@@ -5,18 +5,12 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
+import org.rocksdb.*;
 
 import java.io.File;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import org.rocksdb.CompactionStyle;
-import org.rocksdb.CompressionType;
-import org.rocksdb.Options;
-import org.rocksdb.RocksDB;
-import org.rocksdb.RocksDBException;
 
 /**
  * @author nnarkhed
@@ -93,6 +87,11 @@ public class RocksDbStore implements Store<byte[], byte[]> {
     public Iterator<byte[]> getAll(byte[] key1, byte[] key2) throws StoreException {
         // TODO Auto-generated method stub
         assertInitialized();
+//        if (key1 == null && key2 == null) {
+//            RocksIterator iterator = db.newIterator();
+//            iterator.seekToFirst();
+//            return iterator;
+//        }
         return null;
     }
 

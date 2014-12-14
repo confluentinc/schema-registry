@@ -24,6 +24,10 @@ public class Topic {
         this.validators = validators;
     }
 
+    public Topic(@JsonProperty("name") String name) {
+        this.name = name;
+    }
+
     @JsonProperty("name")
     public String getName() {
         return name;

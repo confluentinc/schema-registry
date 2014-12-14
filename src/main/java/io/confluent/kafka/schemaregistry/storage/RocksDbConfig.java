@@ -1,18 +1,17 @@
 package io.confluent.kafka.schemaregistry.storage;
 
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class RocksDbConfig extends AbstractConfig {
 

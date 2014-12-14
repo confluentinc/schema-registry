@@ -1,11 +1,12 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.rest.Versions;
+import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.entities.Topic;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 
 import javax.ws.rs.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Set;
 
 @Path("/topics")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -16,45 +17,36 @@ import java.util.List;
     Versions.JSON, Versions.GENERIC_REQUEST})
 public class TopicsResource {
     public final static String MESSAGE_TOPIC_NOT_FOUND = "Topic not found.";
-    private List<Topic> topics = new ArrayList<Topic>();
+    private final SchemaRegistry schemaRegistry;
 
-    public TopicsResource() {
-        topics.add(new Topic("Kafka", "full", "all", "all", null));
-        topics.add(new Topic("Rocks", "backward", "all", "all", null));
+    public TopicsResource(SchemaRegistry schemaRegistry) {
+        this.schemaRegistry = schemaRegistry;
     }
 
     @GET
     @Path("/{topic}")
     public Topic getTopic(@PathParam("topic") String topicName) {
-        Topic topic = null;
-        for (Topic t : topics) {
-            if (t.getName().equals(topicName)) {
-                topic = t;
-                break;
-            }
-        }
-        if (topic == null)
+        System.out.println("Received get topic request for " + topicName);
+        if (!schemaRegistry.listTopics().contains(topicName))
             throw new NotFoundException(MESSAGE_TOPIC_NOT_FOUND);
-        return topic;
+        // TODO: Implement topic/schema metadata
+        return new Topic(topicName);
     }
 
     @Path("/{topic}/key/versions")
     public SchemasResource getKeySchemas(@PathParam("topic") String topicName) {
-        return new SchemasResource(topics, topicName, true);
+        return new SchemasResource(schemaRegistry, topicName, true);
     }
 
     @Path("/{topic}/value/versions")
     public SchemasResource getValueSchemas(@PathParam("topic") String topicName) {
-        return new SchemasResource(topics, topicName, false);
+        return new SchemasResource(schemaRegistry, topicName, false);
     }
 
     @GET
-    public List<String> list() {
-        List<String> topicNames = new ArrayList<String>();
-        for (Topic topic : topics) {
-            topicNames.add(topic.getName());
-        }
-        return topicNames;
+    public Set<String> list() {
+        System.out.println("Received list topics request");
+        return schemaRegistry.listTopics();
     }
 
 }

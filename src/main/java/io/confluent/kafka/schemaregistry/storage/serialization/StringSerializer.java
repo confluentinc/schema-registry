@@ -1,7 +1,5 @@
 package io.confluent.kafka.schemaregistry.storage.serialization;
 
-import org.apache.kafka.clients.producer.Serializer;
-
 import java.util.Map;
 
 public class StringSerializer implements Serializer<String> {

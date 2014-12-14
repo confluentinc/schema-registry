@@ -1,6 +1,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import kafka.consumer.ConsumerConfig;
 import kafka.consumer.ConsumerIterator;
 import kafka.consumer.KafkaStream;
@@ -8,7 +9,6 @@ import kafka.javaapi.consumer.ConsumerConnector;
 import kafka.javaapi.consumer.ZookeeperConsumerConnector;
 import kafka.message.MessageAndMetadata;
 import kafka.utils.ShutdownableThread;
-import org.apache.kafka.clients.producer.Serializer;
 
 import java.util.*;
 
@@ -18,7 +18,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     private final String groupId;
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
-    private final Random random = new Random(1000000);
+    private final Random random = new Random(System.currentTimeMillis());
     private final Store<K, V> localStore;
     private final long commitInterval;
     private ConsumerIterator<byte[], byte[]> consumerIterator;

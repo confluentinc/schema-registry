@@ -12,7 +12,7 @@ public class Schema {
     private Integer version;
     @NotEmpty
     private String schema;
-    private boolean compatible;
+    private boolean compatible = true;
     private boolean deprecated = false;
     private boolean latest = true;
 
@@ -25,6 +25,7 @@ public class Schema {
         this.name = name;
         this.version = version;
         this.schema = schema;
+        this.compatible = compatible;
         this.deprecated = deprecated;
         this.latest = latest;
     }
@@ -39,16 +40,6 @@ public class Schema {
         this.name = name;
     }
 
-    @JsonProperty("version")
-    public Integer getVersion() {
-        return this.version;
-    }
-
-    @JsonProperty("version")
-    public void setVersion(Integer version) {
-        this.version = version;
-    }
-
     @JsonProperty("schema")
     public String getSchema() {
         return this.schema;
@@ -57,6 +48,16 @@ public class Schema {
     @JsonProperty("schema")
     public void setSchema(String schema) {
         this.schema = schema;
+    }
+
+    @JsonProperty("version")
+    public Integer getVersion() {
+        return this.version;
+    }
+
+    @JsonProperty("version")
+    public void setVersion(Integer version) {
+        this.version = version;
     }
 
     @JsonProperty("compatible")
@@ -88,5 +89,46 @@ public class Schema {
     public void setLatest(boolean latest) {
         this.latest = latest;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Schema that = (Schema) o;
+
+        if (!name.equals(that.getName())) return false;
+        if (!schema.equals(that.schema)) return false;
+        if (this.version != that.getVersion()) return false;
+        if (this.compatible && !that.compatible) return false;
+        if (this.deprecated && !that.deprecated) return false;
+        if (this.latest && !that.latest) return false;
+
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = name.hashCode();
+        result = 31 * result + schema.hashCode();
+        result = 31 * result + version;
+        result = 31 * result + new Boolean(compatible).hashCode();
+        result = 31 * result + new Boolean(deprecated).hashCode();
+        result = 31 * result + new Boolean(latest).hashCode();
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{name=" + this.name + ",");
+        sb.append("schema=" + this.schema + ",");
+        sb.append("version=" + this.version + ",");
+        sb.append("compatible=" + this.compatible + ",");
+        sb.append("deprecated=" + this.deprecated + ",");
+        sb.append("latest=" + this.latest + "}");
+        return sb.toString();
+    }
+
 
 }

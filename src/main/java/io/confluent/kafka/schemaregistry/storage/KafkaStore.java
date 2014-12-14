@@ -2,6 +2,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
+import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
 import kafka.cluster.Broker;
 import kafka.consumer.ConsumerConfig;
@@ -11,11 +12,12 @@ import kafka.consumer.KafkaStream;
 import kafka.javaapi.consumer.ConsumerConnector;
 import kafka.javaapi.consumer.ZookeeperConsumerConnector;
 import kafka.message.MessageAndMetadata;
-import kafka.utils.ZKStringSerializer;
 import kafka.utils.ZkUtils;
 import org.I0Itec.zkclient.ZkClient;
-import org.apache.kafka.clients.producer.*;
-import org.apache.kafka.clients.producer.Serializer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import scala.collection.JavaConversions;
 
 import java.util.*;
@@ -33,7 +35,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
     private final Store<K, V> localStore;
-    private final Random random = new Random(1000000);
+    private final Random random = new Random(System.currentTimeMillis());
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final int timeout;
     private KafkaProducer producer;
@@ -85,7 +87,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
         consumerProps.put("group.id", groupId);
         consumerProps.put("auto.offset.reset", "smallest");
         consumerProps.put("zookeeper.connect", kafkaClusterZkUrl);
-        consumerProps.put("consumer.timeout.ms", "1000");
+        consumerProps.put("consumer.timeout.ms", "2000");
         consumer = new ZookeeperConsumerConnector(new ConsumerConfig(consumerProps));
         Map<String, Integer> kafkaStreamConfig = new HashMap<String, Integer>();
         kafkaStreamConfig.put(topic, 1);
@@ -124,6 +126,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
             // the consumer will checkpoint it's offset in zookeeper, so the background thread will
             // continue from where the bootstrap consumer left off
             consumer.shutdown();
+            System.out.println("Bootstrap is complete. Now switching to live update");
         }
         // start the background thread that subscribes to the Kafka topic and applies updates
         kafkaTopicReader.start();

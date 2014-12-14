@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package org.apache.kafka.clients.producer;
+package io.confluent.kafka.schemaregistry.storage.serialization;
 
 import org.apache.kafka.common.Configurable;
 

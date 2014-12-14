@@ -2,10 +2,16 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.rest.entities.Topic;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 import javax.ws.rs.*;
+import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.container.Suspended;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -18,36 +24,47 @@ public class SchemasResource {
     public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
 
     private final String topic;
-    private boolean isKey;
-    List<Integer> versions = new ArrayList<Integer>();
-    List<Topic> topics = null;
+    private final boolean isKey;
+    private final SchemaRegistry schemaRegistry;
 
-    public SchemasResource() {
-        this.topic = null;
-        this.isKey = false;
-        versions.add(1);
-        versions.add(2);
-    }
-
-    public SchemasResource(List<Topic> topics, String topic, boolean isKey) {
-        this.topics = topics;
+    public SchemasResource(SchemaRegistry registry, String topic, boolean isKey) {
+        this.schemaRegistry = registry;
         this.topic = topic;
         this.isKey = isKey;
-        versions.add(1);
-        versions.add(2);
     }
 
     @GET
     @Path("/{id}")
     public Schema getSchema(@PathParam("id") Integer id) {
-        String schema = "dummy";
+        Schema schema = schemaRegistry.get(this.topic, id);
         if (schema == null)
             throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
-        return new Schema(topic, 1, schema, true, false, true);
+        return schema;
     }
 
     @GET
     public List<Integer> list() {
-        return versions;
+        Iterator<Schema> allSchemasForThisTopic = null;
+        List<Integer> allVersions = new ArrayList<Integer>();
+        try {
+            allSchemasForThisTopic = schemaRegistry.getAllVersions(this.topic);
+        } catch (StoreException e) {
+            // TODO: throw meaningful exception
+            e.printStackTrace();
+        }
+        while (allSchemasForThisTopic.hasNext()) {
+            Schema schema = allSchemasForThisTopic.next();
+            allVersions.add(schema.getVersion());
+        }
+        return allVersions;
+    }
+
+    @POST
+    public void register(final @Suspended AsyncResponse asyncResponse,
+        @PathParam("topic") String topicName, RegisterSchemaRequest request) {
+        int version = schemaRegistry.register(topicName, request.getSchema());
+        RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
+        registerSchemaResponse.setVersion(version);
+        asyncResponse.resume(registerSchemaResponse);
     }
 }

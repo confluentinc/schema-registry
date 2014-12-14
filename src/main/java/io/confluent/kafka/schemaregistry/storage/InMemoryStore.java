@@ -5,12 +5,9 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
-import io.confluent.kafka.schemaregistry.utils.Pair;
 
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -40,7 +37,8 @@ public class InMemoryStore<K,V> implements Store<K,V> {
     }
 
     @Override public Iterator<V> getAll(K key1, K key2) {
-        ConcurrentNavigableMap<K, V> subMap = store.subMap(key1, key2);
+        ConcurrentNavigableMap<K, V> subMap = (key1 == null && key2 == null) ?
+            store : store.subMap(key1, key2);
         return subMap.values().iterator();
     }
 

@@ -7,10 +7,7 @@ import org.apache.kafka.common.utils.Time;
 
 import java.util.Properties;
 
-/**
- * Created by nnarkhed
- */
-public class SchemaRegistryConfig extends Configuration {
+public class SchemaRegistryApplicationConfig extends Configuration {
     public Time time;
 
     public boolean debug;
@@ -51,11 +48,11 @@ public class SchemaRegistryConfig extends Configuration {
     public int consumerInstanceTimeoutMs;
     public static final String DEFAULT_CONSUMER_INSTANCE_TIMEOUT_MS = "300000";
 
-    public SchemaRegistryConfig() throws ConfigurationException {
+    public SchemaRegistryApplicationConfig() throws ConfigurationException {
         this(new Properties());
     }
 
-    public SchemaRegistryConfig(Properties props) throws ConfigurationException {
+    public SchemaRegistryApplicationConfig(Properties props) throws ConfigurationException {
         time = new SystemTime();
 
         debug = Boolean.parseBoolean(props.getProperty("debug", DEFAULT_DEBUG));
@@ -63,12 +60,18 @@ public class SchemaRegistryConfig extends Configuration {
         port = Integer.parseInt(props.getProperty("port", DEFAULT_PORT));
         zookeeperConnect = props.getProperty("zookeeper.connect", DEFAULT_ZOOKEEPER_CONNECT);
         bootstrapServers = props.getProperty("bootstrap.servers", DEFAULT_BOOTSTRAP_SERVERS);
-        producerThreads = Integer.parseInt(props.getProperty("producer.threads", DEFAULT_PRODUCER_THREADS));
-        consumerIteratorTimeoutMs = Integer.parseInt(props.getProperty("consumer.iterator.timeout.ms", DEFAULT_CONSUMER_ITERATOR_TIMEOUT_MS));
-        consumerRequestTimeoutMs = Integer.parseInt(props.getProperty("consumer.request.timeout.ms", DEFAULT_CONSUMER_REQUEST_TIMEOUT_MS));
-        consumerRequestMaxMessages = Integer.parseInt(props.getProperty("consumer.request.max.messages", DEFAULT_CONSUMER_REQUEST_MAX_MESSAGES));
-        consumerThreads = Integer.parseInt(props.getProperty("consumer.threads", DEFAULT_CONSUMER_THREADS));
-        consumerInstanceTimeoutMs = Integer.parseInt(props.getProperty("consumer.instance.timeout.ms", DEFAULT_CONSUMER_INSTANCE_TIMEOUT_MS));
+        producerThreads = Integer.parseInt(props.getProperty("producer.threads",
+            DEFAULT_PRODUCER_THREADS));
+        consumerIteratorTimeoutMs = Integer.parseInt(props.getProperty(
+            "consumer.iterator.timeout.ms", DEFAULT_CONSUMER_ITERATOR_TIMEOUT_MS));
+        consumerRequestTimeoutMs = Integer.parseInt(props.getProperty(
+            "consumer.request.timeout.ms", DEFAULT_CONSUMER_REQUEST_TIMEOUT_MS));
+        consumerRequestMaxMessages = Integer.parseInt(props.getProperty(
+            "consumer.request.max.messages", DEFAULT_CONSUMER_REQUEST_MAX_MESSAGES));
+        consumerThreads = Integer.parseInt(props.getProperty("consumer.threads",
+            DEFAULT_CONSUMER_THREADS));
+        consumerInstanceTimeoutMs = Integer.parseInt(props.getProperty(
+            "consumer.instance.timeout.ms", DEFAULT_CONSUMER_INSTANCE_TIMEOUT_MS));
     }
 
 }

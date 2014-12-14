@@ -13,21 +13,21 @@ public class KafkaStoreConfig extends AbstractConfig {
 
     /** <code>kafkastore.connection.url</code> */
     public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
-    private static final String KAFKASTORE_CONNECTION_URL_DOC = "Zookeeper url for the Kafka cluster";
+    protected static final String KAFKASTORE_CONNECTION_URL_DOC = "Zookeeper url for the Kafka cluster";
 
     /** <code>kafkastore.zk.session.timeout.ms</code> */
     public static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG
         = "kafkastore.zk.session.timeout.ms";
-    private static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC = "Zookeeper session timeout";
+    protected static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC = "Zookeeper session timeout";
 
     /** <code>kafkastore.topic</code> */
     public static final String KAFKASTORE_TOPIC_CONFIG = "kafkastore.topic";
-    private static final String KAFKASTORE_TOPIC_DOC = "The durable single partition topic that acts" +
+    protected static final String KAFKASTORE_TOPIC_DOC = "The durable single partition topic that acts" +
         "as the durable log for the data";
 
     /** <code>kafkastore.timeout.ms</code> */
     public static final String KAFKASTORE_TIMEOUT_CONFIG = "kafkastore.timeout.ms";
-    private static final String KAFKASTORE_TIMEOUT_DOC = "The timeout for an operation on the Kafka" +
+    protected static final String KAFKASTORE_TIMEOUT_DOC = "The timeout for an operation on the Kafka" +
         " store";
 
     private static final ConfigDef config = new ConfigDef()
