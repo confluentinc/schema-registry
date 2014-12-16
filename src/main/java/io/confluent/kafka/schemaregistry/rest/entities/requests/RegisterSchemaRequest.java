@@ -6,15 +6,15 @@ import org.hibernate.validator.constraints.NotEmpty;
 
 public class RegisterSchemaRequest {
     @NotEmpty
-    private Schema schema;
+    private String schema;
 
     @JsonProperty("schema")
-    public Schema getSchema() {
+    public String getSchema() {
         return this.schema;
     }
 
     @JsonProperty("schema")
-    public void setSchema(Schema schema) {
+    public void setSchema(String schema) {
         this.schema = schema;
     }
 

@@ -16,14 +16,7 @@ Quickstart
 
 4. Register a schema
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/topics/Kafka/value/versions -d '
- {"schema":{
-   "name": "Kafka",
-   "version": 1,
-   "schema": "Hello World",
-   "compatible": true,
-   "deprecated": false,
-   "latest": true
- }}'
+ {"schema":"Hello World"}'
 
 5. List all topics
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/topics

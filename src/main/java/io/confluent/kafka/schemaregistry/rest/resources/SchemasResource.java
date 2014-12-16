@@ -62,7 +62,8 @@ public class SchemasResource {
     @POST
     public void register(final @Suspended AsyncResponse asyncResponse,
         @PathParam("topic") String topicName, RegisterSchemaRequest request) {
-        int version = schemaRegistry.register(topicName, request.getSchema());
+        Schema schema = new Schema(topicName, 0, request.getSchema(), true, false, true);
+        int version = schemaRegistry.register(topicName, schema);
         RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
         registerSchemaResponse.setVersion(version);
         asyncResponse.resume(registerSchemaResponse);

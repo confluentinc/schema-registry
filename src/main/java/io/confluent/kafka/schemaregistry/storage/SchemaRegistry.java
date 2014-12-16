@@ -60,6 +60,7 @@ public class SchemaRegistry {
         if (isCompatible(topic, schema, latestSchema)) {
             try {
                 schema.setVersion(version);
+                System.out.println("Adding schema to the Kafka store: " + schema.toString());
                 kafkaStore.put(newKeyForLatestSchema, schema);
             } catch (StoreException e) {
                 e.printStackTrace();
