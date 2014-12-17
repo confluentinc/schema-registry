@@ -82,8 +82,6 @@ public class SchemaRegistryRestConfiguration extends Configuration {
 
     port = Integer.parseInt(props.getProperty("port", DEFAULT_PORT));
     zookeeperConnect = props.getProperty("zookeeper.connect", DEFAULT_ZOOKEEPER_CONNECT);
-    props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, "_schemas");
-
     kafkastoreTopic = props.getProperty("kafkastore.topic", DEFAULT_KAFKASTORE_TOPIC);
 
     producerThreads = Integer.parseInt(props.getProperty("producer.threads",
