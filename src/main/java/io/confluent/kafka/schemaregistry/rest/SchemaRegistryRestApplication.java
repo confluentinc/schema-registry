@@ -38,7 +38,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryRes
   @Override
   public void setupResources(Configurable<?> config, SchemaRegistryRestConfiguration appConfig) {
     Properties props = new Properties();
-    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, appConfig.kafkastoreConnect);
+    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, appConfig.zookeeperConnect);
     props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, appConfig.kafkastoreTopic);
     SchemaRegistryConfig schemaRegistryConfig = new SchemaRegistryConfig(props);
 
