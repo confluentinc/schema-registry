@@ -1,8 +1,10 @@
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.resources.RootResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemasResource;
 import io.confluent.kafka.schemaregistry.rest.resources.TopicsResource;
+import io.confluent.kafka.schemaregistry.storage.KafkaStoreConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaSerializer;
@@ -27,9 +29,12 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryRes
 
     @Override
     public void setupResources(Configurable<?> config, SchemaRegistryRestConfiguration appConfig) {
-        SchemaRegistryConfig schemaRegistryConfig = new SchemaRegistryConfig(new Properties());
-        SchemaRegistry schemaRegistry =
-            new SchemaRegistry(schemaRegistryConfig, new SchemaSerializer());
+        Properties props = new Properties();
+        props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, "localhost:2181");
+        props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, "schemaregistry");
+        SchemaRegistryConfig schemaRegistryConfig = new SchemaRegistryConfig(props);
+        SchemaRegistry schemaRegistry = new SchemaRegistry(schemaRegistryConfig,
+            new SchemaSerializer());
         config.register(RootResource.class);
         config.register(new TopicsResource(schemaRegistry));
         config.register(SchemasResource.class);
