@@ -4,9 +4,10 @@ import java.io.File;
 import java.util.Random;
 
 public class TestUtils {
+
   static String IoTmpDir = System.getProperty("java.io.tmpdir");
   static Random random = new Random();
-  
+
   /**
    * Create a temporary directory
    */
@@ -14,7 +15,7 @@ public class TestUtils {
     final File f = new File(IoTmpDir, namePrefix + "-" + random.nextInt(1000000));
     f.mkdirs();
     f.deleteOnExit();
-    
+
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
@@ -23,18 +24,19 @@ public class TestUtils {
     });
     return f;
   }
-  
+
   /**
    * Recursively delete the given file/directory and any subfiles (if any exist)
+   *
    * @param file The root file at which to begin deleting
    */
   public static void rm(File file) {
-    if(file == null) {
+    if (file == null) {
       return;
-    } else if(file.isDirectory()) {
+    } else if (file.isDirectory()) {
       File[] files = file.listFiles();
-      if(files != null) {
-        for(File f : files) {
+      if (files != null) {
+        for (File f : files) {
           rm(f);
         }
       }

@@ -15,27 +15,28 @@ package io.confluent.kafka.schemaregistry.storage.serialization;
 
 import org.apache.kafka.common.Configurable;
 
+import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
+
 /**
- *
- * @param <T> Type to be serialized from.
- *
- * A class that implements this interface is expected to have a constructor with no parameter.
+ * @param <T> Type to be serialized from. <p/> A class that implements this interface is expected to
+ *            have a constructor with no parameter.
  */
 public interface Serializer<T> extends Configurable {
-    /**
-     * @param data Typed data
-     * @return bytes of the serialized data
-     */
-    public byte[] toBytes(T data);
 
-    /**
-     * @param data Bytes
-     * @return Typed deserialized data
-     */
-    public T fromBytes(byte[] data);
+  /**
+   * @param data Typed data
+   * @return bytes of the serialized data
+   */
+  public byte[] toBytes(T data) throws SerializationException;
 
-    /**
-     * Close this serializer
-     */
-    public void close();
+  /**
+   * @param data Bytes
+   * @return Typed deserialized data
+   */
+  public T fromBytes(byte[] data) throws SerializationException;
+
+  /**
+   * Close this serializer
+   */
+  public void close();
 }

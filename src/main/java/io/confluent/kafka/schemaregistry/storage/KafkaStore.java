@@ -1,5 +1,26 @@
 package io.confluent.kafka.schemaregistry.storage;
 
+import org.I0Itec.zkclient.ZkClient;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Random;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
@@ -13,22 +34,13 @@ import kafka.javaapi.consumer.ConsumerConnector;
 import kafka.javaapi.consumer.ZookeeperConsumerConnector;
 import kafka.message.MessageAndMetadata;
 import kafka.utils.ZkUtils;
-import org.I0Itec.zkclient.ZkClient;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import scala.collection.JavaConversions;
 
-import java.util.*;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 public class KafkaStore<K, V> implements Store<K, V> {
-    private final String kafkaClusterZkUrl;
+
+  private static final Logger log = LoggerFactory.getLogger(KafkaStore.class);
+
+  private final String kafkaClusterZkUrl;
     private final int zkSessionTimeoutMs;
     private final String topic;
     private final String groupId;
@@ -105,11 +117,21 @@ public class KafkaStore<K, V> implements Store<K, V> {
             while (iterator.hasNext()) {
                 MessageAndMetadata<byte[], byte[]> messageAndMetadata = iterator.next();
                 byte[] messageBytes = messageAndMetadata.message();
-                V message = messageBytes == null ? null : valueSerializer.fromBytes(messageBytes);
-                K messageKey = keySerializer.fromBytes(messageAndMetadata.key());
-                try {
-                    System.out.println("Applying update (" + messageKey + "," + message + ") to the " +
-                        "local store during bootstrap");
+              V message = null;
+              try {
+                message = messageBytes == null ? null : valueSerializer.fromBytes(messageBytes);
+              } catch (SerializationException e) {
+                throw new StoreInitializationException("Failed to deserialize the schema", e);
+              }
+              K messageKey = null;
+              try {
+                messageKey = keySerializer.fromBytes(messageAndMetadata.key());
+              } catch (SerializationException e) {
+                throw new StoreInitializationException("Failed to deserialize the schema key", e);
+              }
+              try {
+                  log.trace("Applying update (" + messageKey + "," + message + ") to the " +
+                            "local store during bootstrap");
                     if (message == null) {
                         localStore.delete(messageKey);
                     } else {
@@ -126,7 +148,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
             // the consumer will checkpoint it's offset in zookeeper, so the background thread will
             // continue from where the bootstrap consumer left off
             consumer.shutdown();
-            System.out.println("Bootstrap is complete. Now switching to live update");
+          log.info("Kafka store bootstrap from the log " + this.topic + " is complete. Now " +
+                   "switching to live update");
         }
         // start the background thread that subscribes to the Kafka topic and applies updates
         kafkaTopicReader.start();
@@ -148,9 +171,15 @@ public class KafkaStore<K, V> implements Store<K, V> {
             throw new StoreException("Key should not be null");
         }
         // write to the Kafka topic
-        ProducerRecord producerRecord = new ProducerRecord(topic, 0, keySerializer.toBytes(key),
+      ProducerRecord producerRecord = null;
+      try {
+        producerRecord = new ProducerRecord(topic, 0, keySerializer.toBytes(key),
             value == null ? null : valueSerializer.toBytes(value));
-        Future<RecordMetadata> ack = producer.send(producerRecord);
+      } catch (SerializationException e) {
+        throw new StoreException("Error serializing schema while creating the Kafka produce "
+                                 + "record", e);
+      }
+      Future<RecordMetadata> ack = producer.send(producerRecord);
         try {
             ack.get(timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
@@ -186,8 +215,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     @Override public void close() {
         kafkaTopicReader.shutdown();
-        producer.close();
-        localStore.close();
+      log.debug("Kafka store reader thread shut down");
+      producer.close();
+      log.debug("Kafka store producer shut down");
+      localStore.close();
+      log.debug("Kafka store shut down complete");
     }
 
     private void assertInitialized() throws StoreException {

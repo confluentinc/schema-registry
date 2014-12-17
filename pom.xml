@@ -17,6 +17,7 @@
         <javaxel.version>3.0.0</javaxel.version>
         <kafka.version>0.8.2-beta</kafka.version>
         <kafka.scala.version>2.10</kafka.scala.version>
+        <log4j.version>1.7.6</log4j.version>
         <easymock.version>3.0</easymock.version>
         <rocksdbjni.version>3.5.1</rocksdbjni.version>
         <restutils.version>0.1-SNAPSHOT</restutils.version>
@@ -100,6 +101,11 @@
             <groupId>io.confluent</groupId>
             <artifactId>rest-utils</artifactId>
             <version>${restutils.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>${log4j.version}</version>
         </dependency>
 
         <dependency>

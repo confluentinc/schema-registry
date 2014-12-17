@@ -3,14 +3,19 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
-import org.rocksdb.*;
+import org.rocksdb.CompactionStyle;
+import org.rocksdb.CompressionType;
+import org.rocksdb.Options;
+import org.rocksdb.RocksDB;
+import org.rocksdb.RocksDBException;
 
 import java.io.File;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
 /**
  * @author nnarkhed
@@ -18,12 +23,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class RocksDbStore implements Store<byte[], byte[]> {
 
-    private RocksDB db;
     private final Options options;
     private final File rocksDbDir;
     private final AtomicBoolean initialized = new AtomicBoolean(false);
+  private RocksDB db;
 
-    public RocksDbStore(RocksDbConfig config) {
+  public RocksDbStore(RocksDbConfig config) {
         rocksDbDir = new File(config.getString(RocksDbConfig.ROCKSDB_DATADIR_CONFIG));
         options = new Options();
         String compression = config.getString(RocksDbConfig.ROCKSDB_COMPRESSION_CONFIG);
@@ -61,8 +66,7 @@ public class RocksDbStore implements Store<byte[], byte[]> {
         try {
             value = db.get(key);
         } catch (RocksDBException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+          throw new StoreException(e);
         }
         return value;
     }
