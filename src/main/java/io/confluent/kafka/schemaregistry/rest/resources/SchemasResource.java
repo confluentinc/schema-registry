@@ -28,69 +28,71 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
-    Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
-    Versions.JSON_WEIGHTED})
+           Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
+           Versions.JSON_WEIGHTED})
 @Consumes({Versions.SCHEMA_REGISTRY_V1_JSON,
-    Versions.SCHEMA_REGISTRY_DEFAULT_JSON,
-    Versions.JSON, Versions.GENERIC_REQUEST})
+           Versions.SCHEMA_REGISTRY_DEFAULT_JSON,
+           Versions.JSON, Versions.GENERIC_REQUEST})
 public class SchemasResource {
-    public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
+
+  public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
 
   private final String topic;
-    private final boolean isKey;
-    private final SchemaRegistry schemaRegistry;
+  private final boolean isKey;
+  private final SchemaRegistry schemaRegistry;
 
-    public SchemasResource(SchemaRegistry registry, String topic, boolean isKey) {
-        this.schemaRegistry = registry;
-        this.topic = topic;
-        this.isKey = isKey;
-    }
+  public SchemasResource(SchemaRegistry registry, String topic, boolean isKey) {
+    this.schemaRegistry = registry;
+    this.topic = topic;
+    this.isKey = isKey;
+  }
 
-    @GET
-    @Path("/{id}")
-    public Schema getSchema(@PathParam("id") Integer id) {
-      Schema schema = null;
-      try {
-        schema = schemaRegistry.get(this.topic, id);
-      } catch (SchemaRegistryException e) {
-        log.debug("Error while retrieving schema with id " + id + " from the schema registry",
-                  e);
-        throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND, e);
-      }
-      if (schema == null)
-            throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
-        return schema;
+  @GET
+  @Path("/{id}")
+  public Schema getSchema(@PathParam("id") Integer id) {
+    Schema schema = null;
+    try {
+      schema = schemaRegistry.get(this.topic, id);
+    } catch (SchemaRegistryException e) {
+      log.debug("Error while retrieving schema with id " + id + " from the schema registry",
+                e);
+      throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND, e);
     }
+    if (schema == null) {
+      throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
+    }
+    return schema;
+  }
 
-    @GET
-    public List<Integer> list() {
-        Iterator<Schema> allSchemasForThisTopic = null;
-        List<Integer> allVersions = new ArrayList<Integer>();
-        try {
-            allSchemasForThisTopic = schemaRegistry.getAllVersions(this.topic);
-        } catch (StoreException e) {
-          throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
-        }
-        while (allSchemasForThisTopic.hasNext()) {
-            Schema schema = allSchemasForThisTopic.next();
-            allVersions.add(schema.getVersion());
-        }
-        return allVersions;
+  @GET
+  public List<Integer> list() {
+    Iterator<Schema> allSchemasForThisTopic = null;
+    List<Integer> allVersions = new ArrayList<Integer>();
+    try {
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.topic);
+    } catch (StoreException e) {
+      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
+    while (allSchemasForThisTopic.hasNext()) {
+      Schema schema = allSchemasForThisTopic.next();
+      allVersions.add(schema.getVersion());
+    }
+    return allVersions;
+  }
 
-    @POST
-    public void register(final @Suspended AsyncResponse asyncResponse,
-        @PathParam("topic") String topicName, RegisterSchemaRequest request) {
-        Schema schema = new Schema(topicName, 0, request.getSchema(), true, false, true);
-      int version = 0;
-      try {
-        version = schemaRegistry.register(topicName, schema);
-      } catch (SchemaRegistryException e) {
-        throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
-      }
-      RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
-        registerSchemaResponse.setVersion(version);
-        asyncResponse.resume(registerSchemaResponse);
+  @POST
+  public void register(final @Suspended AsyncResponse asyncResponse,
+                       @PathParam("topic") String topicName, RegisterSchemaRequest request) {
+    Schema schema = new Schema(topicName, 0, request.getSchema(), true, false, true);
+    int version = 0;
+    try {
+      version = schemaRegistry.register(topicName, schema);
+    } catch (SchemaRegistryException e) {
+      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
+    RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
+    registerSchemaResponse.setVersion(version);
+    asyncResponse.resume(registerSchemaResponse);
+  }
 }

@@ -21,7 +21,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreTest.class);
 
-  private String topic = "log";
+  private String topic = "_schemas";
 
   @Before
   public void setup() {
@@ -99,7 +99,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     } catch (StoreException e) {
       fail("Kafka store put(Kafka, Rocks) operation failed");
     }
-    Thread.sleep(500);
     String retrievedValue = null;
     try {
       retrievedValue = kafkaStore.get(key);
@@ -134,7 +133,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     } catch (StoreException e) {
       fail("Kafka store put(Kafka, Rocks) operation failed");
     }
-    Thread.sleep(1000);
     String retrievedValue = null;
     try {
       retrievedValue = kafkaStore.get(key);
@@ -187,7 +185,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     } catch (StoreException e) {
       fail("Kafka store put(Kafka, Rocks) operation failed");
     }
-    Thread.sleep(500);
     String retrievedValue = null;
     try {
       retrievedValue = kafkaStore.get(key);
@@ -200,7 +197,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     } catch (StoreException e) {
       fail("Kafka store delete(Kafka) operation failed");
     }
-    Thread.sleep(500);
     // verify that value is deleted
     retrievedValue = value;
     try {
@@ -236,7 +232,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     } catch (StoreException e) {
       fail("Kafka store put(Kafka, Rocks) operation failed");
     }
-    Thread.sleep(1000);
     String retrievedValue = null;
     try {
       retrievedValue = kafkaStore.get(key);
@@ -250,7 +245,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     } catch (StoreException e) {
       fail("Kafka store delete(Kafka) operation failed");
     }
-    Thread.sleep(500);
     // verify that key is deleted
     retrievedValue = value;
     try {
