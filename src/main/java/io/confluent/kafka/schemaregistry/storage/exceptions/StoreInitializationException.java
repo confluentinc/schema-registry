@@ -2,8 +2,6 @@ package io.confluent.kafka.schemaregistry.storage.exceptions;
 
 /**
  * Error while initializing a <code>io.confluent.kafka.schemaregistry.storage.Store</code>
- * @author nnarkhed
- *
  */
 public class StoreInitializationException extends Exception {
 

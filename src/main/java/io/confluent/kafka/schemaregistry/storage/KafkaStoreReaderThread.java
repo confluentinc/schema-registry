@@ -1,5 +1,15 @@
 package io.confluent.kafka.schemaregistry.storage;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Random;
+
+import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import kafka.consumer.ConsumerConfig;
@@ -10,10 +20,11 @@ import kafka.javaapi.consumer.ZookeeperConsumerConnector;
 import kafka.message.MessageAndMetadata;
 import kafka.utils.ShutdownableThread;
 
-import java.util.*;
-
 public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
-    private final String kafkaClusterZkUrl;
+
+  private static final Logger log = LoggerFactory.getLogger(KafkaStoreReaderThread.class);
+
+  private final String kafkaClusterZkUrl;
     private final String topic;
     private final String groupId;
     private final Serializer<K> keySerializer;
@@ -63,7 +74,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         }
         KafkaStream<byte[], byte[]> stream = streamsForTheLogTopic.get(0);
         consumerIterator = stream.iterator();
-        System.out.println("Thread started with consumer properties " + consumerProps.toString());
+      log.debug("Kafka store reader thread started with consumer properties " +
+                consumerProps.toString());
     }
 
     @Override
@@ -72,12 +84,23 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         while (consumerIterator != null && consumerIterator.hasNext()) {
             MessageAndMetadata<byte[], byte[]> messageAndMetadata = consumerIterator.next();
             byte[] messageBytes = messageAndMetadata.message();
-            V message = messageBytes == null ? null : valueSerializer.fromBytes(messageBytes);
-            K messageKey = keySerializer.fromBytes(messageAndMetadata.key());
-            try {
-                System.out.println("Applying update (" + messageKey + "," + message + ") to the " +
-                    "local store");
-                if (message == null) {
+          V message = null;
+          try {
+            message = messageBytes == null ? null : valueSerializer.fromBytes(messageBytes);
+          } catch (SerializationException e) {
+            // TODO: fail just this operation or all subsequent operations?
+            log.error("Failed to deserialize the schema", e);
+          }
+          K messageKey = null;
+          try {
+            messageKey = keySerializer.fromBytes(messageAndMetadata.key());
+          } catch (SerializationException e) {
+            log.error("Failed to deserialize the schema key", e);
+          }
+          try {
+              log.trace("Applying update (" + messageKey + "," + message + ") to the local " +
+                        "store");
+              if (message == null) {
                     localStore.delete(messageKey);
                 } else {
                     localStore.put(messageKey, message);
@@ -93,8 +116,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                  * 1. Restart the store hoping that it works subsequently
                  * 2. Look into the issue manually
                  */
-                System.err.println("Failed to add record from the Kafka topic" +
-                    topic + " the local store");
+              log.error("Failed to add record from the Kafka topic" + topic + " the local store");
             }
         }
     }

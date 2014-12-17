@@ -1,18 +1,31 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.ws.rs.ClientErrorException;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.NotFoundException;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.container.Suspended;
+import javax.ws.rs.core.Response;
+
 import io.confluent.kafka.schemaregistry.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
-
-import javax.ws.rs.*;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
     Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
@@ -22,8 +35,9 @@ import java.util.List;
     Versions.JSON, Versions.GENERIC_REQUEST})
 public class SchemasResource {
     public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
+  private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
 
-    private final String topic;
+  private final String topic;
     private final boolean isKey;
     private final SchemaRegistry schemaRegistry;
 
@@ -36,8 +50,15 @@ public class SchemasResource {
     @GET
     @Path("/{id}")
     public Schema getSchema(@PathParam("id") Integer id) {
-        Schema schema = schemaRegistry.get(this.topic, id);
-        if (schema == null)
+      Schema schema = null;
+      try {
+        schema = schemaRegistry.get(this.topic, id);
+      } catch (SchemaRegistryException e) {
+        log.debug("Error while retrieving schema with id " + id + " from the schema registry",
+                  e);
+        throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND, e);
+      }
+      if (schema == null)
             throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
         return schema;
     }
@@ -49,8 +70,7 @@ public class SchemasResource {
         try {
             allSchemasForThisTopic = schemaRegistry.getAllVersions(this.topic);
         } catch (StoreException e) {
-            // TODO: throw meaningful exception
-            e.printStackTrace();
+          throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
         }
         while (allSchemasForThisTopic.hasNext()) {
             Schema schema = allSchemasForThisTopic.next();
@@ -63,8 +83,13 @@ public class SchemasResource {
     public void register(final @Suspended AsyncResponse asyncResponse,
         @PathParam("topic") String topicName, RegisterSchemaRequest request) {
         Schema schema = new Schema(topicName, 0, request.getSchema(), true, false, true);
-        int version = schemaRegistry.register(topicName, schema);
-        RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
+      int version = 0;
+      try {
+        version = schemaRegistry.register(topicName, schema);
+      } catch (SchemaRegistryException e) {
+        throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      }
+      RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
         registerSchemaResponse.setVersion(version);
         asyncResponse.resume(registerSchemaResponse);
     }

@@ -1,12 +1,20 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Set;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.NotFoundException;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+
 import io.confluent.kafka.schemaregistry.rest.Versions;
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.entities.Topic;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
-
-import javax.ws.rs.*;
-import java.util.Set;
 
 @Path("/topics")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -17,7 +25,8 @@ import java.util.Set;
     Versions.JSON, Versions.GENERIC_REQUEST})
 public class TopicsResource {
     public final static String MESSAGE_TOPIC_NOT_FOUND = "Topic not found.";
-    private final SchemaRegistry schemaRegistry;
+  private static final Logger log = LoggerFactory.getLogger(TopicsResource.class);
+  private final SchemaRegistry schemaRegistry;
 
     public TopicsResource(SchemaRegistry schemaRegistry) {
         this.schemaRegistry = schemaRegistry;
@@ -26,11 +35,10 @@ public class TopicsResource {
     @GET
     @Path("/{topic}")
     public Topic getTopic(@PathParam("topic") String topicName) {
-        System.out.println("Received get topic request for " + topicName);
         if (!schemaRegistry.listTopics().contains(topicName))
             throw new NotFoundException(MESSAGE_TOPIC_NOT_FOUND);
-        // TODO: Implement topic/schema metadata
-        return new Topic(topicName);
+      // TODO: https://github.com/confluentinc/schema-registry/issues/3 Implement metadata
+      return new Topic(topicName);
     }
 
     @Path("/{topic}/key/versions")
@@ -45,7 +53,6 @@ public class TopicsResource {
 
     @GET
     public Set<String> list() {
-        System.out.println("Received list topics request");
         return schemaRegistry.listTopics();
     }
 

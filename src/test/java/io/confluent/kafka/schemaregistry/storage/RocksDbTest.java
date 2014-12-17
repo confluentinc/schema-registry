@@ -1,15 +1,5 @@
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
-import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.Test;
-
-import java.util.Properties;
-
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
-
 public class RocksDbTest {
 
 //  @Test
@@ -60,7 +50,6 @@ public class RocksDbTest {
 //    try {
 //      db = new RocksDbStore(config);
 //    } catch (StoreInitializationException e) {
-//      // TODO Auto-generated catch block
 //      e.printStackTrace();
 //      fail("RocksDB store initialization failed");
 //    } finally {
@@ -73,7 +62,6 @@ public class RocksDbTest {
 //      db.put("Kafka".getBytes(), "rocks".getBytes());
 //      value = db.get("Kafka".getBytes());
 //    } catch (StoreException e) {
-//      // TODO Auto-generated catch block
 //      e.printStackTrace();
 //      fail("RocksDB store put failed");
 //    }

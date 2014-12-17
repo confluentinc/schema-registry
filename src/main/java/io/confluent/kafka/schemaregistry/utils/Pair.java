@@ -1,6 +1,6 @@
 package io.confluent.kafka.schemaregistry.utils;
 
-public class Pair<K,V> {
+public class Pair<K, V> {
 
   private K item1;
   private V item2;
