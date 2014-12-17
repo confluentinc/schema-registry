@@ -56,7 +56,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryRes
 
   @Override
   public SchemaRegistryRestConfiguration configure() throws ConfigurationException {
-      return config;
+    return config;
   }
-
 }
