@@ -185,7 +185,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     Future<RecordMetadata> ack = producer.send(producerRecord);
     try {
       RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
-      log.info("Waiting for offset " + recordMetadata.offset());
+      log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
       kafkaTopicReader.waitUntilOffset(recordMetadata.offset(), timeout, TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
       throw new StoreException("Put operation interrupted while waiting for an ack from Kafka",
