@@ -7,6 +7,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Properties;
 
+import io.confluent.kafka.schemaregistry.storage.KafkaStoreConfig;
 import io.confluent.rest.Configuration;
 import io.confluent.rest.ConfigurationException;
 
@@ -16,7 +17,7 @@ public class SchemaRegistryRestConfiguration extends Configuration {
   public static final String DEFAULT_DEBUG = "false";
   public static final String DEFAULT_PORT = "8080";
   public static final String DEFAULT_ZOOKEEPER_CONNECT = "localhost:2181";
-  public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
+  public static final String DEFAULT_KAFKASTORE_TOPIC = "_schemas";
   public static final String DEFAULT_PRODUCER_THREADS = "5";
   public static final String DEFAULT_CONSUMER_ITERATOR_TIMEOUT_MS = "1";
   public static final String DEFAULT_CONSUMER_ITERATOR_BACKOFF_MS = "50";
@@ -35,7 +36,7 @@ public class SchemaRegistryRestConfiguration extends Configuration {
   public boolean debug;
   public int port;
   public String zookeeperConnect;
-  public String bootstrapServers;
+  public String kafkastoreTopic;
   public int producerThreads;
   /**
    * The consumer timeout used to limit consumer iterator operations. This should be very small so
@@ -81,7 +82,8 @@ public class SchemaRegistryRestConfiguration extends Configuration {
 
     port = Integer.parseInt(props.getProperty("port", DEFAULT_PORT));
     zookeeperConnect = props.getProperty("zookeeper.connect", DEFAULT_ZOOKEEPER_CONNECT);
-    bootstrapServers = props.getProperty("bootstrap.servers", DEFAULT_BOOTSTRAP_SERVERS);
+    kafkastoreTopic = props.getProperty("kafkastore.topic", DEFAULT_KAFKASTORE_TOPIC);
+
     producerThreads = Integer.parseInt(props.getProperty("producer.threads",
                                                          DEFAULT_PRODUCER_THREADS));
     consumerIteratorTimeoutMs = Integer.parseInt(props.getProperty(

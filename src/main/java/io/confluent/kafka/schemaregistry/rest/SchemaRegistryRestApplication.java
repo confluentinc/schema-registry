@@ -24,39 +24,39 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryRes
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryRestApplication.class);
 
   public SchemaRegistryRestApplication() throws ConfigurationException {
-        this(new Properties());
-    }
+    this(new Properties());
+  }
 
-    public SchemaRegistryRestApplication(Properties props) throws ConfigurationException {
-        this(new SchemaRegistryRestConfiguration(props));
-    }
+  public SchemaRegistryRestApplication(Properties props) throws ConfigurationException {
+    this(new SchemaRegistryRestConfiguration(props));
+  }
 
-    public SchemaRegistryRestApplication(SchemaRegistryRestConfiguration config) {
-        this.config = config;
-    }
+  public SchemaRegistryRestApplication(SchemaRegistryRestConfiguration config) {
+    this.config = config;
+  }
 
-    @Override
-    public void setupResources(Configurable<?> config, SchemaRegistryRestConfiguration appConfig) {
-        Properties props = new Properties();
-        props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, "localhost:2181");
-      props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, "_schemas");
-      SchemaRegistryConfig schemaRegistryConfig = new SchemaRegistryConfig(props);
-      SchemaRegistry schemaRegistry = null;
-      try {
-        schemaRegistry = new KafkaSchemaRegistry(schemaRegistryConfig,
-                                                 new SchemaSerializer());
-      } catch (SchemaRegistryException e) {
-        log.error("Error starting the schema registry", e);
-        System.exit(1);
-      }
-      config.register(RootResource.class);
-        config.register(new TopicsResource(schemaRegistry));
-        config.register(SchemasResource.class);
-    }
+  @Override
+  public void setupResources(Configurable<?> config, SchemaRegistryRestConfiguration appConfig) {
+    Properties props = new Properties();
+    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, appConfig.zookeeperConnect);
+    props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, appConfig.kafkastoreTopic);
+    SchemaRegistryConfig schemaRegistryConfig = new SchemaRegistryConfig(props);
 
-    @Override
-    public SchemaRegistryRestConfiguration configure() throws ConfigurationException {
-        return config;
+    SchemaRegistry schemaRegistry = null;
+    try {
+      schemaRegistry = new KafkaSchemaRegistry(schemaRegistryConfig, new SchemaSerializer());
+    } catch (SchemaRegistryException e) {
+      log.error("Error starting the schema registry", e);
+      System.exit(1);
     }
+    config.register(RootResource.class);
+    config.register(new TopicsResource(schemaRegistry));
+    config.register(SchemasResource.class);
+  }
+
+  @Override
+  public SchemaRegistryRestConfiguration configure() throws ConfigurationException {
+      return config;
+  }
 
 }
