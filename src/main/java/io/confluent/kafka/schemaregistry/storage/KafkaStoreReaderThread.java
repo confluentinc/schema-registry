@@ -157,7 +157,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                       + " the specified offset: " + offset, e);
           }
         } else {
-          log.info("Kafka store reader thread reached offset " + offsetInSchemasTopic + " for "
+          log.trace("Kafka store reader thread reached offset " + offsetInSchemasTopic + " for "
                                                                 + "topic: " + topic);
           return;
         }
