@@ -25,5 +25,5 @@ curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/topics/Kafka/value/versions
 
 7. Get a particular version of a topic's schema
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/Kafka/value/versions/1
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/topics/Kafka/value/versions/1
 
