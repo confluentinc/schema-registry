@@ -16,22 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
-
-public class KafkaStoreMessageHandler implements StoreUpdateHandler<SchemaKey, Schema> {
-
-  public KafkaStoreMessageHandler() {
-  }
-
-  /**
-   * Invoked on every new schema written to the Kafka store
-   *
-   * @param key    Key associated with the schema. Key is in the form SubjectSEPARATORVersion
-   * @param schema Schema written to the Kafka store
-   */
-  @Override
-  public void handleUpdate(SchemaKey key, Schema schema) {
-  }
+public enum SchemaSubtype {
+  KEY, VALUE;
 }
