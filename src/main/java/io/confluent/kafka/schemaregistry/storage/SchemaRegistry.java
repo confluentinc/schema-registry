@@ -4,12 +4,13 @@ import java.util.Iterator;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.entities.SchemaSubType;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 public interface SchemaRegistry {
 
-  int register(String topic, Schema schema) throws SchemaRegistryException;
+  int register(String topic, SchemaSubType schemaSubType, String schema) throws SchemaRegistryException;
 
   Schema get(String topic, int version) throws SchemaRegistryException;
 

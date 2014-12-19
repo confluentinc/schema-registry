@@ -21,6 +21,7 @@ import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.entities.SchemaSubType;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
@@ -84,10 +85,10 @@ public class SchemasResource {
   @POST
   public void register(final @Suspended AsyncResponse asyncResponse,
                        @PathParam("topic") String topicName, RegisterSchemaRequest request) {
-    Schema schema = new Schema(topicName, 0, request.getSchema(), false);
     int version = 0;
+    SchemaSubType schemaSubType = this.isKey ? SchemaSubType.KEY : SchemaSubType.VALUE;
     try {
-      version = schemaRegistry.register(topicName, schema);
+      version = schemaRegistry.register(topicName, schemaSubType, request.getSchema());
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }

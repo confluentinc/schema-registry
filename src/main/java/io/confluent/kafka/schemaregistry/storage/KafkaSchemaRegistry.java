@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.entities.SchemaSubType;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -52,14 +53,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public int register(String topic, Schema schema) throws SchemaRegistryException {
+  public int register(String topic, SchemaSubType schemaSubType, String schemaString)
+      throws SchemaRegistryException {
+
     int latestVersion = 0;
     if (schemaVersions.containsKey(topic)) {
       latestVersion = schemaVersions.get(topic);
     }
     int version = latestVersion + 1;
+    Schema schema = new Schema(topic, schemaSubType, version, schemaString, false);
+
     String newKeyForLatestSchema = topic + "," + version;
     String keyForLatestSchema = topic + "," + latestVersion;
+
     Schema latestSchema = null;
     try {
       latestSchema = kafkaStore.get(keyForLatestSchema);
@@ -69,7 +75,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
     if (isCompatible(topic, schema, latestSchema)) {
       try {
-        schema.setVersion(version);
         log.trace("Adding schema to the Kafka store: " + schema.toString());
         kafkaStore.put(newKeyForLatestSchema, schema);
       } catch (StoreException e) {
