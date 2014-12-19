@@ -13,6 +13,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 
 import io.confluent.kafka.schemaregistry.rest.Versions;
+import io.confluent.kafka.schemaregistry.rest.entities.SchemaSubType;
 import io.confluent.kafka.schemaregistry.rest.entities.Topic;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 
@@ -45,12 +46,12 @@ public class TopicsResource {
 
   @Path("/{topic}/key/versions")
   public SchemasResource getKeySchemas(@PathParam("topic") String topicName) {
-    return new SchemasResource(schemaRegistry, topicName, true);
+    return new SchemasResource(schemaRegistry, topicName, SchemaSubType.KEY);
   }
 
   @Path("/{topic}/value/versions")
   public SchemasResource getValueSchemas(@PathParam("topic") String topicName) {
-    return new SchemasResource(schemaRegistry, topicName, false);
+    return new SchemasResource(schemaRegistry, topicName, SchemaSubType.VALUE);
   }
 
   @GET

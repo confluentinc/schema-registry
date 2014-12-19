@@ -30,9 +30,10 @@ public class Schema {
     this.deprecated = deprecated;
   }
 
+  // TODO - should this really be a json property, or is it something we just want to use internally?
   @JsonProperty("name")
   public String getName() {
-    return this.getTopic() + this.getSchemaSubtypeString();
+    return Schema.name(this.getTopic(), this.getSchemaSubType());
   }
 
   @JsonProperty("topic")
@@ -125,7 +126,11 @@ public class Schema {
     return sb.toString();
   }
 
+  /**
+   * An identifier for the collection of schemas having different versions but
+   * the same topic and schemaSubType.
+   */
   public static String name(String topic, SchemaSubType schemaSubType) {
-    return topic + schemaSubType.toString().toLowerCase();
+    return topic + "/" + schemaSubType.toString().toLowerCase();
   }
 }

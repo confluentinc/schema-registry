@@ -12,15 +12,15 @@ public interface SchemaRegistry {
 
   int register(String topic, SchemaSubType schemaSubType, String schema) throws SchemaRegistryException;
 
-  Schema get(String topic, int version) throws SchemaRegistryException;
+  Schema get(String topic, SchemaSubType schemaSubType, int version) throws SchemaRegistryException;
 
   Set<String> listTopics();
 
-  Iterator<Schema> getAll(String topic) throws StoreException;
+  Iterator<Schema> getAll(String topic, SchemaSubType schemaSubType) throws StoreException;
 
-  Iterator<Schema> getAllVersions(String topic) throws StoreException;
+  Iterator<Schema> getAllVersions(String topic, SchemaSubType schemaSubType) throws StoreException;
 
-  boolean isCompatible(String topic, Schema schema1, Schema schema2);
+  boolean isCompatible(Schema schema1, Schema schema2);
 
   void close();
 }
