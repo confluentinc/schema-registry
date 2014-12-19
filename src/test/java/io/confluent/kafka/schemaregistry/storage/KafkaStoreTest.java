@@ -49,6 +49,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     } catch (StoreInitializationException e) {
       fail("Kafka store failed to initialize");
     }
+    kafkaStore.close();
   }
 
   @Test
@@ -73,6 +74,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     } catch (StoreInitializationException e) {
       // this is expected
     }
+    kafkaStore.close();
   }
 
   @Test
@@ -141,7 +143,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     }
     assertEquals("Retrieved value should match entered value", value, retrievedValue);
     kafkaStore.close();
-    inMemoryStore.close();
+
     // recreate kafka store
     kafkaStore = new KafkaStore<String, String>(storeConfig, stringSerializer, stringSerializer,
                                                 inMemoryStore);
@@ -158,7 +160,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     }
     assertEquals("Retrieved value should match entered value", value, retrievedValue);
     kafkaStore.close();
-    inMemoryStore.close();
   }
 
   @Test
@@ -254,7 +255,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     }
     assertNull("Value should have been deleted", retrievedValue);
     kafkaStore.close();
-    inMemoryStore.close();
     // recreate kafka store
     kafkaStore = new KafkaStore<String, String>(storeConfig, stringSerializer, stringSerializer,
                                                 inMemoryStore);
@@ -272,6 +272,5 @@ public class KafkaStoreTest extends ClusterTestHarness {
     }
     assertNull("Value should have been deleted", retrievedValue);
     kafkaStore.close();
-    inMemoryStore.close();
   }
 }

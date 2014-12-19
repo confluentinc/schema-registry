@@ -41,7 +41,7 @@ import scala.collection.JavaConversions;
  */
 public abstract class ClusterTestHarness {
 
-  public static final int DEFAULT_NUM_BROKERS = 3;
+  public static final int DEFAULT_NUM_BROKERS = 1;
 
   // Shared config
   protected Queue<Integer> ports;
