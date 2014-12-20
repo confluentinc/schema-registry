@@ -13,6 +13,7 @@ Quickstart
 ./bin/kafka-server-start.sh config/server.properties
 
 3. Start the REST server by running io.confluent.kafka.schemaregistry.rest.Main
+mvn exec:java
 
 4. Register a schema
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/topics/Kafka/value/versions -d '
