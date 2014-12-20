@@ -7,10 +7,10 @@ Quickstart
 ----------
 
 1. Start ZooKeeper from the standard Kafka install
-./bin/zookeeper-server.sh config/zookeeper.properties
+./bin/zookeeper-server-start.sh config/zookeeper.properties
 
 2. Start Kafka from the standard Kafka install
-./bin/kafka-server.sh config/server.properties
+./bin/kafka-server-start.sh config/server.properties
 
 3. Start the REST server by running io.confluent.kafka.schemaregistry.rest.Main
 
