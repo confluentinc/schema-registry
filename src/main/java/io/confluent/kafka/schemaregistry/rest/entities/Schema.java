@@ -1,5 +1,6 @@
 package io.confluent.kafka.schemaregistry.rest.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.hibernate.validator.constraints.NotEmpty;
@@ -41,6 +42,7 @@ public class Schema {
     return topic;
   }
 
+  @JsonIgnore
   public SchemaSubType getSchemaSubType() {
     return this.schemaSubType;
   }
