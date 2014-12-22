@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.rest.entities.SchemaSubType;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -35,6 +34,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     try {
       kafkaStore.init();
     } catch (StoreInitializationException e) {
+      throw new SchemaRegistryException("Error initializing the backend Kafka store.", e);
     }
     try {
       Iterator<Schema> allSchemas = kafkaStore.getAll(null, null);
@@ -53,7 +53,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public int register(String topic, SchemaSubType schemaSubType, String schemaString)
+  public int register(String topic, String schemaSubType, String schemaString)
       throws SchemaRegistryException {
 
     int latestVersion = 0;
@@ -63,8 +63,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     int version = latestVersion + 1;
     Schema schema = new Schema(topic, schemaSubType, version, schemaString, false);
 
-    String newKeyForLatestSchema = topic + "," + schemaSubType.toString().toLowerCase() + "," + version;
-    String keyForLatestSchema = topic + "," + schemaSubType.toString().toLowerCase() + "," + latestVersion;
+    String newKeyForLatestSchema = topic + "," + schemaSubType + "," + version;
+    String keyForLatestSchema = topic + "," + schemaSubType + "," + latestVersion;
 
     Schema latestSchema = null;
     try {
@@ -87,8 +87,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Schema get(String topic, SchemaSubType schemaSubType, int version) throws SchemaRegistryException {
-    String key = topic + "," + schemaSubType.toString().toLowerCase() + "," + version;
+  public Schema get(String topic, String schemaSubType, int version) throws SchemaRegistryException {
+    String key = topic + "," + schemaSubType + "," + version;
     Schema schema = null;
     try {
       schema = kafkaStore.get(key);
@@ -107,19 +107,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Iterator<Schema> getAll(String topic, SchemaSubType schemaSubType) throws StoreException {
+  public Iterator<Schema> getAll(String topic, String schemaSubType) throws StoreException {
     int earliestVersion = 1;
     int latestVersion = 1;
     if (schemaLatestVersions.containsKey(Schema.name(topic, schemaSubType))) {
       latestVersion = schemaLatestVersions.get(Schema.name(topic, schemaSubType)) + 1;
     }
-    String keyEarliestVersion = topic + "," + schemaSubType.toString().toLowerCase() + "," + earliestVersion;
-    String keyLatestVersion = topic + "," + schemaSubType.toString().toLowerCase() + "," + latestVersion;
+    String keyEarliestVersion = topic + "," + schemaSubType + "," + earliestVersion;
+    String keyLatestVersion = topic + "," + schemaSubType + "," + latestVersion;
     return kafkaStore.getAll(keyEarliestVersion, keyLatestVersion);
   }
 
   @Override
-  public Iterator<Schema> getAllVersions(String topic, SchemaSubType schemaSubType) throws StoreException {
+  public Iterator<Schema> getAllVersions(String topic, String schemaSubType) throws StoreException {
     int earliestVersion = 1;
     int latestVersion = 1;
     if (schemaLatestVersions.containsKey(Schema.name(topic, schemaSubType))) {
@@ -128,8 +128,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       log.trace("Schema for " + Schema.name(topic, schemaSubType) +
                 "does not exist in version cache. Defaulting to version 1 as latest version");
     }
-    String keyEarliestVersion = topic + "," + schemaSubType.toString().toLowerCase() + "," + earliestVersion;
-    String keyLatestVersion = topic + "," + schemaSubType.toString().toLowerCase() + "," + latestVersion;
+    String keyEarliestVersion = topic + "," + schemaSubType + "," + earliestVersion;
+    String keyLatestVersion = topic + "," + schemaSubType + "," + latestVersion;
     log.trace("Getting schemas between versions: " + earliestVersion + "," + latestVersion);
     return kafkaStore.getAll(keyEarliestVersion, keyLatestVersion);
   }

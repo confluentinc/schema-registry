@@ -12,7 +12,7 @@ public class Schema {
   @NotEmpty
   private final String topic;
   @NotEmpty
-  private final SchemaSubType schemaSubType;
+  private final String schemaSubType;
   @Min(1)
   private final Integer version;
   @NotEmpty
@@ -20,7 +20,7 @@ public class Schema {
   private boolean deprecated = false;
 
   public Schema(@JsonProperty("topic") String topic,
-                SchemaSubType schemaSubType,
+                @JsonProperty("subtype") String schemaSubType,
                 @JsonProperty("version") Integer version,
                 @JsonProperty("schema") String schema,
                 @JsonProperty("deprecated") boolean deprecated) {
@@ -32,7 +32,7 @@ public class Schema {
   }
 
   // TODO - should this really be a json property, or is it something we just want to use internally?
-  @JsonProperty("name")
+  @JsonIgnore
   public String getName() {
     return Schema.name(this.getTopic(), this.getSchemaSubType());
   }
@@ -42,14 +42,9 @@ public class Schema {
     return topic;
   }
 
-  @JsonIgnore
-  public SchemaSubType getSchemaSubType() {
-    return this.schemaSubType;
-  }
-
   @JsonProperty("subtype")
-  public String getSchemaSubtypeString() {
-    return this.getSchemaSubType().toString().toLowerCase();
+  public String getSchemaSubType() {
+    return this.schemaSubType;
   }
 
   @JsonProperty("schema")
@@ -121,7 +116,7 @@ public class Schema {
     StringBuilder sb = new StringBuilder();
     sb.append("{name=" + this.getName() + ",");
     sb.append("{topic=" + this.topic + ",");
-    sb.append("{schemaSubType=" + this.getSchemaSubtypeString() + ",");
+    sb.append("{schemaSubType=" + this.schemaSubType + ",");
     sb.append("schema=" + this.schema + ",");
     sb.append("version=" + this.version + ",");
     sb.append("deprecated=" + this.deprecated + ",");
@@ -132,7 +127,7 @@ public class Schema {
    * An identifier for the collection of schemas having different versions but
    * the same topic and schemaSubType.
    */
-  public static String name(String topic, SchemaSubType schemaSubType) {
-    return topic + "/" + schemaSubType.toString().toLowerCase();
+  public static String name(String topic, String schemaSubType) {
+    return topic + "/" + schemaSubType;
   }
 }

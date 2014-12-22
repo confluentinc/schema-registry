@@ -21,7 +21,6 @@ import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.rest.entities.SchemaSubType;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
@@ -40,10 +39,10 @@ public class SchemasResource {
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
 
   private final String topic;
-  private final SchemaSubType schemaSubType;
+  private final String schemaSubType;
   private final SchemaRegistry schemaRegistry;
 
-  public SchemasResource(SchemaRegistry registry, String topic, SchemaSubType schemaSubType) {
+  public SchemasResource(SchemaRegistry registry, String topic, String schemaSubType) {
     this.schemaRegistry = registry;
     this.topic = topic;
     this.schemaSubType = schemaSubType;
