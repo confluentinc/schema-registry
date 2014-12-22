@@ -3,6 +3,7 @@ package io.confluent.kafka.schemaregistry.storage.serialization;
 import java.util.Map;
 
 public class StringSerializer implements Serializer<String> {
+  public static StringSerializer INSTANCE = new StringSerializer();
 
   @Override
   public byte[] toBytes(String data) {

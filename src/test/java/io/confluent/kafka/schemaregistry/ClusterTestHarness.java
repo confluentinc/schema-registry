@@ -25,6 +25,7 @@ import java.util.Properties;
 import java.util.Queue;
 import java.util.Vector;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestConfiguration;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.SystemTime$;
@@ -42,6 +43,7 @@ import scala.collection.JavaConversions;
 public abstract class ClusterTestHarness {
 
   public static final int DEFAULT_NUM_BROKERS = 1;
+  public static final String KAFKASTORE_TOPIC = SchemaRegistryRestConfiguration.DEFAULT_KAFKASTORE_TOPIC;
 
   // Shared config
   protected Queue<Integer> ports;

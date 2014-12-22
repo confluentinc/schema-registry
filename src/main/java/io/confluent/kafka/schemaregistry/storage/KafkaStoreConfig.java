@@ -39,7 +39,7 @@ public class KafkaStoreConfig extends AbstractConfig {
       "The timeout for an operation on the Kafka" +
       " store";
 
-  private static final ConfigDef config = new ConfigDef()
+  protected static final ConfigDef config = new ConfigDef()
       .define(KAFKASTORE_CONNECTION_URL_CONFIG, Type.STRING, Importance.HIGH,
               KAFKASTORE_CONNECTION_URL_DOC)
       .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, Type.INT, 10000, atLeast(0),

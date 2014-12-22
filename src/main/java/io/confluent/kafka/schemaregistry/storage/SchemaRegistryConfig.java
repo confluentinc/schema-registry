@@ -4,19 +4,27 @@ import org.apache.kafka.common.config.ConfigDef;
 
 import java.util.Map;
 
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-
 public class SchemaRegistryConfig extends KafkaStoreConfig {
 
-  private static final ConfigDef config = new ConfigDef()
-      .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
-              KAFKASTORE_CONNECTION_URL_DOC)
-      .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
-              ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC)
-      .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
-              KAFKASTORE_TOPIC_DOC)
-      .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
-              ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC);
+  /**
+   * <code>advertised.host</code>
+   */
+  public static final String ADVERTISED_HOST_CONFIG = "advertised.host";
+
+  /**
+   * <code>port</code>
+   */
+  public static final String PORT_CONFIG = "port";
+
+  protected static final String ADVERTISED_HOST_DOC =
+      "Host to bind the HTTP servlet";
+  protected static final String PORT_DOC =
+      "Port to bind the HTTP servlet";
+
+  private static final ConfigDef config = KafkaStoreConfig.config
+      .define(ADVERTISED_HOST_CONFIG, ConfigDef.Type.STRING, "", ConfigDef.Importance.LOW,
+              ADVERTISED_HOST_DOC)
+      .define(PORT_CONFIG, ConfigDef.Type.INT, 8080, ConfigDef.Importance.LOW, PORT_DOC);
 
   public SchemaRegistryConfig(ConfigDef arg0, Map<?, ?> arg1) {
     super(arg0, arg1);

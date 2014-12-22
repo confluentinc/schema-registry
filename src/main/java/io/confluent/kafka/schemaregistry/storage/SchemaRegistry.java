@@ -8,6 +8,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 public interface SchemaRegistry {
+  void init() throws SchemaRegistryException ;
 
   int register(String topic, Schema schema) throws SchemaRegistryException;
 

@@ -24,7 +24,6 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationExcepti
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
 import kafka.cluster.Broker;
 import kafka.consumer.ConsumerConfig;
 import kafka.consumer.ConsumerIterator;
@@ -41,7 +40,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private static final Logger log = LoggerFactory.getLogger(KafkaStore.class);
 
   private final String kafkaClusterZkUrl;
-  private final int zkSessionTimeoutMs;
   private final String topic;
   private final String groupId;
   private final Serializer<K> keySerializer;
@@ -53,13 +51,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private KafkaProducer producer;
   private ConsumerConnector consumer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
+  private final ZkClient zkClient;
 
   public KafkaStore(KafkaStoreConfig storeConfig, Serializer<K> keySerializer,
-                    Serializer<V> valueSerializer, Store<K, V> localStore) {
+                    Serializer<V> valueSerializer, Store<K, V> localStore, ZkClient zkClient) {
     this.kafkaClusterZkUrl =
         storeConfig.getString(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
-    this.zkSessionTimeoutMs =
-        storeConfig.getInt(KafkaStoreConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
     this.topic = storeConfig.getString(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG);
     this.groupId = "KafkaStore-" + topic + "-bootstrap-" + random.nextInt(1000000);
     timeout = storeConfig.getInt(KafkaStoreConfig.KAFKASTORE_TIMEOUT_CONFIG);
@@ -69,6 +66,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<K, V>(kafkaClusterZkUrl, topic, groupId, keySerializer,
                                          valueSerializer, this.localStore);
+    this.zkClient = zkClient;
   }
 
   @Override
@@ -77,8 +75,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
     }
-    ZkClient zkClient = new ZkClient(kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-                                     new ZkStringSerializer());
+
     // set the producer properties
     List<Broker> brokers =
         JavaConversions.seqAsJavaList(ZkUtils.getAllBrokersInCluster(zkClient));

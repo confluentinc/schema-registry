@@ -6,12 +6,9 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Properties;
-
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
-import io.confluent.kafka.schemaregistry.storage.serialization.StringSerializer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -20,8 +17,6 @@ import static org.junit.Assert.fail;
 public class KafkaStoreTest extends ClusterTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreTest.class);
-
-  private String topic = "_schemas";
 
   @Before
   public void setup() {
@@ -35,39 +30,15 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testInitialization() {
-    Properties props = new Properties();
-    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, topic);
-    KafkaStoreConfig storeConfig = new KafkaStoreConfig(props);
-    StringSerializer stringSerializer = new StringSerializer();
-    KafkaStore<String, String> kafkaStore = new KafkaStore<String, String>(storeConfig,
-                                                                           stringSerializer,
-                                                                           stringSerializer,
-                                                                           new InMemoryStore<String, String>());
-    try {
-      kafkaStore.init();
-    } catch (StoreInitializationException e) {
-      fail("Kafka store failed to initialize");
-    }
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
+                                                                                       zkClient);
     kafkaStore.close();
   }
 
   @Test
   public void testIncorrectInitialization() {
-    Properties props = new Properties();
-    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, topic);
-    KafkaStoreConfig storeConfig = new KafkaStoreConfig(props);
-    StringSerializer stringSerializer = new StringSerializer();
-    KafkaStore<String, String> kafkaStore = new KafkaStore<String, String>(storeConfig,
-                                                                           stringSerializer,
-                                                                           stringSerializer,
-                                                                           new InMemoryStore<String, String>());
-    try {
-      kafkaStore.init();
-    } catch (StoreInitializationException e) {
-      fail("Kafka store failed to initialize");
-    }
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
+                                                                                       zkClient);
     try {
       kafkaStore.init();
       fail("Kafka store repeated initialization should fail");
@@ -79,21 +50,8 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testSimplePut() throws InterruptedException {
-    Properties props = new Properties();
-    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, topic);
-    KafkaStoreConfig storeConfig = new KafkaStoreConfig(props);
-    StringSerializer stringSerializer = new StringSerializer();
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
-    KafkaStore<String, String> kafkaStore = new KafkaStore<String, String>(storeConfig,
-                                                                           stringSerializer,
-                                                                           stringSerializer,
-                                                                           inMemoryStore);
-    try {
-      kafkaStore.init();
-    } catch (StoreInitializationException e) {
-      fail("Kafka store failed to initialize");
-    }
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
+                                                                                       zkClient);
     String key = "Kafka";
     String value = "Rocks";
     try {
@@ -113,21 +71,10 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testSimpleGetAfterFailure() throws InterruptedException {
-    Properties props = new Properties();
-    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, topic);
-    KafkaStoreConfig storeConfig = new KafkaStoreConfig(props);
-    StringSerializer stringSerializer = new StringSerializer();
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
-    KafkaStore<String, String> kafkaStore = new KafkaStore<String, String>(storeConfig,
-                                                                           stringSerializer,
-                                                                           stringSerializer,
-                                                                           inMemoryStore);
-    try {
-      kafkaStore.init();
-    } catch (StoreInitializationException e) {
-      fail("Kafka store failed to initialize");
-    }
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
+                                                                                       zkClient,
+                                                                                       inMemoryStore);
     String key = "Kafka";
     String value = "Rocks";
     try {
@@ -145,13 +92,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     kafkaStore.close();
 
     // recreate kafka store
-    kafkaStore = new KafkaStore<String, String>(storeConfig, stringSerializer, stringSerializer,
-                                                inMemoryStore);
-    try {
-      kafkaStore.init();
-    } catch (StoreInitializationException e) {
-      fail("Kafka store failed to initialize");
-    }
+    kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore);
     retrievedValue = null;
     try {
       retrievedValue = kafkaStore.get(key);
@@ -164,21 +105,8 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testSimpleDelete() throws InterruptedException {
-    Properties props = new Properties();
-    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, topic);
-    KafkaStoreConfig storeConfig = new KafkaStoreConfig(props);
-    StringSerializer stringSerializer = new StringSerializer();
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
-    KafkaStore<String, String> kafkaStore = new KafkaStore<String, String>(storeConfig,
-                                                                           stringSerializer,
-                                                                           stringSerializer,
-                                                                           inMemoryStore);
-    try {
-      kafkaStore.init();
-    } catch (StoreInitializationException e) {
-      fail("Kafka store failed to initialize");
-    }
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
+                                                                                       zkClient);
     String key = "Kafka";
     String value = "Rocks";
     try {
@@ -211,21 +139,10 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testDeleteAfterRestart() throws InterruptedException {
-    Properties props = new Properties();
-    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, topic);
-    KafkaStoreConfig storeConfig = new KafkaStoreConfig(props);
-    StringSerializer stringSerializer = new StringSerializer();
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
-    KafkaStore<String, String> kafkaStore = new KafkaStore<String, String>(storeConfig,
-                                                                           stringSerializer,
-                                                                           stringSerializer,
-                                                                           inMemoryStore);
-    try {
-      kafkaStore.init();
-    } catch (StoreInitializationException e) {
-      fail("Kafka store failed to initialize");
-    }
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
+                                                                                       zkClient,
+                                                                                       inMemoryStore);
     String key = "Kafka";
     String value = "Rocks";
     try {
@@ -256,13 +173,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     assertNull("Value should have been deleted", retrievedValue);
     kafkaStore.close();
     // recreate kafka store
-    kafkaStore = new KafkaStore<String, String>(storeConfig, stringSerializer, stringSerializer,
-                                                inMemoryStore);
-    try {
-      kafkaStore.init();
-    } catch (StoreInitializationException e) {
-      fail("Kafka store failed to initialize");
-    }
+    kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore);
     // verify that key still doesn't exist in the store
     retrievedValue = value;
     try {

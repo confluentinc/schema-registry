@@ -77,16 +77,16 @@ public class Schema {
 
     Schema that = (Schema) o;
 
-    if (!name.equals(that.getName())) {
+    if (!this.name.equals(that.name)) {
       return false;
     }
-    if (!schema.equals(that.schema)) {
+    if (!this.schema.equals(that.schema)) {
       return false;
     }
-    if (this.version != that.getVersion()) {
+    if (!this.version.equals(that.version)) {
       return false;
     }
-    if (this.deprecated && !that.deprecated) {
+    if (this.deprecated != that.deprecated) {
       return false;
     }
 

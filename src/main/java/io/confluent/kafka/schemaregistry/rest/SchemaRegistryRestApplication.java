@@ -45,6 +45,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryRes
     SchemaRegistry schemaRegistry = null;
     try {
       schemaRegistry = new KafkaSchemaRegistry(schemaRegistryConfig, new SchemaSerializer());
+      schemaRegistry.init();
     } catch (SchemaRegistryException e) {
       log.error("Error starting the schema registry", e);
       System.exit(1);
