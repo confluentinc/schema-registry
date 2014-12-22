@@ -115,7 +115,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <mainClass>io.confluent.kafka.schemaregistry.Main</mainClass>
+                    <mainClass>io.confluent.kafka.schemaregistry.rest.Main</mainClass>
                 </configuration>
             </plugin>
         </plugins>
