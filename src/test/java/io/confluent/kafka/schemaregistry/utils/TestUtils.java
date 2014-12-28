@@ -1,22 +1,46 @@
+/**
+ * Copyright 2014 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.confluent.kafka.schemaregistry.utils;
 
 import java.io.File;
-import java.util.Properties;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
 
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.storage.serialization.SchemaSerializer;
+import io.confluent.kafka.schemaregistry.rest.Versions;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+/**
+ * For general utility methods used in unit tests.
+ */
 public class TestUtils {
 
-  static String IoTmpDir = System.getProperty("java.io.tmpdir");
-  static Random random = new Random();
-  static SchemaSerializer schemaSerializer = new SchemaSerializer();
+  private static final String IoTmpDir = System.getProperty("java.io.tmpdir");
+  private static final Random random = new Random();
+  public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
+
+  static {
+    DEFAULT_REQUEST_PROPERTIES = new HashMap<String, String>();
+    DEFAULT_REQUEST_PROPERTIES.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+  }
 
   /**
    * Create a temporary directory
@@ -56,36 +80,16 @@ public class TestUtils {
   }
 
   /**
-   * Create a KafkaSchemaRegistry instance and initialize it.
-   * @param props
-   * @return
-   */
-  public static KafkaSchemaRegistry createAndInitSchemaRegistryInstance(Properties props) {
-    KafkaSchemaRegistry schemaRegistry = null;
-    try {
-      SchemaRegistryConfig schemaRegistryConfig = new SchemaRegistryConfig(props);
-      schemaRegistry = new KafkaSchemaRegistry(schemaRegistryConfig, schemaSerializer);
-      schemaRegistry.init();
-    } catch (SchemaRegistryException e) {
-      fail("Can't instantiate KafkaSchemaRegistry: " + e);
-    }
-    return schemaRegistry;
-  }
-
-  /**
    * Wait until a callable returns true or the timeout is reached.
-   * @param callable
-   * @param timeoutMs
-   * @param errorMsg
-   * @throws Exception
    */
   public static void waitUntilTrue(Callable<Boolean> callable, long timeoutMs, String errorMsg) {
     try {
-    long startTime = System.currentTimeMillis();
+      long startTime = System.currentTimeMillis();
       do {
         Boolean state = callable.call();
-        if (state)
+        if (state) {
           return;
+        }
         if (System.currentTimeMillis() > startTime + timeoutMs) {
           fail(errorMsg);
         }
@@ -94,5 +98,34 @@ public class TestUtils {
     } catch (Exception e) {
       fail("Unexpected exception: " + e);
     }
+  }
+
+  public static int registerSchema(String baseUrl, String schemaString, String topic, boolean iskey)
+      throws IOException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+
+    Map<String, String> requestProperties = new HashMap<String, String>();
+    requestProperties.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+
+    return RestUtils.registerSchema(baseUrl, requestProperties, request, topic, iskey);
+  }
+
+  /**
+   * Register a new schema and verify that it can be found on the expected version.
+   */
+  public static void registerAndVerifySchema(String baseUrl, String schemaString,
+                                             int expectedVersion, String topic, boolean isKey)
+      throws IOException {
+    assertEquals("Registering a new schema should succeed",
+                 TestUtils.registerSchema(baseUrl, schemaString, topic, isKey),
+                 expectedVersion);
+
+    // the newly registered schema should be immediately readable on the master
+    assertEquals("Registered schema should be found",
+                 RestUtils.getVersion(baseUrl,
+                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, topic, isKey,
+                                      expectedVersion).getSchema(),
+                 schemaString);
   }
 }

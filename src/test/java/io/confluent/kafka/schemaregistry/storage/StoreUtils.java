@@ -1,3 +1,18 @@
+/**
+ * Copyright 2014 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.confluent.kafka.schemaregistry.storage;
 
 import org.I0Itec.zkclient.ZkClient;
@@ -10,34 +25,35 @@ import io.confluent.kafka.schemaregistry.storage.serialization.StringSerializer;
 
 import static org.junit.Assert.fail;
 
+/**
+ * For all store related utility methods.
+ */
 public class StoreUtils {
 
   /**
    * Get a new instance of KafkaStore and initialize it.
-   * @return
    */
-  public static KafkaStore<String, String> createAndInitKafkaStoreInstance(String zkConnect,
-                                                                           ZkClient zkClient) {
+  public static KafkaStore<String, String> createAndInitKafkaStoreInstance(
+      String zkConnect, ZkClient zkClient) {
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
     return createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore);
   }
 
   /**
    * Get a new instance of KafkaStore and initialize it.
-   * @return
    */
-  public static KafkaStore<String, String> createAndInitKafkaStoreInstance(String zkConnect,
-                                                                           ZkClient zkClient,
-                                                                           Store<String, String> inMemoryStore) {
+  public static KafkaStore<String, String> createAndInitKafkaStoreInstance(
+      String zkConnect, ZkClient zkClient, Store<String, String> inMemoryStore) {
     Properties props = new Properties();
-    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
-    KafkaStoreConfig storeConfig = new KafkaStoreConfig(props);
-    KafkaStore<String, String> kafkaStore = new KafkaStore<String, String>(storeConfig,
-                                                                           StringSerializer.INSTANCE,
-                                                                           StringSerializer.INSTANCE,
-                                                                           inMemoryStore,
-                                                                           zkClient);
+    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+    //turn off offset commit
+    props.put(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG,
+              String.valueOf(Integer.MAX_VALUE));
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaStore<String, String> kafkaStore =
+        new KafkaStore<String, String>(config, StringSerializer.INSTANCE,
+                                       StringSerializer.INSTANCE, inMemoryStore, zkClient);
     try {
       kafkaStore.init();
     } catch (StoreInitializationException e) {

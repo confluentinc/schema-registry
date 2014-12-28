@@ -25,7 +25,7 @@ import java.util.Properties;
 import java.util.Queue;
 import java.util.Vector;
 
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestConfiguration;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryConfig;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.SystemTime$;
@@ -43,7 +43,7 @@ import scala.collection.JavaConversions;
 public abstract class ClusterTestHarness {
 
   public static final int DEFAULT_NUM_BROKERS = 1;
-  public static final String KAFKASTORE_TOPIC = SchemaRegistryRestConfiguration.DEFAULT_KAFKASTORE_TOPIC;
+  public static final String KAFKASTORE_TOPIC = SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC;
 
   // Shared config
   protected Queue<Integer> ports;
@@ -63,16 +63,20 @@ public abstract class ClusterTestHarness {
 
   protected String bootstrapServers = null;
 
+  protected RestApp restApp = null;
+
   public ClusterTestHarness() {
     this(DEFAULT_NUM_BROKERS);
   }
 
   public ClusterTestHarness(int numBrokers) {
-    // 1 port per broker + ZK + REST server
-    this(numBrokers, numBrokers + 2);
+    this(numBrokers, false);
   }
 
-  public ClusterTestHarness(int numBrokers, int numPorts) {
+  public ClusterTestHarness(int numBrokers, boolean setupRestApp) {
+    // 1 port for ZK, 1 port per broker, and 1 port for the rest App if needed
+    int numPorts = 1 + numBrokers + (setupRestApp ? 1 : 0);
+
     ports = new ArrayDeque<Integer>();
     for (Object portObj : JavaConversions.asJavaList(TestUtils.choosePorts(numPorts))) {
       ports.add((Integer) portObj);
@@ -85,12 +89,10 @@ public abstract class ClusterTestHarness {
     for (int i = 0; i < numBrokers; i++) {
       int port = ports.remove();
       Properties props = TestUtils.createBrokerConfig(i, port, false);
-      // Turn auto creation *off*, unlike the default. This lets us test errors that should be generated when
-      // brokers are configured that way.
       props.setProperty("auto.create.topics.enable", "true");
       props.setProperty("num.partitions", "1");
-      // We *must* override this to use the port we allocated (Kafka currently allocates one port that it always
-      // uses for ZK
+      // We *must* override this to use the port we allocated (Kafka currently allocates one port
+      // that it always uses for ZK
       props.setProperty("zookeeper.connect", this.zkConnect);
       configs.add(new KafkaConfig(props));
 
@@ -98,6 +100,11 @@ public abstract class ClusterTestHarness {
         bootstrapServers += ",";
       }
       bootstrapServers = bootstrapServers + "localhost:" + ((Integer) port).toString();
+    }
+
+    if (setupRestApp) {
+      int restPort = ports.remove();
+      restApp = new RestApp(restPort, zkConnect, KAFKASTORE_TOPIC);
     }
   }
 
@@ -118,10 +125,16 @@ public abstract class ClusterTestHarness {
       KafkaServer server = TestUtils.createServer(config, SystemTime$.MODULE$);
       servers.add(server);
     }
+
+    if (restApp != null)
+      restApp.start();
   }
 
   @After
   public void tearDown() throws Exception {
+    if (restApp != null)
+      restApp.stop();
+
     for (KafkaServer server : servers) {
       server.shutdown();
     }

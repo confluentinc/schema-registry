@@ -1,3 +1,18 @@
+/**
+ * Copyright 2014 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.confluent.kafka.schemaregistry.zookeeper;
 
 import org.I0Itec.zkclient.IZkDataListener;
@@ -16,6 +31,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
 import kafka.utils.ZkUtils;
 
 public class ZookeeperMasterElector {
+
   private static final Logger log = LoggerFactory.getLogger(ZookeeperMasterElector.class);
   private static final String MASTER_PATH = "/schema-registry-master";
 
@@ -25,20 +41,20 @@ public class ZookeeperMasterElector {
   private final KafkaSchemaRegistry schemaRegistry;
 
 
-  public ZookeeperMasterElector(ZkClient zkClient, SchemaRegistryIdentity myIdentity, KafkaSchemaRegistry schemaRegistry)
-    throws SchemaRegistryException {
+  public ZookeeperMasterElector(ZkClient zkClient, SchemaRegistryIdentity myIdentity,
+                                KafkaSchemaRegistry schemaRegistry)
+      throws SchemaRegistryException {
     this.zkClient = zkClient;
     this.myIdentity = myIdentity;
     try {
       this.myIdentityString = myIdentity.toJson();
     } catch (IOException e) {
-      throw new SchemaRegistryException("Error while serializing " + myIdentity.toString(),
+      throw new SchemaRegistryException(String.format(
+          "Error while serializing schema registry identity %s to json", myIdentity.toString()),
                                         e);
     }
     this.schemaRegistry = schemaRegistry;
-  }
 
-  public void init() {
     zkClient.subscribeStateChanges(new SessionExpirationListener());
     zkClient.subscribeDataChanges(MASTER_PATH, new MasterChangeListener());
     electMaster();
@@ -48,7 +64,7 @@ public class ZookeeperMasterElector {
     zkClient.unsubscribeAll();
   }
 
-  public void electMaster() {
+  public void electMaster() throws SchemaRegistryException {
     SchemaRegistryIdentity masterIdentity = null;
     try {
       ZkUtils.createEphemeralPathExpectConflict(zkClient, MASTER_PATH, myIdentityString);
@@ -61,7 +77,7 @@ public class ZookeeperMasterElector {
         try {
           masterIdentity = SchemaRegistryIdentity.fromJson(masterIdentityString);
         } catch (IOException ioe) {
-          log.error("Can't parse schema registry identity string " + masterIdentityString);
+          log.error("Can't parse schema registry identity json string " + masterIdentityString);
         }
       } catch (ZkNoNodeException znne) {
         // just let it go; we will get another handleDataDeleted event
@@ -71,8 +87,11 @@ public class ZookeeperMasterElector {
   }
 
   private class MasterChangeListener implements IZkDataListener {
+
     /**
-     * Called when the leader information stored in zookeeper has changed. Record the new leader in memory
+     * Called when the leader information stored in zookeeper has changed. Record the new leader in
+     * memory
+     *
      * @throws Exception On any error.
      */
     @Override
@@ -81,11 +100,13 @@ public class ZookeeperMasterElector {
     }
 
     /**
-     * Called when the leader information stored in zookeeper has been delete. Try to elect as the leader
+     * Called when the leader information stored in zookeeper has been delete. Try to elect as the
+     * leader
+     *
      * @throws Exception On any error.
      */
     @Override
-    public void handleDataDeleted(String dataPath) {
+    public void handleDataDeleted(String dataPath) throws Exception {
       electMaster();
     }
   }
@@ -98,13 +119,13 @@ public class ZookeeperMasterElector {
     }
 
     /**
-     * Called after the zookeeper session has expired and a new session has been created. You would have to re-create
-     * any ephemeral nodes here.
+     * Called after the zookeeper session has expired and a new session has been created. You would
+     * have to re-create any ephemeral nodes here.
      *
      * @throws Exception On any error.
      */
     @Override
-    public void handleNewSession() {
+    public void handleNewSession() throws Exception {
       electMaster();
     }
   }
