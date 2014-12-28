@@ -43,7 +43,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     log.debug("Shutting down");
   }
 
-  /*
   @Test
   public void testInitialization() {
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
@@ -84,7 +83,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     assertEquals("Retrieved value should match entered value", value, retrievedValue);
     kafkaStore.close();
   }
-  */
 
   @Test
   public void testSimpleGetAfterFailure() throws InterruptedException {
@@ -120,7 +118,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     kafkaStore.close();
   }
 
-  /*
   @Test
   public void testSimpleDelete() throws InterruptedException {
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
@@ -202,5 +199,4 @@ public class KafkaStoreTest extends ClusterTestHarness {
     assertNull("Value should have been deleted", retrievedValue);
     kafkaStore.close();
   }
-  */
 }

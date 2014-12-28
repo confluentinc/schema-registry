@@ -49,7 +49,7 @@ public class StoreUtils {
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
     //turn off offset commit
     props.put(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG,
-              String.valueOf(Integer.MAX_VALUE));
+              String.valueOf(-1));
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     KafkaStore<String, String> kafkaStore =
         new KafkaStore<String, String>(config, StringSerializer.INSTANCE,

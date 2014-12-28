@@ -162,8 +162,10 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     } catch (ConsumerTimeoutException cte) {
       // do nothing
     }
-    if (System.currentTimeMillis() - lastCommitTime > commitInterval)
+    if (commitInterval > 0 && System.currentTimeMillis() - lastCommitTime > commitInterval) {
+      log.debug("Committing offsets");
       consumer.commitOffsets(true);
+    }
   }
 
   @Override
