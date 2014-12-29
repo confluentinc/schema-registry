@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryConfig;
 import io.confluent.rest.ConfigurationException;
 
 public class Main {
@@ -33,8 +34,8 @@ public class Main {
   public static void main(String[] args) throws IOException {
 
     try {
-      SchemaRegistryRestConfiguration config =
-          new SchemaRegistryRestConfiguration((args.length > 0 ? args[0] : null));
+      SchemaRegistryConfig config =
+          new SchemaRegistryConfig((args.length > 0 ? args[0] : null));
       SchemaRegistryRestApplication app = new SchemaRegistryRestApplication(config);
       Server server = app.createServer();
       server.start();

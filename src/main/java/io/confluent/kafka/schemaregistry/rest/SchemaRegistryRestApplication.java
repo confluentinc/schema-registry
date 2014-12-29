@@ -33,7 +33,7 @@ import io.confluent.kafka.schemaregistry.storage.serialization.SchemaSerializer;
 import io.confluent.rest.Application;
 import io.confluent.rest.ConfigurationException;
 
-public class SchemaRegistryRestApplication extends Application<SchemaRegistryRestConfiguration> {
+public class SchemaRegistryRestApplication extends Application<SchemaRegistryConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryRestApplication.class);
   private SchemaRegistry schemaRegistry = null;
@@ -43,17 +43,15 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryRes
   }
 
   public SchemaRegistryRestApplication(Properties props) throws ConfigurationException {
-    this(new SchemaRegistryRestConfiguration(props));
+    this(new SchemaRegistryConfig(props));
   }
 
-  public SchemaRegistryRestApplication(SchemaRegistryRestConfiguration config) {
+  public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
     this.config = config;
   }
 
   @Override
-  public void setupResources(Configurable<?> config, SchemaRegistryRestConfiguration appConfig) {
-    SchemaRegistryConfig schemaRegistryConfig = appConfig.getSchemaRegistryConfig();
-
+  public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
     try {
       schemaRegistry = new KafkaSchemaRegistry(schemaRegistryConfig, new SchemaSerializer());
       schemaRegistry.init();
@@ -67,7 +65,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryRes
   }
 
   @Override
-  public SchemaRegistryRestConfiguration configure() throws ConfigurationException {
+  public SchemaRegistryConfig configure() {
     return config;
   }
 

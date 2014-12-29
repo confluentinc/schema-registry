@@ -20,25 +20,16 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Map;
 
-import io.confluent.common.config.AbstractConfig;
 import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigException;
+import io.confluent.kafka.schemaregistry.rest.Versions;
+import io.confluent.rest.ConfigurationException;
+import io.confluent.rest.RestConfig;
 
 import static io.confluent.common.config.ConfigDef.Range.atLeast;
 
-public class SchemaRegistryConfig extends AbstractConfig {
+public class SchemaRegistryConfig extends RestConfig {
 
-  /**
-   * <code>port</code>
-   */
-  public static final String PORT_CONFIG = "port";
-  protected static final String PORT_DOC = "Port to bind the HTTP servlet";
-  public static final int DEFAULT_PORT = 8080;
-
-
-  /**
-   * <code>kafkastore.connection.url</code>
-   */
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper url for the Kafka cluster";
@@ -80,22 +71,28 @@ public class SchemaRegistryConfig extends AbstractConfig {
   public static final String ADVERTISED_HOST_CONFIG = "advertised.host";
   protected static final String ADVERTISED_HOST_DOC = "The host name advertised in Zookeeper";
 
-
-  protected static final ConfigDef config = new ConfigDef()
-      .define(PORT_CONFIG, ConfigDef.Type.INT, DEFAULT_PORT, ConfigDef.Importance.LOW, PORT_DOC)
-      .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
-              KAFKASTORE_CONNECTION_URL_DOC)
-      .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
-              ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC)
-      .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKASTORE_TOPIC,
-              ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_DOC)
-      .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
-              ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC)
-      .define(KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT, 60000,
-              ConfigDef.Importance.MEDIUM,
-              KAFKASTORE_COMMIT_INTERVAL_MS_DOC)
-      .define(ADVERTISED_HOST_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
-              ConfigDef.Importance.LOW, ADVERTISED_HOST_DOC);
+  static {
+    config
+        .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
+                        Versions.PREFERRED_RESPONSE_TYPES, ConfigDef.Importance.HIGH,
+                        RESPONSE_MEDIATYPE_PREFERRED_CONFIG_DOC)
+        .defineOverride(RESPONSE_MEDIATYPE_DEFAULT_CONFIG, ConfigDef.Type.STRING,
+                        Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT, ConfigDef.Importance.HIGH,
+                        RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
+        .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
+                KAFKASTORE_CONNECTION_URL_DOC)
+        .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
+                ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC)
+        .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKASTORE_TOPIC,
+                ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_DOC)
+        .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
+                ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC)
+        .define(KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT, 60000,
+                ConfigDef.Importance.MEDIUM,
+                KAFKASTORE_COMMIT_INTERVAL_MS_DOC)
+        .define(ADVERTISED_HOST_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
+                ConfigDef.Importance.LOW, ADVERTISED_HOST_DOC);
+  }
 
   private static String getDefaultHost() {
     try {
@@ -105,12 +102,12 @@ public class SchemaRegistryConfig extends AbstractConfig {
     }
   }
 
-  public SchemaRegistryConfig(ConfigDef arg0, Map<?, ?> arg1) {
-    super(arg0, arg1);
+  public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props) {
+    super(props);
   }
 
-  public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props) {
-    super(config, props);
+  public SchemaRegistryConfig(String propsFile) throws ConfigurationException {
+    this(getPropsFromFile(propsFile));
   }
 
   public static void main(String[] args) {
