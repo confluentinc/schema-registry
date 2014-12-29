@@ -23,8 +23,8 @@ import java.util.Map;
 import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.rest.Versions;
-import io.confluent.rest.ConfigurationException;
 import io.confluent.rest.RestConfig;
+import io.confluent.rest.RestConfigException;
 
 import static io.confluent.common.config.ConfigDef.Range.atLeast;
 
@@ -106,7 +106,7 @@ public class SchemaRegistryConfig extends RestConfig {
     super(props);
   }
 
-  public SchemaRegistryConfig(String propsFile) throws ConfigurationException {
+  public SchemaRegistryConfig(String propsFile) throws RestConfigException {
     this(getPropsFromFile(propsFile));
   }
 
