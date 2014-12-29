@@ -1,5 +1,17 @@
 /**
+ * Copyright 2014 Confluent Inc.
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package io.confluent.kafka.schemaregistry.storage;
 
@@ -17,9 +29,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
-/**
- * @author nnarkhed
- */
 public class RocksDbStore implements Store<byte[], byte[]> {
 
   private final Options options;
@@ -114,6 +123,12 @@ public class RocksDbStore implements Store<byte[], byte[]> {
     } catch (RocksDBException e) {
       throw new StoreException("Error during a RocksDB delete operation", e);
     }
+  }
+
+  @Override
+  public Iterator<byte[]> getAllKeys() throws StoreException {
+    //TODO: to be implemented
+    throw new UnsupportedOperationException("To be implemented");
   }
 
   @Override
