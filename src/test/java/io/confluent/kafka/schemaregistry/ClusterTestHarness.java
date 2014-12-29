@@ -25,7 +25,7 @@ import java.util.Properties;
 import java.util.Queue;
 import java.util.Vector;
 
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.SystemTime$;

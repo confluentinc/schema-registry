@@ -20,6 +20,7 @@ import org.I0Itec.zkclient.ZkClient;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.StringSerializer;
 

@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.Vector;
 
 import io.confluent.kafka.schemaregistry.rest.RegisterSchemaForwardingAgent;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;

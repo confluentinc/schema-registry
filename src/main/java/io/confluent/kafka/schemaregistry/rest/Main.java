@@ -21,8 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryConfig;
-import io.confluent.rest.ConfigurationException;
+import io.confluent.rest.RestConfigException;
 
 public class Main {
 
@@ -41,7 +40,7 @@ public class Main {
       server.start();
       log.info("Server started, listening for requests...");
       server.join();
-    } catch (ConfigurationException e) {
+    } catch (RestConfigException e) {
       log.error("Server configuration failed: ", e);
       System.exit(1);
     } catch (Exception e) {
