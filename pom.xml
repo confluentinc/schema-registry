@@ -11,6 +11,7 @@
 
     <properties>
         <jersey.version>2.6</jersey.version>
+        <confluent-common.version>0.1-SNAPSHOT</confluent-common.version>
         <kafka.version>0.8.2-beta</kafka.version>
         <kafka.scala.version>2.10</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
@@ -33,6 +34,16 @@
     </dependencyManagement>
 
     <dependencies>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>common-config</artifactId>
+            <version>0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>common-utils</artifactId>
+            <version>0.1-SNAPSHOT</version>
+        </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.containers</groupId>
             <artifactId>jersey-container-servlet</artifactId>

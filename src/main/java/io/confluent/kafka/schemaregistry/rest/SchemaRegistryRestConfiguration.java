@@ -1,13 +1,11 @@
 package io.confluent.kafka.schemaregistry.rest;
 
-import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.utils.Time;
-
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Properties;
 
-import io.confluent.kafka.schemaregistry.storage.KafkaStoreConfig;
+import io.confluent.common.utils.SystemTime;
+import io.confluent.common.utils.Time;
 import io.confluent.rest.Configuration;
 import io.confluent.rest.ConfigurationException;
 
@@ -112,25 +110,5 @@ public class SchemaRegistryRestConfiguration extends Configuration {
       throw new ConfigurationException("Couldn't load properties from " + propsFile, e);
     }
     return props;
-  }
-
-  @Override
-  public boolean getDebug() {
-    return debug;
-  }
-
-  @Override
-  public int getPort() {
-    return port;
-  }
-
-  @Override
-  public Iterable<String> getPreferredResponseMediaTypes() {
-    return Versions.PREFERRED_RESPONSE_TYPES;
-  }
-
-  @Override
-  public String getDefaultResponseMediaType() {
-    return Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT;
   }
 }

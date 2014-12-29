@@ -1,13 +1,13 @@
 package io.confluent.kafka.schemaregistry.storage;
 
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.common.config.ConfigDef.Type;
-
 import java.util.Map;
 
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import io.confluent.common.config.AbstractConfig;
+import io.confluent.common.config.ConfigDef;
+
+import static io.confluent.common.config.ConfigDef.Importance;
+import static io.confluent.common.config.ConfigDef.Range.atLeast;
+import static io.confluent.common.config.ConfigDef.Type;
 
 public class KafkaStoreConfig extends AbstractConfig {
 
@@ -40,7 +40,7 @@ public class KafkaStoreConfig extends AbstractConfig {
       " store";
 
   private static final ConfigDef config = new ConfigDef()
-      .define(KAFKASTORE_CONNECTION_URL_CONFIG, Type.STRING, Importance.HIGH,
+      .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
               KAFKASTORE_CONNECTION_URL_DOC)
       .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, Type.INT, 10000, atLeast(0),
               Importance.LOW,

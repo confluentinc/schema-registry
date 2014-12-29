@@ -1,10 +1,10 @@
 package io.confluent.kafka.schemaregistry.storage;
 
-import org.apache.kafka.common.config.ConfigDef;
-
 import java.util.Map;
 
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import io.confluent.common.config.ConfigDef;
+
+import static io.confluent.common.config.ConfigDef.Range.atLeast;
 
 public class SchemaRegistryConfig extends KafkaStoreConfig {
 

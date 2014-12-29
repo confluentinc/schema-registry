@@ -13,8 +13,7 @@
 
 package io.confluent.kafka.schemaregistry.storage.serialization;
 
-import org.apache.kafka.common.Configurable;
-
+import io.confluent.common.Configurable;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
 
 /**
