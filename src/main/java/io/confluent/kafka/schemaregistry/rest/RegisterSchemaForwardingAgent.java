@@ -54,15 +54,17 @@ public class RegisterSchemaForwardingAgent {
    */
   public int forward(String host, int port) throws SchemaRegistryException {
     String baseUrl = String.format("http://%s:%d", host, port);
-
-    log.debug("Forwarding registering " + registerSchemaRequest + " to " + baseUrl);
+    log.debug(String.format("Forwarding registering schema request %s to %s",
+                            registerSchemaRequest, baseUrl));
     try {
       int version = RestUtils.registerSchema(baseUrl, requestProperties, registerSchemaRequest,
                                              topic, isKey);
       return version;
     } catch (IOException e) {
       throw new SchemaRegistryException(
-          "Unexpected error while forwarding the request to " + baseUrl, e);
+          String.format("Unexpected error while forwarding the registering schema request %s to %s",
+                        registerSchemaRequest, baseUrl),
+          e);
     }
   }
 }

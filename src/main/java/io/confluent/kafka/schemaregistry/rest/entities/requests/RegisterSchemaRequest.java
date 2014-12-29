@@ -65,6 +65,13 @@ public class RegisterSchemaRequest {
     return result;
   }
 
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{schema=" + this.schema + "}");
+    return sb.toString();
+  }
+
   public String toJson() throws IOException {
     return new ObjectMapper().writeValueAsString(this);
   }

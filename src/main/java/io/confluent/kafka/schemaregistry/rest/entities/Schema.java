@@ -123,7 +123,7 @@ public class Schema implements Comparable<Schema> {
     sb.append("{name=" + this.name + ",");
     sb.append("schema=" + this.schema + ",");
     sb.append("version=" + this.version + ",");
-    sb.append("deprecated=" + this.deprecated + ",");
+    sb.append("deprecated=" + this.deprecated + "}");
     return sb.toString();
   }
 
