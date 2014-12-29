@@ -16,8 +16,7 @@ Quickstart
 mvn exec:java
 
 4. Register a schema
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/topics/Kafka/value/versions -d '
- {"schema":"Hello World"}'
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/topics/Kafka/value/versions -d ' {"schema":"Hello World"}'
 
 5. List all topics
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/topics

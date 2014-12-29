@@ -1,5 +1,6 @@
 package io.confluent.kafka.schemaregistry.rest.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.hibernate.validator.constraints.NotEmpty;
@@ -9,31 +10,41 @@ import javax.validation.constraints.Min;
 public class Schema {
 
   @NotEmpty
-  private String name;
-  @Min(1)
-  private Integer version;
+  private final String topic;
   @NotEmpty
-  private String schema;
+  private final String schemaSubType;
+  @Min(1)
+  private final Integer version;
+  @NotEmpty
+  private final String schema;
   private boolean deprecated = false;
 
-  public Schema(@JsonProperty("name") String name,
+  public Schema(@JsonProperty("topic") String topic,
+                @JsonProperty("subtype") String schemaSubType,
                 @JsonProperty("version") Integer version,
                 @JsonProperty("schema") String schema,
                 @JsonProperty("deprecated") boolean deprecated) {
-    this.name = name;
+    this.topic = topic;
+    this.schemaSubType = schemaSubType;
     this.version = version;
     this.schema = schema;
     this.deprecated = deprecated;
   }
 
-  @JsonProperty("name")
+  // TODO - should this really be a json property, or is it something we just want to use internally?
+  @JsonIgnore
   public String getName() {
-    return name;
+    return Schema.name(this.getTopic(), this.getSchemaSubType());
   }
 
-  @JsonProperty("name")
-  public void setName(String name) {
-    this.name = name;
+  @JsonProperty("topic")
+  public String getTopic() {
+    return topic;
+  }
+
+  @JsonProperty("subtype")
+  public String getSchemaSubType() {
+    return this.schemaSubType;
   }
 
   @JsonProperty("schema")
@@ -41,19 +52,9 @@ public class Schema {
     return this.schema;
   }
 
-  @JsonProperty("schema")
-  public void setSchema(String schema) {
-    this.schema = schema;
-  }
-
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
-  }
-
-  @JsonProperty("version")
-  public void setVersion(Integer version) {
-    this.version = version;
   }
 
   @JsonProperty("deprecated")
@@ -77,7 +78,13 @@ public class Schema {
 
     Schema that = (Schema) o;
 
-    if (!name.equals(that.getName())) {
+    if (!this.getName().equals(that.getName())) {
+      return false;
+    }
+    if (!this.getTopic().equals(that.getTopic())) {
+      return false;
+    }
+    if (!this.schemaSubType.equals(that.schemaSubType)) {
       return false;
     }
     if (!schema.equals(that.schema)) {
@@ -95,7 +102,9 @@ public class Schema {
 
   @Override
   public int hashCode() {
-    int result = name.hashCode();
+    int result = this.getName().hashCode();
+    result = 31 * result + topic.hashCode();
+    result = 31 * result + schemaSubType.hashCode();
     result = 31 * result + schema.hashCode();
     result = 31 * result + version;
     result = 31 * result + new Boolean(deprecated).hashCode();
@@ -105,12 +114,20 @@ public class Schema {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("{name=" + this.name + ",");
+    sb.append("{name=" + this.getName() + ",");
+    sb.append("{topic=" + this.topic + ",");
+    sb.append("{schemaSubType=" + this.schemaSubType + ",");
     sb.append("schema=" + this.schema + ",");
     sb.append("version=" + this.version + ",");
     sb.append("deprecated=" + this.deprecated + ",");
     return sb.toString();
   }
 
-
+  /**
+   * An identifier for the collection of schemas having different versions but
+   * the same topic and schemaSubType.
+   */
+  public static String name(String topic, String schemaSubType) {
+    return topic + "/" + schemaSubType;
+  }
 }

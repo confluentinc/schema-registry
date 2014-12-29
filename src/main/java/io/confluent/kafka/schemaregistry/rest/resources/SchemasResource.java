@@ -39,23 +39,23 @@ public class SchemasResource {
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
 
   private final String topic;
-  private final boolean isKey;
+  private final String schemaSubType;
   private final SchemaRegistry schemaRegistry;
 
-  public SchemasResource(SchemaRegistry registry, String topic, boolean isKey) {
+  public SchemasResource(SchemaRegistry registry, String topic, String schemaSubType) {
     this.schemaRegistry = registry;
     this.topic = topic;
-    this.isKey = isKey;
+    this.schemaSubType = schemaSubType;
   }
 
   @GET
-  @Path("/{id}")
-  public Schema getSchema(@PathParam("id") Integer id) {
+  @Path("/{version}")
+  public Schema getSchema(@PathParam("version") Integer version) {
     Schema schema = null;
     try {
-      schema = schemaRegistry.get(this.topic, id);
+      schema = schemaRegistry.get(this.topic, this.schemaSubType, version);
     } catch (SchemaRegistryException e) {
-      log.debug("Error while retrieving schema with id " + id + " from the schema registry",
+      log.debug("Error while retrieving schema with version " + version + " from the schema registry",
                 e);
       throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND, e);
     }
@@ -70,7 +70,7 @@ public class SchemasResource {
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
     try {
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.topic);
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.topic, this.schemaSubType);
     } catch (StoreException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
@@ -84,10 +84,9 @@ public class SchemasResource {
   @POST
   public void register(final @Suspended AsyncResponse asyncResponse,
                        @PathParam("topic") String topicName, RegisterSchemaRequest request) {
-    Schema schema = new Schema(topicName, 0, request.getSchema(), false);
     int version = 0;
     try {
-      version = schemaRegistry.register(topicName, schema);
+      version = schemaRegistry.register(topicName, this.schemaSubType, request.getSchema());
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }

@@ -45,12 +45,12 @@ public class TopicsResource {
 
   @Path("/{topic}/key/versions")
   public SchemasResource getKeySchemas(@PathParam("topic") String topicName) {
-    return new SchemasResource(schemaRegistry, topicName, true);
+    return new SchemasResource(schemaRegistry, topicName, "key");
   }
 
   @Path("/{topic}/value/versions")
   public SchemasResource getValueSchemas(@PathParam("topic") String topicName) {
-    return new SchemasResource(schemaRegistry, topicName, false);
+    return new SchemasResource(schemaRegistry, topicName, "value");
   }
 
   @GET
