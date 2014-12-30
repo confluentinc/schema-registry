@@ -144,8 +144,9 @@ public class Schema implements Comparable<Schema> {
   @Override
   public int compareTo(Schema that) {
     int result = this.name.compareTo(that.name);
-    if (result != 0)
+    if (result != 0) {
       return result;
+    }
     result = this.version - that.version;
     return result;
   }

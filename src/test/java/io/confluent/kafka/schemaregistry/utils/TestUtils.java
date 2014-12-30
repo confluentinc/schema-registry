@@ -34,10 +34,12 @@ import static org.junit.Assert.fail;
 public class TestUtils {
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
+
   static {
     DEFAULT_REQUEST_PROPERTIES = new HashMap<String, String>();
     DEFAULT_REQUEST_PROPERTIES.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
   }
+
   private static final String IoTmpDir = System.getProperty("java.io.tmpdir");
   private static final Random random = new Random();
 

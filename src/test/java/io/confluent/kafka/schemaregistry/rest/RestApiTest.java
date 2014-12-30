@@ -53,7 +53,8 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test getAllSubjects with no existing data
     assertEquals("Getting all topics should return empty",
-                 RestUtils.getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
+                 RestUtils
+                     .getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
                  allTopics);
 
     // test getVersion on a non-existing topic
@@ -126,7 +127,8 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test getAllSubjects with existing data
     assertEquals("Getting all topics should match all registered topics",
-                 RestUtils.getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
+                 RestUtils
+                     .getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
                  allTopics);
   }
 }

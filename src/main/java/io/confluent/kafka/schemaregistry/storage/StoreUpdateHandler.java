@@ -20,7 +20,8 @@ public interface StoreUpdateHandler<K, V> {
 
   /**
    * Invoked on every new K,V pair written to the store
-   * @param key Key associated with the data
+   *
+   * @param key   Key associated with the data
    * @param value Data written to the store
    */
   public void handleUpdate(K key, V value);

@@ -59,7 +59,7 @@ public class RegisterSchemaForwardingAgent {
                             registerSchemaRequest, baseUrl));
     try {
       long id = RestUtils.registerSchema(baseUrl, requestProperties, registerSchemaRequest,
-                                             topic, isKey);
+                                         topic, isKey);
       return id;
     } catch (IOException e) {
       throw new SchemaRegistryException(
