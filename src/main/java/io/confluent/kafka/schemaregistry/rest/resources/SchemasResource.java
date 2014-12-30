@@ -113,14 +113,14 @@ public class SchemasResource {
     RegisterSchemaForwardingAgent forwardingAgent =
         new RegisterSchemaForwardingAgent(requestProperties, subjectName, request);
     Schema schema = new Schema(subjectName, 0, request.getSchema(), false);
-    int version = -1;
+    long id = 0L;
     try {
-      version = schemaRegistry.register(subjectName, schema, forwardingAgent);
+      id = schemaRegistry.register(subjectName, schema, forwardingAgent);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
-    registerSchemaResponse.setVersion(version);
+    registerSchemaResponse.setId(id);
     asyncResponse.resume(registerSchemaResponse);
   }
 

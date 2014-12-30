@@ -143,7 +143,7 @@ public class RestUtils {
     RegisterSchemaResponse response =
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
                               requestProperties, REGISTER_RESPONSE_TYPE);
-    return response.getVersion();
+    return response.getId();
   }
 
   public static void updateConfig(String baseUrl, Map<String, String> requestProperties,

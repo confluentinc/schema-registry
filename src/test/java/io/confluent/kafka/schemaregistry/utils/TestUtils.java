@@ -97,7 +97,7 @@ public class TestUtils {
     }
   }
 
-  public static int registerSchema(String baseUrl, String schemaString, String subject)
+  public static long registerSchema(String baseUrl, String schemaString, String subject)
       throws IOException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);

@@ -26,10 +26,12 @@ public interface SchemaRegistry {
 
   void init() throws SchemaRegistryException;
 
-  int register(String subject, Schema schema, RegisterSchemaForwardingAgent forwardingAgent)
+  long register(String subject, Schema schema, RegisterSchemaForwardingAgent forwardingAgent)
       throws SchemaRegistryException;
 
   Schema get(String subject, int version) throws SchemaRegistryException;
+
+  Schema get(long id) throws SchemaRegistryException;
 
   void deprecate(String subject, int version) throws SchemaRegistryException;
 
