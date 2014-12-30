@@ -63,8 +63,8 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (WebApplicationException e) {
       // this is expected.
       assertEquals("Unregistered subject shouldn't be found in getVersion()",
-                   e.getResponse().getStatusInfo(),
-                   Response.Status.NOT_FOUND);
+                   Response.Status.NOT_FOUND,
+                   e.getResponse().getStatusInfo());
     }
 
     // test registering and verifying new schemas in subject1
