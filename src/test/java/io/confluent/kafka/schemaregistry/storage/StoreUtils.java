@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import org.I0Itec.zkclient.ZkClient;
 
+import java.util.Map;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
