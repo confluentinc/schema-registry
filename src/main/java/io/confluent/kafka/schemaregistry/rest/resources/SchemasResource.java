@@ -56,25 +56,25 @@ public class SchemasResource {
   public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
 
-  private final String topic;
+  private final String subject;
   private final boolean isKey;
   private final SchemaRegistry schemaRegistry;
 
-  public SchemasResource(SchemaRegistry registry, String topic, boolean isKey) {
+  public SchemasResource(SchemaRegistry registry, String subject, boolean isKey) {
     this.schemaRegistry = registry;
-    this.topic = topic;
+    this.subject = subject;
     this.isKey = isKey;
   }
 
   @GET
-  @Path("/{id}")
-  public Schema getSchema(@PathParam("id") Integer id) {
+  @Path("/{version}")
+  public Schema getSchema(@PathParam("version") Integer version) {
     Schema schema = null;
     try {
-      schema = schemaRegistry.get(this.topic, id);
+      schema = schemaRegistry.get(this.subject, version);
     } catch (SchemaRegistryException e) {
-      log.debug("Error while retrieving schema with id " + id + " from the schema registry",
-                e);
+      log.debug("Error while retrieving schema for subject " + this.subject + " with version " +
+                version + " from the schema registry", e);
       throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND, e);
     }
     if (schema == null) {
@@ -88,7 +88,7 @@ public class SchemasResource {
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
     try {
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.topic);
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
@@ -103,22 +103,21 @@ public class SchemasResource {
   public void register(final @Suspended AsyncResponse asyncResponse,
                        final @HeaderParam("Content-Type") String contentType,
                        final @HeaderParam("Accept") String accept,
-                       @PathParam("topic") String topicName, RegisterSchemaRequest request) {
+                       @PathParam("subject") String subjectName, RegisterSchemaRequest request) {
     Map<String, String> requestProperties = new HashMap<String, String>();
     requestProperties.put("Content-Type", contentType);
     requestProperties.put("Accept", accept);
     RegisterSchemaForwardingAgent forwardingAgent =
-        new RegisterSchemaForwardingAgent(requestProperties, topicName, isKey, request);
-
-    Schema schema = new Schema(topicName, 0, request.getSchema(), false);
-    int version = -1;
+        new RegisterSchemaForwardingAgent(requestProperties, subjectName, isKey, request);
+    Schema schema = new Schema(subjectName, 0, 0L, request.getSchema(), false);
+    long id = 0L;
     try {
-      version = schemaRegistry.register(topicName, schema, forwardingAgent);
+      id = schemaRegistry.register(subjectName, schema, forwardingAgent);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
-    registerSchemaResponse.setVersion(version);
+    registerSchemaResponse.setId(id);
     asyncResponse.resume(registerSchemaResponse);
   }
 }

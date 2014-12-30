@@ -21,10 +21,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 
 /**
- *  The identity of a schema registry instance. The master will store the json representation
- *  of its identity in Zookeeper.
+ * The identity of a schema registry instance. The master will store the json representation of its
+ * identity in Zookeeper.
  */
 public class SchemaRegistryIdentity {
+
   public static int CURRENT_VERSION = 1;
 
   private Integer version;
@@ -36,6 +37,10 @@ public class SchemaRegistryIdentity {
     this.version = CURRENT_VERSION;
     this.host = host;
     this.port = port;
+  }
+
+  public static SchemaRegistryIdentity fromJson(String json) throws IOException {
+    return new ObjectMapper().readValue(json, SchemaRegistryIdentity.class);
   }
 
   @JsonProperty("version")
@@ -111,9 +116,5 @@ public class SchemaRegistryIdentity {
 
   public String toJson() throws IOException {
     return new ObjectMapper().writeValueAsString(this);
-  }
-
-  public static SchemaRegistryIdentity fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, SchemaRegistryIdentity.class);
   }
 }

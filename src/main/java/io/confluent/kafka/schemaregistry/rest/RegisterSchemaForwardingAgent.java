@@ -26,7 +26,8 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
 import io.confluent.kafka.schemaregistry.utils.RestUtils;
 
 /**
- * An agent responsible for forwarding an incoming registering schema request to another HTTP server
+ * An agent responsible for forwarding an incoming registering schema request to another HTTP
+ * server
  */
 public class RegisterSchemaForwardingAgent {
 
@@ -50,16 +51,16 @@ public class RegisterSchemaForwardingAgent {
    * @param host host to forward the request to
    * @param port port to forward the request to
    * @return The version id of the schema if registration is successful. Otherwise, throw a
-   *         WebApplicationException.
+   * WebApplicationException.
    */
-  public int forward(String host, int port) throws SchemaRegistryException {
+  public long forward(String host, int port) throws SchemaRegistryException {
     String baseUrl = String.format("http://%s:%d", host, port);
     log.debug(String.format("Forwarding registering schema request %s to %s",
                             registerSchemaRequest, baseUrl));
     try {
-      int version = RestUtils.registerSchema(baseUrl, requestProperties, registerSchemaRequest,
+      long id = RestUtils.registerSchema(baseUrl, requestProperties, registerSchemaRequest,
                                              topic, isKey);
-      return version;
+      return id;
     } catch (IOException e) {
       throw new SchemaRegistryException(
           String.format("Unexpected error while forwarding the registering schema request %s to %s",

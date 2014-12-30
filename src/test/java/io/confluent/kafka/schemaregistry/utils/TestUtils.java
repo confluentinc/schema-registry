@@ -33,14 +33,13 @@ import static org.junit.Assert.fail;
  */
 public class TestUtils {
 
-  private static final String IoTmpDir = System.getProperty("java.io.tmpdir");
-  private static final Random random = new Random();
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
-
   static {
     DEFAULT_REQUEST_PROPERTIES = new HashMap<String, String>();
     DEFAULT_REQUEST_PROPERTIES.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
   }
+  private static final String IoTmpDir = System.getProperty("java.io.tmpdir");
+  private static final Random random = new Random();
 
   /**
    * Create a temporary directory
@@ -100,7 +99,8 @@ public class TestUtils {
     }
   }
 
-  public static int registerSchema(String baseUrl, String schemaString, String topic, boolean iskey)
+  public static long registerSchema(String baseUrl, String schemaString, String topic,
+                                    boolean iskey)
       throws IOException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);

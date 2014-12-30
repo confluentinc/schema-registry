@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage.serialization;
 import java.util.Map;
 
 public class StringSerializer implements Serializer<String> {
+
   public static StringSerializer INSTANCE = new StringSerializer();
 
   // only a singleton is needed

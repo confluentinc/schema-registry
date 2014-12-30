@@ -42,7 +42,6 @@ import io.confluent.rest.entities.ErrorMessage;
 public class RestUtils {
 
   private static final Logger log = LoggerFactory.getLogger(RestUtils.class);
-  private static ObjectMapper jsonDeserializer = new ObjectMapper();
   private final static TypeReference<RegisterSchemaResponse> REGISTER_RESPONSE_TYPE =
       new TypeReference<RegisterSchemaResponse>() {
       };
@@ -55,6 +54,7 @@ public class RestUtils {
   private final static TypeReference<List<String>> ALL_TOPICS_RESPONSE_TYPE =
       new TypeReference<List<String>>() {
       };
+  private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
   public static <T> T httpRequest(String target, String method, byte[] entity,
                                   Map<String, String> requestProperties,
@@ -107,15 +107,15 @@ public class RestUtils {
     }
   }
 
-  public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
-                                   RegisterSchemaRequest registerSchemaRequest, String topic,
-                                   boolean isKey) throws IOException {
+  public static long registerSchema(String baseUrl, Map<String, String> requestProperties,
+                                    RegisterSchemaRequest registerSchemaRequest, String topic,
+                                    boolean isKey) throws IOException {
     String url = String.format("%s/topics/%s/%s/versions", baseUrl, topic, isKey ? "key" : "value");
 
     RegisterSchemaResponse response =
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
                               requestProperties, REGISTER_RESPONSE_TYPE);
-    return response.getVersion();
+    return response.getId();
   }
 
   public static Schema getVersion(String baseUrl, Map<String, String> requestProperties,

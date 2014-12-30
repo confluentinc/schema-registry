@@ -27,16 +27,20 @@ public class Schema implements Comparable<Schema> {
   private String name;
   @Min(1)
   private Integer version;
+  @Min(0)
+  private Long id;
   @NotEmpty
   private String schema;
   private boolean deprecated = false;
 
   public Schema(@JsonProperty("name") String name,
                 @JsonProperty("version") Integer version,
+                @JsonProperty("id") Long id,
                 @JsonProperty("schema") String schema,
                 @JsonProperty("deprecated") boolean deprecated) {
     this.name = name;
     this.version = version;
+    this.id = id;
     this.schema = schema;
     this.deprecated = deprecated;
   }
@@ -69,6 +73,16 @@ public class Schema implements Comparable<Schema> {
   @JsonProperty("version")
   public void setVersion(Integer version) {
     this.version = version;
+  }
+
+  @JsonProperty("id")
+  public Long getId() {
+    return this.id;
+  }
+
+  @JsonProperty("id")
+  public void setId(Long id) {
+    this.id = id;
   }
 
   @JsonProperty("deprecated")

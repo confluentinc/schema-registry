@@ -20,12 +20,13 @@ import org.eclipse.jetty.server.Server;
 
 import java.util.Properties;
 
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 
 public class RestApp {
+
   public final Properties prop;
   public final String restConnect;
   public SchemaRegistryRestApplication restApp;
@@ -56,16 +57,16 @@ public class RestApp {
     return restApp.schemaRegistry().isMaster();
   }
 
+  public void setMaster(SchemaRegistryIdentity schemaRegistryIdentity)
+      throws SchemaRegistryException {
+    restApp.schemaRegistry().setMaster(schemaRegistryIdentity);
+  }
+
   public SchemaRegistryIdentity myIdentity() {
     return restApp.schemaRegistry().myIdentity();
   }
 
   public SchemaRegistryIdentity masterIdentity() {
     return restApp.schemaRegistry().masterIdentity();
-  }
-
-  public void setMaster(SchemaRegistryIdentity schemaRegistryIdentity)
-      throws SchemaRegistryException {
-    restApp.schemaRegistry().setMaster(schemaRegistryIdentity);
   }
 }

@@ -27,6 +27,10 @@ public class RegisterSchemaRequest {
   @NotEmpty
   private String schema;
 
+  public static RegisterSchemaRequest fromJson(String json) throws IOException {
+    return new ObjectMapper().readValue(json, RegisterSchemaRequest.class);
+  }
+
   @JsonProperty("schema")
   public String getSchema() {
     return this.schema;
@@ -74,10 +78,6 @@ public class RegisterSchemaRequest {
 
   public String toJson() throws IOException {
     return new ObjectMapper().writeValueAsString(this);
-  }
-
-  public static RegisterSchemaRequest fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, RegisterSchemaRequest.class);
   }
 
 }

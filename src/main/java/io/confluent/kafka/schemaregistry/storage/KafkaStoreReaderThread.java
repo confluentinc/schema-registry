@@ -170,10 +170,12 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   @Override
   public void shutdown() {
-    if (consumer != null)
+    if (consumer != null) {
       consumer.shutdown();
-    if (localStore != null)
+    }
+    if (localStore != null) {
       localStore.close();
+    }
     super.shutdown();
   }
 

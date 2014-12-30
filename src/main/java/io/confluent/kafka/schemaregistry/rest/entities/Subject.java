@@ -19,7 +19,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.hibernate.validator.constraints.NotEmpty;
 
-public class Topic {
+public class Subject {
 
   @NotEmpty
   private String name;
@@ -29,11 +29,11 @@ public class Topic {
   private String deprecation = "all";
   private String validators = null;
 
-  public Topic(@JsonProperty("name") String name,
-               @JsonProperty("compatibility") String compatibility,
-               @JsonProperty("registration") String registration,
-               @JsonProperty("deprecation") String deprecation,
-               @JsonProperty("validators") String validators) {
+  public Subject(@JsonProperty("name") String name,
+                 @JsonProperty("compatibility") String compatibility,
+                 @JsonProperty("registration") String registration,
+                 @JsonProperty("deprecation") String deprecation,
+                 @JsonProperty("validators") String validators) {
     this.name = name;
     this.compatibility = compatibility;
     this.registration = registration;
@@ -41,7 +41,7 @@ public class Topic {
     this.validators = validators;
   }
 
-  public Topic(@JsonProperty("name") String name) {
+  public Subject(@JsonProperty("name") String name) {
     this.name = name;
   }
 
@@ -104,21 +104,21 @@ public class Topic {
       return false;
     }
 
-    Topic topic = (Topic) o;
+    Subject subject = (Subject) o;
 
-    if (!name.equals(topic.name)) {
+    if (!name.equals(subject.name)) {
       return false;
     }
-    if (!this.compatibility.equals(topic.compatibility)) {
+    if (!this.compatibility.equals(subject.compatibility)) {
       return false;
     }
-    if (!this.registration.equals(topic.registration)) {
+    if (!this.registration.equals(subject.registration)) {
       return false;
     }
-    if (!this.deprecation.equals(topic.deprecation)) {
+    if (!this.deprecation.equals(subject.deprecation)) {
       return false;
     }
-    if (!this.validators.equals(topic.validators)) {
+    if (!this.validators.equals(subject.validators)) {
       return false;
     }
 

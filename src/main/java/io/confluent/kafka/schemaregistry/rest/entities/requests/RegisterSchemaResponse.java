@@ -25,24 +25,24 @@ import java.io.IOException;
 public class RegisterSchemaResponse {
 
   @NotEmpty
-  private int version;
+  private long id;
 
-  @JsonProperty("version")
-  public int getVersion() {
-    return version;
+  public static RegisterSchemaResponse fromJson(String json) throws IOException {
+    return new ObjectMapper().readValue(json, RegisterSchemaResponse.class);
   }
 
-  @JsonProperty("version")
-  public void setVersion(int version) {
-    this.version = version;
+  @JsonProperty("id")
+  public long getId() {
+    return id;
+  }
+
+  @JsonProperty("id")
+  public void setId(long id) {
+    this.id = id;
   }
 
   public String toJson() throws IOException {
     return new ObjectMapper().writeValueAsString(this);
-  }
-
-  public static RegisterSchemaResponse fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, RegisterSchemaResponse.class);
   }
 
 }

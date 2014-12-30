@@ -67,9 +67,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final Store<K, V> localStore;
   private final AtomicBoolean initialized = new AtomicBoolean(false);
   private final int timeout;
+  private final Seq<Broker> brokerSeq;
   private KafkaProducer producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
-  private final Seq<Broker> brokerSeq;
 
   public KafkaStore(SchemaRegistryConfig config, Serializer<K> keySerializer,
                     Serializer<V> valueSerializer, Store<K, V> localStore, ZkClient zkClient) {
@@ -86,7 +86,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     int commitInterval = config.getInt(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG);
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<K, V>(zkClient, kafkaClusterZkUrl, topic, groupId,
-                                         commitInterval, keySerializer, valueSerializer,
+                                         Integer.MAX_VALUE, keySerializer, valueSerializer,
                                          this.localStore);
     this.brokerSeq = ZkUtils.getAllBrokersInCluster(zkClient);
 
@@ -94,17 +94,19 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   @Override
   public void init() throws StoreInitializationException {
-    if (initialized.get())
+    if (initialized.get()) {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
+    }
 
     // set the producer properties
     List<Broker> brokers = JavaConversions.seqAsJavaList(brokerSeq);
     String bootstrapBrokers = "";
     for (int i = 0; i < brokers.size(); i++) {
       bootstrapBrokers += brokers.get(i).connectionString();
-      if (i != (brokers.size() - 1))
+      if (i != (brokers.size() - 1)) {
         bootstrapBrokers += ",";
+      }
     }
     // initialize a Kafka producer client
     Properties props = new Properties();
@@ -116,23 +118,24 @@ public class KafkaStore<K, V> implements Store<K, V> {
     kafkaTopicReader.start();
 
     try {
-      waitUntilFullyCaughtUp();
+      waitUntilBootstrapCompletes();
     } catch (StoreException e) {
       throw new StoreInitializationException(e);
     }
 
     boolean isInitialized = initialized.compareAndSet(false, true);
-    if (!isInitialized)
+    if (!isInitialized) {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
+    }
   }
 
   /**
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.
    */
-  public void waitUntilFullyCaughtUp() throws StoreException {
+  public void waitUntilBootstrapCompletes() throws StoreException {
     long offsetOfLastMessage = getLatestOffsetOfKafkaTopic(timeout) - 1;
-    log.info("Wait until reaching the offset of the last message at " + offsetOfLastMessage);
+    log.info("Wait to catch up until the offset of the last message at " + offsetOfLastMessage);
     kafkaTopicReader.waitUntilOffset(offsetOfLastMessage, timeout, TimeUnit.MILLISECONDS);
     log.debug("Reached offset at " + offsetOfLastMessage);
   }
@@ -146,8 +149,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
   @Override
   public void put(K key, V value) throws StoreException {
     assertInitialized();
-    if (key == null)
+    if (key == null) {
       throw new StoreException("Key should not be null");
+    }
     // write to the Kafka topic
     ProducerRecord producerRecord = null;
     try {
@@ -212,8 +216,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   private void assertInitialized() throws StoreException {
-    if (!initialized.get())
+    if (!initialized.get()) {
       throw new StoreException("Illegal state. Store not initialized yet");
+    }
   }
 
   /**

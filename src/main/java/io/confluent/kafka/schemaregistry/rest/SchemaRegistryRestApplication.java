@@ -24,7 +24,7 @@ import javax.ws.rs.core.Configurable;
 
 import io.confluent.kafka.schemaregistry.rest.resources.RootResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemasResource;
-import io.confluent.kafka.schemaregistry.rest.resources.TopicsResource;
+import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
@@ -55,7 +55,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
       System.exit(1);
     }
     config.register(RootResource.class);
-    config.register(new TopicsResource(schemaRegistry));
+    config.register(new SubjectsResource(schemaRegistry));
     config.register(SchemasResource.class);
   }
 

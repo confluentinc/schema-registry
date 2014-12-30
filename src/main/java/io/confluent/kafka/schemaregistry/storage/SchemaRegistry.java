@@ -27,12 +27,14 @@ public interface SchemaRegistry {
 
   void init() throws SchemaRegistryException;
 
-  int register(String topic, Schema schema, RegisterSchemaForwardingAgent forwardingAgent)
-      throws SchemaRegistryException;
+  long register(String topic, Schema schema, RegisterSchemaForwardingAgent forwardingAgent)
+  throws SchemaRegistryException;
 
   Schema get(String topic, int version) throws SchemaRegistryException;
 
-  Set<String> listTopics() throws SchemaRegistryException;
+  Schema get(long id) throws SchemaRegistryException;
+
+  Set<String> listSubjects() throws SchemaRegistryException;
 
   Iterator<Schema> getAllVersions(String topic) throws SchemaRegistryException;
 

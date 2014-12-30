@@ -15,16 +15,17 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.common.config.AbstractConfig;
-import io.confluent.common.config.ConfigDef;
-import io.confluent.common.config.ConfigDef.Importance;
-import io.confluent.common.config.ConfigDef.Type;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import io.confluent.common.config.AbstractConfig;
+import io.confluent.common.config.ConfigDef;
+import io.confluent.common.config.ConfigDef.Importance;
+import io.confluent.common.config.ConfigDef.Type;
 
 import static io.confluent.common.config.ConfigDef.Range.atLeast;
 
@@ -66,6 +67,7 @@ public class RocksDbConfig extends AbstractConfig {
       "The compaction style for RocksDB. Could be one of universal, fifo, level";
   private static final List<String> compactionOptions =
       Arrays.asList("universal", "level", "fifo");
+
   private static final ConfigDef config = new ConfigDef()
       .define(ROCKSDB_COMPRESSION_CONFIG, Type.STRING, CompressionType.NO_COMPRESSION.toString(),
               Importance.MEDIUM, ROCKSDB_COMPRESSION_DOC)

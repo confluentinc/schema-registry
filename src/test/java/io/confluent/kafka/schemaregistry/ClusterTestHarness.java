@@ -126,14 +126,16 @@ public abstract class ClusterTestHarness {
       servers.add(server);
     }
 
-    if (restApp != null)
+    if (restApp != null) {
       restApp.start();
+    }
   }
 
   @After
   public void tearDown() throws Exception {
-    if (restApp != null)
+    if (restApp != null) {
       restApp.stop();
+    }
 
     for (KafkaServer server : servers) {
       server.shutdown();
