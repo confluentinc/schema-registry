@@ -20,8 +20,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,18 +44,18 @@ import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 
 public class KafkaSchemaRegistry implements SchemaRegistry {
 
+  public static final char SCHEMA_KEY_SEPARATOR = ',';
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
   private static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 1000;
-  private static final char SEPARATOR = ',';
-  private static final String ID_KEY_PREFIX = "#";
   private final KafkaStore<String, Schema> kafkaStore;
   private final Serializer<Schema> serializer;
-  private AtomicLong schemaIdCounter;
-  private long maxSchemaIdCounterValue;
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
   private final ZkClient zkClient;
+  private final Map<Long, String> idCache;
+  private AtomicLong schemaIdCounter;
+  private long maxSchemaIdCounterValue;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
 
@@ -71,7 +73,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                  new ZkStringSerializer());
 
     this.serializer = serializer;
-    kafkaStore = new KafkaStore<String, Schema>(config,
+    this.idCache = new HashMap<Long, String>();
+    kafkaStore = new KafkaStore<String, Schema>(config, new KafkaStoreMessageHandler(idCache),
                                                 StringSerializer.INSTANCE, this.serializer,
                                                 new InMemoryStore<String, Schema>(), zkClient);
   }
@@ -89,10 +92,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   @Override
   public boolean isMaster() {
     synchronized (masterLock) {
-      if (masterIdentity != null && masterIdentity.equals(myIdentity))
+      if (masterIdentity != null && masterIdentity.equals(myIdentity)) {
         return true;
-      else
+      } else {
         return false;
+      }
     }
   }
 
@@ -130,7 +134,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   @Override
   public long register(String topic, Schema schema, RegisterSchemaForwardingAgent forwardingAgent)
-  throws SchemaRegistryException {
+      throws SchemaRegistryException {
     synchronized (masterLock) {
       if (isMaster()) {
         try {
@@ -142,15 +146,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           while (allVersions.hasNext()) {
             Schema s = allVersions.next();
             if (!s.getDeprecated()) {
-              if (s.getSchema().compareTo(schema.getSchema()) == 0)
+              if (s.getSchema().compareTo(schema.getSchema()) == 0) {
                 return s.getId();
+              }
               latestSchema = s;
             }
             latestUsedSchemaVersion = s.getVersion();
           }
           if (latestSchema == null || isCompatible(topic, schema, latestSchema)) {
             int newVersion = latestUsedSchemaVersion + 1;
-            String keyForNewVersion = String.format("%s%c%d", topic, SEPARATOR, newVersion);
+            String
+                keyForNewVersion =
+                String.format("%s%c%d", topic, SCHEMA_KEY_SEPARATOR, newVersion);
             schema.setId(schemaIdCounter.getAndIncrement());
             if (schemaIdCounter.get() == maxSchemaIdCounterValue) {
               maxSchemaIdCounterValue =
@@ -158,20 +165,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
             }
             schema.setVersion(newVersion);
             kafkaStore.put(keyForNewVersion, schema);
-            kafkaStore.put(ID_KEY_PREFIX + schema.getId().toString(), schema);
-          } else
+          } else {
             throw new SchemaRegistryException("Incompatible schema");
+          }
         } catch (StoreException e) {
           throw new SchemaRegistryException("Error while registering the schema in the" +
                                             " backend Kafka store", e);
         }
       } else {
         // forward registering request to the master
-        if (masterIdentity != null)
+        if (masterIdentity != null) {
           return forwardingAgent.forward(masterIdentity.getHost(), masterIdentity.getPort());
-        else
+        } else {
           throw new SchemaRegistryException("Register schema request failed since master is "
                                             + "unknown");
+        }
       }
     }
     return schema.getId();
@@ -179,7 +187,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   @Override
   public Schema get(String topic, int version) throws SchemaRegistryException {
-    String key = topic + SEPARATOR + version;
+    String key = topic + SCHEMA_KEY_SEPARATOR + version;
     try {
       Schema schema = kafkaStore.get(key);
       return schema;
@@ -194,7 +202,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public Schema get(long id) throws SchemaRegistryException {
     Schema schema = null;
     try {
-      schema = kafkaStore.get(ID_KEY_PREFIX + String.valueOf(id));
+      String subjectVersionKey = idCache.get(id);
+      if (subjectVersionKey != null) {
+        schema = kafkaStore.get(subjectVersionKey);
+      }
     } catch (StoreException e) {
       throw new SchemaRegistryException(
           "Error while retrieving schema with id " + id + " from the backend Kafka" +
@@ -218,9 +229,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     Set<String> subjects = new HashSet<String>();
     while (allKeys.hasNext()) {
       String key = allKeys.next();
-      if (!key.startsWith(ID_KEY_PREFIX)) {
-        subjects.add(key.split(String.valueOf(SEPARATOR))[0]);
-      }
+      subjects.add(key.split(String.valueOf(SCHEMA_KEY_SEPARATOR))[0]);
     }
     return subjects;
   }
@@ -228,8 +237,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   @Override
   public Iterator<Schema> getAllVersions(String topic) throws SchemaRegistryException {
     try {
-      Iterator<Schema> allVersions = kafkaStore.getAll(String.format("%s%c", topic, SEPARATOR),
-                                                       String.format("%s%c%c", topic, SEPARATOR,
+      Iterator<Schema> allVersions = kafkaStore.getAll(String.format("%s%c", topic,
+                                                                     SCHEMA_KEY_SEPARATOR),
+                                                       String.format("%s%c%c", topic,
+                                                                     SCHEMA_KEY_SEPARATOR,
                                                                      '9' + 1));
       return sortSchemasByVersion(allVersions);
     } catch (StoreException e) {

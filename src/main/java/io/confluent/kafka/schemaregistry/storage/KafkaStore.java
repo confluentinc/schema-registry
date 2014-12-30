@@ -62,6 +62,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final String kafkaClusterZkUrl;
   private final String topic;
   private final String groupId;
+  private final StoreUpdateHandler<K, V> storeUpdateHandler;
   private final Serializer<K> keySerializer;
   private final Serializer<V> valueSerializer;
   private final Store<K, V> localStore;
@@ -71,8 +72,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private KafkaProducer producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
 
-  public KafkaStore(SchemaRegistryConfig config, Serializer<K> keySerializer,
-                    Serializer<V> valueSerializer, Store<K, V> localStore, ZkClient zkClient) {
+  public KafkaStore(SchemaRegistryConfig config,
+                    StoreUpdateHandler<K, V> storeUpdateHandler,
+                    Serializer<K> keySerializer,
+                    Serializer<V> valueSerializer,
+                    Store<K, V> localStore,
+                    ZkClient zkClient) {
     this.kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
@@ -80,14 +85,16 @@ public class KafkaStore<K, V> implements Store<K, V> {
                                  config.getString(SchemaRegistryConfig.ADVERTISED_HOST_CONFIG),
                                  config.getInt(SchemaRegistryConfig.PORT_CONFIG));
     timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
+    this.storeUpdateHandler = storeUpdateHandler;
     this.keySerializer = keySerializer;
     this.valueSerializer = valueSerializer;
     this.localStore = localStore;
+    // TODO: Do not use the commit interval until the decision on the embedded store is done
     int commitInterval = config.getInt(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG);
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<K, V>(zkClient, kafkaClusterZkUrl, topic, groupId,
-                                         Integer.MAX_VALUE, keySerializer, valueSerializer,
-                                         this.localStore);
+                                         Integer.MIN_VALUE, this.storeUpdateHandler, keySerializer,
+                                         valueSerializer, this.localStore);
     this.brokerSeq = ZkUtils.getAllBrokersInCluster(zkClient);
 
   }

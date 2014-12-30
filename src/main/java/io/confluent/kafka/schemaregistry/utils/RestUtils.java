@@ -34,6 +34,7 @@ import javax.ws.rs.WebApplicationException;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.entities.ErrorMessage;
 
 /**
@@ -110,7 +111,11 @@ public class RestUtils {
   public static long registerSchema(String baseUrl, Map<String, String> requestProperties,
                                     RegisterSchemaRequest registerSchemaRequest, String topic,
                                     boolean isKey) throws IOException {
-    String url = String.format("%s/topics/%s/%s/versions", baseUrl, topic, isKey ? "key" : "value");
+    String subjectName = topic;
+    if (isKey) {
+      subjectName = subjectName + KafkaSchemaRegistry.SCHEMA_KEY_SEPARATOR + "key";
+    }
+    String url = String.format("%s/subjects/%s/versions", baseUrl, subjectName);
 
     RegisterSchemaResponse response =
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
@@ -118,10 +123,22 @@ public class RestUtils {
     return response.getId();
   }
 
+  public static Schema getId(String baseUrl, Map<String, String> requestProperties, long id)
+      throws IOException {
+    String url = String.format("%s/subjects/%d", baseUrl, id);
+
+    Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
+                                            GET_SCHEMA_RESPONSE_TYPE);
+    return response;
+  }
+
   public static Schema getVersion(String baseUrl, Map<String, String> requestProperties,
                                   String topic, boolean isKey, int version) throws IOException {
-    String url = String.format("%s/topics/%s/%s/versions/%d",
-                               baseUrl, topic, isKey ? "key" : "value", version);
+    String subjectName = topic;
+    if (isKey) {
+      subjectName = subjectName + KafkaSchemaRegistry.SCHEMA_KEY_SEPARATOR + "key";
+    }
+    String url = String.format("%s/subjects/%s/versions/%d", baseUrl, subjectName, version);
 
     Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                             GET_SCHEMA_RESPONSE_TYPE);
@@ -130,16 +147,20 @@ public class RestUtils {
 
   public static List<Integer> getAllVersions(String baseUrl, Map<String, String> requestProperties,
                                              String topic, boolean isKey) throws IOException {
-    String url = String.format("%s/topics/%s/%s/versions", baseUrl, topic, isKey ? "key" : "value");
+    String subjectName = topic;
+    if (isKey) {
+      subjectName = subjectName + KafkaSchemaRegistry.SCHEMA_KEY_SEPARATOR + "key";
+    }
+    String url = String.format("%s/subjects/%s/versions", baseUrl, subjectName);
 
     List<Integer> response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                                    ALL_VERSIONS_RESPONSE_TYPE);
     return response;
   }
 
-  public static List<String> getAllTopics(String baseUrl, Map<String, String> requestProperties)
+  public static List<String> getAllSubjects(String baseUrl, Map<String, String> requestProperties)
       throws IOException {
-    String url = String.format("%s/topics", baseUrl);
+    String url = String.format("%s/subjects", baseUrl);
 
     List<String> response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                                   ALL_TOPICS_RESPONSE_TYPE);

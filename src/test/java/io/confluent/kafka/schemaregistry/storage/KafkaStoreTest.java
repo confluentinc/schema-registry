@@ -21,6 +21,9 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -155,6 +158,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
   @Test
   public void testDeleteAfterRestart() throws InterruptedException {
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    Map<Long, String> idIndex = new HashMap<Long, String>();
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
                                                                                        zkClient,
                                                                                        inMemoryStore);

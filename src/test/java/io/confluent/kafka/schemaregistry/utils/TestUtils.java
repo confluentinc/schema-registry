@@ -115,17 +115,16 @@ public class TestUtils {
    * Register a new schema and verify that it can be found on the expected version.
    */
   public static void registerAndVerifySchema(String baseUrl, String schemaString,
-                                             int expectedVersion, String topic, boolean isKey)
+                                             int expectedId, String topic, boolean isKey)
       throws IOException {
     assertEquals("Registering a new schema should succeed",
                  TestUtils.registerSchema(baseUrl, schemaString, topic, isKey),
-                 expectedVersion);
+                 expectedId);
 
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",
-                 RestUtils.getVersion(baseUrl,
-                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, topic, isKey,
-                                      expectedVersion).getSchema(),
+                 RestUtils.getId(baseUrl, TestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
+                     .getSchema(),
                  schemaString);
   }
 }

@@ -51,9 +51,9 @@ public class RestApiTest extends ClusterTestHarness {
                                           topic1, isKey),
                  allVersionsInTopic1);
 
-    // test getAllTopics with no existing data
+    // test getAllSubjects with no existing data
     assertEquals("Getting all topics should return empty",
-                 RestUtils.getAllTopics(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
+                 RestUtils.getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
                  allTopics);
 
     // test getVersion on a non-existing topic
@@ -69,11 +69,13 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test registering and verifying new schemas in topic1
     int schemasInTopic1 = 10;
+    int schemaIdCounter = 0;
     for (int i = 0; i < schemasInTopic1; i++) {
       String schema = topic1 + " schema " + i;
       int expectedVersion = i + 1;
-      TestUtils.registerAndVerifySchema(restApp.restConnect, schema, expectedVersion,
+      TestUtils.registerAndVerifySchema(restApp.restConnect, schema, schemaIdCounter,
                                         topic1, isKey);
+      schemaIdCounter++;
       allVersionsInTopic1.add(expectedVersion);
       allSchemasInTopic1.add(schema);
     }
@@ -92,11 +94,12 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test re-registering existing schemas
     for (int i = 0; i < schemasInTopic1; i++) {
+      int expectedId = i;
       int expectedVersion = i + 1;
       String schemaString = allSchemasInTopic1.get(i);
       assertEquals("Re-registering an existing schema should return the existing version",
                    TestUtils.registerSchema(restApp.restConnect, schemaString, topic1, isKey),
-                   expectedVersion);
+                   expectedId);
     }
 
     // test registering schemas in topic2
@@ -104,8 +107,9 @@ public class RestApiTest extends ClusterTestHarness {
     for (int i = 0; i < schemasInTopic2; i++) {
       String schema = topic2 + " schema " + i;
       int expectedVersion = i + 1;
-      TestUtils.registerAndVerifySchema(restApp.restConnect, schema, expectedVersion,
+      TestUtils.registerAndVerifySchema(restApp.restConnect, schema, schemaIdCounter,
                                         topic2, isKey);
+      schemaIdCounter++;
       allVersionsInTopic2.add(expectedVersion);
     }
     allTopics.add(topic2);
@@ -120,9 +124,9 @@ public class RestApiTest extends ClusterTestHarness {
                                           topic2, isKey),
                  allVersionsInTopic2);
 
-    // test getAllTopics with existing data
+    // test getAllSubjects with existing data
     assertEquals("Getting all topics should match all registered topics",
-                 RestUtils.getAllTopics(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
+                 RestUtils.getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
                  allTopics);
   }
 }

@@ -47,6 +47,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   private final String topic;
   private final String groupId;
+  private final StoreUpdateHandler<K, V> storeUpdateHandler;
   private final Serializer<K> keySerializer;
   private final Serializer<V> valueSerializer;
   private final Store<K, V> localStore;
@@ -63,6 +64,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 String topic,
                                 String groupId,
                                 int commitInterval,
+                                StoreUpdateHandler<K, V> storeUpdateHandler,
                                 Serializer<K> keySerializer,
                                 Serializer<V> valueSerializer,
                                 Store<K, V> localStore) {
@@ -71,6 +73,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     offsetReachedThreshold = offsetUpdateLock.newCondition();
     this.topic = topic;
     this.groupId = groupId;
+    this.storeUpdateHandler = storeUpdateHandler;
     this.keySerializer = keySerializer;
     this.valueSerializer = valueSerializer;
     this.localStore = localStore;
@@ -83,7 +86,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     consumerProps.put("client.id", "KafkaStore-reader-" + this.topic);
     consumerProps.put("zookeeper.connect", kafkaClusterZkUrl);
     consumerProps.put("auto.offset.reset", "smallest");
-    consumerProps.put("consumer.timeout.ms", String.valueOf(commitInterval));
+    consumerProps.put("consumer.timeout.ms", "1000");
     consumerProps.put("auto.commit.enable", "false");
     consumer = new ZookeeperConsumerConnector(new ConsumerConfig(consumerProps));
     Map<String, Integer> kafkaStreamConfig = new HashMap<String, Integer>();
@@ -143,6 +146,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           } else {
             localStore.put(messageKey, message);
           }
+          this.storeUpdateHandler.handleUpdate(messageKey, message);
           offsetUpdateLock.lock();
           offsetInSchemasTopic = messageAndMetadata.offset();
           offsetReachedThreshold.signalAll();
