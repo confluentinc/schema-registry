@@ -16,11 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import java.util.Map;
-
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 
-public class KafkaStoreMessageHandler implements StoreUpdateHandler<String, Schema> {
+public class KafkaStoreMessageHandler implements StoreUpdateHandler<SchemaRegistryKey, Schema> {
 
   public KafkaStoreMessageHandler() {
   }
@@ -32,6 +30,6 @@ public class KafkaStoreMessageHandler implements StoreUpdateHandler<String, Sche
    * @param schema Schema written to the Kafka store
    */
   @Override
-  public void handleUpdate(String key, Schema schema) {
+  public void handleUpdate(SchemaRegistryKey key, Schema schema) {
   }
 }

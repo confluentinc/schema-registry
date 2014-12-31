@@ -23,6 +23,7 @@ import javax.ws.rs.core.Response;
  * to the compatibility level.
  */
 public class IncompatibleAvroSchemaException extends WebApplicationException {
+
   public static final Response.Status STATUS = Response.Status.CONFLICT;
 
   public IncompatibleAvroSchemaException(String errorMsg) {

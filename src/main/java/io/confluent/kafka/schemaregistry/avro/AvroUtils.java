@@ -24,7 +24,7 @@ public class AvroUtils {
    * Convert a schema string into a schema object and a canonical schema string.
    *
    * @return A schema object and a canonical representation of the schema string. Return null if
-   *         there is any parsing error.
+   * there is any parsing error.
    */
   public static AvroSchema parseSchema(String schemaString) {
     try {

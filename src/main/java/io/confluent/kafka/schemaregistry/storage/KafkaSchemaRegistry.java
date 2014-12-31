@@ -37,26 +37,28 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import io.confluent.kafka.schemaregistry.storage.serialization.StringSerializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
-import io.confluent.kafka.schemaregistry.utils.Pair;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 
 public class KafkaSchemaRegistry implements SchemaRegistry {
 
-  public static final char SCHEMA_KEY_SEPARATOR = ',';
+  public static final int MIN_VERSION = 0;
+  public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
-  private final KafkaStore<String, Schema> kafkaStore;
+  private final KafkaStore<SchemaRegistryKey, Schema> kafkaStore;
+  private final Serializer<SchemaRegistryKey> keySerializer;
   private final Serializer<Schema> serializer;
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
+  private final AvroCompatibilityType defaultCompatibilityType;
   private final ZkClient zkClient;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
-  private final AvroCompatibilityType defaultCompatibilityType;
 
-  public KafkaSchemaRegistry(SchemaRegistryConfig config, Serializer<Schema> serializer)
+  public KafkaSchemaRegistry(SchemaRegistryConfig config,
+                             Serializer<SchemaRegistryKey> keySerializer,
+                             Serializer<Schema> serializer)
       throws SchemaRegistryException {
     String host = config.getString(SchemaRegistryConfig.ADVERTISED_HOST_CONFIG);
     int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
@@ -68,11 +70,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
     this.zkClient = new ZkClient(kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
                                  new ZkStringSerializer());
-
+    this.keySerializer = keySerializer;
     this.serializer = serializer;
-    kafkaStore = new KafkaStore<String, Schema>(config, new KafkaStoreMessageHandler(),
-                                                StringSerializer.INSTANCE, this.serializer,
-                                                new InMemoryStore<String, Schema>(), zkClient);
+    kafkaStore = new KafkaStore<SchemaRegistryKey, Schema>(config, new KafkaStoreMessageHandler(),
+                                                           this.keySerializer, this.serializer,
+                                                           new InMemoryStore<SchemaRegistryKey, Schema>(),
+                                                           zkClient);
     this.defaultCompatibilityType = config.compatibilityType();
   }
 
@@ -132,7 +135,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
           Iterator<Schema> allVersions = getAllVersions(subject);
           Schema latestSchema = null;
-          int latestUsedSchemaVersion = 0;
+          int latestUsedSchemaVersion = MIN_VERSION;
           // see if the schema to be registered already exists
           while (allVersions.hasNext()) {
             Schema s = allVersions.next();
@@ -147,8 +150,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
           if (latestSchema == null || isCompatible(avroSchemaObj, latestSchema)) {
             int newVersion = latestUsedSchemaVersion + 1;
-            String keyForNewVersion =
-                String.format("%s%c%d", subject, SCHEMA_KEY_SEPARATOR, newVersion);
+            SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
             schema.setVersion(newVersion);
             kafkaStore.put(keyForNewVersion, schema);
             return newVersion;
@@ -183,7 +185,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   @Override
   public Schema get(String subject, int version) throws SchemaRegistryException {
-    String key = subject + SCHEMA_KEY_SEPARATOR + version;
+    SchemaKey key = new SchemaKey(subject, version);
     try {
       Schema schema = kafkaStore.get(key);
       return schema;
@@ -197,7 +199,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   @Override
   public Set<String> listSubjects() throws SchemaRegistryException {
     try {
-      Iterator<String> allKeys = kafkaStore.getAllKeys();
+      Iterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys();
       return extractUniqueSubjects(allKeys);
     } catch (StoreException e) {
       throw new SchemaRegistryException(
@@ -205,11 +207,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  private Set<String> extractUniqueSubjects(Iterator<String> allKeys) {
+  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys) {
     Set<String> subjects = new HashSet<String>();
     while (allKeys.hasNext()) {
-      String key = allKeys.next();
-      subjects.add(key.split(String.valueOf(SCHEMA_KEY_SEPARATOR))[0]);
+      SchemaKey key = (SchemaKey) allKeys.next();
+      subjects.add(key.getSubject());
     }
     return subjects;
   }
@@ -217,11 +219,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   @Override
   public Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException {
     try {
-      Iterator<Schema> allVersions = kafkaStore.getAll(String.format("%s%c", subject,
-                                                                     SCHEMA_KEY_SEPARATOR),
-                                                       String.format("%s%c%c", subject,
-                                                                     SCHEMA_KEY_SEPARATOR,
-                                                                     '9' + 1));
+      SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
+      SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
+      Iterator<Schema> allVersions = kafkaStore.getAll(key1, key2);
       return sortSchemasByVersion(allVersions);
     } catch (StoreException e) {
       throw new SchemaRegistryException(
