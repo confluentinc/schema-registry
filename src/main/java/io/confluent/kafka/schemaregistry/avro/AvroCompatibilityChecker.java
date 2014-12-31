@@ -59,9 +59,6 @@ public class AvroCompatibilityChecker {
 
   /**
    * Check the compatibility between the new schema and the latest schema
-   * @param newSchema
-   * @param latestSchema
-   * @return
    */
   public boolean isCompatible(Schema newSchema, Schema latestSchema) {
     List<Schema> schemas = new ArrayList<Schema>();

@@ -49,15 +49,15 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test getAllVersions with no existing data
     assertEquals("Getting all versions from subject1 should return empty",
+                 allVersionsInSubject1,
                  RestUtils.getAllVersions(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                          subject1),
-                 allVersionsInSubject1);
+                                          subject1));
 
     // test getAllSubjects with no existing data
     assertEquals("Getting all subjects should return empty",
+                 allSubjects,
                  RestUtils
-                     .getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
-                 allSubjects);
+                     .getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES));
 
     // test getVersion on a non-existing subject
     try {
@@ -66,8 +66,8 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (WebApplicationException e) {
       // this is expected.
       assertEquals("Unregistered subject shouldn't be found in getVersion()",
-                   e.getResponse().getStatusInfo(),
-                   Response.Status.NOT_FOUND);
+                   Response.Status.NOT_FOUND,
+                   e.getResponse().getStatusInfo());
     }
 
     // test registering and verifying new schemas in subject1
@@ -96,8 +96,8 @@ public class RestApiTest extends ClusterTestHarness {
       int expectedVersion = i + 1;
       String schemaString = allSchemasInSubject1.get(i);
       assertEquals("Re-registering an existing schema should return the existing version",
-                   TestUtils.registerSchema(restApp.restConnect, schemaString, subject1),
-                   expectedVersion);
+                   expectedVersion,
+                   TestUtils.registerSchema(restApp.restConnect, schemaString, subject1));
     }
 
     // test registering schemas in subject2
@@ -112,18 +112,18 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test getAllVersions with existing data
     assertEquals("Getting all versions from subject1 should match all registered versions",
+                 allVersionsInSubject1,
                  RestUtils.getAllVersions(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                          subject1),
-                 allVersionsInSubject1);
+                                          subject1));
     assertEquals("Getting all versions from subject2 should match all registered versions",
+                 allVersionsInSubject2,
                  RestUtils.getAllVersions(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                          subject2),
-                 allVersionsInSubject2);
+                                          subject2));
 
     // test getAllSubjects with existing data
     assertEquals("Getting all subjects should match all registered subjects",
+                 allSubjects,
                  RestUtils
-                     .getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
-                 allSubjects);
+                     .getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES));
   }
 }

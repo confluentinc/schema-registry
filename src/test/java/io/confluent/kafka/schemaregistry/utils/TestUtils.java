@@ -142,7 +142,7 @@ public class TestUtils {
                             + "\"fields\":"
                             + "[{\"type\":\"string\",\"name\":"
                             + "\"f" + random.nextInt(Integer.MAX_VALUE) + "\"}]}";
-      avroStrings.add(AvroUtils.parseSchema(schemaString).getLast());
+      avroStrings.add(AvroUtils.parseSchema(schemaString).canonicalString);
     }
     return avroStrings;
   }

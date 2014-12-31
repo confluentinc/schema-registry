@@ -45,11 +45,11 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
-        .getLast();
+        .canonicalString;
     int expectedVersionSchema1 = 1;
     assertEquals("Registering should succeed",
-                 TestUtils.registerSchema(restApp.restConnect, schemaString1, subject),
-                 expectedVersionSchema1);
+                 expectedVersionSchema1,
+                 TestUtils.registerSchema(restApp.restConnect, schemaString1, subject));
 
     // register an incompatible avro
     String incompatibleSchemaString = AvroUtils.parseSchema(
@@ -58,7 +58,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"}]}"
-    ).getLast();
+    ).canonicalString;
     try {
       TestUtils.registerSchema(restApp.restConnect, incompatibleSchemaString, subject);
       fail("Registering an incompatible schema should fail");
@@ -88,10 +88,10 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}"
-    ).getLast();
+    ).canonicalString;
     int expectedVersionSchema2 = 2;
     assertEquals("Registering a compatible schema should succeed",
-                 TestUtils.registerSchema(restApp.restConnect, schemaString2, subject),
-                 expectedVersionSchema2);
+                 expectedVersionSchema2,
+                 TestUtils.registerSchema(restApp.restConnect, schemaString2, subject));
   }
 }

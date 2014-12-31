@@ -69,16 +69,16 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String ADVERTISED_HOST_DOC = "The host name advertised in Zookeeper";
 
   /**
-   * <code>avro</code>
+   * <code>avro.compatibility.level</code>
    */
-  public static final String COMPATIBILITY_CONFIG = "avro";
+  public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
   protected static final String COMPATIBILITY_DOC =
       "The avro compatibility type. Valid values are: "
       + "none (new schema can be any valid avro schema), "
       + "backward (new schema can read data produced by latest registered schema), "
-      + "forward (latest registered schema can read the new schema), "
+      + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema)";
-  public static final String COMPATIBILITY_DEFAULT = "none";
+  private static final String COMPATIBILITY_DEFAULT = "backward";
 
   private final AvroCompatibilityType compatibilityType;
 

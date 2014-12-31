@@ -52,7 +52,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     assertTrue("Schema registry instance 1 should be the master", restApp1.isMaster());
     assertFalse("Schema registry instance 2 shouldn't be the master", restApp2.isMaster());
     assertEquals("Instance 2's master should be instance 1",
-                 restApp2.masterIdentity(), restApp1.myIdentity());
+                 restApp1.myIdentity(), restApp2.masterIdentity());
 
     // test registering a schema to the master and finding it on the expected version
     final String firstSchema = avroSchemas.get(0);

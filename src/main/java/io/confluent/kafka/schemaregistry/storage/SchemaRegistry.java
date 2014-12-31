@@ -21,7 +21,6 @@ import java.util.Set;
 import io.confluent.kafka.schemaregistry.rest.RegisterSchemaForwardingAgent;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 
 public interface SchemaRegistry {
 
@@ -35,14 +34,6 @@ public interface SchemaRegistry {
   Set<String> listSubjects() throws SchemaRegistryException;
 
   Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException;
-
-  boolean isMaster();
-
-  void setMaster(SchemaRegistryIdentity schemaRegistryIdentity) throws SchemaRegistryException;
-
-  SchemaRegistryIdentity myIdentity();
-
-  SchemaRegistryIdentity masterIdentity();
 
   void close();
 }

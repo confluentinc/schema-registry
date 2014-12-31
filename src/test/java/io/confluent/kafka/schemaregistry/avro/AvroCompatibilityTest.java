@@ -29,41 +29,41 @@ public class AvroCompatibilityTest {
                            + "\"name\":\"myrecord\","
                            + "\"fields\":"
                            + "[{\"type\":\"string\",\"name\":\"f1\"}]}";
-    Schema schema1 = AvroUtils.parseSchema(schemaString1).getFirst();
+    Schema schema1 = AvroUtils.parseSchema(schemaString1).schemaObj;
 
     String schemaString2 = "{\"type\":\"record\","
                            + "\"name\":\"myrecord\","
                            + "\"fields\":"
                            + "[{\"type\":\"string\",\"name\":\"f1\"},"
                            + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}";
-    Schema schema2 = AvroUtils.parseSchema(schemaString2).getFirst();
+    Schema schema2 = AvroUtils.parseSchema(schemaString2).schemaObj;
 
     String schemaString3 = "{\"type\":\"record\","
                            + "\"name\":\"myrecord\","
                            + "\"fields\":"
                            + "[{\"type\":\"string\",\"name\":\"f1\"},"
                            + " {\"type\":\"string\",\"name\":\"f2\"}]}";
-    Schema schema3 = AvroUtils.parseSchema(schemaString3).getFirst();
+    Schema schema3 = AvroUtils.parseSchema(schemaString3).schemaObj;
 
     String schemaString4 = "{\"type\":\"record\","
                            + "\"name\":\"myrecord\","
                            + "\"fields\":"
                            + "[{\"type\":\"string\",\"name\":\"f1_new\", \"aliases\": [\"f1\"]}]}";
-    Schema schema4 = AvroUtils.parseSchema(schemaString4).getFirst();
+    Schema schema4 = AvroUtils.parseSchema(schemaString4).schemaObj;
 
     String schemaString6 = "{\"type\":\"record\","
                            + "\"name\":\"myrecord\","
                            + "\"fields\":"
                            + "[{\"type\":[\"null\", \"string\"],\"name\":\"f1\","
                            + " \"doc\":\"doc of f1\"}]}";
-    Schema schema6 = AvroUtils.parseSchema(schemaString6).getFirst();
+    Schema schema6 = AvroUtils.parseSchema(schemaString6).schemaObj;
 
     String schemaString7 = "{\"type\":\"record\","
                            + "\"name\":\"myrecord\","
                            + "\"fields\":"
                            + "[{\"type\":[\"null\", \"string\", \"int\"],\"name\":\"f1\","
                            + " \"doc\":\"doc of f1\"}]}";
-    Schema schema7 = AvroUtils.parseSchema(schemaString7).getFirst();
+    Schema schema7 = AvroUtils.parseSchema(schemaString7).schemaObj;
 
     AvroCompatibilityChecker backwardChecker = AvroCompatibilityType.BACKWARD.compatibilityChecker;
     assertTrue("adding a field with default is a backward compatible change",
@@ -85,7 +85,7 @@ public class AvroCompatibilityTest {
     assertTrue("adding a field is a forward compatible change",
                forwardChecker.isCompatible(schema2, schema1));
 
-    AvroCompatibilityChecker fullChecker = AvroCompatibilityType.BACKWARD.compatibilityChecker;
+    AvroCompatibilityChecker fullChecker = AvroCompatibilityType.FULL.compatibilityChecker;
     assertTrue("adding a field with default is a backward and a forward compatible change",
                fullChecker.isCompatible(schema2, schema1));
   }

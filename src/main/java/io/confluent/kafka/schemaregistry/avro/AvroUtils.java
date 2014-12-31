@@ -18,22 +18,20 @@ package io.confluent.kafka.schemaregistry.avro;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
 
-import io.confluent.kafka.schemaregistry.utils.Pair;
-
 public class AvroUtils {
 
   /**
    * Convert a schema string into a schema object and a canonical schema string.
-   * @param schemaString
-   * @return A pair of schema object and a canonical representation of the schema string.
-   *         Return null if there is any parsing error.
+   *
+   * @return A schema object and a canonical representation of the schema string. Return null if
+   *         there is any parsing error.
    */
-  public static Pair<Schema, String> parseSchema(String schemaString) {
+  public static AvroSchema parseSchema(String schemaString) {
     try {
       Schema.Parser parser1 = new Schema.Parser();
       Schema schema = parser1.parse(schemaString);
-      //TODO: schema.toString() is not canonical
-      return new Pair<Schema, String>(schema, schema.toString());
+      //TODO: schema.toString() is not canonical (issue-28)
+      return new AvroSchema(schema, schema.toString());
     } catch (SchemaParseException e) {
       return null;
     }

@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.Vector;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityType;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.rest.RegisterSchemaForwardingAgent;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
@@ -85,7 +86,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     masterElector = new ZookeeperMasterElector(zkClient, myIdentity, this);
   }
 
-  @Override
   public boolean isMaster() {
     synchronized (masterLock) {
       if (masterIdentity != null && masterIdentity.equals(myIdentity)) {
@@ -96,7 +96,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  @Override
   public void setMaster(SchemaRegistryIdentity schemaRegistryIdentity)
       throws SchemaRegistryException {
     log.debug("Setting the master to " + schemaRegistryIdentity);
@@ -113,12 +112,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  @Override
   public SchemaRegistryIdentity myIdentity() {
     return myIdentity;
   }
 
-  @Override
   public SchemaRegistryIdentity masterIdentity() {
     synchronized (masterLock) {
       return masterIdentity;
@@ -131,18 +128,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     synchronized (masterLock) {
       if (isMaster()) {
         try {
+          org.apache.avro.Schema avroSchemaObj = canonicalizeSchema(schema);
+
           Iterator<Schema> allVersions = getAllVersions(subject);
-
-          Pair<org.apache.avro.Schema, String> newSchemaObjAndString =
-              AvroUtils.parseSchema(schema.getSchema());
-          if (newSchemaObjAndString == null) {
-            throw new InvalidAvroException();
-          }
-
-          org.apache.avro.Schema newAvroSchema = newSchemaObjAndString.getFirst();
-          // use canonicalized schema string
-          schema.setSchema(newSchemaObjAndString.getLast());
-
           Schema latestSchema = null;
           int latestUsedSchemaVersion = 0;
           // see if the schema to be registered already exists
@@ -157,7 +145,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
             latestUsedSchemaVersion = s.getVersion();
           }
 
-          if (latestSchema == null || isCompatible(newAvroSchema, latestSchema)) {
+          if (latestSchema == null || isCompatible(avroSchemaObj, latestSchema)) {
             int newVersion = latestUsedSchemaVersion + 1;
             String keyForNewVersion =
                 String.format("%s%c%d", subject, SCHEMA_KEY_SEPARATOR, newVersion);
@@ -182,6 +170,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         }
       }
     }
+  }
+
+  private org.apache.avro.Schema canonicalizeSchema(Schema schema) {
+    AvroSchema avroSchema = AvroUtils.parseSchema(schema.getSchema());
+    if (avroSchema == null) {
+      throw new InvalidAvroException();
+    }
+    schema.setSchema(avroSchema.canonicalString);
+    return avroSchema.schemaObj;
   }
 
   @Override
@@ -232,16 +229,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  private boolean isCompatible(org.apache.avro.Schema newSchema, Schema latestSchema)
+  private boolean isCompatible(org.apache.avro.Schema newSchemaObj, Schema latestSchema)
       throws SchemaRegistryException {
-    Pair<org.apache.avro.Schema, String> latestSchemaObjAndString =
-        AvroUtils.parseSchema(latestSchema.getSchema());
-    if (latestSchemaObjAndString == null) {
+    AvroSchema latestAvroSchema = AvroUtils.parseSchema(latestSchema.getSchema());
+    if (latestAvroSchema == null) {
       throw new SchemaRegistryException(
           "Existing schema " + latestSchema + " is not a valid Avro schema");
     }
     return defaultCompatibilityType.compatibilityChecker
-        .isCompatible(newSchema, latestSchemaObjAndString.getFirst());
+        .isCompatible(newSchemaObj, latestAvroSchema.schemaObj);
   }
 
   @Override

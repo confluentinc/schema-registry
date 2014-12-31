@@ -18,6 +18,10 @@ package io.confluent.kafka.schemaregistry.rest.exceptions;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 
+/**
+ * An exception thrown when the registered schema is not compatible with the latest schema according
+ * to the compatibility level.
+ */
 public class IncompatibleAvroSchemaException extends WebApplicationException {
   public static final Response.Status STATUS = Response.Status.CONFLICT;
 

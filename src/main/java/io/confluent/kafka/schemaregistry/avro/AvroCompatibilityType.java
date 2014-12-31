@@ -18,32 +18,30 @@ package io.confluent.kafka.schemaregistry.avro;
 import io.confluent.rest.RestConfigException;
 
 public enum AvroCompatibilityType {
-  NONE("none", false, AvroCompatibilityChecker.NO_OP_CHECKER),
-  BACKWARD("backward", true, AvroCompatibilityChecker.BACKWARD_CHECKER),
-  FORWARD("forward", true, AvroCompatibilityChecker.FORWARD_CHECKER),
-  FULL("full", true, AvroCompatibilityChecker.FULL_CHECKER);
+  NONE("none", AvroCompatibilityChecker.NO_OP_CHECKER),
+  BACKWARD("backward", AvroCompatibilityChecker.BACKWARD_CHECKER),
+  FORWARD("forward", AvroCompatibilityChecker.FORWARD_CHECKER),
+  FULL("full", AvroCompatibilityChecker.FULL_CHECKER);
 
   public final String name;
-  public final boolean requiresAvro;
   public final AvroCompatibilityChecker compatibilityChecker;
 
-  private AvroCompatibilityType(String name, boolean requiresAvro,
-                                AvroCompatibilityChecker compatibilityChecker) {
+  private AvroCompatibilityType(String name, AvroCompatibilityChecker compatibilityChecker) {
     this.name = name;
-    this.requiresAvro = requiresAvro;
     this.compatibilityChecker = compatibilityChecker;
   }
 
   public static AvroCompatibilityType forName(String name) throws RestConfigException {
-    if (NONE.name.equals(name))
+    if (NONE.name.equals(name)) {
       return NONE;
-    else if (BACKWARD.name.equals(name))
+    } else if (BACKWARD.name.equals(name)) {
       return BACKWARD;
-    else if (FORWARD.name.equals(name))
+    } else if (FORWARD.name.equals(name)) {
       return FORWARD;
-    else if (FULL.name.equals(name))
+    } else if (FULL.name.equals(name)) {
       return FULL;
-    else
-      throw new RestConfigException("Unknown avro compatibility type: " + name);
+    } else {
+      throw new RestConfigException("Unknown avro compatibility level: " + name);
+    }
   }
 }
