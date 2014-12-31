@@ -33,10 +33,15 @@ public class RestApp {
   public Server restServer;
 
   public RestApp(int port, String zkConnect, String kafkaTopic) {
+    this(port, zkConnect, kafkaTopic, SchemaRegistryConfig.COMPATIBILITY_DEFAULT);
+  }
+
+  public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType) {
     prop = new Properties();
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
     prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
     prop.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
+    prop.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, compatibilityType);
     restConnect = String.format("http://localhost:%d", port);
   }
 

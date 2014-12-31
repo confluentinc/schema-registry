@@ -20,9 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Properties;
 
-import io.confluent.common.utils.Utils;
 import io.confluent.rest.RestConfigException;
 
 public class Main {
@@ -39,8 +37,7 @@ public class Main {
         log.error("Properties file is required to start the schema registry REST instance");
         System.exit(1);
       }
-      Properties props = Utils.loadProps(args[0]);
-      SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+      SchemaRegistryConfig config = new SchemaRegistryConfig(args[0]);
       SchemaRegistryRestApplication app = new SchemaRegistryRestApplication(config);
       Server server = app.createServer();
       server.start();

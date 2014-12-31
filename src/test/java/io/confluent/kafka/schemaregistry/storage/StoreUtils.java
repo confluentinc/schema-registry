@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.StringSerializer;
+import io.confluent.rest.RestConfigException;
 
 import static org.junit.Assert.fail;
 
@@ -51,7 +52,12 @@ public class StoreUtils {
     //turn off offset commit
     props.put(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG,
               String.valueOf(SchemaRegistryConfig.OFFSET_COMMIT_OFF));
-    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    SchemaRegistryConfig config = null;
+    try {
+      config = new SchemaRegistryConfig(props);
+    } catch (RestConfigException e) {
+      fail("Can't initialize configs");
+    }
 
     KafkaStore<String, String> kafkaStore =
         new KafkaStore<String, String>(config, new StringMessageHandler(),

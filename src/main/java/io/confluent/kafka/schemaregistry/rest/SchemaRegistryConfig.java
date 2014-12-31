@@ -21,6 +21,7 @@ import java.util.Map;
 
 import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigException;
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityType;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
 
@@ -67,6 +68,20 @@ public class SchemaRegistryConfig extends RestConfig {
       "The interval to commit offsets while consuming the Kafka topic";
   protected static final String ADVERTISED_HOST_DOC = "The host name advertised in Zookeeper";
 
+  /**
+   * <code>avro</code>
+   */
+  public static final String COMPATIBILITY_CONFIG = "avro";
+  protected static final String COMPATIBILITY_DOC =
+      "The avro compatibility type. Valid values are: "
+      + "none (new schema can be any valid avro schema), "
+      + "backward (new schema can read data produced by latest registered schema), "
+      + "forward (latest registered schema can read the new schema), "
+      + "full (new schema is backward and forward compatible with latest registered schema)";
+  public static final String COMPATIBILITY_DEFAULT = "none";
+
+  private final AvroCompatibilityType compatibilityType;
+
   static {
     config
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
@@ -87,11 +102,16 @@ public class SchemaRegistryConfig extends RestConfig {
                 KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT, ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_COMMIT_INTERVAL_MS_DOC)
         .define(ADVERTISED_HOST_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
-                ConfigDef.Importance.LOW, ADVERTISED_HOST_DOC);
+                ConfigDef.Importance.LOW, ADVERTISED_HOST_DOC)
+        .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
+                ConfigDef.Importance.HIGH, COMPATIBILITY_DOC);
   }
 
-  public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props) {
+  public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props)
+      throws RestConfigException {
     super(props);
+    compatibilityType = AvroCompatibilityType
+        .forName(getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG));
   }
 
   public SchemaRegistryConfig(String propsFile) throws RestConfigException {
@@ -108,5 +128,9 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static void main(String[] args) {
     System.out.println(config.toHtmlTable());
+  }
+
+  public AvroCompatibilityType compatibilityType() {
+    return compatibilityType;
   }
 }

@@ -36,8 +36,6 @@ public interface SchemaRegistry {
 
   Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException;
 
-  boolean isCompatible(String subject, Schema schema1, Schema schema2);
-
   boolean isMaster();
 
   void setMaster(SchemaRegistryIdentity schemaRegistryIdentity) throws SchemaRegistryException;

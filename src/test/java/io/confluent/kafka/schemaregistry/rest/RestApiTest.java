@@ -39,9 +39,12 @@ public class RestApiTest extends ClusterTestHarness {
   public void testBasic() throws Exception {
     String subject1 = "testTopic1";
     String subject2 = "testTopic2";
+    int schemasInSubject1 = 10;
     List<Integer> allVersionsInSubject1 = new ArrayList<Integer>();
-    List<String> allSchemasInSubject1 = new ArrayList<String>();
+    List<String> allSchemasInSubject1 = TestUtils.getRandomCanonicalAvroString(schemasInSubject1);
+    int schemasInSubject2 = 5;
     List<Integer> allVersionsInSubject2 = new ArrayList<Integer>();
+    List<String> allSchemasInSubject2 = TestUtils.getRandomCanonicalAvroString(schemasInSubject2);
     List<String> allSubjects = new ArrayList<String>();
 
     // test getAllVersions with no existing data
@@ -68,14 +71,12 @@ public class RestApiTest extends ClusterTestHarness {
     }
 
     // test registering and verifying new schemas in subject1
-    int schemasInSubject1 = 10;
     for (int i = 0; i < schemasInSubject1; i++) {
-      String schema = subject1 + " schema " + i;
+      String schema = allSchemasInSubject1.get(i);
       int expectedVersion = i + 1;
       TestUtils.registerAndVerifySchema(restApp.restConnect, schema, expectedVersion,
                                         subject1);
       allVersionsInSubject1.add(expectedVersion);
-      allSchemasInSubject1.add(schema);
     }
     allSubjects.add(subject1);
 
@@ -100,9 +101,8 @@ public class RestApiTest extends ClusterTestHarness {
     }
 
     // test registering schemas in subject2
-    int schemasInSubject2 = 5;
     for (int i = 0; i < schemasInSubject2; i++) {
-      String schema = subject2 + " schema " + i;
+      String schema = allSchemasInSubject2.get(i);
       int expectedVersion = i + 1;
       TestUtils.registerAndVerifySchema(restApp.restConnect, schema, expectedVersion,
                                         subject2);
