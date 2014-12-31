@@ -63,6 +63,10 @@ public class RocksDbConfig extends AbstractConfig {
   private static final String ROCKSDB_BLOCK_SIZE_DOC = "Block size in bytes for data in RocksDB";
   private static final String ROCKSDB_WRITE_BUFFER_SIZE_BYTES_DOC =
       "Write buffer size in bytes for data in RocksDB";
+  private static final String ROCKSDB_COMPACTION_STYLE_DOC =
+      "The compaction style for RocksDB. Could be one of universal, fifo, level";
+  private static final List<String> compactionOptions =
+      Arrays.asList("universal", "level", "fifo");
   private static final ConfigDef config = new ConfigDef()
       .define(ROCKSDB_COMPRESSION_CONFIG, Type.STRING, CompressionType.NO_COMPRESSION.toString(),
               Importance.MEDIUM, ROCKSDB_COMPRESSION_DOC)
@@ -76,10 +80,6 @@ public class RocksDbConfig extends AbstractConfig {
       .define(ROCKSDB_WRITE_BUFFERS_CONFIG, Type.INT, 1, Importance.LOW, null)
       .define(ROCKSDB_WRITE_BUFFER_SIZE_BYTES_CONFIG, Type.LONG, 4096, Importance.MEDIUM,
               ROCKSDB_WRITE_BUFFER_SIZE_BYTES_DOC);
-  private static final String ROCKSDB_COMPACTION_STYLE_DOC =
-      "The compaction style for RocksDB. Could be one of universal, fifo, level";
-  private static final List<String> compactionOptions =
-      Arrays.asList("universal", "level", "fifo");
 
   public RocksDbConfig(ConfigDef arg0, Map<?, ?> arg1) {
     super(arg0, arg1);

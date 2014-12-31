@@ -46,16 +46,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   public static final char SCHEMA_KEY_SEPARATOR = ',';
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
-  private static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
-  private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 1000;
   private final KafkaStore<String, Schema> kafkaStore;
   private final Serializer<Schema> serializer;
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
   private final ZkClient zkClient;
   private final Map<Long, String> idCache;
-  private AtomicLong schemaIdCounter;
-  private long maxSchemaIdCounterValue;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
 
@@ -113,9 +109,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         } catch (StoreException e) {
           throw new SchemaRegistryException(e);
         }
-        schemaIdCounter = new AtomicLong(nextSchemaIdCounterBatch());
-        maxSchemaIdCounterValue =
-            schemaIdCounter.longValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
       }
     }
   }
@@ -133,12 +126,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public long register(String topic, Schema schema, RegisterSchemaForwardingAgent forwardingAgent)
+  public int register(String subject, Schema schema, RegisterSchemaForwardingAgent forwardingAgent)
       throws SchemaRegistryException {
     synchronized (masterLock) {
       if (isMaster()) {
         try {
-          Iterator<Schema> allVersions = getAllVersions(topic);
+          Iterator<Schema> allVersions = getAllVersions(subject);
 
           Schema latestSchema = null;
           int latestUsedSchemaVersion = 0;
@@ -147,22 +140,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
             Schema s = allVersions.next();
             if (!s.getDeprecated()) {
               if (s.getSchema().compareTo(schema.getSchema()) == 0) {
-                return s.getId();
+                return s.getVersion();
               }
               latestSchema = s;
             }
             latestUsedSchemaVersion = s.getVersion();
           }
-          if (latestSchema == null || isCompatible(topic, schema, latestSchema)) {
+          if (latestSchema == null || isCompatible(subject, schema, latestSchema)) {
             int newVersion = latestUsedSchemaVersion + 1;
             String
                 keyForNewVersion =
-                String.format("%s%c%d", topic, SCHEMA_KEY_SEPARATOR, newVersion);
-            schema.setId(schemaIdCounter.getAndIncrement());
-            if (schemaIdCounter.get() == maxSchemaIdCounterValue) {
-              maxSchemaIdCounterValue =
-                  nextSchemaIdCounterBatch().longValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
-            }
+                String.format("%s%c%d", subject, SCHEMA_KEY_SEPARATOR, newVersion);
             schema.setVersion(newVersion);
             kafkaStore.put(keyForNewVersion, schema);
           } else {
@@ -182,12 +170,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         }
       }
     }
-    return schema.getId();
+    return schema.getVersion();
   }
 
   @Override
-  public Schema get(String topic, int version) throws SchemaRegistryException {
-    String key = topic + SCHEMA_KEY_SEPARATOR + version;
+  public Schema get(String subject, int version) throws SchemaRegistryException {
+    String key = subject + SCHEMA_KEY_SEPARATOR + version;
     try {
       Schema schema = kafkaStore.get(key);
       return schema;
@@ -196,22 +184,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           "Error while retrieving schema from the backend Kafka" +
           " store", e);
     }
-  }
-
-  @Override
-  public Schema get(long id) throws SchemaRegistryException {
-    Schema schema = null;
-    try {
-      String subjectVersionKey = idCache.get(id);
-      if (subjectVersionKey != null) {
-        schema = kafkaStore.get(subjectVersionKey);
-      }
-    } catch (StoreException e) {
-      throw new SchemaRegistryException(
-          "Error while retrieving schema with id " + id + " from the backend Kafka" +
-          " store", e);
-    }
-    return schema;
   }
 
   @Override
@@ -235,11 +207,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Iterator<Schema> getAllVersions(String topic) throws SchemaRegistryException {
+  public Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException {
     try {
-      Iterator<Schema> allVersions = kafkaStore.getAll(String.format("%s%c", topic,
+      Iterator<Schema> allVersions = kafkaStore.getAll(String.format("%s%c", subject,
                                                                      SCHEMA_KEY_SEPARATOR),
-                                                       String.format("%s%c%c", topic,
+                                                       String.format("%s%c%c", subject,
                                                                      SCHEMA_KEY_SEPARATOR,
                                                                      '9' + 1));
       return sortSchemasByVersion(allVersions);
@@ -250,7 +222,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public boolean isCompatible(String topic, Schema schema1, Schema schema2) {
+  public boolean isCompatible(String subject, Schema schema1, Schema schema2) {
     return true;
   }
 
@@ -272,28 +244,5 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
     Collections.sort(schemaVector);
     return schemaVector.iterator();
-  }
-
-  private Long nextSchemaIdCounterBatch() throws SchemaRegistryException {
-    // create ZOOKEEPER_SCHEMA_ID_COUNTER if it already doesn't exist
-    long schemaIdCounterThreshold = 0L;
-    if (!zkClient.exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
-      ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
-                                   String.valueOf(ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE));
-    } else {
-      // read the latest counter value
-      ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
-      if (counterValue.getData() != null) {
-        schemaIdCounterThreshold = Long.valueOf(counterValue.getData());
-      } else {
-        throw new SchemaRegistryException("Failed to initialize schema registry. Failed to read "
-                                          + "schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
-                                          " from zookeeper");
-      }
-      ZkUtils.updatePersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
-                                   String.valueOf(schemaIdCounterThreshold +
-                                                  ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE));
-    }
-    return schemaIdCounterThreshold;
   }
 }

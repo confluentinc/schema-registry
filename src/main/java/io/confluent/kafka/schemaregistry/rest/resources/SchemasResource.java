@@ -57,13 +57,11 @@ public class SchemasResource {
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
 
   private final String subject;
-  private final boolean isKey;
   private final SchemaRegistry schemaRegistry;
 
-  public SchemasResource(SchemaRegistry registry, String subject, boolean isKey) {
+  public SchemasResource(SchemaRegistry registry, String subject) {
     this.schemaRegistry = registry;
     this.subject = subject;
-    this.isKey = isKey;
   }
 
   @GET
@@ -108,16 +106,16 @@ public class SchemasResource {
     requestProperties.put("Content-Type", contentType);
     requestProperties.put("Accept", accept);
     RegisterSchemaForwardingAgent forwardingAgent =
-        new RegisterSchemaForwardingAgent(requestProperties, subjectName, isKey, request);
-    Schema schema = new Schema(subjectName, 0, 0L, request.getSchema(), false);
-    long id = 0L;
+        new RegisterSchemaForwardingAgent(requestProperties, subjectName, request);
+    Schema schema = new Schema(subjectName, 0, request.getSchema(), false);
+    int version = -1;
     try {
-      id = schemaRegistry.register(subjectName, schema, forwardingAgent);
+      version = schemaRegistry.register(subjectName, schema, forwardingAgent);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
-    registerSchemaResponse.setId(id);
+    registerSchemaResponse.setVersion(version);
     asyncResponse.resume(registerSchemaResponse);
   }
 }

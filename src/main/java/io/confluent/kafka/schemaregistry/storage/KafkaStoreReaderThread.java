@@ -86,7 +86,6 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     consumerProps.put("client.id", "KafkaStore-reader-" + this.topic);
     consumerProps.put("zookeeper.connect", kafkaClusterZkUrl);
     consumerProps.put("auto.offset.reset", "smallest");
-    consumerProps.put("consumer.timeout.ms", "1000");
     consumerProps.put("auto.commit.enable", "false");
     consumer = new ZookeeperConsumerConnector(new ConsumerConfig(consumerProps));
     Map<String, Integer> kafkaStreamConfig = new HashMap<String, Integer>();

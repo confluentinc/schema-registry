@@ -34,14 +34,12 @@ public class RegisterSchemaForwardingAgent {
   private static final Logger log = LoggerFactory.getLogger(RegisterSchemaForwardingAgent.class);
   private final Map<String, String> requestProperties;
   private final String topic;
-  private final boolean isKey;
   private final RegisterSchemaRequest registerSchemaRequest;
 
   public RegisterSchemaForwardingAgent(Map<String, String> requestProperties, String topic,
-                                       boolean isKey, RegisterSchemaRequest registerSchemaRequest) {
+                                       RegisterSchemaRequest registerSchemaRequest) {
     this.requestProperties = requestProperties;
     this.topic = topic;
-    this.isKey = isKey;
     this.registerSchemaRequest = registerSchemaRequest;
   }
 
@@ -53,14 +51,14 @@ public class RegisterSchemaForwardingAgent {
    * @return The version id of the schema if registration is successful. Otherwise, throw a
    * WebApplicationException.
    */
-  public long forward(String host, int port) throws SchemaRegistryException {
+  public int forward(String host, int port) throws SchemaRegistryException {
     String baseUrl = String.format("http://%s:%d", host, port);
     log.debug(String.format("Forwarding registering schema request %s to %s",
                             registerSchemaRequest, baseUrl));
     try {
-      long id = RestUtils.registerSchema(baseUrl, requestProperties, registerSchemaRequest,
-                                         topic, isKey);
-      return id;
+      int version = RestUtils.registerSchema(baseUrl, requestProperties, registerSchemaRequest,
+                                             topic);
+      return version;
     } catch (IOException e) {
       throw new SchemaRegistryException(
           String.format("Unexpected error while forwarding the registering schema request %s to %s",

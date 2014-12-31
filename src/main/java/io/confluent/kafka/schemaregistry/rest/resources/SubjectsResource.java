@@ -28,30 +28,12 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SubjectsResource {
 
-  public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
   public final static String MESSAGE_SUBJECT_NOT_FOUND = "Subject not found.";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
   private final SchemaRegistry schemaRegistry;
 
   public SubjectsResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
-  }
-
-  @GET
-  @Path("/{id}")
-  public Schema getSchema(@PathParam("id") Long id) {
-    Schema schema = null;
-    try {
-      schema = schemaRegistry.get(id);
-    } catch (SchemaRegistryException e) {
-      log.debug("Error while retrieving schema with id " + id + " from the schema registry",
-                e);
-      throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND, e);
-    }
-    if (schema == null) {
-      throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
-    }
-    return schema;
   }
 
   @Path("/{subject}/versions")
@@ -62,11 +44,7 @@ public class SubjectsResource {
     } else {
       throw new NotFoundException(MESSAGE_SUBJECT_NOT_FOUND);
     }
-    if (subjectName.endsWith(",key")) {
-      return new SchemasResource(schemaRegistry, subjectName, true);
-    } else {
-      return new SchemasResource(schemaRegistry, subjectName, false);
-    }
+    return new SchemasResource(schemaRegistry, subjectName);
   }
 
   @GET

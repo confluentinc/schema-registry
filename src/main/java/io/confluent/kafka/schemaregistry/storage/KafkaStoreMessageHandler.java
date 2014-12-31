@@ -22,10 +22,7 @@ import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 
 public class KafkaStoreMessageHandler implements StoreUpdateHandler<String, Schema> {
 
-  private final Map<Long, String> idIndex;
-
   public KafkaStoreMessageHandler(Map<Long, String> idIndex) {
-    this.idIndex = idIndex;
   }
 
   /**
@@ -36,6 +33,5 @@ public class KafkaStoreMessageHandler implements StoreUpdateHandler<String, Sche
    */
   @Override
   public void handleUpdate(String key, Schema schema) {
-    idIndex.put(schema.getId(), key);
   }
 }

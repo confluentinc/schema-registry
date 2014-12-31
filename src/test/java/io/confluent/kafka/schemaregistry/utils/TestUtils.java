@@ -101,8 +101,7 @@ public class TestUtils {
     }
   }
 
-  public static long registerSchema(String baseUrl, String schemaString, String topic,
-                                    boolean iskey)
+  public static int registerSchema(String baseUrl, String schemaString, String subject)
       throws IOException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
@@ -110,22 +109,23 @@ public class TestUtils {
     Map<String, String> requestProperties = new HashMap<String, String>();
     requestProperties.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
 
-    return RestUtils.registerSchema(baseUrl, requestProperties, request, topic, iskey);
+    return RestUtils.registerSchema(baseUrl, requestProperties, request, subject);
   }
 
   /**
    * Register a new schema and verify that it can be found on the expected version.
    */
   public static void registerAndVerifySchema(String baseUrl, String schemaString,
-                                             int expectedId, String topic, boolean isKey)
+                                             int expectedVersion, String subject)
       throws IOException {
     assertEquals("Registering a new schema should succeed",
-                 TestUtils.registerSchema(baseUrl, schemaString, topic, isKey),
-                 expectedId);
+                 TestUtils.registerSchema(baseUrl, schemaString, subject),
+                 expectedVersion);
 
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",
-                 RestUtils.getId(baseUrl, TestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
+                 RestUtils.getVersion(baseUrl, TestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
+                                      expectedVersion)
                      .getSchema(),
                  schemaString);
   }
