@@ -119,14 +119,14 @@ public class TestUtils {
                                              int expectedVersion, String subject)
       throws IOException {
     assertEquals("Registering a new schema should succeed",
-                 TestUtils.registerSchema(baseUrl, schemaString, subject),
-                 expectedVersion);
+                 expectedVersion,
+                 TestUtils.registerSchema(baseUrl, schemaString, subject));
 
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",
+                 schemaString,
                  RestUtils.getVersion(baseUrl, TestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
                                       expectedVersion)
-                     .getSchema(),
-                 schemaString);
+                     .getSchema());
   }
 }

@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.rest.resources.RootResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemasResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaKeySerializer;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaSerializer;
@@ -48,7 +49,8 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   @Override
   public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
     try {
-      schemaRegistry = new KafkaSchemaRegistry(schemaRegistryConfig, new SchemaSerializer());
+      schemaRegistry = new KafkaSchemaRegistry(schemaRegistryConfig, new SchemaKeySerializer(),
+                                               new SchemaSerializer());
       schemaRegistry.init();
     } catch (SchemaRegistryException e) {
       log.error("Error starting the schema registry", e);
