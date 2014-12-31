@@ -26,21 +26,20 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
 import io.confluent.kafka.schemaregistry.utils.RestUtils;
 
 /**
- * An agent responsible for forwarding an incoming registering schema request to another HTTP server
+ * An agent responsible for forwarding an incoming registering schema request to another HTTP
+ * server
  */
 public class RegisterSchemaForwardingAgent {
 
   private static final Logger log = LoggerFactory.getLogger(RegisterSchemaForwardingAgent.class);
   private final Map<String, String> requestProperties;
-  private final String topic;
-  private final boolean isKey;
+  private final String subject;
   private final RegisterSchemaRequest registerSchemaRequest;
 
-  public RegisterSchemaForwardingAgent(Map<String, String> requestProperties, String topic,
-                                       boolean isKey, RegisterSchemaRequest registerSchemaRequest) {
+  public RegisterSchemaForwardingAgent(Map<String, String> requestProperties, String subject,
+                                       RegisterSchemaRequest registerSchemaRequest) {
     this.requestProperties = requestProperties;
-    this.topic = topic;
-    this.isKey = isKey;
+    this.subject = subject;
     this.registerSchemaRequest = registerSchemaRequest;
   }
 
@@ -50,7 +49,7 @@ public class RegisterSchemaForwardingAgent {
    * @param host host to forward the request to
    * @param port port to forward the request to
    * @return The version id of the schema if registration is successful. Otherwise, throw a
-   *         WebApplicationException.
+   * WebApplicationException.
    */
   public int forward(String host, int port) throws SchemaRegistryException {
     String baseUrl = String.format("http://%s:%d", host, port);
@@ -58,7 +57,7 @@ public class RegisterSchemaForwardingAgent {
                             registerSchemaRequest, baseUrl));
     try {
       int version = RestUtils.registerSchema(baseUrl, requestProperties, registerSchemaRequest,
-                                             topic, isKey);
+                                             subject);
       return version;
     } catch (IOException e) {
       throw new SchemaRegistryException(

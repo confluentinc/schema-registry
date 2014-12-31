@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,35 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.storage.serialization;
 
-import java.util.Map;
+package io.confluent.kafka.schemaregistry.storage;
 
-public class StringSerializer implements Serializer<String> {
+public class StringMessageHandler implements StoreUpdateHandler<String, String> {
 
-  public static StringSerializer INSTANCE = new StringSerializer();
-
-  // only a singleton is needed
-  private StringSerializer() {
-  }
-
+  /**
+   * Invoked on every new K,V pair written to the store
+   *
+   * @param key   Key associated with the data
+   * @param value Data written to the store
+   */
   @Override
-  public byte[] toBytes(String data) {
-    return data.getBytes();
-  }
+  public void handleUpdate(String key, String value) {
 
-  @Override
-  public String fromBytes(byte[] data) {
-    return new String(data);
-  }
-
-  @Override
-  public void close() {
-    // do nothing
-  }
-
-  @Override
-  public void configure(Map<String, ?> stringMap) {
-    // do nothing
   }
 }

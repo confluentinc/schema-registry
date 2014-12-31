@@ -29,47 +29,42 @@ import static io.confluent.common.config.ConfigDef.Range.atLeast;
 public class SchemaRegistryConfig extends RestConfig {
 
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
-  protected static final String KAFKASTORE_CONNECTION_URL_DOC =
-      "Zookeeper url for the Kafka cluster";
-
   /**
    * <code>kafkastore.zk.session.timeout.ms</code>
    */
   public static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG
       = "kafkastore.zk.session.timeout.ms";
-  protected static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC =
-      "Zookeeper session timeout";
-
   /**
    * <code>kafkastore.topic</code>
    */
   public static final String KAFKASTORE_TOPIC_CONFIG = "kafkastore.topic";
   public static final String DEFAULT_KAFKASTORE_TOPIC = "_schemas";
-  protected static final String KAFKASTORE_TOPIC_DOC =
-      "The durable single partition topic that acts" +
-      "as the durable log for the data";
-
   /**
    * <code>kafkastore.timeout.ms</code>
    */
   public static final String KAFKASTORE_TIMEOUT_CONFIG = "kafkastore.timeout.ms";
-  protected static final String KAFKASTORE_TIMEOUT_DOC =
-      "The timeout for an operation on the Kafka store";
-
   /**
    * <code>kafkastore.commit.interval.ms</code>
    */
   public static final String KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG = "kafkastore.commit.interval.ms";
-  protected static final String KAFKASTORE_COMMIT_INTERVAL_MS_DOC =
-      "The interval to commit offsets while consuming the Kafka topic";
   public static final int OFFSET_COMMIT_OFF = -1;
   // TODO: turn off offset commit by default for now since we only have an in-memory store
   private static final int KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT = OFFSET_COMMIT_OFF;
-
   /**
    * <code>advertised.host</code>
    */
   public static final String ADVERTISED_HOST_CONFIG = "advertised.host";
+  protected static final String KAFKASTORE_CONNECTION_URL_DOC =
+      "Zookeeper url for the Kafka cluster";
+  protected static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC =
+      "Zookeeper session timeout";
+  protected static final String KAFKASTORE_TOPIC_DOC =
+      "The durable single partition topic that acts" +
+      "as the durable log for the data";
+  protected static final String KAFKASTORE_TIMEOUT_DOC =
+      "The timeout for an operation on the Kafka store";
+  protected static final String KAFKASTORE_COMMIT_INTERVAL_MS_DOC =
+      "The interval to commit offsets while consuming the Kafka topic";
   protected static final String ADVERTISED_HOST_DOC = "The host name advertised in Zookeeper";
 
   static {
@@ -95,20 +90,20 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.LOW, ADVERTISED_HOST_DOC);
   }
 
-  private static String getDefaultHost() {
-    try {
-      return InetAddress.getLocalHost().getCanonicalHostName();
-    } catch (UnknownHostException e) {
-      throw new ConfigException("Unknown local hostname", e);
-    }
-  }
-
   public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props) {
     super(props);
   }
 
   public SchemaRegistryConfig(String propsFile) throws RestConfigException {
     this(getPropsFromFile(propsFile));
+  }
+
+  private static String getDefaultHost() {
+    try {
+      return InetAddress.getLocalHost().getCanonicalHostName();
+    } catch (UnknownHostException e) {
+      throw new ConfigException("Unknown local hostname", e);
+    }
   }
 
   public static void main(String[] args) {

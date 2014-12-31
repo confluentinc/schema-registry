@@ -33,14 +33,15 @@ import static org.junit.Assert.fail;
  */
 public class TestUtils {
 
-  private static final String IoTmpDir = System.getProperty("java.io.tmpdir");
-  private static final Random random = new Random();
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
   static {
     DEFAULT_REQUEST_PROPERTIES = new HashMap<String, String>();
     DEFAULT_REQUEST_PROPERTIES.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
   }
+
+  private static final String IoTmpDir = System.getProperty("java.io.tmpdir");
+  private static final Random random = new Random();
 
   /**
    * Create a temporary directory
@@ -100,7 +101,7 @@ public class TestUtils {
     }
   }
 
-  public static int registerSchema(String baseUrl, String schemaString, String topic, boolean iskey)
+  public static int registerSchema(String baseUrl, String schemaString, String subject)
       throws IOException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
@@ -108,24 +109,24 @@ public class TestUtils {
     Map<String, String> requestProperties = new HashMap<String, String>();
     requestProperties.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
 
-    return RestUtils.registerSchema(baseUrl, requestProperties, request, topic, iskey);
+    return RestUtils.registerSchema(baseUrl, requestProperties, request, subject);
   }
 
   /**
    * Register a new schema and verify that it can be found on the expected version.
    */
   public static void registerAndVerifySchema(String baseUrl, String schemaString,
-                                             int expectedVersion, String topic, boolean isKey)
+                                             int expectedVersion, String subject)
       throws IOException {
     assertEquals("Registering a new schema should succeed",
-                 TestUtils.registerSchema(baseUrl, schemaString, topic, isKey),
+                 TestUtils.registerSchema(baseUrl, schemaString, subject),
                  expectedVersion);
 
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",
-                 RestUtils.getVersion(baseUrl,
-                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, topic, isKey,
-                                      expectedVersion).getSchema(),
+                 RestUtils.getVersion(baseUrl, TestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
+                                      expectedVersion)
+                     .getSchema(),
                  schemaString);
   }
 }

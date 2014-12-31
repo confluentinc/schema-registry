@@ -52,9 +52,11 @@ public class StoreUtils {
     props.put(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG,
               String.valueOf(SchemaRegistryConfig.OFFSET_COMMIT_OFF));
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+
     KafkaStore<String, String> kafkaStore =
-        new KafkaStore<String, String>(config, StringSerializer.INSTANCE,
-                                       StringSerializer.INSTANCE, inMemoryStore, zkClient);
+        new KafkaStore<String, String>(config, new StringMessageHandler(),
+                                       StringSerializer.INSTANCE, StringSerializer.INSTANCE,
+                                       inMemoryStore, zkClient);
     try {
       kafkaStore.init();
     } catch (StoreInitializationException e) {

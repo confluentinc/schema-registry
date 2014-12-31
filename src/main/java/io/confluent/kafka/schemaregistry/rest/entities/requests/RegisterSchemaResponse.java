@@ -27,6 +27,10 @@ public class RegisterSchemaResponse {
   @NotEmpty
   private int version;
 
+  public static RegisterSchemaResponse fromJson(String json) throws IOException {
+    return new ObjectMapper().readValue(json, RegisterSchemaResponse.class);
+  }
+
   @JsonProperty("version")
   public int getVersion() {
     return version;
@@ -39,10 +43,6 @@ public class RegisterSchemaResponse {
 
   public String toJson() throws IOException {
     return new ObjectMapper().writeValueAsString(this);
-  }
-
-  public static RegisterSchemaResponse fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, RegisterSchemaResponse.class);
   }
 
 }

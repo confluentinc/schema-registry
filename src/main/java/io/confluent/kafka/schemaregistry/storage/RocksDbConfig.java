@@ -15,16 +15,17 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.common.config.AbstractConfig;
-import io.confluent.common.config.ConfigDef;
-import io.confluent.common.config.ConfigDef.Importance;
-import io.confluent.common.config.ConfigDef.Type;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import io.confluent.common.config.AbstractConfig;
+import io.confluent.common.config.ConfigDef;
+import io.confluent.common.config.ConfigDef.Importance;
+import io.confluent.common.config.ConfigDef.Type;
 
 import static io.confluent.common.config.ConfigDef.Range.atLeast;
 

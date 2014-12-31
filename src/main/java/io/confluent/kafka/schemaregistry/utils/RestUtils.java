@@ -42,7 +42,6 @@ import io.confluent.rest.entities.ErrorMessage;
 public class RestUtils {
 
   private static final Logger log = LoggerFactory.getLogger(RestUtils.class);
-  private static ObjectMapper jsonDeserializer = new ObjectMapper();
   private final static TypeReference<RegisterSchemaResponse> REGISTER_RESPONSE_TYPE =
       new TypeReference<RegisterSchemaResponse>() {
       };
@@ -55,6 +54,7 @@ public class RestUtils {
   private final static TypeReference<List<String>> ALL_TOPICS_RESPONSE_TYPE =
       new TypeReference<List<String>>() {
       };
+  private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
   public static <T> T httpRequest(String target, String method, byte[] entity,
                                   Map<String, String> requestProperties,
@@ -108,9 +108,9 @@ public class RestUtils {
   }
 
   public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
-                                   RegisterSchemaRequest registerSchemaRequest, String topic,
-                                   boolean isKey) throws IOException {
-    String url = String.format("%s/topics/%s/%s/versions", baseUrl, topic, isKey ? "key" : "value");
+                                   RegisterSchemaRequest registerSchemaRequest, String subject)
+      throws IOException {
+    String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
 
     RegisterSchemaResponse response =
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
@@ -118,10 +118,18 @@ public class RestUtils {
     return response.getVersion();
   }
 
+  public static Schema getId(String baseUrl, Map<String, String> requestProperties, long id)
+      throws IOException {
+    String url = String.format("%s/subjects/%d", baseUrl, id);
+
+    Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
+                                            GET_SCHEMA_RESPONSE_TYPE);
+    return response;
+  }
+
   public static Schema getVersion(String baseUrl, Map<String, String> requestProperties,
-                                  String topic, boolean isKey, int version) throws IOException {
-    String url = String.format("%s/topics/%s/%s/versions/%d",
-                               baseUrl, topic, isKey ? "key" : "value", version);
+                                  String subject, int version) throws IOException {
+    String url = String.format("%s/subjects/%s/versions/%d", baseUrl, subject, version);
 
     Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                             GET_SCHEMA_RESPONSE_TYPE);
@@ -129,17 +137,17 @@ public class RestUtils {
   }
 
   public static List<Integer> getAllVersions(String baseUrl, Map<String, String> requestProperties,
-                                             String topic, boolean isKey) throws IOException {
-    String url = String.format("%s/topics/%s/%s/versions", baseUrl, topic, isKey ? "key" : "value");
+                                             String subject) throws IOException {
+    String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
 
     List<Integer> response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                                    ALL_VERSIONS_RESPONSE_TYPE);
     return response;
   }
 
-  public static List<String> getAllTopics(String baseUrl, Map<String, String> requestProperties)
+  public static List<String> getAllSubjects(String baseUrl, Map<String, String> requestProperties)
       throws IOException {
-    String url = String.format("%s/topics", baseUrl);
+    String url = String.format("%s/subjects", baseUrl);
 
     List<String> response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                                   ALL_TOPICS_RESPONSE_TYPE);

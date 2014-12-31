@@ -37,53 +37,53 @@ public class RestApiTest extends ClusterTestHarness {
 
   @Test
   public void testBasic() throws Exception {
-    String topic1 = "testTopic1";
-    String topic2 = "testTopic2";
-    Boolean isKey = false;
-    List<Integer> allVersionsInTopic1 = new ArrayList<Integer>();
-    List<String> allSchemasInTopic1 = new ArrayList<String>();
-    List<Integer> allVersionsInTopic2 = new ArrayList<Integer>();
-    List<String> allTopics = new ArrayList<String>();
+    String subject1 = "testTopic1";
+    String subject2 = "testTopic2";
+    List<Integer> allVersionsInSubject1 = new ArrayList<Integer>();
+    List<String> allSchemasInSubject1 = new ArrayList<String>();
+    List<Integer> allVersionsInSubject2 = new ArrayList<Integer>();
+    List<String> allSubjects = new ArrayList<String>();
 
     // test getAllVersions with no existing data
-    assertEquals("Getting all versions from topic1 should return empty",
+    assertEquals("Getting all versions from subject1 should return empty",
                  RestUtils.getAllVersions(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                          topic1, isKey),
-                 allVersionsInTopic1);
+                                          subject1),
+                 allVersionsInSubject1);
 
-    // test getAllTopics with no existing data
-    assertEquals("Getting all topics should return empty",
-                 RestUtils.getAllTopics(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
-                 allTopics);
+    // test getAllSubjects with no existing data
+    assertEquals("Getting all subjects should return empty",
+                 RestUtils
+                     .getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
+                 allSubjects);
 
-    // test getVersion on a non-existing topic
+    // test getVersion on a non-existing subject
     try {
       RestUtils.getVersion(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES,
-                           "non-existing-topic", isKey, 1);
+                           "non-existing-subject", 1);
     } catch (WebApplicationException e) {
       // this is expected.
-      assertEquals("Unregistered topic shouldn't be found in getVersion()",
+      assertEquals("Unregistered subject shouldn't be found in getVersion()",
                    e.getResponse().getStatusInfo(),
                    Response.Status.NOT_FOUND);
     }
 
-    // test registering and verifying new schemas in topic1
-    int schemasInTopic1 = 10;
-    for (int i = 0; i < schemasInTopic1; i++) {
-      String schema = topic1 + " schema " + i;
+    // test registering and verifying new schemas in subject1
+    int schemasInSubject1 = 10;
+    for (int i = 0; i < schemasInSubject1; i++) {
+      String schema = subject1 + " schema " + i;
       int expectedVersion = i + 1;
       TestUtils.registerAndVerifySchema(restApp.restConnect, schema, expectedVersion,
-                                        topic1, isKey);
-      allVersionsInTopic1.add(expectedVersion);
-      allSchemasInTopic1.add(schema);
+                                        subject1);
+      allVersionsInSubject1.add(expectedVersion);
+      allSchemasInSubject1.add(schema);
     }
-    allTopics.add(topic1);
+    allSubjects.add(subject1);
 
     // test getVersion on a non-existing version
     try {
       RestUtils.getVersion(restApp.restConnect,
-                           TestUtils.DEFAULT_REQUEST_PROPERTIES, topic1, isKey,
-                           schemasInTopic1 + 1);
+                           TestUtils.DEFAULT_REQUEST_PROPERTIES, subject1,
+                           schemasInSubject1 + 1);
     } catch (WebApplicationException e) {
       // this is expected.
       assertEquals("Unregistered version shouldn't be found", e.getResponse().getStatusInfo(),
@@ -91,38 +91,39 @@ public class RestApiTest extends ClusterTestHarness {
     }
 
     // test re-registering existing schemas
-    for (int i = 0; i < schemasInTopic1; i++) {
+    for (int i = 0; i < schemasInSubject1; i++) {
       int expectedVersion = i + 1;
-      String schemaString = allSchemasInTopic1.get(i);
+      String schemaString = allSchemasInSubject1.get(i);
       assertEquals("Re-registering an existing schema should return the existing version",
-                   TestUtils.registerSchema(restApp.restConnect, schemaString, topic1, isKey),
+                   TestUtils.registerSchema(restApp.restConnect, schemaString, subject1),
                    expectedVersion);
     }
 
-    // test registering schemas in topic2
-    int schemasInTopic2 = 5;
-    for (int i = 0; i < schemasInTopic2; i++) {
-      String schema = topic2 + " schema " + i;
+    // test registering schemas in subject2
+    int schemasInSubject2 = 5;
+    for (int i = 0; i < schemasInSubject2; i++) {
+      String schema = subject2 + " schema " + i;
       int expectedVersion = i + 1;
       TestUtils.registerAndVerifySchema(restApp.restConnect, schema, expectedVersion,
-                                        topic2, isKey);
-      allVersionsInTopic2.add(expectedVersion);
+                                        subject2);
+      allVersionsInSubject2.add(expectedVersion);
     }
-    allTopics.add(topic2);
+    allSubjects.add(subject2);
 
     // test getAllVersions with existing data
-    assertEquals("Getting all versions from topic1 should match all registered versions",
+    assertEquals("Getting all versions from subject1 should match all registered versions",
                  RestUtils.getAllVersions(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                          topic1, isKey),
-                 allVersionsInTopic1);
-    assertEquals("Getting all versions from topic2 should match all registered versions",
+                                          subject1),
+                 allVersionsInSubject1);
+    assertEquals("Getting all versions from subject2 should match all registered versions",
                  RestUtils.getAllVersions(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                          topic2, isKey),
-                 allVersionsInTopic2);
+                                          subject2),
+                 allVersionsInSubject2);
 
-    // test getAllTopics with existing data
-    assertEquals("Getting all topics should match all registered topics",
-                 RestUtils.getAllTopics(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
-                 allTopics);
+    // test getAllSubjects with existing data
+    assertEquals("Getting all subjects should match all registered subjects",
+                 RestUtils
+                     .getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES),
+                 allSubjects);
   }
 }
