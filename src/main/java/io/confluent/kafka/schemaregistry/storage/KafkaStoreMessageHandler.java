@@ -22,7 +22,7 @@ import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 
 public class KafkaStoreMessageHandler implements StoreUpdateHandler<String, Schema> {
 
-  public KafkaStoreMessageHandler(Map<Long, String> idIndex) {
+  public KafkaStoreMessageHandler() {
   }
 
   /**

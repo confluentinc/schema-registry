@@ -33,13 +33,13 @@ public class RegisterSchemaForwardingAgent {
 
   private static final Logger log = LoggerFactory.getLogger(RegisterSchemaForwardingAgent.class);
   private final Map<String, String> requestProperties;
-  private final String topic;
+  private final String subject;
   private final RegisterSchemaRequest registerSchemaRequest;
 
-  public RegisterSchemaForwardingAgent(Map<String, String> requestProperties, String topic,
+  public RegisterSchemaForwardingAgent(Map<String, String> requestProperties, String subject,
                                        RegisterSchemaRequest registerSchemaRequest) {
     this.requestProperties = requestProperties;
-    this.topic = topic;
+    this.subject = subject;
     this.registerSchemaRequest = registerSchemaRequest;
   }
 
@@ -57,7 +57,7 @@ public class RegisterSchemaForwardingAgent {
                             registerSchemaRequest, baseUrl));
     try {
       int version = RestUtils.registerSchema(baseUrl, requestProperties, registerSchemaRequest,
-                                             topic);
+                                             subject);
       return version;
     } catch (IOException e) {
       throw new SchemaRegistryException(

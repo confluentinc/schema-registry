@@ -30,7 +30,4 @@ curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://
 7. Get a particular version of a subject's schema
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects/Kafka/versions/1
 
-8. Get a particular schema using it's id (as returned by the register request)
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects/0
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects/1
 

@@ -36,8 +36,7 @@ public class MasterElectorTest extends ClusterTestHarness {
 
   @Test
   public void testAutoFailover() throws Exception {
-    final String topic = "testTopic";
-    final Boolean isKey = false;
+    final String subject = "testTopic";
 
     // create schema registry instance 1
     final RestApp restApp1 = new RestApp(kafka.utils.TestUtils.choosePort(),
@@ -57,44 +56,44 @@ public class MasterElectorTest extends ClusterTestHarness {
     final String firstSchema = "first schema";
     final int firstSchemaExpectedVersion = 1;
     TestUtils.registerAndVerifySchema(restApp1.restConnect, firstSchema, firstSchemaExpectedVersion,
-                                      topic);
+                                      subject);
     // the newly registered schema should be eventually readable on the non-master
-    waitUntilVersionExists(restApp2.restConnect, topic, firstSchemaExpectedVersion, firstSchema,
-                      "Registered schema should be found on the non-master");
+    waitUntilVersionExists(restApp2.restConnect, subject, firstSchemaExpectedVersion, firstSchema,
+                           "Registered schema should be found on the non-master");
 
     // test registering a schema to the non-master and finding it on the expected version
     final String secondSchema = "second schema";
     final int secondSchemaExpectedVersion = 2;
     assertEquals("Registering a new schema to the non-master should succeed",
                  secondSchemaExpectedVersion,
-                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, topic));
+                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, subject));
 
     // the newly registered schema should be immediately readable on the master using the version
     assertEquals("Registered schema should be found on the master",
                  secondSchema,
                  RestUtils.getVersion(restApp1.restConnect,
-                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, topic,
+                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
                                       secondSchemaExpectedVersion).getSchema());
 
     // the newly registered schema should be eventually readable on the non-master
-    waitUntilVersionExists(restApp2.restConnect, topic, secondSchemaExpectedVersion, secondSchema,
-                      "Registered schema should be found on the non-master");
+    waitUntilVersionExists(restApp2.restConnect, subject, secondSchemaExpectedVersion, secondSchema,
+                           "Registered schema should be found on the non-master");
 
     // test registering an existing schema to the master
     assertEquals("Registering an existing schema to the master should return its version",
                  secondSchemaExpectedVersion,
-                 TestUtils.registerSchema(restApp1.restConnect, secondSchema, topic));
+                 TestUtils.registerSchema(restApp1.restConnect, secondSchema, subject));
 
     // test registering an existing schema to the non-master
     assertEquals("Registering an existing schema to the non-master should return its version",
                  secondSchemaExpectedVersion,
-                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, topic));
+                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, subject));
 
     // fake an incorrect master and registration should fail
     restApp1.setMaster(null);
     int statusCodeFromRestApp1 = 0;
     try {
-      TestUtils.registerSchema(restApp1.restConnect, "failed schema", topic);
+      TestUtils.registerSchema(restApp1.restConnect, "failed schema", subject);
       fail("Registration should fail on the master");
     } catch (WebApplicationException e) {
       // this is expected.
@@ -103,7 +102,7 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     int statusCodeFromRestApp2 = 0;
     try {
-      TestUtils.registerSchema(restApp2.restConnect, "failed schema", topic);
+      TestUtils.registerSchema(restApp2.restConnect, "failed schema", subject);
       fail("Registration should fail on the non-master");
     } catch (WebApplicationException e) {
       // this is expected.
@@ -123,7 +122,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     final int thirdSchemaExpectedVersion = 3;
     assertEquals("Registering a new schema to the master should succeed",
                  thirdSchemaExpectedVersion,
-                 TestUtils.registerSchema(restApp1.restConnect, thirdSchema, topic));
+                 TestUtils.registerSchema(restApp1.restConnect, thirdSchema, subject));
 
     // stop schema registry instance 1; instance 2 should become the new master
     restApp1.stop();
@@ -140,7 +139,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     assertEquals("Latest version should be found on the new master",
                  thirdSchema,
                  RestUtils.getVersion(restApp2.restConnect,
-                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, topic,
+                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
                                       thirdSchemaExpectedVersion).getSchema());
 
     // register a schema to the new master
@@ -148,7 +147,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     final int fourthSchemaExpectedVersion = 4;
     TestUtils.registerAndVerifySchema(restApp2.restConnect, fourthSchema,
                                       fourthSchemaExpectedVersion,
-                                      topic);
+                                      subject);
 
     restApp2.stop();
   }

@@ -51,7 +51,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
   private final ZkClient zkClient;
-  private final Map<Long, String> idCache;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
 
@@ -69,8 +68,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                  new ZkStringSerializer());
 
     this.serializer = serializer;
-    this.idCache = new HashMap<Long, String>();
-    kafkaStore = new KafkaStore<String, Schema>(config, new KafkaStoreMessageHandler(idCache),
+    kafkaStore = new KafkaStore<String, Schema>(config, new KafkaStoreMessageHandler(),
                                                 StringSerializer.INSTANCE, this.serializer,
                                                 new InMemoryStore<String, Schema>(), zkClient);
   }

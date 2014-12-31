@@ -37,8 +37,7 @@ public class SubjectsResource {
   }
 
   @Path("/{subject}/versions")
-  public SchemasResource getKeySchemas(@PathParam("subject") String subjectName) {
-    // check if suffix is "key"
+  public SchemasResource getSchemas(@PathParam("subject") String subjectName) {
     if (subjectName != null) {
       subjectName = subjectName.trim();
     } else {
