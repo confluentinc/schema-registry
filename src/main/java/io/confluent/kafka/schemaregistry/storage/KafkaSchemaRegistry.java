@@ -20,25 +20,26 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
-import java.util.concurrent.atomic.AtomicLong;
 
-import io.confluent.common.utils.ZkData;
-import io.confluent.common.utils.ZkUtils;
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityType;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.rest.RegisterSchemaForwardingAgent;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.exceptions.IncompatibleAvroSchemaException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.InvalidAvroException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.StringSerializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
+import io.confluent.kafka.schemaregistry.utils.Pair;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 
@@ -53,6 +54,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final ZkClient zkClient;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
+  private final AvroCompatibilityType defaultCompatibilityType;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config, Serializer<Schema> serializer)
       throws SchemaRegistryException {
@@ -71,6 +73,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     kafkaStore = new KafkaStore<String, Schema>(config, new KafkaStoreMessageHandler(),
                                                 StringSerializer.INSTANCE, this.serializer,
                                                 new InMemoryStore<String, Schema>(), zkClient);
+    this.defaultCompatibilityType = config.compatibilityType();
   }
 
   @Override
@@ -83,7 +86,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     masterElector = new ZookeeperMasterElector(zkClient, myIdentity, this);
   }
 
-  @Override
   public boolean isMaster() {
     synchronized (masterLock) {
       if (masterIdentity != null && masterIdentity.equals(myIdentity)) {
@@ -94,7 +96,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  @Override
   public void setMaster(SchemaRegistryIdentity schemaRegistryIdentity)
       throws SchemaRegistryException {
     log.debug("Setting the master to " + schemaRegistryIdentity);
@@ -111,12 +112,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  @Override
   public SchemaRegistryIdentity myIdentity() {
     return myIdentity;
   }
 
-  @Override
   public SchemaRegistryIdentity masterIdentity() {
     synchronized (masterLock) {
       return masterIdentity;
@@ -129,8 +128,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     synchronized (masterLock) {
       if (isMaster()) {
         try {
-          Iterator<Schema> allVersions = getAllVersions(subject);
+          org.apache.avro.Schema avroSchemaObj = canonicalizeSchema(schema);
 
+          Iterator<Schema> allVersions = getAllVersions(subject);
           Schema latestSchema = null;
           int latestUsedSchemaVersion = 0;
           // see if the schema to be registered already exists
@@ -144,15 +144,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
             }
             latestUsedSchemaVersion = s.getVersion();
           }
-          if (latestSchema == null || isCompatible(subject, schema, latestSchema)) {
+
+          if (latestSchema == null || isCompatible(avroSchemaObj, latestSchema)) {
             int newVersion = latestUsedSchemaVersion + 1;
-            String
-                keyForNewVersion =
+            String keyForNewVersion =
                 String.format("%s%c%d", subject, SCHEMA_KEY_SEPARATOR, newVersion);
             schema.setVersion(newVersion);
             kafkaStore.put(keyForNewVersion, schema);
+            return newVersion;
           } else {
-            throw new SchemaRegistryException("Incompatible schema");
+            throw new IncompatibleAvroSchemaException(
+                "New schema is incompatible with the latest schema " + latestSchema);
           }
         } catch (StoreException e) {
           throw new SchemaRegistryException("Error while registering the schema in the" +
@@ -168,7 +170,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         }
       }
     }
-    return schema.getVersion();
+  }
+
+  private org.apache.avro.Schema canonicalizeSchema(Schema schema) {
+    AvroSchema avroSchema = AvroUtils.parseSchema(schema.getSchema());
+    if (avroSchema == null) {
+      throw new InvalidAvroException();
+    }
+    schema.setSchema(avroSchema.canonicalString);
+    return avroSchema.schemaObj;
   }
 
   @Override
@@ -219,9 +229,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  @Override
-  public boolean isCompatible(String subject, Schema schema1, Schema schema2) {
-    return true;
+  private boolean isCompatible(org.apache.avro.Schema newSchemaObj, Schema latestSchema)
+      throws SchemaRegistryException {
+    AvroSchema latestAvroSchema = AvroUtils.parseSchema(latestSchema.getSchema());
+    if (latestAvroSchema == null) {
+      throw new SchemaRegistryException(
+          "Existing schema " + latestSchema + " is not a valid Avro schema");
+    }
+    return defaultCompatibilityType.compatibilityChecker
+        .isCompatible(newSchemaObj, latestAvroSchema.schemaObj);
   }
 
   @Override

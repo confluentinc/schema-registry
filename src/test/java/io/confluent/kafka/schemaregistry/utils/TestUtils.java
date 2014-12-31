@@ -17,11 +17,14 @@ package io.confluent.kafka.schemaregistry.utils;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
 
+import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 
@@ -128,5 +131,19 @@ public class TestUtils {
                                       expectedVersion)
                      .getSchema(),
                  schemaString);
+  }
+
+  public static List<String> getRandomCanonicalAvroString(int num) {
+    List<String> avroStrings = new ArrayList<String>();
+
+    for (int i = 0; i < num; i++) {
+      String schemaString = "{\"type\":\"record\","
+                            + "\"name\":\"myrecord\","
+                            + "\"fields\":"
+                            + "[{\"type\":\"string\",\"name\":"
+                            + "\"f" + random.nextInt(Integer.MAX_VALUE) + "\"}]}";
+      avroStrings.add(AvroUtils.parseSchema(schemaString).canonicalString);
+    }
+    return avroStrings;
   }
 }

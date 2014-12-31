@@ -97,6 +97,10 @@ public class SchemasResource {
     return allVersions;
   }
 
+  /**
+   * @throws {@link io.confluent.kafka.schemaregistry.rest.exceptions.InvalidAvroException,
+   *                io.confluent.kafka.schemaregistry.rest.exceptions.IncompatibleAvroSchemaException}
+   */
   @POST
   public void register(final @Suspended AsyncResponse asyncResponse,
                        final @HeaderParam("Content-Type") String contentType,

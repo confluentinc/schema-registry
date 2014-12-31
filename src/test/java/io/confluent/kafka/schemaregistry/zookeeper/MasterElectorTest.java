@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.zookeeper;
 
 import org.junit.Test;
 
+import java.util.List;
 import java.util.concurrent.Callable;
 
 import javax.ws.rs.WebApplicationException;
@@ -37,6 +38,7 @@ public class MasterElectorTest extends ClusterTestHarness {
   @Test
   public void testAutoFailover() throws Exception {
     final String subject = "testTopic";
+    List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(4);
 
     // create schema registry instance 1
     final RestApp restApp1 = new RestApp(kafka.utils.TestUtils.choosePort(),
@@ -50,10 +52,10 @@ public class MasterElectorTest extends ClusterTestHarness {
     assertTrue("Schema registry instance 1 should be the master", restApp1.isMaster());
     assertFalse("Schema registry instance 2 shouldn't be the master", restApp2.isMaster());
     assertEquals("Instance 2's master should be instance 1",
-                 restApp2.masterIdentity(), restApp1.myIdentity());
+                 restApp1.myIdentity(), restApp2.masterIdentity());
 
     // test registering a schema to the master and finding it on the expected version
-    final String firstSchema = "first schema";
+    final String firstSchema = avroSchemas.get(0);
     final int firstSchemaExpectedVersion = 1;
     TestUtils.registerAndVerifySchema(restApp1.restConnect, firstSchema, firstSchemaExpectedVersion,
                                       subject);
@@ -62,7 +64,7 @@ public class MasterElectorTest extends ClusterTestHarness {
                            "Registered schema should be found on the non-master");
 
     // test registering a schema to the non-master and finding it on the expected version
-    final String secondSchema = "second schema";
+    final String secondSchema = avroSchemas.get(1);
     final int secondSchemaExpectedVersion = 2;
     assertEquals("Registering a new schema to the non-master should succeed",
                  secondSchemaExpectedVersion,
@@ -118,7 +120,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     restApp1.setMaster(restApp1.myIdentity());
 
     // registering a schema to the master
-    final String thirdSchema = "third schema";
+    final String thirdSchema = avroSchemas.get(2);
     final int thirdSchemaExpectedVersion = 3;
     assertEquals("Registering a new schema to the master should succeed",
                  thirdSchemaExpectedVersion,
@@ -143,7 +145,7 @@ public class MasterElectorTest extends ClusterTestHarness {
                                       thirdSchemaExpectedVersion).getSchema());
 
     // register a schema to the new master
-    final String fourthSchema = "fourth schema";
+    final String fourthSchema = avroSchemas.get(3);
     final int fourthSchemaExpectedVersion = 4;
     TestUtils.registerAndVerifySchema(restApp2.restConnect, fourthSchema,
                                       fourthSchemaExpectedVersion,

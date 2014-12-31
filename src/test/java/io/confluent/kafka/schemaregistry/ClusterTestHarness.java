@@ -25,6 +25,7 @@ import java.util.Properties;
 import java.util.Queue;
 import java.util.Vector;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityType;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
@@ -74,6 +75,10 @@ public abstract class ClusterTestHarness {
   }
 
   public ClusterTestHarness(int numBrokers, boolean setupRestApp) {
+    this(numBrokers, setupRestApp, AvroCompatibilityType.NONE.name);
+  }
+
+  public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType) {
     // 1 port for ZK, 1 port per broker, and 1 port for the rest App if needed
     int numPorts = 1 + numBrokers + (setupRestApp ? 1 : 0);
 
@@ -104,7 +109,7 @@ public abstract class ClusterTestHarness {
 
     if (setupRestApp) {
       int restPort = ports.remove();
-      restApp = new RestApp(restPort, zkConnect, KAFKASTORE_TOPIC);
+      restApp = new RestApp(restPort, zkConnect, KAFKASTORE_TOPIC, compatibilityType);
     }
   }
 
