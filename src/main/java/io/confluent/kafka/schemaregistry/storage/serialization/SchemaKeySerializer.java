@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.storage.serialization;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -51,9 +52,10 @@ public class SchemaKeySerializer implements Serializer<SchemaRegistryKey> {
   public SchemaRegistryKey fromBytes(byte[] data) throws SerializationException {
     SchemaRegistryKey schemaKey = null;
     try {
-      schemaKey = new ObjectMapper().readValue(data, SchemaKey.class);
-      if (schemaKey.getKeyType() == SchemaRegistryKeyType.CONFIG) {
+      try {
         schemaKey = new ObjectMapper().readValue(data, ConfigKey.class);
+      } catch (JsonProcessingException e) {
+        schemaKey = new ObjectMapper().readValue(data, SchemaKey.class);
       }
     } catch (IOException e) {
       throw new SerializationException("Error while deserializing schema key", e);
