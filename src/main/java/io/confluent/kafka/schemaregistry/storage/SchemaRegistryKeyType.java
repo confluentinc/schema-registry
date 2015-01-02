@@ -16,8 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.rest.RestConfigException;
-
 public enum SchemaRegistryKeyType {
   CONFIG("config"),
   SCHEMA("schema");
@@ -28,7 +26,7 @@ public enum SchemaRegistryKeyType {
     this.keyType = keyType;
   }
 
-  public static SchemaRegistryKeyType forName(String keyType) throws RestConfigException {
+  public static SchemaRegistryKeyType forName(String keyType) {
     if (CONFIG.keyType.equals(keyType)) {
       return CONFIG;
     } else if (SCHEMA.keyType.equals(keyType)) {

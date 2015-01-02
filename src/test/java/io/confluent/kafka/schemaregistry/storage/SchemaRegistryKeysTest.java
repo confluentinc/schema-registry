@@ -56,13 +56,12 @@ public class SchemaRegistryKeysTest {
 
   @Test
   public void testSchemaKeyComparator() {
-    InMemoryStore<SchemaRegistryKey, String> store = new InMemoryStore<SchemaRegistryKey, String>();
     String subject = "foo";
     SchemaRegistryKey key1 = new SchemaKey(subject, KafkaSchemaRegistry.MIN_VERSION);
     SchemaRegistryKey key2 = new SchemaKey(subject, KafkaSchemaRegistry.MAX_VERSION);
     assertTrue("key 1 should be less than key2", key1.compareTo(key2) < 0);
-    SchemaRegistryKey key3 = new SchemaKey(subject, KafkaSchemaRegistry.MIN_VERSION);
-    assertEquals("key 1 should be equal to key3", key1, key3);
+    SchemaRegistryKey key1Dup = new SchemaKey(subject, KafkaSchemaRegistry.MIN_VERSION);
+    assertEquals("key 1 should be equal to key1Dup", key1, key1Dup);
     String subject4 = "bar";
     SchemaRegistryKey key4 = new SchemaKey(subject4, KafkaSchemaRegistry.MIN_VERSION);
     assertTrue("key1 should be greater than key4", key1.compareTo(key4) > 0);
@@ -70,33 +69,12 @@ public class SchemaRegistryKeysTest {
     SchemaRegistryKey key5 = new SchemaKey(subject5, KafkaSchemaRegistry.MIN_VERSION);
     // compare key1 and key5
     assertTrue("key5 should be less than key1", key1.compareTo(key5) > 0);
-
-    try {
-      store.put(key1, "key1");
-      store.put(key2, "key2");
-      store.put(key4, "key4");
-      store.put(key5, "key5");
-    } catch (StoreException e) {
-      fail();
-    }
-    // test key order
-    try {
-      Iterator<SchemaRegistryKey> keys = store.getAllKeys();
-      SchemaRegistryKey[] retrievedKeyOrder = new SchemaRegistryKey[4];
-      int keyIndex = 0;
-      while (keys.hasNext()) {
-        retrievedKeyOrder[keyIndex++] = keys.next();
-      }
-      SchemaRegistryKey[] expectedOrder = {key4, key5, key1, key2};
-      assertArrayEquals(expectedOrder, retrievedKeyOrder);
-    } catch (StoreException e) {
-      fail();
-    }
+    SchemaRegistryKey[] expectedOrder = {key4, key5, key1, key2};
+    testStoreKeyOrder(expectedOrder);
   }
 
   @Test
   public void testConfigKeySerde() {
-    InMemoryStore<SchemaRegistryKey, String> store = new InMemoryStore<SchemaRegistryKey, String>();
     String subject = "foo";
     ConfigKey key1 = new ConfigKey(null);
     ConfigKey key2 = new ConfigKey(subject);
@@ -121,7 +99,6 @@ public class SchemaRegistryKeysTest {
 
   @Test
   public void testConfigKeyComparator() {
-    InMemoryStore<SchemaRegistryKey, String> store = new InMemoryStore<SchemaRegistryKey, String>();
     ConfigKey key1 = new ConfigKey(null);
     ConfigKey key2 = new ConfigKey(null);
     assertEquals("Top level config keys should be equal", key1, key2);
@@ -132,56 +109,42 @@ public class SchemaRegistryKeysTest {
     String subject4 = "bar";
     ConfigKey key4 = new ConfigKey(subject4);
     assertTrue("key3 should be greater than key4", key3.compareTo(key4) > 0);
-    try {
-      store.put(key1, "key1");
-      store.put(key3, "key3");
-      store.put(key4, "key4");
-    } catch (StoreException e) {
-      fail();
-    }
-    // test key order
-    try {
-      Iterator<SchemaRegistryKey> keys = store.getAllKeys();
-      SchemaRegistryKey[] retrievedKeyOrder = new SchemaRegistryKey[3];
-      int keyIndex = 0;
-      while (keys.hasNext()) {
-        retrievedKeyOrder[keyIndex++] = keys.next();
-      }
-      SchemaRegistryKey[] expectedOrder = {key1, key4, key3};
-      assertArrayEquals(expectedOrder, retrievedKeyOrder);
-    } catch (StoreException e) {
-      fail();
-    }
+    SchemaRegistryKey[] expectedOrder = {key1, key4, key3};
+    testStoreKeyOrder(expectedOrder);
   }
 
   @Test
   public void testKeyComparator() {
-    InMemoryStore<SchemaRegistryKey, String> store = new InMemoryStore<SchemaRegistryKey, String>();
     String subject = "foo";
     ConfigKey topLevelConfigKey = new ConfigKey(null);
     ConfigKey subjectLevelConfigKey = new ConfigKey(subject);
     SchemaKey schemaKey = new SchemaKey(subject, 1);
     SchemaKey schemaKeyWithHigherVersion = new SchemaKey(subject, 2);
-    try {
-      store.put(subjectLevelConfigKey, "subject level config");
-      store.put(schemaKey, "schema key");
-      store.put(schemaKeyWithHigherVersion, "schema key 2");
-      store.put(topLevelConfigKey, "top level config");
-    } catch (StoreException e) {
-      fail();
+    SchemaRegistryKey[]
+        expectedOrder =
+        {topLevelConfigKey, subjectLevelConfigKey, schemaKey, schemaKeyWithHigherVersion};
+    testStoreKeyOrder(expectedOrder);
+  }
+
+  private void testStoreKeyOrder(SchemaRegistryKey[] orderedKeys) {
+    int numKeys = orderedKeys.length;
+    InMemoryStore<SchemaRegistryKey, String> store = new InMemoryStore<SchemaRegistryKey, String>();
+    while (--numKeys >= 0) {
+      try {
+        store.put(orderedKeys[numKeys], orderedKeys[numKeys].toString());
+      } catch (StoreException e) {
+        fail("Error writing key " + orderedKeys[numKeys].toString() + " to the in memory store");
+      }
     }
     // test key order
     try {
       Iterator<SchemaRegistryKey> keys = store.getAllKeys();
-      SchemaRegistryKey[] retrievedKeyOrder = new SchemaRegistryKey[4];
+      SchemaRegistryKey[] retrievedKeyOrder = new SchemaRegistryKey[orderedKeys.length];
       int keyIndex = 0;
       while (keys.hasNext()) {
         retrievedKeyOrder[keyIndex++] = keys.next();
       }
-      SchemaRegistryKey[]
-          expectedOrder =
-          {topLevelConfigKey, subjectLevelConfigKey, schemaKey, schemaKeyWithHigherVersion};
-      assertArrayEquals(expectedOrder, retrievedKeyOrder);
+      assertArrayEquals(orderedKeys, retrievedKeyOrder);
     } catch (StoreException e) {
       fail();
     }

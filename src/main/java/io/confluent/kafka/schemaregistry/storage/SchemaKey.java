@@ -18,10 +18,12 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import org.codehaus.jackson.annotate.JsonPropertyOrder;
 import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.constraints.Min;
 
+@JsonPropertyOrder(value = { "subject", "version"})
 public class SchemaKey extends SchemaRegistryKey {
 
   private static final int MAGIC_BYTE = 0;

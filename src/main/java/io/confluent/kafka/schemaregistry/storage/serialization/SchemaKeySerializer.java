@@ -50,17 +50,16 @@ public class SchemaKeySerializer implements Serializer<SchemaRegistryKey> {
    */
   @Override
   public SchemaRegistryKey fromBytes(byte[] data) throws SerializationException {
-    SchemaRegistryKey schemaKey = null;
+    SchemaRegistryKey schemaRegistryKey = null;
     try {
-      try {
-        schemaKey = new ObjectMapper().readValue(data, ConfigKey.class);
-      } catch (JsonProcessingException e) {
-        schemaKey = new ObjectMapper().readValue(data, SchemaKey.class);
+      schemaRegistryKey = new ObjectMapper().readValue(data, SchemaKey.class);
+      if (schemaRegistryKey.getKeyType() == SchemaRegistryKeyType.CONFIG) {
+        schemaRegistryKey = new ObjectMapper().readValue(data, ConfigKey.class);
       }
     } catch (IOException e) {
       throw new SerializationException("Error while deserializing schema key", e);
     }
-    return schemaKey;
+    return schemaRegistryKey;
   }
 
   /**

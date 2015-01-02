@@ -210,8 +210,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys) {
     Set<String> subjects = new HashSet<String>();
     while (allKeys.hasNext()) {
-      SchemaKey key = (SchemaKey) allKeys.next();
-      subjects.add(key.getSubject());
+      SchemaRegistryKey k = allKeys.next();
+      if (k instanceof SchemaKey) {
+        SchemaKey key = (SchemaKey) k;
+        subjects.add(key.getSubject());
+      }
     }
     return subjects;
   }
