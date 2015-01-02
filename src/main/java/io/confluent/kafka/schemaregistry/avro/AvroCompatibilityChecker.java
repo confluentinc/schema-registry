@@ -24,34 +24,31 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AvroCompatibilityChecker {
+
   // Check if the new schema can be used to read data produced by the latest schema
   private static SchemaValidator BACKWARD_VALIDATOR =
       new SchemaValidatorBuilder().canReadStrategy().validateLatest();
-
+  public static AvroCompatibilityChecker BACKWARD_CHECKER = new AvroCompatibilityChecker(
+      BACKWARD_VALIDATOR);
   // Check if data produced by the new schema can be read by the latest schema
   private static SchemaValidator FORWARD_VALIDATOR =
       new SchemaValidatorBuilder().canBeReadStrategy().validateLatest();
-
+  public static AvroCompatibilityChecker FORWARD_CHECKER = new AvroCompatibilityChecker(
+      FORWARD_VALIDATOR);
   // Check if the new schema is both forward and backward compatible with the latest schema
   private static SchemaValidator FULL_VALIDATOR =
       new SchemaValidatorBuilder().mutualReadStrategy().validateLatest();
-
+  public static AvroCompatibilityChecker FULL_CHECKER = new AvroCompatibilityChecker(
+      FULL_VALIDATOR);
   private static SchemaValidator NO_OP_VALIDATOR = new SchemaValidator() {
     @Override
     public void validate(Schema schema, Iterable<Schema> schemas) throws SchemaValidationException {
       // do nothing
     }
   };
-  private final SchemaValidator validator;
-
-  public static AvroCompatibilityChecker FORWARD_CHECKER = new AvroCompatibilityChecker(
-      FORWARD_VALIDATOR);
-  public static AvroCompatibilityChecker BACKWARD_CHECKER = new AvroCompatibilityChecker(
-      BACKWARD_VALIDATOR);
-  public static AvroCompatibilityChecker FULL_CHECKER = new AvroCompatibilityChecker(
-      FULL_VALIDATOR);
   public static AvroCompatibilityChecker NO_OP_CHECKER = new AvroCompatibilityChecker(
       NO_OP_VALIDATOR);
+  private final SchemaValidator validator;
 
   private AvroCompatibilityChecker(SchemaValidator validator) {
     this.validator = validator;

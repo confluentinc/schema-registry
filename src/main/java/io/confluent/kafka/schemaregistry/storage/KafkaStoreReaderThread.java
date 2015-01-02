@@ -146,9 +146,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             localStore.put(messageKey, message);
           }
           this.storeUpdateHandler.handleUpdate(messageKey, message);
-          offsetUpdateLock.lock();
-          offsetInSchemasTopic = messageAndMetadata.offset();
-          offsetReachedThreshold.signalAll();
+          try {
+            offsetUpdateLock.lock();
+            offsetInSchemasTopic = messageAndMetadata.offset();
+            offsetReachedThreshold.signalAll();
+          } finally {
+            offsetUpdateLock.unlock();
+          }
         } catch (StoreException se) {
           /**
            * TODO: maybe retry for a configurable amount before logging a failure?
@@ -158,8 +162,6 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
            * 2. Look into the issue manually
            */
           log.error("Failed to add record from the Kafka topic" + topic + " the local store");
-        } finally {
-          offsetUpdateLock.unlock();
         }
       }
     } catch (ConsumerTimeoutException cte) {

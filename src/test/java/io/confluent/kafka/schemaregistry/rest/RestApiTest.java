@@ -93,7 +93,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test re-registering existing schemas
     for (int i = 0; i < schemasInSubject1; i++) {
-      int expectedVersion = i + 1;
+      int expectedVersion = allVersionsInSubject1.get(i);
       String schemaString = allSchemasInSubject1.get(i);
       assertEquals("Re-registering an existing schema should return the existing version",
                    expectedVersion,

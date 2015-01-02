@@ -73,7 +73,7 @@ public class AvroCompatibilityTest {
     assertFalse("changing field name is not a backward compatible change",
                 backwardChecker.isCompatible(schema4, schema1));
     assertTrue("evolving a field type to a union is a backward compatible change",
-        backwardChecker.isCompatible(schema6, schema1));
+               backwardChecker.isCompatible(schema6, schema1));
     assertFalse("removing a type from a union is not a backward compatible change",
                 backwardChecker.isCompatible(schema1, schema6));
     assertTrue("adding a new type in union is a backward compatible change",

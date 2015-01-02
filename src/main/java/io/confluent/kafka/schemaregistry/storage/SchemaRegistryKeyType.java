@@ -16,20 +16,25 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+public enum SchemaRegistryKeyType {
+  CONFIG("config"),
+  SCHEMA("schema");
 
-public class KafkaStoreMessageHandler implements StoreUpdateHandler<SchemaRegistryKey, Schema> {
+  public final String keyType;
 
-  public KafkaStoreMessageHandler() {
+  private SchemaRegistryKeyType(String keyType) {
+    this.keyType = keyType;
   }
 
-  /**
-   * Invoked on every new schema written to the Kafka store
-   *
-   * @param key    Key associated with the schema. Key is in the form SubjectSEPARATORVersion
-   * @param schema Schema written to the Kafka store
-   */
-  @Override
-  public void handleUpdate(SchemaRegistryKey key, Schema schema) {
+  public static SchemaRegistryKeyType forName(String keyType) {
+    if (CONFIG.keyType.equals(keyType)) {
+      return CONFIG;
+    } else if (SCHEMA.keyType.equals(keyType)) {
+      return SCHEMA;
+    } else {
+      throw new IllegalArgumentException("Unknown schema registry key type : " + keyType
+                                         + " Valid key types are {config, schema}");
+    }
   }
 }
+

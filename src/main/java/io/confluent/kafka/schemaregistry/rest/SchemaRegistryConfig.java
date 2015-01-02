@@ -55,6 +55,10 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>advertised.host</code>
    */
   public static final String ADVERTISED_HOST_CONFIG = "advertised.host";
+  /**
+   * <code>avro.compatibility.level</code>
+   */
+  public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper url for the Kafka cluster";
   protected static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC =
@@ -67,11 +71,6 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_COMMIT_INTERVAL_MS_DOC =
       "The interval to commit offsets while consuming the Kafka topic";
   protected static final String ADVERTISED_HOST_DOC = "The host name advertised in Zookeeper";
-
-  /**
-   * <code>avro.compatibility.level</code>
-   */
-  public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
   protected static final String COMPATIBILITY_DOC =
       "The avro compatibility type. Valid values are: "
       + "none (new schema can be any valid avro schema), "

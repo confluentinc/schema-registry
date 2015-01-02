@@ -22,6 +22,7 @@ import javax.ws.rs.core.Response;
  * An exception thrown when the registered schema is not a valid Avro schema.
  */
 public class InvalidAvroException extends WebApplicationException {
+
   public static final Response.Status STATUS = Response.Status.BAD_REQUEST;
 
   public InvalidAvroException() {
