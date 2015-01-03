@@ -185,7 +185,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     // change compatibility to backward
     TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.BACKWARD, null);
 
-    // verify that new compatibility level is forward
+    // verify that new compatibility level is backward
     assertEquals("Updated compatibility level should be backward",
                  AvroCompatibilityLevel.BACKWARD,
                  RestUtils.getConfig(restApp.restConnect,

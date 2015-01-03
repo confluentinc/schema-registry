@@ -125,7 +125,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         try {
           messageKey = this.serializer.deserializeKey(messageAndMetadata.key());
         } catch (SerializationException e) {
-          log.error("Failed to deserialize the schema key", e);
+          log.error("Failed to deserialize the schema or config key", e);
         }
         V message = null;
         try {
@@ -133,7 +133,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
               messageBytes == null ? null : serializer.deserializeValue(messageKey, messageBytes);
         } catch (SerializationException e) {
           // TODO: fail just this operation or all subsequent operations?
-          log.error("Failed to deserialize the schema", e);
+          log.error("Failed to deserialize a schema or config update", e);
         }
         try {
           log.trace("Applying update (" + messageKey + "," + message + ") to the local " +

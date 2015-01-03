@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 @Path("/config")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -79,7 +80,12 @@ public class ConfigResource {
 
   @GET
   public Config getTopLevelConfig() {
-    Config config = new Config(schemaRegistry.getLocalCompatibilityLevel());
+    Config config = null;
+    try {
+      config = new Config(schemaRegistry.getCompatibilityLevel());
+    } catch (StoreException e) {
+      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+    }
     return config;
   }
 }

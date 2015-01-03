@@ -261,8 +261,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  public AvroCompatibilityLevel getLocalCompatibilityLevel() {
-    return this.compatibilityLevel.get();
+  public AvroCompatibilityLevel getCompatibilityLevel() throws StoreException {
+    ConfigKey configKey = new ConfigKey(null);
+    Config config = (Config) kafkaStore.get(configKey);
+    if (config == null) {
+      // if top level config was never updated, send the configured value for this instance
+      config = new Config(this.compatibilityLevel.get());
+    }
+    return config.getCompatibilityLevel();
   }
 
   public void setLocalCompatibilityLevel(AvroCompatibilityLevel newCompatibilityLevel) {
