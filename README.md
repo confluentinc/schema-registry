@@ -15,11 +15,9 @@ Quickstart
 mvn exec:java -Dexec.mainClass="io.confluent.kafka.schemaregistry.rest.Main" -Dexec.args="config/schema-registry.properties"
 
 4. Register a schema
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka/versions -d
- '{"schema": "{\"type\": \"string\"}"}'
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka/versions -d '{"schema": "{\"type\": \"string\"}"}'
 
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka,key/versions -d
- '{"schema": "{\"type\": \"string\"}"}'
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka,key/versions -d '{"schema": "{\"type\": \"string\"}"}'
 
 5. List all subjects 
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects
@@ -30,4 +28,8 @@ curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://
 7. Get a particular version of a subject's schema
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects/Kafka/versions/1
 
+8. Get top level config
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/config
 
+9. Update compatibility level globally
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X PUT -i http://localhost:8080/config -d '{"compatibility":"NONE"}'

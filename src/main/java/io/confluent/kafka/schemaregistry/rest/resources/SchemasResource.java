@@ -73,7 +73,7 @@ public class SchemasResource {
     } catch (SchemaRegistryException e) {
       log.debug("Error while retrieving schema for subject " + this.subject + " with version " +
                 version + " from the schema registry", e);
-      throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND, e);
+      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     if (schema == null) {
       throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);

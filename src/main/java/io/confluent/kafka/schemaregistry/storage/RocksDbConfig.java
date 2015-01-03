@@ -67,6 +67,7 @@ public class RocksDbConfig extends AbstractConfig {
       "The compaction style for RocksDB. Could be one of universal, fifo, level";
   private static final List<String> compactionOptions =
       Arrays.asList("universal", "level", "fifo");
+
   private static final ConfigDef config = new ConfigDef()
       .define(ROCKSDB_COMPRESSION_CONFIG, Type.STRING, CompressionType.NO_COMPRESSION.toString(),
               Importance.MEDIUM, ROCKSDB_COMPRESSION_DOC)

@@ -21,7 +21,9 @@ import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.constraints.Min;
 
-public class Schema implements Comparable<Schema> {
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryValue;
+
+public class Schema implements Comparable<Schema>, SchemaRegistryValue {
 
   @NotEmpty
   private String name;

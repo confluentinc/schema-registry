@@ -22,10 +22,11 @@ import java.util.Iterator;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
-import io.confluent.kafka.schemaregistry.storage.serialization.SchemaKeySerializer;
+import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
+import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 
-import static junit.framework.Assert.assertTrue;
 import static junit.framework.Assert.assertNotNull;
+import static junit.framework.Assert.assertTrue;
 import static junit.framework.Assert.fail;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -37,16 +38,16 @@ public class SchemaRegistryKeysTest {
     String subject = "foo";
     int version = 1;
     SchemaKey key = new SchemaKey(subject, version);
-    SchemaKeySerializer keySerializer = new SchemaKeySerializer();
+    Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer = new SchemaRegistrySerializer();
     byte[] serializedKey = null;
     try {
-      serializedKey = keySerializer.toBytes(key);
+      serializedKey = serializer.serializeKey(key);
     } catch (SerializationException e) {
       fail();
     }
     assertNotNull(serializedKey);
     try {
-      SchemaRegistryKey deserializedKey = keySerializer.fromBytes(serializedKey);
+      SchemaRegistryKey deserializedKey = serializer.deserializeKey(serializedKey);
       assertEquals("Deserialized key should be equal to original key", key, deserializedKey);
     } catch (SerializationException e) {
       e.printStackTrace();
@@ -78,18 +79,18 @@ public class SchemaRegistryKeysTest {
     String subject = "foo";
     ConfigKey key1 = new ConfigKey(null);
     ConfigKey key2 = new ConfigKey(subject);
-    SchemaKeySerializer keySerializer = new SchemaKeySerializer();
+    Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer = new SchemaRegistrySerializer();
     byte[] serializedKey1 = null;
     byte[] serializedKey2 = null;
     try {
-      serializedKey1 = keySerializer.toBytes(key1);
-      serializedKey2 = keySerializer.toBytes(key2);
+      serializedKey1 = serializer.serializeKey(key1);
+      serializedKey2 = serializer.serializeKey(key2);
     } catch (SerializationException e) {
       fail();
     }
     try {
-      SchemaRegistryKey deserializedKey1 = keySerializer.fromBytes(serializedKey1);
-      SchemaRegistryKey deserializedKey2 = keySerializer.fromBytes(serializedKey2);
+      SchemaRegistryKey deserializedKey1 = serializer.deserializeKey(serializedKey1);
+      SchemaRegistryKey deserializedKey2 = serializer.deserializeKey(serializedKey2);
       assertEquals("Deserialized key should be equal to original key", key1, deserializedKey1);
       assertEquals("Deserialized key should be equal to original key", key2, deserializedKey2);
     } catch (SerializationException e) {

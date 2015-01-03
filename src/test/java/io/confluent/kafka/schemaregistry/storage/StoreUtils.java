@@ -22,7 +22,6 @@ import java.util.Properties;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
-import io.confluent.kafka.schemaregistry.storage.serialization.StringSerializer;
 import io.confluent.rest.RestConfigException;
 
 import static org.junit.Assert.fail;
@@ -61,7 +60,7 @@ public class StoreUtils {
 
     KafkaStore<String, String> kafkaStore =
         new KafkaStore<String, String>(config, new StringMessageHandler(),
-                                       StringSerializer.INSTANCE, StringSerializer.INSTANCE,
+                                       StringSerializer.INSTANCE,
                                        inMemoryStore, zkClient);
     try {
       kafkaStore.init();

@@ -22,13 +22,13 @@ import java.util.Properties;
 
 import javax.ws.rs.core.Configurable;
 
+import io.confluent.kafka.schemaregistry.rest.resources.ConfigResource;
 import io.confluent.kafka.schemaregistry.rest.resources.RootResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemasResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.storage.serialization.SchemaKeySerializer;
-import io.confluent.kafka.schemaregistry.storage.serialization.SchemaSerializer;
+import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfigException;
 
@@ -48,14 +48,15 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   @Override
   public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
     try {
-      schemaRegistry = new KafkaSchemaRegistry(schemaRegistryConfig, new SchemaKeySerializer(),
-                                               new SchemaSerializer());
+      schemaRegistry = new KafkaSchemaRegistry(schemaRegistryConfig,
+                                               new SchemaRegistrySerializer());
       schemaRegistry.init();
     } catch (SchemaRegistryException e) {
       log.error("Error starting the schema registry", e);
       System.exit(1);
     }
     config.register(RootResource.class);
+    config.register(new ConfigResource(schemaRegistry));
     config.register(new SubjectsResource(schemaRegistry));
     config.register(SchemasResource.class);
   }

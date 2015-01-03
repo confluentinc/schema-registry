@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,35 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.storage.serialization;
 
-import java.util.Map;
+package io.confluent.kafka.schemaregistry.rest.entities;
 
-public class StringSerializer implements Serializer<String> {
+public enum PermissionType {
+  ALL("all"),
+  ADMIN("admin");
 
-  public static StringSerializer INSTANCE = new StringSerializer();
+  public final String permissionType;
 
-  // only a singleton is needed
-  private StringSerializer() {
-  }
-
-  @Override
-  public byte[] toBytes(String data) {
-    return data.getBytes();
-  }
-
-  @Override
-  public String fromBytes(byte[] data) {
-    return new String(data);
-  }
-
-  @Override
-  public void close() {
-    // do nothing
-  }
-
-  @Override
-  public void configure(Map<String, ?> stringMap) {
-    // do nothing
+  private PermissionType(String permissionType) {
+    this.permissionType = permissionType;
   }
 }
