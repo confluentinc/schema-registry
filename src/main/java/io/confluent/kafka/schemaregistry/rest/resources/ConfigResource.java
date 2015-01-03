@@ -19,9 +19,12 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Set;
+
 import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -33,7 +36,6 @@ import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 @Path("/config")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -52,18 +54,38 @@ public class ConfigResource {
     this.schemaRegistry = schemaRegistry;
   }
 
-  @Path("/config/{subject}")
+  @Path("/{subject}")
   @PUT
-  public void updateSubjectLevelConfig(@PathParam("subject") String subjectName,
+  public void updateSubjectLevelConfig(@PathParam("subject") String subject,
                                        ConfigUpdateRequest request) {
-    if (request.getCompatibilityLevel() != null) {
+    if (request != null) {
       try {
-        schemaRegistry.updateCompatibilityLevel(subjectName, request.getCompatibilityLevel());
+        Set<String> subjects = schemaRegistry.listSubjects();
+        if (!subjects.contains(subject)) {
+          throw new NotFoundException(MESSAGE_SUBJECT_NOT_FOUND);
+        }
+        schemaRegistry.updateCompatibilityLevel(subject, request.getCompatibilityLevel());
         log.debug("Updated compatibility level to " + request.getCompatibilityLevel());
       } catch (SchemaRegistryException e) {
         throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
       }
     }
+  }
+
+  @Path("/{subject}")
+  @GET
+  public Config getSubjectLevelConfig(@PathParam("subject") String subject) {
+    Config config = null;
+    try {
+      Set<String> subjects = schemaRegistry.listSubjects();
+      if (!subjects.contains(subject)) {
+        throw new NotFoundException(MESSAGE_SUBJECT_NOT_FOUND);
+      }
+      config = new Config(schemaRegistry.getCompatibilityLevel(subject));
+    } catch (SchemaRegistryException e) {
+      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+    }
+    return config;
   }
 
   @PUT
@@ -82,8 +104,8 @@ public class ConfigResource {
   public Config getTopLevelConfig() {
     Config config = null;
     try {
-      config = new Config(schemaRegistry.getCompatibilityLevel());
-    } catch (StoreException e) {
+      config = new Config(schemaRegistry.getCompatibilityLevel(null));
+    } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     return config;

@@ -24,7 +24,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.Vector;
-import java.util.concurrent.atomic.AtomicReference;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -52,7 +51,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
-  private final AtomicReference<AvroCompatibilityLevel> compatibilityLevel;
+  private final AvroCompatibilityLevel defaultCompatibilityLevel;
   private final ZkClient zkClient;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
@@ -71,8 +70,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     this.zkClient = new ZkClient(kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
                                  new ZkStringSerializer());
     this.serializer = serializer;
-    this.compatibilityLevel =
-        new AtomicReference<AvroCompatibilityLevel>(config.compatibilityType());
+    this.defaultCompatibilityLevel = config.compatibilityType();
     kafkaStore =
         new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(config,
                                                                new KafkaStoreMessageHandler(this),
@@ -145,7 +143,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           int latestUsedSchemaVersion =
               latestSchema != null ? latestSchema.getVersion() : MIN_VERSION;
           // register schema if compatible
-          if (latestSchema == null || isCompatible(avroSchemaObj, latestSchema)) {
+          if (latestSchema == null || isCompatible(subject, avroSchemaObj, latestSchema)) {
             int newVersion = latestUsedSchemaVersion + 1;
             SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
             schema.setVersion(newVersion);
@@ -261,18 +259,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  public AvroCompatibilityLevel getCompatibilityLevel() throws StoreException {
-    ConfigKey configKey = new ConfigKey(null);
-    Config config = (Config) kafkaStore.get(configKey);
-    if (config == null) {
-      // if top level config was never updated, send the configured value for this instance
-      config = new Config(this.compatibilityLevel.get());
+  public AvroCompatibilityLevel getCompatibilityLevel(String subject)
+      throws SchemaRegistryException {
+    ConfigKey subjectConfigKey = new ConfigKey(subject);
+    Config config = null;
+    try {
+      config = (Config) kafkaStore.get(subjectConfigKey);
+      if (config == null) {
+        // if subject level config was never updated, send the top level config value
+        config = (Config) kafkaStore.get(new ConfigKey(null));
+        if (config == null) {
+          // if top level config was never updated, send the configured value for this instance
+          config = new Config(this.defaultCompatibilityLevel);
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryException("Failed to read config from the kafka store", e);
     }
     return config.getCompatibilityLevel();
-  }
-
-  public void setLocalCompatibilityLevel(AvroCompatibilityLevel newCompatibilityLevel) {
-    this.compatibilityLevel.set(newCompatibilityLevel);
   }
 
   private Schema getLatestOrExistingSchema(String subject, Schema schema)
@@ -293,14 +297,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     return latestOrExistingSchema;
   }
 
-  private boolean isCompatible(org.apache.avro.Schema newSchemaObj, Schema latestSchema)
+  private boolean isCompatible(String subject,
+                               org.apache.avro.Schema newSchemaObj,
+                               Schema latestSchema)
       throws SchemaRegistryException {
     AvroSchema latestAvroSchema = AvroUtils.parseSchema(latestSchema.getSchema());
     if (latestAvroSchema == null) {
       throw new SchemaRegistryException(
           "Existing schema " + latestSchema + " is not a valid Avro schema");
     }
-    return compatibilityLevel.get().compatibilityChecker
+    return getCompatibilityLevel(subject).compatibilityChecker
         .isCompatible(newSchemaObj, latestAvroSchema.schemaObj);
   }
 

@@ -43,7 +43,6 @@ public class KafkaStoreMessageHandler
     if (key.getKeyType() == SchemaRegistryKeyType.CONFIG) {
       Config config = (Config) schema;
       if (config.getCompatibilityLevel() != null) {
-        this.schemaRegistry.setLocalCompatibilityLevel(config.getCompatibilityLevel());
         log.info("Compatibility level updated to " + config.getCompatibilityLevel().name);
       }
     }

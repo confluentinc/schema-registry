@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,10 +25,14 @@ import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
+import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
+import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -125,5 +130,82 @@ public class RestApiTest extends ClusterTestHarness {
                  allSubjects,
                  RestUtils
                      .getAllSubjects(restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES));
+  }
+
+  @Test
+  public void testConfigDefaults() throws IOException {
+    String subject = "testSubject";
+    String schemaString = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    assertEquals("Default compatibility level should be none for this test instance",
+                 NONE,
+                 RestUtils.getConfig(restApp.restConnect,
+                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     null).getCompatibilityLevel());
+
+    // change it to forward
+    TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.FORWARD, null);
+
+    assertEquals("New compatibility level should be forward for this test instance",
+                 FORWARD,
+                 RestUtils.getConfig(restApp.restConnect,
+                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     null).getCompatibilityLevel());
+
+    assertEquals("Registering a schema should return the existing version",
+                 1,
+                 TestUtils.registerSchema(restApp.restConnect, schemaString, subject));
+
+    assertEquals("Default compatibility level should match current top level config for this subject",
+                 FORWARD,
+                 RestUtils.getConfig(restApp.restConnect,
+                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     subject).getCompatibilityLevel());
+
+  }
+
+  @Test
+  public void testInvalidSubjectConfigChange() throws IOException {
+    String subject = "testSubject";
+    try {
+      TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.FORWARD, subject);
+      fail("Changing config for an invalid subject should fail");
+    } catch (WebApplicationException e) {
+      e.printStackTrace();
+      // this is expected.
+      assertEquals("Should get a 404",
+                   Response.Status.NOT_FOUND.getStatusCode(),
+                   e.getResponse().getStatus());
+    }
+  }
+
+  @Test
+  public void testSubjectConfigChange() throws IOException {
+    String subject = "testSubject";
+    String schemaString = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    assertEquals("Default compatibility level should be none for this test instance",
+                 NONE,
+                 RestUtils.getConfig(restApp.restConnect,
+                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     null).getCompatibilityLevel());
+
+    assertEquals("Registering a schema should return the existing version",
+                 1,
+                 TestUtils.registerSchema(restApp.restConnect, schemaString, subject));
+
+    // change subject compatibility to forward
+    TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.FORWARD, subject);
+
+    assertEquals("Global compatibility level should remain none for this test instance",
+                 NONE,
+                 RestUtils.getConfig(restApp.restConnect,
+                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     null).getCompatibilityLevel());
+
+    assertEquals("New compatibility level for this subject should be forward",
+                 FORWARD,
+                 RestUtils.getConfig(restApp.restConnect,
+                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     subject).getCompatibilityLevel());
+
   }
 }
