@@ -23,7 +23,7 @@ import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.constraints.Min;
 
-@JsonPropertyOrder(value = {"subject", "version"})
+@JsonPropertyOrder(value = {"keytype", "subject", "version", "magic"})
 public class SchemaKey extends SchemaRegistryKey {
 
   private static final int MAGIC_BYTE = 0;

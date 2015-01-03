@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage.serialization;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -71,9 +72,18 @@ public class SchemaRegistrySerializer
     SchemaRegistryKey schemaKey = null;
     try {
       try {
-        schemaKey = new ObjectMapper().readValue(key, ConfigKey.class);
+        Map<Object, Object> keyObj = null;
+        keyObj = new ObjectMapper().readValue(key,
+                                              new TypeReference<Map<Object, Object>>() { });
+        SchemaRegistryKeyType keyType =
+            SchemaRegistryKeyType.forName((String) keyObj.get("keytype"));
+        if (keyType == SchemaRegistryKeyType.CONFIG) {
+          schemaKey = new ObjectMapper().readValue(key, ConfigKey.class);
+        } else {
+          schemaKey = new ObjectMapper().readValue(key, SchemaKey.class);
+        }
       } catch (JsonProcessingException e) {
-        schemaKey = new ObjectMapper().readValue(key, SchemaKey.class);
+
       }
     } catch (IOException e) {
       throw new SerializationException("Error while deserializing schema key", e);
@@ -84,8 +94,9 @@ public class SchemaRegistrySerializer
   /**
    * @param key   Typed key corresponding to this value
    * @param value Bytes of the serialized value
-   * @return Typed deserialized value. Must be one of {@link io.confluent.kafka.schemaregistry.rest.entities.Config}
-   * or {@link io.confluent.kafka.schemaregistry.rest.entities.Schema}
+   * @return Typed deserialized value. Must be one of
+   * {@link io.confluent.kafka.schemaregistry.rest.entities.Config} or
+   * {@link io.confluent.kafka.schemaregistry.rest.entities.Schema}
    */
   @Override
   public SchemaRegistryValue deserializeValue(SchemaRegistryKey key, byte[] value)

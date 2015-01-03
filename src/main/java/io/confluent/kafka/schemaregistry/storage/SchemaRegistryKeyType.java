@@ -17,8 +17,8 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 public enum SchemaRegistryKeyType {
-  CONFIG("config"),
-  SCHEMA("schema");
+  CONFIG("CONFIG"),
+  SCHEMA("SCHEMA");
 
   public final String keyType;
 
