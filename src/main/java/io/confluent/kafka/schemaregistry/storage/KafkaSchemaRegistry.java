@@ -233,6 +233,29 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
+  public void deprecate(String subject, int version) throws SchemaRegistryException {
+    SchemaKey key = new SchemaKey(subject, version);
+    Schema schema = null;
+
+    synchronized (masterLock) {
+      if (isMaster()) {
+        try {
+          schema = (Schema) kafkaStore.get(key);
+          schema.setDeprecated(true);
+          kafkaStore.put(key, schema);
+        } catch (StoreException e) {
+          throw new SchemaRegistryException(
+              "Error updating schema deprecation in the backend Kafka store", e);
+        }
+      } else {
+        // TODO: logic to forward will be included as part of issue#35
+        throw new SchemaRegistryException("Config update request failed since this is not the "
+                                          + "master");
+      }
+    }
+  }
+
+  @Override
   public void close() {
     kafkaStore.close();
     if (masterElector != null) {

@@ -134,6 +134,54 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testDeprecatedDiscoverable() throws IOException {
+    String subject = "testSubject";
+    int numSchemas = 5;
+    List<String> schemaStrings = TestUtils.getRandomCanonicalAvroString(numSchemas);
+
+    int version = TestUtils.registerSchema(restApp.restConnect, schemaStrings.get(0), subject);
+    // sanity check
+    assertEquals(version, 1);
+
+    // test that a deprecated schema is discoverable by version number
+    RestUtils.deprecateSchema(restApp.restConnect,
+                              TestUtils.DEFAULT_REQUEST_PROPERTIES, subject, version);
+    Schema schema = RestUtils.getVersion(restApp.restConnect,
+                                         TestUtils.DEFAULT_REQUEST_PROPERTIES, subject, version);
+    assertNotNull("A deprecated version of a schema should be discoverable", schema);
+    assertTrue("The schema should be deprecated. " + schema, schema.getDeprecated());
+
+//    // test that deprecated versions are listed when querying for all versions for a subject
+//    for (int i = 1; i < numSchemas; i++) {
+//      version = TestUtils.registerSchema(restApp.restConnect, schemaStrings.get(i), subject);
+//      RestUtils.deprecateSchema(restApp.restConnect,
+//                                TestUtils.DEFAULT_REQUEST_PROPERTIES, subject, version);
+//    }
+//    List<Integer> versions = RestUtils.getAllVersions(
+//        restApp.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
+//    assertEquals("Deprecated versions should appear when listing all versions.",
+//                 versions.size(), numSchemas);
+//
+//    // test that a subject which has all versions deprecated is still listed among all subjects
+//    List<String> allSubjects = RestUtils.getAllSubjects(restApp.restConnect,
+//                                                        TestUtils.DEFAULT_REQUEST_PROPERTIES);
+//    assertTrue("A subject which has no non-deprecated schema versions should",
+//               allSubjects.contains(subject));
+//
+//
+//    // test that re-registering a previously deprecated schema results in a new version number
+//    version = TestUtils.registerSchema(restApp.restConnect, schemaStrings.get(0), subject);
+//    assertNotEquals("Should be able to re-register a deprecated schema and get a new version.",
+//                    version, 1);
+
+  }
+
+//  @Test
+//  public void testDeprecatedCompatibility() throws IOException {
+//    assertEquals(1, 2);
+//  }
+
+  @Test
   public void testConfigDefaults() throws IOException {
     String subject = "testSubject";
     String schemaString = TestUtils.getRandomCanonicalAvroString(1).get(0);
