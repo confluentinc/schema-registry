@@ -158,7 +158,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     assertEquals("Default compatibility level should be backward",
                  AvroCompatibilityLevel.BACKWARD,
                  RestUtils.getConfig(restApp.restConnect,
-                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                      null).getCompatibilityLevel());
     // change it to forward
     TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.FORWARD, null);
@@ -167,7 +167,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     assertEquals("New compatibility level should be forward",
                  AvroCompatibilityLevel.FORWARD,
                  RestUtils.getConfig(restApp.restConnect,
-                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                      null).getCompatibilityLevel());
 
     // register schema that is forward compatible with schemaString1
@@ -189,7 +189,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     assertEquals("Updated compatibility level should be backward",
                  AvroCompatibilityLevel.BACKWARD,
                  RestUtils.getConfig(restApp.restConnect,
-                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                      null).getCompatibilityLevel());
 
     // register forward compatible schema, which should fail

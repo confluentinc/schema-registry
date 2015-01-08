@@ -74,7 +74,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     assertEquals("Registered schema should be found on the master",
                  secondSchema,
                  RestUtils.getVersion(restApp1.restConnect,
-                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
+                                      RestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
                                       secondSchemaExpectedVersion).getSchema());
 
     // the newly registered schema should be eventually readable on the non-master
@@ -141,7 +141,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     assertEquals("Latest version should be found on the new master",
                  thirdSchema,
                  RestUtils.getVersion(restApp2.restConnect,
-                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
+                                      RestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
                                       thirdSchemaExpectedVersion).getSchema());
 
     // register a schema to the new master
@@ -161,7 +161,7 @@ public class MasterElectorTest extends ClusterTestHarness {
       @Override
       public Boolean call() throws Exception {
         try {
-          Schema schema = RestUtils.getVersion(baseUrl, TestUtils.DEFAULT_REQUEST_PROPERTIES,
+          Schema schema = RestUtils.getVersion(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                                subject, expectedVersion);
           return expectedSchemaString.compareTo(schema.getSchema()) == 0;
         } catch (WebApplicationException e) {
