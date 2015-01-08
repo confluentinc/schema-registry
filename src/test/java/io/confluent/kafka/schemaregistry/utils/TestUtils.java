@@ -111,10 +111,7 @@ public class TestUtils {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
 
-    Map<String, String> requestProperties = new HashMap<String, String>();
-    requestProperties.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
-
-    return RestUtils.registerSchema(baseUrl, requestProperties, request, subject);
+    return RestUtils.registerSchema(baseUrl, DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
 
   public static void changeCompatibility(String baseUrl,
@@ -124,10 +121,7 @@ public class TestUtils {
     ConfigUpdateRequest request = new ConfigUpdateRequest();
     request.setCompatibilityLevel(newCompatibilityLevel);
 
-    Map<String, String> requestProperties = new HashMap<String, String>();
-    requestProperties.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
-
-    RestUtils.updateConfig(baseUrl, requestProperties, request, subject);
+    RestUtils.updateConfig(baseUrl, DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
 
   /**
@@ -143,8 +137,7 @@ public class TestUtils {
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",
                  schemaString,
-                 RestUtils.getVersion(baseUrl, TestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
-                                      expectedVersion)
+                 RestUtils.getVersion(baseUrl, DEFAULT_REQUEST_PROPERTIES, subject, expectedVersion)
                      .getSchema());
   }
 

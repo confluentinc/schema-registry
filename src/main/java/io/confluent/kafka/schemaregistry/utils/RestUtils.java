@@ -173,4 +173,11 @@ public class RestUtils {
                                                   ALL_TOPICS_RESPONSE_TYPE);
     return response;
   }
+
+  public static void deprecateSchema(String baseUrl, Map<String, String> requestProperties,
+                               String subject, int version) throws IOException {
+    String url = String.format("%s/subjects/%s/versions/%d", baseUrl, subject, version);
+
+    RestUtils.httpRequest(url, "DELETE", null, requestProperties, null);
+  }
 }

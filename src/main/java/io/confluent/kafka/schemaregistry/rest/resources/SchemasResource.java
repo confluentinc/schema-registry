@@ -26,6 +26,7 @@ import java.util.Map;
 
 import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.NotFoundException;
@@ -121,5 +122,18 @@ public class SchemasResource {
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
     registerSchemaResponse.setVersion(version);
     asyncResponse.resume(registerSchemaResponse);
+  }
+
+  @DELETE
+  @Path("/{version}")
+  public void deprecate(@PathParam("version") Integer version) {
+
+    try {
+      schemaRegistry.deprecate(this.subject, version);
+    } catch (SchemaRegistryException e) {
+      log.debug("Error while deprecating schema for subject " + this.subject + " with version " +
+                version + " from the schema registry", e);
+      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+    }
   }
 }

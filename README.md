@@ -33,3 +33,7 @@ curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://
 
 9. Update compatibility level globally
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X PUT -i http://localhost:8080/config -d '{"compatibility":"NONE"}'
+
+10. Deprecate a particular version of a subject's schema
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X DELETE http://localhost:8080/subjects/Kafka/versions/1
+
