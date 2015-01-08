@@ -44,7 +44,8 @@ import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 
 public class KafkaSchemaRegistry implements SchemaRegistry {
 
-  public static final int MIN_VERSION = 0;
+  /** Schema versions under a particular subject are indexed from MIN_VERSION. */
+  public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
@@ -135,7 +136,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
           Iterator<Schema> allVersions = getAllVersions(subject);
           Schema latestSchema = null;
-          int latestUsedSchemaVersion = MIN_VERSION;
+          int newVersion = MIN_VERSION;
           // see if the schema to be registered already exists
           while (allVersions.hasNext()) {
             Schema s = allVersions.next();
@@ -145,11 +146,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
               }
               latestSchema = s;
             }
-            latestUsedSchemaVersion = s.getVersion();
+            newVersion = s.getVersion() + 1;
           }
 
           if (latestSchema == null || isCompatible(subject, avroSchemaObj, latestSchema)) {
-            int newVersion = latestUsedSchemaVersion + 1;
             SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
             schema.setVersion(newVersion);
             kafkaStore.put(keyForNewVersion, schema);
