@@ -63,8 +63,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final String topic;
   private final String groupId;
   private final StoreUpdateHandler<K, V> storeUpdateHandler;
-  private final Serializer<K> keySerializer;
-  private final Serializer<V> valueSerializer;
+  private final Serializer<K, V> serializer;
   private final Store<K, V> localStore;
   private final AtomicBoolean initialized = new AtomicBoolean(false);
   private final int timeout;
@@ -74,8 +73,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
-                    Serializer<K> keySerializer,
-                    Serializer<V> valueSerializer,
+                    Serializer<K, V> serializer,
                     Store<K, V> localStore,
                     ZkClient zkClient) {
     this.kafkaClusterZkUrl =
@@ -86,15 +84,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
                                  config.getInt(SchemaRegistryConfig.PORT_CONFIG));
     timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.storeUpdateHandler = storeUpdateHandler;
-    this.keySerializer = keySerializer;
-    this.valueSerializer = valueSerializer;
+    this.serializer = serializer;
     this.localStore = localStore;
     // TODO: Do not use the commit interval until the decision on the embedded store is done
     int commitInterval = config.getInt(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG);
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<K, V>(zkClient, kafkaClusterZkUrl, topic, groupId,
-                                         Integer.MIN_VALUE, this.storeUpdateHandler, keySerializer,
-                                         valueSerializer, this.localStore);
+                                         Integer.MIN_VALUE, this.storeUpdateHandler,
+                                         serializer, this.localStore);
     this.brokerSeq = ZkUtils.getAllBrokersInCluster(zkClient);
 
   }
@@ -162,8 +159,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
     // write to the Kafka topic
     ProducerRecord producerRecord = null;
     try {
-      producerRecord = new ProducerRecord(topic, 0, keySerializer.toBytes(key),
-                                          value == null ? null : valueSerializer.toBytes(value));
+      producerRecord = new ProducerRecord(topic, 0, this.serializer.serializeKey(key),
+                                          value == null ? null : this.serializer.serializeValue(
+                                              value));
     } catch (SerializationException e) {
       throw new StoreException("Error serializing schema while creating the Kafka produce "
                                + "record", e);

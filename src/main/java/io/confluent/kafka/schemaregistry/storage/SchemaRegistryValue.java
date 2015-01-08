@@ -16,25 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-public enum SchemaRegistryKeyType {
-  CONFIG("CONFIG"),
-  SCHEMA("SCHEMA");
+public interface SchemaRegistryValue {
 
-  public final String keyType;
-
-  private SchemaRegistryKeyType(String keyType) {
-    this.keyType = keyType;
-  }
-
-  public static SchemaRegistryKeyType forName(String keyType) {
-    if (CONFIG.keyType.equals(keyType)) {
-      return CONFIG;
-    } else if (SCHEMA.keyType.equals(keyType)) {
-      return SCHEMA;
-    } else {
-      throw new IllegalArgumentException("Unknown schema registry key type : " + keyType
-                                         + " Valid key types are {config, schema}");
-    }
-  }
 }
-

@@ -25,7 +25,7 @@ import java.util.Properties;
 import java.util.Queue;
 import java.util.Vector;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityType;
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
@@ -75,7 +75,7 @@ public abstract class ClusterTestHarness {
   }
 
   public ClusterTestHarness(int numBrokers, boolean setupRestApp) {
-    this(numBrokers, setupRestApp, AvroCompatibilityType.NONE.name);
+    this(numBrokers, setupRestApp, AvroCompatibilityLevel.NONE.name);
   }
 
   public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType) {

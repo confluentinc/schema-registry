@@ -21,7 +21,7 @@ import java.util.Map;
 
 import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigException;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityType;
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
 
@@ -79,7 +79,7 @@ public class SchemaRegistryConfig extends RestConfig {
       + "full (new schema is backward and forward compatible with latest registered schema)";
   private static final String COMPATIBILITY_DEFAULT = "backward";
 
-  private final AvroCompatibilityType compatibilityType;
+  private final AvroCompatibilityLevel compatibilityType;
 
   static {
     config
@@ -109,7 +109,7 @@ public class SchemaRegistryConfig extends RestConfig {
   public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props)
       throws RestConfigException {
     super(props);
-    compatibilityType = AvroCompatibilityType
+    compatibilityType = AvroCompatibilityLevel
         .forName(getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG));
   }
 
@@ -129,7 +129,7 @@ public class SchemaRegistryConfig extends RestConfig {
     System.out.println(config.toHtmlTable());
   }
 
-  public AvroCompatibilityType compatibilityType() {
+  public AvroCompatibilityLevel compatibilityType() {
     return compatibilityType;
   }
 }

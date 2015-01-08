@@ -24,8 +24,10 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.rest.Versions;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 
 import static org.junit.Assert.assertEquals;
@@ -113,6 +115,19 @@ public class TestUtils {
     requestProperties.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
 
     return RestUtils.registerSchema(baseUrl, requestProperties, request, subject);
+  }
+
+  public static void changeCompatibility(String baseUrl,
+                                         AvroCompatibilityLevel newCompatibilityLevel,
+                                         String subject)
+      throws IOException {
+    ConfigUpdateRequest request = new ConfigUpdateRequest();
+    request.setCompatibilityLevel(newCompatibilityLevel);
+
+    Map<String, String> requestProperties = new HashMap<String, String>();
+    requestProperties.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+
+    RestUtils.updateConfig(baseUrl, requestProperties, request, subject);
   }
 
   /**

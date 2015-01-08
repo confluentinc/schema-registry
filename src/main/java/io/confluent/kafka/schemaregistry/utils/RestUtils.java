@@ -31,7 +31,9 @@ import java.util.Map;
 
 import javax.ws.rs.WebApplicationException;
 
+import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.rest.entities.ErrorMessage;
@@ -44,6 +46,9 @@ public class RestUtils {
   private static final Logger log = LoggerFactory.getLogger(RestUtils.class);
   private final static TypeReference<RegisterSchemaResponse> REGISTER_RESPONSE_TYPE =
       new TypeReference<RegisterSchemaResponse>() {
+      };
+  private final static TypeReference<Config> GET_CONFIG_RESPONSE_TYPE =
+      new TypeReference<Config>() {
       };
   private final static TypeReference<Schema> GET_SCHEMA_RESPONSE_TYPE =
       new TypeReference<Schema>() {
@@ -92,6 +97,8 @@ public class RestUtils {
           T result = jsonDeserializer.readValue(is, responseFormat);
           is.close();
           return result;
+        } else if (connection.getResponseCode() == HttpURLConnection.HTTP_NO_CONTENT) {
+          return null;
         } else {
           InputStream es = connection.getErrorStream();
           ErrorMessage errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
@@ -118,13 +125,26 @@ public class RestUtils {
     return response.getVersion();
   }
 
-  public static Schema getId(String baseUrl, Map<String, String> requestProperties, long id)
+  public static void updateConfig(String baseUrl, Map<String, String> requestProperties,
+                                  ConfigUpdateRequest configUpdateRequest, String subject)
       throws IOException {
-    String url = String.format("%s/subjects/%d", baseUrl, id);
+    String url = subject != null ? String.format("%s/config/%s", baseUrl, subject) :
+                 String.format("%s/config", baseUrl);
 
-    Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
-                                            GET_SCHEMA_RESPONSE_TYPE);
-    return response;
+    RestUtils.httpRequest(url, "PUT", configUpdateRequest.toJson().getBytes(),
+                          requestProperties, null);
+  }
+
+  public static Config getConfig(String baseUrl,
+                                 Map<String, String> requestProperties,
+                                 String subject)
+  throws IOException {
+    String url = subject != null ? String.format("%s/config/%s", baseUrl, subject) :
+                 String.format("%s/config", baseUrl);
+
+    Config config =
+        RestUtils.httpRequest(url, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
+    return config;
   }
 
   public static Schema getVersion(String baseUrl, Map<String, String> requestProperties,

@@ -48,8 +48,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private final String topic;
   private final String groupId;
   private final StoreUpdateHandler<K, V> storeUpdateHandler;
-  private final Serializer<K> keySerializer;
-  private final Serializer<V> valueSerializer;
+  private final Serializer<K, V> serializer;
   private final Store<K, V> localStore;
   private final long commitInterval;
   private final ReentrantLock offsetUpdateLock;
@@ -65,8 +64,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 String groupId,
                                 int commitInterval,
                                 StoreUpdateHandler<K, V> storeUpdateHandler,
-                                Serializer<K> keySerializer,
-                                Serializer<V> valueSerializer,
+                                Serializer<K, V> serializer,
                                 Store<K, V> localStore) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     offsetUpdateLock = new ReentrantLock();
@@ -74,8 +72,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.topic = topic;
     this.groupId = groupId;
     this.storeUpdateHandler = storeUpdateHandler;
-    this.keySerializer = keySerializer;
-    this.valueSerializer = valueSerializer;
+    this.serializer = serializer;
     this.localStore = localStore;
     this.commitInterval = commitInterval;
 
@@ -124,18 +121,19 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       if (consumerIterator.hasNext()) {
         MessageAndMetadata<byte[], byte[]> messageAndMetadata = consumerIterator.next();
         byte[] messageBytes = messageAndMetadata.message();
-        V message = null;
-        try {
-          message = messageBytes == null ? null : valueSerializer.fromBytes(messageBytes);
-        } catch (SerializationException e) {
-          // TODO: fail just this operation or all subsequent operations?
-          log.error("Failed to deserialize the schema", e);
-        }
         K messageKey = null;
         try {
-          messageKey = keySerializer.fromBytes(messageAndMetadata.key());
+          messageKey = this.serializer.deserializeKey(messageAndMetadata.key());
         } catch (SerializationException e) {
-          log.error("Failed to deserialize the schema key", e);
+          log.error("Failed to deserialize the schema or config key", e);
+        }
+        V message = null;
+        try {
+          message =
+              messageBytes == null ? null : serializer.deserializeValue(messageKey, messageBytes);
+        } catch (SerializationException e) {
+          // TODO: fail just this operation or all subsequent operations?
+          log.error("Failed to deserialize a schema or config update", e);
         }
         try {
           log.trace("Applying update (" + messageKey + "," + message + ") to the local " +

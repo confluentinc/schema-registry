@@ -18,6 +18,9 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import org.codehaus.jackson.annotate.JsonPropertyOrder;
+
+@JsonPropertyOrder(value = {"keytype", "subject", "magic"})
 public class ConfigKey extends SchemaRegistryKey {
 
   private static final int MAGIC_BYTE = 0;

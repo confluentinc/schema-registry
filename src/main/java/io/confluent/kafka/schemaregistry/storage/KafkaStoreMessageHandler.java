@@ -16,20 +16,43 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class KafkaStoreMessageHandler implements StoreUpdateHandler<SchemaRegistryKey, Schema> {
+import io.confluent.kafka.schemaregistry.rest.entities.Config;
 
-  public KafkaStoreMessageHandler() {
+public class KafkaStoreMessageHandler
+    implements StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> {
+
+  private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
+  private final KafkaSchemaRegistry schemaRegistry;
+
+  public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry) {
+    this.schemaRegistry = schemaRegistry;
   }
 
   /**
    * Invoked on every new schema written to the Kafka store
    *
-   * @param key    Key associated with the schema. Key is in the form SubjectSEPARATORVersion
+   * @param key    Key associated with the schema.
    * @param schema Schema written to the Kafka store
    */
   @Override
-  public void handleUpdate(SchemaRegistryKey key, Schema schema) {
+  public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue schema) {
+    // apply config updates
+    if (key.getKeyType() == SchemaRegistryKeyType.CONFIG) {
+      Config config = (Config) schema;
+      if (config.getCompatibilityLevel() != null) {
+        ConfigKey configKey = (ConfigKey) key;
+        if (configKey.getSubject() != null) {
+          log.info("Compatibility level for subject " + configKey.getSubject() + " updated to "
+                   + config.getCompatibilityLevel().name);
+        } else {
+          log.info("Compatibility level updated to " + config.getCompatibilityLevel().name);
+        }
+
+      }
+    }
+
   }
 }
