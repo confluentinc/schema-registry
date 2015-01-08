@@ -26,8 +26,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 public class ConfigUpdateRequest {
 
   private AvroCompatibilityLevel compatibilityLevel;
-  private String registrationPermission;
-  private String deprecationPermission;
 
   public static ConfigUpdateRequest fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, ConfigUpdateRequest.class);
@@ -41,26 +39,6 @@ public class ConfigUpdateRequest {
   @JsonProperty("compatibility")
   public void setCompatibilityLevel(AvroCompatibilityLevel compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
-  }
-
-  @JsonProperty("registration")
-  public String getRegistrationPermission() {
-    return this.registrationPermission;
-  }
-
-  @JsonProperty("registration")
-  public void setRegistrationPermission(String registrationPermission) {
-    this.registrationPermission = registrationPermission;
-  }
-
-  @JsonProperty("deprecation")
-  public String getDeprecationPermission() {
-    return this.deprecationPermission;
-  }
-
-  @JsonProperty("deprecation")
-  public void setDeprecationPermission(String deprecationPermission) {
-    this.deprecationPermission = deprecationPermission;
   }
 
   public String toJson() throws IOException {

@@ -70,19 +70,24 @@ public class SchemaRegistrySerializer
   @Override
   public SchemaRegistryKey deserializeKey(byte[] key) throws SerializationException {
     SchemaRegistryKey schemaKey = null;
+    SchemaRegistryKeyType keyType = null;
     try {
       try {
         Map<Object, Object> keyObj = null;
         keyObj = new ObjectMapper().readValue(key,
                                               new TypeReference<Map<Object, Object>>() { });
-        SchemaRegistryKeyType keyType =
-            SchemaRegistryKeyType.forName((String) keyObj.get("keytype"));
+        keyType = SchemaRegistryKeyType.forName((String) keyObj.get("keytype"));
         if (keyType == SchemaRegistryKeyType.CONFIG) {
           schemaKey = new ObjectMapper().readValue(key, ConfigKey.class);
         } else {
           schemaKey = new ObjectMapper().readValue(key, SchemaKey.class);
         }
       } catch (JsonProcessingException e) {
+        if (keyType == SchemaRegistryKeyType.CONFIG) {
+          throw new SerializationException("Failed to deserialize CONFIG key", e);
+        } else {
+          throw new SerializationException("Failed to deserialize SCHEMA key", e);
+        }
 
       }
     } catch (IOException e) {

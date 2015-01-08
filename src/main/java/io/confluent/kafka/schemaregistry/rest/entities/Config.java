@@ -30,6 +30,7 @@ public class Config implements SchemaRegistryValue {
   }
 
   public Config() {
+    compatibilityLevel = null;
   }
 
   @JsonProperty("compatibility")

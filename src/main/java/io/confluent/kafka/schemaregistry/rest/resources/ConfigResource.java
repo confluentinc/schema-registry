@@ -24,7 +24,6 @@ import java.util.Set;
 import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -46,7 +45,6 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class ConfigResource {
 
-  public final static String MESSAGE_SUBJECT_NOT_FOUND = "Subject not found.";
   private static final Logger log = LoggerFactory.getLogger(ConfigResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -61,11 +59,14 @@ public class ConfigResource {
     if (request != null) {
       try {
         Set<String> subjects = schemaRegistry.listSubjects();
-        if (!subjects.contains(subject)) {
-          throw new NotFoundException(MESSAGE_SUBJECT_NOT_FOUND);
-        }
         schemaRegistry.updateCompatibilityLevel(subject, request.getCompatibilityLevel());
-        log.debug("Updated compatibility level to " + request.getCompatibilityLevel());
+        if (!subjects.contains(subject)) {
+          log.debug("Updated compatibility level for unregistered subject " + subject + " to "
+                    + request.getCompatibilityLevel());
+        } else {
+          log.debug("Updated compatibility level for subject " + subject + " to "
+                    + request.getCompatibilityLevel());
+        }
       } catch (SchemaRegistryException e) {
         throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
       }
@@ -77,10 +78,6 @@ public class ConfigResource {
   public Config getSubjectLevelConfig(@PathParam("subject") String subject) {
     Config config = null;
     try {
-      Set<String> subjects = schemaRegistry.listSubjects();
-      if (!subjects.contains(subject)) {
-        throw new NotFoundException(MESSAGE_SUBJECT_NOT_FOUND);
-      }
       config = new Config(schemaRegistry.getCompatibilityLevel(subject));
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
@@ -93,7 +90,7 @@ public class ConfigResource {
     if (request.getCompatibilityLevel() != null) {
       try {
         schemaRegistry.updateCompatibilityLevel(null, request.getCompatibilityLevel());
-        log.debug("Updated compatibility level to " + request.getCompatibilityLevel());
+        log.debug("Updated global compatibility level to " + request.getCompatibilityLevel());
       } catch (SchemaRegistryException e) {
         throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
       }

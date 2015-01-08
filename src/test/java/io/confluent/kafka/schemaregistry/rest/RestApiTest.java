@@ -31,6 +31,7 @@ import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
+import static junit.framework.TestCase.assertNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -151,15 +152,11 @@ public class RestApiTest extends ClusterTestHarness {
                                      TestUtils.DEFAULT_REQUEST_PROPERTIES,
                                      null).getCompatibilityLevel());
 
-    assertEquals("Registering a schema should return the existing version",
-                 1,
-                 TestUtils.registerSchema(restApp.restConnect, schemaString, subject));
-
-    assertEquals("Default compatibility level should match current top level config for this subject",
-                 FORWARD,
-                 RestUtils.getConfig(restApp.restConnect,
-                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                     subject).getCompatibilityLevel());
+    assertNull("Default compatibility level should not match current top level config for this "
+               + "subject",
+               RestUtils.getConfig(restApp.restConnect,
+                                   TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                   subject).getCompatibilityLevel());
 
   }
 
@@ -168,14 +165,14 @@ public class RestApiTest extends ClusterTestHarness {
     String subject = "testSubject";
     try {
       TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.FORWARD, subject);
-      fail("Changing config for an invalid subject should fail");
     } catch (WebApplicationException e) {
-      e.printStackTrace();
-      // this is expected.
-      assertEquals("Should get a 404",
-                   Response.Status.NOT_FOUND.getStatusCode(),
-                   e.getResponse().getStatus());
+      fail("Changing config for an invalid subject should succeed");
     }
+    assertEquals("New compatibility level for this subject should be forward",
+                 FORWARD,
+                 RestUtils.getConfig(restApp.restConnect,
+                                     TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     subject).getCompatibilityLevel());
   }
 
   @Test
@@ -187,10 +184,6 @@ public class RestApiTest extends ClusterTestHarness {
                  RestUtils.getConfig(restApp.restConnect,
                                      TestUtils.DEFAULT_REQUEST_PROPERTIES,
                                      null).getCompatibilityLevel());
-
-    assertEquals("Registering a schema should return the existing version",
-                 1,
-                 TestUtils.registerSchema(restApp.restConnect, schemaString, subject));
 
     // change subject compatibility to forward
     TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.FORWARD, subject);

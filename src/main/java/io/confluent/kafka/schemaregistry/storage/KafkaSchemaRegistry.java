@@ -132,17 +132,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       if (isMaster()) {
         try {
           org.apache.avro.Schema avroSchemaObj = canonicalizeSchema(schema);
-          // check if schema already exists or return latest schema
-          Schema latestSchema = getLatestOrExistingSchema(subject, schema);
-          // return immediately if schema already exists and bypass registration
-          if (latestSchema != null && latestSchema.getSchema().compareTo(schema.getSchema()) == 0) {
-            return latestSchema.getVersion();
+
+          Iterator<Schema> allVersions = getAllVersions(subject);
+          Schema latestSchema = null;
+          int latestUsedSchemaVersion = MIN_VERSION;
+          // see if the schema to be registered already exists
+          while (allVersions.hasNext()) {
+            Schema s = allVersions.next();
+            if (!s.getDeprecated()) {
+              if (s.getSchema().compareTo(schema.getSchema()) == 0) {
+                return s.getVersion();
+              }
+              latestSchema = s;
+            }
+            latestUsedSchemaVersion = s.getVersion();
           }
-          // set this to version of the latest schema or to the MIN_VERSION if this is the first
-          // schema registered under the subject
-          int latestUsedSchemaVersion =
-              latestSchema != null ? latestSchema.getVersion() : MIN_VERSION;
-          // register schema if compatible
+
           if (latestSchema == null || isCompatible(subject, avroSchemaObj, latestSchema)) {
             int newVersion = latestUsedSchemaVersion + 1;
             SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
@@ -246,7 +251,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         try {
           kafkaStore.put(configKey, new Config(newCompatibilityLevel));
           log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
-                    + " Kafka data store");
+                    + " Kafka data store with key " + configKey.toString());
         } catch (StoreException e) {
           throw new SchemaRegistryException("Failed to write new config value to the store", e);
         }
@@ -262,16 +267,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public AvroCompatibilityLevel getCompatibilityLevel(String subject)
       throws SchemaRegistryException {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
-    Config config = null;
+    Config config;
     try {
       config = (Config) kafkaStore.get(subjectConfigKey);
-      if (config == null) {
-        // if subject level config was never updated, send the top level config value
-        config = (Config) kafkaStore.get(new ConfigKey(null));
-        if (config == null) {
-          // if top level config was never updated, send the configured value for this instance
-          config = new Config(this.defaultCompatibilityLevel);
-        }
+      if (config == null && subject == null) {
+        // if top level config was never updated, send the configured value for this instance
+        config = new Config(this.defaultCompatibilityLevel);
+      } else if (config == null) {
+        config = new Config();
       }
     } catch (StoreException e) {
       throw new SchemaRegistryException("Failed to read config from the kafka store", e);
@@ -306,8 +309,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       throw new SchemaRegistryException(
           "Existing schema " + latestSchema + " is not a valid Avro schema");
     }
-    return getCompatibilityLevel(subject).compatibilityChecker
-        .isCompatible(newSchemaObj, latestAvroSchema.schemaObj);
+    AvroCompatibilityLevel compatibility = getCompatibilityLevel(subject);
+    if (compatibility == null) {
+      compatibility = getCompatibilityLevel(null);
+    }
+    return compatibility.compatibilityChecker.isCompatible(newSchemaObj, latestAvroSchema.schemaObj);
   }
 
   private Iterator<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas) {
