@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
 
@@ -37,14 +36,6 @@ import static org.junit.Assert.fail;
  * For general utility methods used in unit tests.
  */
 public class TestUtils {
-
-  public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
-
-  static {
-    DEFAULT_REQUEST_PROPERTIES = new HashMap<String, String>();
-    DEFAULT_REQUEST_PROPERTIES.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
-  }
-
   private static final String IoTmpDir = System.getProperty("java.io.tmpdir");
   private static final Random random = new Random();
 
@@ -111,10 +102,7 @@ public class TestUtils {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
 
-    Map<String, String> requestProperties = new HashMap<String, String>();
-    requestProperties.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
-
-    return RestUtils.registerSchema(baseUrl, requestProperties, request, subject);
+    return RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
 
   public static void changeCompatibility(String baseUrl,
@@ -124,10 +112,7 @@ public class TestUtils {
     ConfigUpdateRequest request = new ConfigUpdateRequest();
     request.setCompatibilityLevel(newCompatibilityLevel);
 
-    Map<String, String> requestProperties = new HashMap<String, String>();
-    requestProperties.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
-
-    RestUtils.updateConfig(baseUrl, requestProperties, request, subject);
+    RestUtils.updateConfig(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
 
   /**
@@ -143,8 +128,7 @@ public class TestUtils {
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",
                  schemaString,
-                 RestUtils.getVersion(baseUrl, TestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
-                                      expectedVersion)
+                 RestUtils.getVersion(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject, expectedVersion)
                      .getSchema());
   }
 

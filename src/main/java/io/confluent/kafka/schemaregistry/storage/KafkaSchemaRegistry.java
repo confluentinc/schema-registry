@@ -44,7 +44,8 @@ import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 
 public class KafkaSchemaRegistry implements SchemaRegistry {
 
-  public static final int MIN_VERSION = 0;
+  /** Schema versions under a particular subject are indexed from MIN_VERSION. */
+  public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
@@ -135,7 +136,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
           Iterator<Schema> allVersions = getAllVersions(subject);
           Schema latestSchema = null;
-          int latestUsedSchemaVersion = MIN_VERSION;
+          int newVersion = MIN_VERSION;
           // see if the schema to be registered already exists
           while (allVersions.hasNext()) {
             Schema s = allVersions.next();
@@ -145,11 +146,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
               }
               latestSchema = s;
             }
-            latestUsedSchemaVersion = s.getVersion();
+            newVersion = s.getVersion() + 1;
           }
 
           if (latestSchema == null || isCompatible(subject, avroSchemaObj, latestSchema)) {
-            int newVersion = latestUsedSchemaVersion + 1;
             SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
             schema.setVersion(newVersion);
             kafkaStore.put(keyForNewVersion, schema);
@@ -229,6 +229,29 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     } catch (StoreException e) {
       throw new SchemaRegistryException(
           "Error from the backend Kafka store", e);
+    }
+  }
+
+  @Override
+  public void deprecate(String subject, int version) throws SchemaRegistryException {
+    SchemaKey key = new SchemaKey(subject, version);
+    Schema schema = null;
+
+    synchronized (masterLock) {
+      if (isMaster()) {
+        try {
+          schema = (Schema) kafkaStore.get(key);
+          schema.setDeprecated(true);
+          kafkaStore.put(key, schema);
+        } catch (StoreException e) {
+          throw new SchemaRegistryException(
+              "Error updating schema deprecation in the backend Kafka store", e);
+        }
+      } else {
+        // TODO: logic to forward will be included as part of issue#35
+        throw new SchemaRegistryException("Deprecate request failed since this is not the "
+                                          + "master");
+      }
     }
   }
 
