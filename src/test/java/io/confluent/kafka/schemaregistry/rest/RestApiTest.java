@@ -26,11 +26,17 @@ import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
+import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.BACKWARD;
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
+import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FULL;
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
@@ -179,6 +185,87 @@ public class RestApiTest extends ClusterTestHarness {
                     version, 1);
 
   }
+
+  @Test
+  public void testForwardCompatibilityWithDeprecation() throws IOException {
+    AvroCompatibilityLevel compatibilityLevel = FORWARD;
+
+    try {
+      checkCompatibilityWithDeprecation(compatibilityLevel);
+    } catch(IOException e) {
+      fail("Registering a schema incompatible with a deprecated schema should succeed. " +
+           "Failed with compatibility level: " + compatibilityLevel);
+    }
+  }
+
+  @Test
+  public void testBackwardCompatibilityWithDeprecation() throws IOException {
+    AvroCompatibilityLevel compatibilityLevel = BACKWARD;
+
+    try {
+      checkCompatibilityWithDeprecation(compatibilityLevel);
+    } catch(IOException e) {
+      fail("Registering a schema incompatible with a deprecated schema should succeed. " +
+           "Failed with compatibility level: " + compatibilityLevel);
+    }
+  }
+
+  @Test
+  public void testFullCompatibilityWithDeprecation() throws IOException {
+    AvroCompatibilityLevel compatibilityLevel = FULL;
+
+    try {
+      checkCompatibilityWithDeprecation(compatibilityLevel);
+    } catch(IOException e) {
+      fail("Registering a schema incompatible with a deprecated schema should succeed. " +
+           "Failed with compatibility level: " + compatibilityLevel);
+    }
+  }
+
+  private void checkCompatibilityWithDeprecation(AvroCompatibilityLevel compatibilityLevel)
+      throws IOException {
+    String subject = "testSubject";
+
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(compatibilityLevel);
+
+    RestUtils.updateConfig(restApp.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                           configUpdateRequest, null);
+    Config config = RestUtils.getConfig(restApp.restConnect,
+                                        RestUtils.DEFAULT_REQUEST_PROPERTIES, null);
+    // sanity check
+    assertEquals("Global compatibility should be forward.",
+                 config.getCompatibilityLevel(), compatibilityLevel);
+
+    // Make two incompatible schemas - field 'f' has different types
+    String schema1String = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{\"type\":\"string\",\"name\":"
+                           + "\"f" + "\"}]}";
+    String schema1 = AvroUtils.parseSchema(schema1String).canonicalString;
+
+    String schema2String = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{\"type\":\"int\",\"name\":"
+                           + "\"f" + "\"}]}";
+    String schema2 = AvroUtils.parseSchema(schema2String).canonicalString;
+
+    RegisterSchemaRequest registerSchemaRequest1 = new RegisterSchemaRequest();
+    registerSchemaRequest1.setSchema(schema1);
+    int version1 = RestUtils.registerSchema(restApp.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                           registerSchemaRequest1, subject);
+
+    // Deprecate schema1 and register the incompatible schema2
+    RegisterSchemaRequest registerSchemaRequest2 = new RegisterSchemaRequest();
+    registerSchemaRequest2.setSchema(schema2);
+    RestUtils.deprecateSchema(restApp.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                              subject, version1);
+    RestUtils.registerSchema(restApp.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                             registerSchemaRequest2, subject);
+  }
+
 
   @Test
   public void testConfigDefaults() throws IOException {
