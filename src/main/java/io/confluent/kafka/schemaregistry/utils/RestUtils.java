@@ -102,6 +102,8 @@ public class RestUtils {
       }
 
       connection.setUseCaches(false);
+      // doOutput should be true only if we're sending bytes in the request body.
+      // Therefore, limit this to "PUT" and "POST" requests.
       if ("PUT".equals(method) || "POST".equals(method)) {
         connection.setDoOutput(true);
       }

@@ -249,7 +249,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         }
       } else {
         // TODO: logic to forward will be included as part of issue#35
-        throw new SchemaRegistryException("Config update request failed since this is not the "
+        throw new SchemaRegistryException("Deprecate request failed since this is not the "
                                           + "master");
       }
     }

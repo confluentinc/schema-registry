@@ -151,7 +151,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     int version = TestUtils.registerSchema(restApp.restConnect, schemaStrings.get(0), subject);
     // sanity check
-    assertEquals(version, 1);
+    assertEquals(1, version);
 
     // test that a deprecated schema is discoverable by version number
     RestUtils.deprecateSchema(restApp.restConnect,
@@ -170,7 +170,7 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> versions = RestUtils.getAllVersions(
         restApp.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
     assertEquals("Deprecated versions should appear when listing all versions.",
-                 versions.size(), numSchemas);
+                 numSchemas, versions.size());
 
     // test that a subject which has all versions deprecated is still listed among all subjects
     List<String> allSubjects = RestUtils.getAllSubjects(restApp.restConnect,
