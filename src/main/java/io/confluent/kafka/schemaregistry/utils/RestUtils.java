@@ -73,8 +73,7 @@ public class RestUtils {
   /**
    * @param baseUrl HTTP connection will be established with this url.
    * @param method HTTP method ("GET", "POST", "PUT", etc.)
-   * @param requestBodyData Bytes to be sent in the request body. These bytes are only transmitted
-   *                        if method is  "PUT" or "POST".
+   * @param requestBodyData Bytes to be sent in the request body.
    * @param requestProperties HTTP header properties.
    * @param responseFormat Expected format of the response to the HTTP request.
    * @param <T> The type of the deserialized response to the HTTP request.
@@ -102,13 +101,10 @@ public class RestUtils {
       }
 
       connection.setUseCaches(false);
-      // doOutput should be true only if we're sending bytes in the request body.
-      // Therefore, limit this to "PUT" and "POST" requests.
-      if ("PUT".equals(method) || "POST".equals(method)) {
-        connection.setDoOutput(true);
-      }
 
-      if (requestBodyData != null && connection.getDoOutput()) {
+      if (requestBodyData != null) {
+        connection.setDoOutput(true);
+
         OutputStream os = connection.getOutputStream();
         os.write(requestBodyData);
         os.flush();
