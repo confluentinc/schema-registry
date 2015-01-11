@@ -143,12 +143,6 @@ public class RestApiTest extends ClusterTestHarness {
                      .getAllSubjects(restApp.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES));
   }
 
-//  @Test
-//  public void testDryRunSame() throws IOException {
-//    assertTrue(false);
-//  }
-
-
   @Test
   public void testDryRunCompatible() throws IOException {
     String subject = "testSubject";
@@ -195,12 +189,56 @@ public class RestApiTest extends ClusterTestHarness {
     checkNumberOfVersions(numRegisteredSchemas, subject);
   }
 
+  @Test
+  public void testDryRunIncompatible() throws IOException {
+    String subject = "testSubject";
 
+    // Make two incompatible schemas - field 'f' has different types
+    String schema1String = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{\"type\":\"string\",\"name\":"
+                           + "\"f" + "\"}]}";
+    String schema1 = AvroUtils.parseSchema(schema1String).canonicalString;
 
-//  @Test
-//  public void testDryRunIncompatible() throws IOException {
-//    assertTrue(false);
-//  }
+    String schema2String = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{\"type\":\"int\",\"name\":"
+                           + "\"f" + "\"}]}";
+    String schema2 = AvroUtils.parseSchema(schema2String).canonicalString;
+
+    // ensure registering incompatible schemas will raise an error
+    TestUtils.changeCompatibility(
+        restApp.restConnect, AvroCompatibilityLevel.FULL, subject);
+
+    // test that dry run register of incompatible schema produces error
+    WebApplicationException dryRunException = null;
+    register(schema1, subject);
+    try {
+      registerDryRun(schema2, subject);
+
+    } catch(WebApplicationException e) {
+      // this is expected
+      dryRunException = e;
+    }
+    assertNotNull("Dry run with incompatible schema should produce a " +
+      "WebApplicationException.", dryRunException);
+
+    // Capture error produced by registering incompatible schema
+    WebApplicationException registerException = null;
+    try {
+      register(schema2, subject);
+    } catch(WebApplicationException e) {
+      // this is expected
+      registerException = e;
+    }
+    assertNotNull("Registering incompatible schema should produce a " +
+                  "WebApplicationException.", registerException);
+
+    // test that errors produced by dry run and actual register are the same
+    assertEquals("", registerException.getMessage(), dryRunException.getMessage());
+  }
 
   @Test
   public void testDeprecatedDiscoverable() throws IOException {
@@ -420,5 +458,6 @@ public class RestApiTest extends ClusterTestHarness {
     return RestUtils.registerSchemaDryRun(restApp.restConnect,
                                           RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
+
 
 }
