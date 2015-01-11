@@ -34,6 +34,7 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
@@ -106,7 +107,10 @@ public class SchemasResource {
   public void register(final @Suspended AsyncResponse asyncResponse,
                        final @HeaderParam("Content-Type") String contentType,
                        final @HeaderParam("Accept") String accept,
-                       @PathParam("subject") String subjectName, RegisterSchemaRequest request) {
+                       @PathParam("subject") String subjectName,
+                       @QueryParam("dry_run") String dryRun,
+                       RegisterSchemaRequest request) {
+
     Map<String, String> requestProperties = new HashMap<String, String>();
     requestProperties.put("Content-Type", contentType);
     requestProperties.put("Accept", accept);
@@ -114,8 +118,10 @@ public class SchemasResource {
         new RegisterSchemaForwardingAgent(requestProperties, subjectName, request);
     Schema schema = new Schema(subjectName, 0, request.getSchema(), false);
     int version = -1;
+    boolean isDryRun = dryRun != null && "true".equals(dryRun.toLowerCase());
+
     try {
-      version = schemaRegistry.register(subjectName, schema, forwardingAgent);
+      version = schemaRegistry.register(subjectName, schema, forwardingAgent, isDryRun);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }

@@ -44,5 +44,4 @@ public class RegisterSchemaResponse {
   public String toJson() throws IOException {
     return new ObjectMapper().writeValueAsString(this);
   }
-
 }

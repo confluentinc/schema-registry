@@ -127,13 +127,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public int register(String subject, Schema schema, RegisterSchemaForwardingAgent forwardingAgent)
+  public int register(String subject,
+                      Schema schema,
+                      RegisterSchemaForwardingAgent forwardingAgent,
+                      boolean isDryRun)
       throws SchemaRegistryException {
     synchronized (masterLock) {
       if (isMaster()) {
         try {
-          org.apache.avro.Schema avroSchemaObj = canonicalizeSchema(schema);
-
           Iterator<Schema> allVersions = getAllVersions(subject);
           Schema latestSchema = null;
           int newVersion = MIN_VERSION;
@@ -149,10 +150,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
             newVersion = s.getVersion() + 1;
           }
 
-          if (latestSchema == null || isCompatible(subject, avroSchemaObj, latestSchema)) {
-            SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
-            schema.setVersion(newVersion);
-            kafkaStore.put(keyForNewVersion, schema);
+          if (latestSchema == null || isCompatible(subject, schema, latestSchema)) {
+
+            // update the kafka store
+            if (!isDryRun) {
+              SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
+              schema.setVersion(newVersion);
+              kafkaStore.put(keyForNewVersion, schema);
+            }
+
             return newVersion;
           } else {
             throw new IncompatibleAvroSchemaException(
@@ -305,28 +311,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     return config.getCompatibilityLevel();
   }
 
-  private Schema getLatestOrExistingSchema(String subject, Schema schema)
-      throws SchemaRegistryException {
-    Iterator<Schema> allVersions = getAllVersions(subject);
-    Schema latestOrExistingSchema = null;
-    // see if the schema to be registered already exists
-    while (allVersions.hasNext()) {
-      Schema s = allVersions.next();
-      if (!s.getDeprecated()) {
-        if (s.getSchema().compareTo(schema.getSchema()) == 0) {
-          latestOrExistingSchema = s;
-          break;
-        }
-      }
-      latestOrExistingSchema = s;
-    }
-    return latestOrExistingSchema;
-  }
-
   private boolean isCompatible(String subject,
-                               org.apache.avro.Schema newSchemaObj,
+                               Schema newSchemaObj,
                                Schema latestSchema)
       throws SchemaRegistryException {
+
+    org.apache.avro.Schema avroSchemaObj = canonicalizeSchema(newSchemaObj);
+
     AvroSchema latestAvroSchema = AvroUtils.parseSchema(latestSchema.getSchema());
     if (latestAvroSchema == null) {
       throw new SchemaRegistryException(
@@ -336,7 +327,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     if (compatibility == null) {
       compatibility = getCompatibilityLevel(null);
     }
-    return compatibility.compatibilityChecker.isCompatible(newSchemaObj, latestAvroSchema.schemaObj);
+    return compatibility.compatibilityChecker.isCompatible(avroSchemaObj, latestAvroSchema.schemaObj);
   }
 
   private Iterator<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas) {

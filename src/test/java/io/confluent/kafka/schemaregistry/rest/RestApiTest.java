@@ -143,6 +143,65 @@ public class RestApiTest extends ClusterTestHarness {
                      .getAllSubjects(restApp.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES));
   }
 
+//  @Test
+//  public void testDryRunSame() throws IOException {
+//    assertTrue(false);
+//  }
+
+
+  @Test
+  public void testDryRunCompatible() throws IOException {
+    String subject = "testSubject";
+    int numRegisteredSchemas = 0;
+
+    // Make two different but compatible schemas - field 'f' has different default values
+    String schema1String = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{"
+                           + "\"type\":\"string\","
+                           + "\"name\":\"f\","
+                           + "\"default\":\"hi\""
+                           + "}]}";
+    String schema1 = AvroUtils.parseSchema(schema1String).canonicalString;
+
+    String schema2String = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{"
+                           + "\"type\":\"string\","
+                           + "\"name\":\"f\","
+                           + "\"default\":\"bye\""
+                           + "}]}";
+    String schema2 = AvroUtils.parseSchema(schema2String).canonicalString;
+
+    // test dry run registration of a schema into new subject
+    int version = registerDryRun(schema1, subject);
+    assertEquals("Dry run should return version 1.", 1, version);
+    checkNumberOfVersions(numRegisteredSchemas, subject);
+
+    // test that dry run registration of an already registered schema returns the version of the original
+    int registeredVersion = register(schema1, subject);
+    numRegisteredSchemas++;
+    assertEquals(1, registeredVersion);
+    int dryRunVersion = registerDryRun(schema1, subject);
+    assertEquals("Dry run registration of a schema that has already been registered should return "
+                 + "the original version of the schema.", registeredVersion, dryRunVersion);
+    checkNumberOfVersions(numRegisteredSchemas, subject);
+
+    // test dry run registration of a new compatible subject
+    version = registerDryRun(schema2, subject);
+    assertEquals("Dry run should increment the version number.", numRegisteredSchemas + 1, version);
+    checkNumberOfVersions(numRegisteredSchemas, subject);
+  }
+
+
+
+//  @Test
+//  public void testDryRunIncompatible() throws IOException {
+//    assertTrue(false);
+//  }
+
   @Test
   public void testDeprecatedDiscoverable() throws IOException {
     String subject = "testSubject";
@@ -335,4 +394,31 @@ public class RestApiTest extends ClusterTestHarness {
                                      subject).getCompatibilityLevel());
 
   }
+
+  /** Helper method which checks the number of versions registered under the given subject. */
+  private void checkNumberOfVersions(int expected, String subject) throws IOException {
+    List<Integer> versions = RestUtils.getAllVersions(restApp.restConnect,
+                                                      RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                                      subject);
+    assertEquals("Expected " + expected + " registered versions under subject " + subject +
+                 ", but found " + versions.size(),
+                 expected, versions.size());
+  }
+
+  /** Helper method to reduce boilerplate. */
+  private int register(String schema, String subject) throws IOException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schema);
+    return RestUtils.registerSchema(restApp.restConnect,
+                                    RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+  }
+
+  /** Helper method to reduce boilerplate. */
+  private int registerDryRun(String schema, String subject) throws IOException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schema);
+    return RestUtils.registerSchemaDryRun(restApp.restConnect,
+                                          RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+  }
+
 }
