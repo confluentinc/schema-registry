@@ -118,7 +118,8 @@ public class SchemasResource {
         new RegisterSchemaForwardingAgent(requestProperties, subjectName, request);
     Schema schema = new Schema(subjectName, 0, request.getSchema(), false);
     int version = -1;
-    boolean isDryRun = dryRun != null && "true".equals(dryRun.toLowerCase());
+    // note that parseBoolean(null) returns false which is what we want
+    boolean isDryRun = Boolean.parseBoolean(dryRun);
 
     try {
       version = schemaRegistry.register(subjectName, schema, forwardingAgent, isDryRun);
