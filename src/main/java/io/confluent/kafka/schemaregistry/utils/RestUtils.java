@@ -135,15 +135,32 @@ public class RestUtils {
 
   }
 
-  public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
-                                   RegisterSchemaRequest registerSchemaRequest, String subject)
-      throws IOException {
+  private static int registerSchema(String baseUrl, Map<String, String> requestProperties,
+                                   RegisterSchemaRequest registerSchemaRequest, String subject,
+                                   boolean isDryRun)
+    throws IOException {
+
     String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
+    if (isDryRun) {
+      url += "?dry_run=true";
+    }
 
     RegisterSchemaResponse response =
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
                               requestProperties, REGISTER_RESPONSE_TYPE);
     return response.getVersion();
+  }
+
+  public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
+                                   RegisterSchemaRequest registerSchemaRequest, String subject)
+      throws IOException {
+    return registerSchema(baseUrl, requestProperties, registerSchemaRequest, subject, false);
+  }
+
+  public static int registerSchemaDryRun(String baseUrl, Map<String, String> requestProperties,
+                                     RegisterSchemaRequest registerSchemaRequest, String subject)
+      throws IOException {
+    return registerSchema(baseUrl, requestProperties, registerSchemaRequest, subject, true);
   }
 
   public static void updateConfig(String baseUrl, Map<String, String> requestProperties,
