@@ -33,18 +33,15 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   private Long id;
   @NotEmpty
   private String schema;
-  private boolean deprecated = false;
 
   public Schema(@JsonProperty("name") String name,
                 @JsonProperty("version") Integer version,
                 @JsonProperty("id") Long id,
-                @JsonProperty("schema") String schema,
-                @JsonProperty("deprecated") boolean deprecated) {
+                @JsonProperty("schema") String schema) {
     this.name = name;
     this.version = version;
     this.id = id;
     this.schema = schema;
-    this.deprecated = deprecated;
   }
 
   @JsonProperty("name")
@@ -87,16 +84,6 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     this.id = id;
   }
 
-  @JsonProperty("deprecated")
-  public boolean getDeprecated() {
-    return this.deprecated;
-  }
-
-  @JsonProperty("deprecated")
-  public void setDeprecated(boolean deprecated) {
-    this.deprecated = deprecated;
-  }
-
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -117,9 +104,6 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     if (!this.version.equals(that.version)) {
       return false;
     }
-    if (this.deprecated != that.deprecated) {
-      return false;
-    }
 
     return true;
   }
@@ -129,7 +113,6 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     int result = name.hashCode();
     result = 31 * result + schema.hashCode();
     result = 31 * result + version;
-    result = 31 * result + new Boolean(deprecated).hashCode();
     return result;
   }
 
@@ -139,7 +122,6 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     sb.append("{name=" + this.name + ",");
     sb.append("schema=" + this.schema + ",");
     sb.append("version=" + this.version + ",");
-    sb.append("deprecated=" + this.deprecated + "}");
     return sb.toString();
   }
 

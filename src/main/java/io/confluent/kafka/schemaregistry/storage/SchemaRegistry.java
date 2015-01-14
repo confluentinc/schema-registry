@@ -33,8 +33,6 @@ public interface SchemaRegistry {
 
   Schema get(long id) throws SchemaRegistryException;
 
-  void deprecate(String subject, int version) throws SchemaRegistryException;
-
   Set<String> listSubjects() throws SchemaRegistryException;
 
   Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException;

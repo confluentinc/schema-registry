@@ -123,17 +123,4 @@ public class SchemasResource {
     registerSchemaResponse.setId(id);
     asyncResponse.resume(registerSchemaResponse);
   }
-
-  @DELETE
-  @Path("/{version}")
-  public void deprecate(@PathParam("version") Integer version) {
-
-    try {
-      schemaRegistry.deprecate(this.subject, version);
-    } catch (SchemaRegistryException e) {
-      log.debug("Error while deprecating schema for subject " + this.subject + " with version " +
-                version + " from the schema registry", e);
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
-    }
-  }
 }
