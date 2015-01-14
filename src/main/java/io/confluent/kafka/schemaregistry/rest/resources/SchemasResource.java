@@ -112,7 +112,7 @@ public class SchemasResource {
     requestProperties.put("Accept", accept);
     RegisterSchemaForwardingAgent forwardingAgent =
         new RegisterSchemaForwardingAgent(requestProperties, subjectName, request);
-    Schema schema = new Schema(subjectName, 0, request.getSchema(), false);
+    Schema schema = new Schema(subjectName, 0, 0L, request.getSchema(), false);
     long id = 0L;
     try {
       id = schemaRegistry.register(subjectName, schema, forwardingAgent);

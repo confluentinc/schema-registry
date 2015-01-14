@@ -135,7 +135,7 @@ public class RestUtils {
 
   }
 
-  public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
+  public static long registerSchema(String baseUrl, Map<String, String> requestProperties,
                                    RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException {
     String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
@@ -166,6 +166,15 @@ public class RestUtils {
     Config config =
         RestUtils.httpRequest(url, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
     return config;
+  }
+
+  public static Schema getId(String baseUrl, Map<String, String> requestProperties,
+                             long id) throws IOException {
+    String url = String.format("%s/subjects/%d", baseUrl, id);
+
+    Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
+                                            GET_SCHEMA_RESPONSE_TYPE);
+    return response;
   }
 
   public static Schema getVersion(String baseUrl, Map<String, String> requestProperties,
