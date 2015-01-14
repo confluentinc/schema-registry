@@ -18,14 +18,12 @@ package io.confluent.kafka.schemaregistry.utils;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 
@@ -119,16 +117,16 @@ public class TestUtils {
    * Register a new schema and verify that it can be found on the expected version.
    */
   public static void registerAndVerifySchema(String baseUrl, String schemaString,
-                                             int expectedVersion, String subject)
-      throws IOException {
+                                             long expectedId, String subject)
+  throws IOException {
     assertEquals("Registering a new schema should succeed",
-                 expectedVersion,
+                 expectedId,
                  TestUtils.registerSchema(baseUrl, schemaString, subject));
 
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",
                  schemaString,
-                 RestUtils.getVersion(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject, expectedVersion)
+                 RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
                      .getSchema());
   }
 

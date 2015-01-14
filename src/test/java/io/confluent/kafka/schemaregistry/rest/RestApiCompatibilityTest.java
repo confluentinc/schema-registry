@@ -47,9 +47,9 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
         .canonicalString;
-    int expectedVersionSchema1 = 1;
+    int expectedIdSchema1 = 0;
     assertEquals("Registering should succeed",
-                 expectedVersionSchema1,
+                 expectedIdSchema1,
                  TestUtils.registerSchema(restApp.restConnect, schemaString1, subject));
 
     // register an incompatible avro
@@ -90,9 +90,9 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}"
     ).canonicalString;
-    int expectedVersionSchema2 = 2;
+    int expectedIdSchema2 = 1;
     assertEquals("Registering a compatible schema should succeed",
-                 expectedVersionSchema2,
+                 expectedIdSchema2,
                  TestUtils.registerSchema(restApp.restConnect, schemaString2, subject));
   }
 
@@ -107,9 +107,9 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
         .canonicalString;
-    int expectedVersionSchema1 = 1;
+    int expectedIdSchema1 = 0;
     assertEquals("Registering should succeed",
-                 expectedVersionSchema1,
+                 expectedIdSchema1,
                  TestUtils.registerSchema(restApp.restConnect, schemaString1, subject));
 
     // register an incompatible avro
@@ -150,9 +150,9 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString;
-    int expectedVersionSchema1 = 1;
+    int expectedIdSchema1 = 0;
     assertEquals("Registering should succeed",
-                 expectedVersionSchema1,
+                 expectedIdSchema1,
                  TestUtils.registerSchema(restApp.restConnect, schemaString1, subject));
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
@@ -177,9 +177,9 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"}]}").canonicalString;
-    int expectedVersionSchema2 = 2;
+    int expectedIdSchema2 = 1;
     assertEquals("Registering should succeed",
-                 expectedVersionSchema2,
+                 expectedIdSchema2,
                  TestUtils.registerSchema(restApp.restConnect, schemaString2, subject));
 
     // change compatibility to backward
@@ -218,9 +218,9 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"},"
         + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"foo\"}]}").canonicalString;
-    int expectedVersionSchema4 = 3;
+    int expectedIdSchema4 = 2;
     assertEquals("Registering should succeed with backwards compatible schema",
-                 expectedVersionSchema4,
+                 expectedIdSchema4,
                  TestUtils.registerSchema(restApp.restConnect, schemaString4, subject));
 
 

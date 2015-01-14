@@ -53,7 +53,7 @@ public class SubjectsResource {
     }
     return schema;
   }
-  
+
   @Path("/{subject}/versions")
   public SchemasResource getSchemas(@PathParam("subject") String subjectName) {
     if (subjectName != null) {

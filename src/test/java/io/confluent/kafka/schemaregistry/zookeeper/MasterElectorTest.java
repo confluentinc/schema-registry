@@ -56,35 +56,25 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     // test registering a schema to the master and finding it on the expected version
     final String firstSchema = avroSchemas.get(0);
-    final int firstSchemaExpectedVersion = 1;
-    TestUtils.registerAndVerifySchema(restApp1.restConnect, firstSchema, firstSchemaExpectedVersion,
-                                      subject);
     final int firstSchemaExpectedId = 0;
     TestUtils.registerAndVerifySchema(restApp1.restConnect, firstSchema, firstSchemaExpectedId,
-                                      topic, isKey);
+                                      subject);
     // the newly registered schema should be eventually readable on the non-master
-    waitUntilVersionExists(restApp2.restConnect, subject, firstSchemaExpectedVersion, firstSchema,
-                           "Registered schema should be found on the non-master");
     waitUntilIdExists(restApp2.restConnect, firstSchemaExpectedId, firstSchema,
                       "Registered schema should be found on the non-master");
 
     // test registering a schema to the non-master and finding it on the expected version
     final String secondSchema = avroSchemas.get(1);
-    final String secondSchema = "second schema";
     final int secondSchemaExpectedId = 1;
     final int secondSchemaExpectedVersion = 2;
     assertEquals("Registering a new schema to the non-master should succeed",
-                 secondSchemaExpectedVersion,
-                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, subject));
                  secondSchemaExpectedId,
-                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, topic, isKey));
+                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, subject));
 
-    // the newly registered schema should be immediately readable on the master using the version
     // the newly registered schema should be immediately readable on the master using the id
     assertEquals("Registered schema should be found on the master",
                  secondSchema,
-                 secondSchema,
-                 RestUtils.getId(restApp1.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                 RestUtils.getId(restApp1.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                  secondSchemaExpectedId).getSchema());
 
     // the newly registered schema should be immediately readable on the master using the version
@@ -93,28 +83,20 @@ public class MasterElectorTest extends ClusterTestHarness {
                  RestUtils.getVersion(restApp1.restConnect,
                                       RestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
                                       secondSchemaExpectedVersion).getSchema());
-                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, topic, isKey,
-                                      secondSchemaExpectedVersion).getSchema());
 
     // the newly registered schema should be eventually readable on the non-master
-    waitUntilVersionExists(restApp2.restConnect, subject, secondSchemaExpectedVersion, secondSchema,
-                           "Registered schema should be found on the non-master");
     waitUntilIdExists(restApp2.restConnect, secondSchemaExpectedId, secondSchema,
                       "Registered schema should be found on the non-master");
 
     // test registering an existing schema to the master
-    assertEquals("Registering an existing schema to the master should return its version",
-                 secondSchemaExpectedVersion,
-                 TestUtils.registerSchema(restApp1.restConnect, secondSchema, subject));
+    assertEquals("Registering an existing schema to the master should return its id",
                  secondSchemaExpectedId,
-                 TestUtils.registerSchema(restApp1.restConnect, secondSchema, topic, isKey));
+                 TestUtils.registerSchema(restApp1.restConnect, secondSchema, subject));
 
     // test registering an existing schema to the non-master
-    assertEquals("Registering an existing schema to the non-master should return its version",
-                 secondSchemaExpectedVersion,
-                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, subject));
+    assertEquals("Registering an existing schema to the non-master should return its id",
                  secondSchemaExpectedId,
-                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, topic, isKey));
+                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, subject));
 
     // fake an incorrect master and registration should fail
     restApp1.setMaster(null);
@@ -163,12 +145,10 @@ public class MasterElectorTest extends ClusterTestHarness {
     TestUtils.waitUntilTrue(condition, 5000,
                             "Schema registry instance 2 should become the master");
 
-    // the latest version should be immediately available on the new master using the version
     // the latest version should be immediately available on the new master using the id
     assertEquals("Latest version should be found on the new master",
                  thirdSchema,
-                 thirdSchema,
-                 RestUtils.getId(restApp2.restConnect, TestUtils.DEFAULT_REQUEST_PROPERTIES,
+                 RestUtils.getId(restApp2.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                  thirdSchemaExpectedId).getSchema());
 
     // the latest version should be immediately available on the new master using the version
@@ -177,36 +157,25 @@ public class MasterElectorTest extends ClusterTestHarness {
                  RestUtils.getVersion(restApp2.restConnect,
                                       RestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
                                       thirdSchemaExpectedVersion).getSchema());
-                                      TestUtils.DEFAULT_REQUEST_PROPERTIES, topic, isKey,
-                                      thirdSchemaExpectedVersion).getSchema());
 
     // register a schema to the new master
     final String fourthSchema = avroSchemas.get(3);
-    final int fourthSchemaExpectedVersion = 4;
-    final String fourthSchema = "fourth schema";
     final int fourthSchemaExpectedId = 2000;
     TestUtils.registerAndVerifySchema(restApp2.restConnect, fourthSchema,
-                                      fourthSchemaExpectedVersion,
-                                      subject);
                                       fourthSchemaExpectedId,
-                                      topic, isKey);
+                                      subject);
 
     restApp2.stop();
   }
 
-  private void waitUntilVersionExists(final String baseUrl, final String subject,
-                                      final int expectedVersion, final String expectedSchemaString,
-                                      String errorMsg) {
   private void waitUntilIdExists(final String baseUrl, final int expectedId,
                                  final String expectedSchemaString, String errorMsg) {
     Callable<Boolean> condition = new Callable<Boolean>() {
       @Override
       public Boolean call() throws Exception {
         try {
-          Schema schema = RestUtils.getVersion(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                               subject, expectedVersion);
           Schema schema = RestUtils.getId(baseUrl,
-                                          TestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId);
+                                          RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId);
           return expectedSchemaString.compareTo(schema.getSchema()) == 0;
         } catch (WebApplicationException e) {
           return false;

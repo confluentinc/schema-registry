@@ -49,12 +49,15 @@ import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 
 public class KafkaSchemaRegistry implements SchemaRegistry {
 
-  /** Schema versions under a particular subject are indexed from MIN_VERSION. */
+  /**
+   * Schema versions under a particular subject are indexed from MIN_VERSION.
+   */
   public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 1000;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
+  final Map<Long, SchemaKey> idCache;
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
@@ -65,11 +68,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private ZookeeperMasterElector masterElector = null;
   private AtomicLong schemaIdCounter;
   private long maxSchemaIdCounterValue;
-  final Map<Long, SchemaKey> idCache;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
-  throws SchemaRegistryException {
+      throws SchemaRegistryException {
     String host = config.getString(SchemaRegistryConfig.ADVERTISED_HOST_CONFIG);
     int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
     myIdentity = new SchemaRegistryIdentity(host, port);
@@ -392,7 +394,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     if (compatibility == null) {
       compatibility = getCompatibilityLevel(null);
     }
-    return compatibility.compatibilityChecker.isCompatible(newSchemaObj, latestAvroSchema.schemaObj);
+    return compatibility.compatibilityChecker
+        .isCompatible(newSchemaObj, latestAvroSchema.schemaObj);
   }
 
   private Iterator<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas) {
