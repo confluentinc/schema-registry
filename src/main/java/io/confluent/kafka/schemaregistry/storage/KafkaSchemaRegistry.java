@@ -57,7 +57,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 1000;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
-  final Map<Long, SchemaKey> idCache;
+  final Map<Long, SchemaKey> guidToSchemaKey;
+  final Map<MD5, Long> schemaHashToGuid;
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
@@ -84,7 +85,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                  new ZkStringSerializer());
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
-    this.idCache = new HashMap<Long, SchemaKey>();
+    this.guidToSchemaKey = new HashMap<Long, SchemaKey>();
+    this.schemaHashToGuid = new HashMap<MD5, Long>();
     kafkaStore =
         new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(config,
                                                                new KafkaStoreMessageHandler(this),
@@ -148,23 +150,23 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     synchronized (masterLock) {
       if (isMaster()) {
         try {
+          // see if the schema to be registered already exists
           org.apache.avro.Schema avroSchemaObj = canonicalizeSchema(schema);
+          MD5 md5 = MD5.ofString(schema.getSchema());
+          if (this.schemaHashToGuid.containsKey(md5)) {
+            return this.schemaHashToGuid.get(md5);
+          }
 
+          // determine the latest version of the schema in the subject
           Iterator<Schema> allVersions = getAllVersions(subject);
           Schema latestSchema = null;
           int newVersion = MIN_VERSION;
-          // see if the schema to be registered already exists
           while (allVersions.hasNext()) {
-            Schema s = allVersions.next();
-            if (!s.getDeprecated()) {
-              if (s.getSchema().compareTo(schema.getSchema()) == 0) {
-                return s.getVersion();
-              }
-              latestSchema = s;
-            }
-            newVersion = s.getVersion() + 1;
+            latestSchema = allVersions.next();
+            newVersion = latestSchema.getVersion() + 1;
           }
 
+          // assign a guid and put the schema in the kafka store
           if (latestSchema == null || isCompatible(subject, avroSchemaObj, latestSchema)) {
             SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
             schema.setVersion(newVersion);
@@ -244,7 +246,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public Schema get(long id) throws SchemaRegistryException {
     Schema schema = null;
     try {
-      SchemaKey subjectVersionKey = idCache.get(id);
+      SchemaKey subjectVersionKey = guidToSchemaKey.get(id);
       schema = (Schema) kafkaStore.get(subjectVersionKey);
     } catch (StoreException e) {
       throw new SchemaRegistryException(
@@ -361,24 +363,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       throw new SchemaRegistryException("Failed to read config from the kafka store", e);
     }
     return config.getCompatibilityLevel();
-  }
-
-  private Schema getLatestOrExistingSchema(String subject, Schema schema)
-      throws SchemaRegistryException {
-    Iterator<Schema> allVersions = getAllVersions(subject);
-    Schema latestOrExistingSchema = null;
-    // see if the schema to be registered already exists
-    while (allVersions.hasNext()) {
-      Schema s = allVersions.next();
-      if (!s.getDeprecated()) {
-        if (s.getSchema().compareTo(schema.getSchema()) == 0) {
-          latestOrExistingSchema = s;
-          break;
-        }
-      }
-      latestOrExistingSchema = s;
-    }
-    return latestOrExistingSchema;
   }
 
   private boolean isCompatible(String subject,

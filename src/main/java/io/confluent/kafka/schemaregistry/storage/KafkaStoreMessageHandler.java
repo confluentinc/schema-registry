@@ -56,8 +56,10 @@ public class KafkaStoreMessageHandler
     } else if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       Schema schemaObj = (Schema) schema;
       SchemaKey schemaKey = (SchemaKey) key;
-      schemaRegistry.idCache.put(schemaObj.getId(), schemaKey);
-    }
+      schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
 
+      MD5 md5 = MD5.ofString(schemaObj.getSchema());
+      schemaRegistry.schemaHashToGuid.put(md5, schemaObj.getId());
+    }
   }
 }
