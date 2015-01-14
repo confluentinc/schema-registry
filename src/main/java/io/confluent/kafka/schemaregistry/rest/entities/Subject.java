@@ -25,20 +25,12 @@ public class Subject {
   private String name;
 
   private String compatibility = "full";
-  private String registration = "all";
-  private String deprecation = "all";
-  private String validators = null;
 
   public Subject(@JsonProperty("name") String name,
-                 @JsonProperty("compatibility") String compatibility,
-                 @JsonProperty("registration") String registration,
-                 @JsonProperty("deprecation") String deprecation,
-                 @JsonProperty("validators") String validators) {
+                 @JsonProperty("compatibility") String compatibility)
+  {
     this.name = name;
     this.compatibility = compatibility;
-    this.registration = registration;
-    this.deprecation = deprecation;
-    this.validators = validators;
   }
 
   public Subject(@JsonProperty("name") String name) {
@@ -65,36 +57,6 @@ public class Subject {
     this.compatibility = compatibility;
   }
 
-  @JsonProperty("registration")
-  public String getRegistration() {
-    return this.registration;
-  }
-
-  @JsonProperty("registration")
-  public void setRegistration(String registration) {
-    this.registration = registration;
-  }
-
-  @JsonProperty("deprecation")
-  public String getDeprecation() {
-    return this.deprecation;
-  }
-
-  @JsonProperty("deprecation")
-  public void setDeprecation(String deprecation) {
-    this.deprecation = deprecation;
-  }
-
-  @JsonProperty("validators")
-  public String getValidators() {
-    return this.validators;
-  }
-
-  @JsonProperty("validators")
-  public void setValidators(String validators) {
-    this.validators = validators;
-  }
-
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -112,15 +74,6 @@ public class Subject {
     if (!this.compatibility.equals(subject.compatibility)) {
       return false;
     }
-    if (!this.registration.equals(subject.registration)) {
-      return false;
-    }
-    if (!this.deprecation.equals(subject.deprecation)) {
-      return false;
-    }
-    if (!this.validators.equals(subject.validators)) {
-      return false;
-    }
 
     return true;
   }
@@ -128,10 +81,7 @@ public class Subject {
   @Override
   public int hashCode() {
     int result = name.hashCode();
-    result = 31 * result + this.registration.hashCode();
-    result = 31 * result + this.deprecation.hashCode();
-    result = 31 * result + this.validators.hashCode();
+    result = 31 * result + this.compatibility.hashCode();
     return result;
   }
-
 }
