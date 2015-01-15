@@ -19,10 +19,10 @@ package io.confluent.kafka.schemaregistry.tools;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
+import io.confluent.common.utils.AbstractPerformanceTest;
+import io.confluent.common.utils.PerformanceStats;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
@@ -31,9 +31,7 @@ import io.confluent.kafka.schemaregistry.utils.RestUtils;
 
 public class SchemaRegistryPerformance extends AbstractPerformanceTest {
     long targetRegisteredSchemas;
-    long schemasPerSec;
-    List<String> schemasToRegister;
-    ObjectMapper serializer = new ObjectMapper();
+    long targetSchemasPerSec;
     String baseUrl;
     String subject;
     long registeredSchemas = 0;
@@ -48,8 +46,8 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
 
         String baseUrl = "http://localhost:8080";
         String subject = "testSubject";
-        int numSchemas = 10;
-        int throughput = 100;
+        int numSchemas = 5000;
+        int targetSchemasPerSec = 1000;
 
 
 
@@ -67,24 +65,23 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
 //        int numRecords = Integer.parseInt(args[2]);
 //        int throughput = Integer.parseInt(args[3]);
 
-        SchemaRegistryPerformance perf = new SchemaRegistryPerformance(baseUrl, subject, numSchemas, throughput);
+        SchemaRegistryPerformance perf = new SchemaRegistryPerformance(baseUrl, subject, numSchemas, targetSchemasPerSec);
 
         // We need an approximate # of iterations per second, but we don't know how many records per request we'll receive
         // so we don't know how many iterations per second we need to hit the target rate. Get an approximate value using
         // the default max # of records per request the server will return.
-        perf.run(100000); // target iterations per second
+
+        perf.run(targetSchemasPerSec); // target iterations per second
         perf.close();
     }
 
     public SchemaRegistryPerformance(String baseUrl, String subject, long numSchemas,
-                                     long schemasPerSec) throws Exception {
+                                     long targetSchemasPerSec) throws Exception {
         super(numSchemas);
         this.baseUrl = baseUrl;
         this.subject = subject;
         this.targetRegisteredSchemas = numSchemas;
-        this.schemasPerSec = schemasPerSec;
-
-        this.schemasToRegister = makeSchemas(numSchemas);
+        this.targetSchemasPerSec = targetSchemasPerSec;
 
         // No compatibility verification
         ConfigUpdateRequest request = new ConfigUpdateRequest();
@@ -95,29 +92,20 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
     }
 
     // sequential schema maker
-    /** */
-    private static List<String> makeSchemas(long num) {
-        List<String> allSchemas = new ArrayList<String>();
-
-        for (int i = 0; i < num; i++) {
-            String schemaString = "{\"type\":\"record\","
-                                  + "\"name\":\"myrecord\","
-                                  + "\"fields\":"
-                                  + "[{\"type\":\"string\",\"name\":"
-                                  + "\"f" + i + "\"}]}";
-            allSchemas.add(AvroUtils.parseSchema(schemaString).canonicalString);
-        }
-
-        return allSchemas;
+    private static String makeSchema(long num) {
+        String schemaString = "{\"type\":\"record\","
+                              + "\"name\":\"myrecord\","
+                              + "\"fields\":"
+                              + "[{\"type\":\"string\",\"name\":"
+                              + "\"f" + num + "\"}]}";
+        return AvroUtils.parseSchema(schemaString).canonicalString;
     }
 
     @Override
     protected void doIteration(PerformanceStats.Callback cb) {
-
-        System.out.println("Iterating...");
-
         RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
-        registerSchemaRequest.setSchema(this.schemasToRegister.remove(0));
+        String schema = makeSchema(this.registeredSchemas);
+        registerSchemaRequest.setSchema(schema);
 
         try {
             RestUtils.registerSchema(this.baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
@@ -127,7 +115,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
             System.out.println("Problem registering schema: " + e.getMessage());
         }
 
-        cb.onCompletion(0, 0);
+        cb.onCompletion(1, 0);
     }
 
     protected void close() {
@@ -136,21 +124,12 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
 
     @Override
     protected boolean finished(int iteration) {
-        return this.schemasToRegister.isEmpty();
+        return this.targetRegisteredSchemas == this.registeredSchemas;
     }
 
     @Override
-    protected boolean runningSlow(int iteration, float elapsed) {
-        return (registeredSchemas /elapsed < schemasPerSec);
-    }
-
-    // This version of ConsumerRecord has the same basic format, but leaves the data encoded since we only need to get
-    // the size of each record.
-    private static class UndecodedConsumerRecord {
-        public String key;
-        public String value;
-        public int partition;
-        public long offset;
+    protected boolean runningFast(int iteration, float elapsed) {
+        return iteration / elapsed > targetSchemasPerSec;
     }
 }
 
