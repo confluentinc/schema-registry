@@ -81,10 +81,6 @@ if [ "x$$HELP" = "xtrue" ]; then
   exit 0
 fi
 
-echo "-------------"
-echo $CLASSPATH
-echo "-------------"
-
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
   nohup $JAVA $KAFKAREST_HEAP_OPTS $KAFKAREST_JVM_PERFORMANCE_OPTS $KAFKAREST_JMX_OPTS -cp $CLASSPATH $KAFKAREST_OPTS "$@" 2>&1 < /dev/null &
