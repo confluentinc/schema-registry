@@ -144,7 +144,7 @@
                     </descriptors>
                     <archive>
                         <manifest>
-                            <mainClass>io.confluent.kafkarest.Main</mainClass>
+                            <mainClass>io.confluent.kafka.schemaregistry.rest.Main</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
