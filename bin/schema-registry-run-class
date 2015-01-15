@@ -27,18 +27,18 @@ for library in "confluent-common" "rest-utils" "schema-registry"; do
 done
 
 # JMX settings
-if [ -z "$KAFKAREST_JMX_OPTS" ]; then
-  KAFKAREST_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false "
+if [ -z "$SCHEMA_REGISTRY_JMX_OPTS" ]; then
+  SCHEMA_REGISTRY_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false "
 fi
 
 # JMX port to use
 if [  $JMX_PORT ]; then
-  KAFKAREST_JMX_OPTS="$KAFKAREST_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
+  SCHEMA_REGISTRY_JMX_OPTS="$SCHEMA_REGISTRY_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
 fi
 
 # Generic jvm settings you want to add
-if [ -z "$KAFKAREST_OPTS" ]; then
-  KAFKAREST_OPTS=""
+if [ -z "$SCHEMA_REGISTRY_OPTS" ]; then
+  SCHEMA_REGISTRY_OPTS=""
 fi
 
 # Which java to use
@@ -49,13 +49,13 @@ else
 fi
 
 # Memory options
-if [ -z "$KAFKAREST_HEAP_OPTS" ]; then
-  KAFKAREST_HEAP_OPTS="-Xmx256M"
+if [ -z "$SCHEMA_REGISTRY_HEAP_OPTS" ]; then
+  SCHEMA_REGISTRY_HEAP_OPTS="-Xmx256M"
 fi
 
 # JVM performance options
-if [ -z "$KAFKAREST_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKAREST_JVM_PERFORMANCE_OPTS="-server -XX:+UseCompressedOops -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true"
+if [ -z "$SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS" ]; then
+  SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS="-server -XX:+UseCompressedOops -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true"
 fi
 
 
@@ -83,7 +83,7 @@ fi
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
-  nohup $JAVA $KAFKAREST_HEAP_OPTS $KAFKAREST_JVM_PERFORMANCE_OPTS $KAFKAREST_JMX_OPTS -cp $CLASSPATH $KAFKAREST_OPTS "$@" 2>&1 < /dev/null &
+  nohup $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$@" 2>&1 < /dev/null &
 else
-  exec $JAVA $KAFKAREST_HEAP_OPTS $KAFKAREST_JVM_PERFORMANCE_OPTS $KAFKAREST_JMX_OPTS -cp $CLASSPATH $KAFKAREST_OPTS "$@"
+  exec $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$@"
 fi
