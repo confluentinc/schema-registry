@@ -1,0 +1,93 @@
+#!/bin/sh
+#
+# Copyright 2014 Confluent Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+base_dir=$(dirname $0)/..
+
+# Development jars. `mvn package` should collect all the required dependency jars here
+for dir in $base_dir/target/kafka-schema-registry-*-development; do
+  CLASSPATH=$CLASSPATH:$dir/share/schema-registry/*
+done
+
+# Production jars, including kafka, rest-utils, and schema-registry
+for library in "confluent-common" "rest-utils" "schema-registry"; do
+  CLASSPATH=$CLASSPATH:$base_dir/share/$library/*
+done
+
+# JMX settings
+if [ -z "$KAFKAREST_JMX_OPTS" ]; then
+  KAFKAREST_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false "
+fi
+
+# JMX port to use
+if [  $JMX_PORT ]; then
+  KAFKAREST_JMX_OPTS="$KAFKAREST_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
+fi
+
+# Generic jvm settings you want to add
+if [ -z "$KAFKAREST_OPTS" ]; then
+  KAFKAREST_OPTS=""
+fi
+
+# Which java to use
+if [ -z "$JAVA_HOME" ]; then
+  JAVA="java"
+else
+  JAVA="$JAVA_HOME/bin/java"
+fi
+
+# Memory options
+if [ -z "$KAFKAREST_HEAP_OPTS" ]; then
+  KAFKAREST_HEAP_OPTS="-Xmx256M"
+fi
+
+# JVM performance options
+if [ -z "$KAFKAREST_JVM_PERFORMANCE_OPTS" ]; then
+  KAFKAREST_JVM_PERFORMANCE_OPTS="-server -XX:+UseCompressedOops -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true"
+fi
+
+
+while [ $# -gt 0 ]; do
+  COMMAND=$1
+  case $COMMAND in
+    -help)
+      HELP="true"
+      shift
+      ;;
+    -daemon)
+      DAEMON_MODE="true"
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [ "x$$HELP" = "xtrue" ]; then
+  echo "USAGE: $0 [-daemon] [opts] [-help]"
+  exit 0
+fi
+
+echo "-------------"
+echo $CLASSPATH
+echo "-------------"
+
+# Launch mode
+if [ "x$DAEMON_MODE" = "xtrue" ]; then
+  nohup $JAVA $KAFKAREST_HEAP_OPTS $KAFKAREST_JVM_PERFORMANCE_OPTS $KAFKAREST_JMX_OPTS -cp $CLASSPATH $KAFKAREST_OPTS "$@" 2>&1 < /dev/null &
+else
+  exec $JAVA $KAFKAREST_HEAP_OPTS $KAFKAREST_JVM_PERFORMANCE_OPTS $KAFKAREST_JMX_OPTS -cp $CLASSPATH $KAFKAREST_OPTS "$@"
+fi
