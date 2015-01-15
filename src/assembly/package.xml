@@ -35,7 +35,8 @@
             <useTransitiveFiltering>true</useTransitiveFiltering>
             <excludes>
                 <exclude>io.confluent:rest-utils</exclude>
-                <exclude>io.confluent:rest-utils-test</exclude>
+                <exclude>io.confluent:common-config</exclude>
+                <exclude>io.confluent:common-utils</exclude>
             </excludes>
         </dependencySet>
     </dependencySets>
