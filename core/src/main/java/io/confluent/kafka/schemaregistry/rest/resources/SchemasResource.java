@@ -116,31 +116,18 @@ public class SchemasResource {
     requestProperties.put("Accept", accept);
     RegisterSchemaForwardingAgent forwardingAgent =
         new RegisterSchemaForwardingAgent(requestProperties, subjectName, request);
-    Schema schema = new Schema(subjectName, 0, request.getSchema(), false);
-    int version = -1;
+    Schema schema = new Schema(subjectName, 0, 0L, request.getSchema());
+    long id = 0L;
     // note that parseBoolean(null) returns false which is what we want
     boolean isDryRun = Boolean.parseBoolean(dryRun);
 
     try {
-      version = schemaRegistry.register(subjectName, schema, forwardingAgent, isDryRun);
+      id = schemaRegistry.register(subjectName, schema, forwardingAgent, isDryRun);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
-    registerSchemaResponse.setVersion(version);
+    registerSchemaResponse.setId(id);
     asyncResponse.resume(registerSchemaResponse);
-  }
-
-  @DELETE
-  @Path("/{version}")
-  public void deprecate(@PathParam("version") Integer version) {
-
-    try {
-      schemaRegistry.deprecate(this.subject, version);
-    } catch (SchemaRegistryException e) {
-      log.debug("Error while deprecating schema for subject " + this.subject + " with version " +
-                version + " from the schema registry", e);
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
-    }
   }
 }
