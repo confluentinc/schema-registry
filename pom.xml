@@ -26,6 +26,7 @@
         <restutils.version>0.1-SNAPSHOT</restutils.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <avro.version>1.7.7</avro.version>
+        <jackson.version>2.4.3</jackson.version>
         <common-config.version>0.1-SNAPSHOT</common-config.version>
         <common-utils.version>0.1-SNAPSHOT</common-utils.version>
         <junit.version>4.11</junit.version>

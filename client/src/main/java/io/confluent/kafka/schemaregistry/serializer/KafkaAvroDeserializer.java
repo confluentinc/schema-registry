@@ -15,25 +15,31 @@
  */
 package io.confluent.kafka.schemaregistry.serializer;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.io.DatumReader;
+import org.apache.avro.io.DecoderFactory;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import org.apache.avro.io.DatumReader;
-import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.Schema;
+import io.confluent.kafka.schemaregistry.SchemaRegistryClient;
+import kafka.serializer.Decoder;
+import kafka.utils.VerifiableProperties;
 
-
-public class KafkaAvroDeserializer {
+public class KafkaAvroDeserializer implements Decoder<Object>  {
 
   private static final byte MAGIC_BYTE = 0x0;
-
   private final DecoderFactory decoderFactory = DecoderFactory.get();
+  private final VerifiableProperties props;
+  private final String propertyName = "schema.registry.url";
+  private SchemaRegistryClient schemaRegistry;
 
-  private final Schema schema;
+  public KafkaAvroDeserializer(VerifiableProperties props) {
+    this.props = props;
+    String url = props.getProperty(propertyName);
+    schemaRegistry = new SchemaRegistryClient(url);
 
-  public KafkaAvroDeserializer(Schema schema) {
-    this.schema = schema;
   }
 
   private ByteBuffer getByteBuffer(byte[] payload) {
@@ -44,13 +50,24 @@ public class KafkaAvroDeserializer {
     return buffer;
   }
 
-  public Object deserialize(byte[] payload) throws IOException {
+  @Override
+  public Object fromBytes(byte[] bytes){
+    try {
+      return deserialize(bytes);
+    } catch (IOException e) {
+
+    }
+    return null;
+  }
+
+  private Object deserialize(byte[] payload) throws IOException {
     ByteBuffer buffer = getByteBuffer(payload);
-    buffer.getInt();
+    int id = buffer.getInt();
+    Schema schema = schemaRegistry.getByID("topic", id);
     int start = buffer.position() + buffer.arrayOffset();
     int length = buffer.limit() - 5;
-    DatumReader<Object> reader = new GenericDatumReader<Object>();
-    Object object = reader.read(null, decoderFactory.binaryDecoder(buffer.array(),start, length, null));
+    DatumReader<Object> reader = new GenericDatumReader<Object>(schema);
+    Object object = reader.read(null,  decoderFactory.binaryDecoder(buffer.array(),start, length, null));
     return object;
   }
 }

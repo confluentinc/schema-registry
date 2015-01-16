@@ -27,14 +27,12 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import javax.ws.rs.WebApplicationException;
 
 import io.confluent.kafka.schemaregistry.rest.Versions;
-
-import io.confluent.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaResponse;

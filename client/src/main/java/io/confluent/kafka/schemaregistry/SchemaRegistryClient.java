@@ -15,12 +15,13 @@
  */
 package io.confluent.kafka.schemaregistry;
 
+import org.apache.avro.Schema;
+
 import java.io.IOException;
-import java.util.Map;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.Map;
 
-import org.apache.avro.Schema;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 
 public class SchemaRegistryClient {
@@ -42,7 +43,6 @@ public class SchemaRegistryClient {
 
     if (schemaCache.containsKey(subject)) {
       Map<Schema, Integer> schemaIdMap = schemaCache.get(subject);
-
       if (schemaIdMap.containsKey(schema)) {
         return schemaIdMap.get(schema);
       } else {
