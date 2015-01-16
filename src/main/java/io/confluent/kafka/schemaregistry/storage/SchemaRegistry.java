@@ -26,7 +26,10 @@ public interface SchemaRegistry {
 
   void init() throws SchemaRegistryException;
 
-  long register(String subject, Schema schema, RegisterSchemaForwardingAgent forwardingAgent)
+  long register(String subject,
+                Schema schema,
+                RegisterSchemaForwardingAgent forwardingAgent,
+                boolean isDryRun)
       throws SchemaRegistryException;
 
   Schema get(String subject, int version) throws SchemaRegistryException;

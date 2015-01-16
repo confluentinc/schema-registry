@@ -19,17 +19,21 @@ curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i htt
 
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka,key/versions -d '{"schema": "{\"type\": \"string\"}"}'
 
-5. List all subjects 
+5. Do a dry run of a schema registration. This is a good way to test compatibility without changing the state of the registry
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka/versions&dry_run=true -d '{"schema": "{\"type\": \"string\"}"}'
+
+6. List all subjects 
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects
 
-6. List all versions of a subject's schema
+7. List all versions of a subject's schema
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects/Kafka/versions
 
-7. Get a particular version of a subject's schema
+8. Get a particular version of a subject's schema
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects/Kafka/versions/1
 
-8. Get top level config
+9. Get top level config
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/config
 
-9. Update compatibility level globally
+10. Update compatibility level globally
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X PUT -i http://localhost:8080/config -d '{"compatibility":"NONE"}'
+

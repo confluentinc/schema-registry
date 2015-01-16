@@ -26,12 +26,15 @@ import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
@@ -102,7 +105,6 @@ public class RestApiTest extends ClusterTestHarness {
     // test re-registering existing schemas
     for (int i = 0; i < schemasInSubject1; i++) {
       long expectedId = i;
-//      int expectedVersion = allVersionsInSubject1.get(i);
       String schemaString = allSchemasInSubject1.get(i);
       long foundId = TestUtils.registerSchema(restApp.restConnect, schemaString, subject1);
       assertEquals("Re-registering an existing schema should return the existing version",
@@ -135,6 +137,92 @@ public class RestApiTest extends ClusterTestHarness {
                  allSubjects,
                  RestUtils
                      .getAllSubjects(restApp.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES));
+  }
+
+  @Test
+  public void testDryRunCompatible() throws IOException {
+    String subject = "testSubject";
+    int numRegisteredSchemas = 0;
+    int numSchemas = 10;
+
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(numSchemas);
+    TestUtils.changeCompatibility(restApp.restConnect, NONE, subject);
+
+    // test dry run registration of a schema into new subject
+    String schema1 = allSchemas.get(0);
+    long id = TestUtils.registerDryRun(restApp.restConnect, schema1, subject);
+    assertEquals("Dry run should return id 0.", 0, id);
+    TestUtils.checkNumberOfVersions(restApp.restConnect, numRegisteredSchemas, subject);
+
+    for (int i = 0; i < numSchemas; i++) {
+      // Test that dry run doesn't change the number of versions
+      String schema = allSchemas.get(i);
+      long dryRunId = TestUtils.registerDryRun(restApp.restConnect, schema, subject);
+      TestUtils.checkNumberOfVersions(restApp.restConnect, numRegisteredSchemas, subject);
+
+      // Test that registering and dry run return the same ids
+      long registeredId = TestUtils.registerSchema(restApp.restConnect, schema, subject);
+      numRegisteredSchemas++;
+      assertEquals("Dry run id and register id should be the same.", registeredId, dryRunId);
+
+      // test that dry run registration of an already registered schema returns the version of the original
+      dryRunId = TestUtils.registerDryRun(restApp.restConnect, schema, subject);
+      assertEquals("Dry run registration of an already registered schema should not change the id.",
+                   registeredId, dryRunId);
+      TestUtils.checkNumberOfVersions(restApp.restConnect, numRegisteredSchemas, subject);
+    }
+  }
+
+
+  @Test
+  public void testDryRunIncompatible() throws IOException {
+    String subject = "testSubject";
+
+    // Make two incompatible schemas - field 'f' has different types
+    String schema1String = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{\"type\":\"string\",\"name\":"
+                           + "\"f" + "\"}]}";
+    String schema1 = AvroUtils.parseSchema(schema1String).canonicalString;
+
+    String schema2String = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{\"type\":\"int\",\"name\":"
+                           + "\"f" + "\"}]}";
+    String schema2 = AvroUtils.parseSchema(schema2String).canonicalString;
+
+    // ensure registering incompatible schemas will raise an error
+    TestUtils.changeCompatibility(
+        restApp.restConnect, AvroCompatibilityLevel.FULL, subject);
+
+    // test that dry run register of incompatible schema produces error
+    WebApplicationException dryRunException = null;
+    TestUtils.registerSchema(restApp.restConnect, schema1, subject);
+    try {
+      TestUtils.registerDryRun(restApp.restConnect, schema2, subject);
+
+    } catch(WebApplicationException e) {
+      // this is expected
+      dryRunException = e;
+    }
+    assertNotNull("Dry run with incompatible schema should produce a " +
+      "WebApplicationException.", dryRunException);
+
+    // Capture error produced by registering incompatible schema
+    WebApplicationException registerException = null;
+    try {
+      TestUtils.registerSchema(restApp.restConnect, schema2, subject);
+    } catch(WebApplicationException e) {
+      // this is expected
+      registerException = e;
+    }
+    assertNotNull("Registering incompatible schema should produce a " +
+                  "WebApplicationException.", registerException);
+
+    // test that errors produced by dry run and actual register are the same
+    assertEquals("", registerException.getMessage(), dryRunException.getMessage());
   }
 
   @Test
@@ -206,3 +294,4 @@ public class RestApiTest extends ClusterTestHarness {
 
   }
 }
+

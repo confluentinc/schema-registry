@@ -145,7 +145,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public long register(String subject, Schema schema, RegisterSchemaForwardingAgent forwardingAgent)
+  public long register(String subject,
+                       Schema schema,
+                       RegisterSchemaForwardingAgent forwardingAgent,
+                       boolean isDryRun)
       throws SchemaRegistryException {
     synchronized (masterLock) {
       if (isMaster()) {
@@ -170,11 +173,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           if (latestSchema == null || isCompatible(subject, avroSchemaObj, latestSchema)) {
             SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
             schema.setVersion(newVersion);
+
+            if (isDryRun) {
+              return schemaIdCounter.get();
+            }
+
             schema.setId(schemaIdCounter.getAndIncrement());
             if (schemaIdCounter.get() == maxSchemaIdCounterValue) {
               maxSchemaIdCounterValue =
                   nextSchemaIdCounterBatch().longValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
             }
+
             kafkaStore.put(keyForNewVersion, schema);
             return schema.getId();
           } else {

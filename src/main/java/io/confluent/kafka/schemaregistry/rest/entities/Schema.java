@@ -54,16 +54,6 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     this.name = name;
   }
 
-  @JsonProperty("schema")
-  public String getSchema() {
-    return this.schema;
-  }
-
-  @JsonProperty("schema")
-  public void setSchema(String schema) {
-    this.schema = schema;
-  }
-
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
@@ -84,6 +74,16 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     this.id = id;
   }
 
+  @JsonProperty("schema")
+  public String getSchema() {
+    return this.schema;
+  }
+
+  @JsonProperty("schema")
+  public void setSchema(String schema) {
+    this.schema = schema;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -98,12 +98,16 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     if (!this.name.equals(that.name)) {
       return false;
     }
-    if (!this.schema.equals(that.schema)) {
-      return false;
-    }
     if (!this.version.equals(that.version)) {
       return false;
     }
+    if (!this.id.equals(that.getId())) {
+      return false;
+    }
+    if (!this.schema.equals(that.schema)) {
+      return false;
+    }
+
 
     return true;
   }
@@ -111,8 +115,9 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   @Override
   public int hashCode() {
     int result = name.hashCode();
-    result = 31 * result + schema.hashCode();
     result = 31 * result + version;
+    result = 31 * result + id.intValue();
+    result = 31 * result + schema.hashCode();
     return result;
   }
 
@@ -120,8 +125,9 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("{name=" + this.name + ",");
-    sb.append("schema=" + this.schema + ",");
     sb.append("version=" + this.version + ",");
+    sb.append("id=" + this.id + ",");
+    sb.append("schema=" + this.schema + "}");
     return sb.toString();
   }
 
