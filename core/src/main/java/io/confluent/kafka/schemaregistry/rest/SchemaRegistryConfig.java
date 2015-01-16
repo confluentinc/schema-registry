@@ -146,7 +146,7 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   public static void main(String[] args) {
-    System.out.println(config.toHtmlTable());
+    System.out.println(config.toRst());
   }
 
   public AvroCompatibilityLevel compatibilityType() {

@@ -12,4 +12,5 @@ Contents:
    :maxdepth: 3
 
    intro 
-   api 
+   api
+   config 
