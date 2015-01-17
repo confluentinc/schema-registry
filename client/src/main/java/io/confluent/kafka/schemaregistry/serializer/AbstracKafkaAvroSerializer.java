@@ -78,9 +78,9 @@ public abstract class AbstracKafkaAvroSerializer {
     try {
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       Schema schema = getSchema(record);
-      int id = schemaRegistry.register(schema, topic);
+      long id = schemaRegistry.register(schema, topic);
       out.write(MAGIC_BYTE);
-      out.write(ByteBuffer.allocate(4).putInt(id).array());
+      out.write(ByteBuffer.allocate(8).putLong(id).array());
       BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
       DatumWriter<Object> writer;

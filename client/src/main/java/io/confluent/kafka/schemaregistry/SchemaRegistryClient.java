@@ -27,58 +27,49 @@ import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRe
 public class SchemaRegistryClient {
 
   private final String baseUrl;
-  private final Map<String, Map<Schema, Integer>> schemaCache;
-  private final Map<String, Map<Integer, Schema>> idCache;
+  private final Map<String, Map<Schema, Long>> schemaCache;
+  private final Map<Long, Schema> idCache;
+  private final Schema.Parser parser = new Schema.Parser();
 
   public SchemaRegistryClient(String baseUrl) {
     this.baseUrl = baseUrl;
-    schemaCache = new HashMap<String, Map<Schema, Integer>>();
-    idCache = new HashMap<String, Map<Integer, Schema>>();
+    schemaCache = new HashMap<String, Map<Schema, Long>>();
+    idCache = new HashMap<Long, Schema>();
   }
 
-  public synchronized int register(Schema schema, String subject) throws IOException {
+  public synchronized long register(Schema schema, String subject) throws IOException {
     String schemaString = schema.toString();
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
 
     if (schemaCache.containsKey(subject)) {
-      Map<Schema, Integer> schemaIdMap = schemaCache.get(subject);
+      Map<Schema, Long> schemaIdMap = schemaCache.get(subject);
       if (schemaIdMap.containsKey(schema)) {
         return schemaIdMap.get(schema);
       } else {
-        int version = RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
+        long id = RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                                request, subject);
-        schemaIdMap.put(schema, version);
-        return version;
+        schemaIdMap.put(schema, id);
+        return id;
       }
     } else {
-      Map<Schema, Integer> schemaIdMap = new IdentityHashMap<Schema, Integer>();
-      int version = RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
-      schemaIdMap.put(schema, version);
+      Map<Schema, Long> schemaIdMap = new IdentityHashMap<Schema, Long>();
+      long id = RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+      schemaIdMap.put(schema, id);
       schemaCache.put(subject, schemaIdMap);
-      return version;
+      return id;
     }
   }
 
-  public synchronized Schema getByID(String subject, int version) throws IOException {
-    if (idCache.containsKey(subject)) {
-      Map<Integer, Schema> idSchemaMap = idCache.get(subject);
-      if (idSchemaMap.containsKey(version)) {
-        return idSchemaMap.get(version);
-      } else {
-        io.confluent.kafka.schemaregistry.rest.entities.Schema restSchema =
-            RestUtils.getVersion(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject, version);
-        Schema schema = new Schema.Parser().parse(restSchema.getName());
-        idSchemaMap.put(version, schema);
-        return schema;
-      }
+  public synchronized Schema getByID(long id) throws IOException {
+
+    if (idCache.containsKey(id)) {
+      return idCache.get(id);
     } else {
-      Map<Integer, Schema> idSchemaMap = new IdentityHashMap<Integer, Schema>();
       io.confluent.kafka.schemaregistry.rest.entities.Schema restSchema =
-          RestUtils.getVersion(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject, version);
-      Schema schema = new Schema.Parser().parse(restSchema.getName());
-      idSchemaMap.put(version, schema);
-      idCache.put(subject, idSchemaMap);
+            RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
+      Schema schema = parser.parse(restSchema.getName());
+      idCache.put(id, schema);
       return schema;
     }
   }

@@ -126,7 +126,7 @@ public class RestUtils {
 
 
 
-  private static int registerSchema(String baseUrl, Map<String, String> requestProperties,
+  private static long registerSchema(String baseUrl, Map<String, String> requestProperties,
                                     RegisterSchemaRequest registerSchemaRequest, String subject,
                                     boolean isDryRun)
       throws IOException {
@@ -139,21 +139,22 @@ public class RestUtils {
     RegisterSchemaResponse response =
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
                               requestProperties, REGISTER_RESPONSE_TYPE);
-    return response.getVersion();
+    return response.getId();
   }
 
-  public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
+  public static long registerSchema(String baseUrl, Map<String, String> requestProperties,
                                    RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException {
     return registerSchema(baseUrl, requestProperties, registerSchemaRequest, subject, false);
   }
 
-  public static Schema getVersion(String baseUrl, Map<String, String> requestProperties,
-                                  String subject, int version) throws IOException {
-    String url = String.format("%s/subjects/%s/versions/%d", baseUrl, subject, version);
+  public static Schema getId(String baseUrl, Map<String, String> requestProperties,
+                             long id) throws IOException {
+    String url = String.format("%s/subjects/%d", baseUrl, id);
 
     Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                             GET_SCHEMA_RESPONSE_TYPE);
     return response;
   }
+
 }

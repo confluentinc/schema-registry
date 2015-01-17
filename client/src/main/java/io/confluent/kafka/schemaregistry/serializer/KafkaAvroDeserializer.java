@@ -62,8 +62,8 @@ public class KafkaAvroDeserializer implements Decoder<Object>  {
 
   private Object deserialize(byte[] payload) throws IOException {
     ByteBuffer buffer = getByteBuffer(payload);
-    int id = buffer.getInt();
-    Schema schema = schemaRegistry.getByID("topic", id);
+    long id = buffer.getLong();
+    Schema schema = schemaRegistry.getByID(id);
     int start = buffer.position() + buffer.arrayOffset();
     int length = buffer.limit() - 5;
     DatumReader<Object> reader = new GenericDatumReader<Object>(schema);
