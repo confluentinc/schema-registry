@@ -16,10 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.tools;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.io.IOException;
-import java.util.Random;
 
 import io.confluent.common.utils.AbstractPerformanceTest;
 import io.confluent.common.utils.PerformanceStats;
@@ -68,8 +65,6 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
         ConfigUpdateRequest request = new ConfigUpdateRequest();
         request.setCompatibilityLevel(AvroCompatibilityLevel.NONE);
         RestUtils.updateConfig(this.baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, null);
-
-        String groupId = "schema-registry-perf-" + Integer.toString(new Random().nextInt(100000));
     }
 
     // sequential schema maker
@@ -100,7 +95,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
     }
 
     protected void close() {
-
+        // nothing to do
     }
 
     @Override
