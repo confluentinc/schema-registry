@@ -80,16 +80,14 @@ public class TestUtils {
   public static void waitUntilTrue(Callable<Boolean> callable, long timeoutMs, String errorMsg) {
     try {
       long startTime = System.currentTimeMillis();
+      Boolean state = false;
       do {
-        Boolean state = callable.call();
-        if (state) {
-          return;
-        }
+        state = callable.call();
         if (System.currentTimeMillis() > startTime + timeoutMs) {
           fail(errorMsg);
         }
         Thread.sleep(50);
-      } while (true);
+      } while (!state);
     } catch (Exception e) {
       fail("Unexpected exception: " + e);
     }

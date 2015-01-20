@@ -37,6 +37,7 @@ public class MasterElectorTest extends ClusterTestHarness {
 
   @Test
   public void testAutoFailover() throws Exception {
+    final int ID_BATCH_SIZE = 20;
     final String subject = "testTopic";
     List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(4);
 
@@ -129,7 +130,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     // registering a schema to the master
     final String thirdSchema = avroSchemas.get(2);
     final int thirdSchemaExpectedVersion = 3;
-    final int thirdSchemaExpectedId = 1000;
+    final int thirdSchemaExpectedId = ID_BATCH_SIZE;
     assertEquals("Registering a new schema to the master should succeed",
                  thirdSchemaExpectedId,
                  TestUtils.registerSchema(restApp1.restConnect, thirdSchema, subject));
@@ -160,7 +161,7 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     // register a schema to the new master
     final String fourthSchema = avroSchemas.get(3);
-    final int fourthSchemaExpectedId = 2000;
+    final int fourthSchemaExpectedId = 2 * ID_BATCH_SIZE;
     TestUtils.registerAndVerifySchema(restApp2.restConnect, fourthSchema,
                                       fourthSchemaExpectedId,
                                       subject);

@@ -206,6 +206,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
+  /**
+   * Allocate and lock the next batch of ids. Indicate a lock over the next batch by writing
+   * the upper bound of the batch to zookeeper.
+   *
+   * Return the start index of the next batch.
+   */
   private Long nextSchemaIdCounterBatch() throws SchemaRegistryException {
     // create ZOOKEEPER_SCHEMA_ID_COUNTER if it already doesn't exist
     long schemaIdCounterThreshold = 0L;
