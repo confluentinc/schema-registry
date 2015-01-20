@@ -32,12 +32,12 @@ import java.util.Map;
 
 import javax.ws.rs.WebApplicationException;
 
-import io.confluent.kafka.schemaregistry.rest.Versions;
+import io.confluent.kafka.schemaregistryclient.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistryclient.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.rest.entities.ErrorMessage;
 
 /**

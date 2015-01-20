@@ -25,7 +25,7 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 
-import io.confluent.kafka.schemaregistry.rest.Versions;
+import io.confluent.kafka.schemaregistryclient.rest.Versions;
 
 @Path("/")
 @Produces(

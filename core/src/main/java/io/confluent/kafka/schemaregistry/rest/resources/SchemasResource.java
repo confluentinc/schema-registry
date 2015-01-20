@@ -26,7 +26,6 @@ import java.util.Map;
 
 import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.NotFoundException;
@@ -40,10 +39,10 @@ import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.rest.RegisterSchemaForwardingAgent;
-import io.confluent.kafka.schemaregistry.rest.Versions;
+import io.confluent.kafka.schemaregistryclient.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
@@ -100,8 +99,8 @@ public class SchemasResource {
   }
 
   /**
-   * @throws {@link io.confluent.kafka.schemaregistry.rest.exceptions.InvalidAvroException,
-   *                io.confluent.kafka.schemaregistry.rest.exceptions.IncompatibleAvroSchemaException}
+   * @throws {@link io.confluent.kafka.schemaregistryclient.rest.exceptions.InvalidAvroException ,
+   *                IncompatibleAvroSchemaException}
    */
   @POST
   public void register(final @Suspended AsyncResponse asyncResponse,

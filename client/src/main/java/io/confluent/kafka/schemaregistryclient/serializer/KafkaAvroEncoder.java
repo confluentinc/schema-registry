@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.serializer;
+package io.confluent.kafka.schemaregistryclient.serializer;
 
 import org.apache.avro.generic.IndexedRecord;
 
-import io.confluent.kafka.schemaregistry.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistryclient.SchemaRegistryClient;
 import kafka.serializer.Encoder;
 import kafka.utils.VerifiableProperties;
 
@@ -29,12 +29,12 @@ import kafka.utils.VerifiableProperties;
 
 public class KafkaAvroEncoder extends AbstracKafkaAvroSerializer implements Encoder<Object>  {
 
-  private VerifiableProperties props = null;
-
   public KafkaAvroEncoder(VerifiableProperties props) {
-    this.props = props;
     if (props != null) {
-      String url = props.getProperty(propertyName);
+      String url = props.getProperty(SCHEMA_REGISTRY_URL);
+      if (url == null) {
+        throw new IllegalArgumentException("Missing schema registry url!");
+      }
       schemaRegistry = new SchemaRegistryClient(url);
     } else {
       throw new IllegalArgumentException("Props should not be null");

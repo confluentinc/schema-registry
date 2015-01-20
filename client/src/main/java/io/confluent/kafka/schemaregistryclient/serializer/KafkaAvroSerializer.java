@@ -13,18 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.serializer;
+package io.confluent.kafka.schemaregistryclient.serializer;
+
+import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistryclient.SchemaRegistryClient;
 
 public class KafkaAvroSerializer extends AbstracKafkaAvroSerializer implements Serializer<Object> {
 
   @Override
   public void configure(Map<String,?> configs, boolean isKey) {
-    Object url = configs.get(propertyName);
-    if (url == null ) {
+    Object url = configs.get(SCHEMA_REGISTRY_URL);
+    if (url == null) {
       throw new IllegalArgumentException("Missing Schema registry url!");
     }
     schemaRegistry = new SchemaRegistryClient((String) url);

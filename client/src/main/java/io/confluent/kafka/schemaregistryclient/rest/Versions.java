@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.rest;
+package io.confluent.kafka.schemaregistryclient.rest;
 
 import java.util.Arrays;
 import java.util.List;

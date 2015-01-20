@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.serializer;
+package io.confluent.kafka.schemaregistryclient.serializer;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
@@ -23,24 +23,14 @@ import org.apache.avro.io.DecoderFactory;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import io.confluent.kafka.schemaregistry.SchemaRegistryClient;
-import kafka.serializer.Decoder;
-import kafka.utils.VerifiableProperties;
+import io.confluent.kafka.schemaregistryclient.SchemaRegistryClient;
 
-public class KafkaAvroDeserializer implements Decoder<Object>  {
-
+public class AbstractKafkaAvroDeserializer {
   private static final byte MAGIC_BYTE = 0x0;
+  private static final int idSize = 8;
   private final DecoderFactory decoderFactory = DecoderFactory.get();
-  private final VerifiableProperties props;
-  private final String propertyName = "schema.registry.url";
-  private SchemaRegistryClient schemaRegistry;
-
-  public KafkaAvroDeserializer(VerifiableProperties props) {
-    this.props = props;
-    String url = props.getProperty(propertyName);
-    schemaRegistry = new SchemaRegistryClient(url);
-
-  }
+  protected final String SCHEMA_REGISTRY_URL = "schema.registry.url";
+  protected SchemaRegistryClient schemaRegistry;
 
   private ByteBuffer getByteBuffer(byte[] payload) {
     ByteBuffer buffer = ByteBuffer.wrap(payload);
@@ -50,22 +40,12 @@ public class KafkaAvroDeserializer implements Decoder<Object>  {
     return buffer;
   }
 
-  @Override
-  public Object fromBytes(byte[] bytes){
-    try {
-      return deserialize(bytes);
-    } catch (IOException e) {
-
-    }
-    return null;
-  }
-
-  private Object deserialize(byte[] payload) throws IOException {
+  protected Object deserialize(byte[] payload) throws IOException {
     ByteBuffer buffer = getByteBuffer(payload);
     long id = buffer.getLong();
     Schema schema = schemaRegistry.getByID(id);
     int start = buffer.position() + buffer.arrayOffset();
-    int length = buffer.limit() - 5;
+    int length = buffer.limit() - 1 - idSize;
     DatumReader<Object> reader = new GenericDatumReader<Object>(schema);
     Object object = reader.read(null,  decoderFactory.binaryDecoder(buffer.array(),start, length, null));
     return object;

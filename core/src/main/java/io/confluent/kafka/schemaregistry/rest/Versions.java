@@ -34,8 +34,9 @@ public class Versions {
   public static final String JSON_WEIGHTED = JSON + "; qs=0.5";
 
   public static final List<String> PREFERRED_RESPONSE_TYPES = Arrays
-      .asList(Versions.SCHEMA_REGISTRY_V1_JSON, Versions.SCHEMA_REGISTRY_DEFAULT_JSON,
-              Versions.JSON);
+      .asList(
+          io.confluent.kafka.schemaregistryclient.rest.Versions.SCHEMA_REGISTRY_V1_JSON, io.confluent.kafka.schemaregistryclient.rest.Versions.SCHEMA_REGISTRY_DEFAULT_JSON,
+              io.confluent.kafka.schemaregistryclient.rest.Versions.JSON);
 
   // This type is completely generic and carries no actual information about the type of data, but
   // it is the default for request entities if no content type is specified. Well behaving users

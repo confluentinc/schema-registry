@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry;
+package io.confluent.kafka.schemaregistryclient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,11 +31,11 @@ import java.util.Map;
 
 import javax.ws.rs.WebApplicationException;
 
-import io.confluent.kafka.schemaregistry.rest.Versions;
-import io.confluent.kafka.schemaregistry.rest.entities.ErrorMessage;
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistryclient.rest.Versions;
+import io.confluent.kafka.schemaregistryclient.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistryclient.rest.entities.Schema;
+import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaResponse;
 
 /**
  * Helper methods for making http client requests to the schema registry servlet.

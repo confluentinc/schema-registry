@@ -108,7 +108,6 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
       return false;
     }
 
-
     return true;
   }
 

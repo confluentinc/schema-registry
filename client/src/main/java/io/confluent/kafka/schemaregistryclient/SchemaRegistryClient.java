@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry;
+package io.confluent.kafka.schemaregistryclient;
 
 import org.apache.avro.Schema;
 
@@ -22,7 +22,7 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaRequest;
 
 public class SchemaRegistryClient {
 
@@ -66,9 +66,10 @@ public class SchemaRegistryClient {
     if (idCache.containsKey(id)) {
       return idCache.get(id);
     } else {
-      io.confluent.kafka.schemaregistry.rest.entities.Schema restSchema =
+      io.confluent.kafka.schemaregistryclient.rest.entities.Schema restSchema =
             RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
-      Schema schema = parser.parse(restSchema.getName());
+      System.out.println(restSchema.getSchema());
+      Schema schema = parser.parse(restSchema.getSchema());
       idCache.put(id, schema);
       return schema;
     }

@@ -25,7 +25,7 @@ import java.util.concurrent.Callable;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaRequest;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
