@@ -233,6 +233,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     long start = System.currentTimeMillis();
     do {
       Set<String> topics = new HashSet<String>();
+      topics.add(topic);
       scala.collection.mutable.Set<String> topicsScalaSet = JavaConversions.asScalaSet(topics);
       TopicMetadataResponse topicMetadataResponse =
           new kafka.javaapi.TopicMetadataResponse(
@@ -243,19 +244,22 @@ public class KafkaStore<K, V> implements Store<K, V> {
       }
 
       TopicMetadata topicMetadata = topicMetadataResponse.topicsMetadata().get(0);
-      Broker leader = topicMetadata.partitionsMetadata().get(0).leader();
-      if (leader != null) {
-        try {
-          SimpleConsumer simpleConsumer = new SimpleConsumer(
-              leader.host(), leader.port(), timeoutMs, SOCKET_BUFFER_SIZE, CLIENT_ID);
-          TopicAndPartition topicAndPartition = new TopicAndPartition(topic, 0);
-          return simpleConsumer.earliestOrLatestOffset(
-              topicAndPartition, LATEST_OFFSET, CONSUMER_ID);
-        } catch (Exception e) {
-          log.warn("Exception while fetch the latest offset", e);
+      // only try to proceed if there weren't other, possibly temporary errors, e.g. leader election
+      if (topicMetadata.errorCode() == 0) {
+        Broker leader = topicMetadata.partitionsMetadata().get(0).leader();
+        if (leader != null) {
+          try {
+            SimpleConsumer simpleConsumer = new SimpleConsumer(
+                leader.host(), leader.port(), timeoutMs, SOCKET_BUFFER_SIZE, CLIENT_ID);
+            TopicAndPartition topicAndPartition = new TopicAndPartition(topic, 0);
+            return simpleConsumer.earliestOrLatestOffset(
+                topicAndPartition, LATEST_OFFSET, CONSUMER_ID);
+          } catch (Exception e) {
+            log.warn("Exception while fetch the latest offset", e);
+          }
         }
       }
-
+      
       try {
         // backoff a bit
         Thread.sleep(10);
