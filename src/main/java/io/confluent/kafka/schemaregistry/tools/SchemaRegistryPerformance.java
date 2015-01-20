@@ -38,40 +38,21 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
 
     public static void main(String[] args) throws Exception {
 
-//        if (args.length < 1) {
-//            System.out.println("Usage: java " + SchemaRegistryPerformance.class.getName() + "url");
-//        }
+        if (args.length < 4) {
+            System.out.println(
+                    "Usage: java " + SchemaRegistryPerformance.class.getName() + " schema_registry_url"
+                    + " subject num_schemas target_schemas_per_sec"
+            );
+            System.exit(1);
+        }
 
-        // /opt/kafka/bin/kafka-run-class.sh org.apache.kafka.clients.tools.ProducerPerformance test-rep-one 50000000 100 -1 bootstrap.servers=worker2:9092
-
-        String baseUrl = "http://localhost:8080";
-        String subject = "testSubject";
-        int numSchemas = 5000;
-        int targetSchemasPerSec = 1000;
-
-
-
-
-//        if (args.length < 4) {
-//            System.out.println(
-//                    "Usage: java " + SchemaRegistryPerformance.class.getName() + " schema_registry_url"
-//                    + " subject_name num_records target_schemas_per_sec"
-//            );
-//            System.exit(1);
-//        }
-//
-//        String baseUrl = args[0];
-//        String topic = args[1];
-//        int numRecords = Integer.parseInt(args[2]);
-//        int throughput = Integer.parseInt(args[3]);
+        String baseUrl = args[0];
+        String subject = args[1];
+        int numSchemas = Integer.parseInt(args[2]);
+        int targetSchemasPerSec = Integer.parseInt(args[3]);
 
         SchemaRegistryPerformance perf = new SchemaRegistryPerformance(baseUrl, subject, numSchemas, targetSchemasPerSec);
-
-        // We need an approximate # of iterations per second, but we don't know how many records per request we'll receive
-        // so we don't know how many iterations per second we need to hit the target rate. Get an approximate value using
-        // the default max # of records per request the server will return.
-
-        perf.run(targetSchemasPerSec); // target iterations per second
+        perf.run(targetSchemasPerSec);
         perf.close();
     }
 
