@@ -42,7 +42,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
-    this.config = config;
+    super(config);
   }
 
   @Override
@@ -59,11 +59,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new ConfigResource(schemaRegistry));
     config.register(new SubjectsResource(schemaRegistry));
     config.register(SchemasResource.class);
-  }
-
-  @Override
-  public SchemaRegistryConfig configure() {
-    return config;
   }
 
   @Override
