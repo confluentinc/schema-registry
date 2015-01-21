@@ -263,6 +263,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   @Override
   public void close() {
+    log.info("Shutting down schema registry");
     kafkaStore.close();
     if (masterElector != null) {
       masterElector.close();

@@ -66,6 +66,11 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     return config;
   }
 
+  @Override
+  public void onShutdown() {
+    schemaRegistry.close();
+  }
+
   // for testing purpose only
   public KafkaSchemaRegistry schemaRegistry() {
     return schemaRegistry;
