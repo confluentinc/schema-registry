@@ -145,6 +145,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   private void createSchemaTopic() throws StoreInitializationException {
     if (AdminUtils.topicExists(zkClient, topic)) {
+      verifySchemaTopic();
       return;
     }
     int numLiveBrokers = brokerSeq.size();
@@ -152,6 +153,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreInitializationException("No live Kafka brokers");
     }
     int schemaTopicReplicationFactor = Math.min(numLiveBrokers, desiredReplicationFactor);
+    if (schemaTopicReplicationFactor < desiredReplicationFactor) {
+      log.warn("Creating the schema topic " + topic + " using a replication factor of " +
+               schemaTopicReplicationFactor + ", which is less than the desired one of "
+               + desiredReplicationFactor + ". If this is a production environment, it's " +
+               "crucial to add more brokers and increase the replication factor of the topic.");
+    }
     Properties schemaTopicProps = new Properties();
     schemaTopicProps.put(LogConfig.CleanupPolicyProp(), "compact");
 
@@ -159,6 +166,35 @@ public class KafkaStore<K, V> implements Store<K, V> {
       AdminUtils.createTopic(zkClient, topic, 1, schemaTopicReplicationFactor, schemaTopicProps);
     } catch (TopicExistsException e) {
       // This is ok.
+    }
+  }
+
+  private void verifySchemaTopic() {
+    Set<String> topics = new HashSet<String>();
+    topics.add(topic);
+
+    // check # partition and the replication factor
+    scala.collection.Map partitionAssignment = ZkUtils.getPartitionAssignmentForTopics(
+        zkClient, JavaConversions.asScalaSet(topics).toSeq())
+        .get(topic).get();
+
+    if (partitionAssignment.size() != 1) {
+      log.warn("The schema topic " + topic + " should have only 1 partition.");
+    }
+
+    if ( ((Seq) partitionAssignment.get(0).get()).size() < desiredReplicationFactor) {
+      log.warn("The replication factor of the schema topic " + topic + " is less than the " +
+               "desired one of " + desiredReplicationFactor + ". If this is a production " +
+               "environment, it's crucial to add more brokers and increase the replication " +
+               "factor of the topic.");
+    }
+
+    // check the retention policy
+    Properties prop = AdminUtils.fetchTopicConfig(zkClient, topic);
+    String retentionPolicy = prop.getProperty(LogConfig.CleanupPolicyProp());
+    if (retentionPolicy == null || "compact".compareTo(retentionPolicy) != 0) {
+      log.warn("The retention policy of the schema topic " + topic + " may be incorrect. " +
+               "Please configure it with compact.");
     }
   }
 

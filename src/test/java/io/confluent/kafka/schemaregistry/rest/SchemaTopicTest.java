@@ -43,13 +43,13 @@ public class SchemaTopicTest extends ClusterTestHarness {
     topics.add(KAFKASTORE_TOPIC);
 
     // check # partition and the replication factor
-    Map partionAssignment = ZkUtils.getPartitionAssignmentForTopics(
+    Map partitionAssignment = ZkUtils.getPartitionAssignmentForTopics(
         zkClient, JavaConversions.asScalaSet(topics).toSeq())
         .get(KAFKASTORE_TOPIC).get();
     assertEquals("There should be only 1 partition in the schema topic",
                  1,
-                 partionAssignment.size());
-    Seq replicas = (Seq) partionAssignment.get(0).get();
+                 partitionAssignment.size());
+    Seq replicas = (Seq) partitionAssignment.get(0).get();
     assertEquals("There should be 3 replicas in partition 0 in the schema topic",
                  3,
                  replicas.size());
