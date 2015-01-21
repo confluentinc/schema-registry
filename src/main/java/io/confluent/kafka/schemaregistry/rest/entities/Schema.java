@@ -29,18 +29,19 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   private String name;
   @Min(1)
   private Integer version;
+  @Min(0)
+  private Long id;
   @NotEmpty
   private String schema;
-  private boolean deprecated = false;
 
   public Schema(@JsonProperty("name") String name,
                 @JsonProperty("version") Integer version,
-                @JsonProperty("schema") String schema,
-                @JsonProperty("deprecated") boolean deprecated) {
+                @JsonProperty("id") Long id,
+                @JsonProperty("schema") String schema) {
     this.name = name;
     this.version = version;
+    this.id = id;
     this.schema = schema;
-    this.deprecated = deprecated;
   }
 
   @JsonProperty("name")
@@ -53,16 +54,6 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     this.name = name;
   }
 
-  @JsonProperty("schema")
-  public String getSchema() {
-    return this.schema;
-  }
-
-  @JsonProperty("schema")
-  public void setSchema(String schema) {
-    this.schema = schema;
-  }
-
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
@@ -73,14 +64,24 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     this.version = version;
   }
 
-  @JsonProperty("deprecated")
-  public boolean getDeprecated() {
-    return this.deprecated;
+  @JsonProperty("id")
+  public Long getId() {
+    return this.id;
   }
 
-  @JsonProperty("deprecated")
-  public void setDeprecated(boolean deprecated) {
-    this.deprecated = deprecated;
+  @JsonProperty("id")
+  public void setId(Long id) {
+    this.id = id;
+  }
+
+  @JsonProperty("schema")
+  public String getSchema() {
+    return this.schema;
+  }
+
+  @JsonProperty("schema")
+  public void setSchema(String schema) {
+    this.schema = schema;
   }
 
   @Override
@@ -97,15 +98,16 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     if (!this.name.equals(that.name)) {
       return false;
     }
-    if (!this.schema.equals(that.schema)) {
-      return false;
-    }
     if (!this.version.equals(that.version)) {
       return false;
     }
-    if (this.deprecated != that.deprecated) {
+    if (!this.id.equals(that.getId())) {
       return false;
     }
+    if (!this.schema.equals(that.schema)) {
+      return false;
+    }
+
 
     return true;
   }
@@ -113,9 +115,9 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   @Override
   public int hashCode() {
     int result = name.hashCode();
-    result = 31 * result + schema.hashCode();
     result = 31 * result + version;
-    result = 31 * result + new Boolean(deprecated).hashCode();
+    result = 31 * result + id.intValue();
+    result = 31 * result + schema.hashCode();
     return result;
   }
 
@@ -123,9 +125,9 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("{name=" + this.name + ",");
-    sb.append("schema=" + this.schema + ",");
     sb.append("version=" + this.version + ",");
-    sb.append("deprecated=" + this.deprecated + "}");
+    sb.append("id=" + this.id + ",");
+    sb.append("schema=" + this.schema + "}");
     return sb.toString();
   }
 

@@ -183,24 +183,18 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   }
 
   public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) {
-    while (true) {
-      try {
-        offsetUpdateLock.lock();
-        if (offsetInSchemasTopic < offset) {
-          try {
-            offsetReachedThreshold.await(timeout, timeUnit);
-          } catch (InterruptedException e) {
-            log.debug("Interrupted while waiting for the background store reader thread to reach"
-                      + " the specified offset: " + offset, e);
-          }
-        } else {
-          log.trace("Kafka store reader thread reached offset " + offsetInSchemasTopic + " for "
-                    + "topic: " + topic);
-          return;
+    try {
+      offsetUpdateLock.lock();
+      while (offsetInSchemasTopic < offset) {
+        try {
+          offsetReachedThreshold.await(timeout, timeUnit);
+        } catch (InterruptedException e) {
+          log.debug("Interrupted while waiting for the background store reader thread to reach"
+                    + " the specified offset: " + offset, e);
         }
-      } finally {
-        offsetUpdateLock.unlock();
       }
+    } finally {
+      offsetUpdateLock.unlock();
     }
   }
 }

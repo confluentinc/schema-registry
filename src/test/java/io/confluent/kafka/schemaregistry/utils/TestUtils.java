@@ -18,14 +18,12 @@ package io.confluent.kafka.schemaregistry.utils;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 
@@ -82,27 +80,45 @@ public class TestUtils {
   public static void waitUntilTrue(Callable<Boolean> callable, long timeoutMs, String errorMsg) {
     try {
       long startTime = System.currentTimeMillis();
+      Boolean state = false;
       do {
-        Boolean state = callable.call();
-        if (state) {
-          return;
-        }
+        state = callable.call();
         if (System.currentTimeMillis() > startTime + timeoutMs) {
           fail(errorMsg);
         }
         Thread.sleep(50);
-      } while (true);
+      } while (!state);
     } catch (Exception e) {
       fail("Unexpected exception: " + e);
     }
   }
 
-  public static int registerSchema(String baseUrl, String schemaString, String subject)
+  public static long registerSchema(String baseUrl, String schemaString, String subject)
       throws IOException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
 
-    return RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+    return RestUtils.registerSchema(
+        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+  }
+
+  public static long registerDryRun(String baseUrl, String schemaString, String subject)
+      throws IOException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+
+    return RestUtils.registerSchemaDryRun(
+        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+  }
+
+  /** Helper method which checks the number of versions registered under the given subject. */
+  public static void checkNumberOfVersions(String baseUrl, int expected, String subject) throws IOException {
+    List<Integer> versions = RestUtils.getAllVersions(baseUrl,
+                                                      RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                                      subject);
+    assertEquals("Expected " + expected + " registered versions under subject " + subject +
+                 ", but found " + versions.size(),
+                 expected, versions.size());
   }
 
   public static void changeCompatibility(String baseUrl,
@@ -119,16 +135,16 @@ public class TestUtils {
    * Register a new schema and verify that it can be found on the expected version.
    */
   public static void registerAndVerifySchema(String baseUrl, String schemaString,
-                                             int expectedVersion, String subject)
-      throws IOException {
+                                             long expectedId, String subject)
+  throws IOException {
     assertEquals("Registering a new schema should succeed",
-                 expectedVersion,
+                 expectedId,
                  TestUtils.registerSchema(baseUrl, schemaString, subject));
 
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",
                  schemaString,
-                 RestUtils.getVersion(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject, expectedVersion)
+                 RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
                      .getSchema());
   }
 
