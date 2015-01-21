@@ -55,8 +55,6 @@ public class RestApp {
   public void stop() throws Exception {
     restServer.stop();
     restServer.join();
-    //TODO: hack to close the underlying resources during shutdown; need to fix rest util
-    restApp.schemaRegistry().close();
   }
 
   public boolean isMaster() {

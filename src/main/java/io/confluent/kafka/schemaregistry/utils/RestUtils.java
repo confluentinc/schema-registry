@@ -45,8 +45,11 @@ import io.confluent.rest.entities.ErrorMessage;
  */
 public class RestUtils {
 
-  /** Minimum header data necessary for using the Schema Registry REST api. */
+  /**
+   * Minimum header data necessary for using the Schema Registry REST api.
+   */
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
+
   static {
     DEFAULT_REQUEST_PROPERTIES = new HashMap<String, String>();
     DEFAULT_REQUEST_PROPERTIES.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
@@ -71,20 +74,20 @@ public class RestUtils {
   private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
   /**
-   * @param baseUrl HTTP connection will be established with this url.
-   * @param method HTTP method ("GET", "POST", "PUT", etc.)
-   * @param requestBodyData Bytes to be sent in the request body.
+   * @param baseUrl           HTTP connection will be established with this url.
+   * @param method            HTTP method ("GET", "POST", "PUT", etc.)
+   * @param requestBodyData   Bytes to be sent in the request body.
    * @param requestProperties HTTP header properties.
-   * @param responseFormat Expected format of the response to the HTTP request.
-   * @param <T> The type of the deserialized response to the HTTP request.
+   * @param responseFormat    Expected format of the response to the HTTP request.
+   * @param <T>               The type of the deserialized response to the HTTP request.
    * @return The deserialized response to the HTTP request, or null if no data is expected.
-   * @throws IOException
    */
   public static <T> T httpRequest(String baseUrl, String method, byte[] requestBodyData,
                                   Map<String, String> requestProperties,
                                   TypeReference<T> responseFormat) throws IOException {
     log.debug(String.format("Sending %s with input %s to %s",
-                            method, requestBodyData == null ? "null" : new String(requestBodyData), baseUrl));
+                            method, requestBodyData == null ? "null" : new String(requestBodyData),
+                            baseUrl));
 
     HttpURLConnection connection = null;
     try {
@@ -135,12 +138,12 @@ public class RestUtils {
 
   }
 
-  private static int registerSchema(String baseUrl, Map<String, String> requestProperties,
-                                   RegisterSchemaRequest registerSchemaRequest, String subject,
-                                   boolean isDryRun)
-    throws IOException {
-
+  public static long registerSchema(String baseUrl, Map<String, String> requestProperties,
+                                    RegisterSchemaRequest registerSchemaRequest, String subject,
+                                    boolean isDryRun)
+      throws IOException {
     String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
+
     if (isDryRun) {
       url += "?dry_run=true";
     }
@@ -148,17 +151,17 @@ public class RestUtils {
     RegisterSchemaResponse response =
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
                               requestProperties, REGISTER_RESPONSE_TYPE);
-    return response.getVersion();
+    return response.getId();
   }
 
-  public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
-                                   RegisterSchemaRequest registerSchemaRequest, String subject)
+  public static long registerSchema(String baseUrl, Map<String, String> requestProperties,
+                                    RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException {
     return registerSchema(baseUrl, requestProperties, registerSchemaRequest, subject, false);
   }
 
-  public static int registerSchemaDryRun(String baseUrl, Map<String, String> requestProperties,
-                                     RegisterSchemaRequest registerSchemaRequest, String subject)
+  public static long registerSchemaDryRun(String baseUrl, Map<String, String> requestProperties,
+                                          RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException {
     return registerSchema(baseUrl, requestProperties, registerSchemaRequest, subject, true);
   }
@@ -176,13 +179,22 @@ public class RestUtils {
   public static Config getConfig(String baseUrl,
                                  Map<String, String> requestProperties,
                                  String subject)
-  throws IOException {
+      throws IOException {
     String url = subject != null ? String.format("%s/config/%s", baseUrl, subject) :
                  String.format("%s/config", baseUrl);
 
     Config config =
         RestUtils.httpRequest(url, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
     return config;
+  }
+
+  public static Schema getId(String baseUrl, Map<String, String> requestProperties,
+                             long id) throws IOException {
+    String url = String.format("%s/subjects/%d", baseUrl, id);
+
+    Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
+                                            GET_SCHEMA_RESPONSE_TYPE);
+    return response;
   }
 
   public static Schema getVersion(String baseUrl, Map<String, String> requestProperties,
@@ -210,12 +222,5 @@ public class RestUtils {
     List<String> response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                                   ALL_TOPICS_RESPONSE_TYPE);
     return response;
-  }
-
-  public static void deprecateSchema(String baseUrl, Map<String, String> requestProperties,
-                               String subject, int version) throws IOException {
-    String url = String.format("%s/subjects/%s/versions/%d", baseUrl, subject, version);
-
-    RestUtils.httpRequest(url, "DELETE", null, requestProperties, null);
   }
 }
