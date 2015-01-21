@@ -40,12 +40,15 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationExcepti
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import kafka.admin.AdminUtils;
 import kafka.client.ClientUtils;
 import kafka.cluster.Broker;
 import kafka.common.TopicAndPartition;
+import kafka.common.TopicExistsException;
 import kafka.consumer.SimpleConsumer;
 import kafka.javaapi.TopicMetadata;
 import kafka.javaapi.TopicMetadataResponse;
+import kafka.log.LogConfig;
 import kafka.utils.ZkUtils;
 import scala.collection.JavaConversions;
 import scala.collection.Seq;
@@ -58,9 +61,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private static final long LATEST_OFFSET = -1;
   private static final int CONSUMER_ID = -1;
 
-
   private final String kafkaClusterZkUrl;
   private final String topic;
+  private final int desiredReplicationFactor;
   private final String groupId;
   private final StoreUpdateHandler<K, V> storeUpdateHandler;
   private final Serializer<K, V> serializer;
@@ -68,6 +71,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final AtomicBoolean initialized = new AtomicBoolean(false);
   private final int timeout;
   private final Seq<Broker> brokerSeq;
+  private final ZkClient zkClient;
   private KafkaProducer producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
 
@@ -79,6 +83,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
+    this.desiredReplicationFactor =
+        config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
     this.groupId = String.format("schema-registry-%s-%d",
                                  config.getString(SchemaRegistryConfig.ADVERTISED_HOST_CONFIG),
                                  config.getInt(SchemaRegistryConfig.PORT_CONFIG));
@@ -93,7 +99,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
                                          Integer.MIN_VALUE, this.storeUpdateHandler,
                                          serializer, this.localStore);
     this.brokerSeq = ZkUtils.getAllBrokersInCluster(zkClient);
-
+    this.zkClient = zkClient;
   }
 
   @Override
@@ -102,6 +108,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
     }
+
+    // create the schema topic if needed
+    createSchemaTopic(zkClient, brokerSeq.size());
 
     // set the producer properties
     List<Broker> brokers = JavaConversions.seqAsJavaList(brokerSeq);
@@ -131,6 +140,28 @@ public class KafkaStore<K, V> implements Store<K, V> {
     if (!isInitialized) {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
+    }
+  }
+
+  private void createSchemaTopic(ZkClient zkClient, int numLiveBrokers)
+      throws StoreInitializationException {
+    if (AdminUtils.topicExists(zkClient, topic)) {
+      return;
+    }
+
+    if (numLiveBrokers <= 0) {
+      throw new StoreInitializationException("No live Kafka brokers");
+    }
+
+    int schemaTopicReplicationFactor = Math.min(numLiveBrokers, desiredReplicationFactor);
+
+    Properties schemaTopicProps = new Properties();
+    schemaTopicProps.put(LogConfig.CleanupPolicyProp(), "compact");
+
+    try {
+      AdminUtils.createTopic(zkClient, topic, 1, schemaTopicReplicationFactor, schemaTopicProps);
+    } catch (TopicExistsException e) {
+      // This is ok.
     }
   }
 
