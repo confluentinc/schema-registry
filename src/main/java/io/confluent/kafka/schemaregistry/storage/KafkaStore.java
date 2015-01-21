@@ -110,7 +110,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
 
     // create the schema topic if needed
-    createSchemaTopic(zkClient, brokerSeq.size());
+    createSchemaTopic();
 
     // set the producer properties
     List<Broker> brokers = JavaConversions.seqAsJavaList(brokerSeq);
@@ -143,18 +143,15 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
   }
 
-  private void createSchemaTopic(ZkClient zkClient, int numLiveBrokers)
-      throws StoreInitializationException {
+  private void createSchemaTopic() throws StoreInitializationException {
     if (AdminUtils.topicExists(zkClient, topic)) {
       return;
     }
-
+    int numLiveBrokers = brokerSeq.size();
     if (numLiveBrokers <= 0) {
       throw new StoreInitializationException("No live Kafka brokers");
     }
-
     int schemaTopicReplicationFactor = Math.min(numLiveBrokers, desiredReplicationFactor);
-
     Properties schemaTopicProps = new Properties();
     schemaTopicProps.put(LogConfig.CleanupPolicyProp(), "compact");
 
