@@ -39,7 +39,6 @@ import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 
-import io.confluent.kafka.schemaregistry.rest.RegisterSchemaForwardingAgent;
 import io.confluent.kafka.schemaregistry.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
@@ -111,18 +110,16 @@ public class SchemasResource {
                        @QueryParam("dry_run") String dryRun,
                        RegisterSchemaRequest request) {
 
-    Map<String, String> requestProperties = new HashMap<String, String>();
-    requestProperties.put("Content-Type", contentType);
-    requestProperties.put("Accept", accept);
-    RegisterSchemaForwardingAgent forwardingAgent =
-        new RegisterSchemaForwardingAgent(requestProperties, subjectName, request);
+    Map<String, String> headerProperties = new HashMap<String, String>();
+    headerProperties.put("Content-Type", contentType);
+    headerProperties.put("Accept", accept);
     Schema schema = new Schema(subjectName, 0, request.getSchema(), false);
     int version = -1;
     // note that parseBoolean(null) returns false which is what we want
     boolean isDryRun = Boolean.parseBoolean(dryRun);
 
     try {
-      version = schemaRegistry.register(subjectName, schema, forwardingAgent, isDryRun);
+      version = schemaRegistry.register(subjectName, schema, headerProperties, isDryRun);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }

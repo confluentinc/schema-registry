@@ -19,19 +19,21 @@ import org.I0Itec.zkclient.ZkClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.rest.RegisterSchemaForwardingAgent;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.exceptions.IncompatibleAvroSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.InvalidAvroException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
@@ -39,6 +41,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
+import io.confluent.kafka.schemaregistry.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 
@@ -129,7 +132,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   @Override
   public int register(String subject,
                       Schema schema,
-                      RegisterSchemaForwardingAgent forwardingAgent,
+                      Map<String, String> headerProperties,
                       boolean isDryRun)
       throws SchemaRegistryException {
     synchronized (masterLock) {
@@ -171,12 +174,32 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
-          return forwardingAgent.forward(masterIdentity.getHost(), masterIdentity.getPort());
+          return forwardToMaster(subject, schema.getSchema(), masterIdentity.getHost(),
+                                 masterIdentity.getPort(), headerProperties);
         } else {
           throw new SchemaRegistryException("Register schema request failed since master is "
                                             + "unknown");
         }
       }
+    }
+  }
+
+  private int forwardToMaster(String subject, String schemaString, String host, int port,
+                              Map<String, String> headerProperties) throws SchemaRegistryException {
+    String baseUrl = String.format("http://%s:%d", host, port);
+    RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
+    registerSchemaRequest.setSchema(schemaString);
+    log.debug(String.format("Forwarding registering schema request %s to %s",
+                            registerSchemaRequest, baseUrl));
+    try {
+      int version = RestUtils.registerSchema(baseUrl, headerProperties, registerSchemaRequest,
+                                             subject);
+      return version;
+    } catch (IOException e) {
+      throw new SchemaRegistryException(
+          String.format("Unexpected error while forwarding the registering schema request %s to %s",
+                        registerSchemaRequest, baseUrl),
+          e);
     }
   }
 
