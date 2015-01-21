@@ -37,38 +37,40 @@ public class SchemaRegistryClient {
     idCache = new HashMap<Long, Schema>();
   }
 
-  public synchronized long register(Schema schema, String subject) throws IOException {
+  private RegisterSchemaRequest createRequest(Schema schema) {
     String schemaString = schema.toString();
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
+    return request;
+  }
 
+  public synchronized long register(Schema schema, String subject) throws IOException {
+
+    Map<Schema, Long> schemaIdMap;
     if (schemaCache.containsKey(subject)) {
-      Map<Schema, Long> schemaIdMap = schemaCache.get(subject);
-      if (schemaIdMap.containsKey(schema)) {
-        return schemaIdMap.get(schema);
-      } else {
-        long id = RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                               request, subject);
-        schemaIdMap.put(schema, id);
-        return id;
-      }
+      schemaIdMap = schemaCache.get(subject);
     } else {
-      Map<Schema, Long> schemaIdMap = new IdentityHashMap<Schema, Long>();
-      long id = RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
-      schemaIdMap.put(schema, id);
+      schemaIdMap = new IdentityHashMap<Schema, Long>();
       schemaCache.put(subject, schemaIdMap);
+    }
+
+    if (schemaIdMap.containsKey(schema)) {
+      return schemaIdMap.get(schema);
+    } else {
+      RegisterSchemaRequest request = createRequest(schema);
+      long id = RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                               request, subject);
+      schemaIdMap.put(schema, id);
       return id;
     }
   }
 
   public synchronized Schema getByID(long id) throws IOException {
-
     if (idCache.containsKey(id)) {
       return idCache.get(id);
     } else {
       io.confluent.kafka.schemaregistryclient.rest.entities.Schema restSchema =
             RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
-      System.out.println(restSchema.getSchema());
       Schema schema = parser.parse(restSchema.getSchema());
       idCache.put(id, schema);
       return schema;

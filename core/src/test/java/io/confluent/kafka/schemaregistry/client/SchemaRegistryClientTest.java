@@ -107,11 +107,13 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
   private class AvroNewProducer implements Runnable {
     private final KafkaProducer producer;
     private final String topic;
+    private final int num;
 
-    public AvroNewProducer(String topic, String brokers) {
+    public AvroNewProducer(String topic, int num) {
       this.topic = topic;
+      this.num = num;
       Properties props = new Properties();
-      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
+      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
       props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
       props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringSerializer.class);
       props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, io.confluent.kafka.schemaregistryclient.serializer.KafkaAvroSerializer.class);
@@ -138,7 +140,7 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
       ProducerRecord<String, String> stringRecord = new ProducerRecord<String, String>(topic, "abc");
       ProducerRecord<String, byte[]> bytesRecord = new ProducerRecord<String, byte[]>(topic, "abc".getBytes());
       for(int i = 0; i < num; ++i) {
-        // producer.send(nullRecord);
+        producer.send(nullRecord);
         producer.send(booleanRecord);
         producer.send(intRecord);
         producer.send(longRecord);
@@ -151,8 +153,8 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
 
     @Override
     public void run() {
-      produceIndexedRecord(1);
-      producePrimitives(1);
+      produceIndexedRecord(num);
+      producePrimitives(num);
       producer.close();
     }
   }
@@ -161,14 +163,16 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
     private final kafka.javaapi.producer.Producer<String, Object> producer;
     private final String topic;
     private final Properties props = new Properties();
+    private final int num;
 
-    public AvroProducer(String topic) {
+    public AvroProducer(String topic, int num) {
+      this.topic = topic;
+      this.num = num;
       props.put("serializer.class", "io.confluent.kafka.schemaregistryclient.serializer.KafkaAvroEncoder");
       props.put("key.serializer.class", "kafka.serializer.StringEncoder");
       props.put("metadata.broker.list", brokerList);
       props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
       producer = new kafka.javaapi.producer.Producer<String, Object>(new kafka.producer.ProducerConfig(props));
-      this.topic = topic;
     }
 
     private void produceIndexedRecord(int num) {
@@ -183,7 +187,7 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
 
     @Override
     public void run() {
-      produceIndexedRecord(1);
+      produceIndexedRecord(num);
       producer.close();
     }
   }
@@ -193,7 +197,7 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
   public void testAvroOldProducer() {
     recordList.clear();
 
-    AvroProducer producer = new AvroProducer(topic);
+    AvroProducer producer = new AvroProducer(topic, 1);
     Thread producerThread = new Thread(producer);
     producerThread.start();
 
@@ -247,7 +251,7 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
   public void testAvroNewProducer() {
     recordList.clear();
 
-    AvroNewProducer newProducer = new AvroNewProducer(topic, brokerList);
+    AvroNewProducer newProducer = new AvroNewProducer(topic, 1);
     Thread producerThread = new Thread(newProducer);
     producerThread.start();
 
@@ -298,5 +302,5 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
       }
     }
   }
-
 }
+
