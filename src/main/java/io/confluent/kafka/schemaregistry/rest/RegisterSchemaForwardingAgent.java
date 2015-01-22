@@ -51,12 +51,12 @@ public class RegisterSchemaForwardingAgent {
    * @return The id of the schema if registration is successful. Otherwise, throw a
    * WebApplicationException.
    */
-  public long forward(String host, int port) throws SchemaRegistryException {
+  public int forward(String host, int port) throws SchemaRegistryException {
     String baseUrl = String.format("http://%s:%d", host, port);
     log.debug(String.format("Forwarding registering schema request %s to %s",
                             registerSchemaRequest, baseUrl));
     try {
-      long id = RestUtils.registerSchema(baseUrl, requestProperties, registerSchemaRequest,
+      int id = RestUtils.registerSchema(baseUrl, requestProperties, registerSchemaRequest,
                                          subject);
       return id;
     } catch (IOException e) {
