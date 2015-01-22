@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.storage;
 import java.util.Iterator;
 import java.util.Set;
 
-import io.confluent.kafka.schemaregistry.rest.RegisterSchemaForwardingAgent;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
@@ -27,9 +26,8 @@ public interface SchemaRegistry {
   void init() throws SchemaRegistryException;
 
   int register(String subject,
-                Schema schema,
-                RegisterSchemaForwardingAgent forwardingAgent,
-                boolean isDryRun)
+               Schema schema,
+               boolean isDryRun)
       throws SchemaRegistryException;
 
   Schema get(String subject, int version) throws SchemaRegistryException;
