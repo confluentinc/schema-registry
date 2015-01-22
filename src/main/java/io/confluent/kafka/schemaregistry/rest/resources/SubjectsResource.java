@@ -39,7 +39,7 @@ public class SubjectsResource {
 
   @GET
   @Path("/{id}")
-  public Schema getSchema(@PathParam("id") Long id) {
+  public Schema getSchema(@PathParam("id") Integer id) {
     Schema schema = null;
     try {
       schema = schemaRegistry.get(id);

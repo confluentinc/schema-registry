@@ -30,13 +30,13 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   @Min(1)
   private Integer version;
   @Min(0)
-  private Long id;
+  private Integer id;
   @NotEmpty
   private String schema;
 
   public Schema(@JsonProperty("name") String name,
                 @JsonProperty("version") Integer version,
-                @JsonProperty("id") Long id,
+                @JsonProperty("id") Integer id,
                 @JsonProperty("schema") String schema) {
     this.name = name;
     this.version = version;
@@ -65,12 +65,12 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   }
 
   @JsonProperty("id")
-  public Long getId() {
+  public Integer getId() {
     return this.id;
   }
 
   @JsonProperty("id")
-  public void setId(Long id) {
+  public void setId(Integer id) {
     this.id = id;
   }
 
@@ -107,7 +107,6 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
     if (!this.schema.equals(that.schema)) {
       return false;
     }
-
 
     return true;
   }

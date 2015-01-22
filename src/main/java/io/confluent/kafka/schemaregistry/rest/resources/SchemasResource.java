@@ -116,8 +116,8 @@ public class SchemasResource {
     requestProperties.put("Accept", accept);
     RegisterSchemaForwardingAgent forwardingAgent =
         new RegisterSchemaForwardingAgent(requestProperties, subjectName, request);
-    Schema schema = new Schema(subjectName, 0, 0L, request.getSchema());
-    long id = 0L;
+    Schema schema = new Schema(subjectName, 0, 0, request.getSchema());
+    int id = 0;
     // note that parseBoolean(null) returns false which is what we want
     boolean isDryRun = Boolean.parseBoolean(dryRun);
 

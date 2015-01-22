@@ -104,9 +104,9 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test re-registering existing schemas
     for (int i = 0; i < schemasInSubject1; i++) {
-      long expectedId = i;
+      int expectedId = i;
       String schemaString = allSchemasInSubject1.get(i);
-      long foundId = TestUtils.registerSchema(restApp.restConnect, schemaString, subject1);
+      int foundId = TestUtils.registerSchema(restApp.restConnect, schemaString, subject1);
       assertEquals("Re-registering an existing schema should return the existing version",
                    expectedId, foundId);
     }
@@ -150,18 +150,18 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test dry run registration of a schema into new subject
     String schema1 = allSchemas.get(0);
-    long id = TestUtils.registerDryRun(restApp.restConnect, schema1, subject);
+    int id = TestUtils.registerDryRun(restApp.restConnect, schema1, subject);
     assertEquals("Dry run should return id 0.", 0, id);
     TestUtils.checkNumberOfVersions(restApp.restConnect, numRegisteredSchemas, subject);
 
     for (int i = 0; i < numSchemas; i++) {
       // Test that dry run doesn't change the number of versions
       String schema = allSchemas.get(i);
-      long dryRunId = TestUtils.registerDryRun(restApp.restConnect, schema, subject);
+      int dryRunId = TestUtils.registerDryRun(restApp.restConnect, schema, subject);
       TestUtils.checkNumberOfVersions(restApp.restConnect, numRegisteredSchemas, subject);
 
       // Test that registering and dry run return the same ids
-      long registeredId = TestUtils.registerSchema(restApp.restConnect, schema, subject);
+      int registeredId = TestUtils.registerSchema(restApp.restConnect, schema, subject);
       numRegisteredSchemas++;
       assertEquals("Dry run id and register id should be the same.", registeredId, dryRunId);
 

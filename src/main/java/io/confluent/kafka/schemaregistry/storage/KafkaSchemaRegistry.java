@@ -26,7 +26,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.common.utils.ZkData;
 import io.confluent.common.utils.ZkUtils;
@@ -57,8 +57,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 20;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
-  final Map<Long, SchemaKey> guidToSchemaKey;
-  final Map<MD5, Long> schemaHashToGuid;
+  final Map<Integer, SchemaKey> guidToSchemaKey;
+  final Map<MD5, Integer> schemaHashToGuid;
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
@@ -67,8 +67,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final ZkClient zkClient;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
-  private AtomicLong schemaIdCounter;
-  private long maxSchemaIdCounterValue;
+  private AtomicInteger schemaIdCounter;
+  private int maxSchemaIdCounterValue;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -85,8 +85,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                  new ZkStringSerializer());
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
-    this.guidToSchemaKey = new HashMap<Long, SchemaKey>();
-    this.schemaHashToGuid = new HashMap<MD5, Long>();
+    this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
+    this.schemaHashToGuid = new HashMap<MD5, Integer>();
     kafkaStore =
         new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(config,
                                                                new KafkaStoreMessageHandler(this),
@@ -127,9 +127,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         } catch (StoreException e) {
           throw new SchemaRegistryException(e);
         }
-        schemaIdCounter = new AtomicLong(nextSchemaIdCounterBatch());
+        schemaIdCounter = new AtomicInteger(nextSchemaIdCounterBatch());
         maxSchemaIdCounterValue =
-            schemaIdCounter.longValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+            schemaIdCounter.intValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
       }
     }
   }
@@ -145,7 +145,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public long register(String subject,
+  public int register(String subject,
                        Schema schema,
                        RegisterSchemaForwardingAgent forwardingAgent,
                        boolean isDryRun)
@@ -181,7 +181,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
             schema.setId(schemaIdCounter.getAndIncrement());
             if (schemaIdCounter.get() == maxSchemaIdCounterValue) {
               maxSchemaIdCounterValue =
-                  nextSchemaIdCounterBatch().longValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+                  nextSchemaIdCounterBatch().intValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
             }
 
             kafkaStore.put(keyForNewVersion, schema);
@@ -212,9 +212,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    *
    * Return the start index of the next batch.
    */
-  private Long nextSchemaIdCounterBatch() throws SchemaRegistryException {
+  private Integer nextSchemaIdCounterBatch() throws SchemaRegistryException {
     // create ZOOKEEPER_SCHEMA_ID_COUNTER if it already doesn't exist
-    long schemaIdCounterThreshold = 0L;
+    int schemaIdCounterThreshold = 0;
     if (!zkClient.exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
       ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
                                    String.valueOf(ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE));
@@ -222,7 +222,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       // read the latest counter value
       ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
       if (counterValue.getData() != null) {
-        schemaIdCounterThreshold = Long.valueOf(counterValue.getData());
+        schemaIdCounterThreshold = Integer.valueOf(counterValue.getData());
       } else {
         throw new SchemaRegistryException("Failed to initialize schema registry. Failed to read "
                                           + "schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
@@ -258,7 +258,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Schema get(long id) throws SchemaRegistryException {
+  public Schema get(int id) throws SchemaRegistryException {
     Schema schema = null;
     try {
       SchemaKey subjectVersionKey = guidToSchemaKey.get(id);

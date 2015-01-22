@@ -26,7 +26,7 @@ public interface SchemaRegistry {
 
   void init() throws SchemaRegistryException;
 
-  long register(String subject,
+  int register(String subject,
                 Schema schema,
                 RegisterSchemaForwardingAgent forwardingAgent,
                 boolean isDryRun)
@@ -34,7 +34,7 @@ public interface SchemaRegistry {
 
   Schema get(String subject, int version) throws SchemaRegistryException;
 
-  Schema get(long id) throws SchemaRegistryException;
+  Schema get(int id) throws SchemaRegistryException;
 
   Set<String> listSubjects() throws SchemaRegistryException;
 
