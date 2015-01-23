@@ -13,20 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistryclient.rest.exceptions;
+package io.confluent.kafka.schemaregistry.client;
 
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
+import org.apache.avro.Schema;
 
-/**
- * An exception thrown when the registered schema is not compatible with the latest schema according
- * to the compatibility level.
- */
-public class IncompatibleAvroSchemaException extends WebApplicationException {
+import java.io.IOException;
 
-  public static final Response.Status STATUS = Response.Status.CONFLICT;
-
-  public IncompatibleAvroSchemaException(String errorMsg) {
-    super(errorMsg, STATUS);
-  }
+public interface SchemaRegistryClient {
+  public int register(Schema schema, String subject) throws IOException;
+  public Schema getByID(int id) throws IOException;
 }

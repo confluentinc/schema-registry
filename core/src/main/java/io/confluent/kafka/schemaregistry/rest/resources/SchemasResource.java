@@ -38,10 +38,10 @@ import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 
-import io.confluent.kafka.schemaregistryclient.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
-import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
@@ -98,7 +98,7 @@ public class SchemasResource {
   }
 
   /**
-   * @throws {@link io.confluent.kafka.schemaregistryclient.rest.exceptions.InvalidAvroException ,
+   * @throws {@link io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroException ,
    *                IncompatibleAvroSchemaException}
    */
   @POST

@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistryclient.serializer.KafkaAvroDecoder;
+import io.confluent.kafka.schemaregistry.client.serializer.KafkaAvroDecoder;
 import kafka.consumer.ConsumerConfig;
 import kafka.consumer.ConsumerIterator;
 import kafka.consumer.KafkaStream;
@@ -43,7 +43,7 @@ import kafka.utils.VerifiableProperties;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class SchemaRegistryClientTest extends ClusterTestHarness{
+public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
   private final String SCHEMA_REGISTRY_URL = "schema.registry.url";
   private final String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
@@ -56,7 +56,7 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
   private final String avroRecordString = "{\"name\": \"testUser\"}";
   private final ArrayList<Object> recordList = new ArrayList<Object>();
 
-  public SchemaRegistryClientTest() {
+  public CachedSchemaRegistryClientTest() {
     super(1, true);
   }
 
@@ -64,13 +64,15 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
     private final ConsumerConnector consumer;
     private final String topic;
     private final String groupId;
+    private final int numMessages;
     private Properties props = new Properties();
 
-    public AvroConsumer(String topic, String groupId) {
+    public AvroConsumer(String topic, String groupId, int numMessages) {
       this.groupId = groupId;
       consumer = kafka.consumer.Consumer.createJavaConsumerConnector(
           createConsumerConfig());
       this.topic = topic;
+      this.numMessages = numMessages;
     }
 
     private ConsumerConfig createConsumerConfig() {
@@ -97,7 +99,9 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
           topicCountMap, keyDecoder, valueDecoder);
       KafkaStream<String, Object> stream =  consumerMap.get(topic).get(0);
       ConsumerIterator<String, Object> it = stream.iterator();
-      while(it.hasNext()) {
+      int i = 1;
+      while(it.hasNext() && i < numMessages) {
+        i++;
         recordList.add(it.next().message());
       }
       consumer.shutdown();
@@ -115,8 +119,10 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
       Properties props = new Properties();
       props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
       props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
-      props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringSerializer.class);
-      props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, io.confluent.kafka.schemaregistryclient.serializer.KafkaAvroSerializer.class);
+      props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                org.apache.kafka.common.serialization.StringSerializer.class);
+      props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                io.confluent.kafka.schemaregistry.client.serializer.KafkaAvroSerializer.class);
       producer = new KafkaProducer(props);
     }
 
@@ -138,7 +144,8 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
       ProducerRecord<String, Float> floatRecord = new ProducerRecord<String, Float>(topic, 1.23f);
       ProducerRecord<String, Double> doubleRecord = new ProducerRecord<String, Double>(topic, 3.45);
       ProducerRecord<String, String> stringRecord = new ProducerRecord<String, String>(topic, "abc");
-      ProducerRecord<String, byte[]> bytesRecord = new ProducerRecord<String, byte[]>(topic, "abc".getBytes());
+      ProducerRecord<String, byte[]> bytesRecord
+          = new ProducerRecord<String, byte[]>(topic, "abc".getBytes());
       for(int i = 0; i < num; ++i) {
         producer.send(nullRecord);
         producer.send(booleanRecord);
@@ -168,11 +175,13 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
     public AvroProducer(String topic, int num) {
       this.topic = topic;
       this.num = num;
-      props.put("serializer.class", "io.confluent.kafka.schemaregistryclient.serializer.KafkaAvroEncoder");
+      props.put("serializer.class",
+                "io.confluent.kafka.schemaregistryclient.client.serializer.KafkaAvroEncoder");
       props.put("key.serializer.class", "kafka.serializer.StringEncoder");
       props.put("metadata.broker.list", brokerList);
       props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
-      producer = new kafka.javaapi.producer.Producer<String, Object>(new kafka.producer.ProducerConfig(props));
+      producer = new kafka.javaapi.producer.Producer<String, Object>(
+          new kafka.producer.ProducerConfig(props));
     }
 
     private void produceIndexedRecord(int num) {
@@ -196,37 +205,22 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
   @Test
   public void testAvroOldProducer() {
     recordList.clear();
-
     AvroProducer producer = new AvroProducer(topic, 1);
-    Thread producerThread = new Thread(producer);
-    producerThread.start();
-
-    try {
-      Thread.sleep(10000);
-    } catch (InterruptedException e) {
-
-    }
-    AvroConsumer avroConsumer = new AvroConsumer(topic, groupId);
-    Thread consumerThread = new Thread(avroConsumer);
-    consumerThread.start();
-
-    try {
-      Thread.sleep(10000);
-    } catch (InterruptedException e) {
-
-    }
+    producer.run();
+    AvroConsumer avroConsumer = new AvroConsumer(topic, groupId, 1);
+    avroConsumer.run();
     assertTrue("record list should have elements", recordList.size() != 0);
     for (Object object: recordList) {
       if (object != null) {
         if (object instanceof Boolean) {
           boolean value = (Boolean) object;
-          assertEquals("Should match", value, true);
+          assertEquals(value, true);
         } else if (object instanceof Integer) {
           int value = (Integer) object;
-          assertEquals("Should match", value, 130);
+          assertEquals(value, 130);
         } else if (object instanceof Long) {
           long value = (Long) object;
-          assertEquals("Should match", value, 345l);
+          assertEquals(value, 345l);
         } else if (object instanceof Float) {
           float value = (Float) object;
           assertEquals(value, 1.23f, 0.0);
@@ -235,13 +229,13 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
           assertEquals(value, 3.45, 0.0);
         } else if (object instanceof String) {
           String value = (String) object;
-          assertEquals("Should match", value, "abc");
+          assertEquals(value, "abc");
         } else if (object instanceof byte[]) {
           byte[] value = (byte[]) object;
-          assertEquals("Should match", value, "abc".getBytes());
+          assertEquals(value, "abc".getBytes());
         } else if (object instanceof IndexedRecord) {
           IndexedRecord record = (IndexedRecord) object;
-          assertEquals("Should match", record.toString(), avroRecordString);
+          assertEquals(record.toString(), avroRecordString);
         }
       }
     }
@@ -250,39 +244,22 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
   @Test
   public void testAvroNewProducer() {
     recordList.clear();
-
     AvroNewProducer newProducer = new AvroNewProducer(topic, 1);
-    Thread producerThread = new Thread(newProducer);
-    producerThread.start();
-
-    try {
-      Thread.sleep(10000);
-    } catch (InterruptedException e) {
-
-    }
-    AvroConsumer avroConsumer = new AvroConsumer(topic, groupId);
-    Thread consumerThread = new Thread(avroConsumer);
-    consumerThread.start();
-
-    try {
-      Thread.sleep(10000);
-    } catch (InterruptedException e) {
-
-    }
-
+    newProducer.run();
+    AvroConsumer avroConsumer = new AvroConsumer(topic, groupId, 9);
+    avroConsumer.run();
     assertTrue("record list should have elements", recordList.size() != 0);
-
     for (Object object: recordList) {
       if (object != null) {
         if (object instanceof Boolean) {
           boolean value = (Boolean) object;
-          assertEquals("Should match", value, true);
+          assertEquals(value, true);
         } else if (object instanceof Integer) {
           int value = (Integer) object;
-          assertEquals("Should match", value, 130);
+          assertEquals(value, 130);
         } else if (object instanceof Long) {
           long value = (Long) object;
-          assertEquals("Should match", value, 345l);
+          assertEquals(value, 345l);
         } else if (object instanceof Float) {
           float value = (Float) object;
           assertEquals(value, 1.23f, 0.0);
@@ -291,13 +268,13 @@ public class SchemaRegistryClientTest extends ClusterTestHarness{
           assertEquals(value, 3.45, 0.0);
         } else if (object instanceof String) {
           String value = (String) object;
-          assertEquals("Should match", value, "abc");
+          assertEquals(value, "abc");
         } else if (object instanceof byte[]) {
           byte[] value = (byte[]) object;
-          assertEquals("Should match", value, "abc".getBytes());
+          assertEquals(value, "abc".getBytes());
         } else if (object instanceof IndexedRecord) {
           IndexedRecord record = (IndexedRecord) object;
-          assertEquals("Should match", record.toString(), avroRecordString);
+          assertEquals(record.toString(), avroRecordString);
         }
       }
     }

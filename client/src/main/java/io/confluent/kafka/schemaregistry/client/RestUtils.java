@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistryclient;
+package io.confluent.kafka.schemaregistry.client;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,11 +31,11 @@ import java.util.Map;
 
 import javax.ws.rs.WebApplicationException;
 
-import io.confluent.kafka.schemaregistryclient.rest.Versions;
-import io.confluent.kafka.schemaregistryclient.rest.entities.ErrorMessage;
-import io.confluent.kafka.schemaregistryclient.rest.entities.Schema;
-import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
 
 /**
  * Helper methods for making http client requests to the schema registry servlet.
@@ -126,7 +126,7 @@ public class RestUtils {
 
 
 
-  private static long registerSchema(String baseUrl, Map<String, String> requestProperties,
+  private static int registerSchema(String baseUrl, Map<String, String> requestProperties,
                                     RegisterSchemaRequest registerSchemaRequest, String subject,
                                     boolean isDryRun)
       throws IOException {
@@ -142,14 +142,14 @@ public class RestUtils {
     return response.getId();
   }
 
-  public static long registerSchema(String baseUrl, Map<String, String> requestProperties,
+  public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
                                    RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException {
     return registerSchema(baseUrl, requestProperties, registerSchemaRequest, subject, false);
   }
 
   public static Schema getId(String baseUrl, Map<String, String> requestProperties,
-                             long id) throws IOException {
+                             int id) throws IOException {
     String url = String.format("%s/subjects/%d", baseUrl, id);
 
     Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,

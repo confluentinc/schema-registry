@@ -13,21 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistryclient.serializer;
+package io.confluent.kafka.schemaregistry.client.serializer;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.util.Utf8;
+import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import io.confluent.kafka.schemaregistryclient.SchemaRegistryClient;
-
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 public class AbstractKafkaAvroDeserializer {
   private static final byte MAGIC_BYTE = 0x0;
-  private static final int idSize = 8;
+  private static final int idSize = 4;
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected final String SCHEMA_REGISTRY_URL = "schema.registry.url";
   protected SchemaRegistryClient schemaRegistry;
@@ -35,19 +36,33 @@ public class AbstractKafkaAvroDeserializer {
   private ByteBuffer getByteBuffer(byte[] payload) {
     ByteBuffer buffer = ByteBuffer.wrap(payload);
     if (buffer.get() != MAGIC_BYTE) {
-      throw new IllegalArgumentException("Unknown magic byte!");
+      throw new SerializationException("Unknown magic byte!");
     }
     return buffer;
   }
 
-  protected Object deserialize(byte[] payload) throws IOException {
-    ByteBuffer buffer = getByteBuffer(payload);
-    long id = buffer.getLong();
-    Schema schema = schemaRegistry.getByID(id);
-    int start = buffer.position() + buffer.arrayOffset();
-    int length = buffer.limit() - 1 - idSize;
-    DatumReader<Object> reader = new GenericDatumReader<Object>(schema);
-    Object object = reader.read(null,  decoderFactory.binaryDecoder(buffer.array(),start, length, null));
-    return object;
+  protected Object deserialize(byte[] payload) throws SerializationException {
+    try {
+      ByteBuffer buffer = getByteBuffer(payload);
+      int id = buffer.getInt();
+      Schema schema = schemaRegistry.getByID(id);
+      int length = buffer.limit() - 1 - idSize;
+      if (schema.getType().equals(Schema.Type.BYTES)) {
+        byte[] bytes = new byte[length];
+        buffer.get(bytes, 0 , length);
+        return bytes;
+      }
+      int start = buffer.position() + buffer.arrayOffset();
+      DatumReader<Object> reader = new GenericDatumReader<Object>(schema);
+      Object object =
+          reader.read(null, decoderFactory.binaryDecoder(buffer.array(), start, length, null));
+
+      if (schema.getType().equals(Schema.Type.STRING)) {
+        object = ((Utf8) object).toString();
+      }
+      return object;
+    } catch (IOException e) {
+      throw new SerializationException("Error deserializing Avro message", e);
+    }
   }
 }

@@ -13,10 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry;
+package io.confluent.kafka.schemaregistry.client.rest.exceptions;
 
-import org.junit.Test;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Response;
 
-public class SchemaRegistryClientTest {
+/**
+ * An exception thrown when the registered schema is not a valid Avro schema.
+ */
+public class InvalidAvroException extends WebApplicationException {
 
+  public static final Response.Status STATUS = Response.Status.BAD_REQUEST;
+
+  public InvalidAvroException() {
+    super("The provided schema string is not a valid Avro schema", STATUS);
+  }
 }

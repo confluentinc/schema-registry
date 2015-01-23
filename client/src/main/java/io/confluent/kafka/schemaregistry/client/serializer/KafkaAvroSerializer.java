@@ -13,15 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistryclient.serializer;
+package io.confluent.kafka.schemaregistry.client.serializer;
 
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistryclient.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 public class KafkaAvroSerializer extends AbstracKafkaAvroSerializer implements Serializer<Object> {
+
+  private boolean isKey;
+
+  public KafkaAvroSerializer() {
+
+  }
+
+  public KafkaAvroSerializer(SchemaRegistryClient client) {
+    schemaRegistry = client;
+  }
 
   @Override
   public void configure(Map<String,?> configs, boolean isKey) {
@@ -29,13 +40,20 @@ public class KafkaAvroSerializer extends AbstracKafkaAvroSerializer implements S
     if (url == null) {
       throw new IllegalArgumentException("Missing Schema registry url!");
     }
-    schemaRegistry = new SchemaRegistryClient((String) url);
+    this.isKey = isKey;
+    schemaRegistry = new CachedSchemaRegistryClient((String) url);
   }
 
 
   @Override
   public byte[] serialize(String topic, Object record) {
-    return serializeImpl(topic, record);
+    String subject;
+    if (isKey) {
+      subject = topic + "-key";
+    } else {
+      subject = topic + "-value";
+    }
+    return serializeImpl(subject, record);
   }
 
   @Override

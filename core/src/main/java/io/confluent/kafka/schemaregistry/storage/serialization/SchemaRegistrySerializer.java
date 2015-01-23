@@ -101,7 +101,7 @@ public class SchemaRegistrySerializer
    * @param key   Typed key corresponding to this value
    * @param value Bytes of the serialized value
    * @return Typed deserialized value. Must be one of {@link io.confluent.kafka.schemaregistry.rest.entities.Config}
-   * or {@link io.confluent.kafka.schemaregistryclient.rest.entities.Schema}
+   * or {@link io.confluent.kafka.schemaregistry.client.rest.entities.Schema}
    */
   @Override
   public SchemaRegistryValue deserializeValue(SchemaRegistryKey key, byte[] value)

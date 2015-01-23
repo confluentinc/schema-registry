@@ -87,7 +87,7 @@ public abstract class ClusterTestHarness {
       ports.add((Integer) portObj);
     }
     zkPort = ports.remove();
-    zkConnect = String.format("localhost:%d", zkPort);
+    zkConnect = String.format("127.0.0.1:%d", zkPort);
 
     configs = new Vector<KafkaConfig>();
     bootstrapServers = "";

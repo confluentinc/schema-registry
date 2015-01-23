@@ -53,8 +53,10 @@ public class RestApp {
   }
 
   public void stop() throws Exception {
-    restServer.stop();
-    restServer.join();
+    if (restServer != null) {
+      restServer.stop();
+      restServer.join();
+    }
   }
 
   public boolean isMaster() {

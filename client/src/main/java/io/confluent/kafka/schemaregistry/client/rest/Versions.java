@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.rest;
+package io.confluent.kafka.schemaregistry.client.rest;
 
 import java.util.Arrays;
 import java.util.List;
@@ -34,9 +34,8 @@ public class Versions {
   public static final String JSON_WEIGHTED = JSON + "; qs=0.5";
 
   public static final List<String> PREFERRED_RESPONSE_TYPES = Arrays
-      .asList(
-          io.confluent.kafka.schemaregistryclient.rest.Versions.SCHEMA_REGISTRY_V1_JSON, io.confluent.kafka.schemaregistryclient.rest.Versions.SCHEMA_REGISTRY_DEFAULT_JSON,
-              io.confluent.kafka.schemaregistryclient.rest.Versions.JSON);
+      .asList(Versions.SCHEMA_REGISTRY_V1_JSON, Versions.SCHEMA_REGISTRY_DEFAULT_JSON,
+              Versions.JSON);
 
   // This type is completely generic and carries no actual information about the type of data, but
   // it is the default for request entities if no content type is specified. Well behaving users

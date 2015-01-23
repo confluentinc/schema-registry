@@ -13,32 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistryclient.serializer;
+package io.confluent.kafka.schemaregistry.client.serializer;
 
-import java.io.IOException;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
 
-import io.confluent.kafka.schemaregistryclient.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import kafka.serializer.Decoder;
 import kafka.utils.VerifiableProperties;
 
+
 public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements Decoder<Object>  {
+
+  public KafkaAvroDecoder(SchemaRegistryClient schemaRegistry) {
+    this.schemaRegistry = schemaRegistry;
+  }
 
   public KafkaAvroDecoder(VerifiableProperties props) {
     if (props == null) {
-      throw new IllegalArgumentException("Props should not be null!");
+      throw new ConfigException("Missing schema registry url!");
     }
     String url = props.getProperty(SCHEMA_REGISTRY_URL);
     if (url == null) {
       throw new IllegalArgumentException("Missing schema registry url!");
     }
-    schemaRegistry = new SchemaRegistryClient(url);
+    schemaRegistry = new CachedSchemaRegistryClient(url);
   }
 
   @Override
   public Object fromBytes(byte[] bytes){
     try {
       return deserialize(bytes);
-    } catch (IOException e) {
+    } catch (SerializationException e) {
       e.printStackTrace();
     }
     return null;

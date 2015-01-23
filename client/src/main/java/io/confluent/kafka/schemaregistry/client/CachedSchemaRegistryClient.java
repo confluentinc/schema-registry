@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistryclient;
+package io.confluent.kafka.schemaregistry.client;
 
 import org.apache.avro.Schema;
 
@@ -22,56 +22,60 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistryclient.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 
-public class SchemaRegistryClient {
+public class CachedSchemaRegistryClient implements SchemaRegistryClient{
 
   private final String baseUrl;
-  private final Map<String, Map<Schema, Long>> schemaCache;
-  private final Map<Long, Schema> idCache;
+  private final Map<String, Map<Schema, Integer>> schemaCache;
+  private final Map<Integer, Schema> idCache;
   private final Schema.Parser parser = new Schema.Parser();
 
-  public SchemaRegistryClient(String baseUrl) {
+  public CachedSchemaRegistryClient(String baseUrl) {
     this.baseUrl = baseUrl;
-    schemaCache = new HashMap<String, Map<Schema, Long>>();
-    idCache = new HashMap<Long, Schema>();
+    schemaCache = new HashMap<String, Map<Schema, Integer>>();
+    idCache = new HashMap<Integer, Schema>();
   }
 
-  private RegisterSchemaRequest createRequest(Schema schema) {
+  private int getIdFromRegistry(Schema schema, String subject) throws IOException {
     String schemaString = schema.toString();
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
-    return request;
+    return RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                    request, subject);
   }
 
-  public synchronized long register(Schema schema, String subject) throws IOException {
+  private Schema getSchemaByIdFromRegisty(int id) throws IOException {
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema restSchema =
+        RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
+    return parser.parse(restSchema.getSchema());
+  }
 
-    Map<Schema, Long> schemaIdMap;
+  @Override
+  public synchronized int register(Schema schema, String subject) throws IOException {
+    Map<Schema, Integer> schemaIdMap;
     if (schemaCache.containsKey(subject)) {
       schemaIdMap = schemaCache.get(subject);
     } else {
-      schemaIdMap = new IdentityHashMap<Schema, Long>();
+      schemaIdMap = new IdentityHashMap<Schema, Integer>();
       schemaCache.put(subject, schemaIdMap);
     }
 
     if (schemaIdMap.containsKey(schema)) {
       return schemaIdMap.get(schema);
     } else {
-      RegisterSchemaRequest request = createRequest(schema);
-      long id = RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                               request, subject);
+      int id = getIdFromRegistry(schema, subject);
       schemaIdMap.put(schema, id);
       return id;
     }
   }
 
-  public synchronized Schema getByID(long id) throws IOException {
+  @Override
+  public synchronized Schema getByID(int id) throws IOException {
     if (idCache.containsKey(id)) {
       return idCache.get(id);
     } else {
-      io.confluent.kafka.schemaregistryclient.rest.entities.Schema restSchema =
-            RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
-      Schema schema = parser.parse(restSchema.getSchema());
+      Schema schema = getSchemaByIdFromRegisty(id);
       idCache.put(id, schema);
       return schema;
     }

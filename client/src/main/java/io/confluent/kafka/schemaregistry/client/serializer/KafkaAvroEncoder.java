@@ -13,38 +13,44 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistryclient.serializer;
+package io.confluent.kafka.schemaregistry.client.serializer;
 
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.kafka.common.config.ConfigException;
 
-import io.confluent.kafka.schemaregistryclient.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import kafka.serializer.Encoder;
 import kafka.utils.VerifiableProperties;
 
-// Only works for IndexedRecord
-// For now, this only works for value.
-// To register for a topic, user will need to provide a list of record_name:topic_name map as
-// a CSV format. By default, will use record name as subject
-// Key uses primitive types.
-
+/**
+  Only works for IndexedRecord
+  For now, this only works for value.
+  To register for a topic, user will need to provide a list of record_name:topic_name map as
+  a CSV format. By default, will use record name as subject.
+*/
 public class KafkaAvroEncoder extends AbstracKafkaAvroSerializer implements Encoder<Object>  {
+
+  public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry){
+    this.schemaRegistry = schemaRegistry;
+  }
 
   public KafkaAvroEncoder(VerifiableProperties props) {
     if (props != null) {
       String url = props.getProperty(SCHEMA_REGISTRY_URL);
       if (url == null) {
-        throw new IllegalArgumentException("Missing schema registry url!");
+        throw new ConfigException("Missing schema registry url!");
       }
-      schemaRegistry = new SchemaRegistryClient(url);
+      schemaRegistry = new CachedSchemaRegistryClient(url);
     } else {
-      throw new IllegalArgumentException("Props should not be null");
+      throw new ConfigException("Missing schema registry url!");
     }
   }
 
   @Override
   public byte[] toBytes(Object object) {
     if (object instanceof IndexedRecord) {
-      String subject = ((IndexedRecord) object).getSchema().getName();
+      String subject = ((IndexedRecord) object).getSchema().getName() + "-value";
       return serializeImpl(subject, object);
     } else {
       throw new IllegalArgumentException("Primitive types are not supported yet");

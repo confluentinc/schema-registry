@@ -22,8 +22,8 @@ import javax.ws.rs.WebApplicationException;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistryclient.rest.exceptions.IncompatibleAvroSchemaException;
-import io.confluent.kafka.schemaregistryclient.rest.exceptions.InvalidAvroException;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IncompatibleAvroSchemaException;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroException;
 import io.confluent.kafka.schemaregistry.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
