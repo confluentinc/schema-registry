@@ -16,7 +16,7 @@ import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistryclient.rest.Versions;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
 @Path("/subjects")
@@ -31,15 +31,15 @@ public class SubjectsResource {
   public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
   public final static String MESSAGE_SUBJECT_NOT_FOUND = "Subject not found.";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
-  private final SchemaRegistry schemaRegistry;
+  private final KafkaSchemaRegistry schemaRegistry;
 
-  public SubjectsResource(SchemaRegistry schemaRegistry) {
+  public SubjectsResource(KafkaSchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
   @GET
   @Path("/{id}")
-  public Schema getSchema(@PathParam("id") Long id) {
+  public Schema getSchema(@PathParam("id") Integer id) {
     Schema schema = null;
     try {
       schema = schemaRegistry.get(id);

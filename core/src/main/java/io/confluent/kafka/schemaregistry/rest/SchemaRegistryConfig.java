@@ -41,6 +41,12 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String KAFKASTORE_TOPIC_CONFIG = "kafkastore.topic";
   public static final String DEFAULT_KAFKASTORE_TOPIC = "_schemas";
   /**
+   * <code>kafkastore.topic.replication.factor</code>
+   */
+  public static final String KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG =
+      "kafkastore.topic.replication.factor";
+  public static final int DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR = 3;
+  /**
    * <code>kafkastore.timeout.ms</code>
    */
   public static final String KAFKASTORE_TIMEOUT_CONFIG = "kafkastore.timeout.ms";
@@ -66,6 +72,9 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_TOPIC_DOC =
       "The durable single partition topic that acts" +
       "as the durable log for the data";
+  protected static final String KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC =
+      "The desired replication factor of the schema topic. The actual replication factor " +
+      "will be the smaller of this value and the number of live Kafka brokers.";
   protected static final String KAFKASTORE_TIMEOUT_DOC =
       "The timeout for an operation on the Kafka store";
   protected static final String KAFKASTORE_COMMIT_INTERVAL_MS_DOC =
@@ -95,6 +104,9 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC)
         .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKASTORE_TOPIC,
                 ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_DOC)
+        .define(KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,
+                DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR,
+                ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC)
         .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC)
         .define(KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT,

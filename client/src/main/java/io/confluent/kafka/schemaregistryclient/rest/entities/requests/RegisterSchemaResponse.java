@@ -25,19 +25,19 @@ import java.io.IOException;
 public class RegisterSchemaResponse {
 
   @NotEmpty
-  private long id;
+  private int id;
 
   public static RegisterSchemaResponse fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, RegisterSchemaResponse.class);
   }
 
   @JsonProperty("id")
-  public long getId() {
+  public int getId() {
     return id;
   }
 
   @JsonProperty("id")
-  public void setId(long id) {
+  public void setId(int id) {
     this.id = id;
   }
 
