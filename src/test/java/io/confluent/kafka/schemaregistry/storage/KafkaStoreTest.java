@@ -158,7 +158,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
   @Test
   public void testDeleteAfterRestart() throws InterruptedException {
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
-    Map<Long, String> idIndex = new HashMap<Long, String>();
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
                                                                                        zkClient,
                                                                                        inMemoryStore);

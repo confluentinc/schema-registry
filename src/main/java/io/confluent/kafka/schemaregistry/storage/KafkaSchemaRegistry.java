@@ -19,6 +19,7 @@ import org.I0Itec.zkclient.ZkClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,17 +27,17 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.common.utils.ZkData;
 import io.confluent.common.utils.ZkUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.rest.RegisterSchemaForwardingAgent;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.exceptions.IncompatibleAvroSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.InvalidAvroException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
@@ -44,6 +45,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
+import io.confluent.kafka.schemaregistry.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 
@@ -57,8 +59,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 20;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
-  final Map<Long, SchemaKey> guidToSchemaKey;
-  final Map<MD5, Long> schemaHashToGuid;
+  final Map<Integer, SchemaKey> guidToSchemaKey;
+  final Map<MD5, Integer> schemaHashToGuid;
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
@@ -67,8 +69,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final ZkClient zkClient;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
-  private AtomicLong schemaIdCounter;
-  private long maxSchemaIdCounterValue;
+  private AtomicInteger schemaIdCounter;
+  private int maxSchemaIdCounterValue;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -85,8 +87,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                  new ZkStringSerializer());
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
-    this.guidToSchemaKey = new HashMap<Long, SchemaKey>();
-    this.schemaHashToGuid = new HashMap<MD5, Long>();
+    this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
+    this.schemaHashToGuid = new HashMap<MD5, Integer>();
     kafkaStore =
         new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(config,
                                                                new KafkaStoreMessageHandler(this),
@@ -127,9 +129,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         } catch (StoreException e) {
           throw new SchemaRegistryException(e);
         }
-        schemaIdCounter = new AtomicLong(nextSchemaIdCounterBatch());
+        schemaIdCounter = new AtomicInteger(nextSchemaIdCounterBatch());
         maxSchemaIdCounterValue =
-            schemaIdCounter.longValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+            schemaIdCounter.intValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
       }
     }
   }
@@ -145,59 +147,67 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public long register(String subject,
-                       Schema schema,
-                       RegisterSchemaForwardingAgent forwardingAgent,
-                       boolean isDryRun)
+  public int register(String subject,
+                      Schema schema,
+                      boolean isDryRun)
+      throws SchemaRegistryException {
+    try {
+      // see if the schema to be registered already exists
+      org.apache.avro.Schema avroSchemaObj = canonicalizeSchema(schema);
+      MD5 md5 = MD5.ofString(schema.getSchema());
+      if (this.schemaHashToGuid.containsKey(md5)) {
+        return this.schemaHashToGuid.get(md5);
+      }
+
+      // determine the latest version of the schema in the subject
+      Iterator<Schema> allVersions = getAllVersions(subject);
+      Schema latestSchema = null;
+      int newVersion = MIN_VERSION;
+      while (allVersions.hasNext()) {
+        latestSchema = allVersions.next();
+        newVersion = latestSchema.getVersion() + 1;
+      }
+
+      // assign a guid and put the schema in the kafka store
+      if (latestSchema == null || isCompatible(subject, avroSchemaObj, latestSchema)) {
+        SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
+        schema.setVersion(newVersion);
+
+        if (isDryRun) {
+          return schemaIdCounter.get();
+        }
+
+        schema.setId(schemaIdCounter.getAndIncrement());
+        if (schemaIdCounter.get() == maxSchemaIdCounterValue) {
+          maxSchemaIdCounterValue =
+              nextSchemaIdCounterBatch().intValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+        }
+
+        kafkaStore.put(keyForNewVersion, schema);
+        return schema.getId();
+      } else {
+        throw new IncompatibleAvroSchemaException(
+            "New schema is incompatible with the latest schema " + latestSchema);
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryException("Error while registering the schema in the" +
+                                        " backend Kafka store", e);
+    }
+  }
+
+  public int registerOrForward(String subject,
+                               Schema schema,
+                               Map<String, String> headerProperties,
+                               boolean isDryRun)
       throws SchemaRegistryException {
     synchronized (masterLock) {
       if (isMaster()) {
-        try {
-          // see if the schema to be registered already exists
-          org.apache.avro.Schema avroSchemaObj = canonicalizeSchema(schema);
-          MD5 md5 = MD5.ofString(schema.getSchema());
-          if (this.schemaHashToGuid.containsKey(md5)) {
-            return this.schemaHashToGuid.get(md5);
-          }
-
-          // determine the latest version of the schema in the subject
-          Iterator<Schema> allVersions = getAllVersions(subject);
-          Schema latestSchema = null;
-          int newVersion = MIN_VERSION;
-          while (allVersions.hasNext()) {
-            latestSchema = allVersions.next();
-            newVersion = latestSchema.getVersion() + 1;
-          }
-
-          // assign a guid and put the schema in the kafka store
-          if (latestSchema == null || isCompatible(subject, avroSchemaObj, latestSchema)) {
-            SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
-            schema.setVersion(newVersion);
-
-            if (isDryRun) {
-              return schemaIdCounter.get();
-            }
-
-            schema.setId(schemaIdCounter.getAndIncrement());
-            if (schemaIdCounter.get() == maxSchemaIdCounterValue) {
-              maxSchemaIdCounterValue =
-                  nextSchemaIdCounterBatch().longValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
-            }
-
-            kafkaStore.put(keyForNewVersion, schema);
-            return schema.getId();
-          } else {
-            throw new IncompatibleAvroSchemaException(
-                "New schema is incompatible with the latest schema " + latestSchema);
-          }
-        } catch (StoreException e) {
-          throw new SchemaRegistryException("Error while registering the schema in the" +
-                                            " backend Kafka store", e);
-        }
+        return register(subject, schema, isDryRun);
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
-          return forwardingAgent.forward(masterIdentity.getHost(), masterIdentity.getPort());
+          return forwardToMaster(subject, schema.getSchema(), masterIdentity.getHost(),
+                                 masterIdentity.getPort(), headerProperties);
         } else {
           throw new SchemaRegistryException("Register schema request failed since master is "
                                             + "unknown");
@@ -212,9 +222,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    *
    * Return the start index of the next batch.
    */
-  private Long nextSchemaIdCounterBatch() throws SchemaRegistryException {
+  private Integer nextSchemaIdCounterBatch() throws SchemaRegistryException {
     // create ZOOKEEPER_SCHEMA_ID_COUNTER if it already doesn't exist
-    long schemaIdCounterThreshold = 0L;
+    int schemaIdCounterThreshold = 0;
     if (!zkClient.exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
       ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
                                    String.valueOf(ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE));
@@ -222,7 +232,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       // read the latest counter value
       ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
       if (counterValue.getData() != null) {
-        schemaIdCounterThreshold = Long.valueOf(counterValue.getData());
+        schemaIdCounterThreshold = Integer.valueOf(counterValue.getData());
       } else {
         throw new SchemaRegistryException("Failed to initialize schema registry. Failed to read "
                                           + "schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
@@ -233,6 +243,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                   ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE));
     }
     return schemaIdCounterThreshold;
+  }
+
+  private int forwardToMaster(String subject, String schemaString, String host, int port,
+                              Map<String, String> headerProperties) throws SchemaRegistryException {
+    String baseUrl = String.format("http://%s:%d", host, port);
+    RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
+    registerSchemaRequest.setSchema(schemaString);
+    log.debug(String.format("Forwarding registering schema request %s to %s",
+                            registerSchemaRequest, baseUrl));
+    try {
+      int version = RestUtils.registerSchema(baseUrl, headerProperties, registerSchemaRequest,
+                                             subject);
+      return version;
+    } catch (IOException e) {
+      throw new SchemaRegistryException(
+          String.format("Unexpected error while forwarding the registering schema request %s to %s",
+                        registerSchemaRequest, baseUrl),
+          e);
+    }
   }
 
   private org.apache.avro.Schema canonicalizeSchema(Schema schema) {
@@ -258,7 +287,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Schema get(long id) throws SchemaRegistryException {
+  public Schema get(int id) throws SchemaRegistryException {
     Schema schema = null;
     try {
       SchemaKey subjectVersionKey = guidToSchemaKey.get(id);
