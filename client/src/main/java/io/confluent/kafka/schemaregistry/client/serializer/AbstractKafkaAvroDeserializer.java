@@ -26,7 +26,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-public class AbstractKafkaAvroDeserializer {
+
+public abstract class AbstractKafkaAvroDeserializer {
   private static final byte MAGIC_BYTE = 0x0;
   private static final int idSize = 4;
   private final DecoderFactory decoderFactory = DecoderFactory.get();

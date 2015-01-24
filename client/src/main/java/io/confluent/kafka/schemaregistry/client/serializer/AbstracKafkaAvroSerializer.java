@@ -42,7 +42,7 @@ public abstract class AbstracKafkaAvroSerializer {
   private final EncoderFactory encoderFactory = EncoderFactory.get();
 
   protected final String SCHEMA_REGISTRY_URL = "schema.registry.url";
-  protected final String MAX_SCHEMA_OBJECT = "max.schema.object";
+  protected final String MAX_SCHEMAS_PER_SUBJECT = "max.schemas.per.subject";
 
   protected SchemaRegistryClient schemaRegistry;
 
@@ -91,7 +91,7 @@ public abstract class AbstracKafkaAvroSerializer {
     try {
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       Schema schema = getSchema(record);
-      int id = schemaRegistry.register(schema, subject);
+      int id = schemaRegistry.register(subject, schema);
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
       if (record instanceof byte[]) {

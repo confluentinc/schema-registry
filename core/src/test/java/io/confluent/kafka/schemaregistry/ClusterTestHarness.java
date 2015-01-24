@@ -115,7 +115,7 @@ public abstract class ClusterTestHarness {
 
   @Before
   public void setUp() throws Exception {
-    zookeeper = new EmbeddedZookeeper( zkConnect);
+    zookeeper = new EmbeddedZookeeper(zkConnect);
     zkClient =
         new ZkClient(zookeeper.connectString(), zkSessionTimeout, zkConnectionTimeout,
                      ZKStringSerializer$.MODULE$);

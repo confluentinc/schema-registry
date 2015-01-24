@@ -76,7 +76,7 @@ public class KafkaAvroSerializerTest {
     obj = avroDecoder.fromBytes(bytes);
     assertEquals(123, obj);
 
-    bytes = avroSerializer.serialize(topic, 345l);
+    bytes = avroSerializer.serialize(topic, 345L);
     obj = avroDecoder.fromBytes(bytes);
     assertEquals(345l, obj);
 
@@ -84,7 +84,7 @@ public class KafkaAvroSerializerTest {
     obj = avroDecoder.fromBytes(bytes);
     assertEquals(1.23f, obj);
 
-    bytes = avroSerializer.serialize(topic, 2.34);
+    bytes = avroSerializer.serialize(topic, 2.34d);
     obj = avroDecoder.fromBytes(bytes);
     assertEquals(2.34, obj);
 

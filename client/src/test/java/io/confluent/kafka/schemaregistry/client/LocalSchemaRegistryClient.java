@@ -35,13 +35,13 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     ids = new AtomicInteger(0);
   }
 
-  private int getIdFromRegistry(Schema schema, String subject) throws IOException {
+  private int getIdFromRegistry(String subject, Schema schema) throws IOException {
     int id = ids.incrementAndGet();
     idCache.put(id, schema);
     return id;
   }
 
-  private Schema getSchemaByIdFromRegisty(int id) throws IOException {
+  private Schema getSchemaByIdFromRegistry(int id) throws IOException {
     if (idCache.containsKey(id)) {
       return idCache.get(id);
     } else {
@@ -50,7 +50,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized int register(Schema schema, String subject) throws IOException {
+  public synchronized int register(String subject, Schema schema) throws IOException {
     Map<Schema, Integer> schemaIdMap;
     if (schemaCache.containsKey(subject)) {
       schemaIdMap = schemaCache.get(subject);
@@ -62,7 +62,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (schemaIdMap.containsKey(schema)) {
       return schemaIdMap.get(schema);
     } else {
-      int id = getIdFromRegistry(schema, subject);
+      int id = getIdFromRegistry(subject, schema);
       schemaIdMap.put(schema, id);
       return id;
     }
@@ -73,7 +73,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (idCache.containsKey(id)) {
       return idCache.get(id);
     } else {
-      Schema schema = getSchemaByIdFromRegisty(id);
+      Schema schema = getSchemaByIdFromRegistry(id);
       idCache.put(id, schema);
       return schema;
     }

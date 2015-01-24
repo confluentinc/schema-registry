@@ -23,7 +23,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import kafka.serializer.Decoder;
 import kafka.utils.VerifiableProperties;
 
-
 public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements Decoder<Object>  {
 
   public KafkaAvroDecoder(SchemaRegistryClient schemaRegistry) {
@@ -36,7 +35,7 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
     }
     String url = props.getProperty(SCHEMA_REGISTRY_URL);
     if (url == null) {
-      throw new IllegalArgumentException("Missing schema registry url!");
+      throw new ConfigException("Missing schema registry url!");
     }
     schemaRegistry = new CachedSchemaRegistryClient(url);
   }

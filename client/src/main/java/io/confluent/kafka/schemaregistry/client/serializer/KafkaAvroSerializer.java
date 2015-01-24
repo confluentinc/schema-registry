@@ -42,9 +42,9 @@ public class KafkaAvroSerializer extends AbstracKafkaAvroSerializer implements S
     if (url == null) {
       throw new ConfigException("Missing Schema registry url!");
     }
-    Object maxSchemaObject = configs.get(MAX_SCHEMA_OBJECT);
+    Object maxSchemaObject = configs.get(MAX_SCHEMAS_PER_SUBJECT);
     if (maxSchemaObject == null) {
-      schemaRegistry = new CachedSchemaRegistryClient((String) url);
+      schemaRegistry = new CachedSchemaRegistryClient((String) url, 1000);
     } else {
       schemaRegistry = new CachedSchemaRegistryClient((String) url, (Integer) maxSchemaObject);
     }

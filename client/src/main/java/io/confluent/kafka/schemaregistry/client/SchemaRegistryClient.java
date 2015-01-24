@@ -20,6 +20,6 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 
 public interface SchemaRegistryClient {
-  public int register(Schema schema, String subject) throws IOException;
+  public int register(String subject, Schema schema) throws IOException;
   public Schema getByID(int id) throws IOException;
 }

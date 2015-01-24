@@ -42,7 +42,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient{
     idCache = new HashMap<Integer, Schema>();
   }
 
-  private int getIdFromRegistry(Schema schema, String subject) throws IOException {
+  private int getIdFromRegistry(String subject, Schema schema) throws IOException {
     String schemaString = schema.toString();
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
@@ -50,14 +50,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient{
                                     request, subject);
   }
 
-  private Schema getSchemaByIdFromRegisty(int id) throws IOException {
+  private Schema getSchemaByIdFromRegistry(int id) throws IOException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema restSchema =
         RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
     return parser.parse(restSchema.getSchema());
   }
 
   @Override
-  public synchronized int register(Schema schema, String subject) throws IOException {
+  public synchronized int register(String subject, Schema schema) throws IOException {
     Map<Schema, Integer> schemaIdMap;
     if (schemaCache.containsKey(subject)) {
       schemaIdMap = schemaCache.get(subject);
@@ -69,11 +69,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient{
     if (schemaIdMap.containsKey(schema)) {
       return schemaIdMap.get(schema);
     } else {
-      int id = getIdFromRegistry(schema, subject);
-      schemaIdMap.put(schema, id);
-      if (schemaIdMap.size() > identityMapCapacity) {
+      if (schemaIdMap.size() >= identityMapCapacity) {
         throw new IllegalStateException("Two many schema object created for " + subject + "!");
       }
+      int id = getIdFromRegistry(subject, schema);
+      schemaIdMap.put(schema, id);
       return id;
     }
   }
@@ -83,7 +83,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient{
     if (idCache.containsKey(id)) {
       return idCache.get(id);
     } else {
-      Schema schema = getSchemaByIdFromRegisty(id);
+      Schema schema = getSchemaByIdFromRegistry(id);
       idCache.put(id, schema);
       return schema;
     }
