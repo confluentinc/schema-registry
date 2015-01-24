@@ -25,28 +25,25 @@ import kafka.serializer.Encoder;
 import kafka.utils.VerifiableProperties;
 
 /**
-  Only works for IndexedRecord
-  For now, this only works for value.
+  At present, this only works for value not key and it only supports IndexedRecord.
   To register for a topic, user will need to provide a list of record_name:topic_name map as
-  a CSV format. By default, will use record name as subject.
+  a CSV format. By default, the encoder will use record name as topic.
 */
-public class KafkaAvroEncoder extends AbstracKafkaAvroSerializer implements Encoder<Object>  {
-
+public class KafkaAvroEncoder extends AbstracKafkaAvroSerializer implements Encoder<Object> {
   public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry){
     this.schemaRegistry = schemaRegistry;
   }
 
   public KafkaAvroEncoder(VerifiableProperties props) {
-    if (props != null) {
-      String url = props.getString(SCHEMA_REGISTRY_URL);
-      if (url == null) {
-        throw new ConfigException("Missing schema registry url!");
-      }
-      int maxSchemaObject = props.getInt(MAX_SCHEMAS_PER_SUBJECT, 1000);
-      schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject);
-    } else {
+    if (props == null) {
       throw new ConfigException("Missing schema registry url!");
     }
+    String url = props.getProperty(SCHEMA_REGISTRY_URL);
+    if (url == null) {
+      throw new ConfigException("Missing schema registry url!");
+    }
+    int maxSchemaObject = props.getInt(MAX_SCHEMAS_PER_SUBJECT, DEFAULT_MAX_SCHEMAS_PER_SUBJECT);
+    schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject);
   }
 
   @Override

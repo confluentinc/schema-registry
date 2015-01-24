@@ -43,7 +43,7 @@ public abstract class AbstracKafkaAvroSerializer {
 
   protected final String SCHEMA_REGISTRY_URL = "schema.registry.url";
   protected final String MAX_SCHEMAS_PER_SUBJECT = "max.schemas.per.subject";
-
+  protected final int DEFAULT_MAX_SCHEMAS_PER_SUBJECT = 1000;
   protected SchemaRegistryClient schemaRegistry;
 
   static {

@@ -32,6 +32,9 @@ public abstract class AbstractKafkaAvroDeserializer {
   private static final int idSize = 4;
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected final String SCHEMA_REGISTRY_URL = "schema.registry.url";
+  protected final String MAX_SCHEMAS_PER_SUBJECT = "max.schemas.per.subject";
+  protected final int DEFAULT_MAX_SCHEMAS_PER_SUBJECT = 1000;
+
   protected SchemaRegistryClient schemaRegistry;
 
   private ByteBuffer getByteBuffer(byte[] payload) {
@@ -50,7 +53,7 @@ public abstract class AbstractKafkaAvroDeserializer {
       int length = buffer.limit() - 1 - idSize;
       if (schema.getType().equals(Schema.Type.BYTES)) {
         byte[] bytes = new byte[length];
-        buffer.get(bytes, 0 , length);
+        buffer.get(bytes, 0, length);
         return bytes;
       }
       int start = buffer.position() + buffer.arrayOffset();

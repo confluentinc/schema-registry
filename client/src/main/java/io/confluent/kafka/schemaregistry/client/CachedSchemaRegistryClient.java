@@ -31,10 +31,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient{
   private final Map<Integer, Schema> idCache;
   private final Schema.Parser parser = new Schema.Parser();
 
-  public CachedSchemaRegistryClient(String baseUrl) {
-    this(baseUrl, 1000);
-  }
-
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
     this.baseUrl = baseUrl;
     this.identityMapCapacity = identityMapCapacity;
@@ -70,7 +66,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient{
       return schemaIdMap.get(schema);
     } else {
       if (schemaIdMap.size() >= identityMapCapacity) {
-        throw new IllegalStateException("Two many schema object created for " + subject + "!");
+        throw new IllegalStateException("Two many schema objects created for " + subject + "!");
       }
       int id = getIdFromRegistry(subject, schema);
       schemaIdMap.put(schema, id);

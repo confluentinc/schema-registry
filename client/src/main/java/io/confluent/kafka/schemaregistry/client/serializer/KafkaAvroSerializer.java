@@ -44,13 +44,14 @@ public class KafkaAvroSerializer extends AbstracKafkaAvroSerializer implements S
     }
     Object maxSchemaObject = configs.get(MAX_SCHEMAS_PER_SUBJECT);
     if (maxSchemaObject == null) {
-      schemaRegistry = new CachedSchemaRegistryClient((String) url, 1000);
+      schemaRegistry = new CachedSchemaRegistryClient(
+          (String) url, DEFAULT_MAX_SCHEMAS_PER_SUBJECT);
     } else {
-      schemaRegistry = new CachedSchemaRegistryClient((String) url, (Integer) maxSchemaObject);
+      schemaRegistry = new CachedSchemaRegistryClient(
+          (String) url, (Integer) maxSchemaObject);
     }
 
   }
-
 
   @Override
   public byte[] serialize(String topic, Object record) {

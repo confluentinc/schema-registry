@@ -37,7 +37,8 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    schemaRegistry = new CachedSchemaRegistryClient(url);
+    int maxSchemaObject = props.getInt(MAX_SCHEMAS_PER_SUBJECT, DEFAULT_MAX_SCHEMAS_PER_SUBJECT);
+    schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject);
   }
 
   @Override
