@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.client.serializer;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -37,11 +38,16 @@ public class KafkaAvroEncoder extends AbstracKafkaAvroSerializer implements Enco
 
   public KafkaAvroEncoder(VerifiableProperties props) {
     if (props != null) {
-      String url = props.getProperty(SCHEMA_REGISTRY_URL);
+      String url = props.getString(SCHEMA_REGISTRY_URL);
       if (url == null) {
         throw new ConfigException("Missing schema registry url!");
       }
-      schemaRegistry = new CachedSchemaRegistryClient(url);
+      String maxSchemaObject = props.getString(MAX_SCHEMA_OBJECT);
+      if (maxSchemaObject == null) {
+        schemaRegistry = new CachedSchemaRegistryClient(url);
+      } else {
+        schemaRegistry = new CachedSchemaRegistryClient(url, Integer.parseInt(maxSchemaObject));
+      }
     } else {
       throw new ConfigException("Missing schema registry url!");
     }
@@ -53,7 +59,7 @@ public class KafkaAvroEncoder extends AbstracKafkaAvroSerializer implements Enco
       String subject = ((IndexedRecord) object).getSchema().getName() + "-value";
       return serializeImpl(subject, object);
     } else {
-      throw new IllegalArgumentException("Primitive types are not supported yet");
+      throw new SerializationException("Primitive types are not supported yet");
     }
   }
 }

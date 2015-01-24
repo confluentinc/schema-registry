@@ -42,6 +42,8 @@ public abstract class AbstracKafkaAvroSerializer {
   private final EncoderFactory encoderFactory = EncoderFactory.get();
 
   protected final String SCHEMA_REGISTRY_URL = "schema.registry.url";
+  protected final String MAX_SCHEMA_OBJECT = "max.schema.object";
+
   protected SchemaRegistryClient schemaRegistry;
 
   static {

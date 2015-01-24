@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.schemaregistry.client.serializer;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -36,12 +37,18 @@ public class KafkaAvroSerializer extends AbstracKafkaAvroSerializer implements S
 
   @Override
   public void configure(Map<String,?> configs, boolean isKey) {
+    this.isKey = isKey;
     Object url = configs.get(SCHEMA_REGISTRY_URL);
     if (url == null) {
-      throw new IllegalArgumentException("Missing Schema registry url!");
+      throw new ConfigException("Missing Schema registry url!");
     }
-    this.isKey = isKey;
-    schemaRegistry = new CachedSchemaRegistryClient((String) url);
+    Object maxSchemaObject = configs.get(MAX_SCHEMA_OBJECT);
+    if (maxSchemaObject == null) {
+      schemaRegistry = new CachedSchemaRegistryClient((String) url);
+    } else {
+      schemaRegistry = new CachedSchemaRegistryClient((String) url, (Integer) maxSchemaObject);
+    }
+
   }
 
 
