@@ -23,15 +23,12 @@
         <kafka.version>0.8.2.0</kafka.version>
         <kafka.scala.version>2.10</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
-        <easymock.version>3.0</easymock.version>
         <rocksdbjni.version>3.5.1</rocksdbjni.version>
         <restutils.version>0.1-SNAPSHOT</restutils.version>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <avro.version>1.7.7</avro.version>
         <jackson.version>2.4.3</jackson.version>
-        <common-config.version>0.1-SNAPSHOT</common-config.version>
-        <common-utils.version>0.1-SNAPSHOT</common-utils.version>
         <junit.version>4.11</junit.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
     <dependencyManagement>
