@@ -13,6 +13,7 @@
     <modules>
         <module>core</module>
         <module>client</module>
+        <module>avro-serializer</module>
         <module>package</module>
     </modules>
 
