@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.client.serializer.KafkaAvroDecoder;
+import io.confluent.kafka.serializers.KafkaAvroDecoder;
 import kafka.consumer.ConsumerConfig;
 import kafka.consumer.ConsumerIterator;
 import kafka.consumer.KafkaStream;
@@ -109,7 +109,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.StringSerializer.class);
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-              io.confluent.kafka.schemaregistry.client.serializer.KafkaAvroSerializer.class);
+              io.confluent.kafka.serializers.KafkaAvroSerializer.class);
     return props;
   }
 
@@ -128,7 +128,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
   private Properties createProducerProps() {
     Properties props = new Properties();
     props.put("serializer.class",
-              "io.confluent.kafka.schemaregistry.client.serializer.KafkaAvroEncoder");
+              "io.confluent.kafka.serializers.KafkaAvroEncoder");
     props.put("key.serializer.class", "kafka.serializer.StringEncoder");
     props.put("metadata.broker.list", brokerList);
     props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);

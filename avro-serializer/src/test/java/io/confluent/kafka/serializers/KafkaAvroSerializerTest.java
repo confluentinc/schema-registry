@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.client;
+package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -21,9 +21,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.Test;
 
-import io.confluent.kafka.schemaregistry.client.serializer.KafkaAvroDecoder;
-import io.confluent.kafka.schemaregistry.client.serializer.KafkaAvroEncoder;
-import io.confluent.kafka.schemaregistry.client.serializer.KafkaAvroSerializer;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
