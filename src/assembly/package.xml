@@ -12,7 +12,7 @@
     <includeBaseDirectory>false</includeBaseDirectory>
     <fileSets>
         <fileSet>
-            <directory>${project.basedir}</directory>
+            <directory>${project.parent.basedir}</directory>
             <outputDirectory>share/doc/schema-registry/</outputDirectory>
             <includes>
                 <include>README*</include>
@@ -21,7 +21,7 @@
             </includes>
         </fileSet>
         <fileSet>
-            <directory>${project.basedir}</directory>
+            <directory>${project.parent.basedir}</directory>
             <outputDirectory>/</outputDirectory>
             <includes>
                 <include>bin/*</include>
