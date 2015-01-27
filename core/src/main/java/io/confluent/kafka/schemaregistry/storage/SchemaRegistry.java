@@ -38,5 +38,7 @@ public interface SchemaRegistry {
 
   Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException;
 
+  Schema getLatestVersion(String subject) throws SchemaRegistryException;
+
   void close();
 }

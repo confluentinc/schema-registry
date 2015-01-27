@@ -24,8 +24,9 @@ import java.util.concurrent.Callable;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -102,13 +103,28 @@ public class TestUtils {
         baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
 
-  public static int registerDryRun(String baseUrl, String schemaString, String subject)
+  public static int registerSchemaDryRun(String baseUrl, String schemaString, String subject)
       throws IOException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
 
     return RestUtils.registerSchemaDryRun(
         baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+  }
+
+  public static boolean testCompatibility(String baseUrl, String schemaString, String subject,
+                                          String version)
+      throws IOException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+
+    return RestUtils.testCompatibility(
+        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject, version);
+  }
+
+  public static Schema getId(String baseUrl, int id)
+      throws IOException {
+    return RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
   }
 
   /** Helper method which checks the number of versions registered under the given subject. */

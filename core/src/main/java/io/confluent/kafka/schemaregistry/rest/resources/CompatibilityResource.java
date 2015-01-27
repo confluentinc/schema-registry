@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2015 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import org.slf4j.Logger;
@@ -20,11 +21,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
@@ -35,74 +34,75 @@ import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.SubjectSchemaVersionResponse;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
-@Path("/subjects")
+@Path("/compatibility")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
            Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
            Versions.JSON_WEIGHTED})
 @Consumes({Versions.SCHEMA_REGISTRY_V1_JSON,
            Versions.SCHEMA_REGISTRY_DEFAULT_JSON,
            Versions.JSON, Versions.GENERIC_REQUEST})
-public class SubjectsResource {
+public class CompatibilityResource {
 
-  public final static String MESSAGE_SUBJECT_NOT_FOUND = "Subject not found.";
-  private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
+  public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
+  private static final Logger log = LoggerFactory.getLogger(CompatibilityResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
-  public SubjectsResource(KafkaSchemaRegistry schemaRegistry) {
+  public CompatibilityResource(KafkaSchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
   @POST
-  @Path("/{subject}")
+  @Path("/subjects/{subject}/versions/{version}")
   public void getSchemaUnderSubject(final @Suspended AsyncResponse asyncResponse,
                                     final @HeaderParam("Content-Type") String contentType,
                                     final @HeaderParam("Accept") String accept,
                                     @PathParam("subject") String subject,
+                                    @PathParam("version") String version,
                                     RegisterSchemaRequest request) {
-    // returns version if the schema exists. Otherwise returns 404
+    // returns true if posted schema is compatible with the specified version. "latest" is 
+    // a special version
     Map<String, String> headerProperties = new HashMap<String, String>();
     headerProperties.put("Content-Type", contentType);
     headerProperties.put("Accept", accept);
     Schema schema = new Schema(subject, 0, 0, request.getSchema());
-    int id = 0;
+    boolean isCompatible = false;
+    CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     try {
-      id = schemaRegistry.registerOrForward(subject, schema, headerProperties, true);
-    } catch (SchemaRegistryException e) {
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
-    }
-    // get version if schema exists under the specified subject
-    try {
-      schema = schemaRegistry.get(id);
-    } catch (SchemaRegistryException e) {
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
-    }
-    SubjectSchemaVersionResponse schemaVersionResponse = new SubjectSchemaVersionResponse();
-    schemaVersionResponse.setVersion(schema.getVersion());
-    asyncResponse.resume(schemaVersionResponse);
-  }
-
-  @Path("/{subject}/versions")
-  public SubjectSchemasResource getSchemas(@PathParam("subject") String subject) {
-    if (subject != null) {
-      subject = subject.trim();
-    } else {
-      throw new NotFoundException(MESSAGE_SUBJECT_NOT_FOUND);
-    }
-    return new SubjectSchemasResource(schemaRegistry, subject);
-  }
-
-  @GET
-  public Set<String> list() {
-    try {
-      return schemaRegistry.listSubjects();
-    } catch (SchemaRegistryException e) {
+      Schema schemaForSpecifiedVersion = null;
+      if (version.trim().toLowerCase().equals("latest")) {
+        schemaForSpecifiedVersion = schemaRegistry.getLatestVersion(subject);
+      } else {
+        int versionId = Integer.valueOf(version.trim());
+        schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId);
+      }
+      if (schemaForSpecifiedVersion == null) {
+        if (version.trim().toLowerCase().equals("latest")) {
+          isCompatible = true;
+          compatibilityCheckResponse.setIsCompatible(isCompatible);
+          asyncResponse.resume(compatibilityCheckResponse);          
+        } else {
+          throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);          
+        }
+      } else {
+        AvroSchema avroSchemaForSpecifiedVersion =
+            AvroUtils.parseSchema(schemaForSpecifiedVersion.getSchema());
+        AvroSchema avroInputSchema =
+            AvroUtils.parseSchema(schema.getSchema());
+        isCompatible =
+            schemaRegistry.isCompatible(subject, avroInputSchema, avroSchemaForSpecifiedVersion);
+        compatibilityCheckResponse.setIsCompatible(isCompatible);
+        asyncResponse.resume(compatibilityCheckResponse);
+      }
+      } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
   }

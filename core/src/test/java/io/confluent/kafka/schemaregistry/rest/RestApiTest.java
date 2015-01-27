@@ -33,8 +33,9 @@ import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class RestApiTest extends ClusterTestHarness {
@@ -147,27 +148,28 @@ public class RestApiTest extends ClusterTestHarness {
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(numSchemas);
     TestUtils.changeCompatibility(restApp.restConnect, NONE, subject);
 
-    // test dry run registration of a schema into new subject
+    // test compatibility of this schema against the latest version under the subject
     String schema1 = allSchemas.get(0);
-    int id = TestUtils.registerDryRun(restApp.restConnect, schema1, subject);
-    assertEquals("Dry run should return id 0.", 0, id);
+    boolean isCompatible = 
+        TestUtils.testCompatibility(restApp.restConnect, schema1, subject, "latest");
+    assertTrue("First schema registered should be compatible", isCompatible);
     TestUtils.checkNumberOfVersions(restApp.restConnect, numRegisteredSchemas, subject);
 
     for (int i = 0; i < numSchemas; i++) {
-      // Test that dry run doesn't change the number of versions
+      // Test that compatibility check doesn't change the number of versions
       String schema = allSchemas.get(i);
-      int dryRunId = TestUtils.registerDryRun(restApp.restConnect, schema, subject);
+      isCompatible = TestUtils.testCompatibility(restApp.restConnect, schema, subject, "latest");
       TestUtils.checkNumberOfVersions(restApp.restConnect, numRegisteredSchemas, subject);
 
       // Test that registering and dry run return the same ids
       int registeredId = TestUtils.registerSchema(restApp.restConnect, schema, subject);
+      int versionOfRegisteredSchema = 
+          TestUtils.getId(restApp.restConnect, registeredId).getVersion();
       numRegisteredSchemas++;
-      assertEquals("Dry run id and register id should be the same.", registeredId, dryRunId);
-
-      // test that dry run registration of an already registered schema returns the version of the original
-      dryRunId = TestUtils.registerDryRun(restApp.restConnect, schema, subject);
-      assertEquals("Dry run registration of an already registered schema should not change the id.",
-                   registeredId, dryRunId);
+      // check if the schema exists under the subject
+      int dryRunVersion = TestUtils.registerSchemaDryRun(restApp.restConnect, schema, subject);
+      assertEquals("Dry run version and register version should be the same.", 
+                   versionOfRegisteredSchema, dryRunVersion);
       TestUtils.checkNumberOfVersions(restApp.restConnect, numRegisteredSchemas, subject);
     }
   }
@@ -196,32 +198,14 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.changeCompatibility(
         restApp.restConnect, AvroCompatibilityLevel.FULL, subject);
 
-    // test that dry run register of incompatible schema produces error
-    WebApplicationException dryRunException = null;
-    TestUtils.registerSchema(restApp.restConnect, schema1, subject);
-    try {
-      TestUtils.registerDryRun(restApp.restConnect, schema2, subject);
-
-    } catch(WebApplicationException e) {
-      // this is expected
-      dryRunException = e;
-    }
-    assertNotNull("Dry run with incompatible schema should produce a " +
-      "WebApplicationException.", dryRunException);
-
-    // Capture error produced by registering incompatible schema
-    WebApplicationException registerException = null;
-    try {
-      TestUtils.registerSchema(restApp.restConnect, schema2, subject);
-    } catch(WebApplicationException e) {
-      // this is expected
-      registerException = e;
-    }
-    assertNotNull("Registering incompatible schema should produce a " +
-                  "WebApplicationException.", registerException);
-
-    // test that errors produced by dry run and actual register are the same
-    assertEquals("", registerException.getMessage(), dryRunException.getMessage());
+    // test that compatibility check for incompatible schema returns false and the appropriate 
+    // error response from Avro
+    int idOfRegisteredSchema = TestUtils.registerSchema(restApp.restConnect, schema1, subject);
+    int versionOfRegisteredSchema =
+        TestUtils.getId(restApp.restConnect, idOfRegisteredSchema).getVersion();
+    boolean isCompatible = TestUtils.testCompatibility(restApp.restConnect, schema2, subject, 
+                                  String.valueOf(versionOfRegisteredSchema));
+    assertFalse("Schema should be incompatible with specified version", isCompatible);
   }
 
   @Test

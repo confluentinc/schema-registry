@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.resources.SchemaMd5AndSubject;
 
 public class KafkaStoreMessageHandler
     implements StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> {
@@ -59,7 +60,8 @@ public class KafkaStoreMessageHandler
       schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
 
       MD5 md5 = MD5.ofString(schemaObj.getSchema());
-      schemaRegistry.schemaHashToGuid.put(md5, schemaObj.getId());
+      SchemaMd5AndSubject schemaMd5AndSubject = new SchemaMd5AndSubject(schemaKey.getSubject(), md5);
+      schemaRegistry.schemaHashToGuid.put(schemaMd5AndSubject, schemaObj.getId());
     }
   }
 }
