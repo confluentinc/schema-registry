@@ -27,8 +27,7 @@ public class Subject {
   private String compatibility = "full";
 
   public Subject(@JsonProperty("name") String name,
-                 @JsonProperty("compatibility") String compatibility)
-  {
+                 @JsonProperty("compatibility") String compatibility) {
     this.name = name;
     this.compatibility = compatibility;
   }

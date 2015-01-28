@@ -16,16 +16,33 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import io.confluent.kafka.schemaregistry.storage.MD5;
+import java.util.HashMap;
+import java.util.Map;
 
-public class SchemaMd5AndSubject {
+public class SchemaIdAndSubjects {
 
-  private MD5 md5;
-  private String subject;
-  
-  public SchemaMd5AndSubject(String subject, MD5 md5) {
-    this.subject = subject;  
-    this.md5 = md5;
+  private int id;
+  private Map<String, Integer> subjectsAndVersions;
+
+  public SchemaIdAndSubjects(int id) {
+    this.subjectsAndVersions = new HashMap<String, Integer>();
+    this.id = id;
+  }
+
+  public void addSubjectAndVersion(String subject, int version) {
+    this.subjectsAndVersions.put(subject, version);
+  }
+
+  public boolean hasSubject(String subject) {
+    return this.subjectsAndVersions.keySet().contains(subject);
+  }
+
+  public int getVersion(String subject) {
+    return this.subjectsAndVersions.get(subject);
+  }
+
+  public int getSchemaId() {
+    return this.id;
   }
 
   @Override
@@ -37,12 +54,12 @@ public class SchemaMd5AndSubject {
       return false;
     }
 
-    SchemaMd5AndSubject that = (SchemaMd5AndSubject) o;
+    SchemaIdAndSubjects that = (SchemaIdAndSubjects) o;
 
-    if (!this.subject.equals(that.subject)) {
+    if (this.id != that.id) {
       return false;
     }
-    if (!this.md5.equals(that.md5)) {
+    if (!this.subjectsAndVersions.equals(that.subjectsAndVersions)) {
       return false;
     }
 
@@ -51,16 +68,16 @@ public class SchemaMd5AndSubject {
 
   @Override
   public int hashCode() {
-    int result = subject.hashCode();
-    result = 31 * result + md5.hashCode();
+    int result = 31 * this.id;
+    result = 31 * result + subjectsAndVersions.hashCode();
     return result;
   }
 
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("{subject=" + this.subject + ",");
-    sb.append("md5=" + this.md5.toString() + "}");
+    sb.append("{id=" + this.id + ",");
+    sb.append("subjectsAndVersions=" + this.subjectsAndVersions.toString() + "}");
     return sb.toString();
   }
 

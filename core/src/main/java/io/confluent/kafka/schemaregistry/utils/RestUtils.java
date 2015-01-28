@@ -147,7 +147,7 @@ public class RestUtils {
   }
 
   public static int registerSchemaDryRun(String baseUrl, Map<String, String> requestProperties,
-                                         RegisterSchemaRequest registerSchemaRequest, 
+                                         RegisterSchemaRequest registerSchemaRequest,
                                          String subject)
       throws IOException {
     String url = String.format("%s/subjects/%s", baseUrl, subject);
@@ -159,7 +159,7 @@ public class RestUtils {
   }
 
   public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
-                                    RegisterSchemaRequest registerSchemaRequest, String subject)
+                                   RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException {
     String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
 
@@ -170,8 +170,9 @@ public class RestUtils {
   }
 
   public static boolean testCompatibility(String baseUrl, Map<String, String> requestProperties,
-                                      RegisterSchemaRequest registerSchemaRequest, String subject,
-                                      String version)
+                                          RegisterSchemaRequest registerSchemaRequest,
+                                          String subject,
+                                          String version)
       throws IOException {
     String
         url =

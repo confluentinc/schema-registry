@@ -23,7 +23,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import kafka.serializer.Decoder;
 import kafka.utils.VerifiableProperties;
 
-public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements Decoder<Object>  {
+public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements Decoder<Object> {
 
   public KafkaAvroDecoder(SchemaRegistryClient schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
@@ -42,7 +42,7 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
   }
 
   @Override
-  public Object fromBytes(byte[] bytes){
+  public Object fromBytes(byte[] bytes) {
     try {
       return deserialize(bytes);
     } catch (SerializationException e) {

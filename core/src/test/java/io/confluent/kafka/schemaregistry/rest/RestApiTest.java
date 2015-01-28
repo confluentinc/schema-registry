@@ -174,7 +174,6 @@ public class RestApiTest extends ClusterTestHarness {
     }
   }
 
-
   @Test
   public void testDryRunIncompatible() throws IOException {
     String subject = "testSubject";
@@ -209,9 +208,63 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testSchemaRegistrationUnderDiffSubjects() throws IOException {
+    String subject1 = "testSubject1";
+    String subject2 = "testSubject2";
+
+    // Make two incompatible schemas - field 'f' has different types
+    String schemaString1 = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{\"type\":\"string\",\"name\":"
+                           + "\"f" + "\"}]}";
+    String schema1 = AvroUtils.parseSchema(schemaString1).canonicalString;
+    String schemaString2 = "{\"type\":\"record\","
+                           + "\"name\":\"myrecord\","
+                           + "\"fields\":"
+                           + "[{\"type\":\"int\",\"name\":"
+                           + "\"foo" + "\"}]}";
+    String schema2 = AvroUtils.parseSchema(schemaString2).canonicalString;
+
+    TestUtils.changeCompatibility(
+        restApp.restConnect, AvroCompatibilityLevel.NONE, subject1);
+    TestUtils.changeCompatibility(
+        restApp.restConnect, AvroCompatibilityLevel.NONE, subject2);
+
+    int idOfRegisteredSchema1Subject1 =
+        TestUtils.registerSchema(restApp.restConnect, schema1, subject1);
+    int versionOfRegisteredSchema1Subject1 =
+        TestUtils.registerSchemaDryRun(restApp.restConnect, schema1, subject1);
+    assertEquals("1st schema under subject1 should have version 1", 1,
+                 versionOfRegisteredSchema1Subject1);
+    assertEquals("1st schema registered globally should have id 0", 0,
+                 idOfRegisteredSchema1Subject1);
+
+    int idOfRegisteredSchema2Subject1 =
+        TestUtils.registerSchema(restApp.restConnect, schema2, subject1);
+    int versionOfRegisteredSchema2Subject1 =
+        TestUtils.registerSchemaDryRun(restApp.restConnect, schema2, subject1);
+    assertEquals("2nd schema under subject1 should have version 2", 2,
+                 versionOfRegisteredSchema2Subject1);
+    assertEquals("2nd schema registered globally should have id 1", 1,
+                 idOfRegisteredSchema2Subject1);
+
+    int idOfRegisteredSchema2Subject2 =
+        TestUtils.registerSchema(restApp.restConnect, schema2, subject2);
+    int versionOfRegisteredSchema2Subject2 =
+        TestUtils.registerSchemaDryRun(restApp.restConnect, schema2, subject2);
+    assertEquals(
+        "2nd schema under subject1 should still have version 1 as the first schema under subject2",
+        1,
+        versionOfRegisteredSchema2Subject2);
+    assertEquals("Since schema is globally registered but not under subject2, id should not change",
+                 1,
+                 idOfRegisteredSchema2Subject2);
+  }
+
+  @Test
   public void testConfigDefaults() throws IOException {
     String subject = "testSubject";
-    String schemaString = TestUtils.getRandomCanonicalAvroString(1).get(0);
     assertEquals("Default compatibility level should be none for this test instance",
                  NONE,
                  RestUtils.getConfig(restApp.restConnect,

@@ -40,7 +40,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroExcep
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.rest.resources.SchemaMd5AndSubject;
+import io.confluent.kafka.schemaregistry.rest.resources.SchemaIdAndSubjects;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -61,7 +61,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 20;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
   final Map<Integer, SchemaKey> guidToSchemaKey;
-  final Map<SchemaMd5AndSubject, Integer> schemaHashToGuid;
+  final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
@@ -89,7 +89,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
-    this.schemaHashToGuid = new HashMap<SchemaMd5AndSubject, Integer>();
+    this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();
     kafkaStore =
         new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(config,
                                                                new KafkaStoreMessageHandler(this),
@@ -156,9 +156,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       // see if the schema to be registered already exists
       AvroSchema avroSchema = canonicalizeSchema(schema);
       MD5 md5 = MD5.ofString(schema.getSchema());
-      SchemaMd5AndSubject schemaMd5AndSubject = new SchemaMd5AndSubject(subject, md5);
-      if (this.schemaHashToGuid.containsKey(schemaMd5AndSubject)) {
-        return this.schemaHashToGuid.get(schemaMd5AndSubject);
+      int schemaId = -1;
+      if (this.schemaHashToGuid.containsKey(md5)) {
+        SchemaIdAndSubjects schemaIdAndSubjects = this.schemaHashToGuid.get(md5);
+        if (schemaIdAndSubjects.hasSubject(subject)) {
+          // return only if the schema was previously registered under the input subject
+          return schemaIdAndSubjects.getSchemaId();
+        } else {
+          // need to register schema under the input subject
+          schemaId = schemaIdAndSubjects.getSchemaId();
+        }
       }
 
       // determine the latest version of the schema in the subject
@@ -182,7 +189,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           return schemaIdCounter.get();
         }
 
-        schema.setId(schemaIdCounter.getAndIncrement());
+        if (schemaId > 0) {
+          schema.setId(schemaId);
+        } else {
+          schema.setId(schemaIdCounter.getAndIncrement());
+        }
         if (schemaIdCounter.get() == maxSchemaIdCounterValue) {
           maxSchemaIdCounterValue =
               nextSchemaIdCounterBatch().intValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
@@ -218,6 +229,49 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                             + "unknown");
         }
       }
+    }
+  }
+
+  public int lookUpSchemaUnderSubjectOrForward(String subject,
+                                               Schema schema,
+                                               Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    synchronized (masterLock) {
+      if (isMaster()) {
+        return lookUpSchemaUnderSubject(subject, schema);
+      } else {
+        // forward registering request to the master
+        if (masterIdentity != null) {
+          return forwardToMaster(subject, schema.getSchema(), masterIdentity.getHost(),
+                                 masterIdentity.getPort(), headerProperties);
+        } else {
+          throw new SchemaRegistryException("Register schema request failed since master is "
+                                            + "unknown");
+        }
+      }
+    }
+  }
+
+  /**
+   * Checks if given schema was ever registered under a subject. If found, it returns the version of
+   * the schema under the subject. If not, returns -1
+   */
+  public int lookUpSchemaUnderSubject(String subject,
+                                      Schema schema)
+      throws SchemaRegistryException {
+    // see if the schema to be registered already exists
+    MD5 md5 = MD5.ofString(schema.getSchema());
+    if (this.schemaHashToGuid.containsKey(md5)) {
+      SchemaIdAndSubjects schemaIdAndSubjects = this.schemaHashToGuid.get(md5);
+      if (schemaIdAndSubjects.hasSubject(subject)) {
+        return schemaIdAndSubjects.getVersion(subject);
+      } else {
+        // this schema was never registered under the input subject
+        return -1;
+      }
+    } else {
+      // this schema was never registered in the registry under any subject
+      return -1;
     }
   }
 

@@ -24,7 +24,8 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 
-public class CachedSchemaRegistryClient implements SchemaRegistryClient{
+public class CachedSchemaRegistryClient implements SchemaRegistryClient {
+
   private final String baseUrl;
   private final int identityMapCapacity;
   private final Map<String, Map<Schema, Integer>> schemaCache;

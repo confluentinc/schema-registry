@@ -61,8 +61,8 @@ public class SubjectsResource {
 
   @POST
   @Path("/{subject}")
-  public void getSchemaUnderSubject(final @Suspended AsyncResponse asyncResponse,
-                                    final @HeaderParam("Content-Type") String contentType,
+  public void lookUpSchemaUnderSubject(final @Suspended AsyncResponse asyncResponse,
+                                       final @HeaderParam("Content-Type") String contentType,
                                     final @HeaderParam("Accept") String accept,
                                     @PathParam("subject") String subject,
                                     RegisterSchemaRequest request) {
@@ -71,20 +71,17 @@ public class SubjectsResource {
     headerProperties.put("Content-Type", contentType);
     headerProperties.put("Accept", accept);
     Schema schema = new Schema(subject, 0, 0, request.getSchema());
-    int id = 0;
+    int version = -1;
     try {
-      id = schemaRegistry.registerOrForward(subject, schema, headerProperties, true);
+      version = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema, headerProperties);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
-    // get version if schema exists under the specified subject
-    try {
-      schema = schemaRegistry.get(id);
-    } catch (SchemaRegistryException e) {
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+    if (version < 0) {
+      throw new NotFoundException("Schema never registered under subject " + subject);
     }
     SubjectSchemaVersionResponse schemaVersionResponse = new SubjectSchemaVersionResponse();
-    schemaVersionResponse.setVersion(schema.getVersion());
+    schemaVersionResponse.setVersion(version);
     asyncResponse.resume(schemaVersionResponse);
   }
 

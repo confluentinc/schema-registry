@@ -24,6 +24,7 @@ import org.hibernate.validator.constraints.NotEmpty;
 import java.io.IOException;
 
 public class CompatibilityCheckResponse {
+
   @NotEmpty
   private boolean isCompatible;
 

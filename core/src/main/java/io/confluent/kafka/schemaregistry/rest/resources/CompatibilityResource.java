@@ -88,9 +88,9 @@ public class CompatibilityResource {
         if (version.trim().toLowerCase().equals("latest")) {
           isCompatible = true;
           compatibilityCheckResponse.setIsCompatible(isCompatible);
-          asyncResponse.resume(compatibilityCheckResponse);          
+          asyncResponse.resume(compatibilityCheckResponse);
         } else {
-          throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);          
+          throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
         }
       } else {
         AvroSchema avroSchemaForSpecifiedVersion =
@@ -102,7 +102,7 @@ public class CompatibilityResource {
         compatibilityCheckResponse.setIsCompatible(isCompatible);
         asyncResponse.resume(compatibilityCheckResponse);
       }
-      } catch (SchemaRegistryException e) {
+    } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
   }

@@ -36,7 +36,7 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
   }
 
   @Override
-  public void configure(Map<String,?> configs, boolean isKey) {
+  public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
     Object url = configs.get(SCHEMA_REGISTRY_URL);
     if (url == null) {

@@ -35,6 +35,7 @@ import static org.junit.Assert.fail;
  * For general utility methods used in unit tests.
  */
 public class TestUtils {
+
   private static final String IoTmpDir = System.getProperty("java.io.tmpdir");
   private static final Random random = new Random();
 
@@ -127,8 +128,11 @@ public class TestUtils {
     return RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
   }
 
-  /** Helper method which checks the number of versions registered under the given subject. */
-  public static void checkNumberOfVersions(String baseUrl, int expected, String subject) throws IOException {
+  /**
+   * Helper method which checks the number of versions registered under the given subject.
+   */
+  public static void checkNumberOfVersions(String baseUrl, int expected, String subject)
+      throws IOException {
     List<Integer> versions = RestUtils.getAllVersions(baseUrl,
                                                       RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                                       subject);
@@ -152,7 +156,7 @@ public class TestUtils {
    */
   public static void registerAndVerifySchema(String baseUrl, String schemaString,
                                              int expectedId, String subject)
-  throws IOException {
+      throws IOException {
     assertEquals("Registering a new schema should succeed",
                  expectedId,
                  TestUtils.registerSchema(baseUrl, schemaString, subject));
