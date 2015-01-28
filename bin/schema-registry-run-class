@@ -21,8 +21,10 @@ for dir in $base_dir/package/target/package-*-development; do
   CLASSPATH=$CLASSPATH:$dir/share/schema-registry/*
 done
 
-# Production jars
-CLASSPATH=$CLASSPATH:$base_dir/package/target/package-*-package/share/schema-registry/*
+# Production jars, including kafka, rest-utils, and schema-registry
+for library in "confluent-common" "rest-utils" "schema-registry"; do
+  CLASSPATH=$CLASSPATH:$base_dir/share/$library/*      
+done
 
 # JMX settings
 if [ -z "$SCHEMA_REGISTRY_JMX_OPTS" ]; then
