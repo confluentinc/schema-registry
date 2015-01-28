@@ -29,7 +29,6 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
 public class SubjectsResource {
 
   public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
-  public final static String MESSAGE_SUBJECT_NOT_FOUND = "Subject not found.";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -52,16 +51,6 @@ public class SubjectsResource {
       throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
     }
     return schema;
-  }
-
-  @Path("/{subject}/versions")
-  public SchemasResource getSchemas(@PathParam("subject") String subjectName) {
-    if (subjectName != null) {
-      subjectName = subjectName.trim();
-    } else {
-      throw new NotFoundException(MESSAGE_SUBJECT_NOT_FOUND);
-    }
-    return new SchemasResource(schemaRegistry, subjectName);
   }
 
   @GET

@@ -58,7 +58,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(RootResource.class);
     config.register(new ConfigResource(schemaRegistry));
     config.register(new SubjectsResource(schemaRegistry));
-    config.register(SchemasResource.class);
+    config.register(new SchemasResource(schemaRegistry));
   }
 
   @Override

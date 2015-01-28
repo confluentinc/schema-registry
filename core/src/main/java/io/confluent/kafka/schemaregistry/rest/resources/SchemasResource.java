@@ -45,6 +45,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
+@Path("/subjects/{subject}/versions")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
            Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
            Versions.JSON_WEIGHTED})
@@ -53,25 +54,26 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SchemasResource {
 
+  public final static String MESSAGE_SUBJECT_NOT_FOUND = "Subject not found.";
   public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
 
-  private final String subject;
   private final KafkaSchemaRegistry schemaRegistry;
 
-  public SchemasResource(KafkaSchemaRegistry registry, String subject) {
+  public SchemasResource(KafkaSchemaRegistry registry) {
     this.schemaRegistry = registry;
-    this.subject = subject;
   }
 
   @GET
   @Path("/{version}")
-  public Schema getSchema(@PathParam("version") Integer version) {
+  public Schema getSchema(@PathParam("subject") String subject,
+                          @PathParam("version") Integer version) {
+    subject = cleanSubjectName(subject);
     Schema schema = null;
     try {
-      schema = schemaRegistry.get(this.subject, version);
+      schema = schemaRegistry.get(subject, version);
     } catch (SchemaRegistryException e) {
-      log.debug("Error while retrieving schema for subject " + this.subject + " with version " +
+      log.debug("Error while retrieving schema for subject " + subject + " with version " +
                 version + " from the schema registry", e);
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
@@ -82,11 +84,12 @@ public class SchemasResource {
   }
 
   @GET
-  public List<Integer> list() {
+  public List<Integer> list(@PathParam("subject") String subject) {
+    subject = cleanSubjectName(subject);
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
     try {
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
@@ -109,6 +112,7 @@ public class SchemasResource {
                        @QueryParam("dry_run") String dryRun,
                        RegisterSchemaRequest request) {
 
+    subjectName = cleanSubjectName(subjectName);
     Map<String, String> headerProperties = new HashMap<String, String>();
     headerProperties.put("Content-Type", contentType);
     headerProperties.put("Accept", accept);
@@ -125,5 +129,13 @@ public class SchemasResource {
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
     registerSchemaResponse.setId(id);
     asyncResponse.resume(registerSchemaResponse);
+  }
+
+  private String cleanSubjectName(final String subjectName) {
+    if (subjectName != null) {
+      return subjectName.trim();
+    } else {
+      throw new NotFoundException(MESSAGE_SUBJECT_NOT_FOUND);
+    }
   }
 }
