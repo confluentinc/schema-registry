@@ -185,9 +185,10 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) {
     try {
       offsetUpdateLock.lock();
-      while (offsetInSchemasTopic < offset) {
+      long timeoutNs = TimeUnit.NANOSECONDS.convert(timeout, timeUnit);
+      while ((offsetInSchemasTopic < offset) && (timeoutNs > 0)) {
         try {
-          offsetReachedThreshold.await(timeout, timeUnit);
+          timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
         } catch (InterruptedException e) {
           log.debug("Interrupted while waiting for the background store reader thread to reach"
                     + " the specified offset: " + offset, e);
