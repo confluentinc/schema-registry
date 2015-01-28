@@ -33,7 +33,7 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
-public abstract class AbstracKafkaAvroSerializer {
+public abstract class AbstractKafkaAvroSerializer {
 
   private static final byte MAGIC_BYTE = 0x0;
   private static final int idSize = 4;
