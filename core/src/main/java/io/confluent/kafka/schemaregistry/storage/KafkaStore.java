@@ -86,7 +86,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
     this.groupId = String.format("schema-registry-%s-%d",
-                                 config.getString(SchemaRegistryConfig.ADVERTISED_HOST_CONFIG),
+                                 config.getString(SchemaRegistryConfig.ADVERTISED_HOST_NAME_CONFIG),
                                  config.getInt(SchemaRegistryConfig.PORT_CONFIG));
     timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.storeUpdateHandler = storeUpdateHandler;

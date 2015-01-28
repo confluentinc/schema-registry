@@ -60,7 +60,7 @@ public class SchemaRegistryConfig extends RestConfig {
   /**
    * <code>advertised.host</code>
    */
-  public static final String ADVERTISED_HOST_CONFIG = "advertised.host";
+  public static final String ADVERTISED_HOST_NAME_CONFIG = "advertised.host.name";
   /**
    * <code>avro.compatibility.level</code>
    */
@@ -112,7 +112,7 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT,
                 KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT, ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_COMMIT_INTERVAL_MS_DOC)
-        .define(ADVERTISED_HOST_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
+        .define(ADVERTISED_HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
                 ConfigDef.Importance.LOW, ADVERTISED_HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
                 ConfigDef.Importance.HIGH, COMPATIBILITY_DOC);
