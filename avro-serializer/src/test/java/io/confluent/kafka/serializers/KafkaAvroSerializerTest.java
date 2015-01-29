@@ -58,8 +58,8 @@ public class KafkaAvroSerializerTest {
     byte[] bytes;
     Object obj;
     IndexedRecord avroRecord = createAvroRecord();
-    bytes= avroSerializer.serialize(topic, avroRecord);
-    obj =  avroDecoder.fromBytes(bytes);
+    bytes = avroSerializer.serialize(topic, avroRecord);
+    obj = avroDecoder.fromBytes(bytes);
     assertEquals(avroRecord, obj);
 
     bytes = avroSerializer.serialize(topic, null);
@@ -100,8 +100,8 @@ public class KafkaAvroSerializerTest {
     byte[] bytes;
     Object obj;
     IndexedRecord avroRecord = createAvroRecord();
-    bytes= avroEncoder.toBytes(avroRecord);
-    obj =  avroDecoder.fromBytes(bytes);
+    bytes = avroEncoder.toBytes(avroRecord);
+    obj = avroDecoder.fromBytes(bytes);
     assertEquals(avroRecord, obj);
   }
 }

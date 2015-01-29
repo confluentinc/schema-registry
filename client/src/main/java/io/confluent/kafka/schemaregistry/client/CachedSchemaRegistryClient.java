@@ -24,7 +24,8 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 
-public class CachedSchemaRegistryClient implements SchemaRegistryClient{
+public class CachedSchemaRegistryClient implements SchemaRegistryClient {
+
   private final String baseUrl;
   private final int identityMapCapacity;
   private final Map<String, Map<Schema, Integer>> schemaCache;
@@ -38,7 +39,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient{
     idCache = new HashMap<Integer, Schema>();
   }
 
-  private int getIdFromRegistry(String subject, Schema schema) throws IOException {
+  private int registerAndGetId(String subject, Schema schema) throws IOException {
     String schemaString = schema.toString();
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
@@ -68,7 +69,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient{
       if (schemaIdMap.size() >= identityMapCapacity) {
         throw new IllegalStateException("Two many schema objects created for " + subject + "!");
       }
-      int id = getIdFromRegistry(subject, schema);
+      int id = registerAndGetId(subject, schema);
       schemaIdMap.put(schema, id);
       return id;
     }

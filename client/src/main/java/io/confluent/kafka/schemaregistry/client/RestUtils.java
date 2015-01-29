@@ -31,19 +31,22 @@ import java.util.Map;
 
 import javax.ws.rs.WebApplicationException;
 
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
-import io.confluent.kafka.schemaregistry.client.rest.Versions;
 
 /**
  * Helper methods for making http client requests to the schema registry servlet.
  */
 public class RestUtils {
 
-  /** Minimum header data necessary for using the Schema Registry REST api. */
+  /**
+   * Minimum header data necessary for using the Schema Registry REST api.
+   */
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
+
   static {
     DEFAULT_REQUEST_PROPERTIES = new HashMap<String, String>();
     DEFAULT_REQUEST_PROPERTIES.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
@@ -62,20 +65,20 @@ public class RestUtils {
   private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
   /**
-   * @param baseUrl HTTP connection will be established with this url.
-   * @param method HTTP method ("GET", "POST", "PUT", etc.)
-   * @param requestBodyData Bytes to be sent in the request body.
+   * @param baseUrl           HTTP connection will be established with this url.
+   * @param method            HTTP method ("GET", "POST", "PUT", etc.)
+   * @param requestBodyData   Bytes to be sent in the request body.
    * @param requestProperties HTTP header properties.
-   * @param responseFormat Expected format of the response to the HTTP request.
-   * @param <T> The type of the deserialized response to the HTTP request.
+   * @param responseFormat    Expected format of the response to the HTTP request.
+   * @param <T>               The type of the deserialized response to the HTTP request.
    * @return The deserialized response to the HTTP request, or null if no data is expected.
-   * @throws IOException
    */
   public static <T> T httpRequest(String baseUrl, String method, byte[] requestBodyData,
                                   Map<String, String> requestProperties,
                                   TypeReference<T> responseFormat) throws IOException {
     log.debug(String.format("Sending %s with input %s to %s",
-                            method, requestBodyData == null ? "null" : new String(requestBodyData), baseUrl));
+                            method, requestBodyData == null ? "null" : new String(requestBodyData),
+                            baseUrl));
 
     HttpURLConnection connection = null;
     try {
@@ -125,7 +128,6 @@ public class RestUtils {
   }
 
 
-
   private static int registerSchema(String baseUrl, Map<String, String> requestProperties,
                                     RegisterSchemaRequest registerSchemaRequest, String subject,
                                     boolean isDryRun)
@@ -150,11 +152,10 @@ public class RestUtils {
 
   public static Schema getId(String baseUrl, Map<String, String> requestProperties,
                              int id) throws IOException {
-    String url = String.format("%s/subjects/%d", baseUrl, id);
+    String url = String.format("%s/schemas/ids/%d", baseUrl, id);
 
     Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                             GET_SCHEMA_RESPONSE_TYPE);
     return response;
   }
-
 }

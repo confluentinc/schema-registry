@@ -91,7 +91,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
     Map<String, List<KafkaStream<String, Object>>> consumerMap = consumer.createMessageStreams(
         topicCountMap, keyDecoder, valueDecoder);
-    KafkaStream<String, Object> stream =  consumerMap.get(topic).get(0);
+    KafkaStream<String, Object> stream = consumerMap.get(topic).get(0);
     ConsumerIterator<String, Object> it = stream.iterator();
     int i = 0;
     while (i < numMessages) {
@@ -119,7 +119,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
   private void newProduce(KafkaProducer producer, String topic, Object[] objects) {
     ProducerRecord<String, Object> record;
-    for (Object object: objects) {
+    for (Object object : objects) {
       record = new ProducerRecord<String, Object>(topic, object);
       producer.send(record);
     }
@@ -142,7 +142,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
   private void produce(Producer<String, Object> producer, String topic, Object[] objects) {
     KeyedMessage<String, Object> message;
-    for (Object object: objects)  {
+    for (Object object : objects) {
       message = new KeyedMessage<String, Object>(topic, object);
       producer.send(message);
     }
@@ -152,7 +152,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
   public void testAvroProducer() {
     String topic = "testAvro";
     IndexedRecord avroRecord = createAvroRecord();
-    Object[] objects = new Object[] {avroRecord};
+    Object[] objects = new Object[]{avroRecord};
     Properties producerProps = createProducerProps();
     Producer<String, Object> producer = createProducer(producerProps);
     produce(producer, topic, objects);
