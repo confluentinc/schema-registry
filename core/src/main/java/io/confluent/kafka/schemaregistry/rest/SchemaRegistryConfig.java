@@ -90,8 +90,10 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private final AvroCompatibilityLevel compatibilityType;
 
+  private static final ConfigDef config;
+
   static {
-    config
+    config = baseConfigDef()
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
                         io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES, ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_PREFERRED_CONFIG_DOC)
@@ -120,7 +122,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props)
       throws RestConfigException {
-    super(props);
+    super(config, props);
     compatibilityType = AvroCompatibilityLevel
         .forName(getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG));
   }
