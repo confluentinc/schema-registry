@@ -152,7 +152,7 @@ public class RestUtils {
 
   public static Schema getId(String baseUrl, Map<String, String> requestProperties,
                              int id) throws IOException {
-    String url = String.format("%s/schemas/%d", baseUrl, id);
+    String url = String.format("%s/schemas/ids/%d", baseUrl, id);
 
     Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                             GET_SCHEMA_RESPONSE_TYPE);

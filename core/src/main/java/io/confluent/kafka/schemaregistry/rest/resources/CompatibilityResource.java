@@ -34,8 +34,6 @@ import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -93,12 +91,9 @@ public class CompatibilityResource {
           throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
         }
       } else {
-        AvroSchema avroSchemaForSpecifiedVersion =
-            AvroUtils.parseSchema(schemaForSpecifiedVersion.getSchema());
-        AvroSchema avroInputSchema =
-            AvroUtils.parseSchema(schema.getSchema());
         isCompatible =
-            schemaRegistry.isCompatible(subject, avroInputSchema, avroSchemaForSpecifiedVersion);
+            schemaRegistry
+                .isCompatible(subject, schema.getSchema(), schemaForSpecifiedVersion.getSchema());
         compatibilityCheckResponse.setIsCompatible(isCompatible);
         asyncResponse.resume(compatibilityCheckResponse);
       }

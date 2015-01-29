@@ -26,7 +26,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
@@ -48,9 +48,9 @@ public class SchemasResource {
   }
 
   @GET
-  @Path("/{id}")
-  public Schema getSchema(@PathParam("id") Integer id) {
-    Schema schema = null;
+  @Path("/ids/{id}")
+  public SchemaString getSchema(@PathParam("id") Integer id) {
+    SchemaString schema = null;
     try {
       schema = schemaRegistry.get(id);
     } catch (SchemaRegistryException e) {

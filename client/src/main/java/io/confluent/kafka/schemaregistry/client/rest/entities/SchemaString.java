@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2015 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
+
+package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,23 +23,23 @@ import org.hibernate.validator.constraints.NotEmpty;
 
 import java.io.IOException;
 
-public class SubjectSchemaVersionResponse {
+public class SchemaString {
 
   @NotEmpty
-  private int version;
+  private String schemaString;
 
-  public static SubjectSchemaVersionResponse fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, SubjectSchemaVersionResponse.class);
+  public static SchemaString fromJson(String json) throws IOException {
+    return new ObjectMapper().readValue(json, SchemaString.class);
   }
 
-  @JsonProperty("version")
-  public int getVersion() {
-    return version;
+  @JsonProperty("schema")
+  public String getSchemaString() {
+    return schemaString;
   }
 
-  @JsonProperty("version")
-  public void setVersion(int version) {
-    this.version = version;
+  @JsonProperty("schema")
+  public void setSchemaString(String schemaString) {
+    this.schemaString = schemaString;
   }
 
   public String toJson() throws IOException {

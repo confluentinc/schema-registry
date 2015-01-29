@@ -25,6 +25,7 @@ import java.util.concurrent.Callable;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
 
@@ -104,12 +105,12 @@ public class TestUtils {
         baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
 
-  public static int registerSchemaDryRun(String baseUrl, String schemaString, String subject)
+  public static Schema lookUpSubjectVersion(String baseUrl, String schemaString, String subject)
       throws IOException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
 
-    return RestUtils.registerSchemaDryRun(
+    return RestUtils.lookUpSubjectVersion(
         baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
 
@@ -123,7 +124,7 @@ public class TestUtils {
         baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject, version);
   }
 
-  public static Schema getId(String baseUrl, int id)
+  public static SchemaString getId(String baseUrl, int id)
       throws IOException {
     return RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
   }
@@ -165,7 +166,7 @@ public class TestUtils {
     assertEquals("Registered schema should be found",
                  schemaString,
                  RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
-                     .getSchema());
+                     .getSchemaString());
   }
 
   public static List<String> getRandomCanonicalAvroString(int num) {

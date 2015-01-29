@@ -37,7 +37,6 @@ import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.SubjectSchemaVersionResponse;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
@@ -71,28 +70,26 @@ public class SubjectsResource {
     headerProperties.put("Content-Type", contentType);
     headerProperties.put("Accept", accept);
     Schema schema = new Schema(subject, 0, 0, request.getSchema());
-    int version = -1;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
     try {
-      version = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema, headerProperties);
+      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema, headerProperties);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
-    if (version < 0) {
+    if (matchingSchema == null) {
       throw new NotFoundException("Schema never registered under subject " + subject);
     }
-    SubjectSchemaVersionResponse schemaVersionResponse = new SubjectSchemaVersionResponse();
-    schemaVersionResponse.setVersion(version);
-    asyncResponse.resume(schemaVersionResponse);
+    asyncResponse.resume(matchingSchema);
   }
 
   @Path("/{subject}/versions")
-  public SubjectSchemasResource getSchemas(@PathParam("subject") String subject) {
+  public SubjectVersionsResource getSchemas(@PathParam("subject") String subject) {
     if (subject != null) {
       subject = subject.trim();
     } else {
       throw new NotFoundException(MESSAGE_SUBJECT_NOT_FOUND);
     }
-    return new SubjectSchemasResource(schemaRegistry, subject);
+    return new SubjectVersionsResource(schemaRegistry, subject);
   }
 
   @GET

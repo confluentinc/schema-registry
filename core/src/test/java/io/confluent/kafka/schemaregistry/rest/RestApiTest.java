@@ -160,17 +160,6 @@ public class RestApiTest extends ClusterTestHarness {
       String schema = allSchemas.get(i);
       isCompatible = TestUtils.testCompatibility(restApp.restConnect, schema, subject, "latest");
       TestUtils.checkNumberOfVersions(restApp.restConnect, numRegisteredSchemas, subject);
-
-      // Test that registering and dry run return the same ids
-      int registeredId = TestUtils.registerSchema(restApp.restConnect, schema, subject);
-      int versionOfRegisteredSchema = 
-          TestUtils.getId(restApp.restConnect, registeredId).getVersion();
-      numRegisteredSchemas++;
-      // check if the schema exists under the subject
-      int dryRunVersion = TestUtils.registerSchemaDryRun(restApp.restConnect, schema, subject);
-      assertEquals("Dry run version and register version should be the same.", 
-                   versionOfRegisteredSchema, dryRunVersion);
-      TestUtils.checkNumberOfVersions(restApp.restConnect, numRegisteredSchemas, subject);
     }
   }
 
@@ -199,10 +188,10 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test that compatibility check for incompatible schema returns false and the appropriate 
     // error response from Avro
-    int idOfRegisteredSchema = TestUtils.registerSchema(restApp.restConnect, schema1, subject);
+    TestUtils.registerSchema(restApp.restConnect, schema1, subject);
     int versionOfRegisteredSchema =
-        TestUtils.getId(restApp.restConnect, idOfRegisteredSchema).getVersion();
-    boolean isCompatible = TestUtils.testCompatibility(restApp.restConnect, schema2, subject, 
+        TestUtils.lookUpSubjectVersion(restApp.restConnect, schema1, subject).getVersion();
+    boolean isCompatible = TestUtils.testCompatibility(restApp.restConnect, schema2, subject,
                                   String.valueOf(versionOfRegisteredSchema));
     assertFalse("Schema should be incompatible with specified version", isCompatible);
   }
@@ -234,7 +223,7 @@ public class RestApiTest extends ClusterTestHarness {
     int idOfRegisteredSchema1Subject1 =
         TestUtils.registerSchema(restApp.restConnect, schema1, subject1);
     int versionOfRegisteredSchema1Subject1 =
-        TestUtils.registerSchemaDryRun(restApp.restConnect, schema1, subject1);
+        TestUtils.lookUpSubjectVersion(restApp.restConnect, schema1, subject1).getVersion();
     assertEquals("1st schema under subject1 should have version 1", 1,
                  versionOfRegisteredSchema1Subject1);
     assertEquals("1st schema registered globally should have id 0", 0,
@@ -243,7 +232,7 @@ public class RestApiTest extends ClusterTestHarness {
     int idOfRegisteredSchema2Subject1 =
         TestUtils.registerSchema(restApp.restConnect, schema2, subject1);
     int versionOfRegisteredSchema2Subject1 =
-        TestUtils.registerSchemaDryRun(restApp.restConnect, schema2, subject1);
+        TestUtils.lookUpSubjectVersion(restApp.restConnect, schema2, subject1).getVersion();
     assertEquals("2nd schema under subject1 should have version 2", 2,
                  versionOfRegisteredSchema2Subject1);
     assertEquals("2nd schema registered globally should have id 1", 1,
@@ -252,7 +241,7 @@ public class RestApiTest extends ClusterTestHarness {
     int idOfRegisteredSchema2Subject2 =
         TestUtils.registerSchema(restApp.restConnect, schema2, subject2);
     int versionOfRegisteredSchema2Subject2 =
-        TestUtils.registerSchemaDryRun(restApp.restConnect, schema2, subject2);
+        TestUtils.lookUpSubjectVersion(restApp.restConnect, schema2, subject2).getVersion();
     assertEquals(
         "2nd schema under subject1 should still have version 1 as the first schema under subject2",
         1,

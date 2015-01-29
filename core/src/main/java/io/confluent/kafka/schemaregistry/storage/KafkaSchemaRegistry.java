@@ -29,11 +29,12 @@ import java.util.Set;
 import java.util.Vector;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import io.confluent.common.utils.ZkData;
-import io.confluent.common.utils.ZkUtils;
+import io.confluent.common.utils.zookeeper.ZkData;
+import io.confluent.common.utils.zookeeper.ZkUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IncompatibleAvroSchemaException;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroException;
@@ -177,11 +178,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         newVersion = latestSchema.getVersion() + 1;
       }
 
-      AvroSchema
-          latestAvroSchema =
-          latestSchema == null ? null : AvroUtils.parseSchema(latestSchema.getSchema());
       // assign a guid and put the schema in the kafka store
-      if (latestSchema == null || isCompatible(subject, avroSchema, latestAvroSchema)) {
+      if (latestSchema == null || isCompatible(subject, avroSchema.canonicalString,
+                                               latestSchema.getSchema())) {
         SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
         schema.setVersion(newVersion);
 
@@ -222,8 +221,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
-          return forwardToMaster(subject, schema.getSchema(), masterIdentity.getHost(),
-                                 masterIdentity.getPort(), headerProperties);
+          return forwardRegisterRequestToMaster(subject, schema.getSchema(),
+                                                masterIdentity.getHost(),
+                                                masterIdentity.getPort(), headerProperties);
         } else {
           throw new SchemaRegistryException("Register schema request failed since master is "
                                             + "unknown");
@@ -232,18 +232,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  public int lookUpSchemaUnderSubjectOrForward(String subject,
-                                               Schema schema,
-                                               Map<String, String> headerProperties)
-      throws SchemaRegistryException {
+  public io.confluent.kafka.schemaregistry.client.rest.entities.Schema lookUpSchemaUnderSubjectOrForward(
+      String subject, Schema schema, Map<String, String> headerProperties)
+  throws SchemaRegistryException {
     synchronized (masterLock) {
       if (isMaster()) {
         return lookUpSchemaUnderSubject(subject, schema);
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
-          return forwardToMaster(subject, schema.getSchema(), masterIdentity.getHost(),
-                                 masterIdentity.getPort(), headerProperties);
+          return forwardSubjectVersionRequestToMaster(subject, schema.getSchema(),
+                                                      masterIdentity.getHost(),
+                                                      masterIdentity.getPort(), headerProperties);
         } else {
           throw new SchemaRegistryException("Register schema request failed since master is "
                                             + "unknown");
@@ -256,22 +256,30 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * Checks if given schema was ever registered under a subject. If found, it returns the version of
    * the schema under the subject. If not, returns -1
    */
-  public int lookUpSchemaUnderSubject(String subject,
-                                      Schema schema)
-      throws SchemaRegistryException {
+  public io.confluent.kafka.schemaregistry.client.rest.entities.Schema lookUpSchemaUnderSubject(
+      String subject, Schema schema)
+  throws SchemaRegistryException {
     // see if the schema to be registered already exists
     MD5 md5 = MD5.ofString(schema.getSchema());
     if (this.schemaHashToGuid.containsKey(md5)) {
       SchemaIdAndSubjects schemaIdAndSubjects = this.schemaHashToGuid.get(md5);
       if (schemaIdAndSubjects.hasSubject(subject)) {
-        return schemaIdAndSubjects.getVersion(subject);
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema =
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(subject,
+                                                                              schemaIdAndSubjects
+                                                                                  .getVersion(
+                                                                                      subject),
+                                                                              schemaIdAndSubjects
+                                                                                  .getSchemaId(),
+                                                                              schema.getSchema());
+        return matchingSchema;
       } else {
         // this schema was never registered under the input subject
-        return -1;
+        return null;
       }
     } else {
       // this schema was never registered in the registry under any subject
-      return -1;
+      return null;
     }
   }
 
@@ -304,17 +312,41 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     return schemaIdCounterThreshold;
   }
 
-  private int forwardToMaster(String subject, String schemaString, String host, int port,
-                              Map<String, String> headerProperties) throws SchemaRegistryException {
+  private int forwardRegisterRequestToMaster(String subject, String schemaString, String host,
+                                             int port,
+                                             Map<String, String> headerProperties)
+      throws SchemaRegistryException {
     String baseUrl = String.format("http://%s:%d", host, port);
     RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
     registerSchemaRequest.setSchema(schemaString);
     log.debug(String.format("Forwarding registering schema request %s to %s",
                             registerSchemaRequest, baseUrl));
     try {
-      int version = RestUtils.registerSchema(baseUrl, headerProperties, registerSchemaRequest,
-                                             subject);
-      return version;
+      int id = RestUtils.registerSchema(baseUrl, headerProperties, registerSchemaRequest,
+                                        subject);
+      return id;
+    } catch (IOException e) {
+      throw new SchemaRegistryException(
+          String.format("Unexpected error while forwarding the registering schema request %s to %s",
+                        registerSchemaRequest, baseUrl),
+          e);
+    }
+  }
+
+  private io.confluent.kafka.schemaregistry.client.rest.entities.Schema forwardSubjectVersionRequestToMaster(
+      String subject, String schemaString, String host,
+      int port,
+      Map<String, String> headerProperties) throws SchemaRegistryException {
+    String baseUrl = String.format("http://%s:%d", host, port);
+    RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
+    registerSchemaRequest.setSchema(schemaString);
+    log.debug(String.format("Forwarding schema version search request %s to %s",
+                            registerSchemaRequest, baseUrl));
+    try {
+      io.confluent.kafka.schemaregistry.client.rest.entities.Schema schema =
+          RestUtils.lookUpSubjectVersion(baseUrl, headerProperties, registerSchemaRequest,
+                                         subject);
+      return schema;
     } catch (IOException e) {
       throw new SchemaRegistryException(
           String.format("Unexpected error while forwarding the registering schema request %s to %s",
@@ -346,7 +378,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Schema get(int id) throws SchemaRegistryException {
+  public SchemaString get(int id) throws SchemaRegistryException {
     Schema schema = null;
     try {
       SchemaKey subjectVersionKey = guidToSchemaKey.get(id);
@@ -356,7 +388,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           "Error while retrieving schema with id " + id + " from the backend Kafka" +
           " store", e);
     }
-    return schema;
+    SchemaString schemaString = new SchemaString();
+    schemaString.setSchemaString(schema.getSchema());
+    return schemaString;
   }
 
   @Override
@@ -464,10 +498,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     return config.getCompatibilityLevel();
   }
 
+  @Override
   public boolean isCompatible(String subject,
-                              AvroSchema newSchemaObj,
-                              AvroSchema latestSchema)
+                              String newSchemaObj,
+                              String latestSchema)
   throws SchemaRegistryException {
+    AvroSchema newAvroSchema = AvroUtils.parseSchema(newSchemaObj);
+    AvroSchema latestAvroSchema = AvroUtils.parseSchema(latestSchema);
     if (latestSchema == null) {
       throw new SchemaRegistryException(
           "Existing schema " + latestSchema + " is not a valid Avro schema");
@@ -477,7 +514,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       compatibility = getCompatibilityLevel(null);
     }
     return compatibility.compatibilityChecker
-        .isCompatible(newSchemaObj.schemaObj, latestSchema.schemaObj);
+        .isCompatible(newAvroSchema.schemaObj, latestAvroSchema.schemaObj);
   }
 
   private Vector<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas) {

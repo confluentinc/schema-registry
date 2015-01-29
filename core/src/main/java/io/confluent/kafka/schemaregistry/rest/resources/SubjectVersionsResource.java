@@ -50,15 +50,15 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryExcept
 @Consumes({Versions.SCHEMA_REGISTRY_V1_JSON,
            Versions.SCHEMA_REGISTRY_DEFAULT_JSON,
            Versions.JSON, Versions.GENERIC_REQUEST})
-public class SubjectSchemasResource {
+public class SubjectVersionsResource {
 
   public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
-  private static final Logger log = LoggerFactory.getLogger(SubjectSchemasResource.class);
+  private static final Logger log = LoggerFactory.getLogger(SubjectVersionsResource.class);
 
   private final String subject;
   private final KafkaSchemaRegistry schemaRegistry;
 
-  public SubjectSchemasResource(KafkaSchemaRegistry registry, String subject) {
+  public SubjectVersionsResource(KafkaSchemaRegistry registry, String subject) {
     this.schemaRegistry = registry;
     this.subject = subject;
   }
