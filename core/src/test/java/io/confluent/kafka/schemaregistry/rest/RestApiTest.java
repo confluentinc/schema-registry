@@ -140,7 +140,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testDryRunCompatible() throws IOException {
+  public void testCompatibleSchemaLookupBySubject() throws IOException {
     String subject = "testSubject";
     int numRegisteredSchemas = 0;
     int numSchemas = 10;
@@ -164,7 +164,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testDryRunIncompatible() throws IOException {
+  public void testIncompatibleSchemaLookupBySubject() throws IOException {
     String subject = "testSubject";
 
     // Make two incompatible schemas - field 'f' has different types

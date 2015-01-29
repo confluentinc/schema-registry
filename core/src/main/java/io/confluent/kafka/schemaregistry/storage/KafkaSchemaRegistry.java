@@ -150,8 +150,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   @Override
   public int register(String subject,
-                      Schema schema,
-                      boolean isDryRun)
+                      Schema schema)
       throws SchemaRegistryException {
     try {
       // see if the schema to be registered already exists
@@ -184,10 +183,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
         schema.setVersion(newVersion);
 
-        if (isDryRun) {
-          return schemaIdCounter.get();
-        }
-
         if (schemaId > 0) {
           schema.setId(schemaId);
         } else {
@@ -212,12 +207,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   public int registerOrForward(String subject,
                                Schema schema,
-                               Map<String, String> headerProperties,
-                               boolean isDryRun)
+                               Map<String, String> headerProperties)
       throws SchemaRegistryException {
     synchronized (masterLock) {
       if (isMaster()) {
-        return register(subject, schema, isDryRun);
+        return register(subject, schema);
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {

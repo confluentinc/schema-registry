@@ -26,10 +26,7 @@ public interface SchemaRegistry {
 
   void init() throws SchemaRegistryException;
 
-  int register(String subject,
-               Schema schema,
-               boolean isDryRun)
-      throws SchemaRegistryException;
+  int register(String subject, Schema schema) throws SchemaRegistryException;
 
   Schema get(String subject, int version) throws SchemaRegistryException;
 

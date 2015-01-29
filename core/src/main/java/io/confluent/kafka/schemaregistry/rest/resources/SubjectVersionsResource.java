@@ -113,7 +113,7 @@ public class SubjectVersionsResource {
     Schema schema = new Schema(subjectName, 0, 0, request.getSchema());
     int id = 0;
     try {
-      id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties, false);
+      id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }

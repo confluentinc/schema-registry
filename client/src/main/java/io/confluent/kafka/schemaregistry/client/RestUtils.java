@@ -127,27 +127,15 @@ public class RestUtils {
     }
   }
 
-
-  private static int registerSchema(String baseUrl, Map<String, String> requestProperties,
-                                    RegisterSchemaRequest registerSchemaRequest, String subject,
-                                    boolean isDryRun)
+  public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
+                                   RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException {
-
     String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
-    if (isDryRun) {
-      url += "?dry_run=true";
-    }
 
     RegisterSchemaResponse response =
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
                               requestProperties, REGISTER_RESPONSE_TYPE);
     return response.getId();
-  }
-
-  public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
-                                   RegisterSchemaRequest registerSchemaRequest, String subject)
-      throws IOException {
-    return registerSchema(baseUrl, requestProperties, registerSchemaRequest, subject, false);
   }
 
   public static Schema getId(String baseUrl, Map<String, String> requestProperties,
