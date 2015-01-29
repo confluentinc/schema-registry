@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import java.util.Iterator;
 import java.util.Set;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
@@ -25,18 +26,21 @@ public interface SchemaRegistry {
 
   void init() throws SchemaRegistryException;
 
-  int register(String subject,
-               Schema schema,
-               boolean isDryRun)
-      throws SchemaRegistryException;
+  int register(String subject, Schema schema) throws SchemaRegistryException;
 
   Schema get(String subject, int version) throws SchemaRegistryException;
 
-  Schema get(int id) throws SchemaRegistryException;
+  SchemaString get(int id) throws SchemaRegistryException;
 
   Set<String> listSubjects() throws SchemaRegistryException;
 
   Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException;
+
+  Schema getLatestVersion(String subject) throws SchemaRegistryException;
+
+  public boolean isCompatible(String subject,
+                              String inputSchema,
+                              String targetSchema) throws SchemaRegistryException;
 
   void close();
 }

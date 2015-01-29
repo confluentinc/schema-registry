@@ -24,7 +24,6 @@ import javax.ws.rs.WebApplicationException;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.RestApp;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
@@ -76,7 +75,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     assertEquals("Registered schema should be found on the master",
                  secondSchema,
                  RestUtils.getId(restApp1.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                 secondSchemaExpectedId).getSchema());
+                                 secondSchemaExpectedId).getSchemaString());
 
     // the newly registered schema should be immediately readable on the master using the version
     assertEquals("Registered schema should be found on the master",
@@ -150,7 +149,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     assertEquals("Latest version should be found on the new master",
                  thirdSchema,
                  RestUtils.getId(restApp2.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                 thirdSchemaExpectedId).getSchema());
+                                 thirdSchemaExpectedId).getSchemaString());
 
     // the latest version should be immediately available on the new master using the version
     assertEquals("Latest version should be found on the new master",
@@ -175,9 +174,10 @@ public class MasterElectorTest extends ClusterTestHarness {
       @Override
       public Boolean call() throws Exception {
         try {
-          Schema schema = RestUtils.getId(baseUrl,
-                                          RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId);
-          return expectedSchemaString.compareTo(schema.getSchema()) == 0;
+          String schema = RestUtils.getId(baseUrl,
+                                          RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
+              .getSchemaString();
+          return expectedSchemaString.compareTo(schema) == 0;
         } catch (WebApplicationException e) {
           return false;
         }

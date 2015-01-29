@@ -96,10 +96,12 @@ public class SchemaRegistryConfig extends RestConfig {
   static {
     config = baseConfigDef()
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
-                        io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES, ConfigDef.Importance.HIGH,
+                        io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES,
+                        ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_PREFERRED_CONFIG_DOC)
         .defineOverride(RESPONSE_MEDIATYPE_DEFAULT_CONFIG, ConfigDef.Type.STRING,
-                        io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT, ConfigDef.Importance.HIGH,
+                        io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT,
+                        ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
                         METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,

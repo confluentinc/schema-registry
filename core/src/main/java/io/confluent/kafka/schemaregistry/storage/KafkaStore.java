@@ -125,8 +125,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
     Properties props = new Properties();
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
     props.put(ProducerConfig.ACKS_CONFIG, "-1");
-    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.ByteArraySerializer.class);
-    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.ByteArraySerializer.class);
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+              org.apache.kafka.common.serialization.ByteArraySerializer.class);
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+              org.apache.kafka.common.serialization.ByteArraySerializer.class);
     producer = new KafkaProducer(props);
 
     // start the background thread that subscribes to the Kafka topic and applies updates
@@ -184,7 +186,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       log.warn("The schema topic " + topic + " should have only 1 partition.");
     }
 
-    if ( ((Seq) partitionAssignment.get(0).get()).size() < desiredReplicationFactor) {
+    if (((Seq) partitionAssignment.get(0).get()).size() < desiredReplicationFactor) {
       log.warn("The replication factor of the schema topic " + topic + " is less than the " +
                "desired one of " + desiredReplicationFactor + ". If this is a production " +
                "environment, it's crucial to add more brokers and increase the replication " +
@@ -325,7 +327,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
           }
         }
       }
-      
+
       try {
         // backoff a bit
         Thread.sleep(10);

@@ -26,6 +26,7 @@ import jersey.repackaged.com.google.common.base.Preconditions;
  * Simple wrapper for 16 byte MD5 hash.
  */
 public class MD5 {
+
   private final byte[] md5;
 
   public MD5(byte[] md5) {
@@ -34,6 +35,19 @@ public class MD5 {
         md5.length == 16, "Tried to instantiate MD5 object with invalid byte array.");
 
     this.md5 = md5;
+  }
+
+  /**
+   * Factory method converts String into MD5 object.
+   */
+  public static MD5 ofString(String str) {
+    try {
+      MessageDigest md = MessageDigest.getInstance("MD5");
+      md.update(str.getBytes());
+      return new MD5(md.digest());
+    } catch (NoSuchAlgorithmException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
@@ -57,16 +71,5 @@ public class MD5 {
 
     MD5 otherMd5 = (MD5) o;
     return Arrays.equals(this.md5, otherMd5.md5);
-  }
-
-  /** Factory method converts String into MD5 object. */
-  public static MD5 ofString(String str) {
-    try {
-      MessageDigest md = MessageDigest.getInstance("MD5");
-      md.update(str.getBytes());
-      return new MD5(md.digest());
-    } catch (NoSuchAlgorithmException e) {
-      throw new RuntimeException(e);
-    }
   }
 }
