@@ -40,7 +40,8 @@ public abstract class AbstractKafkaAvroSerializer {
   private static final Schema.Parser parser = new Schema.Parser();
   private static final Map<String, Schema> primitiveSchemas;
   private final EncoderFactory encoderFactory = EncoderFactory.get();
-
+  protected final ByteArrayOutputStream out = new ByteArrayOutputStream();
+  private BinaryEncoder encoder = encoderFactory.binaryEncoder(out, null);
   protected final String SCHEMA_REGISTRY_URL = "schema.registry.url";
   protected final String MAX_SCHEMAS_PER_SUBJECT = "max.schemas.per.subject";
   protected final int DEFAULT_MAX_SCHEMAS_PER_SUBJECT = 1000;
@@ -89,7 +90,6 @@ public abstract class AbstractKafkaAvroSerializer {
 
   protected byte[] serializeImpl(String subject, Object record) throws SerializationException {
     try {
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
       Schema schema = getSchema(record);
       int id = schemaRegistry.register(subject, schema);
       out.write(MAGIC_BYTE);
@@ -97,7 +97,6 @@ public abstract class AbstractKafkaAvroSerializer {
       if (record instanceof byte[]) {
         out.write((byte[]) record);
       } else {
-        BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
         DatumWriter<Object> writer;
         if (record instanceof SpecificRecord) {
           writer = new SpecificDatumWriter<Object>(schema);
@@ -108,10 +107,11 @@ public abstract class AbstractKafkaAvroSerializer {
         encoder.flush();
       }
       byte[] bytes = out.toByteArray();
-      out.close();
+      out.reset();
       return bytes;
     } catch (IOException e) {
       throw new SerializationException("Error serializing Avro message", e);
     }
   }
+
 }

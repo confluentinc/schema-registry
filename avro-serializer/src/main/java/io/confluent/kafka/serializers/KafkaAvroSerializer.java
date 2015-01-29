@@ -16,8 +16,10 @@
 package io.confluent.kafka.serializers;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
@@ -66,6 +68,12 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   @Override
   public void close() {
-
+    if (out != null) {
+      try {
+        out.close();
+      } catch (IOException e) {
+        throw new SerializationException("Error serializing Avro message", e);
+      }
+    }
   }
 }
