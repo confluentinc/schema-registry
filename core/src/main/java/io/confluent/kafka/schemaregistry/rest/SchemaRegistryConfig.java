@@ -90,8 +90,9 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private final AvroCompatibilityLevel compatibilityType;
 
-  private static final ConfigDef config;
+  private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "schema-registry";
 
+  private static final ConfigDef config;
   static {
     config = baseConfigDef()
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
@@ -100,6 +101,9 @@ public class SchemaRegistryConfig extends RestConfig {
         .defineOverride(RESPONSE_MEDIATYPE_DEFAULT_CONFIG, ConfigDef.Type.STRING,
                         io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT, ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
+        .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
+                        METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
+                        METRICS_JMX_PREFIX_DOC)
         .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
                 KAFKASTORE_CONNECTION_URL_DOC)
         .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
