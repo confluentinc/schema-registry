@@ -20,6 +20,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +65,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final String kafkaClusterZkUrl;
   private final String topic;
   private final int desiredReplicationFactor;
+  private final int numRetries;
+  private final int writeRetryBackoffMs;
   private final String groupId;
   private final StoreUpdateHandler<K, V> storeUpdateHandler;
   private final Serializer<K, V> serializer;
@@ -79,12 +82,15 @@ public class KafkaStore<K, V> implements Store<K, V> {
                     StoreUpdateHandler<K, V> storeUpdateHandler,
                     Serializer<K, V> serializer,
                     Store<K, V> localStore,
-                    ZkClient zkClient) {
+                    ZkClient zkClient) { 
     this.kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
+    this.numRetries = config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
+    this.writeRetryBackoffMs = 
+        config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_RETRY_BACKOFF_MS_CONFIG);
     this.groupId = String.format("schema-registry-%s-%d",
                                  config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
                                  config.getInt(SchemaRegistryConfig.PORT_CONFIG));
@@ -129,6 +135,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
+    props.put(ProducerConfig.RETRIES_CONFIG, this.numRetries);
+    props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, this.writeRetryBackoffMs);
     producer = new KafkaProducer(props);
 
     // start the background thread that subscribes to the Kafka topic and applies updates
@@ -225,7 +233,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreException("Key should not be null");
     }
     // write to the Kafka topic
-    ProducerRecord producerRecord = null;
+    ProducerRecord<K, V> producerRecord = null;
     try {
       producerRecord = new ProducerRecord(topic, 0, this.serializer.serializeKey(key),
                                           value == null ? null : this.serializer.serializeValue(
@@ -240,14 +248,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
       log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
       kafkaTopicReader.waitUntilOffset(recordMetadata.offset(), timeout, TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
-      throw new StoreException("Put operation interrupted while waiting for an ack from Kafka",
-                               e);
+      throw new StoreException("Put operation interrupted while waiting for an ack from Kafka", e);
     } catch (ExecutionException e) {
-      throw new StoreException("Put operation failed while waiting for an ack from Kafka",
-                               e);
+      throw new StoreException("Put operation failed while waiting for an ack from Kafka", e);
     } catch (TimeoutException e) {
-      throw new StoreException("Put operation timed out while waiting for an ack from Kafka",
-                               e);
+      throw new StoreException("Put operation timed out while waiting for an ack from Kafka", e);
+    } catch (KafkaException ke) {
+      throw new StoreException("Put operation to Kafka failed", ke);
     }
   }
 
