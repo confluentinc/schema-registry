@@ -43,6 +43,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
+import io.confluent.rest.annotations.PerformanceMetric;
 
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
            Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
@@ -65,6 +66,7 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}")
+  @PerformanceMetric("schema.lookup.by.version")
   public Schema getSchema(@PathParam("version") Integer version) {
     Schema schema = null;
     try {
@@ -81,6 +83,7 @@ public class SubjectVersionsResource {
   }
 
   @GET
+  @PerformanceMetric("list.versions")
   public List<Integer> list() {
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
@@ -101,6 +104,7 @@ public class SubjectVersionsResource {
    *                IncompatibleAvroSchemaException}
    */
   @POST
+  @PerformanceMetric("register.schema")
   public void register(final @Suspended AsyncResponse asyncResponse,
                        final @HeaderParam("Content-Type") String contentType,
                        final @HeaderParam("Accept") String accept,

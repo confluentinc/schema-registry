@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
+import io.confluent.rest.annotations.PerformanceMetric;
 
 @Path("/schemas")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -49,6 +50,7 @@ public class SchemasResource {
 
   @GET
   @Path("/ids/{id}")
+  @PerformanceMetric("schema.lookup.by.id")
   public SchemaString getSchema(@PathParam("id") Integer id) {
     SchemaString schema = null;
     try {

@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import javax.validation.Valid;
 import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -40,6 +41,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
+import io.confluent.rest.annotations.PerformanceMetric;
 
 @Path("/subjects")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -60,6 +62,7 @@ public class SubjectsResource {
 
   @POST
   @Path("/{subject}")
+  @PerformanceMetric("schema.lookup.by.subject")
   public void lookUpSchemaUnderSubject(final @Suspended AsyncResponse asyncResponse,
                                        final @HeaderParam("Content-Type") String contentType,
                                     final @HeaderParam("Accept") String accept,
@@ -72,7 +75,8 @@ public class SubjectsResource {
     Schema schema = new Schema(subject, 0, 0, request.getSchema());
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
     try {
-      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema, headerProperties);
+      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema,
+                                                                        headerProperties);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
@@ -93,6 +97,8 @@ public class SubjectsResource {
   }
 
   @GET
+  @Valid
+  @PerformanceMetric("subjects.list")
   public Set<String> list() {
     try {
       return schemaRegistry.listSubjects();
