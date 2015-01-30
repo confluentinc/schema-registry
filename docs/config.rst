@@ -70,7 +70,21 @@ Configuration Options
   * Default: 500
   * Importance: medium
 
-``advertised.host.name``
+``kafkastore.write.max.retries``
+  Retry the register schema write up to this many times on failure
+
+  * Type: int
+  * Default: 5
+  * Importance: medium
+
+``kafkastore.write.retry.backoff.ms``
+  The amount of time in milliseconds to wait before attempting to retry a failed write to the Kafka store
+
+  * Type: int
+  * Default: 100
+  * Importance: medium
+
+``host.name``
   The host name advertised in Zookeeper
 
   * Type: string
@@ -125,4 +139,5 @@ Configuration Options
   * Type: int
   * Default: 1000
   * Importance: low
+
 

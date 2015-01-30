@@ -96,8 +96,15 @@ Storage settings
 
 Schema registry stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for the schema registry database and is the source of truth, writes to this store need to be durable. Schema Registry ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Whenever in doubt, leave these settings alone.
 
+.. note:: 
+
+     Configure ``min.insync.replicas`` on the Kafka server for the schemas topic that stores all registered 
+     schemas to be higher than 1. For example, if the ``kafkastore.topic.replication.factor`` is 3, then set 
+     ``min.insync.replicas`` on the Kafka server for the ``kafkastore.topic`` to 2. This ensures that the 
+     register schema write is considered durable if it gets committed on at least 2 replicas out of 3.
+
 ``kafkastore.topic``
-The durable single partition topic that actsas the durable log for the data
+The single partition topic that acts as the durable log for the data
 
 * Type: string
 * Default: _schemas
@@ -109,6 +116,20 @@ The desired replication factor of the schema topic. The actual replication facto
 * Type: int
 * Default: 3
 * Importance: high
+
+``kafkastore.write.max.retries``
+Retry the register schema write up to this many times on failure
+
+* Type: int
+* Default: 5
+* Importance: medium
+
+``kafkastore.write.retry.backoff.ms``
+The amount of time in milliseconds to wait before attempting to retry a failed write to the Kafka store
+
+* Type: int
+* Default: 100
+* Importance: medium
 
 `kafkastore.timeout.ms``
 The timeout for an operation on the Kafka store. This is the maximum time that a register call blocks.
