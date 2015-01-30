@@ -16,6 +16,12 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import org.I0Itec.zkclient.ZkClient;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,9 +30,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.common.utils.zookeeper.ConditionalUpdateCallback;
@@ -77,6 +85,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private ZookeeperMasterElector masterElector = null;
   private AtomicInteger schemaIdCounter;
   private int maxSchemaIdCounterValue;
+  private final Metrics metrics;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -101,6 +110,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                                this.serializer,
                                                                new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>(),
                                                                zkClient);
+    MetricConfig metricConfig = 
+        new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
+        .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
+                    TimeUnit.MILLISECONDS);
+    List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
+                                                                    MetricsReporter.class);
+    String jmxPrefix = "kafka.schema.registry";
+    reporters.add(new JmxReporter(jmxPrefix));
+    this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
   }
 
   @Override

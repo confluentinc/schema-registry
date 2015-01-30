@@ -108,7 +108,30 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private final AvroCompatibilityLevel compatibilityType;
 
-  private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "schema-registry";
+  public static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
+  public static final String METRICS_JMX_PREFIX_CONFIG = "metrics.jmx.prefix";
+  protected static final String METRICS_JMX_PREFIX_DOC =
+      "Prefix to apply to metric names for the default JMX reporter.";
+
+  public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
+  protected static final String METRICS_SAMPLE_WINDOW_MS_DOC =
+      "The metrics system maintains a configurable number of samples over a fixed window size. " +
+      "This configuration controls the size of the window. For example we might maintain two " +
+      "samples each measured over a 30 second period. When a window expires we erase and " +
+      "overwrite the oldest window.";
+  protected static final long METRICS_SAMPLE_WINDOW_MS_DEFAULT = 30000;
+
+  public static final String METRICS_NUM_SAMPLES_CONFIG = "metrics.num.samples";
+  protected static final String METRICS_NUM_SAMPLES_DOC =
+      "The number of samples maintained to compute metrics.";
+  protected static final int METRICS_NUM_SAMPLES_DEFAULT = 2;
+
+  public static final String METRICS_REPORTER_CLASSES_CONFIG = "metric.reporters";
+  protected static final String METRICS_REPORTER_CLASSES_DOC =
+      "A list of classes to use as metrics reporters. Implementing the " +
+      "<code>MetricReporter</code> interface allows plugging in classes that will be notified " +
+      "of new metric creation. The JmxReporter is always included to register JMX statistics.";
+  protected static final String METRICS_REPORTER_CLASSES_DEFAULT = "";
 
   private static final ConfigDef config;
   static {
@@ -121,9 +144,6 @@ public class SchemaRegistryConfig extends RestConfig {
                         io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT,
                         ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
-        .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
-                        METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
-                        METRICS_JMX_PREFIX_DOC)
         .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
                 KAFKASTORE_CONNECTION_URL_DOC)
         .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
@@ -147,7 +167,20 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
                 ConfigDef.Importance.LOW, HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
-                ConfigDef.Importance.HIGH, COMPATIBILITY_DOC);
+                ConfigDef.Importance.HIGH, COMPATIBILITY_DOC)
+        .define(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
+                METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW, METRICS_JMX_PREFIX_DOC)
+        .define(METRICS_REPORTER_CLASSES_CONFIG, ConfigDef.Type.LIST,
+                METRICS_REPORTER_CLASSES_DEFAULT, ConfigDef.Importance.LOW, METRICS_REPORTER_CLASSES_DOC)
+        .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
+                ConfigDef.Type.LONG,
+                METRICS_SAMPLE_WINDOW_MS_DEFAULT,
+                ConfigDef.Range.atLeast(0),
+                ConfigDef.Importance.LOW,
+                METRICS_SAMPLE_WINDOW_MS_DOC)
+        .define(METRICS_NUM_SAMPLES_CONFIG, ConfigDef.Type.INT,
+                METRICS_NUM_SAMPLES_DEFAULT, ConfigDef.Range.atLeast(1),
+                ConfigDef.Importance.LOW, METRICS_NUM_SAMPLES_DOC);
   }
 
   public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props)
