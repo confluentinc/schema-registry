@@ -58,9 +58,9 @@ public class SchemaRegistryConfig extends RestConfig {
   // TODO: turn off offset commit by default for now since we only have an in-memory store
   private static final int KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT = OFFSET_COMMIT_OFF;
   /**
-   * <code>advertised.host</code>
+   * <code>advertised.host.name</code>
    */
-  public static final String ADVERTISED_HOST_NAME_CONFIG = "advertised.host.name";
+  public static final String HOST_NAME_CONFIG = "host.name";
   /**
    * <code>avro.compatibility.level</code>
    */
@@ -79,7 +79,7 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for an operation on the Kafka store";
   protected static final String KAFKASTORE_COMMIT_INTERVAL_MS_DOC =
       "The interval to commit offsets while consuming the Kafka topic";
-  protected static final String ADVERTISED_HOST_DOC = "The host name advertised in Zookeeper";
+  protected static final String HOST_DOC = "The host name advertised in Zookeeper";
   protected static final String COMPATIBILITY_DOC =
       "The avro compatibility type. Valid values are: "
       + "none (new schema can be any valid avro schema), "
@@ -120,8 +120,8 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT,
                 KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT, ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_COMMIT_INTERVAL_MS_DOC)
-        .define(ADVERTISED_HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
-                ConfigDef.Importance.LOW, ADVERTISED_HOST_DOC)
+        .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
+                ConfigDef.Importance.LOW, HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
                 ConfigDef.Importance.HIGH, COMPATIBILITY_DOC);
   }
@@ -146,7 +146,7 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   public static void main(String[] args) {
-    System.out.println(config.toHtmlTable());
+    System.out.println(config.toRst());
   }
 
   public AvroCompatibilityLevel compatibilityType() {
