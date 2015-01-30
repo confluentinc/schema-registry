@@ -24,8 +24,10 @@ import java.util.concurrent.Callable;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -34,6 +36,7 @@ import static org.junit.Assert.fail;
  * For general utility methods used in unit tests.
  */
 public class TestUtils {
+
   private static final String IoTmpDir = System.getProperty("java.io.tmpdir");
   private static final Random random = new Random();
 
@@ -102,17 +105,35 @@ public class TestUtils {
         baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
 
-  public static int registerDryRun(String baseUrl, String schemaString, String subject)
+  public static Schema lookUpSubjectVersion(String baseUrl, String schemaString, String subject)
       throws IOException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
 
-    return RestUtils.registerSchemaDryRun(
+    return RestUtils.lookUpSubjectVersion(
         baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
 
-  /** Helper method which checks the number of versions registered under the given subject. */
-  public static void checkNumberOfVersions(String baseUrl, int expected, String subject) throws IOException {
+  public static boolean testCompatibility(String baseUrl, String schemaString, String subject,
+                                          String version)
+      throws IOException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+
+    return RestUtils.testCompatibility(
+        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject, version);
+  }
+
+  public static SchemaString getId(String baseUrl, int id)
+      throws IOException {
+    return RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
+  }
+
+  /**
+   * Helper method which checks the number of versions registered under the given subject.
+   */
+  public static void checkNumberOfVersions(String baseUrl, int expected, String subject)
+      throws IOException {
     List<Integer> versions = RestUtils.getAllVersions(baseUrl,
                                                       RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                                       subject);
@@ -136,7 +157,7 @@ public class TestUtils {
    */
   public static void registerAndVerifySchema(String baseUrl, String schemaString,
                                              int expectedId, String subject)
-  throws IOException {
+      throws IOException {
     assertEquals("Registering a new schema should succeed",
                  expectedId,
                  TestUtils.registerSchema(baseUrl, schemaString, subject));
@@ -145,7 +166,7 @@ public class TestUtils {
     assertEquals("Registered schema should be found",
                  schemaString,
                  RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
-                     .getSchema());
+                     .getSchemaString());
   }
 
   public static List<String> getRandomCanonicalAvroString(int num) {

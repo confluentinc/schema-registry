@@ -25,11 +25,11 @@ import kafka.serializer.Encoder;
 import kafka.utils.VerifiableProperties;
 
 /**
-  At present, this only works for value not key and it only supports IndexedRecord.
-  To register for a topic, user will need to provide a list of record_name:topic_name map as
-  a CSV format. By default, the encoder will use record name as topic.
-*/
-public class KafkaAvroEncoder extends AbstracKafkaAvroSerializer implements Encoder<Object> {
+ * At present, this only works for value not key and it only supports IndexedRecord. To register for
+ * a topic, user will need to provide a list of record_name:topic_name map as a CSV format. By
+ * default, the encoder will use record name as topic.
+ */
+public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Encoder<Object> {
   public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry){
     this.schemaRegistry = schemaRegistry;
   }

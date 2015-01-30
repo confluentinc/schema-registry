@@ -19,8 +19,8 @@ curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i htt
 
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka,key/versions -d '{"schema": "{\"type\": \"string\"}"}'
 
-5. Do a dry run of a schema registration. This is a good way to test compatibility without changing the state of the registry
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka/versions&dry_run=true -d '{"schema": "{\"type\": \"string\"}"}'
+5. Test compatibility of a schema with the latest schema under a subject without changing the state of the registry
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/compatibility/subjects/Kafka/versions/latest -d '{"schema": "{\"type\": \"string\"}"}'
 
 6. List all subjects 
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects

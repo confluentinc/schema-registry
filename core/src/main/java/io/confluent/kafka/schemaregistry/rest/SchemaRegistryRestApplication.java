@@ -22,9 +22,11 @@ import java.util.Properties;
 
 import javax.ws.rs.core.Configurable;
 
+import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ConfigResource;
 import io.confluent.kafka.schemaregistry.rest.resources.RootResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemasResource;
+import io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
@@ -42,7 +44,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
-    this.config = config;
+    super(config);
   }
 
   @Override
@@ -58,12 +60,10 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(RootResource.class);
     config.register(new ConfigResource(schemaRegistry));
     config.register(new SubjectsResource(schemaRegistry));
-    config.register(SchemasResource.class);
-  }
-
-  @Override
-  public SchemaRegistryConfig configure() {
-    return config;
+    config.register(new SchemasResource(schemaRegistry));
+    config.register(new SchemasResource(schemaRegistry));
+    config.register(SubjectVersionsResource.class);
+    config.register(new CompatibilityResource(schemaRegistry));
   }
 
   @Override

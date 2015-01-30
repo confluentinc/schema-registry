@@ -23,7 +23,7 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
-public class KafkaAvroSerializer extends AbstracKafkaAvroSerializer implements Serializer<Object> {
+public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements Serializer<Object> {
 
   private boolean isKey;
 
@@ -36,7 +36,7 @@ public class KafkaAvroSerializer extends AbstracKafkaAvroSerializer implements S
   }
 
   @Override
-  public void configure(Map<String,?> configs, boolean isKey) {
+  public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
     Object url = configs.get(SCHEMA_REGISTRY_URL);
     if (url == null) {

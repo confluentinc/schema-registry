@@ -90,14 +90,22 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private final AvroCompatibilityLevel compatibilityType;
 
+  private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "schema-registry";
+
+  private static final ConfigDef config;
   static {
-    config
+    config = baseConfigDef()
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
-                        io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES, ConfigDef.Importance.HIGH,
+                        io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES,
+                        ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_PREFERRED_CONFIG_DOC)
         .defineOverride(RESPONSE_MEDIATYPE_DEFAULT_CONFIG, ConfigDef.Type.STRING,
-                        io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT, ConfigDef.Importance.HIGH,
+                        io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT,
+                        ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
+        .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
+                        METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
+                        METRICS_JMX_PREFIX_DOC)
         .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
                 KAFKASTORE_CONNECTION_URL_DOC)
         .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
@@ -120,7 +128,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props)
       throws RestConfigException {
-    super(props);
+    super(config, props);
     compatibilityType = AvroCompatibilityLevel
         .forName(getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG));
   }

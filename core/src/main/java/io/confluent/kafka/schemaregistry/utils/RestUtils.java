@@ -33,11 +33,13 @@ import java.util.Map;
 import javax.ws.rs.WebApplicationException;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
-import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.rest.entities.ErrorMessage;
 
 /**
@@ -62,7 +64,10 @@ public class RestUtils {
   private final static TypeReference<Config> GET_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
       };
-  private final static TypeReference<Schema> GET_SCHEMA_RESPONSE_TYPE =
+  private final static TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
+      new TypeReference<SchemaString>() {
+      };
+  private final static TypeReference<Schema> GET_SCHEMA_BY_VERSION_RESPONSE_TYPE =
       new TypeReference<Schema>() {
       };
   private final static TypeReference<List<Integer>> ALL_VERSIONS_RESPONSE_TYPE =
@@ -70,6 +75,14 @@ public class RestUtils {
       };
   private final static TypeReference<List<String>> ALL_TOPICS_RESPONSE_TYPE =
       new TypeReference<List<String>>() {
+      };
+  private final static TypeReference<CompatibilityCheckResponse>
+      COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE =
+      new TypeReference<CompatibilityCheckResponse>() {
+      };
+  private final static TypeReference<Schema>
+      SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE =
+      new TypeReference<Schema>() {
       };
   private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
@@ -134,19 +147,24 @@ public class RestUtils {
         connection.disconnect();
       }
     }
+  }
 
+  public static Schema lookUpSubjectVersion(String baseUrl, Map<String, String> requestProperties,
+                                            RegisterSchemaRequest registerSchemaRequest,
+                                            String subject)
+      throws IOException {
+    String url = String.format("%s/subjects/%s", baseUrl, subject);
 
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
+        RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
+                              requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
+    return response;
   }
 
   public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
-                                    RegisterSchemaRequest registerSchemaRequest, String subject,
-                                    boolean isDryRun)
+                                   RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException {
     String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
-
-    if (isDryRun) {
-      url += "?dry_run=true";
-    }
 
     RegisterSchemaResponse response =
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
@@ -154,16 +172,19 @@ public class RestUtils {
     return response.getId();
   }
 
-  public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
-                                    RegisterSchemaRequest registerSchemaRequest, String subject)
+  public static boolean testCompatibility(String baseUrl, Map<String, String> requestProperties,
+                                          RegisterSchemaRequest registerSchemaRequest,
+                                          String subject,
+                                          String version)
       throws IOException {
-    return registerSchema(baseUrl, requestProperties, registerSchemaRequest, subject, false);
-  }
+    String
+        url =
+        String.format("%s/compatibility/subjects/%s/versions/%s", baseUrl, subject, version);
 
-  public static int registerSchemaDryRun(String baseUrl, Map<String, String> requestProperties,
-                                          RegisterSchemaRequest registerSchemaRequest, String subject)
-      throws IOException {
-    return registerSchema(baseUrl, requestProperties, registerSchemaRequest, subject, true);
+    CompatibilityCheckResponse response =
+        RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
+                              requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
+    return response.getIsCompatible();
   }
 
   public static void updateConfig(String baseUrl, Map<String, String> requestProperties,
@@ -188,12 +209,12 @@ public class RestUtils {
     return config;
   }
 
-  public static Schema getId(String baseUrl, Map<String, String> requestProperties,
+  public static SchemaString getId(String baseUrl, Map<String, String> requestProperties,
                              int id) throws IOException {
-    String url = String.format("%s/subjects/%d", baseUrl, id);
+    String url = String.format("%s/schemas/ids/%d", baseUrl, id);
 
-    Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
-                                            GET_SCHEMA_RESPONSE_TYPE);
+    SchemaString response = RestUtils.httpRequest(url, "GET", null, requestProperties,
+                                            GET_SCHEMA_BY_ID_RESPONSE_TYPE);
     return response;
   }
 
@@ -202,7 +223,7 @@ public class RestUtils {
     String url = String.format("%s/subjects/%s/versions/%d", baseUrl, subject, version);
 
     Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
-                                            GET_SCHEMA_RESPONSE_TYPE);
+                                            GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
     return response;
   }
 
