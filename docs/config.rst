@@ -1,6 +1,5 @@
 Configuration Options
 =====================
-
 ``kafkastore.connection.url``
   Zookeeper url for the Kafka cluster
 
@@ -27,6 +26,13 @@ Configuration Options
 
   * Type: string
   * Default: _schemas
+  * Importance: high
+
+``kafkastore.topic.replication.factor``
+  The desired replication factor of the schema topic. The actual replication factor will be the smaller of this value and the number of live Kafka brokers.
+
+  * Type: int
+  * Default: 3
   * Importance: high
 
 ``port``
@@ -64,7 +70,7 @@ Configuration Options
   * Default: 500
   * Importance: medium
 
-``advertised.host``
+``advertised.host.name``
   The host name advertised in Zookeeper
 
   * Type: string
@@ -76,6 +82,34 @@ Configuration Options
 
   * Type: int
   * Default: 10000
+  * Importance: low
+
+``metric.reporters``
+  A list of classes to use as metrics reporters. Implementing the <code>MetricReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.
+
+  * Type: list
+  * Default: []
+  * Importance: low
+
+``metrics.jmx.prefix``
+  Prefix to apply to metric names for the default JMX reporter.
+
+  * Type: string
+  * Default: schema-registry
+  * Importance: low
+
+``metrics.num.samples``
+  The number of samples maintained to compute metrics.
+
+  * Type: int
+  * Default: 2
+  * Importance: low
+
+``metrics.sample.window.ms``
+  The metrics system maintains a configurable number of samples over a fixed window size. This configuration controls the size of the window. For example we might maintain two samples each measured over a 30 second period. When a window expires we erase and overwrite the oldest window.
+
+  * Type: long
+  * Default: 30000
   * Importance: low
 
 ``request.logger.name``

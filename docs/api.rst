@@ -43,7 +43,7 @@ Although it is good practice to check the status code, you may safely parse the 
 Subjects
 --------
 
-The subjects resource provides a list of all registered subjects in your schema registry. A subject refers to the name under which the schema is registered. If you are using the schema registry for Kafka, then a subject refers to either a "<topic>,key" or "<topic>,value" depending on whether you are registering the key schema for that topic or the value schema. 
+The subjects resource provides a list of all registered subjects in your schema registry. A subject refers to the name under which the schema is registered. If you are using the schema registry for Kafka, then a subject refers to either a "<topic>-key" or "<topic>-value" depending on whether you are registering the key schema for that topic or the value schema. 
 
 .. http:get:: /subjects
 
@@ -75,7 +75,7 @@ The subjects resource provides a list of all registered subjects in your schema 
    :param string subject: Name of the subject to get metadata about
 
    :>json string name: Name of the subject
-   :>json string compatibility: The compatibility level for this subject. Null if it was never overriden
+   :>json string compatibility: The compatibility level for this subject. Null if it was never overridden
 
    :statuscode 404: Subject not found
 
@@ -101,6 +101,35 @@ The subjects resource provides a list of all registered subjects in your schema 
 
 Schemas 
 ----------
+
+.. http:get:: /schemas/ids/{id}
+   
+   Get the schema string identified by the input id.
+
+   :param int id: the globally unique identifier of the schema
+
+   :>json string schema: Schema string identified by the id
+
+   :statuscode 404: Schema not found
+
+   **Example request**:
+
+   .. sourcecode:: http
+
+      GET /schemas/ids/1 HTTP/1.1
+      Host: schemaregistry.example.com
+      Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+
+   **Example response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 200 OK
+      Content-Type: application/vnd.schemaregistry.v1+json
+
+      {       
+        "schema": "{\"type\": \"string\"}"
+      }
 
 .. http:get:: /subjects/{subject}/versions
 
@@ -128,7 +157,6 @@ Schemas
       [
         1, 2, 3, 4
       ]
-
 
 .. http:get:: /subjects/(string:subject)/versions/(int:version)
 
@@ -210,9 +238,127 @@ Schemas
 
       1
 
+.. http:post:: /subjects/(string:subject)
+
+   Check if a schema has already been registered under the specified subject. If so, this returns the schema string along with its globally unique identifier, its version under this subject and the subject name.  
+
+   :param string subject: Subject under which the schema will be registered
+	
+   :>json string subject: Name of the subject that this schema is registered under
+   :>json int id: Globally unique identifier of the schema
+   :>json int version: Version of the returned schema
+   :>json string schema: The Avro schema string
+	
+   :statuscode 404: Subject not found
+
+   **Example request**:
+
+   .. sourcecode:: http
+
+      POST /subjects/test HTTP/1.1
+      Host: schemaregistry.example.com
+      Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+
+      { 
+        "type": "record",
+        "name": "test",
+        "fields":
+           [ 
+             {
+               "type": "string",
+               "name": "field1"
+             },
+             {
+               "type": "integer",
+               "name": "field2"
+             }
+           ]
+      }
+
+   **Example response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 200 OK
+      Content-Type: application/vnd.schemaregistry.v1+json
+           
+      {
+	    "subject": "test",
+	    "id": 1
+	    "version": 3
+	    "schema":           
+	       { 
+		     "type": "record",
+		     "name": "test",
+		     "fields":
+		        [ 
+		          {
+		            "type": "string",
+		            "name": "field1"
+		          },
+		          {
+		            "type": "integer",
+		            "name": "field2"
+		          }
+		        ]
+		   }
+	  }
+
+Compatibility
+-------------
+
+The compatibility resource allows the user to test schemas for compatibility against specific versions of a subject's schema.
+
+.. http:post:: /compatibility/subjects/(string:subject)/versions/(int:version)
+
+Test input schema against a particular version of a subject's schema for compatibility. Note that the compatibility level applied for the check is the configured compatibility level for the subject (``http:get:: /config/(string:subject)``). If this subject's compatibility level was never changed, then the global compatibility level applies (``http:get:: /config``).
+
+   :param string subject: Subject of the schema version against which compatibility is to be tested
+   :param int version: Version of the subject's schema against which compatibility is to be tested. -1 is a special value that indicates the current latest version of the subject's schema
+	
+   :>json boolean is_compatible: True, if compatible. False otherwise
+	
+   :statuscode 404:
+      * Error code 40401 -- Subject not found
+      * Error code 40402 -- Version not found
+
+   **Example request**:
+
+   .. sourcecode:: http
+
+      POST /compatibility/subjects/test/versions/-1 HTTP/1.1
+      Host: schemaregistry.example.com
+      Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+
+      { 
+        "type": "record",
+        "name": "test",
+        "fields":
+           [ 
+             {
+               "type": "string",
+               "name": "field1"
+             },
+             {
+               "type": "integer",
+               "name": "field2"
+             }
+           ]
+      }
+
+   **Example response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 200 OK
+      Content-Type: application/vnd.schemaregistry.v1+json
+           
+      {
+	    "is_compatible": "true"
+	  }
 
 Config
----------
+------
 
 The config resource allows you to inspect the cluster-level configuration values as well as subject overrides. 
 
@@ -294,7 +440,7 @@ The config resource allows you to inspect the cluster-level configuration values
 
 .. http:get:: /config/(string:subject)
 
-   Get global compatibility level.
+   Get compatibility level for a subject.
 
    :param string subject: Name of the subject
    :>json string compatibility: New global compatibility level. Will be one of NONE, FULL, FORWARD, BACKWARD

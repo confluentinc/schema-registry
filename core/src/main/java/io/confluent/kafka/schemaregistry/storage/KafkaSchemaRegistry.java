@@ -77,7 +77,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
       throws SchemaRegistryException {
-    String host = config.getString(SchemaRegistryConfig.ADVERTISED_HOST_NAME_CONFIG);
+    String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
     myIdentity = new SchemaRegistryIdentity(host, port);
 
