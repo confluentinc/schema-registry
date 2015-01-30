@@ -233,10 +233,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreException("Key should not be null");
     }
     // write to the Kafka topic
-    ProducerRecord<K, V> producerRecord = null;
+    ProducerRecord<byte[], byte[]> producerRecord = null;
     try {
-      producerRecord = new ProducerRecord(topic, 0, this.serializer.serializeKey(key),
-                                          value == null ? null : this.serializer.serializeValue(
+      producerRecord =
+          new ProducerRecord<byte[], byte[]>(topic, 0, this.serializer.serializeKey(key),
+                                             value == null ? null : this.serializer.serializeValue(
                                               value));
     } catch (SerializationException e) {
       throw new StoreException("Error serializing schema while creating the Kafka produce "

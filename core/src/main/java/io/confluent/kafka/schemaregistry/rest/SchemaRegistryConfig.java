@@ -88,7 +88,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "The desired replication factor of the schema topic. The actual replication factor " +
       "will be the smaller of this value and the number of live Kafka brokers.";
   protected static final String KAFKASTORE_WRITE_RETRIES_DOC = 
-      "Retry the register schema write up to this many times on failure";
+      "Retry a failed register schema request to the underlying Kafka store up to this many times, "
+      + " for example in case of a Kafka broker failure";
   protected static final String KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC =
       "The amount of time in milliseconds to wait before attempting to retry a failed write " 
       + "to the Kafka store";

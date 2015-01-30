@@ -104,7 +104,7 @@ Schema registry stores all schemas in a Kafka topic defined by ``kafkastore.topi
      register schema write is considered durable if it gets committed on at least 2 replicas out of 3.
 
 ``kafkastore.topic``
-The durable single partition topic that acts as the durable log for the data
+The single partition topic that acts as the durable log for the data
 
 * Type: string
 * Default: _schemas
