@@ -158,12 +158,12 @@ Schemas
         1, 2, 3, 4
       ]
 
-.. http:get:: /subjects/(string:subject)/versions/(int:version)
+.. http:get:: /subjects/(string:subject)/versions/(versionId:version)
 
    Get a specific version of the schema registered under this subject
 
    :param string subject: Name of the subject
-   :param int version: Version of the schema to be returned
+   :param versionId version: Version of the schema to be returned. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" returns the last registered schema under the specified subject
 
    :>json string name: Name of the subject that this schema is registered under
    :>json int version: Version of the returned schema
@@ -309,13 +309,13 @@ Compatibility
 
 The compatibility resource allows the user to test schemas for compatibility against specific versions of a subject's schema.
 
-.. http:post:: /compatibility/subjects/(string:subject)/versions/(int:version)
+.. http:post:: /compatibility/subjects/(string:subject)/versions/(versionId:version)
 
 Test input schema against a particular version of a subject's schema for compatibility. Note that the compatibility level applied for the check is the configured compatibility level for the subject (``http:get:: /config/(string:subject)``). If this subject's compatibility level was never changed, then the global compatibility level applies (``http:get:: /config``).
 
    :param string subject: Subject of the schema version against which compatibility is to be tested
-   :param int version: Version of the subject's schema against which compatibility is to be tested. -1 is a special value that indicates the current latest version of the subject's schema
-	
+   :param versionId version: Version of the subject's schema against which compatibility is to be tested. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" checks compatibility of the input schema with the last registered schema under the specified subject
+    	
    :>json boolean is_compatible: True, if compatible. False otherwise
 	
    :statuscode 404:
@@ -326,7 +326,7 @@ Test input schema against a particular version of a subject's schema for compati
 
    .. sourcecode:: http
 
-      POST /compatibility/subjects/test/versions/-1 HTTP/1.1
+      POST /compatibility/subjects/test/versions/latest HTTP/1.1
       Host: schemaregistry.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
 

@@ -398,14 +398,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   @Override
   public Schema get(String subject, int version) throws SchemaRegistryException {
-    SchemaKey key = new SchemaKey(subject, version);
-    try {
-      Schema schema = (Schema) kafkaStore.get(key);
-      return schema;
-    } catch (StoreException e) {
-      throw new SchemaRegistryException(
-          "Error while retrieving schema from the backend Kafka" +
-          " store", e);
+    if (version == -1) {
+      return getLatestVersion(subject);
+    } else {
+      SchemaKey key = new SchemaKey(subject, version);
+      try {
+        Schema schema = (Schema) kafkaStore.get(key);
+        return schema;
+      } catch (StoreException e) {
+        throw new SchemaRegistryException(
+            "Error while retrieving schema from the backend Kafka" +
+            " store", e);
+      }
     }
   }
 
