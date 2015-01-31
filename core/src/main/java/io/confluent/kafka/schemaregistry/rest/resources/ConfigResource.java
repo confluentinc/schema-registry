@@ -21,13 +21,13 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 
-import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.ServerErrorException;
 import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
@@ -68,7 +68,7 @@ public class ConfigResource {
                     + request.getCompatibilityLevel());
         }
       } catch (SchemaRegistryException e) {
-        throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+        throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
       }
     }
   }
@@ -80,7 +80,7 @@ public class ConfigResource {
     try {
       config = new Config(schemaRegistry.getCompatibilityLevel(subject));
     } catch (SchemaRegistryException e) {
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     return config;
   }
@@ -92,7 +92,7 @@ public class ConfigResource {
         schemaRegistry.updateCompatibilityLevel(null, request.getCompatibilityLevel());
         log.debug("Updated global compatibility level to " + request.getCompatibilityLevel());
       } catch (SchemaRegistryException e) {
-        throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+        throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
       }
     }
   }
@@ -103,7 +103,7 @@ public class ConfigResource {
     try {
       config = new Config(schemaRegistry.getCompatibilityLevel(null));
     } catch (SchemaRegistryException e) {
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     return config;
   }

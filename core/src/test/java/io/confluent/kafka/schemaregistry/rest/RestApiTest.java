@@ -436,5 +436,18 @@ public class RestApiTest extends ClusterTestHarness {
                    wae.getResponse().getStatus());
     }
   }
+
+  @Test
+  public void testGetConfigNonExistentSubject() throws IOException {
+    try {
+      RestUtils.getConfig(restApp.restConnect,
+                          RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                          "non-existent-subject");      
+    } catch (WebApplicationException wae) {
+      assertEquals("Subject not found",
+                   Response.Status.NOT_FOUND.getStatusCode(),
+                   wae.getResponse().getStatus());
+    }
+  }
 }
 

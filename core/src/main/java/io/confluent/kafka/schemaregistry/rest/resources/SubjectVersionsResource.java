@@ -24,7 +24,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
@@ -85,7 +84,7 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       log.debug("Error while retrieving schema for subject " + this.subject + " with version " +
                 version + " from the schema registry", e);
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     return schema;
   }
@@ -131,7 +130,7 @@ public class SubjectVersionsResource {
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
     } catch (SchemaRegistryException e) {
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
     registerSchemaResponse.setId(id);
