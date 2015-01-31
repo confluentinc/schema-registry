@@ -17,11 +17,6 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,15 +32,17 @@ import java.util.Vector;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import io.confluent.common.utils.zookeeper.ConditionalUpdateCallback;
+import io.confluent.common.metrics.JmxReporter;
+import io.confluent.common.metrics.MetricConfig;
+import io.confluent.common.metrics.Metrics;
+import io.confluent.common.metrics.MetricsReporter;
+import io.confluent.common.metrics.Sensor;
+import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.zookeeper.ZkData;
 import io.confluent.common.utils.zookeeper.ZkUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.IncompatibleAvroSchemaException;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IncompatibleAvroSchemaException;
@@ -86,6 +83,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private AtomicInteger schemaIdCounter;
   private int maxSchemaIdCounterValue;
   private final Metrics metrics;
+  private Sensor masterNodeSensor;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)

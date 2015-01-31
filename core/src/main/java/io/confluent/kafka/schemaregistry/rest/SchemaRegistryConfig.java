@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rest;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Map;
+import java.util.Properties;
 
 import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigException;
@@ -105,33 +106,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema)";
   private static final String COMPATIBILITY_DEFAULT = "backward";
+  private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
   private final AvroCompatibilityLevel compatibilityType;
-
-  public static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
-  public static final String METRICS_JMX_PREFIX_CONFIG = "metrics.jmx.prefix";
-  protected static final String METRICS_JMX_PREFIX_DOC =
-      "Prefix to apply to metric names for the default JMX reporter.";
-
-  public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
-  protected static final String METRICS_SAMPLE_WINDOW_MS_DOC =
-      "The metrics system maintains a configurable number of samples over a fixed window size. " +
-      "This configuration controls the size of the window. For example we might maintain two " +
-      "samples each measured over a 30 second period. When a window expires we erase and " +
-      "overwrite the oldest window.";
-  protected static final long METRICS_SAMPLE_WINDOW_MS_DEFAULT = 30000;
-
-  public static final String METRICS_NUM_SAMPLES_CONFIG = "metrics.num.samples";
-  protected static final String METRICS_NUM_SAMPLES_DOC =
-      "The number of samples maintained to compute metrics.";
-  protected static final int METRICS_NUM_SAMPLES_DEFAULT = 2;
-
-  public static final String METRICS_REPORTER_CLASSES_CONFIG = "metric.reporters";
-  protected static final String METRICS_REPORTER_CLASSES_DOC =
-      "A list of classes to use as metrics reporters. Implementing the " +
-      "<code>MetricReporter</code> interface allows plugging in classes that will be notified " +
-      "of new metric creation. The JmxReporter is always included to register JMX statistics.";
-  protected static final String METRICS_REPORTER_CLASSES_DEFAULT = "";
 
   private static final ConfigDef config;
   static {
@@ -168,19 +145,9 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.LOW, HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
                 ConfigDef.Importance.HIGH, COMPATIBILITY_DOC)
-        .define(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
-                METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW, METRICS_JMX_PREFIX_DOC)
-        .define(METRICS_REPORTER_CLASSES_CONFIG, ConfigDef.Type.LIST,
-                METRICS_REPORTER_CLASSES_DEFAULT, ConfigDef.Importance.LOW, METRICS_REPORTER_CLASSES_DOC)
-        .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
-                ConfigDef.Type.LONG,
-                METRICS_SAMPLE_WINDOW_MS_DEFAULT,
-                ConfigDef.Range.atLeast(0),
-                ConfigDef.Importance.LOW,
-                METRICS_SAMPLE_WINDOW_MS_DOC)
-        .define(METRICS_NUM_SAMPLES_CONFIG, ConfigDef.Type.INT,
-                METRICS_NUM_SAMPLES_DEFAULT, ConfigDef.Range.atLeast(1),
-                ConfigDef.Importance.LOW, METRICS_NUM_SAMPLES_DOC);
+        .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
+                        METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
+                        METRICS_JMX_PREFIX_DOC);
   }
 
   public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props)
@@ -192,6 +159,12 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public SchemaRegistryConfig(String propsFile) throws RestConfigException {
     this(getPropsFromFile(propsFile));
+  }
+
+  public SchemaRegistryConfig(Properties props) throws RestConfigException {
+    super(config, props);
+    compatibilityType = AvroCompatibilityLevel
+        .forName(getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG));
   }
 
   private static String getDefaultHost() {
