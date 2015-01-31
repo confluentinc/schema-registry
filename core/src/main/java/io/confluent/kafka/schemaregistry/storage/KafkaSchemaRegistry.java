@@ -293,66 +293,38 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     if (!zkClient.exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
       ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
                                    String.valueOf(ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE));
-    } else {
-      int newVersion = -1;
-      while (newVersion < 0) {
-        // read the latest counter value
-        ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
-        if (counterValue.getData() != null) {
-          schemaIdCounterThreshold = Integer.valueOf(counterValue.getData());
-        } else {
-          throw new SchemaRegistryException("Failed to initialize schema registry. Failed to read "
-                                            + "schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
-                                            " from zookeeper");
-        }
-        // conditionally update the zookeeper path
-        String newCounterValue = String.valueOf(schemaIdCounterThreshold +
-                                                ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
-        // newVersion < 0 indicates a failed conditional update. Most probable reason is the 
-        // existence of another master who also tries to do the same counter batch allocation at 
-        // the same time. If this happens, re-read the value and continue until one master is 
-        // determined to be the zombie master. 
-        // NOTE: The handling of multiple masters is still a TODO
-        newVersion =
-            ZkUtils.conditionalUpdatePersistentPath(zkClient, 
-                                                    ZOOKEEPER_SCHEMA_ID_COUNTER,
-                                                    newCounterValue,
-                                                    counterValue.getStat().getVersion(),
-                                                    new ConditionalUpdateCallback() {
-                                                      @Override
-                                                      public int checker(ZkClient zkClient,
-                                                                         String path,
-                                                                         String expectedCounterValueStr) {
-                                                        // check if the value stored in the path matches
-                                                        // the expected value.
-                                                        int
-                                                            expectedCounterValue =
-                                                            Integer
-                                                                .valueOf(
-                                                                    expectedCounterValueStr);
-                                                        ZkData
-                                                            counterValue =
-                                                            ZkUtils.readData(zkClient,
-                                                                             ZOOKEEPER_SCHEMA_ID_COUNTER);
-                                                        if (counterValue.getData()
-                                                            != null) {
-                                                          int storedCounterValue =
-                                                              Integer
-                                                                  .valueOf(counterValue
-                                                                               .getData());
-                                                          if (storedCounterValue
-                                                              == expectedCounterValue) {
-                                                            return counterValue.getStat()
-                                                                .getVersion();
-                                                          }
-                                                        } else {
-                                                          return -1;
-                                                        }
-                                                        return -1;
-                                                      }
-                                                    });
-      }
+      return 0;
     }
+
+    // ZOOKEEPER_SCHEMA_ID_COUNTER exists
+    int newSchemaIdCounterDataVersion = -1;
+    while (newSchemaIdCounterDataVersion < 0) {
+      // read the latest counter value
+      final ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
+      if (counterValue.getData() != null) {
+        schemaIdCounterThreshold = Integer.valueOf(counterValue.getData());
+      } else {
+        throw new SchemaRegistryException("Failed to initialize schema registry. Failed to read "
+                                          + "schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
+                                          " from zookeeper");
+      }
+
+      // conditionally update the zookeeper path
+      String newCounterValue = String.valueOf(schemaIdCounterThreshold +
+                                              ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
+
+      // newSchemaIdCounterDataVersion < 0 indicates a failed conditional update. Most probable reason is the
+      // existence of another master who also tries to do the same counter batch allocation at
+      // the same time. If this happens, re-read the value and continue until one master is
+      // determined to be the zombie master.
+      // NOTE: The handling of multiple masters is still a TODO
+      newSchemaIdCounterDataVersion = ZkUtils.conditionalUpdatePersistentPath(zkClient,
+                                                  ZOOKEEPER_SCHEMA_ID_COUNTER,
+                                                  newCounterValue,
+                                                  counterValue.getStat().getVersion(),
+                                                  null);
+    }
+
     return schemaIdCounterThreshold;
   }
 
