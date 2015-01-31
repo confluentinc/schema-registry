@@ -22,7 +22,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import javax.validation.Valid;
 import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -39,6 +38,7 @@ import javax.ws.rs.core.Response;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -75,13 +75,16 @@ public class SubjectsResource {
     Schema schema = new Schema(subject, 0, 0, request.getSchema());
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
     try {
-      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema,
+      if (!schemaRegistry.listSubjects().contains(subject)) {
+        throw Errors.subjectNotFoundException();
+      }
+      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema, 
                                                                         headerProperties);
     } catch (SchemaRegistryException e) {
       throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     if (matchingSchema == null) {
-      throw new NotFoundException("Schema never registered under subject " + subject);
+      throw Errors.schemaNotFoundException();
     }
     asyncResponse.resume(matchingSchema);
   }

@@ -129,6 +129,11 @@ public class TestUtils {
     return RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
   }
 
+  public static List<Integer> getSubjectVersions(String baseUrl, String subject)
+      throws IOException {
+    return RestUtils.getAllVersions(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
+  }
+
   /**
    * Helper method which checks the number of versions registered under the given subject.
    */

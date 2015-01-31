@@ -16,21 +16,21 @@ cd core/
 mvn exec:java -Dexec.mainClass="io.confluent.kafka.schemaregistry.rest.Main" -Dexec.args="../config/schema-registry.properties"
 
 4. Register a schema
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka,value/versions -d '{"schema": "{\"type\": \"string\"}"}'
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka-key/versions -d '{"schema": "{\"type\": \"string\"}"}'
 
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka,value/versions -d '{"schema": "{\"type\": \"string\"}"}'
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/subjects/Kafka-value/versions -d '{"schema": "{\"type\": \"string\"}"}'
 
 5. Test compatibility of a schema with the latest schema under a subject without changing the state of the registry
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/compatibility/subjects/Kafka,value/versions/latest -d '{"schema": "{\"type\": \"string\"}"}'
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X POST -i http://localhost:8080/compatibility/subjects/Kafka-value/versions/latest -d '{"schema": "{\"type\": \"string\"}"}'
 
 6. List all subjects 
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects
 
 7. List all versions of a subject's schema
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects/Kafka,value/versions
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects/Kafka-value/versions
 
 8. Get a particular version of a subject's schema
-curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects/Kafka,value/versions/1
+curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/subjects/Kafka-value/versions/1
 
 9. Get top level config
 curl -v -H "Content-Type: application/vnd.schemaregistry.v1+json" -X GET http://localhost:8080/config

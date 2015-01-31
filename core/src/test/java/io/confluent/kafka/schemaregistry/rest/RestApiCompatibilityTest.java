@@ -222,7 +222,5 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     assertEquals("Registering should succeed with backwards compatible schema",
                  expectedIdSchema4,
                  TestUtils.registerSchema(restApp.restConnect, schemaString4, subject));
-
-
   }
 }

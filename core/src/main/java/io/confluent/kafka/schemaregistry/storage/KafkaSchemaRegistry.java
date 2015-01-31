@@ -109,7 +109,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                                this.serializer,
                                                                new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>(),
                                                                zkClient);
-    MetricConfig metricConfig = 
+    MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
         .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                     TimeUnit.MILLISECONDS);
