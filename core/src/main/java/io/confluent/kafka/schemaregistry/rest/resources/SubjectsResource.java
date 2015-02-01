@@ -62,12 +62,12 @@ public class SubjectsResource {
 
   @POST
   @Path("/{subject}")
-  @PerformanceMetric("schema.lookup.by.subject")
+  @PerformanceMetric("subjects.get-schema")
   public void lookUpSchemaUnderSubject(final @Suspended AsyncResponse asyncResponse,
                                        final @HeaderParam("Content-Type") String contentType,
-                                    final @HeaderParam("Accept") String accept,
-                                    @PathParam("subject") String subject,
-                                    RegisterSchemaRequest request) {
+                                       final @HeaderParam("Accept") String accept,
+                                       @PathParam("subject") String subject,
+                                       RegisterSchemaRequest request) {
     // returns version if the schema exists. Otherwise returns 404
     Map<String, String> headerProperties = new HashMap<String, String>();
     headerProperties.put("Content-Type", contentType);

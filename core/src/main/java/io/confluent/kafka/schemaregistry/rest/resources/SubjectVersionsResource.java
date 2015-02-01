@@ -66,7 +66,7 @@ public class SubjectVersionsResource {
 
   @GET
   @Path("/{version}")
-  @PerformanceMetric("schema.lookup.by.version")
+  @PerformanceMetric("subjects.versions.get-schema")
   public Schema getSchema(@PathParam("version") Integer version) {
     Schema schema = null;
     try {
@@ -83,7 +83,7 @@ public class SubjectVersionsResource {
   }
 
   @GET
-  @PerformanceMetric("list.versions")
+  @PerformanceMetric("subjects.versions.list")
   public List<Integer> list() {
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
@@ -104,7 +104,7 @@ public class SubjectVersionsResource {
    *                IncompatibleAvroSchemaException}
    */
   @POST
-  @PerformanceMetric("register.schema")
+  @PerformanceMetric("subjects.versions.register")
   public void register(final @Suspended AsyncResponse asyncResponse,
                        final @HeaderParam("Content-Type") String contentType,
                        final @HeaderParam("Accept") String accept,

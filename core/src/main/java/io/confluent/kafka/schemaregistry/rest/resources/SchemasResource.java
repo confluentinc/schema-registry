@@ -50,7 +50,7 @@ public class SchemasResource {
 
   @GET
   @Path("/ids/{id}")
-  @PerformanceMetric("schema.lookup.by.id")
+  @PerformanceMetric("schemas.ids.get")
   public SchemaString getSchema(@PathParam("id") Integer id) {
     SchemaString schema = null;
     try {
