@@ -48,6 +48,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IncompatibleAvroSchemaException;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemaIdAndSubjects;
@@ -398,7 +399,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   @Override
   public Schema get(String subject, int version) throws SchemaRegistryException {
-    if (version == -1) {
+    VersionId versionId = new VersionId(version);
+    if (versionId.isLatest()) {
       return getLatestVersion(subject);
     } else {
       SchemaKey key = new SchemaKey(subject, version);

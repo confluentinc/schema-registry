@@ -35,14 +35,27 @@ public class VersionId {
         throw new IllegalArgumentException(version + " is not a valid version. Valid values are " 
                                            + "[1,2^31-1] both inclusive and \"latest\"");
       }
-      if (this.version <= 0) {
-        throw new IllegalArgumentException(version + " is not a valid version. Valid values are "
-                                           + "[1,2^31-1] both inclusive and \"latest\"");
-      }
+      assertValidVersion();
     }
+  }
+  
+  public VersionId(int version) {
+    this.version = version;
+    assertValidVersion();
   }
   
   public int getVersionId() {
     return this.version;    
+  }
+  
+  public boolean isLatest() {
+    return version == -1;
+  }
+  
+  private void assertValidVersion() {
+    if (this.version <= 0 && this.version != -1) {
+      throw new IllegalArgumentException(this.version + " is not a valid version. Valid values are "
+                                         + "[1,2^31-1] both inclusive and \"latest\"");
+    }
   }
 }

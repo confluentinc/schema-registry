@@ -82,7 +82,7 @@ public class CompatibilityResource {
       VersionId versionId = new VersionId(version);
       schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
       if (schemaForSpecifiedVersion == null) {
-        if (version.trim().toLowerCase().equals("latest")) {
+        if (versionId.isLatest()) {
           isCompatible = true;
           compatibilityCheckResponse.setIsCompatible(isCompatible);
           asyncResponse.resume(compatibilityCheckResponse);
