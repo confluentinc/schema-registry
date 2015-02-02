@@ -84,6 +84,38 @@ public class KafkaStoreTest extends ClusterTestHarness {
     kafkaStore.close();
   }
 
+  // TODO: This requires fix for https://issues.apache.org/jira/browse/KAFKA-1788
+//  @Test
+//  public void testPutRetries() throws InterruptedException {
+//    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
+//                                                                                       zkClient);
+//    String key = "Kafka";
+//    String value = "Rocks";
+//    try {
+//      kafkaStore.put(key, value);
+//    } catch (StoreException e) {
+//      fail("Kafka store put(Kafka, Rocks) operation failed");
+//    }
+//    String retrievedValue = null;
+//    try {
+//      retrievedValue = kafkaStore.get(key);
+//    } catch (StoreException e) {
+//      fail("Kafka store get(Kafka) operation failed");
+//    }
+//    assertEquals("Retrieved value should match entered value", value, retrievedValue);
+//    // stop the Kafka servers
+//    for (KafkaServer server : servers) {
+//      server.shutdown();
+//    }
+//    try {
+//      kafkaStore.put(key, value);
+//      fail("Kafka store put(Kafka, Rocks) operation should fail");
+//    } catch (StoreException e) {
+//      // expected since the Kafka producer will run out of retries
+//    }
+//    kafkaStore.close();
+//  }
+
   @Test
   public void testSimpleGetAfterFailure() throws InterruptedException {
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();

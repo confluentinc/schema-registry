@@ -29,11 +29,15 @@ import java.util.Set;
 import java.util.Vector;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import io.confluent.common.utils.zookeeper.ConditionalUpdateCallback;
 import io.confluent.common.utils.zookeeper.ZkData;
 import io.confluent.common.utils.zookeeper.ZkUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IncompatibleAvroSchemaException;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IncompatibleAvroSchemaException;
@@ -77,7 +81,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
       throws SchemaRegistryException {
-    String host = config.getString(SchemaRegistryConfig.ADVERTISED_HOST_NAME_CONFIG);
+    String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
     myIdentity = new SchemaRegistryIdentity(host, port);
 
@@ -289,9 +293,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     if (!zkClient.exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
       ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
                                    String.valueOf(ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE));
-    } else {
+      return 0;
+    }
+
+    // ZOOKEEPER_SCHEMA_ID_COUNTER exists
+    int newSchemaIdCounterDataVersion = -1;
+    while (newSchemaIdCounterDataVersion < 0) {
       // read the latest counter value
-      ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
+      final ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
       if (counterValue.getData() != null) {
         schemaIdCounterThreshold = Integer.valueOf(counterValue.getData());
       } else {
@@ -299,10 +308,23 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                           + "schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
                                           " from zookeeper");
       }
-      ZkUtils.updatePersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
-                                   String.valueOf(schemaIdCounterThreshold +
-                                                  ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE));
+
+      // conditionally update the zookeeper path
+      String newCounterValue = String.valueOf(schemaIdCounterThreshold +
+                                              ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
+
+      // newSchemaIdCounterDataVersion < 0 indicates a failed conditional update. Most probable reason is the
+      // existence of another master who also tries to do the same counter batch allocation at
+      // the same time. If this happens, re-read the value and continue until one master is
+      // determined to be the zombie master.
+      // NOTE: The handling of multiple masters is still a TODO
+      newSchemaIdCounterDataVersion = ZkUtils.conditionalUpdatePersistentPath(zkClient,
+                                                  ZOOKEEPER_SCHEMA_ID_COUNTER,
+                                                  newCounterValue,
+                                                  counterValue.getStat().getVersion(),
+                                                  null);
     }
+
     return schemaIdCounterThreshold;
   }
 
