@@ -6,3 +6,6 @@ target/
 *.iml
 .idea/
 .ipr
+
+# Documentation build output
+/docs/_build
