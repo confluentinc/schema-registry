@@ -40,6 +40,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
+import io.confluent.rest.annotations.PerformanceMetric;
 
 @Path("/compatibility")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -60,6 +61,7 @@ public class CompatibilityResource {
 
   @POST
   @Path("/subjects/{subject}/versions/{version}")
+  @PerformanceMetric("compatibility.subjects.versions.verify")
   public void getSchemaUnderSubject(final @Suspended AsyncResponse asyncResponse,
                                     final @HeaderParam("Content-Type") String contentType,
                                     final @HeaderParam("Accept") String accept,

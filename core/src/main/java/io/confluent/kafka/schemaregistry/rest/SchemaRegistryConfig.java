@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rest;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Map;
+import java.util.Properties;
 
 import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigException;
@@ -105,10 +106,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema)";
   private static final String COMPATIBILITY_DEFAULT = "backward";
+  private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
   private final AvroCompatibilityLevel compatibilityType;
-
-  private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "schema-registry";
 
   private static final ConfigDef config;
   static {
@@ -121,9 +121,6 @@ public class SchemaRegistryConfig extends RestConfig {
                         io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT,
                         ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
-        .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
-                        METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
-                        METRICS_JMX_PREFIX_DOC)
         .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
                 KAFKASTORE_CONNECTION_URL_DOC)
         .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
@@ -147,7 +144,10 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
                 ConfigDef.Importance.LOW, HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
-                ConfigDef.Importance.HIGH, COMPATIBILITY_DOC);
+                ConfigDef.Importance.HIGH, COMPATIBILITY_DOC)
+        .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
+                        METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
+                        METRICS_JMX_PREFIX_DOC);
   }
 
   public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props)
@@ -159,6 +159,12 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public SchemaRegistryConfig(String propsFile) throws RestConfigException {
     this(getPropsFromFile(propsFile));
+  }
+
+  public SchemaRegistryConfig(Properties props) throws RestConfigException {
+    super(config, props);
+    compatibilityType = AvroCompatibilityLevel
+        .forName(getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG));
   }
 
   private static String getDefaultHost() {
