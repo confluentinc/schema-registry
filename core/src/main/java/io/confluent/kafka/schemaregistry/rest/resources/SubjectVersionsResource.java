@@ -40,6 +40,7 @@ import javax.ws.rs.core.Response;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
@@ -67,10 +68,11 @@ public class SubjectVersionsResource {
   @GET
   @Path("/{version}")
   @PerformanceMetric("subjects.versions.get-schema")
-  public Schema getSchema(@PathParam("version") Integer version) {
+  public Schema getSchema(@PathParam("version") String version) {
+    VersionId versionId = new VersionId(version);
     Schema schema = null;
     try {
-      schema = schemaRegistry.get(this.subject, version);
+      schema = schemaRegistry.get(this.subject, versionId.getVersionId());
     } catch (SchemaRegistryException e) {
       log.debug("Error while retrieving schema for subject " + this.subject + " with version " +
                 version + " from the schema registry", e);

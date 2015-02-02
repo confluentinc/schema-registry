@@ -37,6 +37,7 @@ import javax.ws.rs.core.Response;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
@@ -62,12 +63,12 @@ public class CompatibilityResource {
   @POST
   @Path("/subjects/{subject}/versions/{version}")
   @PerformanceMetric("compatibility.subjects.versions.verify")
-  public void getSchemaUnderSubject(final @Suspended AsyncResponse asyncResponse,
-                                    final @HeaderParam("Content-Type") String contentType,
-                                    final @HeaderParam("Accept") String accept,
-                                    @PathParam("subject") String subject,
-                                    @PathParam("version") String version,
-                                    RegisterSchemaRequest request) {
+  public void lookUpSchemaUnderSubject(final @Suspended AsyncResponse asyncResponse,
+                                       final @HeaderParam("Content-Type") String contentType,
+                                       final @HeaderParam("Accept") String accept,
+                                       @PathParam("subject") String subject,
+                                       @PathParam("version") String version,
+                                       RegisterSchemaRequest request) {
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
     Map<String, String> headerProperties = new HashMap<String, String>();
@@ -78,14 +79,10 @@ public class CompatibilityResource {
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     try {
       Schema schemaForSpecifiedVersion = null;
-      if (version.trim().toLowerCase().equals("latest")) {
-        schemaForSpecifiedVersion = schemaRegistry.getLatestVersion(subject);
-      } else {
-        int versionId = Integer.valueOf(version.trim());
-        schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId);
-      }
+      VersionId versionId = new VersionId(version);
+      schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
       if (schemaForSpecifiedVersion == null) {
-        if (version.trim().toLowerCase().equals("latest")) {
+        if (versionId.isLatest()) {
           isCompatible = true;
           compatibilityCheckResponse.setIsCompatible(isCompatible);
           asyncResponse.resume(compatibilityCheckResponse);
