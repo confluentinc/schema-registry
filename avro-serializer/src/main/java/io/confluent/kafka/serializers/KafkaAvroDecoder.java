@@ -16,7 +16,6 @@
 package io.confluent.kafka.serializers;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.SerializationException;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -43,11 +42,6 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
 
   @Override
   public Object fromBytes(byte[] bytes) {
-    try {
-      return deserialize(bytes);
-    } catch (SerializationException e) {
-      e.printStackTrace();
-    }
-    return null;
+    return deserialize(bytes);
   }
 }
