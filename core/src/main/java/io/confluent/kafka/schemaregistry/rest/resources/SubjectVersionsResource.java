@@ -24,7 +24,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
@@ -33,6 +32,7 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.ServerErrorException;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
@@ -42,6 +42,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -54,7 +56,6 @@ import io.confluent.rest.annotations.PerformanceMetric;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SubjectVersionsResource {
 
-  public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
   private static final Logger log = LoggerFactory.getLogger(SubjectVersionsResource.class);
 
   private final String subject;
@@ -73,13 +74,17 @@ public class SubjectVersionsResource {
     Schema schema = null;
     try {
       schema = schemaRegistry.get(this.subject, versionId.getVersionId());
+      if (schema == null) {
+        if (!schemaRegistry.listSubjects().contains(this.subject)) {
+          throw Errors.subjectNotFoundException();
+        } else {
+          throw Errors.versionNotFoundException();
+        }
+      }
     } catch (SchemaRegistryException e) {
       log.debug("Error while retrieving schema for subject " + this.subject + " with version " +
                 version + " from the schema registry", e);
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
-    }
-    if (schema == null) {
-      throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
+      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     return schema;
   }
@@ -87,12 +92,16 @@ public class SubjectVersionsResource {
   @GET
   @PerformanceMetric("subjects.versions.list")
   public List<Integer> list() {
+    // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
     try {
+      if (!schemaRegistry.listSubjects().contains(this.subject)) {
+        throw new NotFoundException("Subject " + this.subject + " does not exist in the registry");
+      }
       allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
     } catch (SchemaRegistryException e) {
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     while (allSchemasForThisTopic.hasNext()) {
       Schema schema = allSchemasForThisTopic.next();
@@ -121,7 +130,7 @@ public class SubjectVersionsResource {
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
     } catch (SchemaRegistryException e) {
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
     registerSchemaResponse.setId(id);

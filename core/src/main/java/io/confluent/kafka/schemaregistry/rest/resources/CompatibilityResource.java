@@ -22,14 +22,13 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.ws.rs.ClientErrorException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.HeaderParam;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.ServerErrorException;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
@@ -39,6 +38,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Compatibi
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -78,6 +78,9 @@ public class CompatibilityResource {
     boolean isCompatible = false;
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     try {
+      if (!schemaRegistry.listSubjects().contains(subject)) {
+        throw Errors.subjectNotFoundException();
+      }
       Schema schemaForSpecifiedVersion = null;
       VersionId versionId = new VersionId(version);
       schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
@@ -87,7 +90,7 @@ public class CompatibilityResource {
           compatibilityCheckResponse.setIsCompatible(isCompatible);
           asyncResponse.resume(compatibilityCheckResponse);
         } else {
-          throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
+          throw Errors.versionNotFoundException();
         }
       } else {
         isCompatible =
@@ -97,7 +100,7 @@ public class CompatibilityResource {
         asyncResponse.resume(compatibilityCheckResponse);
       }
     } catch (SchemaRegistryException e) {
-      throw new ClientErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
   }
 }

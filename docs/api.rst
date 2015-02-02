@@ -68,37 +68,6 @@ The subjects resource provides a list of all registered subjects in your schema 
 
       ["subject1", "subject2"]
 
-.. http:get:: /subjects/(string:subject)
-
-   Get metadata about a specific subject.
-
-   :param string subject: Name of the subject to get metadata about
-
-   :>json string name: Name of the subject
-   :>json string compatibility: The compatibility level for this subject. Null if it was never overridden
-
-   :statuscode 404: Subject not found
-
-   **Example request**:
-
-   .. sourcecode:: http
-
-      GET /subjects/test HTTP/1.1
-      Host: kafkaproxy.example.com
-      Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
-
-   **Example response**:
-
-   .. sourcecode:: http
-
-      HTTP/1.1 200 OK
-      Content-Type: application/vnd.schemaregistry.v1+json
-
-      {
-        "name": "test",
-        "compatibility": "full"
-      }
-
 Schemas 
 ----------
 
@@ -139,6 +108,8 @@ Schemas
 
    :>jsonarr int version: version of the schema registered under this subject
 
+   :statuscode 404: Subject not found
+
    **Example request**:
 
    .. sourcecode:: http
@@ -172,6 +143,7 @@ Schemas
    :statuscode 404:
       * Error code 40401 -- Subject not found
       * Error code 40402 -- Version not found
+   :statuscode 400: Invalid version
 
    **Example request**:
 
@@ -202,8 +174,6 @@ Schemas
 
    :param string subject: Subject under which the schema will be registered
    :reqjson schema: The Avro schema string
-
-   :statuscode 404: Subject not found
 
    **Example request**:
 
@@ -249,7 +219,9 @@ Schemas
    :>json int version: Version of the returned schema
    :>json string schema: The Avro schema string
 	
-   :statuscode 404: Subject not found
+   :statuscode 404:
+      * Error code 40401 -- Subject not found
+      * Error code 40403 -- Schema not found
 
    **Example request**:
 
@@ -311,7 +283,7 @@ The compatibility resource allows the user to test schemas for compatibility aga
 
 .. http:post:: /compatibility/subjects/(string:subject)/versions/(versionId:version)
 
-Test input schema against a particular version of a subject's schema for compatibility. Note that the compatibility level applied for the check is the configured compatibility level for the subject (``http:get:: /config/(string:subject)``). If this subject's compatibility level was never changed, then the global compatibility level applies (``http:get:: /config``).
+   Test input schema against a particular version of a subject's schema for compatibility. Note that the compatibility level applied for the check is the configured compatibility level for the subject (``http:get:: /config/(string:subject)``). If this subject's compatibility level was never changed, then the global compatibility level applies (``http:get:: /config``).
 
    :param string subject: Subject of the schema version against which compatibility is to be tested
    :param versionId version: Version of the subject's schema against which compatibility is to be tested. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" checks compatibility of the input schema with the last registered schema under the specified subject
@@ -321,6 +293,7 @@ Test input schema against a particular version of a subject's schema for compati
    :statuscode 404:
       * Error code 40401 -- Subject not found
       * Error code 40402 -- Version not found
+   :statuscode 400: Invalid version
 
    **Example request**:
 
@@ -417,7 +390,7 @@ The config resource allows you to inspect the cluster-level configuration values
    :param string subject: Name of the subject
    :<json string compatibility: New global compatibility level. Must be one of NONE, FULL, FORWARD, BACKWARD
 
-   :statuscode 404: Subject not found
+   :statuscode 400: Invalid compatibility level
 
    **Example request**:
 

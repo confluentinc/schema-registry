@@ -109,7 +109,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                                this.serializer,
                                                                new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>(),
                                                                zkClient);
-    MetricConfig metricConfig = 
+    MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
         .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                     TimeUnit.MILLISECONDS);
@@ -419,8 +419,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public SchemaString get(int id) throws SchemaRegistryException {
     Schema schema = null;
     try {
-      SchemaKey subjectVersionKey = guidToSchemaKey.get(id);
-      schema = (Schema) kafkaStore.get(subjectVersionKey);
+      SchemaKey subjectVersionKey = guidToSchemaKey.get(id);      
+      if (subjectVersionKey == null) {
+        return null;
+      }
+        schema = (Schema) kafkaStore.get(subjectVersionKey);
     } catch (StoreException e) {
       throw new SchemaRegistryException(
           "Error while retrieving schema with id " + id + " from the backend Kafka" +

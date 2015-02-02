@@ -24,6 +24,8 @@ import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.ServerErrorException;
+import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -58,7 +60,7 @@ public class SchemasResource {
     } catch (SchemaRegistryException e) {
       log.debug("Error while retrieving schema with id " + id + " from the schema registry",
                 e);
-      throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND, e);
+      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
     if (schema == null) {
       throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
