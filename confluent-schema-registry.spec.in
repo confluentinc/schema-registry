@@ -1,0 +1,60 @@
+Summary: RESTful Avro schema registry for Kafka
+Name: confluent-schema-registry
+Version: ##RPMVERSION##
+Release: ##RPMRELEASE##
+Group: Applications/Internet
+License: Apache (v2)
+Source0: confluent-schema-registry-%{version}.tar.gz
+URL: http://confluent.io
+BuildRoot: %{_tmppath}/%{name}-%{version}-root
+Vendor: Confluent, Inc.
+Packager: Ewen Cheslack-Postava <ewen@confluent.io>
+BuildArch: noarch
+
+Requires: java >= 1.6, confluent-rest-utils
+
+%description
+
+Schema Registry provides a serving layer for your metadata. It provides a RESTful interface for storing and retrieving Avro schemas. It stores a versioned history of all schemas, provides multiple compatibility settings and allows evolution of schemas according to the configured compatibility setting. It provides serializers that plug into Kafka clients that handle schema storage and retrieval for Kafka messages that are sent in the Avro format.
+
+%pre
+
+exit 0
+
+%post
+
+%preun
+
+%postun
+
+%prep
+
+%setup
+
+%build
+
+%install
+
+# Clean out any previous builds not on slash
+[ "%{buildroot}" != "/" ] && %{__rm} -rf %{buildroot}
+
+%{__mkdir_p} %{buildroot}
+%{__cp} -R * %{buildroot}
+# The spec file gets included, get rid of it
+%{__rm} %{buildroot}/confluent-schema-registry.spec
+
+%files
+%defattr(-,root,root)
+/usr/bin/*
+/etc/schema-registry
+/usr/share/java/avro-serializer
+/usr/share/java/schema-registry
+/usr/share/doc/schema-registry
+
+%clean
+#used to cleanup things outside the build area and possibly inside.
+[ "%{buildroot}" != "/" ] && %{__rm} -rf %{buildroot}
+
+%changelog
+* Tue Feb 3 2015 Ewen Cheslack-Postava <ewen@confluent.io>
+- Initial import
