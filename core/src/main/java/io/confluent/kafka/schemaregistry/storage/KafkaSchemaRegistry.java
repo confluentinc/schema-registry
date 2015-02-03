@@ -34,9 +34,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.common.metrics.JmxReporter;
 import io.confluent.common.metrics.MetricConfig;
+import io.confluent.common.metrics.MetricName;
 import io.confluent.common.metrics.Metrics;
 import io.confluent.common.metrics.MetricsReporter;
 import io.confluent.common.metrics.Sensor;
+import io.confluent.common.metrics.stats.Gauge;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.zookeeper.ZkData;
 import io.confluent.common.utils.zookeeper.ZkUtils;
@@ -70,6 +72,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 20;
+  private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_WRITE_RETRY_BACKOFF_MS = 50;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
   final Map<Integer, SchemaKey> guidToSchemaKey;
   final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
@@ -118,6 +121,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     String jmxPrefix = "kafka.schema.registry";
     reporters.add(new JmxReporter(jmxPrefix));
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
+    this.masterNodeSensor = metrics.sensor("master-slave-role");
+    MetricName
+        m = new MetricName("master-slave-role", "master-slave-role", 
+                           "1.0 indicates the node is the active master in the cluster and is the" 
+                           + " node where all register schema and config update requests are " 
+                           + "served.");
+    this.masterNodeSensor.add(m, new Gauge());
   }
 
   @Override
@@ -155,6 +165,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         schemaIdCounter = new AtomicInteger(nextSchemaIdCounterBatch());
         maxSchemaIdCounterValue =
             schemaIdCounter.intValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+        masterNodeSensor.record(1.0);
+      } else {
+        masterNodeSensor.record(0.0);
       }
     }
   }
@@ -340,6 +353,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                   newCounterValue,
                                                   counterValue.getStat().getVersion(),
                                                   null);
+      try {
+        Thread.sleep(ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_WRITE_RETRY_BACKOFF_MS);
+      } catch (InterruptedException ignored) { }
     }
 
     return schemaIdCounterThreshold;
