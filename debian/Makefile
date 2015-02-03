@@ -18,10 +18,10 @@ export PACKAGE_NAME=$(FULL_PACKAGE_TITLE)-$(VERSION)
 # Defaults that are likely to vary by platform. These are cleanly separated so
 # it should be easy to maintain altered values on platform-specific branches
 # when the values aren't overridden by the script invoking the Makefile
-DEFAULT_APPLY_PATCHES=yes
+DEFAULT_APPLY_PATCHES=no
 DEFAULT_DESTDIR=$(CURDIR)/BUILD/
-DEFAULT_PREFIX=$(PACKAGE_NAME)
-DEFAULT_SYSCONFDIR=PREFIX/etc/$(PACKAGE_TITLE)
+DEFAULT_PREFIX=/usr
+DEFAULT_SYSCONFDIR=/etc/$(PACKAGE_TITLE)
 
 
 # Whether we should apply patches. This only makes sense for alternate packaging
@@ -89,3 +89,5 @@ distclean: clean
 test:
 
 .PHONY: clean install
+
+check:
