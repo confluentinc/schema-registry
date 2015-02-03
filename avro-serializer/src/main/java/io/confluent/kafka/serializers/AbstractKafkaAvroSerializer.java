@@ -113,4 +113,12 @@ public abstract class AbstractKafkaAvroSerializer {
       throw new SerializationException("Error serializing Avro message", e);
     }
   }
+
+  public int register(String subject, Schema schema) throws IOException {
+    return schemaRegistry.register(subject, schema);
+  }
+
+  public Schema getByID(int id) throws IOException {
+    return schemaRegistry.getByID(id);
+  }
 }
