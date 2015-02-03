@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryStoreException;
 import kafka.utils.ZkUtils;
 
 public class ZookeeperMasterElector {
@@ -43,13 +43,13 @@ public class ZookeeperMasterElector {
 
   public ZookeeperMasterElector(ZkClient zkClient, SchemaRegistryIdentity myIdentity,
                                 KafkaSchemaRegistry schemaRegistry)
-      throws SchemaRegistryException {
+      throws SchemaRegistryStoreException {
     this.zkClient = zkClient;
     this.myIdentity = myIdentity;
     try {
       this.myIdentityString = myIdentity.toJson();
     } catch (IOException e) {
-      throw new SchemaRegistryException(String.format(
+      throw new SchemaRegistryStoreException(String.format(
           "Error while serializing schema registry identity %s to json", myIdentity.toString()),
                                         e);
     }
@@ -64,7 +64,7 @@ public class ZookeeperMasterElector {
     zkClient.unsubscribeAll();
   }
 
-  public void electMaster() throws SchemaRegistryException {
+  public void electMaster() throws SchemaRegistryStoreException {
     SchemaRegistryIdentity masterIdentity = null;
     try {
       ZkUtils.createEphemeralPathExpectConflict(zkClient, MASTER_PATH, myIdentityString);

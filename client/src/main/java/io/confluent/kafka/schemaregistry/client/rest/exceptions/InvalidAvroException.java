@@ -28,4 +28,12 @@ public class InvalidAvroException extends WebApplicationException {
   public InvalidAvroException() {
     super("The provided schema string is not a valid Avro schema", STATUS);
   }
+
+  public InvalidAvroException(String message) {
+    super(message, STATUS);
+  }
+
+  public InvalidAvroException(String message, Throwable cause) {
+    super(message, STATUS);
+  }
 }

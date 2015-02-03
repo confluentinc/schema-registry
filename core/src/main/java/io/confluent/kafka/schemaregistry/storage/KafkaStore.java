@@ -40,6 +40,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimedOutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import kafka.admin.AdminUtils;
 import kafka.client.ClientUtils;
@@ -253,7 +254,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     } catch (ExecutionException e) {
       throw new StoreException("Put operation failed while waiting for an ack from Kafka", e);
     } catch (TimeoutException e) {
-      throw new StoreException("Put operation timed out while waiting for an ack from Kafka", e);
+      throw new StoreTimedOutException("Put operation timed out while waiting for an ack from Kafka", e);
     } catch (KafkaException ke) {
       throw new StoreException("Put operation to Kafka failed", ke);
     }
@@ -344,7 +345,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       }
     } while (System.currentTimeMillis() - start <= timeoutMs);
 
-    throw new StoreException(
+    throw new StoreTimedOutException(
         String.format("Can't fetch latest offset of Kafka topic %s after %d ms", topic, timeoutMs));
   }
 }

@@ -77,11 +77,7 @@ public class ConfigResource {
   @GET
   public Config getSubjectLevelConfig(@PathParam("subject") String subject) {
     Config config = null;
-    try {
-      config = new Config(schemaRegistry.getCompatibilityLevel(subject));
-    } catch (SchemaRegistryException e) {
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
-    }
+    config = new Config(schemaRegistry.getCompatibilityLevel(subject));
     return config;
   }
 
@@ -100,11 +96,7 @@ public class ConfigResource {
   @GET
   public Config getTopLevelConfig() {
     Config config = null;
-    try {
-      config = new Config(schemaRegistry.getCompatibilityLevel(null));
-    } catch (SchemaRegistryException e) {
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
-    }
+    config = new Config(schemaRegistry.getCompatibilityLevel(null));
     return config;
   }
 }
