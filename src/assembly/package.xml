@@ -30,7 +30,7 @@
     </fileSets>
     <dependencySets>
         <dependencySet>
-            <outputDirectory>share/schema-registry</outputDirectory>
+            <outputDirectory>share/java/schema-registry</outputDirectory>
             <useProjectArtifact>true</useProjectArtifact>
             <useTransitiveFiltering>true</useTransitiveFiltering>
             <excludes>
@@ -38,6 +38,15 @@
                 <exclude>io.confluent:common-config</exclude>
                 <exclude>io.confluent:common-utils</exclude>
             </excludes>
+        </dependencySet>
+        <dependencySet>
+            <outputDirectory>share/java/avro-serializer</outputDirectory>
+            <useProjectArtifact>true</useProjectArtifact>
+            <useTransitiveFiltering>true</useTransitiveFiltering>
+            <includes>
+                <include>io.confluent:kafka-avro-serializer</include>
+                <include>io.confluent:kafka-schema-registry-client</include>
+            </includes>
         </dependencySet>
     </dependencySets>
 </assembly>

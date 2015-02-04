@@ -27,6 +27,9 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   private boolean isKey;
 
+  /**
+   * Constructor used by Kafka producer.
+   */
   public KafkaAvroSerializer() {
 
   }

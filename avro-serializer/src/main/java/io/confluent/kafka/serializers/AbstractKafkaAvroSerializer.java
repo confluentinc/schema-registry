@@ -17,7 +17,6 @@ package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumWriter;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
@@ -28,63 +27,9 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-
-public abstract class AbstractKafkaAvroSerializer {
-
-  private static final byte MAGIC_BYTE = 0x0;
-  private static final int idSize = 4;
-  private static final Schema.Parser parser = new Schema.Parser();
-  private static final Map<String, Schema> primitiveSchemas;
-  protected final String SCHEMA_REGISTRY_URL = "schema.registry.url";
-  protected final String MAX_SCHEMAS_PER_SUBJECT = "max.schemas.per.subject";
-  protected final int DEFAULT_MAX_SCHEMAS_PER_SUBJECT = 1000;
+public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
   private final EncoderFactory encoderFactory = EncoderFactory.get();
-  protected SchemaRegistryClient schemaRegistry;
-
-  static {
-    primitiveSchemas = new HashMap<String, Schema>();
-    primitiveSchemas.put("Null", createPrimitiveSchema("null"));
-    primitiveSchemas.put("Boolean", createPrimitiveSchema("boolean"));
-    primitiveSchemas.put("Integer", createPrimitiveSchema("int"));
-    primitiveSchemas.put("Long", createPrimitiveSchema("long"));
-    primitiveSchemas.put("Float", createPrimitiveSchema("float"));
-    primitiveSchemas.put("Double", createPrimitiveSchema("double"));
-    primitiveSchemas.put("String", createPrimitiveSchema("string"));
-    primitiveSchemas.put("Bytes", createPrimitiveSchema("bytes"));
-  }
-
-  private static Schema createPrimitiveSchema(String type) {
-    String schemaString = String.format("{\"type\" : \"%s\"}", type);
-    return parser.parse(schemaString);
-  }
-
-  private Schema getSchema(Object object) {
-    if (object == null) {
-      return primitiveSchemas.get("Null");
-    } else if (object instanceof Boolean) {
-      return primitiveSchemas.get("Boolean");
-    } else if (object instanceof Integer) {
-      return primitiveSchemas.get("Integer");
-    } else if (object instanceof Long) {
-      return primitiveSchemas.get("Long");
-    } else if (object instanceof Float) {
-      return primitiveSchemas.get("Float");
-    } else if (object instanceof Double) {
-      return primitiveSchemas.get("Double");
-    } else if (object instanceof String) {
-      return primitiveSchemas.get("String");
-    } else if (object instanceof byte[]) {
-      return primitiveSchemas.get("Bytes");
-    } else if (object instanceof IndexedRecord) {
-      return ((IndexedRecord) object).getSchema();
-    } else {
-      throw new IllegalArgumentException("Invalid Avro type!");
-    }
-  }
 
   protected byte[] serializeImpl(String subject, Object record) throws SerializationException {
     try {
