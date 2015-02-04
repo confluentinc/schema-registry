@@ -115,7 +115,9 @@ public class ZookeeperMasterElector {
     @Override
     public void handleDataChange(String dataPath, Object data) {
       try {
-        readCurrentMaster();
+        if (!isEligibleForMasterElection) {
+          readCurrentMaster();
+        }
       } catch (SchemaRegistryException e) {
         log.error("Error while reading the schema registry master", e);
       }

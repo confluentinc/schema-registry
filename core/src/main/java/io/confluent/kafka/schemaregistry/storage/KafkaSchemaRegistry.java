@@ -151,21 +151,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     if (kafkaNamespaceIndex > 0) {
       kafkaNamespace = kafkaClusterZkUrl.substring(kafkaNamespaceIndex);
     }
-    String zkConnForNamespaceCreation = "";
+    String zkConnForNamespaceCreation = kafkaClusterZkUrl;
     if (kafkaNamespace.length() > 1) {
       zkConnForNamespaceCreation = kafkaClusterZkUrl.substring(0, kafkaNamespaceIndex);
-      ZkClient zkClientForNamespaceCreation = new ZkClient(zkConnForNamespaceCreation, 
-                                                           zkSessionTimeoutMs, zkSessionTimeoutMs, 
-                                                           new ZkStringSerializer());
-      // create the zookeeper namespace using cluster.name if it doesn't already exist
-      ZkUtils.makeSurePersistentPathExists(zkClientForNamespaceCreation, clusterName);
-      log.info("Created schema registry namespace " + zkConnForNamespaceCreation + "/" + 
-               clusterName);
-      zkClientForNamespaceCreation.close();
     }
-    schemaRegistryZkUrl = zkConnForNamespaceCreation + "/" + clusterName;
+    String schemaRegistryNamespace = "/" + clusterName;
+    schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;
+
+    ZkClient zkClientForNamespaceCreation = new ZkClient(zkConnForNamespaceCreation,
+                                                         zkSessionTimeoutMs, zkSessionTimeoutMs,
+                                                         new ZkStringSerializer());
+    // create the zookeeper namespace using cluster.name if it doesn't already exist
+    ZkUtils.makeSurePersistentPathExists(zkClientForNamespaceCreation, schemaRegistryNamespace);
+    log.info("Created schema registry namespace " + 
+             zkConnForNamespaceCreation + schemaRegistryNamespace);
+    zkClientForNamespaceCreation.close();
     this.zkClient = new ZkClient(schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
                                  new ZkStringSerializer());
+    System.out.println("Schema registry url = " + schemaRegistryZkUrl);
   }
   
   public boolean isMaster() {
@@ -254,7 +257,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           maxSchemaIdCounterValue =
               nextSchemaIdCounterBatch().intValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
         }
-
         kafkaStore.put(keyForNewVersion, schema);
         return schema.getId();
       } else {
