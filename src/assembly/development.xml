@@ -11,7 +11,7 @@
     <includeBaseDirectory>false</includeBaseDirectory>
     <dependencySets>
         <dependencySet>
-            <outputDirectory>share/schema-registry/</outputDirectory>
+            <outputDirectory>share/java/schema-registry/</outputDirectory>
         </dependencySet>
     </dependencySets>
 </assembly>

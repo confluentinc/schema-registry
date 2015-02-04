@@ -25,17 +25,8 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-
-public abstract class AbstractKafkaAvroDeserializer {
-
-  private static final byte MAGIC_BYTE = 0x0;
-  private static final int idSize = 4;
-  protected final String SCHEMA_REGISTRY_URL = "schema.registry.url";
-  protected final String MAX_SCHEMAS_PER_SUBJECT = "max.schemas.per.subject";
-  protected final int DEFAULT_MAX_SCHEMAS_PER_SUBJECT = 1000;
+public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
-  protected SchemaRegistryClient schemaRegistry;
 
   private ByteBuffer getByteBuffer(byte[] payload) {
     ByteBuffer buffer = ByteBuffer.wrap(payload);

@@ -15,3 +15,4 @@ Contents:
    api
    config
    operations 
+   serializer-formatter
