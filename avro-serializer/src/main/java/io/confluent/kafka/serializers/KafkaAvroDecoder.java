@@ -28,6 +28,9 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
     this.schemaRegistry = schemaRegistry;
   }
 
+  /**
+   * Constructor used by Kafka consumer.
+   */
   public KafkaAvroDecoder(VerifiableProperties props) {
     if (props == null) {
       throw new ConfigException("Missing schema registry url!");

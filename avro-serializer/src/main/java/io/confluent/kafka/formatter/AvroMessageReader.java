@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.formatter;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
@@ -28,6 +29,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import kafka.common.KafkaException;
 import kafka.producer.KeyedMessage;
 import kafka.tools.ConsoleProducer.MessageReader;
@@ -36,14 +38,14 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 /**
  * Example
  * To use AvroMessageReader, first make sure that Zookeeper, Kafka and schema registry server are
- * all started. Second, run "mvn package" and make sure that all the jars under
- * package/target/package-0.1-SNAPSHOT-package/share/avro-serializer/ are included in the classpath
- * of kafka-console-producer.sh. Then run the following command.
+ * all started. Second, make sure the jar for AvroMessageReader and its dependencies are included
+ * in the classpath of kafka-console-producer.sh. Then run the following
+ * command.
  *
  * 1. Send Avro string as value. (make sure there is no space in the schema string)
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1
- *   --line-reader io.confluent.kafka.formatter.AvroMessageReader
- *   --property schema.registry.url=http://localhost:8080
+ * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
+ *   --property schema.registry.url=http://localhost:8080 \
  *   --property value.schema='{"type":"string"}'
  *
  * In the shell, type in the following.
@@ -51,21 +53,21 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
  * "b"
  *
  * 2. Send Avro record as value.
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1
- *   --line-reader io.confluent.kafka.formatter.AvroMessageReader
- *   --property schema.registry.url=http://localhost:8080
- *   --property value.schema='{"type":"record","name":"User","fields":[{"name":"f1","type":"string"}]}'
+ * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
+ *   --property schema.registry.url=http://localhost:8080 \
+ *   --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
  *
  * In the shell, type in the following.
  * {"f1": "value1"}
  *
  * 3. Send Avro string as key and Avro record as value.
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1
- *   --line-reader io.confluent.kafka.formatter.AvroMessageReader
- *   --property schema.registry.url=http://localhost:8080
- *   --property key.schema='{"type":"string"}'
- *   --property value.schema='{"type":"record","name":"User","fields":[{"name":"f1","type":"string"}]}'
- *   --property parse.key=true
+ * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
+ *   --property schema.registry.url=http://localhost:8080 \
+ *   --property parse.key=true \
+ *   --property key.schema='{"type":"string"}' \
+ *   --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
  *
  * In the shell, type in the following.
  * "key1" \t {"f1": "value1"}
@@ -83,6 +85,27 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
   private Schema valueSchema = null;
   private String keySubject = null;
   private String valueSubject = null;
+
+  /**
+   * Constructor needed by kafka console producer.
+   */
+  public AvroMessageReader() {
+  }
+
+  /**
+   * For testing only.
+   */
+  AvroMessageReader(SchemaRegistryClient schemaRegistryClient, Schema keySchema, Schema valueSchema,
+                    String topic, boolean parseKey, BufferedReader reader) {
+    this.schemaRegistry = schemaRegistryClient;
+    this.keySchema = keySchema;
+    this.valueSchema = valueSchema;
+    this.topic = topic;
+    this.keySubject = topic + "-key";
+    this.valueSubject = topic + "-value";
+    this.parseKey = parseKey;
+    this.reader = reader;
+  }
 
   @Override
   public void init(java.io.InputStream inputStream, java.util.Properties props) {
@@ -167,6 +190,9 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
       }
       return object;
     } catch (IOException e) {
+      throw new SerializationException(
+          String.format("Error deserializing json %s to Avro of schema %s", jsonString, schema), e);
+    } catch (AvroRuntimeException e) {
       throw new SerializationException(
           String.format("Error deserializing json %s to Avro of schema %s", jsonString, schema), e);
     }

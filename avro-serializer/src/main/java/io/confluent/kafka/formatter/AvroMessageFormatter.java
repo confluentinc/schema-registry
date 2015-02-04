@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.formatter;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.DatumWriter;
@@ -28,25 +29,25 @@ import java.io.PrintStream;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import kafka.tools.MessageFormatter;
 
 /**
  * Example
  * To use AvroMessageFormatter, first make sure that Zookeeper, Kafka and schema registry server are
- * all started. Second, run "mvn package" and make sure that all the jars under
- * package/target/package-0.1-SNAPSHOT-package/share/avro-serializer/ are included in the classpath
- * of kafka-console-consumer.sh. Then run the following command.
+ * all started. Second, make sure the jar for AvroMessageFormatter and its dependencies are included
+ * in the classpath of kafka-console-consumer.sh. Then run the following command.
  *
  * 1. To read only the value of the messages in JSON
- * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1
- *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter
+ * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
+ *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
  *   --property schema.registry.url=http://localhost:8080
  *
  * 2. To read both the key and the value of the messages in JSON
- * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1
- *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter
- *   --property schema.registry.url=http://localhost:8080
+ * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
+ *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
+ *   --property schema.registry.url=http://localhost:8080 \
  *   --property print.key=true
  *
  */
@@ -57,6 +58,20 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
   private boolean printKey = false;
   private byte[] keySeparator = "\t".getBytes();
   private byte[] lineSeparator = "\n".getBytes();
+
+  /**
+   * Constructor needed by kafka console consumer.
+   */
+  public AvroMessageFormatter() {
+  }
+
+  /**
+   * For testing only.
+   */
+  AvroMessageFormatter(SchemaRegistryClient schemaRegistryClient, boolean printKey) {
+    this.schemaRegistry = schemaRegistryClient;
+    this.printKey = printKey;
+  }
 
   @Override
   public void init(Properties props) {
@@ -101,10 +116,16 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
   private void writeTo(byte[] data, PrintStream output) throws IOException {
     Object object = deserialize(data);
     Schema schema = getSchema(object);
-    JsonEncoder encoder = encoderFactory.jsonEncoder(schema, output);
-    DatumWriter<Object> writer = new GenericDatumWriter<Object>(schema);
-    writer.write(object, encoder);
-    encoder.flush();
+
+    try {
+      JsonEncoder encoder = encoderFactory.jsonEncoder(schema, output);
+      DatumWriter<Object> writer = new GenericDatumWriter<Object>(schema);
+      writer.write(object, encoder);
+      encoder.flush();
+    } catch (AvroRuntimeException e) {
+      throw new SerializationException(
+          String.format("Error serializing Avro data of schema %s to json", schema), e);
+    }
   }
 
   @Override
