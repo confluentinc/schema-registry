@@ -81,9 +81,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
   private final AvroCompatibilityLevel defaultCompatibilityLevel;
-  private final ZkClient zkClient;
+  private final String kafkaClusterZkUrl;
+  private String schemaRegistryZkUrl;
+  private ZkClient zkClient;
+  private final int zkSessionTimeoutMs;
+  private final String clusterName;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
+  private final boolean isEligibleForMasterElector;
   private AtomicInteger schemaIdCounter;
   private int maxSchemaIdCounterValue;
   private final Metrics metrics;
@@ -94,14 +99,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       throws SchemaRegistryException {
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
+    clusterName = config.getString(SchemaRegistryConfig.CLUSTER_NAME);
     myIdentity = new SchemaRegistryIdentity(host, port);
-
-    String kafkaClusterZkUrl =
+    isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
+    kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
-    int zkSessionTimeoutMs =
+    zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
-    this.zkClient = new ZkClient(kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-                                 new ZkStringSerializer());
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
@@ -110,8 +114,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(config,
                                                                new KafkaStoreMessageHandler(this),
                                                                this.serializer,
-                                                               new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>(),
-                                                               zkClient);
+                                                               new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>());
     MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
         .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
@@ -137,9 +140,34 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     } catch (StoreInitializationException e) {
       throw new SchemaRegistryException("Error while initializing the datastore", e);
     }
-    masterElector = new ZookeeperMasterElector(zkClient, myIdentity, this);
+    createZkNamespace();
+    masterElector = new ZookeeperMasterElector(zkClient, myIdentity, this, 
+                                               isEligibleForMasterElector);
   }
 
+  private void createZkNamespace() {
+    String kafkaNamespace = "";
+    int kafkaNamespaceIndex = kafkaClusterZkUrl.indexOf("/");
+    if (kafkaNamespaceIndex > 0) {
+      kafkaNamespace = kafkaClusterZkUrl.substring(kafkaNamespaceIndex);
+    }
+    String zkConnForNamespaceCreation = "";
+    if (kafkaNamespace.length() > 1) {
+      zkConnForNamespaceCreation = kafkaClusterZkUrl.substring(0, kafkaNamespaceIndex);
+      ZkClient zkClientForNamespaceCreation = new ZkClient(zkConnForNamespaceCreation, 
+                                                           zkSessionTimeoutMs, zkSessionTimeoutMs, 
+                                                           new ZkStringSerializer());
+      // create the zookeeper namespace using cluster.name if it doesn't already exist
+      ZkUtils.makeSurePersistentPathExists(zkClientForNamespaceCreation, clusterName);
+      log.info("Created schema registry namespace " + zkConnForNamespaceCreation + "/" + 
+               clusterName);
+      zkClientForNamespaceCreation.close();
+    }
+    schemaRegistryZkUrl = zkConnForNamespaceCreation + "/" + clusterName;
+    this.zkClient = new ZkClient(schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
+                                 new ZkStringSerializer());
+  }
+  
   public boolean isMaster() {
     synchronized (masterLock) {
       if (masterIdentity != null && masterIdentity.equals(myIdentity)) {

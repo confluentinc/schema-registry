@@ -41,6 +41,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationExcepti
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
 import kafka.admin.AdminUtils;
 import kafka.client.ClientUtils;
 import kafka.cluster.Broker;
@@ -81,8 +82,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
                     Serializer<K, V> serializer,
-                    Store<K, V> localStore,
-                    ZkClient zkClient) { 
+                    Store<K, V> localStore) {
     this.kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
@@ -100,12 +100,15 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.localStore = localStore;
     // TODO: Do not use the commit interval until the decision on the embedded store is done
     int commitInterval = config.getInt(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG);
+    int zkSessionTimeoutMs =
+        config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
+    this.zkClient = new ZkClient(kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
+                                 new ZkStringSerializer());
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<K, V>(zkClient, kafkaClusterZkUrl, topic, groupId,
                                          Integer.MIN_VALUE, this.storeUpdateHandler,
                                          serializer, this.localStore);
     this.brokerSeq = ZkUtils.getAllBrokersInCluster(zkClient);
-    this.zkClient = zkClient;
   }
 
   @Override

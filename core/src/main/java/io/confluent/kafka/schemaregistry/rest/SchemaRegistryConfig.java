@@ -71,6 +71,16 @@ public class SchemaRegistryConfig extends RestConfig {
   // TODO: turn off offset commit by default for now since we only have an in-memory store
   private static final int KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT = OFFSET_COMMIT_OFF;
   /**
+   * <code>master.eligibility</code>* 
+   */
+  public static final String MASTER_ELIGIBILITY = "master.eligibility";
+  public static final boolean DEFAULT_MASTER_ELIGIBILITY = true;
+  /**
+   * <code>cluster.name</code>* 
+   */
+  public static final String CLUSTER_NAME = "cluster.name";
+  public static final String DEFAULT_CLUSTER_NAME = "schema.registry";
+  /**
    * <code>advertised.host.name</code>
    */
   public static final String HOST_NAME_CONFIG = "host.name";
@@ -80,6 +90,9 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper url for the Kafka cluster";
+  protected static final String CLUSTER_NAME_DOC = 
+      "The string that is used as the zookeeper namespace for storing a schema registry cluster's " 
+      + "metadata. This also serves as an identifier for a schema registry cluster";
   protected static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC =
       "Zookeeper session timeout";
   protected static final String KAFKASTORE_TOPIC_DOC =
@@ -105,6 +118,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + "backward (new schema can read data produced by latest registered schema), "
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema)";
+  protected static final String MASTER_ELIGIBILITY_DOC = 
+      "If true, this node can participate in master election. In a multi-colo setup, turn this off" 
+      + "for clusters in the slave data center.";                               
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
@@ -123,7 +139,9 @@ public class SchemaRegistryConfig extends RestConfig {
                         RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
         .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
                 KAFKASTORE_CONNECTION_URL_DOC)
-        .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 10000, atLeast(0),
+        .define(CLUSTER_NAME, ConfigDef.Type.STRING, DEFAULT_CLUSTER_NAME, 
+                ConfigDef.Importance.LOW, CLUSTER_NAME_DOC)
+        .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 30000, atLeast(0),
                 ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC)
         .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKASTORE_TOPIC,
                 ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_DOC)
@@ -145,6 +163,8 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.LOW, HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
                 ConfigDef.Importance.HIGH, COMPATIBILITY_DOC)
+        .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY, 
+                ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC)
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
                         METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
                         METRICS_JMX_PREFIX_DOC);
