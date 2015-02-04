@@ -57,18 +57,20 @@ public class ConfigResource {
   public void updateSubjectLevelConfig(@PathParam("subject") String subject,
                                        ConfigUpdateRequest request) {
     if (request != null) {
+      Set<String> subjects = schemaRegistry.listSubjects();
       try {
-        Set<String> subjects = schemaRegistry.listSubjects();
         schemaRegistry.updateCompatibilityLevel(subject, request.getCompatibilityLevel());
-        if (!subjects.contains(subject)) {
-          log.debug("Updated compatibility level for unregistered subject " + subject + " to "
-                    + request.getCompatibilityLevel());
-        } else {
-          log.debug("Updated compatibility level for subject " + subject + " to "
-                    + request.getCompatibilityLevel());
-        }
       } catch (SchemaRegistryException e) {
-        throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+        throw new ServerErrorException("Failed to update compatibility level",
+                                       Response.Status.INTERNAL_SERVER_ERROR,
+                                       e);
+      }
+      if (!subjects.contains(subject)) {
+        log.debug("Updated compatibility level for unregistered subject " + subject + " to "
+                  + request.getCompatibilityLevel());
+      } else {
+        log.debug("Updated compatibility level for subject " + subject + " to "
+                  + request.getCompatibilityLevel());
       }
     }
   }
@@ -86,10 +88,12 @@ public class ConfigResource {
     if (request.getCompatibilityLevel() != null) {
       try {
         schemaRegistry.updateCompatibilityLevel(null, request.getCompatibilityLevel());
-        log.debug("Updated global compatibility level to " + request.getCompatibilityLevel());
       } catch (SchemaRegistryException e) {
-        throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+        throw new ServerErrorException("Failed to update compatibility level",
+                                       Response.Status.INTERNAL_SERVER_ERROR,
+                                       e);
       }
+      log.debug("Updated global compatibility level to " + request.getCompatibilityLevel());
     }
   }
 

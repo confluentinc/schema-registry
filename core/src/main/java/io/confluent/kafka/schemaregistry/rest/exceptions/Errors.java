@@ -23,21 +23,19 @@ public class Errors {
 
   public final static String SUBJECT_NOT_FOUND_MESSAGE = "Subject not found.";
   public final static int SUBJECT_NOT_FOUND_ERROR_CODE = 40401;
+  public final static String VERSION_NOT_FOUND_MESSAGE = "Version not found.";
+  public final static int VERSION_NOT_FOUND_ERROR_CODE = 40402;
+  public final static String SCHEMA_NOT_FOUND_MESSAGE = "Schema not found";
+  public final static int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
 
   public static RestException subjectNotFoundException() {
     return new RestNotFoundException(SUBJECT_NOT_FOUND_MESSAGE, SUBJECT_NOT_FOUND_ERROR_CODE);
   }
 
-  public final static String VERSION_NOT_FOUND_MESSAGE = "Version not found.";
-  public final static int VERSION_NOT_FOUND_ERROR_CODE = 40402;
-
   public static RestException versionNotFoundException() {
     return new RestNotFoundException(VERSION_NOT_FOUND_MESSAGE, VERSION_NOT_FOUND_ERROR_CODE);
   }
-  
-  public final static String SCHEMA_NOT_FOUND_MESSAGE = "Schema not found";
-  public final static int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
-  
+
   public static RestException schemaNotFoundException() {
     return new RestNotFoundException(SCHEMA_NOT_FOUND_MESSAGE, SCHEMA_NOT_FOUND_ERROR_CODE);
   }

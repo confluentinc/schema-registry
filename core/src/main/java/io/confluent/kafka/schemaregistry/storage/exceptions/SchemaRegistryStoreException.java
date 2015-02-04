@@ -21,7 +21,7 @@ import io.confluent.rest.exceptions.RestServerErrorException;
 public class SchemaRegistryStoreException extends RestServerErrorException {
 
   private static final int ERROR_CODE = 50001;
-  
+
   public SchemaRegistryStoreException(String message) {
     super(message, ERROR_CODE);
   }

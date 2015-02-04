@@ -83,14 +83,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
                     StoreUpdateHandler<K, V> storeUpdateHandler,
                     Serializer<K, V> serializer,
                     Store<K, V> localStore,
-                    ZkClient zkClient) { 
+                    ZkClient zkClient) {
     this.kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
     this.numRetries = config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
-    this.writeRetryBackoffMs = 
+    this.writeRetryBackoffMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_RETRY_BACKOFF_MS_CONFIG);
     this.groupId = String.format("schema-registry-%s-%d",
                                  config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
@@ -239,7 +239,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       producerRecord =
           new ProducerRecord<byte[], byte[]>(topic, 0, this.serializer.serializeKey(key),
                                              value == null ? null : this.serializer.serializeValue(
-                                              value));
+                                                 value));
     } catch (SerializationException e) {
       throw new StoreException("Error serializing schema while creating the Kafka produce "
                                + "record", e);
@@ -254,7 +254,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     } catch (ExecutionException e) {
       throw new StoreException("Put operation failed while waiting for an ack from Kafka", e);
     } catch (TimeoutException e) {
-      throw new StoreTimedOutException("Put operation timed out while waiting for an ack from Kafka", e);
+      throw new StoreTimedOutException(
+          "Put operation timed out while waiting for an ack from Kafka", e);
     } catch (KafkaException ke) {
       throw new StoreException("Put operation to Kafka failed", ke);
     }

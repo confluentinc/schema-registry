@@ -20,8 +20,8 @@ import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 
 /**
- * An exception thrown when the version is not a valid version id. Allowed values are between
- * [1, 2^31-1] and the string "latest"
+ * An exception thrown when the version is not a valid version id. Allowed values are between [1,
+ * 2^31-1] and the string "latest"
  */
 public class InvalidVersionException extends WebApplicationException {
 

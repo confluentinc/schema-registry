@@ -50,8 +50,7 @@ public class ZookeeperMasterElector {
       this.myIdentityString = myIdentity.toJson();
     } catch (IOException e) {
       throw new SchemaRegistryStoreException(String.format(
-          "Error while serializing schema registry identity %s to json", myIdentity.toString()),
-                                        e);
+          "Error while serializing schema registry identity %s to json", myIdentity.toString()), e);
     }
     this.schemaRegistry = schemaRegistry;
 

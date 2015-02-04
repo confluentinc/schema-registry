@@ -30,7 +30,8 @@ import kafka.utils.VerifiableProperties;
  * default, the encoder will use record name as topic.
  */
 public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Encoder<Object> {
-  public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry){
+
+  public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 

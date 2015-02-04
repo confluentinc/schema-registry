@@ -79,7 +79,7 @@ public class SubjectsResource {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
-      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema, 
+      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema,
                                                                         headerProperties);
     } catch (SchemaRegistryException e) {
       throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
@@ -104,10 +104,6 @@ public class SubjectsResource {
   @Valid
   @PerformanceMetric("subjects.list")
   public Set<String> list() {
-    try {
-      return schemaRegistry.listSubjects();
-    } catch (SchemaRegistryException e) {
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
-    }
+    return schemaRegistry.listSubjects();
   }
 }

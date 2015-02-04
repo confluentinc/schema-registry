@@ -27,85 +27,88 @@ import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequ
 import io.confluent.kafka.schemaregistry.utils.RestUtils;
 
 public class SchemaRegistryPerformance extends AbstractPerformanceTest {
-    long targetRegisteredSchemas;
-    long targetSchemasPerSec;
-    String baseUrl;
-    String subject;
-    long registeredSchemas = 0;
 
-    public static void main(String[] args) throws Exception {
+  long targetRegisteredSchemas;
+  long targetSchemasPerSec;
+  String baseUrl;
+  String subject;
+  long registeredSchemas = 0;
 
-        if (args.length < 4) {
-            System.out.println(
-                    "Usage: java " + SchemaRegistryPerformance.class.getName() + " schema_registry_url"
-                    + " subject num_schemas target_schemas_per_sec"
-            );
-            System.exit(1);
-        }
+  public SchemaRegistryPerformance(String baseUrl, String subject, long numSchemas,
+                                   long targetSchemasPerSec) throws Exception {
+    super(numSchemas);
+    this.baseUrl = baseUrl;
+    this.subject = subject;
+    this.targetRegisteredSchemas = numSchemas;
+    this.targetSchemasPerSec = targetSchemasPerSec;
 
-        String baseUrl = args[0];
-        String subject = args[1];
-        int numSchemas = Integer.parseInt(args[2]);
-        int targetSchemasPerSec = Integer.parseInt(args[3]);
+    // No compatibility verification
+    ConfigUpdateRequest request = new ConfigUpdateRequest();
+    request.setCompatibilityLevel(AvroCompatibilityLevel.NONE);
+    RestUtils.updateConfig(this.baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, null);
+  }
 
-        SchemaRegistryPerformance perf = new SchemaRegistryPerformance(baseUrl, subject, numSchemas, targetSchemasPerSec);
-        perf.run(targetSchemasPerSec);
-        perf.close();
+  public static void main(String[] args) throws Exception {
+
+    if (args.length < 4) {
+      System.out.println(
+          "Usage: java " + SchemaRegistryPerformance.class.getName() + " schema_registry_url"
+          + " subject num_schemas target_schemas_per_sec"
+      );
+      System.exit(1);
     }
 
-    public SchemaRegistryPerformance(String baseUrl, String subject, long numSchemas,
-                                     long targetSchemasPerSec) throws Exception {
-        super(numSchemas);
-        this.baseUrl = baseUrl;
-        this.subject = subject;
-        this.targetRegisteredSchemas = numSchemas;
-        this.targetSchemasPerSec = targetSchemasPerSec;
+    String baseUrl = args[0];
+    String subject = args[1];
+    int numSchemas = Integer.parseInt(args[2]);
+    int targetSchemasPerSec = Integer.parseInt(args[3]);
 
-        // No compatibility verification
-        ConfigUpdateRequest request = new ConfigUpdateRequest();
-        request.setCompatibilityLevel(AvroCompatibilityLevel.NONE);
-        RestUtils.updateConfig(this.baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, null);
+    SchemaRegistryPerformance
+        perf =
+        new SchemaRegistryPerformance(baseUrl, subject, numSchemas, targetSchemasPerSec);
+    perf.run(targetSchemasPerSec);
+    perf.close();
+  }
+
+  // sequential schema maker
+  private static String makeSchema(long num) {
+    String schemaString = "{\"type\":\"record\","
+                          + "\"name\":\"myrecord\","
+                          + "\"fields\":"
+                          + "[{\"type\":\"string\",\"name\":"
+                          + "\"f" + num + "\"}]}";
+    return AvroUtils.parseSchema(schemaString).canonicalString;
+  }
+
+  @Override
+  protected void doIteration(PerformanceStats.Callback cb) {
+    RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
+    String schema = makeSchema(this.registeredSchemas);
+    registerSchemaRequest.setSchema(schema);
+
+    try {
+      RestUtils.registerSchema(this.baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                               registerSchemaRequest, this.subject);
+      registeredSchemas++;
+    } catch (IOException e) {
+      System.out.println("Problem registering schema: " + e.getMessage());
     }
 
-    // sequential schema maker
-    private static String makeSchema(long num) {
-        String schemaString = "{\"type\":\"record\","
-                              + "\"name\":\"myrecord\","
-                              + "\"fields\":"
-                              + "[{\"type\":\"string\",\"name\":"
-                              + "\"f" + num + "\"}]}";
-        return AvroUtils.parseSchema(schemaString).canonicalString;
-    }
+    cb.onCompletion(1, 0);
+  }
 
-    @Override
-    protected void doIteration(PerformanceStats.Callback cb) {
-        RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
-        String schema = makeSchema(this.registeredSchemas);
-        registerSchemaRequest.setSchema(schema);
+  protected void close() {
+    // nothing to do
+  }
 
-        try {
-            RestUtils.registerSchema(this.baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                     registerSchemaRequest, this.subject);
-            registeredSchemas++;
-        } catch(IOException e) {
-            System.out.println("Problem registering schema: " + e.getMessage());
-        }
+  @Override
+  protected boolean finished(int iteration) {
+    return this.targetRegisteredSchemas == this.registeredSchemas;
+  }
 
-        cb.onCompletion(1, 0);
-    }
-
-    protected void close() {
-        // nothing to do
-    }
-
-    @Override
-    protected boolean finished(int iteration) {
-        return this.targetRegisteredSchemas == this.registeredSchemas;
-    }
-
-    @Override
-    protected boolean runningFast(int iteration, float elapsed) {
-        return iteration / elapsed > targetSchemasPerSec;
-    }
+  @Override
+  protected boolean runningFast(int iteration, float elapsed) {
+    return iteration / elapsed > targetSchemasPerSec;
+  }
 }
 

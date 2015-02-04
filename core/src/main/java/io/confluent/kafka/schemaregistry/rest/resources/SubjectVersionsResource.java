@@ -27,7 +27,6 @@ import java.util.Map;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -43,10 +42,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryStoreException;
 import io.confluent.rest.annotations.PerformanceMetric;
+import io.confluent.rest.exceptions.RestNotFoundException;
 
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
            Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
@@ -81,10 +81,10 @@ public class SubjectVersionsResource {
           throw Errors.versionNotFoundException();
         }
       }
-    } catch (SchemaRegistryException e) {
+    } catch (SchemaRegistryStoreException e) {
       log.debug("Error while retrieving schema for subject " + this.subject + " with version " +
                 version + " from the schema registry", e);
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw e;
     }
     return schema;
   }
@@ -95,14 +95,11 @@ public class SubjectVersionsResource {
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
-    try {
-      if (!schemaRegistry.listSubjects().contains(this.subject)) {
-        throw new NotFoundException("Subject " + this.subject + " does not exist in the registry");
-      }
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
-    } catch (SchemaRegistryException e) {
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+    if (!schemaRegistry.listSubjects().contains(this.subject)) {
+      throw new RestNotFoundException("Subject " + this.subject + " does not exist in the " 
+                                      + "registry", Response.Status.NOT_FOUND.getStatusCode());
     }
+    allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
     while (allSchemasForThisTopic.hasNext()) {
       Schema schema = allSchemasForThisTopic.next();
       allVersions.add(schema.getVersion());

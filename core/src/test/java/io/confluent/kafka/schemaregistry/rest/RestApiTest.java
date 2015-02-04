@@ -64,7 +64,7 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (WebApplicationException wae) {
       assertEquals("Getting all versions from non-existing subject1 should throw a 404",
                    Response.Status.NOT_FOUND,
-                   wae.getResponse().getStatusInfo());      
+                   wae.getResponse().getStatusInfo());
     }
 
     // test getAllSubjects with no existing data
@@ -132,11 +132,11 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.changeCompatibility(restApp.restConnect, NONE, subject);
 
     TestUtils.registerSchema(restApp.restConnect, allSchemas.get(0), subject);
-    numRegisteredSchemas ++;
-    
+    numRegisteredSchemas++;
+
     // test compatibility of this schema against the latest version under the subject
     String schema1 = allSchemas.get(0);
-    boolean isCompatible = 
+    boolean isCompatible =
         TestUtils.testCompatibility(restApp.restConnect, schema1, subject, "latest");
     assertTrue("First schema registered should be compatible", isCompatible);
 
@@ -177,7 +177,7 @@ public class RestApiTest extends ClusterTestHarness {
     int versionOfRegisteredSchema =
         TestUtils.lookUpSubjectVersion(restApp.restConnect, schema1, subject).getVersion();
     boolean isCompatible = TestUtils.testCompatibility(restApp.restConnect, schema2, subject,
-                                  String.valueOf(versionOfRegisteredSchema));
+                                                       String.valueOf(versionOfRegisteredSchema));
     assertFalse("Schema should be incompatible with specified version", isCompatible);
   }
 
@@ -303,7 +303,7 @@ public class RestApiTest extends ClusterTestHarness {
                                      subject).getCompatibilityLevel());
 
   }
-  
+
   @Test
   public void testGetSchemaNonExistingId() throws IOException {
     try {
@@ -311,24 +311,24 @@ public class RestApiTest extends ClusterTestHarness {
       fail("Schema lookup by non-existing id should fail with a 404");
     } catch (WebApplicationException wae) {
       // this is expected.
-      assertEquals("Should get a 404 status for non-existing id", 
-                   404, 
+      assertEquals("Should get a 404 status for non-existing id",
+                   404,
                    wae.getResponse().getStatus());
     }
   }
-  
+
   @Test
   public void testListVersionsNonExistingSubject() throws IOException {
     try {
       TestUtils.getSubjectVersions(restApp.restConnect, "Invalid");
     } catch (WebApplicationException wae) {
       // this is expected.
-      assertEquals("Should get a 404 status for non-existing subject", 
-                   404, 
-                   wae.getResponse().getStatus());      
-    }    
+      assertEquals("Should get a 404 status for non-existing subject",
+                   404,
+                   wae.getResponse().getStatus());
+    }
   }
-  
+
   @Test
   public void testGetVersionNonExistentSubject() throws IOException {
     // test getVersion on a non-existing subject
@@ -342,7 +342,7 @@ public class RestApiTest extends ClusterTestHarness {
                    e.getResponse().getStatus());
     }
   }
-  
+
   @Test
   public void testGetNonExistingVersion() throws IOException {
     // test getVersion on a non-existing version
@@ -371,8 +371,8 @@ public class RestApiTest extends ClusterTestHarness {
                            0);
     } catch (WebApplicationException e) {
       // this is expected.
-      assertEquals("Invalid version shouldn't be found", 
-                   Response.Status.BAD_REQUEST.getStatusCode(), 
+      assertEquals("Invalid version shouldn't be found",
+                   Response.Status.BAD_REQUEST.getStatusCode(),
                    e.getResponse().getStatus());
     }
   }
@@ -381,12 +381,12 @@ public class RestApiTest extends ClusterTestHarness {
   public void testLookUpSchemaUnderNonExistentSubject() throws IOException {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {
-      TestUtils.lookUpSubjectVersion(restApp.restConnect, schema, "non-existent-subject");  
+      TestUtils.lookUpSubjectVersion(restApp.restConnect, schema, "non-existent-subject");
     } catch (WebApplicationException wae) {
       assertEquals("Subject not found", 40401, wae.getResponse().getStatus());
     }
   }
-  
+
   @Test
   public void testLookUpNonExistentSchemaUnderSubject() throws IOException {
     String subject = "test";
@@ -400,7 +400,7 @@ public class RestApiTest extends ClusterTestHarness {
       assertEquals("Schema not found", 40403, wae.getResponse().getStatus());
     }
   }
-  
+
   @Test
   public void testCompatibilityNonExistentSubject() throws IOException {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
@@ -431,8 +431,8 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       TestUtils.testCompatibility(restApp.restConnect, schema, subject, "earliest");
     } catch (WebApplicationException wae) {
-      assertEquals("Version not found", 
-                   Response.Status.BAD_REQUEST.getStatusCode(), 
+      assertEquals("Version not found",
+                   Response.Status.BAD_REQUEST.getStatusCode(),
                    wae.getResponse().getStatus());
     }
   }
@@ -442,7 +442,7 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       RestUtils.getConfig(restApp.restConnect,
                           RestUtils.DEFAULT_REQUEST_PROPERTIES,
-                          "non-existent-subject");      
+                          "non-existent-subject");
     } catch (WebApplicationException wae) {
       assertEquals("Subject not found",
                    Response.Status.NOT_FOUND.getStatusCode(),
