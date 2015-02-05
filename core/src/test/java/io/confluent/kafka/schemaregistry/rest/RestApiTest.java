@@ -374,7 +374,7 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (WebApplicationException e) {
       // this is expected.
       assertEquals("Invalid version shouldn't be found",
-                   RestInvalidVersionException.DEFAULT_ERROR_CODE,
+                   RestInvalidVersionException.ERROR_CODE,
                    e.getResponse().getStatus());
     }
   }
@@ -434,7 +434,7 @@ public class RestApiTest extends ClusterTestHarness {
       TestUtils.testCompatibility(restApp.restConnect, schema, subject, "earliest");
     } catch (WebApplicationException wae) {
       assertEquals("Version not found",
-                   RestInvalidVersionException.DEFAULT_ERROR_CODE,
+                   RestInvalidVersionException.ERROR_CODE,
                    wae.getResponse().getStatus());
     }
   }
