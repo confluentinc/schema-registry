@@ -139,7 +139,10 @@ public class RestUtils {
         InputStream es = connection.getErrorStream();
         ErrorMessage errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
         es.close();
+        // TODO: This is a hack until we fix it correctly as part of the refactoring planned in 
+        // issue #66
         throw new WebApplicationException(errorMessage.getMessage(), errorMessage.getErrorCode());
+//        throw new WebApplicationException(errorMessage.getMessage(), responseCode);
       }
 
     } finally {
@@ -210,11 +213,11 @@ public class RestUtils {
   }
 
   public static SchemaString getId(String baseUrl, Map<String, String> requestProperties,
-                             int id) throws IOException {
+                                   int id) throws IOException {
     String url = String.format("%s/schemas/ids/%d", baseUrl, id);
 
     SchemaString response = RestUtils.httpRequest(url, "GET", null, requestProperties,
-                                            GET_SCHEMA_BY_ID_RESPONSE_TYPE);
+                                                  GET_SCHEMA_BY_ID_RESPONSE_TYPE);
     return response;
   }
 

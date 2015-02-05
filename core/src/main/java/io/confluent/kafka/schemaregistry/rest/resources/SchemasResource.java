@@ -20,17 +20,15 @@ import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.ServerErrorException;
-import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.rest.annotations.PerformanceMetric;
 
 @Path("/schemas")
@@ -57,13 +55,14 @@ public class SchemasResource {
     SchemaString schema = null;
     try {
       schema = schemaRegistry.get(id);
-    } catch (SchemaRegistryException e) {
-      log.debug("Error while retrieving schema with id " + id + " from the schema registry",
-                e);
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+    } catch (SchemaRegistryStoreException e) {
+      String errorMessage = "Error while retrieving schema with id " + id + " from the schema " 
+                            + "registry";
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
     }
     if (schema == null) {
-      throw new NotFoundException(MESSAGE_SCHEMA_NOT_FOUND);
+      throw Errors.schemaNotFoundException();
     }
     return schema;
   }

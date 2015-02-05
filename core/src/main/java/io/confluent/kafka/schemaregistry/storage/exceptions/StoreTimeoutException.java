@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2015 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,27 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.storage.exceptions;
 
 /**
- * Error while (de)serializing data while reading from or writing to a 
- * * <code>io.confluent.kafka.schemaregistry.storage.Store</code>
+ * Indicates either a write, read or a bootstrap operation on the underlying Kafka store timed out.
  */
-public class SerializationException extends Exception {
+public class StoreTimeoutException extends StoreException {
 
-  public SerializationException(String message, Throwable cause) {
-    super(message, cause);
-  }
-
-  public SerializationException(String message) {
+  public StoreTimeoutException(String message) {
     super(message);
   }
 
-  public SerializationException(Throwable cause) {
-    super(cause);
-  }
-
-  public SerializationException() {
-    super();
+  public StoreTimeoutException(String message, Throwable cause) {
+    super(message, cause);
   }
 }

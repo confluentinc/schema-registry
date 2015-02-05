@@ -117,7 +117,10 @@ public class RestUtils {
         InputStream es = connection.getErrorStream();
         ErrorMessage errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
         es.close();
+        // TODO: This is a hack until we fix it correctly as part of the refactoring planned in
+        // issue #66
         throw new WebApplicationException(errorMessage.getMessage(), errorMessage.getErrorCode());
+//        throw new WebApplicationException(errorMessage.getMessage(), responseCode);
       }
 
     } finally {

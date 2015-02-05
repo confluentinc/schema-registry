@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2015 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,27 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.storage.exceptions;
+
+package io.confluent.kafka.schemaregistry.exceptions;
 
 /**
- * Error while (de)serializing data while reading from or writing to a 
- * * <code>io.confluent.kafka.schemaregistry.storage.Store</code>
+ * Indicates that the node that is asked to serve the request is not the current master and
+ * is not aware of the master node to forward the request to
  */
-public class SerializationException extends Exception {
+public class UnknownMasterException extends SchemaRegistryException {
 
-  public SerializationException(String message, Throwable cause) {
+  public UnknownMasterException(String message, Throwable cause) {
     super(message, cause);
   }
 
-  public SerializationException(String message) {
+  public UnknownMasterException(String message) {
     super(message);
   }
 
-  public SerializationException(Throwable cause) {
+  public UnknownMasterException(Throwable cause) {
     super(cause);
   }
 
-  public SerializationException() {
+  public UnknownMasterException() {
     super();
   }
 }

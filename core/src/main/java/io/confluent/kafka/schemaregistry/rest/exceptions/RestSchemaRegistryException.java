@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2015 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,20 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
+import io.confluent.rest.exceptions.RestServerErrorException;
 
 /**
- * An exception thrown when the registered schema is not compatible with the latest schema according
- * to the compatibility level.
+ * Indicates some error while performing a schema registry operation
  */
-public class IncompatibleAvroSchemaException extends WebApplicationException {
+public class RestSchemaRegistryException extends RestServerErrorException {
 
-  public static final Response.Status STATUS = Response.Status.CONFLICT;
+  private static final int ERROR_CODE = RestServerErrorException.DEFAULT_ERROR_CODE;
 
-  public IncompatibleAvroSchemaException(String errorMsg) {
-    super(errorMsg, STATUS);
+  public RestSchemaRegistryException(String message) {
+    super(message, ERROR_CODE);
+  }
+
+  public RestSchemaRegistryException(String message, Throwable cause) {
+    super(message, ERROR_CODE, cause);
   }
 }

@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2015 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.storage.exceptions;
 
-public class SchemaRegistryException extends Exception {
+package io.confluent.kafka.schemaregistry.exceptions;
 
-  public SchemaRegistryException(String message, Throwable cause) {
+/**
+ * Indicates an error while performing an operation on the underlying data store that
+ * stores all schemas in the registry
+ */
+public class SchemaRegistryStoreException extends SchemaRegistryException {
+
+  public SchemaRegistryStoreException(String message, Throwable cause) {
     super(message, cause);
   }
 
-  public SchemaRegistryException(String message) {
+  public SchemaRegistryStoreException(String message) {
     super(message);
   }
 
-  public SchemaRegistryException(Throwable cause) {
+  public SchemaRegistryStoreException(Throwable cause) {
     super(cause);
   }
 
-  public SchemaRegistryException() {
+  public SchemaRegistryStoreException() {
     super();
   }
 }

@@ -14,21 +14,26 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.rest.exceptions;
-
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
+package io.confluent.kafka.schemaregistry.exceptions;
 
 /**
- * An exception thrown when the version is not a valid version id. Allowed values are between
- * [1, 2^31-1] and the string "latest"
+ * Indicates that the version is not a valid version id. Allowed values are between [1,
+ * 2^31-1] and the string "latest"
  */
-public class InvalidVersionException extends WebApplicationException {
+public class InvalidVersionException extends SchemaRegistryException {
+  public InvalidVersionException(String message, Throwable cause) {
+    super(message, cause);
+  }
 
-  public static final Response.Status STATUS = Response.Status.BAD_REQUEST;
+  public InvalidVersionException(String message) {
+    super(message);
+  }
+
+  public InvalidVersionException(Throwable cause) {
+    super(cause);
+  }
 
   public InvalidVersionException() {
-    super("The specified version is not a valid version id. Allowed values are between "
-          + "[1, 2^31-1] and the string \"latest\"", STATUS);
+    super();
   }
 }

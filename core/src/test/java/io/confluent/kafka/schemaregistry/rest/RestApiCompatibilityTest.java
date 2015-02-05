@@ -23,7 +23,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IncompatibleAvroSchemaException;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroException;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestInvalidAvroException;
 import io.confluent.kafka.schemaregistry.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
@@ -78,7 +78,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     } catch (WebApplicationException e) {
       // this is expected.
       assertEquals("Should get a bad request status",
-                   InvalidAvroException.STATUS.getStatusCode(),
+                   RestInvalidAvroException.STATUS.getStatusCode(),
                    e.getResponse().getStatus());
     }
 
