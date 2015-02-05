@@ -14,15 +14,23 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.storage.exceptions;
+package io.confluent.kafka.schemaregistry.exceptions;
 
-public class StoreTimedOutException extends StoreException {
+public class UnknownMasterException extends SchemaRegistryException {
 
-  public StoreTimedOutException(String message) {
+  public UnknownMasterException(String message, Throwable cause) {
+    super(message, cause);
+  }
+
+  public UnknownMasterException(String message) {
     super(message);
   }
 
-  public StoreTimedOutException(String message, Throwable cause) {
-    super(message, cause);
+  public UnknownMasterException(Throwable cause) {
+    super(cause);
+  }
+
+  public UnknownMasterException() {
+    super();
   }
 }

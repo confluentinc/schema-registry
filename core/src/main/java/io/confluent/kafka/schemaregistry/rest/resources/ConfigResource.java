@@ -27,14 +27,13 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.ServerErrorException;
-import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
 @Path("/config")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -57,13 +56,17 @@ public class ConfigResource {
   public void updateSubjectLevelConfig(@PathParam("subject") String subject,
                                        ConfigUpdateRequest request) {
     if (request != null) {
-      Set<String> subjects = schemaRegistry.listSubjects();
+      Set<String> subjects = null;
+      try {
+        subjects = schemaRegistry.listSubjects();
+      } catch (SchemaRegistryStoreException e) {
+        throw new RestSchemaRegistryStoreException("Failed to retrieve a list of all subjects" 
+                                                   + " from the registry", e);
+      }
       try {
         schemaRegistry.updateCompatibilityLevel(subject, request.getCompatibilityLevel());
-      } catch (SchemaRegistryException e) {
-        throw new ServerErrorException("Failed to update compatibility level",
-                                       Response.Status.INTERNAL_SERVER_ERROR,
-                                       e);
+      } catch (SchemaRegistryStoreException e) {
+        throw new RestSchemaRegistryStoreException("Failed to update compatibility level", e);
       }
       if (!subjects.contains(subject)) {
         log.debug("Updated compatibility level for unregistered subject " + subject + " to "
@@ -79,7 +82,12 @@ public class ConfigResource {
   @GET
   public Config getSubjectLevelConfig(@PathParam("subject") String subject) {
     Config config = null;
-    config = new Config(schemaRegistry.getCompatibilityLevel(subject));
+    try {
+      config = new Config(schemaRegistry.getCompatibilityLevel(subject));
+    } catch (SchemaRegistryStoreException e) {
+      throw new RestSchemaRegistryStoreException("Failed to get the configs for subject " 
+                                                 + subject, e);
+    }
     return config;
   }
 
@@ -88,10 +96,8 @@ public class ConfigResource {
     if (request.getCompatibilityLevel() != null) {
       try {
         schemaRegistry.updateCompatibilityLevel(null, request.getCompatibilityLevel());
-      } catch (SchemaRegistryException e) {
-        throw new ServerErrorException("Failed to update compatibility level",
-                                       Response.Status.INTERNAL_SERVER_ERROR,
-                                       e);
+      } catch (SchemaRegistryStoreException e) {
+        throw new RestSchemaRegistryStoreException("Failed to update compatibility level", e);
       }
       log.debug("Updated global compatibility level to " + request.getCompatibilityLevel());
     }
@@ -100,7 +106,11 @@ public class ConfigResource {
   @GET
   public Config getTopLevelConfig() {
     Config config = null;
-    config = new Config(schemaRegistry.getCompatibilityLevel(null));
+    try {
+      config = new Config(schemaRegistry.getCompatibilityLevel(null));
+    } catch (SchemaRegistryStoreException e) {
+      throw new RestSchemaRegistryStoreException("Failed to get compatibility level", e);
+    }
     return config;
   }
 }

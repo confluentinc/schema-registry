@@ -16,19 +16,22 @@
 
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
+import io.confluent.rest.exceptions.RestConstraintViolationException;
 
 /**
  * An exception thrown when the version is not a valid version id. Allowed values are between [1,
  * 2^31-1] and the string "latest"
  */
-public class InvalidVersionException extends WebApplicationException {
+public class RestInvalidVersionException extends RestConstraintViolationException {
 
-  public static final Response.Status STATUS = Response.Status.BAD_REQUEST;
+  private static final int ERROR_CODE = RestConstraintViolationException.DEFAULT_ERROR_CODE;
 
-  public InvalidVersionException() {
-    super("The specified version is not a valid version id. Allowed values are between "
-          + "[1, 2^31-1] and the string \"latest\"", STATUS);
+  public RestInvalidVersionException() {
+    this("The specified version is not a valid version id. Allowed values are between "
+          + "[1, 2^31-1] and the string \"latest\"");
+  }
+  
+  public RestInvalidVersionException(String message) {
+    super(message, ERROR_CODE);
   }
 }

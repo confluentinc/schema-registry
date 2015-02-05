@@ -27,6 +27,8 @@ import javax.ws.rs.core.Response;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
@@ -62,9 +64,9 @@ public class RestApiTest extends ClusterTestHarness {
                                subject1);
       fail("Getting all versions from non-existing subject1 should throw a 404");
     } catch (WebApplicationException wae) {
-      assertEquals("Getting all versions from non-existing subject1 should throw a 404",
-                   Response.Status.NOT_FOUND,
-                   wae.getResponse().getStatusInfo());
+      assertEquals("Should get a 404 status for non-existing subject",
+                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+                   wae.getResponse().getStatus());
     }
 
     // test getAllSubjects with no existing data
@@ -324,7 +326,7 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (WebApplicationException wae) {
       // this is expected.
       assertEquals("Should get a 404 status for non-existing subject",
-                   404,
+                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
                    wae.getResponse().getStatus());
     }
   }
@@ -372,7 +374,7 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (WebApplicationException e) {
       // this is expected.
       assertEquals("Invalid version shouldn't be found",
-                   Response.Status.BAD_REQUEST.getStatusCode(),
+                   RestInvalidVersionException.DEFAULT_ERROR_CODE,
                    e.getResponse().getStatus());
     }
   }

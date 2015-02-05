@@ -16,17 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.storage.exceptions;
 
-import io.confluent.rest.exceptions.RestServerErrorException;
+public class StoreTimeoutException extends StoreException {
 
-public class UnknownMasterException extends RestServerErrorException {
-
-  private static final int ERROR_CODE = 50003;
-
-  public UnknownMasterException(String message) {
-    super(message, ERROR_CODE);
+  public StoreTimeoutException(String message) {
+    super(message);
   }
 
-  public UnknownMasterException(String message, Throwable cause) {
-    super(message, ERROR_CODE, cause);
+  public StoreTimeoutException(String message, Throwable cause) {
+    super(message, cause);
   }
 }

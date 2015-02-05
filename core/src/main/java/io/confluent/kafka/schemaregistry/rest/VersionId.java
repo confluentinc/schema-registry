@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import io.confluent.kafka.schemaregistry.rest.exceptions.InvalidVersionException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 
 /**
  * A valid version id should be a positive integer between 1 and 2^31-1. -1 is a special version id
@@ -33,7 +33,7 @@ public class VersionId {
       try {
         this.version = Integer.valueOf(version.trim());
       } catch (NumberFormatException nfe) {
-        throw new InvalidVersionException();
+        throw new RestInvalidVersionException();
       }
       assertValidVersion();
     }
@@ -54,7 +54,7 @@ public class VersionId {
 
   private void assertValidVersion() {
     if (this.version <= 0 && this.version != -1) {
-      throw new InvalidVersionException();
+      throw new RestInvalidVersionException();
     }
   }
 }

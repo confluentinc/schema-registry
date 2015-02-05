@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2015 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.storage.exceptions;
 
-public class SchemaRegistryException extends Exception {
+package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-  public SchemaRegistryException(String message, Throwable cause) {
-    super(message, cause);
+import io.confluent.rest.exceptions.RestServerErrorException;
+
+public class RestRequestForwardingException extends RestServerErrorException {
+
+  private static final int ERROR_CODE = 50004;
+
+  public RestRequestForwardingException(String message) {
+    super(message, ERROR_CODE);
   }
 
-  public SchemaRegistryException(String message) {
-    super(message);
-  }
-
-  public SchemaRegistryException(Throwable cause) {
-    super(cause);
-  }
-
-  public SchemaRegistryException() {
-    super();
+  public RestRequestForwardingException(String message, Throwable cause) {
+    super(message, ERROR_CODE, cause);
   }
 }

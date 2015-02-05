@@ -26,8 +26,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import kafka.utils.ZkUtils;
 
 public class ZookeeperMasterElector {
@@ -43,7 +44,7 @@ public class ZookeeperMasterElector {
 
   public ZookeeperMasterElector(ZkClient zkClient, SchemaRegistryIdentity myIdentity,
                                 KafkaSchemaRegistry schemaRegistry)
-      throws SchemaRegistryStoreException {
+      throws SchemaRegistryStoreException, SchemaRegistryTimeoutException {
     this.zkClient = zkClient;
     this.myIdentity = myIdentity;
     try {
@@ -63,7 +64,7 @@ public class ZookeeperMasterElector {
     zkClient.unsubscribeAll();
   }
 
-  public void electMaster() throws SchemaRegistryStoreException {
+  public void electMaster() throws SchemaRegistryStoreException, SchemaRegistryTimeoutException {
     SchemaRegistryIdentity masterIdentity = null;
     try {
       ZkUtils.createEphemeralPathExpectConflict(zkClient, MASTER_PATH, myIdentityString);

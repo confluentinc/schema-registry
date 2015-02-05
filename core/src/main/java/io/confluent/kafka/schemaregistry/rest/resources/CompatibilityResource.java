@@ -34,9 +34,13 @@ import javax.ws.rs.container.Suspended;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestInvalidAvroException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 
@@ -49,7 +53,6 @@ import io.confluent.rest.annotations.PerformanceMetric;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class CompatibilityResource {
 
-  public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
   private static final Logger log = LoggerFactory.getLogger(CompatibilityResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -74,12 +77,22 @@ public class CompatibilityResource {
     Schema schema = new Schema(subject, 0, 0, request.getSchema());
     boolean isCompatible = false;
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
-    if (!schemaRegistry.listSubjects().contains(subject)) {
-      throw Errors.subjectNotFoundException();
+    try {
+      if (!schemaRegistry.listSubjects().contains(subject)) {
+        throw Errors.subjectNotFoundException();
+      }
+    } catch (SchemaRegistryStoreException e) {
+      throw new RestSchemaRegistryStoreException("Error while retrieving list of all subjects", e);
     }
     Schema schemaForSpecifiedVersion = null;
     VersionId versionId = new VersionId(version);
-    schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
+    try {
+      schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
+    } catch (SchemaRegistryStoreException e) {
+      throw new RestSchemaRegistryStoreException("Error while retrieving schema for subject "
+                                                 + subject + " and version " 
+                                                 + versionId.getVersionId(), e);
+    }
     if (schemaForSpecifiedVersion == null) {
       if (versionId.isLatest()) {
         isCompatible = true;
@@ -89,9 +102,15 @@ public class CompatibilityResource {
         throw Errors.versionNotFoundException();
       }
     } else {
-      isCompatible =
-          schemaRegistry
-              .isCompatible(subject, schema.getSchema(), schemaForSpecifiedVersion.getSchema());
+      try {
+        isCompatible = schemaRegistry.isCompatible(subject, schema.getSchema(), 
+                                                   schemaForSpecifiedVersion.getSchema());
+      } catch (InvalidSchemaException e) {
+        throw new RestInvalidAvroException("Invalid input schema " + schema.getSchema());
+      } catch (SchemaRegistryStoreException e) {
+        throw new RestSchemaRegistryStoreException("Error while getting compatibility level for" 
+                                                   + " subject " + subject, e);
+      }
       compatibilityCheckResponse.setIsCompatible(isCompatible);
       asyncResponse.resume(compatibilityCheckResponse);
     }

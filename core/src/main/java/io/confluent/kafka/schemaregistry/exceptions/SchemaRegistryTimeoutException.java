@@ -14,22 +14,26 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.storage.exceptions;
-
-import io.confluent.rest.exceptions.RestServerErrorException;
+package io.confluent.kafka.schemaregistry.exceptions;
 
 /**
- * Indicates either a write or a bootstrap operation on the underlying Kafka store timed out.
+ * Indicates either a write, read or a bootstrap operation on the underlying Kafka store timed out.
  */
-public class SchemaRegistryStoreTimeoutException extends RestServerErrorException {
+public class SchemaRegistryTimeoutException extends SchemaRegistryException {
 
-  private static final int ERROR_CODE = 50002;
-
-  public SchemaRegistryStoreTimeoutException(String message) {
-    super(message, ERROR_CODE);
+  public SchemaRegistryTimeoutException(String message, Throwable cause) {
+    super(message, cause);
   }
 
-  public SchemaRegistryStoreTimeoutException(String message, Throwable cause) {
-    super(message, ERROR_CODE, cause);
+  public SchemaRegistryTimeoutException(String message) {
+    super(message);
+  }
+
+  public SchemaRegistryTimeoutException(Throwable cause) {
+    super(cause);
+  }
+
+  public SchemaRegistryTimeoutException() {
+    super();
   }
 }

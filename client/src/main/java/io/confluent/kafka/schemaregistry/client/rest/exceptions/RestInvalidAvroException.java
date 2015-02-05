@@ -19,21 +19,23 @@ import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 
 /**
- * An exception thrown when the registered schema is not a valid Avro schema.
+ * TODO: Fix as part of issue #66. This should extend RestConstraintViolationException or some 
+ * subclass of RestException? Currently client does not depend on rest-utils.
+ * * An exception thrown when the registered schema is not a valid Avro schema.
  */
-public class InvalidAvroException extends WebApplicationException {
+public class RestInvalidAvroException extends WebApplicationException {
 
   public static final Response.Status STATUS = Response.Status.BAD_REQUEST;
 
-  public InvalidAvroException() {
+  public RestInvalidAvroException() {
     super("The provided schema string is not a valid Avro schema", STATUS);
   }
 
-  public InvalidAvroException(String message) {
+  public RestInvalidAvroException(String message) {
     super(message, STATUS);
   }
 
-  public InvalidAvroException(String message, Throwable cause) {
+  public RestInvalidAvroException(String message, Throwable cause) {
     super(message, STATUS);
   }
 }

@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.storage.exceptions;
+package io.confluent.kafka.schemaregistry.rest.exceptions;
 
 import io.confluent.rest.exceptions.RestServerErrorException;
 
-public class SchemaRegistryStoreException extends RestServerErrorException {
+public class RestUnknownMasterException extends RestServerErrorException {
 
-  private static final int ERROR_CODE = 50001;
+  private static final int ERROR_CODE = 50003;
 
-  public SchemaRegistryStoreException(String message) {
+  public RestUnknownMasterException(String message) {
     super(message, ERROR_CODE);
   }
 
-  public SchemaRegistryStoreException(String message, Throwable cause) {
+  public RestUnknownMasterException(String message, Throwable cause) {
     super(message, ERROR_CODE, cause);
   }
 }

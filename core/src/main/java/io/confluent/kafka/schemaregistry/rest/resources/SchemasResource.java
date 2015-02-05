@@ -27,8 +27,9 @@ import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.confluent.rest.exceptions.RestNotFoundException;
 
@@ -57,9 +58,10 @@ public class SchemasResource {
     try {
       schema = schemaRegistry.get(id);
     } catch (SchemaRegistryStoreException e) {
-      log.debug("Error while retrieving schema with id " + id + " from the schema registry",
-                e);
-      throw e;
+      String errorMessage = "Error while retrieving schema with id " + id + " from the schema " 
+                            + "registry";
+      log.debug(errorMessage, e);
+      throw new RestSchemaRegistryStoreException(errorMessage, e);
     }
     if (schema == null) {
       throw new RestNotFoundException(MESSAGE_SCHEMA_NOT_FOUND, 

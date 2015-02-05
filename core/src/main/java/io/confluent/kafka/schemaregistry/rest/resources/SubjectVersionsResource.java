@@ -31,22 +31,25 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.ServerErrorException;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestInvalidAvroException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestRequestForwardingException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryStoreException;
 import io.confluent.rest.annotations.PerformanceMetric;
-import io.confluent.rest.exceptions.RestNotFoundException;
 
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
            Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
@@ -82,9 +85,11 @@ public class SubjectVersionsResource {
         }
       }
     } catch (SchemaRegistryStoreException e) {
-      log.debug("Error while retrieving schema for subject " + this.subject + " with version " +
-                version + " from the schema registry", e);
-      throw e;
+      String errorMessage =
+          "Error while retrieving schema for subject " + this.subject + " with version " +
+          version + " from the schema registry";
+      log.debug(errorMessage, e);
+      throw new RestSchemaRegistryStoreException(errorMessage, e);
     }
     return schema;
   }
@@ -95,11 +100,20 @@ public class SubjectVersionsResource {
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
-    if (!schemaRegistry.listSubjects().contains(this.subject)) {
-      throw new RestNotFoundException("Subject " + this.subject + " does not exist in the " 
-                                      + "registry", Response.Status.NOT_FOUND.getStatusCode());
+    try {
+      if (!schemaRegistry.listSubjects().contains(this.subject)) {
+        throw Errors.subjectNotFoundException();
+      }
+    } catch (SchemaRegistryStoreException e) {
+      throw new RestSchemaRegistryStoreException("Error while validating that subject " +
+                                                 this.subject + " exists in the registry", e);
     }
-    allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
+    try {
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
+    } catch (SchemaRegistryStoreException e) {
+      throw new RestSchemaRegistryStoreException("Error while listing all versions for subject " 
+                                                 + this.subject, e);
+    }
     while (allSchemasForThisTopic.hasNext()) {
       Schema schema = allSchemasForThisTopic.next();
       allVersions.add(schema.getVersion());
@@ -108,7 +122,7 @@ public class SubjectVersionsResource {
   }
 
   /**
-   * @throws {@link io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroException ,
+   * @throws {@link io.confluent.kafka.schemaregistry.client.rest.exceptions.RestInvalidAvroException ,
    *                IncompatibleAvroSchemaException}
    */
   @POST
@@ -126,8 +140,16 @@ public class SubjectVersionsResource {
     int id = 0;
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
-    } catch (SchemaRegistryException e) {
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+    } catch (InvalidSchemaException e) {
+      throw new RestInvalidAvroException("Input schema is an invalid Avro schema", e);
+    } catch (SchemaRegistryTimeoutException e) {
+      throw new RestSchemaRegistryTimeoutException("Register operation timed out", e);
+    } catch (SchemaRegistryStoreException e) {
+      throw new RestSchemaRegistryStoreException("Register schema operation failed while writing" 
+                                                 + " to the Kafka store", e);
+    } catch (SchemaRegistryRequestForwardingException e) {
+      throw new RestRequestForwardingException("Error while forwarding register schema request" 
+                                               + " to the master", e);
     }
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
     registerSchemaResponse.setId(id);
