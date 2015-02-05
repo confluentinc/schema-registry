@@ -45,7 +45,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestRequestForwardingException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
@@ -148,8 +148,11 @@ public class SubjectVersionsResource {
       throw new RestSchemaRegistryStoreException("Register schema operation failed while writing" 
                                                  + " to the Kafka store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw new RestRequestForwardingException("Error while forwarding register schema request" 
+      throw new RestSchemaRegistryException("Error while forwarding register schema request"
                                                + " to the master", e);
+      //TODO: Should be fixed as part of issue #66
+//      throw new RestRequestForwardingException("Error while forwarding register schema request"
+//                                               + " to the master", e);
     }
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
     registerSchemaResponse.setId(id);
