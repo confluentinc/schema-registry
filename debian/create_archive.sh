@@ -25,6 +25,9 @@ mkdir -p ${DESTDIR}${SYSCONFDIR}
 
 PREPACKAGED="package/target/package-${VERSION}-package"
 pushd ${PREPACKAGED}
-find . -type f | grep -v README[.]rpm | grep ^[.]/bin/ | xargs -I XXX ${INSTALL_X} -o root -g root XXX ${DESTDIR}${PREFIX}/XXX
-find . -type f | grep -v README[.]rpm | grep -v ^[.]/bin/ | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${PREFIX}/XXX
+find bin/ -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL_X} -o root -g root XXX ${DESTDIR}${PREFIX}/XXX
+find share/ -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${PREFIX}/XXX
+pushd etc/schema-registry/
+find . -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${SYSCONFDIR}/XXX
+popd
 popd
