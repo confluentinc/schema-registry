@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.exceptions;
 
+/**
+ * Indicates that the node that is asked to serve the request is not the current master and
+ * is not aware of the master node to forward the request to
+ */
 public class UnknownMasterException extends SchemaRegistryException {
 
   public UnknownMasterException(String message, Throwable cause) {

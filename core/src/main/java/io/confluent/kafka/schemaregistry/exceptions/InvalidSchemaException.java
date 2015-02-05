@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.exceptions;
 
+/**
+ * Indicates an invalid schema that does not conform to the expected format of the schema
+ */
 public class InvalidSchemaException extends SchemaRegistryException {
   public InvalidSchemaException(String message, Throwable cause) {
     super(message, cause);

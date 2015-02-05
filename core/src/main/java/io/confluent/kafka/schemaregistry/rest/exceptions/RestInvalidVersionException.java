@@ -19,7 +19,7 @@ package io.confluent.kafka.schemaregistry.rest.exceptions;
 import io.confluent.rest.exceptions.RestConstraintViolationException;
 
 /**
- * An exception thrown when the version is not a valid version id. Allowed values are between [1,
+ * Indicates that the version is not a valid version id. Allowed values are between [1,
  * 2^31-1] and the string "latest"
  */
 public class RestInvalidVersionException extends RestConstraintViolationException {

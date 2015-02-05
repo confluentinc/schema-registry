@@ -21,7 +21,7 @@ import javax.ws.rs.core.Response;
 /**
  * TODO: Fix as part of issue #66. This should extend RestConstraintViolationException or some 
  * subclass of RestException? Currently client does not depend on rest-utils.
- * * An exception thrown when the registered schema is not a valid Avro schema.
+ * * Indicates that the input schema is not a valid Avro schema.
  */
 public class RestInvalidAvroException extends WebApplicationException {
 

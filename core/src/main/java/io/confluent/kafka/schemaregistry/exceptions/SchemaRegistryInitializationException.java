@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.exceptions;
 
+/**
+ * Indicates an error while initializing schema registry
+ */
 public class SchemaRegistryInitializationException extends SchemaRegistryException {
 
   public SchemaRegistryInitializationException(String message, Throwable cause) {

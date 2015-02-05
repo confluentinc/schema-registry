@@ -15,6 +15,10 @@
  */
 package io.confluent.kafka.schemaregistry.storage.exceptions;
 
+/**
+ * Error while (de)serializing data while reading from or writing to a 
+ * * <code>io.confluent.kafka.schemaregistry.storage.Store</code>
+ */
 public class SerializationException extends Exception {
 
   public SerializationException(String message, Throwable cause) {

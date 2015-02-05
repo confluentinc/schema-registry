@@ -18,6 +18,9 @@ package io.confluent.kafka.schemaregistry.rest.exceptions;
 
 import io.confluent.rest.exceptions.RestServerErrorException;
 
+/**
+ * Indicates that some schema registry operation timed out.
+ */
 public class RestSchemaRegistryTimeoutException extends RestServerErrorException {
 
   private static final int ERROR_CODE = 50002;

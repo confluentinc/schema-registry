@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.exceptions;
 
+/**
+ * Indicates an error while forwarding a write request to the master node in a schema
+ * registry cluster
+ */
 public class SchemaRegistryRequestForwardingException extends SchemaRegistryException {
 
   public SchemaRegistryRequestForwardingException(String message, Throwable cause) {

@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.storage.exceptions;
 
+/**
+ * Indicates either a write, read or a bootstrap operation on the underlying Kafka store timed out.
+ */
 public class StoreTimeoutException extends StoreException {
 
   public StoreTimeoutException(String message) {

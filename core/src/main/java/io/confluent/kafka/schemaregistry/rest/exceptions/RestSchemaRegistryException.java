@@ -18,6 +18,9 @@ package io.confluent.kafka.schemaregistry.rest.exceptions;
 
 import io.confluent.rest.exceptions.RestServerErrorException;
 
+/**
+ * Indicates some error while performing a schema registry operation
+ */
 public class RestSchemaRegistryException extends RestServerErrorException {
 
   private static final int ERROR_CODE = RestServerErrorException.DEFAULT_ERROR_CODE;

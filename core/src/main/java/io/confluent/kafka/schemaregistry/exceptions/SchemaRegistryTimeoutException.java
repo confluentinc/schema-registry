@@ -17,7 +17,7 @@
 package io.confluent.kafka.schemaregistry.exceptions;
 
 /**
- * Indicates either a write, read or a bootstrap operation on the underlying Kafka store timed out.
+ * Indicates that some schema registry operation timed out.
  */
 public class SchemaRegistryTimeoutException extends SchemaRegistryException {
 
