@@ -27,6 +27,13 @@
                 <include>bin/*</include>
             </includes>
         </fileSet>
+        <fileSet>
+            <directory>${project.parent.basedir}/config</directory>
+            <outputDirectory>etc/schema-registry</outputDirectory>
+            <includes>
+                <include>*</include>
+            </includes>
+        </fileSet>
     </fileSets>
     <dependencySets>
         <dependencySet>
