@@ -28,7 +28,6 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 
@@ -60,7 +59,7 @@ public class SchemasResource {
       String errorMessage = "Error while retrieving schema with id " + id + " from the schema " 
                             + "registry";
       log.debug(errorMessage, e);
-      throw new RestSchemaRegistryStoreException(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
     }
     if (schema == null) {
       throw Errors.schemaNotFoundException();

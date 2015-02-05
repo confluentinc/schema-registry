@@ -39,8 +39,6 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 
@@ -82,8 +80,8 @@ public class SubjectsResource {
       matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema,
                                                                         headerProperties);
     } catch (SchemaRegistryException e) {
-      throw new RestSchemaRegistryException(
-          "Error while looking up schema under subject " + subject, e);
+      throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
+                                           e);
     }
     if (matchingSchema == null) {
       throw Errors.schemaNotFoundException();
@@ -108,7 +106,7 @@ public class SubjectsResource {
     try {
       return schemaRegistry.listSubjects();
     } catch (SchemaRegistryStoreException e) {
-      throw new RestSchemaRegistryStoreException("Error while listing subjects", e);
+      throw Errors.storeException("Error while listing subjects", e);
     }
   }
 }

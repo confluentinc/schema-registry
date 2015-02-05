@@ -34,15 +34,12 @@ import javax.ws.rs.container.Suspended;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestInvalidAvroException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 
@@ -84,23 +81,23 @@ public class CompatibilityResource {
         throw Errors.subjectNotFoundException();
       }
     } catch (SchemaRegistryStoreException e) {
-      throw new RestSchemaRegistryStoreException("Error while retrieving list of all subjects", e);
+      throw Errors.storeException("Error while retrieving list of all subjects", e);
     }
     Schema schemaForSpecifiedVersion = null;
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
     } catch (InvalidVersionException e) {
-      throw new RestInvalidVersionException();
+      throw Errors.invalidVersionException();
     }
     try {
       try {
         schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
       } catch (InvalidVersionException e) {
-        throw new RestInvalidVersionException();
+        throw Errors.invalidVersionException();
       }
     } catch (SchemaRegistryStoreException e) {
-      throw new RestSchemaRegistryStoreException("Error while retrieving schema for subject "
+      throw Errors.storeException("Error while retrieving schema for subject "
                                                  + subject + " and version " 
                                                  + versionId.getVersionId(), e);
     }
@@ -117,9 +114,9 @@ public class CompatibilityResource {
         isCompatible = schemaRegistry.isCompatible(subject, schema.getSchema(), 
                                                    schemaForSpecifiedVersion.getSchema());
       } catch (InvalidSchemaException e) {
-        throw new RestInvalidAvroException("Invalid input schema " + schema.getSchema());
+        throw Errors.invalidAvroException("Invalid input schema " + schema.getSchema(), e);
       } catch (SchemaRegistryStoreException e) {
-        throw new RestSchemaRegistryStoreException("Error while getting compatibility level for" 
+        throw Errors.storeException("Error while getting compatibility level for"
                                                    + " subject " + subject, e);
       }
       compatibilityCheckResponse.setIsCompatible(isCompatible);

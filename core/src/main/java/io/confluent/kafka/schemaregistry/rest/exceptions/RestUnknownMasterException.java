@@ -24,7 +24,7 @@ import io.confluent.rest.exceptions.RestServerErrorException;
 
 public class RestUnknownMasterException extends RestServerErrorException {
 
-  private static final int ERROR_CODE = 50003;
+  private static final int ERROR_CODE = Errors.UNKNOWN_MASTER_ERROR_CODE;
 
   public RestUnknownMasterException(String message) {
     super(message, ERROR_CODE);

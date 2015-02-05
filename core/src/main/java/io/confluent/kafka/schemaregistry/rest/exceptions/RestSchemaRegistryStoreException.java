@@ -24,7 +24,7 @@ import io.confluent.rest.exceptions.RestServerErrorException;
  */
 public class RestSchemaRegistryStoreException extends RestServerErrorException {
 
-  private static final int ERROR_CODE = 50001;
+  private static final int ERROR_CODE = Errors.STORE_ERROR_CODE;
 
   public RestSchemaRegistryStoreException(String message) {
     super(message, ERROR_CODE);

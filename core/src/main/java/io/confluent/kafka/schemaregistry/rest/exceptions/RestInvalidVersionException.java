@@ -24,7 +24,7 @@ import io.confluent.rest.exceptions.RestConstraintViolationException;
  */
 public class RestInvalidVersionException extends RestConstraintViolationException {
 
-  private static final int ERROR_CODE = RestConstraintViolationException.DEFAULT_ERROR_CODE;
+  private static final int ERROR_CODE = Errors.INVALID_VERSION_ERROR_CODE;
 
   public RestInvalidVersionException() {
     this("The specified version is not a valid version id. Allowed values are between "

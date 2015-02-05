@@ -37,7 +37,6 @@ import javax.ws.rs.container.Suspended;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestInvalidAvroException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
@@ -46,10 +45,6 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 
@@ -79,7 +74,7 @@ public class SubjectVersionsResource {
     try {
       versionId = new VersionId(version);
     } catch (InvalidVersionException e) {
-      throw new RestInvalidVersionException();
+      throw Errors.invalidVersionException();
     }
     Schema schema = null;
     try {
@@ -96,9 +91,9 @@ public class SubjectVersionsResource {
           "Error while retrieving schema for subject " + this.subject + " with version " +
           version + " from the schema registry";
       log.debug(errorMessage, e);
-      throw new RestSchemaRegistryStoreException(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
     } catch (InvalidVersionException e) {
-      throw new RestInvalidVersionException();
+      throw Errors.invalidVersionException();
     }
     return schema;
   }
@@ -114,13 +109,13 @@ public class SubjectVersionsResource {
         throw Errors.subjectNotFoundException();
       }
     } catch (SchemaRegistryStoreException e) {
-      throw new RestSchemaRegistryStoreException("Error while validating that subject " +
+      throw Errors.storeException("Error while validating that subject " +
                                                  this.subject + " exists in the registry", e);
     }
     try {
       allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
     } catch (SchemaRegistryStoreException e) {
-      throw new RestSchemaRegistryStoreException("Error while listing all versions for subject " 
+      throw Errors.storeException("Error while listing all versions for subject "
                                                  + this.subject, e);
     }
     while (allSchemasForThisTopic.hasNext()) {
@@ -150,14 +145,14 @@ public class SubjectVersionsResource {
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
     } catch (InvalidSchemaException e) {
-      throw new RestInvalidAvroException("Input schema is an invalid Avro schema", e);
+      throw Errors.invalidAvroException("Input schema is an invalid Avro schema", e);
     } catch (SchemaRegistryTimeoutException e) {
-      throw new RestSchemaRegistryTimeoutException("Register operation timed out", e);
+      throw Errors.operationTimeoutException("Register operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
-      throw new RestSchemaRegistryStoreException("Register schema operation failed while writing" 
+      throw Errors.storeException("Register schema operation failed while writing"
                                                  + " to the Kafka store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw new RestSchemaRegistryException("Error while forwarding register schema request"
+      throw Errors.schemaRegistryException("Error while forwarding register schema request"
                                                + " to the master", e);
       //TODO: Should be fixed as part of issue #66
 //      throw new RestRequestForwardingException("Error while forwarding register schema request"

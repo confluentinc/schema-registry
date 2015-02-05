@@ -152,7 +152,8 @@ Schemas
    :statuscode 404:
       * Error code 40401 -- Subject not found
       * Error code 40402 -- Version not found
-   :statuscode 422: Invalid version
+   :statuscode 422: 
+      * Error code 42202 -- Invalid version
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
 
@@ -187,7 +188,8 @@ Schemas
    :reqjson schema: The Avro schema string
 
    :statuscode 409: Incompatible Avro schema
-   :statuscode 422: Invalid Avro schema
+   :statuscode 422: 
+      * Error code 42201 -- Invalid Avro schema
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
       * Error code 50002 -- Operation timed out
@@ -313,7 +315,7 @@ The compatibility resource allows the user to test schemas for compatibility aga
       * Error code 40401 -- Subject not found
       * Error code 40402 -- Version not found
    :statuscode 422: 
-      * Error code 42201 -- Invalid schema
+      * Error code 42201 -- Invalid Avro schema
       * Error code 42202 -- Invalid version
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store

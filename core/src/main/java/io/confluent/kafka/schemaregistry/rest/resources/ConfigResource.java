@@ -32,7 +32,7 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 
 @Path("/config")
@@ -60,13 +60,13 @@ public class ConfigResource {
       try {
         subjects = schemaRegistry.listSubjects();
       } catch (SchemaRegistryStoreException e) {
-        throw new RestSchemaRegistryStoreException("Failed to retrieve a list of all subjects" 
+        throw Errors.storeException("Failed to retrieve a list of all subjects"
                                                    + " from the registry", e);
       }
       try {
         schemaRegistry.updateCompatibilityLevel(subject, request.getCompatibilityLevel());
       } catch (SchemaRegistryStoreException e) {
-        throw new RestSchemaRegistryStoreException("Failed to update compatibility level", e);
+        throw Errors.storeException("Failed to update compatibility level", e);
       }
       if (!subjects.contains(subject)) {
         log.debug("Updated compatibility level for unregistered subject " + subject + " to "
@@ -85,7 +85,7 @@ public class ConfigResource {
     try {
       config = new Config(schemaRegistry.getCompatibilityLevel(subject));
     } catch (SchemaRegistryStoreException e) {
-      throw new RestSchemaRegistryStoreException("Failed to get the configs for subject " 
+      throw Errors.storeException("Failed to get the configs for subject "
                                                  + subject, e);
     }
     return config;
@@ -97,7 +97,7 @@ public class ConfigResource {
       try {
         schemaRegistry.updateCompatibilityLevel(null, request.getCompatibilityLevel());
       } catch (SchemaRegistryStoreException e) {
-        throw new RestSchemaRegistryStoreException("Failed to update compatibility level", e);
+        throw Errors.storeException("Failed to update compatibility level", e);
       }
       log.debug("Updated global compatibility level to " + request.getCompatibilityLevel());
     }
@@ -109,7 +109,7 @@ public class ConfigResource {
     try {
       config = new Config(schemaRegistry.getCompatibilityLevel(null));
     } catch (SchemaRegistryStoreException e) {
-      throw new RestSchemaRegistryStoreException("Failed to get compatibility level", e);
+      throw Errors.storeException("Failed to get compatibility level", e);
     }
     return config;
   }

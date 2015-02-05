@@ -24,7 +24,7 @@ import io.confluent.rest.exceptions.RestServerErrorException;
  */
 public class RestRequestForwardingException extends RestServerErrorException {
 
-  private static final int ERROR_CODE = 50004;
+  private static final int ERROR_CODE = Errors.REQUEST_FORWARDING_FAILED_ERROR_CODE;
 
   public RestRequestForwardingException(String message) {
     super(message, ERROR_CODE);

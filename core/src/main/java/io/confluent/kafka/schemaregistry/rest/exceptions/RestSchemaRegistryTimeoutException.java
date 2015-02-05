@@ -23,7 +23,7 @@ import io.confluent.rest.exceptions.RestServerErrorException;
  */
 public class RestSchemaRegistryTimeoutException extends RestServerErrorException {
 
-  private static final int ERROR_CODE = 50002;
+  private static final int ERROR_CODE = Errors.OPERATION_TIMEOUT_ERROR_CODE;
 
   public RestSchemaRegistryTimeoutException(String message) {
     super(message, ERROR_CODE);
