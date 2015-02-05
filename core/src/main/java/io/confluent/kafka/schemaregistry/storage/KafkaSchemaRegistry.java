@@ -93,6 +93,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private int maxSchemaIdCounterValue;
   private final Metrics metrics;
   private Sensor masterNodeSensor;
+  // Track the largest id in the kafka store so far (-1 indicates none in the store)
+  private int maxIdInStore = -1;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -345,32 +347,46 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * Allocate and lock the next batch of ids. Indicate a lock over the next batch by writing
    * the upper bound of the batch to zookeeper.
    *
+   * When a schema registry server is initialized, kafka may have preexisting persistent
+   * schema -> id assignments, and zookeeper may have preexisting counter data.
+   * Therefore, when allocating the next batch of ids, it's necessary to ensure the entire new batch
+   * is both greater than the greatest id in kafka and greater than the
+   * previously recorded batch in zookeeper.
+   *
    * Return the start index of the next batch.
    */
   private Integer nextSchemaIdCounterBatch() throws SchemaRegistryException {
+    int nextIdBatchLowerBound = 0;
+
     // create ZOOKEEPER_SCHEMA_ID_COUNTER if it already doesn't exist
-    int schemaIdCounterThreshold = 0;
     if (!zkClient.exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
+      // Infer next batch from preexisting kafka data (if present)
+      nextIdBatchLowerBound = getNextBatchLowerBoundFromKafkaStore();
+      int nextIdBatchUpperBound = nextIdBatchLowerBound + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
       ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
-                                   String.valueOf(ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE));
-      return 0;
+                                   String.valueOf(nextIdBatchUpperBound));
+      return nextIdBatchLowerBound;
     }
 
     // ZOOKEEPER_SCHEMA_ID_COUNTER exists
     int newSchemaIdCounterDataVersion = -1;
     while (newSchemaIdCounterDataVersion < 0) {
+      int zkNextIdBatchLowerBound = 0;
+
       // read the latest counter value
       final ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
       if (counterValue.getData() != null) {
-        schemaIdCounterThreshold = Integer.valueOf(counterValue.getData());
+        zkNextIdBatchLowerBound = Integer.valueOf(counterValue.getData());
       } else {
-        throw new SchemaRegistryException("Failed to initialize schema registry. Failed to read "
-                                          + "schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
-                                          " from zookeeper");
+        throw new SchemaRegistryException(
+            "Failed to initialize schema registry. Failed to read schema id counter " +
+            ZOOKEEPER_SCHEMA_ID_COUNTER + " from zookeeper");
       }
+      nextIdBatchLowerBound =
+          Math.max(zkNextIdBatchLowerBound, getNextBatchLowerBoundFromKafkaStore());
 
-      // conditionally update the zookeeper path
-      String newCounterValue = String.valueOf(schemaIdCounterThreshold +
+      // conditionally update the zookeeper path with the upper bound of the new id batch
+      String newCounterValue = String.valueOf(nextIdBatchLowerBound +
                                               ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
 
       // newSchemaIdCounterDataVersion < 0 indicates a failed conditional update. Most probable reason is the
@@ -388,7 +404,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       } catch (InterruptedException ignored) { }
     }
 
-    return schemaIdCounterThreshold;
+    return nextIdBatchLowerBound;
   }
 
   private int forwardRegisterRequestToMaster(String subject, String schemaString, String host,
@@ -611,5 +627,28 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
     Collections.sort(schemaVector);
     return schemaVector;
+  }
+
+  int getMaxIdInStore() {
+    return this.maxIdInStore;
+  }
+
+  void setMaxIdInStore(int id) {
+    this.maxIdInStore = id;
+  }
+
+  /**
+   * Return a minimum lower bound on the next batch of ids based on ids currently in the
+   * kafka store.
+   */
+  private int getNextBatchLowerBoundFromKafkaStore() {
+    synchronized (masterLock) {
+      if (this.getMaxIdInStore() < 0) {
+        return 0;
+      }
+
+      int nextBatchLowerBound = 1 + this.getMaxIdInStore() / ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+      return nextBatchLowerBound * ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+    }
   }
 }
