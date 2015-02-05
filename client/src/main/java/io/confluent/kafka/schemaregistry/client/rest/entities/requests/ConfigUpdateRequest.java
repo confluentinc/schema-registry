@@ -14,30 +14,28 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.rest.entities.requests;
+package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
-
 public class ConfigUpdateRequest {
 
-  private AvroCompatibilityLevel compatibilityLevel;
+  private String compatibilityLevel;
 
   public static ConfigUpdateRequest fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, ConfigUpdateRequest.class);
   }
 
   @JsonProperty("compatibility")
-  public AvroCompatibilityLevel getCompatibilityLevel() {
+  public String getCompatibilityLevel() {
     return this.compatibilityLevel;
   }
 
   @JsonProperty("compatibility")
-  public void setCompatibilityLevel(AvroCompatibilityLevel compatibilityLevel) {
+  public void setCompatibilityLevel(String compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
   }
 

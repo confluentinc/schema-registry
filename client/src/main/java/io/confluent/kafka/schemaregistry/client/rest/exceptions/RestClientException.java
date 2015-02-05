@@ -15,17 +15,21 @@
  */
 package io.confluent.kafka.schemaregistry.client.rest.exceptions;
 
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
+public class RestClientException extends Exception {
+  private final int status;
+  private final int errorCode;
 
-/**
- * An exception thrown when the registered schema is not a valid Avro schema.
- */
-public class InvalidAvroException extends WebApplicationException {
+  public RestClientException(final String message, final int status, final int errorCode) {
+    super(message + "; error code: " + errorCode);
+    this.status = status;
+    this.errorCode = errorCode;
+  }
 
-  public static final Response.Status STATUS = Response.Status.BAD_REQUEST;
+  public int getStatus() {
+    return status;
+  }
 
-  public InvalidAvroException() {
-    super("The provided schema string is not a valid Avro schema", STATUS);
+  public int getErrorCode() {
+    return errorCode;
   }
 }

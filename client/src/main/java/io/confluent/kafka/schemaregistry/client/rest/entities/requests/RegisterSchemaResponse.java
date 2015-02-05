@@ -18,13 +18,9 @@ package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.hibernate.validator.constraints.NotEmpty;
-
 import java.io.IOException;
 
 public class RegisterSchemaResponse {
-
-  @NotEmpty
   private int id;
 
   public static RegisterSchemaResponse fromJson(String json) throws IOException {

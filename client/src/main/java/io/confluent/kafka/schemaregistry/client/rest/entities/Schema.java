@@ -17,39 +17,30 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import org.hibernate.validator.constraints.NotEmpty;
-
-import javax.validation.constraints.Min;
-
 public class Schema implements Comparable<Schema> {
-
-  @NotEmpty
-  private String name;
-  @Min(1)
+  private String subject;
   private Integer version;
-  @Min(0)
   private Integer id;
-  @NotEmpty
   private String schema;
 
-  public Schema(@JsonProperty("name") String name,
+  public Schema(@JsonProperty("subject") String subject,
                 @JsonProperty("version") Integer version,
                 @JsonProperty("id") Integer id,
                 @JsonProperty("schema") String schema) {
-    this.name = name;
+    this.subject = subject;
     this.version = version;
     this.id = id;
     this.schema = schema;
   }
 
-  @JsonProperty("name")
-  public String getName() {
-    return name;
+  @JsonProperty("subject")
+  public String getSubject() {
+    return subject;
   }
 
-  @JsonProperty("name")
-  public void setName(String name) {
-    this.name = name;
+  @JsonProperty("subject")
+  public void setSubject(String subject) {
+    this.subject = subject;
   }
 
   @JsonProperty("version")
@@ -93,7 +84,7 @@ public class Schema implements Comparable<Schema> {
 
     Schema that = (Schema) o;
 
-    if (!this.name.equals(that.name)) {
+    if (!this.subject.equals(that.subject)) {
       return false;
     }
     if (!this.version.equals(that.version)) {
@@ -111,7 +102,7 @@ public class Schema implements Comparable<Schema> {
 
   @Override
   public int hashCode() {
-    int result = name.hashCode();
+    int result = subject.hashCode();
     result = 31 * result + version;
     result = 31 * result + id.intValue();
     result = 31 * result + schema.hashCode();
@@ -121,7 +112,7 @@ public class Schema implements Comparable<Schema> {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("{name=" + this.name + ",");
+    sb.append("{subject=" + this.subject + ",");
     sb.append("version=" + this.version + ",");
     sb.append("id=" + this.id + ",");
     sb.append("schema=" + this.schema + "}");
@@ -130,7 +121,7 @@ public class Schema implements Comparable<Schema> {
 
   @Override
   public int compareTo(Schema that) {
-    int result = this.name.compareTo(that.name);
+    int result = this.subject.compareTo(that.subject);
     if (result != 0) {
       return result;
     }

@@ -27,7 +27,9 @@ import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -97,7 +99,7 @@ public class TestUtils {
   }
 
   public static int registerSchema(String baseUrl, String schemaString, String subject)
-      throws IOException {
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
 
@@ -106,7 +108,7 @@ public class TestUtils {
   }
 
   public static Schema lookUpSubjectVersion(String baseUrl, String schemaString, String subject)
-      throws IOException {
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
 
@@ -116,7 +118,7 @@ public class TestUtils {
 
   public static boolean testCompatibility(String baseUrl, String schemaString, String subject,
                                           String version)
-      throws IOException {
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
 
@@ -125,12 +127,12 @@ public class TestUtils {
   }
 
   public static SchemaString getId(String baseUrl, int id)
-      throws IOException {
+      throws IOException, RestClientException {
     return RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
   }
 
   public static List<Integer> getSubjectVersions(String baseUrl, String subject)
-      throws IOException {
+      throws IOException, RestClientException {
     return RestUtils.getAllVersions(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
   }
 
@@ -138,7 +140,7 @@ public class TestUtils {
    * Helper method which checks the number of versions registered under the given subject.
    */
   public static void checkNumberOfVersions(String baseUrl, int expected, String subject)
-      throws IOException {
+      throws IOException, RestClientException {
     List<Integer> versions = RestUtils.getAllVersions(baseUrl,
                                                       RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                                       subject);
@@ -150,9 +152,9 @@ public class TestUtils {
   public static void changeCompatibility(String baseUrl,
                                          AvroCompatibilityLevel newCompatibilityLevel,
                                          String subject)
-      throws IOException {
+      throws IOException, RestClientException {
     ConfigUpdateRequest request = new ConfigUpdateRequest();
-    request.setCompatibilityLevel(newCompatibilityLevel);
+    request.setCompatibilityLevel(newCompatibilityLevel.name);
 
     RestUtils.updateConfig(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
@@ -162,7 +164,7 @@ public class TestUtils {
    */
   public static void registerAndVerifySchema(String baseUrl, String schemaString,
                                              int expectedId, String subject)
-      throws IOException {
+      throws IOException, RestClientException {
     assertEquals("Registering a new schema should succeed",
                  expectedId,
                  TestUtils.registerSchema(baseUrl, schemaString, subject));

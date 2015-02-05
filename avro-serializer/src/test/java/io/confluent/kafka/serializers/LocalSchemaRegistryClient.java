@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public class LocalSchemaRegistryClient implements SchemaRegistryClient {
 
@@ -37,7 +38,12 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     ids = new AtomicInteger(0);
   }
 
-  private int getIdFromRegistry(String subject, Schema schema) throws IOException {
+  private int getIdFromRegistry(Schema schema) throws IOException {
+    for (Map.Entry<Integer, Schema> entry: idCache.entrySet()) {
+      if (entry.getValue().toString().equals(schema.toString())) {
+        return entry.getKey();
+      }
+    }
     int id = ids.incrementAndGet();
     idCache.put(id, schema);
     return id;
@@ -52,7 +58,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized int register(String subject, Schema schema) throws IOException {
+  public synchronized int register(String subject, Schema schema)
+      throws IOException, RestClientException {
     Map<Schema, Integer> schemaIdMap;
     if (schemaCache.containsKey(subject)) {
       schemaIdMap = schemaCache.get(subject);
@@ -64,14 +71,14 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (schemaIdMap.containsKey(schema)) {
       return schemaIdMap.get(schema);
     } else {
-      int id = getIdFromRegistry(subject, schema);
+      int id = getIdFromRegistry(schema);
       schemaIdMap.put(schema, id);
       return id;
     }
   }
 
   @Override
-  public synchronized Schema getByID(int id) throws IOException {
+  public synchronized Schema getByID(int id) throws IOException, RestClientException {
     if (idCache.containsKey(id)) {
       return idCache.get(id);
     } else {

@@ -15,13 +15,11 @@
  */
 package io.confluent.kafka.schemaregistry.avro;
 
-import io.confluent.rest.RestConfigException;
-
 public enum AvroCompatibilityLevel {
-  NONE("none", AvroCompatibilityChecker.NO_OP_CHECKER),
-  BACKWARD("backward", AvroCompatibilityChecker.BACKWARD_CHECKER),
-  FORWARD("forward", AvroCompatibilityChecker.FORWARD_CHECKER),
-  FULL("full", AvroCompatibilityChecker.FULL_CHECKER);
+  NONE("NONE", AvroCompatibilityChecker.NO_OP_CHECKER),
+  BACKWARD("BACKWARD", AvroCompatibilityChecker.BACKWARD_CHECKER),
+  FORWARD("FORWARD", AvroCompatibilityChecker.FORWARD_CHECKER),
+  FULL("FULL", AvroCompatibilityChecker.FULL_CHECKER);
 
   public final String name;
   public final AvroCompatibilityChecker compatibilityChecker;
@@ -31,10 +29,12 @@ public enum AvroCompatibilityLevel {
     this.compatibilityChecker = compatibilityChecker;
   }
 
-  public static AvroCompatibilityLevel forName(String name) throws RestConfigException {
+  public static AvroCompatibilityLevel forName(String name) {
     if (name == null) {
-      throw new RestConfigException("Null compatibility level is invalid");
+      return null;
     }
+
+    name = name.toUpperCase();
     if (NONE.name.equals(name)) {
       return NONE;
     } else if (BACKWARD.name.equals(name)) {
@@ -44,7 +44,7 @@ public enum AvroCompatibilityLevel {
     } else if (FULL.name.equals(name)) {
       return FULL;
     } else {
-      throw new RestConfigException("Unknown avro compatibility level: " + name);
+      return null;
     }
   }
 }

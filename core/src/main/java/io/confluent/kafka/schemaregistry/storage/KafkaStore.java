@@ -75,7 +75,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final int timeout;
   private final Seq<Broker> brokerSeq;
   private final ZkClient zkClient;
-  private KafkaProducer producer;
+  private KafkaProducer<byte[],byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
 
   public KafkaStore(SchemaRegistryConfig config,
@@ -137,7 +137,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.RETRIES_CONFIG, this.numRetries);
     props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, this.writeRetryBackoffMs);
-    producer = new KafkaProducer(props);
+    producer = new KafkaProducer<byte[],byte[]>(props);
 
     // start the background thread that subscribes to the Kafka topic and applies updates
     kafkaTopicReader.start();

@@ -14,22 +14,21 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.rest.entities;
+package io.confluent.kafka.schemaregistry.storage;
 
 import org.codehaus.jackson.annotate.JsonProperty;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryValue;
 
-public class Config implements SchemaRegistryValue {
+public class ConfigValue implements SchemaRegistryValue {
 
   private AvroCompatibilityLevel compatibilityLevel;
 
-  public Config(@JsonProperty("compatibility") AvroCompatibilityLevel compatibilityLevel) {
+  public ConfigValue(@JsonProperty("compatibility") AvroCompatibilityLevel compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
   }
 
-  public Config() {
+  public ConfigValue() {
     compatibilityLevel = null;
   }
 
@@ -52,7 +51,7 @@ public class Config implements SchemaRegistryValue {
       return false;
     }
 
-    Config that = (Config) o;
+    ConfigValue that = (ConfigValue) o;
 
     if (!this.compatibilityLevel.equals(that.compatibilityLevel)) {
       return false;

@@ -17,14 +17,13 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import org.junit.Test;
 
-import javax.ws.rs.WebApplicationException;
-
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.IncompatibleAvroSchemaException;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroException;
-import io.confluent.kafka.schemaregistry.utils.RestUtils;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.IncompatibleAvroSchemaException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.InvalidAvroException;
+import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import static org.junit.Assert.assertEquals;
@@ -63,11 +62,11 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     try {
       TestUtils.registerSchema(restApp.restConnect, incompatibleSchemaString, subject);
       fail("Registering an incompatible schema should fail");
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       // this is expected.
       assertEquals("Should get a conflict status",
                    IncompatibleAvroSchemaException.STATUS.getStatusCode(),
-                   e.getResponse().getStatus());
+                   e.getStatus());
     }
 
     // register a non-avro
@@ -75,11 +74,11 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     try {
       TestUtils.registerSchema(restApp.restConnect, nonAvroSchemaString, subject);
       fail("Registering a non-avro schema should fail");
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       // this is expected.
       assertEquals("Should get a bad request status",
                    InvalidAvroException.STATUS.getStatusCode(),
-                   e.getResponse().getStatus());
+                   e.getStatus());
     }
 
     // register a backward compatible avro
@@ -123,11 +122,11 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     try {
       TestUtils.registerSchema(restApp.restConnect, incompatibleSchemaString, subject);
       fail("Registering an incompatible schema should fail");
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       // this is expected.
       assertEquals("Should get a conflict status",
                    IncompatibleAvroSchemaException.STATUS.getStatusCode(),
-                   e.getResponse().getStatus());
+                   e.getStatus());
     }
 
     // change compatibility level to none and try again
@@ -135,7 +134,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     try {
       TestUtils.registerSchema(restApp.restConnect, incompatibleSchemaString, subject);
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       fail("Registering an incompatible schema should succeed after bumping down the compatibility "
            + "level to none");
     }
@@ -156,7 +155,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
                  TestUtils.registerSchema(restApp.restConnect, schemaString1, subject));
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
-                 AvroCompatibilityLevel.BACKWARD,
+                 AvroCompatibilityLevel.BACKWARD.name,
                  RestUtils.getConfig(restApp.restConnect,
                                      RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                      null).getCompatibilityLevel());
@@ -165,7 +164,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     // verify that new compatibility level is forward
     assertEquals("New compatibility level should be forward",
-                 AvroCompatibilityLevel.FORWARD,
+                 AvroCompatibilityLevel.FORWARD.name,
                  RestUtils.getConfig(restApp.restConnect,
                                      RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                      null).getCompatibilityLevel());
@@ -187,7 +186,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     // verify that new compatibility level is backward
     assertEquals("Updated compatibility level should be backward",
-                 AvroCompatibilityLevel.BACKWARD,
+                 AvroCompatibilityLevel.BACKWARD.name,
                  RestUtils.getConfig(restApp.restConnect,
                                      RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                      null).getCompatibilityLevel());
@@ -203,11 +202,11 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     try {
       TestUtils.registerSchema(restApp.restConnect, schemaString3, subject);
       fail("Registering a forward compatible schema should fail");
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       // this is expected.
       assertEquals("Should get a conflict status",
                    IncompatibleAvroSchemaException.STATUS.getStatusCode(),
-                   e.getResponse().getStatus());
+                   e.getStatus());
     }
 
     // now try registering a backward compatible schema (add a field with a default)

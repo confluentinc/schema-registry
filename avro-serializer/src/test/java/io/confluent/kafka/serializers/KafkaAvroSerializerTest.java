@@ -19,12 +19,14 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class KafkaAvroSerializerTest {
 
@@ -50,6 +52,20 @@ public class KafkaAvroSerializerTest {
     Schema schema = parser.parse(userSchema);
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
+    return avroRecord;
+  }
+
+  private IndexedRecord createInvalidAvroRecord() {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+                        "\"name\": \"User\"," +
+                        "\"fields\": [{\"name\": \"f1\", \"type\": \"string\"}," +
+                        "{\"name\": \"f2\", \"type\": \"string\"}]}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(userSchema);
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("f1", "value1");
+    avroRecord.put("f1", 12);
+    // intentionally miss setting a required field f2
     return avroRecord;
   }
 
@@ -103,5 +119,30 @@ public class KafkaAvroSerializerTest {
     bytes = avroEncoder.toBytes(avroRecord);
     obj = avroDecoder.fromBytes(bytes);
     assertEquals(avroRecord, obj);
+  }
+
+  @Test
+  public void testInvalidInput() {
+    IndexedRecord invalidRecord = createInvalidAvroRecord();
+    try {
+      avroSerializer.serialize(topic, invalidRecord);
+      fail("Sending invalid record should fail serializer");
+    } catch (SerializationException e) {
+      // this is expected
+    }
+
+    try {
+      avroEncoder.toBytes(invalidRecord);
+      fail("Sending invalid record should fail encoder");
+    } catch (SerializationException e) {
+      // this is expected
+    }
+
+    try {
+      avroEncoder.toBytes("abc");
+      fail("Sending data of unsupported type should fail encoder");
+    } catch (SerializationException e) {
+      // this is expected
+    }
   }
 }
