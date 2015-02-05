@@ -36,10 +36,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Compatibi
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestInvalidAvroException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -85,9 +87,18 @@ public class CompatibilityResource {
       throw new RestSchemaRegistryStoreException("Error while retrieving list of all subjects", e);
     }
     Schema schemaForSpecifiedVersion = null;
-    VersionId versionId = new VersionId(version);
+    VersionId versionId = null;
     try {
-      schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw new RestInvalidVersionException();
+    }
+    try {
+      try {
+        schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
+      } catch (InvalidVersionException e) {
+        throw new RestInvalidVersionException();
+      }
     } catch (SchemaRegistryStoreException e) {
       throw new RestSchemaRegistryStoreException("Error while retrieving schema for subject "
                                                  + subject + " and version " 

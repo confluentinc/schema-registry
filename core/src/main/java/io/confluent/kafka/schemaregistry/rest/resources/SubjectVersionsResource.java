@@ -39,12 +39,14 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestInvalidAvroException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryTimeoutException;
@@ -73,7 +75,12 @@ public class SubjectVersionsResource {
   @Path("/{version}")
   @PerformanceMetric("subjects.versions.get-schema")
   public Schema getSchema(@PathParam("version") String version) {
-    VersionId versionId = new VersionId(version);
+    VersionId versionId = null;
+    try {
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw new RestInvalidVersionException();
+    }
     Schema schema = null;
     try {
       schema = schemaRegistry.get(this.subject, versionId.getVersionId());
@@ -90,6 +97,8 @@ public class SubjectVersionsResource {
           version + " from the schema registry";
       log.debug(errorMessage, e);
       throw new RestSchemaRegistryStoreException(errorMessage, e);
+    } catch (InvalidVersionException e) {
+      throw new RestInvalidVersionException();
     }
     return schema;
   }

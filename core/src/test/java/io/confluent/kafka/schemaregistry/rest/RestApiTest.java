@@ -314,7 +314,7 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (WebApplicationException wae) {
       // this is expected.
       assertEquals("Should get a 404 status for non-existing id",
-                   404,
+                   Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
                    wae.getResponse().getStatus());
     }
   }
@@ -434,7 +434,7 @@ public class RestApiTest extends ClusterTestHarness {
       TestUtils.testCompatibility(restApp.restConnect, schema, subject, "earliest");
     } catch (WebApplicationException wae) {
       assertEquals("Version not found",
-                   Response.Status.BAD_REQUEST.getStatusCode(),
+                   RestInvalidVersionException.DEFAULT_ERROR_CODE,
                    wae.getResponse().getStatus());
     }
   }

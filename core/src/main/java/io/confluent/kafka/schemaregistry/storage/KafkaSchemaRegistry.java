@@ -49,6 +49,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IncompatibleAvroSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
@@ -303,7 +304,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           // issue #66
 //          throw new UnknownMasterException("Register schema request failed since master is "
 //                                           + "unknown");
-          throw new SchemaRegistryRequestForwardingException("Register schema request failed since " 
+          throw new SchemaRegistryRequestForwardingException("Register schema request failed since "
                                                              + "master is unknown");
         }
       }
@@ -363,8 +364,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         schemaIdCounterThreshold = Integer.valueOf(counterValue.getData());
       } else {
         throw new SchemaRegistryStoreException(
-            "Failed to initialize schema registry. Failed to read "
-            + "schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
+            "Failed to to read schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
             " from zookeeper");
       }
 
@@ -444,7 +444,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Schema get(String subject, int version) throws SchemaRegistryStoreException {
+  public Schema get(String subject, int version)
+      throws SchemaRegistryStoreException, InvalidVersionException {
     VersionId versionId = new VersionId(version);
     if (versionId.isLatest()) {
       return getLatestVersion(subject);

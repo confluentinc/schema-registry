@@ -51,6 +51,9 @@ The subjects resource provides a list of all registered subjects in your schema 
 
    :>jsonarr string name: Subject
 
+   :statuscode 500: 
+      * Error code 50001 -- Error in the backend datastore
+
    **Example request**:
 
    .. sourcecode:: http
@@ -79,7 +82,10 @@ Schemas
 
    :>json string schema: Schema string identified by the id
 
-   :statuscode 404: Schema not found
+   :statuscode 404:
+      * Error code 40403 -- Schema not found
+   :statuscode 500: 
+      * Error code 50001 -- Error in the backend datastore
 
    **Example request**:
 
@@ -108,7 +114,10 @@ Schemas
 
    :>jsonarr int version: version of the schema registered under this subject
 
-   :statuscode 404: Subject not found
+   :statuscode 404:
+      * Error code 40401 -- Subject not found
+   :statuscode 500: 
+      * Error code 50001 -- Error in the backend datastore
 
    **Example request**:
 
@@ -143,7 +152,9 @@ Schemas
    :statuscode 404:
       * Error code 40401 -- Subject not found
       * Error code 40402 -- Version not found
-   :statuscode 400: Invalid version
+   :statuscode 422: Invalid version
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend data store
 
    **Example request**:
 
@@ -174,6 +185,13 @@ Schemas
 
    :param string subject: Subject under which the schema will be registered
    :reqjson schema: The Avro schema string
+
+   :statuscode 409: Incompatible Avro schema
+   :statuscode 422: Invalid Avro schema
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend data store
+      * Error code 50002 -- Operation timed out
+      * Error code 50003 -- Error while forwarding request to the master
 
    **Example request**:
 
@@ -222,6 +240,7 @@ Schemas
    :statuscode 404:
       * Error code 40401 -- Subject not found
       * Error code 40403 -- Schema not found
+   :statuscode 500: Internal server error
 
    **Example request**:
 
@@ -293,7 +312,11 @@ The compatibility resource allows the user to test schemas for compatibility aga
    :statuscode 404:
       * Error code 40401 -- Subject not found
       * Error code 40402 -- Version not found
-   :statuscode 400: Invalid version
+   :statuscode 422: 
+      * Error code 42201 -- Invalid schema
+      * Error code 42202 -- Invalid version
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend data store
 
    **Example request**:
 
@@ -341,6 +364,11 @@ The config resource allows you to inspect the cluster-level configuration values
 
    :<json string compatibility: New global compatibility level. Must be one of NONE, FULL, FORWARD, BACKWARD
 
+   :statuscode 422: 
+      * Error code 42203 -- Invalid compatibility level
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend data store
+
    .. sourcecode:: http
 
       POST /consumers/testgroup/ HTTP/1.1
@@ -363,6 +391,9 @@ The config resource allows you to inspect the cluster-level configuration values
    Get global compatibility level.
 
    :>json string compatibility: New global compatibility level. Will be one of NONE, FULL, FORWARD, BACKWARD
+
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend data store
 
    **Example request**:
 
@@ -390,7 +421,10 @@ The config resource allows you to inspect the cluster-level configuration values
    :param string subject: Name of the subject
    :<json string compatibility: New global compatibility level. Must be one of NONE, FULL, FORWARD, BACKWARD
 
-   :statuscode 400: Invalid compatibility level
+   :statuscode 422: 
+      * Error code 42203 -- Invalid compatibility level
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend data store
 
    **Example request**:
 
@@ -419,6 +453,8 @@ The config resource allows you to inspect the cluster-level configuration values
    :>json string compatibility: New global compatibility level. Will be one of NONE, FULL, FORWARD, BACKWARD
   
    :statuscode 404: Subject not found
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend data store
 
    **Example request**:
 
