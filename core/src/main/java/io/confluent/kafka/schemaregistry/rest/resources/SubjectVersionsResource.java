@@ -41,6 +41,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
@@ -79,6 +80,7 @@ public class SubjectVersionsResource {
       throw Errors.invalidVersionException();
     }
     Schema schema = null;
+    String errorMessage = null;
     try {
       schema = schemaRegistry.get(this.subject, versionId.getVersionId());
       if (schema == null) {
@@ -89,13 +91,15 @@ public class SubjectVersionsResource {
         }
       }
     } catch (SchemaRegistryStoreException e) {
-      String errorMessage =
+      errorMessage =
           "Error while retrieving schema for subject " + this.subject + " with version " +
           version + " from the schema registry";
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException();
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
     }
     return schema;
   }
@@ -106,19 +110,24 @@ public class SubjectVersionsResource {
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
+    String errorMessage = "Error while validating that subject " +
+                          this.subject + " exists in the registry";
     try {
       if (!schemaRegistry.listSubjects().contains(this.subject)) {
         throw Errors.subjectNotFoundException();
       }
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Error while validating that subject " +
-                                                 this.subject + " exists in the registry", e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
     }
+    errorMessage = "Error while listing all versions for subject " + this.subject;
     try {
       allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Error while listing all versions for subject "
-                                                 + this.subject, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
     }
     while (allSchemasForThisTopic.hasNext()) {
       Schema schema = allSchemasForThisTopic.next();
@@ -151,12 +160,14 @@ public class SubjectVersionsResource {
                                   + " to the Kafka store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-                                           + " to the master", e);
+                                                    + " to the master", e);
     } catch (IncompatibleSchemaException e) {
       throw Errors.incompatibleSchemaException("Schema being registered is incompatible with the"
                                                + " latest schema", e);
     } catch (UnknownMasterException e) {
       throw Errors.unknownMasterException("Master not known.", e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while registering schema", e);
     }
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
     registerSchemaResponse.setId(id);

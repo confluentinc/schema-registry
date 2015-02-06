@@ -26,6 +26,7 @@ import javax.ws.rs.Produces;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
@@ -53,13 +54,15 @@ public class SchemasResource {
   @PerformanceMetric("schemas.ids.get-schema")
   public SchemaString getSchema(@PathParam("id") Integer id) {
     SchemaString schema = null;
+    String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
+                          + "registry";
     try {
       schema = schemaRegistry.get(id);
     } catch (SchemaRegistryStoreException e) {
-      String errorMessage = "Error while retrieving schema with id " + id + " from the schema " 
-                            + "registry";
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
     }
     if (schema == null) {
       throw Errors.schemaNotFoundException();

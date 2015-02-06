@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -65,6 +66,9 @@ public class ConfigResource {
       } catch (SchemaRegistryStoreException e) {
         throw Errors.storeException("Failed to retrieve a list of all subjects"
                                     + " from the registry", e);
+      } catch (SchemaRegistryException e) {
+        throw Errors.schemaRegistryException("Failed to retrieve a list of all subjects"
+                                             + " from the registry", e);
       }
       AvroCompatibilityLevel compatibilityLevel =
           AvroCompatibilityLevel.forName(request.getCompatibilityLevel());

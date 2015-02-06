@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Compatibi
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -75,12 +76,15 @@ public class CompatibilityResource {
     headerProperties.put("Accept", accept);
     boolean isCompatible = false;
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
+    String errorMessage = "Error while retrieving list of all subjects";
     try {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Error while retrieving list of all subjects", e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
     }
     Schema schemaForSpecifiedVersion = null;
     VersionId versionId = null;
@@ -90,15 +94,13 @@ public class CompatibilityResource {
       throw Errors.invalidVersionException();
     }
     try {
-      try {
-        schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
-      } catch (InvalidVersionException e) {
-        throw Errors.invalidVersionException();
-      }
-    } catch (SchemaRegistryStoreException e) {
+      schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException();
+    } catch (SchemaRegistryException e) {
       throw Errors.storeException("Error while retrieving schema for subject "
-                                                 + subject + " and version " 
-                                                 + versionId.getVersionId(), e);
+                                  + subject + " and version "
+                                  + versionId.getVersionId(), e);
     }
     if (schemaForSpecifiedVersion == null) {
       if (versionId.isLatest()) {
@@ -118,6 +120,9 @@ public class CompatibilityResource {
       } catch (SchemaRegistryStoreException e) {
         throw Errors.storeException("Error while getting compatibility level for"
                                                    + " subject " + subject, e);
+      } catch (SchemaRegistryException e) {
+        throw Errors.schemaRegistryException("Error while getting compatibility level for"
+                                             + " subject " + subject, e);
       }
       compatibilityCheckResponse.setIsCompatible(isCompatible);
       asyncResponse.resume(compatibilityCheckResponse);

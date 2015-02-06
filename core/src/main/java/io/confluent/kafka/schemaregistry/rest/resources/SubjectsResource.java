@@ -107,6 +107,8 @@ public class SubjectsResource {
       return schemaRegistry.listSubjects();
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while listing subjects", e);
     }
   }
 }

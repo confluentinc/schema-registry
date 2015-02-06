@@ -52,7 +52,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
-import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
@@ -140,7 +139,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public void init() throws SchemaRegistryInitializationException, SchemaRegistryTimeoutException {
+  public void init() throws SchemaRegistryInitializationException {
     try {
       kafkaStore.init();
     } catch (StoreInitializationException e) {
@@ -152,6 +151,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     } catch (SchemaRegistryStoreException e) {
       throw new SchemaRegistryInitializationException("Error electing master while "
                                                       + "initializing schema registry", e);
+    } catch (SchemaRegistryTimeoutException e) {
+      throw new SchemaRegistryInitializationException(e);
     }
   }
 
@@ -203,8 +204,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   @Override
   public int register(String subject,
                       Schema schema)
-      throws SchemaRegistryStoreException, InvalidSchemaException, SchemaRegistryTimeoutException,
-             IncompatibleSchemaException {
+      throws SchemaRegistryException {
     try {
       // see if the schema to be registered already exists
       AvroSchema avroSchema = canonicalizeSchema(schema);
@@ -259,15 +259,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while registering the schema in the" +
                                              " backend Kafka store", e);
-    } 
+    }
   }
 
   public int registerOrForward(String subject,
                                Schema schema,
                                Map<String, String> headerProperties)
-      throws InvalidSchemaException, SchemaRegistryTimeoutException, SchemaRegistryStoreException,
-             SchemaRegistryRequestForwardingException, IncompatibleSchemaException, 
-             UnknownMasterException {
+      throws SchemaRegistryException {
     synchronized (masterLock) {
       if (isMaster()) {
         return register(subject, schema);
@@ -440,8 +438,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Schema get(String subject, int version)
-      throws SchemaRegistryStoreException, InvalidVersionException {
+  public Schema get(String subject, int version) throws SchemaRegistryException {
     VersionId versionId = new VersionId(version);
     if (versionId.isLatest()) {
       return getLatestVersion(subject);
@@ -460,7 +457,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public SchemaString get(int id) throws SchemaRegistryStoreException {
+  public SchemaString get(int id) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
       SchemaKey subjectVersionKey = guidToSchemaKey.get(id);
@@ -479,7 +476,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Set<String> listSubjects() throws SchemaRegistryStoreException {
+  public Set<String> listSubjects() throws SchemaRegistryException {
     try {
       Iterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys();
       return extractUniqueSubjects(allKeys);
@@ -502,7 +499,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryStoreException {
+  public Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException {
     try {
       SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
       SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
@@ -515,7 +512,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Schema getLatestVersion(String subject) throws SchemaRegistryStoreException {
+  public Schema getLatestVersion(String subject) throws SchemaRegistryException {
     try {
       SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
       SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
@@ -588,7 +585,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public boolean isCompatible(String subject,
                               String newSchemaObj,
                               String latestSchema)
-      throws InvalidSchemaException, SchemaRegistryStoreException {
+      throws SchemaRegistryException {
     AvroSchema newAvroSchema = AvroUtils.parseSchema(newSchemaObj);
     AvroSchema latestAvroSchema = AvroUtils.parseSchema(latestSchema);
     if (latestSchema == null) {
