@@ -8,7 +8,7 @@ Source0: confluent-schema-registry-%{version}.tar.gz
 URL: http://confluent.io
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 Vendor: Confluent, Inc.
-Packager: Ewen Cheslack-Postava <ewen@confluent.io>
+Packager: Confluent Packaging <packages@confluent.io>
 BuildArch: noarch
 
 Requires: confluent-rest-utils
@@ -56,5 +56,5 @@ exit 0
 [ "%{buildroot}" != "/" ] && %{__rm} -rf %{buildroot}
 
 %changelog
-* Tue Feb 3 2015 Ewen Cheslack-Postava <ewen@confluent.io>
+* Tue Feb 3 2015 Confluent Packaging <packages@confluent.io>
 - Initial import
