@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2015 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,27 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.storage.exceptions;
+
+package io.confluent.kafka.schemaregistry.exceptions;
 
 /**
- * Error while (de)serializing data while reading from or writing to a 
- * * <code>io.confluent.kafka.schemaregistry.storage.Store</code>
+ * Indicates an error while initializing schema registry
  */
-public class SerializationException extends Exception {
+public class SchemaRegistryInitializationException extends SchemaRegistryException {
 
-  public SerializationException(String message, Throwable cause) {
+  public SchemaRegistryInitializationException(String message, Throwable cause) {
     super(message, cause);
   }
 
-  public SerializationException(String message) {
+  public SchemaRegistryInitializationException(String message) {
     super(message);
   }
 
-  public SerializationException(Throwable cause) {
+  public SchemaRegistryInitializationException(Throwable cause) {
     super(cause);
   }
 
-  public SerializationException() {
+  public SchemaRegistryInitializationException() {
     super();
   }
 }

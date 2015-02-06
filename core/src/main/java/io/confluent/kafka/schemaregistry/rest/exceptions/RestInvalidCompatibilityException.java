@@ -13,27 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.storage.exceptions;
+package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-/**
- * Error while (de)serializing data while reading from or writing to a 
- * * <code>io.confluent.kafka.schemaregistry.storage.Store</code>
- */
-public class SerializationException extends Exception {
+import io.confluent.rest.exceptions.RestConstraintViolationException;
 
-  public SerializationException(String message, Throwable cause) {
-    super(message, cause);
+public class RestInvalidCompatibilityException extends RestConstraintViolationException {
+  public static final int ERROR_CODE = Errors.INVALID_COMPATIBILITY_LEVEL_ERROR_CODE;
+
+  public RestInvalidCompatibilityException() {
+    this("Invalid compatibility level. Valid values are none, backward, forward and full");
   }
 
-  public SerializationException(String message) {
-    super(message);
-  }
-
-  public SerializationException(Throwable cause) {
-    super(cause);
-  }
-
-  public SerializationException() {
-    super();
+  public RestInvalidCompatibilityException(String message) {
+    super(message, ERROR_CODE);
   }
 }
