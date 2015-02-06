@@ -31,15 +31,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
-  <repositories>
-    <repository>
-      <id>kafka</id>
-      <name>kafka</name>
-      <url>https://repository.apache.org/content/groups/staging/</url>
-    </repository>
-  </repositories>
-
-
     <dependencyManagement>
         <dependencies>
             <dependency>

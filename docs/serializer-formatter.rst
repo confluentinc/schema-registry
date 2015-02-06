@@ -14,7 +14,7 @@ the Avro schema for the key and the value will be automatically registered in th
 server under the subject *t-key* and *t-value*, respectively, if the compatibility test passes.
 
 In the following example, we send a message with key of type string and value of type Avro record
-to Kafka.
+to Kafka. A SerializationException may occur during the send call, if the data is not well formed.
 
 .. sourcecode:: bash
 
@@ -45,11 +45,16 @@ to Kafka.
     avroRecord.put("f1", "value1");
 
     record = new ProducerRecord<Object, Object>("topic1", key, avroRecord);
-    producer.send(record);
+    try {
+      producer.send(record);
+    } catch(SerializationException e) {
+      // may need to do something with it
+    }
 
 You can plug in KafkaAvroDecoder to KafkaConsumer to receive messages of any Avro type from Kafka.
 In the following example, we receive messages with key of type string and value of type Avro record
-from Kafka.
+from Kafka. When getting the message key or value, a SerializationException may occur if the data is
+not well formed.
 
 .. sourcecode:: bash
 
@@ -80,10 +85,14 @@ from Kafka.
     ConsumerIterator it = stream.iterator();
     while (it.hasNext()) {
       MessageAndMetadata messageAndMetadata = it.next();
-      String key = (String) messageAndMetadata.key();
-      String value = (IndexedRecord) messageAndMetadata.message();
+      try {
+        String key = (String) messageAndMetadata.key();
+        String value = (IndexedRecord) messageAndMetadata.message();
 
-      ...
+        ...
+      } catch(SerializationException e) {
+        // may need to do something with it
+      }
     }
 
 We recommend users use the new producer in org.apache.kafka.clients.producer.KafkaProducer. If
@@ -91,7 +100,8 @@ you are using a version of Kafka older than 0.8.2.0, you can plug KafkaAvroEncod
 producer in kafka.javaapi.producer. However, there will be some limitations. You can only use
 KafkaAvroEncoder for serializing the value of the message and only send value of type Avro record.
 The Avro schema for the value will be registered under the subject *recordName-value*, where
-*recordName* is the name of the Avro record.
+*recordName* is the name of the Avro record. Because of this, the same Avro record type shouldn't
+be used in more than one topic.
 
 In the following example, we send a message with key of type string and value of type Avro record
 to Kafka. Note that unlike the example in the new producer, we use a StringEncoder for serializing

@@ -18,8 +18,9 @@ package io.confluent.kafka.schemaregistry.storage;
 import java.util.Iterator;
 import java.util.Set;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
 public interface SchemaRegistry {
@@ -38,9 +39,15 @@ public interface SchemaRegistry {
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
 
-  public boolean isCompatible(String subject,
-                              String inputSchema,
-                              String targetSchema) throws SchemaRegistryException;
+  boolean isCompatible(String subject,
+                       String inputSchema,
+                       String targetSchema) throws SchemaRegistryException;
+
+  void updateCompatibilityLevel(String subject, AvroCompatibilityLevel newCompatibilityLevel)
+      throws SchemaRegistryException;
+
+  AvroCompatibilityLevel getCompatibilityLevel(String subject)
+      throws SchemaRegistryException;
 
   void close();
 }

@@ -65,7 +65,7 @@ public class AvroCompatibilityTest {
                            + " \"doc\":\"doc of f1\"}]}";
     Schema schema7 = AvroUtils.parseSchema(schemaString7).schemaObj;
 
-    AvroCompatibilityChecker backwardChecker = AvroCompatibilityLevel.BACKWARD.compatibilityChecker;
+    AvroCompatibilityChecker backwardChecker = AvroCompatibilityChecker.BACKWARD_CHECKER;
     assertTrue("adding a field with default is a backward compatible change",
                backwardChecker.isCompatible(schema2, schema1));
     assertFalse("adding a field w/o default is not a backward compatible change",
@@ -81,11 +81,11 @@ public class AvroCompatibilityTest {
     assertFalse("removing a type from a union is not a backward compatible change",
                 backwardChecker.isCompatible(schema6, schema7));
 
-    AvroCompatibilityChecker forwardChecker = AvroCompatibilityLevel.FORWARD.compatibilityChecker;
+    AvroCompatibilityChecker forwardChecker = AvroCompatibilityChecker.FORWARD_CHECKER;
     assertTrue("adding a field is a forward compatible change",
                forwardChecker.isCompatible(schema2, schema1));
 
-    AvroCompatibilityChecker fullChecker = AvroCompatibilityLevel.FULL.compatibilityChecker;
+    AvroCompatibilityChecker fullChecker = AvroCompatibilityChecker.FULL_CHECKER;
     assertTrue("adding a field with default is a backward and a forward compatible change",
                fullChecker.isCompatible(schema2, schema1));
   }

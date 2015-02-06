@@ -22,8 +22,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.storage.ConfigValue;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.confluent.kafka.schemaregistry.storage.ConfigKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryKey;
@@ -100,8 +100,8 @@ public class SchemaRegistrySerializer
   /**
    * @param key   Typed key corresponding to this value
    * @param value Bytes of the serialized value
-   * @return Typed deserialized value. Must be one of {@link io.confluent.kafka.schemaregistry.rest.entities.Config}
-   * or {@link io.confluent.kafka.schemaregistry.client.rest.entities.Schema}
+   * @return Typed deserialized value. Must be one of {@link io.confluent.kafka.schemaregistry.storage.ConfigValue}
+   * or {@link io.confluent.kafka.schemaregistry.storage.SchemaValue}
    */
   @Override
   public SchemaRegistryValue deserializeValue(SchemaRegistryKey key, byte[] value)
@@ -109,13 +109,13 @@ public class SchemaRegistrySerializer
     SchemaRegistryValue schemaRegistryValue = null;
     if (key.getKeyType().equals(SchemaRegistryKeyType.CONFIG)) {
       try {
-        schemaRegistryValue = new ObjectMapper().readValue(value, Config.class);
+        schemaRegistryValue = new ObjectMapper().readValue(value, ConfigValue.class);
       } catch (IOException e) {
         throw new SerializationException("Error while deserializing config", e);
       }
     } else if (key.getKeyType().equals(SchemaRegistryKeyType.SCHEMA)) {
       try {
-        schemaRegistryValue = new ObjectMapper().readValue(value, Schema.class);
+        schemaRegistryValue = new ObjectMapper().readValue(value, SchemaValue.class);
       } catch (IOException e) {
         throw new SerializationException("Error while deserializing schema", e);
       }

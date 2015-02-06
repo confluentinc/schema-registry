@@ -34,10 +34,10 @@ import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
@@ -74,7 +74,6 @@ public class CompatibilityResource {
     Map<String, String> headerProperties = new HashMap<String, String>();
     headerProperties.put("Content-Type", contentType);
     headerProperties.put("Accept", accept);
-    Schema schema = new Schema(subject, 0, 0, request.getSchema());
     boolean isCompatible = false;
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     try {
@@ -93,9 +92,8 @@ public class CompatibilityResource {
           throw Errors.versionNotFoundException();
         }
       } else {
-        isCompatible =
-            schemaRegistry
-                .isCompatible(subject, schema.getSchema(), schemaForSpecifiedVersion.getSchema());
+        isCompatible = schemaRegistry
+            .isCompatible(subject, request.getSchema(), schemaForSpecifiedVersion.getSchema());
         compatibilityCheckResponse.setIsCompatible(isCompatible);
         asyncResponse.resume(compatibilityCheckResponse);
       }

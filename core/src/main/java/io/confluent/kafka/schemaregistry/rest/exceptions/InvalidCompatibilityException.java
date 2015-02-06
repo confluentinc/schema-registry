@@ -13,20 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.client.rest.exceptions;
+package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
+import io.confluent.rest.exceptions.RestException;
 
-/**
- * An exception thrown when the registered schema is not compatible with the latest schema according
- * to the compatibility level.
- */
-public class IncompatibleAvroSchemaException extends WebApplicationException {
+public class InvalidCompatibilityException extends RestException {
+  private static final int UNPROCESSABLE_ENTITY_STATUS_CODE = 422;
 
-  public static final Response.Status STATUS = Response.Status.CONFLICT;
-
-  public IncompatibleAvroSchemaException(String errorMsg) {
-    super(errorMsg, STATUS);
+  public InvalidCompatibilityException() {
+    super("Invalid compatibility level. Valid values are none, backward, forward and full",
+          UNPROCESSABLE_ENTITY_STATUS_CODE,
+          UNPROCESSABLE_ENTITY_STATUS_CODE);
   }
+
 }

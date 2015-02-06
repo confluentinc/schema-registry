@@ -19,9 +19,11 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+
 public interface SchemaRegistryClient {
 
-  public int register(String subject, Schema schema) throws IOException;
+  public int register(String subject, Schema schema) throws IOException, RestClientException;
 
-  public Schema getByID(int id) throws IOException;
+  public Schema getByID(int id) throws IOException, RestClientException;
 }

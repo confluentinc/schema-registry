@@ -22,7 +22,10 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 
 public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
@@ -39,7 +42,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     idCache = new HashMap<Integer, Schema>();
   }
 
-  private int registerAndGetId(String subject, Schema schema) throws IOException {
+  private int registerAndGetId(String subject, Schema schema)
+      throws IOException, RestClientException {
     String schemaString = schema.toString();
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
@@ -47,14 +51,15 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
                                     request, subject);
   }
 
-  private Schema getSchemaByIdFromRegistry(int id) throws IOException {
-    io.confluent.kafka.schemaregistry.client.rest.entities.Schema restSchema =
+  private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
+    SchemaString restSchema =
         RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
-    return parser.parse(restSchema.getSchema());
+    return parser.parse(restSchema.getSchemaString());
   }
 
   @Override
-  public synchronized int register(String subject, Schema schema) throws IOException {
+  public synchronized int register(String subject, Schema schema)
+      throws IOException, RestClientException {
     Map<Schema, Integer> schemaIdMap;
     if (schemaCache.containsKey(subject)) {
       schemaIdMap = schemaCache.get(subject);
@@ -76,7 +81,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized Schema getByID(int id) throws IOException {
+  public synchronized Schema getByID(int id) throws IOException, RestClientException {
     if (idCache.containsKey(id)) {
       return idCache.get(id);
     } else {

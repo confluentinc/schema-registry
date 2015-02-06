@@ -142,18 +142,25 @@ public abstract class ClusterTestHarness {
       restApp.stop();
     }
 
-    for (KafkaServer server : servers) {
-      server.shutdown();
-    }
+    if (servers != null) {
+      for (KafkaServer server : servers) {
+        server.shutdown();
+      }
 
-    // Remove any persistent data
-    for (KafkaServer server : servers) {
-      for (String logDir : JavaConversions.asJavaCollection(server.config().logDirs())) {
-        Utils.rm(logDir);
+      // Remove any persistent data
+      for (KafkaServer server : servers) {
+        for (String logDir : JavaConversions.asJavaCollection(server.config().logDirs())) {
+          Utils.rm(logDir);
+        }
       }
     }
 
-    zkClient.close();
-    zookeeper.shutdown();
+    if (zkClient != null) {
+      zkClient.close();
+    }
+
+    if (zookeeper != null) {
+      zookeeper.shutdown();
+    }
   }
 }

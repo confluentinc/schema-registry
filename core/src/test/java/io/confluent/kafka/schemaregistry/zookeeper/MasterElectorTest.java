@@ -34,7 +34,8 @@ import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
-import io.confluent.kafka.schemaregistry.utils.RestUtils;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import static org.junit.Assert.assertEquals;
@@ -117,18 +118,18 @@ public class MasterElectorTest extends ClusterTestHarness {
     try {
       TestUtils.registerSchema(restApp1.restConnect, "failed schema", subject);
       fail("Registration should fail on the master");
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       // this is expected.
-      statusCodeFromRestApp1 = e.getResponse().getStatus();
+      statusCodeFromRestApp1 = e.getStatus();
     }
 
     int statusCodeFromRestApp2 = 0;
     try {
       TestUtils.registerSchema(restApp2.restConnect, "failed schema", subject);
       fail("Registration should fail on the non-master");
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       // this is expected.
-      statusCodeFromRestApp2 = e.getResponse().getStatus();
+      statusCodeFromRestApp2 = e.getStatus();
     }
 
     assertEquals("Status code from a non-master rest app for register schema should be 500",
@@ -575,7 +576,7 @@ public class MasterElectorTest extends ClusterTestHarness {
                                           RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
               .getSchemaString();
           return expectedSchemaString.compareTo(schema) == 0;
-        } catch (WebApplicationException e) {
+        } catch (RestClientException e) {
           return false;
         }
       }

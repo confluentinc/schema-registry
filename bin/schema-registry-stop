@@ -14,4 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-exec $(dirname $0)/schema-registry-stop-service schema-registry
+exec $(dirname $0)/schema-registry-stop-service io.confluent.kafka.schemaregistry.rest.Main

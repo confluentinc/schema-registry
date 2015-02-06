@@ -25,6 +25,8 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
 
@@ -37,9 +39,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   }
 
   protected Object deserialize(byte[] payload) throws SerializationException {
+    int id = -1;
     try {
       ByteBuffer buffer = getByteBuffer(payload);
-      int id = buffer.getInt();
+      id = buffer.getInt();
       Schema schema = schemaRegistry.getByID(id);
       int length = buffer.limit() - 1 - idSize;
       if (schema.getType().equals(Schema.Type.BYTES)) {
@@ -57,15 +60,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       }
       return object;
     } catch (IOException e) {
-      throw new SerializationException("Error deserializing Avro message", e);
+      throw new SerializationException("Error deserializing Avro message for id " + id, e);
+    } catch (RestClientException e) {
+      throw new SerializationException("Error retrieving Avro schema for id " + id, e);
+    } catch (RuntimeException e) {
+      // avro deserialization may throw AvroRuntimeException, NullPointerException, etc
+      throw new SerializationException("Error deserializing Avro message for id " + id, e);
     }
-  }
-
-  public int register(String subject, Schema schema) throws IOException {
-    return schemaRegistry.register(subject, schema);
-  }
-
-  public Schema getByID(int id) throws IOException {
-    return schemaRegistry.getByID(id);
   }
 }

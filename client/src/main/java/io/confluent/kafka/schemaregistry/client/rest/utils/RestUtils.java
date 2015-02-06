@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.utils;
+package io.confluent.kafka.schemaregistry.client.rest.utils;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,17 +30,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.ws.rs.WebApplicationException;
-
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
-import io.confluent.kafka.schemaregistry.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 /**
  * Helper methods for making http client requests to the schema registry servlet.
@@ -97,7 +96,8 @@ public class RestUtils {
    */
   public static <T> T httpRequest(String baseUrl, String method, byte[] requestBodyData,
                                   Map<String, String> requestProperties,
-                                  TypeReference<T> responseFormat) throws IOException {
+                                  TypeReference<T> responseFormat)
+      throws IOException, RestClientException {
     log.debug(String.format("Sending %s with input %s to %s",
                             method, requestBodyData == null ? "null" : new String(requestBodyData),
                             baseUrl));
@@ -139,7 +139,8 @@ public class RestUtils {
         InputStream es = connection.getErrorStream();
         ErrorMessage errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
         es.close();
-        throw new WebApplicationException(errorMessage.getMessage(), errorMessage.getErrorCode());
+        throw new RestClientException(errorMessage.getMessage(), responseCode,
+                                      errorMessage.getErrorCode());
       }
 
     } finally {
@@ -152,7 +153,7 @@ public class RestUtils {
   public static Schema lookUpSubjectVersion(String baseUrl, Map<String, String> requestProperties,
                                             RegisterSchemaRequest registerSchemaRequest,
                                             String subject)
-      throws IOException {
+      throws IOException, RestClientException {
     String url = String.format("%s/subjects/%s", baseUrl, subject);
 
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
@@ -163,7 +164,7 @@ public class RestUtils {
 
   public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
                                    RegisterSchemaRequest registerSchemaRequest, String subject)
-      throws IOException {
+      throws IOException, RestClientException {
     String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
 
     RegisterSchemaResponse response =
@@ -176,7 +177,7 @@ public class RestUtils {
                                           RegisterSchemaRequest registerSchemaRequest,
                                           String subject,
                                           String version)
-      throws IOException {
+      throws IOException, RestClientException {
     String
         url =
         String.format("%s/compatibility/subjects/%s/versions/%s", baseUrl, subject, version);
@@ -189,7 +190,7 @@ public class RestUtils {
 
   public static void updateConfig(String baseUrl, Map<String, String> requestProperties,
                                   ConfigUpdateRequest configUpdateRequest, String subject)
-      throws IOException {
+      throws IOException, RestClientException {
     String url = subject != null ? String.format("%s/config/%s", baseUrl, subject) :
                  String.format("%s/config", baseUrl);
 
@@ -200,7 +201,7 @@ public class RestUtils {
   public static Config getConfig(String baseUrl,
                                  Map<String, String> requestProperties,
                                  String subject)
-      throws IOException {
+      throws IOException, RestClientException {
     String url = subject != null ? String.format("%s/config/%s", baseUrl, subject) :
                  String.format("%s/config", baseUrl);
 
@@ -210,7 +211,7 @@ public class RestUtils {
   }
 
   public static SchemaString getId(String baseUrl, Map<String, String> requestProperties,
-                             int id) throws IOException {
+                             int id) throws IOException, RestClientException {
     String url = String.format("%s/schemas/ids/%d", baseUrl, id);
 
     SchemaString response = RestUtils.httpRequest(url, "GET", null, requestProperties,
@@ -219,7 +220,8 @@ public class RestUtils {
   }
 
   public static Schema getVersion(String baseUrl, Map<String, String> requestProperties,
-                                  String subject, int version) throws IOException {
+                                  String subject, int version)
+      throws IOException, RestClientException {
     String url = String.format("%s/subjects/%s/versions/%d", baseUrl, subject, version);
 
     Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
@@ -228,7 +230,8 @@ public class RestUtils {
   }
 
   public static List<Integer> getAllVersions(String baseUrl, Map<String, String> requestProperties,
-                                             String subject) throws IOException {
+                                             String subject)
+      throws IOException, RestClientException {
     String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
 
     List<Integer> response = RestUtils.httpRequest(url, "GET", null, requestProperties,
@@ -237,7 +240,7 @@ public class RestUtils {
   }
 
   public static List<String> getAllSubjects(String baseUrl, Map<String, String> requestProperties)
-      throws IOException {
+      throws IOException, RestClientException {
     String url = String.format("%s/subjects", baseUrl);
 
     List<String> response = RestUtils.httpRequest(url, "GET", null, requestProperties,

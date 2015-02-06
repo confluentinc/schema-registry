@@ -173,8 +173,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props)
       throws RestConfigException {
     super(config, props);
-    compatibilityType = AvroCompatibilityLevel
-        .forName(getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG));
+    String compatibilityTypeString = getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG);
+    compatibilityType = AvroCompatibilityLevel.forName(compatibilityTypeString);
+    if (compatibilityType == null) {
+      throw new RestConfigException("Unknown avro compatibility level: " + compatibilityTypeString);
+    }
   }
 
   public SchemaRegistryConfig(String propsFile) throws RestConfigException {
@@ -183,8 +186,11 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public SchemaRegistryConfig(Properties props) throws RestConfigException {
     super(config, props);
-    compatibilityType = AvroCompatibilityLevel
-        .forName(getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG));
+    String compatibilityTypeString = getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG);
+    compatibilityType = AvroCompatibilityLevel.forName(compatibilityTypeString);
+    if (compatibilityType == null) {
+      throw new RestConfigException("Unknown avro compatibility level: " + compatibilityTypeString);
+    }
   }
 
   private static String getDefaultHost() {

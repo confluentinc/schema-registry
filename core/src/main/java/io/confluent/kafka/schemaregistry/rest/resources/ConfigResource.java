@@ -30,9 +30,11 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.ServerErrorException;
 import javax.ws.rs.core.Response;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
-import io.confluent.kafka.schemaregistry.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.rest.exceptions.InvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 
@@ -59,7 +61,12 @@ public class ConfigResource {
     if (request != null) {
       try {
         Set<String> subjects = schemaRegistry.listSubjects();
-        schemaRegistry.updateCompatibilityLevel(subject, request.getCompatibilityLevel());
+        AvroCompatibilityLevel compatibilityLevel =
+            AvroCompatibilityLevel.forName(request.getCompatibilityLevel());
+        if (compatibilityLevel == null) {
+          throw new InvalidCompatibilityException();
+        }
+        schemaRegistry.updateCompatibilityLevel(subject, compatibilityLevel);
         if (!subjects.contains(subject)) {
           log.debug("Updated compatibility level for unregistered subject " + subject + " to "
                     + request.getCompatibilityLevel());
@@ -78,7 +85,8 @@ public class ConfigResource {
   public Config getSubjectLevelConfig(@PathParam("subject") String subject) {
     Config config = null;
     try {
-      config = new Config(schemaRegistry.getCompatibilityLevel(subject));
+      AvroCompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(subject);
+      config = new Config(compatibilityLevel == null ? null : compatibilityLevel.name);
     } catch (SchemaRegistryException e) {
       throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }
@@ -89,7 +97,12 @@ public class ConfigResource {
   public void updateTopLevelConfig(ConfigUpdateRequest request) {
     if (request.getCompatibilityLevel() != null) {
       try {
-        schemaRegistry.updateCompatibilityLevel(null, request.getCompatibilityLevel());
+        AvroCompatibilityLevel compatibilityLevel =
+            AvroCompatibilityLevel.forName(request.getCompatibilityLevel());
+        if (compatibilityLevel == null) {
+          throw new InvalidCompatibilityException();
+        }
+        schemaRegistry.updateCompatibilityLevel(null, compatibilityLevel);
         log.debug("Updated global compatibility level to " + request.getCompatibilityLevel());
       } catch (SchemaRegistryException e) {
         throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
@@ -101,7 +114,8 @@ public class ConfigResource {
   public Config getTopLevelConfig() {
     Config config = null;
     try {
-      config = new Config(schemaRegistry.getCompatibilityLevel(null));
+      AvroCompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(null);
+      config = new Config(compatibilityLevel == null ? null : compatibilityLevel.name);
     } catch (SchemaRegistryException e) {
       throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
     }

@@ -19,8 +19,6 @@ package io.confluent.kafka.schemaregistry.storage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.confluent.kafka.schemaregistry.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemaIdAndSubjects;
 
 public class KafkaStoreMessageHandler
@@ -41,21 +39,8 @@ public class KafkaStoreMessageHandler
    */
   @Override
   public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue schema) {
-    // apply config updates
-    if (key.getKeyType() == SchemaRegistryKeyType.CONFIG) {
-      Config config = (Config) schema;
-      if (config.getCompatibilityLevel() != null) {
-        ConfigKey configKey = (ConfigKey) key;
-        if (configKey.getSubject() != null) {
-          log.info("Compatibility level for subject " + configKey.getSubject() + " updated to "
-                   + config.getCompatibilityLevel().name);
-        } else {
-          log.info("Compatibility level updated to " + config.getCompatibilityLevel().name);
-        }
-
-      }
-    } else if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
-      Schema schemaObj = (Schema) schema;
+    if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
+      SchemaValue schemaObj = (SchemaValue) schema;
       SchemaKey schemaKey = (SchemaKey) key;
       schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
 

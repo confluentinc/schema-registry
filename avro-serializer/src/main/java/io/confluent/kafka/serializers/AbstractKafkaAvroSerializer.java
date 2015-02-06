@@ -28,14 +28,17 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
   private final EncoderFactory encoderFactory = EncoderFactory.get();
 
   protected byte[] serializeImpl(String subject, Object record) throws SerializationException {
+    Schema schema = null;
     try {
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      Schema schema = getSchema(record);
+      schema = getSchema(record);
       int id = schemaRegistry.register(subject, schema);
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
       if (record instanceof byte[]) {
@@ -56,14 +59,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
       return bytes;
     } catch (IOException e) {
       throw new SerializationException("Error serializing Avro message", e);
+    } catch (RestClientException e) {
+      throw new SerializationException("Error registering Avro schema: " + schema, e);
+    } catch (RuntimeException e) {
+      // avro serialization can throw AvroRuntimeException, NullPointerException,
+      // ClassCastException, etc
+      throw new SerializationException("Error serializing Avro message", e);
     }
-  }
-
-  public int register(String subject, Schema schema) throws IOException {
-    return schemaRegistry.register(subject, schema);
-  }
-
-  public Schema getByID(int id) throws IOException {
-    return schemaRegistry.getByID(id);
   }
 }

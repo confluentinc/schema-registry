@@ -38,12 +38,11 @@ import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
-import io.confluent.kafka.schemaregistry.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -111,8 +110,8 @@ public class SubjectVersionsResource {
   }
 
   /**
-   * @throws {@link io.confluent.kafka.schemaregistry.client.rest.exceptions.InvalidAvroException ,
-   *                IncompatibleAvroSchemaException}
+   * @throws {@link io.confluent.kafka.schemaregistry.rest.exceptions.InvalidAvroException ,
+   *                io.confluent.kafka.schemaregistry.rest.exceptions.IncompatibleAvroSchemaException}
    */
   @POST
   @PerformanceMetric("subjects.versions.register")

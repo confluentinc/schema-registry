@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.rest.entities;
+package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -21,12 +21,12 @@ import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.constraints.Min;
 
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryValue;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 
-public class Schema implements Comparable<Schema>, SchemaRegistryValue {
+public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue {
 
   @NotEmpty
-  private String name;
+  private String subject;
   @Min(1)
   private Integer version;
   @Min(0)
@@ -34,24 +34,31 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   @NotEmpty
   private String schema;
 
-  public Schema(@JsonProperty("name") String name,
-                @JsonProperty("version") Integer version,
-                @JsonProperty("id") Integer id,
-                @JsonProperty("schema") String schema) {
-    this.name = name;
+  public SchemaValue(@JsonProperty("subject") String subject,
+                     @JsonProperty("version") Integer version,
+                     @JsonProperty("id") Integer id,
+                     @JsonProperty("schema") String schema) {
+    this.subject = subject;
     this.version = version;
     this.id = id;
     this.schema = schema;
   }
 
-  @JsonProperty("name")
-  public String getName() {
-    return name;
+  public SchemaValue(Schema schemaEntity) {
+    this.subject = schemaEntity.getSubject();
+    this.version = schemaEntity.getVersion();
+    this.id = schemaEntity.getId();
+    this.schema = schemaEntity.getSchema();
   }
 
-  @JsonProperty("name")
-  public void setName(String name) {
-    this.name = name;
+  @JsonProperty("subject")
+  public String getSubject() {
+    return subject;
+  }
+
+  @JsonProperty("subject")
+  public void setSubject(String subject) {
+    this.subject = subject;
   }
 
   @JsonProperty("version")
@@ -93,9 +100,9 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
       return false;
     }
 
-    Schema that = (Schema) o;
+    SchemaValue that = (SchemaValue) o;
 
-    if (!this.name.equals(that.name)) {
+    if (!this.subject.equals(that.subject)) {
       return false;
     }
     if (!this.version.equals(that.version)) {
@@ -113,7 +120,7 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
 
   @Override
   public int hashCode() {
-    int result = name.hashCode();
+    int result = subject.hashCode();
     result = 31 * result + version;
     result = 31 * result + id.intValue();
     result = 31 * result + schema.hashCode();
@@ -123,7 +130,7 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("{name=" + this.name + ",");
+    sb.append("{subject=" + this.subject + ",");
     sb.append("version=" + this.version + ",");
     sb.append("id=" + this.id + ",");
     sb.append("schema=" + this.schema + "}");
@@ -131,8 +138,8 @@ public class Schema implements Comparable<Schema>, SchemaRegistryValue {
   }
 
   @Override
-  public int compareTo(Schema that) {
-    int result = this.name.compareTo(that.name);
+  public int compareTo(SchemaValue that) {
+    int result = this.subject.compareTo(that.subject);
     if (result != 0) {
       return result;
     }

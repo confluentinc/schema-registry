@@ -19,13 +19,9 @@ package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.hibernate.validator.constraints.NotEmpty;
-
 import java.io.IOException;
 
 public class CompatibilityCheckResponse {
-
-  @NotEmpty
   private boolean isCompatible;
 
   public static CompatibilityCheckResponse fromJson(String json) throws IOException {
