@@ -218,7 +218,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
         schema.setVersion(newVersion);
 
-        if (schemaId > 0) {
+        if (schemaId >= 0) {
           schema.setId(schemaId);
         } else {
           schema.setId(schemaIdCounter.getAndIncrement());
