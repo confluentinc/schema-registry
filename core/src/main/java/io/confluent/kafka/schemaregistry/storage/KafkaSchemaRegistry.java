@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import org.I0Itec.zkclient.ZkClient;
+import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,8 +103,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
     clusterName = config.getString(SchemaRegistryConfig.CLUSTER_NAME);
-    myIdentity = new SchemaRegistryIdentity(host, port);
     isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
+    myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
     kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     zkSessionTimeoutMs =
@@ -183,9 +184,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  public void setMaster(SchemaRegistryIdentity schemaRegistryIdentity)
+  /**
+   * 'Inform' this SchemaRegistry instance which SchemaRegistry is the current master.
+   * If this instance is set as the new master, ensure it is up-to-date with data in
+   * the kafka store, and tell Zookeeper to allocate the next batch of IDs.
+   *
+   * @param schemaRegistryIdentity Identity of the current master. null means no master is alive.
+   * @throws SchemaRegistryException
+   */
+  public void setMaster(@Nullable SchemaRegistryIdentity schemaRegistryIdentity)
       throws SchemaRegistryException {
     log.debug("Setting the master to " + schemaRegistryIdentity);
+
+    // Only schema registry instances eligible for master can be set to master
+    if (schemaRegistryIdentity != null && !schemaRegistryIdentity.getMasterEligibility()) {
+      throw new SchemaRegistryException("Tried to set an ineligible node to master: " +
+                                        schemaRegistryIdentity);
+    }
+
     synchronized (masterLock) {
       masterIdentity = schemaRegistryIdentity;
       if (isMaster()) {
@@ -205,10 +221,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
+  /**
+   * Return json data encoding basic information about this SchemaRegistry instance, such as
+   * host, port, etc.
+   */
   public SchemaRegistryIdentity myIdentity() {
     return myIdentity;
   }
 
+  /**
+   * Return the identity of the SchemaRegistry that this instance thinks is current master.
+   * Any request that requires writing new data gets forwarded to the master.
+   */
   public SchemaRegistryIdentity masterIdentity() {
     synchronized (masterLock) {
       return masterIdentity;

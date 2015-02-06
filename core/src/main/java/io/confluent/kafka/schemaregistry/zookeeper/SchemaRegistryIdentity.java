@@ -31,12 +31,15 @@ public class SchemaRegistryIdentity {
   private Integer version;
   private String host;
   private Integer port;
+  private Boolean masterEligibility;
 
   public SchemaRegistryIdentity(@JsonProperty("host") String host,
-                                @JsonProperty("port") Integer port) {
+                                @JsonProperty("port") Integer port,
+                                @JsonProperty("master_eligibility") Boolean masterEligibility) {
     this.version = CURRENT_VERSION;
     this.host = host;
     this.port = port;
+    this.masterEligibility = masterEligibility;
   }
 
   public static SchemaRegistryIdentity fromJson(String json) throws IOException {
@@ -73,6 +76,12 @@ public class SchemaRegistryIdentity {
     this.port = port;
   }
 
+  @JsonProperty("master_eligibility")
+  public boolean getMasterEligibility() { return this.masterEligibility; }
+
+  @JsonProperty("master_eligibility")
+  public void setMasterEligibility(Boolean eligibility) { this.masterEligibility = eligibility; }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -93,6 +102,9 @@ public class SchemaRegistryIdentity {
     if (!this.port.equals(that.port)) {
       return false;
     }
+    if (!this.masterEligibility.equals(that.masterEligibility)) {
+      return false;
+    }
 
     return true;
   }
@@ -102,6 +114,7 @@ public class SchemaRegistryIdentity {
     int result = port;
     result = 31 * result + host.hashCode();
     result = 31 * result + version;
+    result = 31 * result + masterEligibility.hashCode();
     return result;
   }
 
@@ -110,7 +123,8 @@ public class SchemaRegistryIdentity {
     StringBuilder sb = new StringBuilder();
     sb.append("version=" + this.version + ",");
     sb.append("host=" + this.host + ",");
-    sb.append("port=" + this.port);
+    sb.append("port=" + this.port + ",");
+    sb.append("masterEligibility=" + this.masterEligibility);
     return sb.toString();
   }
 
