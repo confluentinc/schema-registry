@@ -26,22 +26,20 @@ import javax.validation.Valid;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.ServerErrorException;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.rest.annotations.PerformanceMetric;
 
 @Path("/subjects")
@@ -79,10 +77,11 @@ public class SubjectsResource {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
-      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema, 
+      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema,
                                                                         headerProperties);
     } catch (SchemaRegistryException e) {
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
+                                           e);
     }
     if (matchingSchema == null) {
       throw Errors.schemaNotFoundException();
@@ -95,7 +94,7 @@ public class SubjectsResource {
     if (subject != null) {
       subject = subject.trim();
     } else {
-      throw new NotFoundException(MESSAGE_SUBJECT_NOT_FOUND);
+      throw Errors.subjectNotFoundException();
     }
     return new SubjectVersionsResource(schemaRegistry, subject);
   }
@@ -106,8 +105,10 @@ public class SubjectsResource {
   public Set<String> list() {
     try {
       return schemaRegistry.listSubjects();
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw Errors.schemaRegistryException("Error while listing subjects", e);
     }
   }
 }

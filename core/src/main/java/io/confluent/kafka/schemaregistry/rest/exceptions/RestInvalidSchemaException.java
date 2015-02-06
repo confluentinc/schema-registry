@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2015 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,20 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
+import io.confluent.rest.exceptions.RestConstraintViolationException;
 
 /**
- * An exception thrown when the registered schema is not compatible with the latest schema according
- * to the compatibility level.
- */
-public class IncompatibleAvroSchemaException extends WebApplicationException {
+ * Indicates an invalid schema that does not conform to the expected format of the schema
+*/
+public class RestInvalidSchemaException extends RestConstraintViolationException {
+  public static final int ERROR_CODE = Errors.INVALID_SCHEMA_ERROR_CODE;
 
-  public static final Response.Status STATUS = Response.Status.CONFLICT;
+  public RestInvalidSchemaException() {
+    this("Invalid compatibility level. Valid values are none, backward, forward and full");
+  }
 
-  public IncompatibleAvroSchemaException(String errorMsg) {
-    super(errorMsg, STATUS);
+  public RestInvalidSchemaException(String message) {
+    super(message, ERROR_CODE);
   }
 }

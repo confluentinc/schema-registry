@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 Confluent Inc.
+ * Copyright 2015 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,28 +12,28 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-package io.confluent.kafka.schemaregistry.storage.exceptions;
+ **/
+
+package io.confluent.kafka.schemaregistry.exceptions;
 
 /**
- * Error while (de)serializing data while reading from or writing to a 
- * * <code>io.confluent.kafka.schemaregistry.storage.Store</code>
+ * Indicates that there was an attempt to set a SchemaRegistry ineligible for election
+ * (masterEligibility == false) to master.
  */
-public class SerializationException extends Exception {
-
-  public SerializationException(String message, Throwable cause) {
+public class SchemaRegistryIneligibleMasterException extends SchemaRegistryException {
+  public SchemaRegistryIneligibleMasterException(String message, Throwable cause) {
     super(message, cause);
   }
 
-  public SerializationException(String message) {
+  public SchemaRegistryIneligibleMasterException(String message) {
     super(message);
   }
 
-  public SerializationException(Throwable cause) {
+  public SchemaRegistryIneligibleMasterException(Throwable cause) {
     super(cause);
   }
 
-  public SerializationException() {
+  public SchemaRegistryIneligibleMasterException() {
     super();
   }
 }

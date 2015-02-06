@@ -15,6 +15,10 @@
  */
 package io.confluent.kafka.schemaregistry.storage.exceptions;
 
+/**
+ * Error while performing an operation on a 
+ * * <code>io.confluent.kafka.schemaregistry.storage.Store</code>
+ */
 public class StoreException extends Exception {
 
   public StoreException(String message, Throwable cause) {

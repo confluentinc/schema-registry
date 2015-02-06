@@ -27,24 +27,28 @@ import java.util.Map;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.ServerErrorException;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.rest.annotations.PerformanceMetric;
 
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -69,8 +73,14 @@ public class SubjectVersionsResource {
   @Path("/{version}")
   @PerformanceMetric("subjects.versions.get-schema")
   public Schema getSchema(@PathParam("version") String version) {
-    VersionId versionId = new VersionId(version);
+    VersionId versionId = null;
+    try {
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException();
+    }
     Schema schema = null;
+    String errorMessage = null;
     try {
       schema = schemaRegistry.get(this.subject, versionId.getVersionId());
       if (schema == null) {
@@ -80,10 +90,16 @@ public class SubjectVersionsResource {
           throw Errors.versionNotFoundException();
         }
       }
+    } catch (SchemaRegistryStoreException e) {
+      errorMessage =
+          "Error while retrieving schema for subject " + this.subject + " with version " +
+          version + " from the schema registry";
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException();
     } catch (SchemaRegistryException e) {
-      log.debug("Error while retrieving schema for subject " + this.subject + " with version " +
-                version + " from the schema registry", e);
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw Errors.schemaRegistryException(errorMessage, e);
     }
     return schema;
   }
@@ -94,13 +110,24 @@ public class SubjectVersionsResource {
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
+    String errorMessage = "Error while validating that subject " +
+                          this.subject + " exists in the registry";
     try {
       if (!schemaRegistry.listSubjects().contains(this.subject)) {
-        throw new NotFoundException("Subject " + this.subject + " does not exist in the registry");
+        throw Errors.subjectNotFoundException();
       }
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    errorMessage = "Error while listing all versions for subject " + this.subject;
+    try {
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
     }
     while (allSchemasForThisTopic.hasNext()) {
       Schema schema = allSchemasForThisTopic.next();
@@ -109,10 +136,6 @@ public class SubjectVersionsResource {
     return allVersions;
   }
 
-  /**
-   * @throws {@link io.confluent.kafka.schemaregistry.rest.exceptions.InvalidAvroException ,
-   *                io.confluent.kafka.schemaregistry.rest.exceptions.IncompatibleAvroSchemaException}
-   */
   @POST
   @PerformanceMetric("subjects.versions.register")
   public void register(final @Suspended AsyncResponse asyncResponse,
@@ -128,8 +151,23 @@ public class SubjectVersionsResource {
     int id = 0;
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidAvroException("Input schema is an invalid Avro schema", e);
+    } catch (SchemaRegistryTimeoutException e) {
+      throw Errors.operationTimeoutException("Register operation timed out", e);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Register schema operation failed while writing"
+                                  + " to the Kafka store", e);
+    } catch (SchemaRegistryRequestForwardingException e) {
+      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
+                                                    + " to the master", e);
+    } catch (IncompatibleSchemaException e) {
+      throw Errors.incompatibleSchemaException("Schema being registered is incompatible with the"
+                                               + " latest schema", e);
+    } catch (UnknownMasterException e) {
+      throw Errors.unknownMasterException("Master not known.", e);
     } catch (SchemaRegistryException e) {
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      throw Errors.schemaRegistryException("Error while registering schema", e);
     }
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
     registerSchemaResponse.setId(id);

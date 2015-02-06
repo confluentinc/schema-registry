@@ -50,17 +50,24 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
+import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryIneligibleMasterException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
-import io.confluent.kafka.schemaregistry.rest.exceptions.IncompatibleAvroSchemaException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.InvalidAvroException;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemaIdAndSubjects;
-import io.confluent.kafka.schemaregistry.storage.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
-import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 import io.confluent.rest.exceptions.RestException;
@@ -93,7 +100,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final boolean isEligibleForMasterElector;
   private AtomicInteger schemaIdCounter;
   private int maxSchemaIdCounterValue;
-  private final Metrics metrics;
+  private Metrics metrics;
   private Sensor masterNodeSensor;
   // Track the largest id in the kafka store so far (-1 indicates none in the store)
   private int maxIdInStore = -1;
@@ -121,32 +128,45 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                                new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>());
     MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
-        .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
-                    TimeUnit.MILLISECONDS);
-    List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                                                                    MetricsReporter.class);
+            .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
+                        TimeUnit.MILLISECONDS);
+    List<MetricsReporter> reporters =
+        config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
+                                      MetricsReporter.class);
     String jmxPrefix = "kafka.schema.registry";
     reporters.add(new JmxReporter(jmxPrefix));
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
     this.masterNodeSensor = metrics.sensor("master-slave-role");
     MetricName
-        m = new MetricName("master-slave-role", "master-slave-role", 
-                           "1.0 indicates the node is the active master in the cluster and is the" 
-                           + " node where all register schema and config update requests are " 
+        m = new MetricName("master-slave-role", "master-slave-role",
+                           "1.0 indicates the node is the active master in the cluster and is the"
+                           + " node where all register schema and config update requests are "
                            + "served.");
     this.masterNodeSensor.add(m, new Gauge());
   }
 
   @Override
-  public void init() throws SchemaRegistryException {
+  public void init() throws SchemaRegistryInitializationException {
     try {
       kafkaStore.init();
     } catch (StoreInitializationException e) {
-      throw new SchemaRegistryException("Error while initializing the datastore", e);
+      throw new SchemaRegistryInitializationException(
+          "Error initializing kafka store while initializing schema registry", e);
     }
-    createZkNamespace();
-    masterElector = new ZookeeperMasterElector(zkClient, myIdentity, this, 
-                                               isEligibleForMasterElector);
+    
+    try {
+      createZkNamespace();
+      masterElector = new ZookeeperMasterElector(zkClient, myIdentity, this, 
+                                                 isEligibleForMasterElector);
+    } catch (SchemaRegistryStoreException e) {
+      throw new SchemaRegistryInitializationException(
+          "Error electing master while initializing schema registry", e);
+    } catch (SchemaRegistryTimeoutException e) {
+      throw new SchemaRegistryInitializationException(e);
+    } catch (SchemaRegistryIneligibleMasterException e) {
+      throw new SchemaRegistryInitializationException(
+          "Attempted to elect an ineligible master while initializing schema registry", e);
+    }
   }
 
   private void createZkNamespace() {
@@ -184,7 +204,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       }
     }
   }
-
+  
   /**
    * 'Inform' this SchemaRegistry instance which SchemaRegistry is the current master.
    * If this instance is set as the new master, ensure it is up-to-date with data in
@@ -194,13 +214,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * @throws SchemaRegistryException
    */
   public void setMaster(@Nullable SchemaRegistryIdentity schemaRegistryIdentity)
-      throws SchemaRegistryException {
+      throws SchemaRegistryIneligibleMasterException,
+             SchemaRegistryTimeoutException, SchemaRegistryStoreException {
     log.debug("Setting the master to " + schemaRegistryIdentity);
 
     // Only schema registry instances eligible for master can be set to master
     if (schemaRegistryIdentity != null && !schemaRegistryIdentity.getMasterEligibility()) {
-      throw new SchemaRegistryException("Tried to set an ineligible node to master: " +
-                                        schemaRegistryIdentity);
+      throw new SchemaRegistryIneligibleMasterException(
+          "Tried to set an ineligible node to master: " + schemaRegistryIdentity);
     }
 
     synchronized (masterLock) {
@@ -209,8 +230,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         // To become the master, wait until the Kafka store is fully caught up.
         try {
           kafkaStore.waitUntilBootstrapCompletes();
-        } catch (StoreException e) {
-          throw new SchemaRegistryException(e);
+        } catch (StoreTimeoutException stoe) {
+          throw new SchemaRegistryTimeoutException("Bootstrap timed out", stoe);
+        } catch (StoreException se) {
+          throw new SchemaRegistryStoreException("Error while bootstrapping schema registry" 
+                                                 + " from the Kafka store log", se);
         }
         schemaIdCounter = new AtomicInteger(nextSchemaIdCounterBatch());
         maxSchemaIdCounterValue =
@@ -289,12 +313,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         kafkaStore.put(keyForNewVersion, schemaValue);
         return schema.getId();
       } else {
-        throw new IncompatibleAvroSchemaException(
+        throw new IncompatibleSchemaException(
             "New schema is incompatible with the latest schema " + latestSchema);
       }
+    } catch (StoreTimeoutException te) {
+      throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
-      throw new SchemaRegistryException("Error while registering the schema in the" +
-                                        " backend Kafka store", e);
+      throw new SchemaRegistryStoreException("Error while registering the schema in the" +
+                                             " backend Kafka store", e);
     }
   }
 
@@ -312,7 +338,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                 masterIdentity.getHost(),
                                                 masterIdentity.getPort(), headerProperties);
         } else {
-          throw new SchemaRegistryException("Register schema request failed since master is "
+          throw new UnknownMasterException("Register schema request failed since master is "
                                             + "unknown");
         }
       }
@@ -321,7 +347,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   public Schema lookUpSchemaUnderSubjectOrForward(
       String subject, Schema schema, Map<String, String> headerProperties)
-  throws SchemaRegistryException {
+      throws SchemaRegistryRequestForwardingException, UnknownMasterException {
     synchronized (masterLock) {
       if (isMaster()) {
         return lookUpSchemaUnderSubject(subject, schema);
@@ -332,7 +358,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                       masterIdentity.getHost(),
                                                       masterIdentity.getPort(), headerProperties);
         } else {
-          throw new SchemaRegistryException("Register schema request failed since master is "
+          throw new UnknownMasterException("Register schema request failed since master is "
                                             + "unknown");
         }
       }
@@ -344,8 +370,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * the schema under the subject. If not, returns -1
    */
   public Schema lookUpSchemaUnderSubject(
-      String subject, Schema schema)
-  throws SchemaRegistryException {
+      String subject, Schema schema) {
     // see if the schema to be registered already exists
     MD5 md5 = MD5.ofString(schema.getSchema());
     if (this.schemaHashToGuid.containsKey(md5)) {
@@ -367,8 +392,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   /**
-   * Allocate and lock the next batch of ids. Indicate a lock over the next batch by writing
-   * the upper bound of the batch to zookeeper.
+   * Allocate and lock the next batch of ids. Indicate a lock over the next batch by writing the
+   * upper bound of the batch to zookeeper.
    *
    * When a schema registry server is initialized, kafka may have preexisting persistent
    * schema -> id assignments, and zookeeper may have preexisting counter data.
@@ -378,7 +403,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    *
    * Return the start index of the next batch.
    */
-  private Integer nextSchemaIdCounterBatch() throws SchemaRegistryException {
+  private Integer nextSchemaIdCounterBatch() throws SchemaRegistryStoreException {
     int nextIdBatchLowerBound = 0;
 
     // create ZOOKEEPER_SCHEMA_ID_COUNTER if it already doesn't exist
@@ -416,9 +441,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         }
 
       } else {
-        throw new SchemaRegistryException(
-            "Failed to initialize schema registry. Failed to read schema id counter " +
-            ZOOKEEPER_SCHEMA_ID_COUNTER + " from zookeeper");
+        throw new SchemaRegistryStoreException(
+            "Failed to initialize schema registry. Failed to read " +
+            "schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER + " from zookeeper");
       }
       nextIdBatchLowerBound =
           Math.max(zkNextIdBatchLowerBound, getNextBatchLowerBoundFromKafkaStore());
@@ -439,7 +464,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                   null);
       try {
         Thread.sleep(ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_WRITE_RETRY_BACKOFF_MS);
-      } catch (InterruptedException ignored) { }
+      } catch (InterruptedException ignored) {
+      }
     }
 
     return nextIdBatchLowerBound;
@@ -448,7 +474,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private int forwardRegisterRequestToMaster(String subject, String schemaString, String host,
                                              int port,
                                              Map<String, String> headerProperties)
-      throws SchemaRegistryException {
+      throws SchemaRegistryRequestForwardingException {
     String baseUrl = String.format("http://%s:%d", host, port);
     RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
     registerSchemaRequest.setSchema(schemaString);
@@ -459,7 +485,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                         subject);
       return id;
     } catch (IOException e) {
-      throw new SchemaRegistryException(
+      throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the registering schema request %s to %s",
                         registerSchemaRequest, baseUrl),
           e);
@@ -470,7 +496,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   private Schema forwardSubjectVersionRequestToMaster(
       String subject, String schemaString, String host, int port,
-      Map<String, String> headerProperties) throws SchemaRegistryException {
+      Map<String, String> headerProperties) throws SchemaRegistryRequestForwardingException {
     String baseUrl = String.format("http://%s:%d", host, port);
     RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
     registerSchemaRequest.setSchema(schemaString);
@@ -482,19 +508,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                          subject);
       return schema;
     } catch (IOException e) {
-      throw new SchemaRegistryException(
+      throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the registering schema request %s to %s",
                         registerSchemaRequest, baseUrl),
           e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+      // TODO: Fix this
+//    } catch (RestClientException e) {
+//      throw new SchemaRegistryRequestForwardingException(e);
     }
   }
 
-  private AvroSchema canonicalizeSchema(Schema schema) {
+  private AvroSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
     AvroSchema avroSchema = AvroUtils.parseSchema(schema.getSchema());
     if (avroSchema == null) {
-      throw new InvalidAvroException();
+      throw new InvalidSchemaException("Invalid schema " + schema.toString());
     }
     schema.setSchema(avroSchema.canonicalString);
     return avroSchema;
@@ -512,7 +541,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         Schema schema = getSchemaEntityFromSchemaValue(schemaValue);
         return schema;
       } catch (StoreException e) {
-        throw new SchemaRegistryException(
+        throw new SchemaRegistryStoreException(
             "Error while retrieving schema from the backend Kafka" +
             " store", e);
       }
@@ -523,13 +552,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public SchemaString get(int id) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
-      SchemaKey subjectVersionKey = guidToSchemaKey.get(id);      
+      SchemaKey subjectVersionKey = guidToSchemaKey.get(id);
       if (subjectVersionKey == null) {
         return null;
       }
         schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
     } catch (StoreException e) {
-      throw new SchemaRegistryException(
+      throw new SchemaRegistryStoreException(
           "Error while retrieving schema with id " + id + " from the backend Kafka" +
           " store", e);
     }
@@ -544,7 +573,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       Iterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys();
       return extractUniqueSubjects(allKeys);
     } catch (StoreException e) {
-      throw new SchemaRegistryException(
+      throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
     }
   }
@@ -569,7 +598,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       Iterator<SchemaRegistryValue> allVersions = kafkaStore.getAll(key1, key2);
       return sortSchemasByVersion(allVersions).iterator();
     } catch (StoreException e) {
-      throw new SchemaRegistryException(
+      throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
     }
   }
@@ -587,7 +616,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       }
       return latestSchema;
     } catch (StoreException e) {
-      throw new SchemaRegistryException(
+      throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
     }
   }
@@ -605,7 +634,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   public void updateCompatibilityLevel(String subject, AvroCompatibilityLevel newCompatibilityLevel)
-      throws SchemaRegistryException {
+      throws SchemaRegistryStoreException, UnknownMasterException {
     synchronized (masterLock) {
       if (isMaster()) {
         ConfigKey configKey = new ConfigKey(subject);
@@ -614,11 +643,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
                     + " Kafka data store with key " + configKey.toString());
         } catch (StoreException e) {
-          throw new SchemaRegistryException("Failed to write new config value to the store", e);
+          throw new SchemaRegistryStoreException("Failed to write new config value to the store",
+                                                 e);
         }
       } else {
-        // TODO: logic to forward will be included as part of issue#35
-        throw new SchemaRegistryException("Config update request failed since this is not the "
+        // TODO: logic to forward will be included as part of issue#96
+        throw new UnknownMasterException("Config update request failed since this is not the "
                                           + "master");
 
       }
@@ -626,7 +656,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   public AvroCompatibilityLevel getCompatibilityLevel(String subject)
-      throws SchemaRegistryException {
+      throws SchemaRegistryStoreException {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
     ConfigValue config;
     try {
@@ -638,7 +668,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         config = new ConfigValue();
       }
     } catch (StoreException e) {
-      throw new SchemaRegistryException("Failed to read config from the kafka store", e);
+      throw new SchemaRegistryStoreException("Failed to read config from the kafka store", e);
     }
     return config.getCompatibilityLevel();
   }
@@ -647,11 +677,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public boolean isCompatible(String subject,
                               String newSchemaObj,
                               String latestSchema)
-  throws SchemaRegistryException {
+      throws SchemaRegistryException {
     AvroSchema newAvroSchema = AvroUtils.parseSchema(newSchemaObj);
     AvroSchema latestAvroSchema = AvroUtils.parseSchema(latestSchema);
     if (latestSchema == null) {
-      throw new SchemaRegistryException(
+      throw new InvalidSchemaException(
           "Existing schema " + latestSchema + " is not a valid Avro schema");
     }
     AvroCompatibilityLevel compatibility = getCompatibilityLevel(subject);

@@ -16,29 +16,79 @@
 
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
+import javax.ws.rs.core.Response;
+
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.exceptions.RestNotFoundException;
 
 public class Errors {
 
+  // HTTP 404
   public final static String SUBJECT_NOT_FOUND_MESSAGE = "Subject not found.";
   public final static int SUBJECT_NOT_FOUND_ERROR_CODE = 40401;
+  public final static String VERSION_NOT_FOUND_MESSAGE = "Version not found.";
+  public final static int VERSION_NOT_FOUND_ERROR_CODE = 40402;
+  public final static String SCHEMA_NOT_FOUND_MESSAGE = "Schema not found";
+  public final static int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
+
+  // HTTP 409
+  public static final int INCOMPATIBLE_SCHEMA_ERROR_CODE = Response.Status.CONFLICT.getStatusCode();
+
+  // HTTP 422
+  public static final int INVALID_SCHEMA_ERROR_CODE = 42201;
+  public static final int INVALID_VERSION_ERROR_CODE = 42202;
+  public static final int INVALID_COMPATIBILITY_LEVEL_ERROR_CODE = 42203;
+
+  // HTTP 500
+  public static final int STORE_ERROR_CODE = 50001;
+  public static final int OPERATION_TIMEOUT_ERROR_CODE = 50002;
+  public static final int REQUEST_FORWARDING_FAILED_ERROR_CODE = 50003;
+  public static final int UNKNOWN_MASTER_ERROR_CODE = 50004;
 
   public static RestException subjectNotFoundException() {
     return new RestNotFoundException(SUBJECT_NOT_FOUND_MESSAGE, SUBJECT_NOT_FOUND_ERROR_CODE);
   }
 
-  public final static String VERSION_NOT_FOUND_MESSAGE = "Version not found.";
-  public final static int VERSION_NOT_FOUND_ERROR_CODE = 40402;
-
   public static RestException versionNotFoundException() {
     return new RestNotFoundException(VERSION_NOT_FOUND_MESSAGE, VERSION_NOT_FOUND_ERROR_CODE);
   }
-  
-  public final static String SCHEMA_NOT_FOUND_MESSAGE = "Schema not found";
-  public final static int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
-  
+
   public static RestException schemaNotFoundException() {
     return new RestNotFoundException(SCHEMA_NOT_FOUND_MESSAGE, SCHEMA_NOT_FOUND_ERROR_CODE);
+  }
+
+  public static RestIncompatibleAvroSchemaException incompatibleSchemaException(String message,
+                                                                                Throwable cause) {
+    return new RestIncompatibleAvroSchemaException(message,
+                                                   RestIncompatibleAvroSchemaException.DEFAULT_ERROR_CODE,
+                                                   cause);
+  }
+
+  public static RestInvalidSchemaException invalidAvroException(String message, Throwable cause) {
+    return new RestInvalidSchemaException(message);
+  }
+
+  public static RestInvalidVersionException invalidVersionException() {
+    return new RestInvalidVersionException();
+  }
+
+  public static RestException schemaRegistryException(String message, Throwable cause) {
+    return new RestSchemaRegistryException(message, cause);
+  }
+
+  public static RestException storeException(String message, Throwable cause) {
+    return new RestSchemaRegistryStoreException(message, cause);
+  }
+
+  public static RestException operationTimeoutException(String message, Throwable cause) {
+    return new RestSchemaRegistryTimeoutException(message, cause);
+  }
+
+  public static RestException requestForwardingFailedException(String message, Throwable cause) {
+    return new RestRequestForwardingException(message, cause);
+  }
+
+  public static RestException unknownMasterException(String message, Throwable cause) {
+    return new RestUnknownMasterException(message, cause);
   }
 }
