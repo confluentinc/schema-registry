@@ -1,7 +1,7 @@
 Source: confluent-schema-registry
 Section: misc
 Priority: optional
-Maintainer: Ewen Cheslack-Postava <ewen@confluent.io>
+Maintainer: Confluent Packaging <packages@confluent.io>
 Build-Depends: debhelper (>= 9), java6-jdk, javahelper (>= 0.40),
  make, maven
 Standards-Version: 3.9.3
