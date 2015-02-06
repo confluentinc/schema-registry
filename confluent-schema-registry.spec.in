@@ -11,7 +11,7 @@ Vendor: Confluent, Inc.
 Packager: Ewen Cheslack-Postava <ewen@confluent.io>
 BuildArch: noarch
 
-Requires: java >= 1.6, confluent-rest-utils
+Requires: confluent-rest-utils
 
 %description
 
