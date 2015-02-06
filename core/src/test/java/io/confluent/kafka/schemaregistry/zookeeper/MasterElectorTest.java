@@ -25,8 +25,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
 
-import javax.ws.rs.WebApplicationException;
-
 import io.confluent.common.utils.zookeeper.ZkUtils;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.RestApp;
@@ -289,7 +287,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     try {
       TestUtils.registerSchema(aSlave.restConnect, schemas.get(0), subject);
       successfullyRegistered = true;
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       // registration should fail
     }
     assertFalse("Should not be possible to register with no masters present.",
@@ -313,7 +311,7 @@ public class MasterElectorTest extends ClusterTestHarness {
       for (String schema : schemas) {
         ids.add(TestUtils.registerSchema(aMaster.restConnect, schema, subject));
       }
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       fail("It should be possible to register schemas when a master cluster is present.");
     }
 
@@ -321,7 +319,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     String anotherSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {
       ids.add(TestUtils.registerSchema(aSlave.restConnect, anotherSchema, subject));
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       fail("Should be possible register a schema through slave cluster.");
     }
 
@@ -334,7 +332,7 @@ public class MasterElectorTest extends ClusterTestHarness {
             "Master and slave responded with different schemas when queried with the same id.",
             slaveResponse.getSchemaString(), masterResponse.getSchemaString());
       }
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       fail("Expected ids were not found in the schema registry.");
     }
 
@@ -352,7 +350,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     try {
       TestUtils.registerSchema(aSlave.restConnect, anotherSchema, subject);
       successfullyRegistered = true;
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       // should fail
     }
     assertFalse("Should not be possible to register with no masters present.",
@@ -379,7 +377,7 @@ public class MasterElectorTest extends ClusterTestHarness {
       }
       List<Integer> versions = TestUtils.getSubjectVersions(aSlave.restConnect, subject);
       assertEquals("Number of ids should match number of versions.", ids.size(), versions.size());
-    } catch (WebApplicationException e) {
+    } catch (RestClientException e) {
       fail("Should be possible to fetch registered schemas even with no masters present.");
     }
 

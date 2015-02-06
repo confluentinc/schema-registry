@@ -400,6 +400,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       final ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
       if (counterValue.getData() != null) {
         zkNextIdBatchLowerBound = Integer.valueOf(counterValue.getData());
+
+
+        if (zkNextIdBatchLowerBound % ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE != 0) {
+          int oldZkIdBatchLowerBound = zkNextIdBatchLowerBound;
+          zkNextIdBatchLowerBound =
+              (1 + zkNextIdBatchLowerBound / ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE) *
+              ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+
+          log.warn(
+              "Zookeeper schema id counter is not an integer multiple of id batch size." +
+              " Zookeeper may have stale id counter data.\n" +
+              "zk id counter: " + oldZkIdBatchLowerBound + "\n" +
+              "id batch size: " + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
+        }
+
       } else {
         throw new SchemaRegistryException(
             "Failed to initialize schema registry. Failed to read schema id counter " +
