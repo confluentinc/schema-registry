@@ -262,7 +262,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  public io.confluent.kafka.schemaregistry.client.rest.entities.Schema lookUpSchemaUnderSubjectOrForward(
+  public Schema lookUpSchemaUnderSubjectOrForward(
       String subject, Schema schema, Map<String, String> headerProperties)
   throws SchemaRegistryException {
     synchronized (masterLock) {
@@ -286,7 +286,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * Checks if given schema was ever registered under a subject. If found, it returns the version of
    * the schema under the subject. If not, returns -1
    */
-  public io.confluent.kafka.schemaregistry.client.rest.entities.Schema lookUpSchemaUnderSubject(
+  public Schema lookUpSchemaUnderSubject(
       String subject, Schema schema)
   throws SchemaRegistryException {
     // see if the schema to be registered already exists
@@ -294,14 +294,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     if (this.schemaHashToGuid.containsKey(md5)) {
       SchemaIdAndSubjects schemaIdAndSubjects = this.schemaHashToGuid.get(md5);
       if (schemaIdAndSubjects.hasSubject(subject)) {
-        io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema =
-            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(subject,
-                                                                              schemaIdAndSubjects
-                                                                                  .getVersion(
-                                                                                      subject),
-                                                                              schemaIdAndSubjects
-                                                                                  .getSchemaId(),
-                                                                              schema.getSchema());
+        Schema matchingSchema = new Schema(subject,
+                                           schemaIdAndSubjects.getVersion(subject),
+                                           schemaIdAndSubjects.getSchemaId(),
+                                           schema.getSchema());
         return matchingSchema;
       } else {
         // this schema was never registered under the input subject
@@ -386,7 +382,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  private io.confluent.kafka.schemaregistry.client.rest.entities.Schema forwardSubjectVersionRequestToMaster(
+  private Schema forwardSubjectVersionRequestToMaster(
       String subject, String schemaString, String host, int port,
       Map<String, String> headerProperties) throws SchemaRegistryException {
     String baseUrl = String.format("http://%s:%d", host, port);
@@ -395,7 +391,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     log.debug(String.format("Forwarding schema version search request %s to %s",
                             registerSchemaRequest, baseUrl));
     try {
-      io.confluent.kafka.schemaregistry.client.rest.entities.Schema schema =
+      Schema schema =
           RestUtils.lookUpSubjectVersion(baseUrl, headerProperties, registerSchemaRequest,
                                          subject);
       return schema;
