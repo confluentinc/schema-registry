@@ -42,11 +42,6 @@
             <version>${jersey.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.rocksdb</groupId>
-            <artifactId>rocksdbjni</artifactId>
-            <version>${rocksdbjni.version}</version>
-        </dependency>
-        <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>rest-utils</artifactId>
             <version>${restutils.version}</version>

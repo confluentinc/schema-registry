@@ -35,13 +35,6 @@ Configuration Options
   * Default: 3
   * Importance: high
 
-``port``
-  Port to listen on for new connections.
-
-  * Type: int
-  * Default: 8080
-  * Importance: high
-
 ``response.mediatype.default``
   The default response media type that should be used if no specify types are requested in an Accept header.
 
@@ -71,7 +64,7 @@ Configuration Options
   * Importance: medium
 
 ``kafkastore.write.max.retries``
-  Retry the register schema write up to this many times on failure
+  Retry a failed register schema request to the underlying Kafka store up to this many times,  for example in case of a Kafka broker failure
 
   * Type: int
   * Default: 5
@@ -109,7 +102,7 @@ Configuration Options
   Prefix to apply to metric names for the default JMX reporter.
 
   * Type: string
-  * Default: schema-registry
+  * Default: kafka.schema.registry
   * Importance: low
 
 ``metrics.num.samples``
@@ -126,6 +119,13 @@ Configuration Options
   * Default: 30000
   * Importance: low
 
+``port``
+  Port to listen on for new connections.
+
+  * Type: int
+  * Default: 8081
+  * Importance: low
+
 ``request.logger.name``
   Name of the SLF4J logger to write the NCSA Common Log Format request log.
 
@@ -139,5 +139,3 @@ Configuration Options
   * Type: int
   * Default: 1000
   * Importance: low
-
-

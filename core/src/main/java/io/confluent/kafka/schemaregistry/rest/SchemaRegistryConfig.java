@@ -30,6 +30,8 @@ import static io.confluent.common.config.ConfigDef.Range.atLeast;
 
 public class SchemaRegistryConfig extends RestConfig {
 
+  private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
+
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   /**
    * <code>kafkastore.zk.session.timeout.ms</code>
@@ -110,6 +112,8 @@ public class SchemaRegistryConfig extends RestConfig {
   private static final ConfigDef config;
   static {
     config = baseConfigDef()
+        .defineOverride(PORT_CONFIG, ConfigDef.Type.INT, SCHEMAREGISTRY_PORT_DEFAULT, 
+                        ConfigDef.Importance.LOW, PORT_CONFIG_DOC)
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
                         io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES,
                         ConfigDef.Importance.HIGH,
