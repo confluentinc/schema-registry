@@ -14,4 +14,3 @@ Here, we will cover three main topics:
 
    monitoring
    deployment
-   post-deployment
