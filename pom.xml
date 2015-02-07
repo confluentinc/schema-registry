@@ -23,7 +23,6 @@
         <kafka.version>0.8.2.0</kafka.version>
         <kafka.scala.version>2.10</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
-        <rocksdbjni.version>3.5.1</rocksdbjni.version>
         <restutils.version>0.1-SNAPSHOT</restutils.version>
         <avro.version>1.7.7</avro.version>
         <jackson.version>2.4.3</jackson.version>
