@@ -30,7 +30,6 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryIneligibleMasterException;
 import kafka.utils.ZkUtils;
 
 public class ZookeeperMasterElector {
@@ -48,8 +47,7 @@ public class ZookeeperMasterElector {
                                 SchemaRegistryIdentity myIdentity,
                                 KafkaSchemaRegistry schemaRegistry, 
                                 boolean isEligibleForMasterElection)
-      throws SchemaRegistryIneligibleMasterException,
-             SchemaRegistryTimeoutException, SchemaRegistryStoreException {
+      throws SchemaRegistryTimeoutException, SchemaRegistryStoreException {
     this.zkClient = zkClient;
     this.myIdentity = myIdentity;
     try {
@@ -75,7 +73,6 @@ public class ZookeeperMasterElector {
   }
 
   public void electMaster() throws
-      SchemaRegistryIneligibleMasterException,
       SchemaRegistryStoreException, SchemaRegistryTimeoutException {
     SchemaRegistryIdentity masterIdentity = null;
     try {
@@ -89,8 +86,7 @@ public class ZookeeperMasterElector {
   }
 
   public void readCurrentMaster()
-      throws SchemaRegistryIneligibleMasterException,
-             SchemaRegistryTimeoutException, SchemaRegistryStoreException {
+      throws SchemaRegistryTimeoutException, SchemaRegistryStoreException {
     SchemaRegistryIdentity masterIdentity = null;
     // If someone else has written the path, read the new master back
     try {

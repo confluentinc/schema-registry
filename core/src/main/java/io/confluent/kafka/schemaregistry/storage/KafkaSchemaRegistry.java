@@ -53,7 +53,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryIneligibleMasterException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
@@ -163,9 +162,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           "Error electing master while initializing schema registry", e);
     } catch (SchemaRegistryTimeoutException e) {
       throw new SchemaRegistryInitializationException(e);
-    } catch (SchemaRegistryIneligibleMasterException e) {
-      throw new SchemaRegistryInitializationException(
-          "Attempted to elect an ineligible master while initializing schema registry", e);
     }
   }
 
@@ -214,13 +210,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * @throws SchemaRegistryException
    */
   public void setMaster(@Nullable SchemaRegistryIdentity schemaRegistryIdentity)
-      throws SchemaRegistryIneligibleMasterException,
-             SchemaRegistryTimeoutException, SchemaRegistryStoreException {
+      throws SchemaRegistryTimeoutException, SchemaRegistryStoreException {
     log.debug("Setting the master to " + schemaRegistryIdentity);
 
     // Only schema registry instances eligible for master can be set to master
     if (schemaRegistryIdentity != null && !schemaRegistryIdentity.getMasterEligibility()) {
-      throw new SchemaRegistryIneligibleMasterException(
+      throw new IllegalStateException(
           "Tried to set an ineligible node to master: " + schemaRegistryIdentity);
     }
 
