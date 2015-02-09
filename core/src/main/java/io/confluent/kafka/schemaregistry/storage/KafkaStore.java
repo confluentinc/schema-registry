@@ -297,6 +297,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     log.debug("Kafka store reader thread shut down");
     producer.close();
     log.debug("Kafka store producer shut down");
+    zkClient.close();
+    log.debug("Kafka store zookeeper client shut down");
     localStore.close();
     log.debug("Kafka store shut down complete");
   }

@@ -78,8 +78,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    */
   public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
-  private static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
-  private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 20;
+  public static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 20;
+  public static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema.id.counter";
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_WRITE_RETRY_BACKOFF_MS = 50;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
   final Map<Integer, SchemaKey> guidToSchemaKey;
@@ -102,6 +102,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private Metrics metrics;
   private Sensor masterNodeSensor;
   // Track the largest id in the kafka store so far (-1 indicates none in the store)
+
   private int maxIdInStore = -1;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
@@ -183,12 +184,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                          new ZkStringSerializer());
     // create the zookeeper namespace using cluster.name if it doesn't already exist
     ZkUtils.makeSurePersistentPathExists(zkClientForNamespaceCreation, schemaRegistryNamespace);
-    log.info("Created schema registry namespace " + 
+    log.info("Created schema registry namespace " +
              zkConnForNamespaceCreation + schemaRegistryNamespace);
     zkClientForNamespaceCreation.close();
     this.zkClient = new ZkClient(schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
                                  new ZkStringSerializer());
-    System.out.println("Schema registry url = " + schemaRegistryZkUrl);
   }
   
   public boolean isMaster() {
@@ -437,8 +437,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
       } else {
         throw new SchemaRegistryStoreException(
-            "Failed to initialize schema registry. Failed to read " +
-            "schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER + " from zookeeper");
+            "Failed to read schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER + " from zookeeper");
       }
       nextIdBatchLowerBound =
           Math.max(zkNextIdBatchLowerBound, getNextBatchLowerBoundFromKafkaStore());
