@@ -33,7 +33,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
@@ -47,7 +46,8 @@ import static org.junit.Assert.fail;
 public class MasterElectorTest extends ClusterTestHarness {
   private static final int ID_BATCH_SIZE =
       KafkaSchemaRegistry.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
-  private static final String ZK_ID_COUNTER_PATH = KafkaSchemaRegistry.ZOOKEEPER_SCHEMA_ID_COUNTER;
+  private static final String ZK_ID_COUNTER_PATH =
+      "/schema.registry" + KafkaSchemaRegistry.ZOOKEEPER_SCHEMA_ID_COUNTER;
 
   @Test
   public void testAutoFailover() throws Exception {
@@ -191,7 +191,7 @@ public class MasterElectorTest extends ClusterTestHarness {
    */
   public void testSlaveIsNeverMaster() throws Exception {
     int numSlaves = 2;
-    int numMasters = 10;
+    int numMasters = 2;
 
     Set<RestApp> slaveApps = new HashSet<RestApp>();
     RestApp aSlave = null;
@@ -215,7 +215,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     // It should not be possible to set a slave node as master
     try {
       aSlave.setMaster(aSlave.myIdentity());
-    } catch (SchemaRegistryException e) {
+    } catch (IllegalStateException e) {
       // This is expected
     }
     assertFalse("Should not be able to set a slave to be master.", aSlave.isMaster());
@@ -229,6 +229,7 @@ public class MasterElectorTest extends ClusterTestHarness {
                                    AvroCompatibilityLevel.NONE.name, true);
       masterApps.add(master);
       master.start();
+      waitUntilMasterElectionCompletes(masterApps);
     }
 
     // Kill the current master and wait for reelection until no masters are left
@@ -497,7 +498,7 @@ public class MasterElectorTest extends ClusterTestHarness {
 
   private static int getZkIdCounter(ZkClient zkClient) {
     return Integer.valueOf(ZkUtils.readData(
-        zkClient, KafkaSchemaRegistry.ZOOKEEPER_SCHEMA_ID_COUNTER).getData());
+        zkClient, ZK_ID_COUNTER_PATH).getData());
   }
 
   /**
@@ -550,7 +551,6 @@ public class MasterElectorTest extends ClusterTestHarness {
     TestUtils.waitUntilTrue(
         newMasterElected, 5000, "A node should have been elected master by now.");
   }
-
 
   private void waitUntilIdExists(final String baseUrl, final int expectedId,
                                  final String expectedSchemaString, String errorMsg) {

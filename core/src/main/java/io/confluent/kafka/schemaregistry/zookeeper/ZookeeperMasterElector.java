@@ -35,7 +35,7 @@ import kafka.utils.ZkUtils;
 public class ZookeeperMasterElector {
 
   private static final Logger log = LoggerFactory.getLogger(ZookeeperMasterElector.class);
-  private static final String MASTER_PATH = "/schema-registry-master";
+  private static final String MASTER_PATH = "/schema.registry.master";
 
   private final ZkClient zkClient;
   private final SchemaRegistryIdentity myIdentity;
