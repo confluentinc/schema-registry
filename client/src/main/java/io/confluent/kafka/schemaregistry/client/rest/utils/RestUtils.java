@@ -229,6 +229,16 @@ public class RestUtils {
     return response;
   }
 
+  public static Schema getLatestVersion(String baseUrl, Map<String, String> requestProperties,
+                                  String subject)
+      throws IOException, RestClientException {
+    String url = String.format("%s/subjects/%s/versions/latest", baseUrl, subject);
+
+    Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
+                                            GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
+    return response;
+  }
+
   public static List<Integer> getAllVersions(String baseUrl, Map<String, String> requestProperties,
                                              String subject)
       throws IOException, RestClientException {
