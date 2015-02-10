@@ -90,20 +90,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
   private final AvroCompatibilityLevel defaultCompatibilityLevel;
+  private final String clusterName;
   private final String kafkaClusterZkUrl;
   private String schemaRegistryZkUrl;
   private ZkClient zkClient;
   private final int zkSessionTimeoutMs;
-  private final String clusterName;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
   private final boolean isEligibleForMasterElector;
-  private AtomicInteger schemaIdCounter;
-  private int maxSchemaIdCounterValue;
   private Metrics metrics;
   private Sensor masterNodeSensor;
-  // Track the largest id in the kafka store so far (-1 indicates none in the store)
 
+  // Assign this id during the next schema registration (unless the schema is already in the store)
+  private AtomicInteger schemaIdCounter;
+  // Tracks the upper bound of the current id batch. When schemaIdCounter reaches this value,
+  // it's time to allocate a new batch of ids
+  private int maxSchemaIdInBatch;
+  // Track the largest id in the kafka store so far (-1 indicates none in the store)
+  // This is automatically updated by the KafkaStoreReaderThread every time a new Schema is added
+  // Used to ensure that any newly allocated batch of ids does not overlap
+  // with any id in the kafkastore. Primarily for bootstrapping the SchemaRegistry when
+  // data is already in the kafkastore.
   private int maxIdInStore = -1;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
@@ -123,10 +130,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
     this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();
     kafkaStore =
-        new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(config,
-                                                               new KafkaStoreMessageHandler(this),
-                                                               this.serializer,
-                                                               new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>());
+        new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
+            config,
+            new KafkaStoreMessageHandler(this),
+            this.serializer,
+            new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>());
     MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
             .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
@@ -233,7 +241,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                                  + " from the Kafka store log", se);
         }
         schemaIdCounter = new AtomicInteger(nextSchemaIdCounterBatch());
-        maxSchemaIdCounterValue =
+        maxSchemaIdInBatch =
             schemaIdCounter.intValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
         masterNodeSensor.record(1.0);
       } else {
@@ -300,8 +308,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         } else {
           schema.setId(schemaIdCounter.getAndIncrement());
         }
-        if (schemaIdCounter.get() == maxSchemaIdCounterValue) {
-          maxSchemaIdCounterValue =
+        if (schemaIdCounter.get() == maxSchemaIdInBatch) {
+          maxSchemaIdInBatch =
               nextSchemaIdCounterBatch().intValue() + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
         }
 
