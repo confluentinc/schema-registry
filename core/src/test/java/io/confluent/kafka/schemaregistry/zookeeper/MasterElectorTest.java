@@ -22,10 +22,13 @@ import java.util.concurrent.Callable;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.RestApp;
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
+import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
+import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -37,6 +40,7 @@ public class MasterElectorTest extends ClusterTestHarness {
   public void testAutoFailover() throws Exception {
     final int ID_BATCH_SIZE = 20;
     final String subject = "testTopic";
+    final String configSubject = "configTopic";
     List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(4);
 
     // create schema registry instance 1
@@ -97,6 +101,34 @@ public class MasterElectorTest extends ClusterTestHarness {
                  secondSchemaExpectedId,
                  TestUtils.registerSchema(restApp2.restConnect, secondSchema, subject));
 
+    // update config to master
+    TestUtils
+        .changeCompatibility(restApp1.restConnect, AvroCompatibilityLevel.FORWARD, configSubject);
+    assertEquals("New compatibility level should be FORWARD on the master",
+                 FORWARD.name,
+                 RestUtils.getConfig(restApp1.restConnect,
+                                     RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     configSubject).getCompatibilityLevel());
+
+    // the new config should be eventually readable on the non-master
+    waitUntilCompatibilityLevelSet(restApp2.restConnect, configSubject,
+                                   AvroCompatibilityLevel.FORWARD.name,
+                                   "New compatibility level should be FORWARD on the non-master");
+
+    // update config to non-master
+    TestUtils
+        .changeCompatibility(restApp2.restConnect, AvroCompatibilityLevel.NONE, configSubject);
+    assertEquals("New compatibility level should be NONE on the master",
+                 NONE.name,
+                 RestUtils.getConfig(restApp1.restConnect,
+                                     RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     configSubject).getCompatibilityLevel());
+
+    // the new config should be eventually readable on the non-master
+    waitUntilCompatibilityLevelSet(restApp2.restConnect, configSubject,
+                                   AvroCompatibilityLevel.NONE.name,
+                                   "New compatibility level should be NONE on the non-master");
+
     // fake an incorrect master and registration should fail
     restApp1.setMaster(null);
     int statusCodeFromRestApp1 = 0;
@@ -121,6 +153,37 @@ public class MasterElectorTest extends ClusterTestHarness {
                  500, statusCodeFromRestApp1);
     assertEquals("Error code from the master and the non-master should be the same",
                  statusCodeFromRestApp1, statusCodeFromRestApp2);
+
+    // update config should fail if master is not available
+    int updateConfigStatusCodeFromRestApp1 = 0;
+    try {
+      TestUtils.changeCompatibility(restApp1.restConnect, AvroCompatibilityLevel.FORWARD,
+                                    configSubject);
+      fail("Update config should fail on the master");
+    } catch (RestClientException e) {
+      // this is expected.
+      updateConfigStatusCodeFromRestApp1 = e.getStatus();
+    }
+
+    int updateConfigStatusCodeFromRestApp2 = 0;
+    try {
+      TestUtils.changeCompatibility(restApp2.restConnect, AvroCompatibilityLevel.FORWARD,
+                                    configSubject);
+      fail("Update config should fail on the non-master");
+    } catch (RestClientException e) {
+      // this is expected.
+      updateConfigStatusCodeFromRestApp2 = e.getStatus();
+    }
+
+    assertEquals("Status code from a non-master rest app for update config should be 500",
+                 500, updateConfigStatusCodeFromRestApp1);
+    assertEquals("Error code from the master and the non-master should be the same",
+                 updateConfigStatusCodeFromRestApp1, updateConfigStatusCodeFromRestApp2);
+
+    // test registering an existing schema to the non-master when the master is not available
+    assertEquals("Registering an existing schema to the non-master should return its id",
+                 secondSchemaExpectedId,
+                 TestUtils.registerSchema(restApp2.restConnect, secondSchema, subject));
 
     // set the correct master identity back
     restApp1.setMaster(restApp1.myIdentity());
@@ -177,6 +240,25 @@ public class MasterElectorTest extends ClusterTestHarness {
                                           RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
               .getSchemaString();
           return expectedSchemaString.compareTo(schema) == 0;
+        } catch (RestClientException e) {
+          return false;
+        }
+      }
+    };
+    TestUtils.waitUntilTrue(condition, 5000, errorMsg);
+  }
+
+  private void waitUntilCompatibilityLevelSet(final String baseUrl, final String subject,
+                                              final String expectedCompatibilityLevel,
+                                              String errorMsg) {
+    Callable<Boolean> condition = new Callable<Boolean>() {
+      @Override
+      public Boolean call() throws Exception {
+        try {
+          String actualCompatibilityLevel = RestUtils.getConfig(baseUrl,
+                                                                RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                                                subject).getCompatibilityLevel();
+          return expectedCompatibilityLevel.compareTo(actualCompatibilityLevel) == 0;
         } catch (RestClientException e) {
           return false;
         }

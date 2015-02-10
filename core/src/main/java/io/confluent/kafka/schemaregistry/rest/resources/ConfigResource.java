@@ -19,10 +19,13 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -33,6 +36,7 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -58,6 +62,8 @@ public class ConfigResource {
   @Path("/{subject}")
   @PUT
   public void updateSubjectLevelConfig(@PathParam("subject") String subject,
+                                       final @HeaderParam("Content-Type") String contentType,
+                                       final @HeaderParam("Accept") String accept,
                                        ConfigUpdateRequest request) {
     if (request != null) {
       Set<String> subjects = null;
@@ -76,11 +82,17 @@ public class ConfigResource {
         throw new RestInvalidCompatibilityException();
       }
       try {
-        schemaRegistry.updateCompatibilityLevel(subject, compatibilityLevel);
+        Map<String, String> headerProperties = new HashMap<String, String>();
+        headerProperties.put("Content-Type", contentType);
+        headerProperties.put("Accept", accept);
+        schemaRegistry.updateConfigOrForward(subject, compatibilityLevel, headerProperties);
       } catch (SchemaRegistryStoreException e) {
         throw Errors.storeException("Failed to update compatibility level", e);
       } catch (UnknownMasterException e) {
         throw Errors.unknownMasterException("Failed to update compatibility level", e);
+      } catch (SchemaRegistryRequestForwardingException e) {
+        throw Errors.requestForwardingFailedException("Error while forwarding update config request"
+                                                      + " to the master", e);
       }
       if (!subjects.contains(subject)) {
         log.debug("Updated compatibility level for unregistered subject " + subject + " to "
@@ -107,7 +119,9 @@ public class ConfigResource {
   }
 
   @PUT
-  public void updateTopLevelConfig(ConfigUpdateRequest request) {
+  public void updateTopLevelConfig(final @HeaderParam("Content-Type") String contentType,
+                                   final @HeaderParam("Accept") String accept,
+                                   ConfigUpdateRequest request) {
     if (request.getCompatibilityLevel() != null) {
       try {
         AvroCompatibilityLevel compatibilityLevel =
@@ -115,11 +129,17 @@ public class ConfigResource {
         if (compatibilityLevel == null) {
           throw new RestInvalidCompatibilityException();
         }
-        schemaRegistry.updateCompatibilityLevel(null, compatibilityLevel);
+        Map<String, String> headerProperties = new HashMap<String, String>();
+        headerProperties.put("Content-Type", contentType);
+        headerProperties.put("Accept", accept);
+        schemaRegistry.updateConfigOrForward(null, compatibilityLevel, headerProperties);
       } catch (SchemaRegistryStoreException e) {
         throw Errors.storeException("Failed to update compatibility level", e);
       } catch (UnknownMasterException e) {
         throw Errors.unknownMasterException("Failed to update compatibility level", e);
+      }  catch (SchemaRegistryRequestForwardingException e) {
+        throw Errors.requestForwardingFailedException("Error while forwarding update config request"
+                                                      + " to the master", e);
       }
     }
   }
