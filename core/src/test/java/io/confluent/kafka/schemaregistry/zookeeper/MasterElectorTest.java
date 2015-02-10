@@ -477,6 +477,40 @@ public class MasterElectorTest extends ClusterTestHarness {
     assertEquals("", 2 * ID_BATCH_SIZE, getZkIdCounter(zkClient));
   }
 
+  @Test
+  /**
+   * Verify correct id allocation when a SchemaRegistry instance is initialized, and there is
+   * preexisting data in the kafkastore, but no zookeeper id counter node.
+   */
+  public void testIdBehaviorWithoutZkWithKafka() throws Exception {
+
+    // Pre-populate kafkastore with a few schemas
+    int numSchemas = 2;
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(numSchemas);
+    String subject = "testSubject";
+    Set<Integer> ids = new HashSet<Integer>();
+    RestApp restApp = new RestApp(kafka.utils.TestUtils.choosePort(), zkConnect, KAFKASTORE_TOPIC);
+    restApp.start();
+    for (String schema: schemas) {
+      int id = TestUtils.registerSchema(restApp.restConnect, schema, subject);
+      ids.add(id);
+      waitUntilIdExists(restApp.restConnect, id, "Expected id to be available.");
+    }
+    restApp.stop();
+
+    // Sanity check id counter then remove it
+    int zkIdCounter = getZkIdCounter(zkClient);
+    assertEquals("Incorrect ZK id counter.", ID_BATCH_SIZE, zkIdCounter);
+    zkClient.delete(ZK_ID_COUNTER_PATH);
+
+    // start up another app instance and verify zk id node
+    restApp = new RestApp(kafka.utils.TestUtils.choosePort(), zkConnect, KAFKASTORE_TOPIC);
+    restApp.start();
+    zkIdCounter = getZkIdCounter(zkClient);
+    assertEquals("ZK id counter was incorrectly initialized.", 2 * ID_BATCH_SIZE, zkIdCounter);
+    restApp.stop();
+  }
+
   /** Return the first node which reports itself as master, or null if none does. */
   private static RestApp findMaster(Collection<RestApp> cluster) {
     for (RestApp restApp: cluster) {
