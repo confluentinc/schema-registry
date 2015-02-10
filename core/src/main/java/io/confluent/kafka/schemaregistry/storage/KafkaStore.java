@@ -73,6 +73,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final Serializer<K, V> serializer;
   private final Store<K, V> localStore;
   private final AtomicBoolean initialized = new AtomicBoolean(false);
+  private final int initTimeout;
   private final int timeout;
   private final Seq<Broker> brokerSeq;
   private final ZkClient zkClient;
@@ -95,6 +96,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.groupId = String.format("schema-registry-%s-%d",
                                  config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
                                  config.getInt(SchemaRegistryConfig.PORT_CONFIG));
+    initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.storeUpdateHandler = storeUpdateHandler;
     this.serializer = serializer;
@@ -144,7 +146,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     kafkaTopicReader.start();
 
     try {
-      waitUntilBootstrapCompletes();
+      waitUntilBootstrapCompletes(initTimeout);
     } catch (StoreException e) {
       throw new StoreInitializationException(e);
     }
@@ -215,9 +217,15 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.
    */
   public void waitUntilBootstrapCompletes() throws StoreException {
-    long offsetOfLastMessage = getLatestOffsetOfKafkaTopic(timeout) - 1;
+    waitUntilBootstrapCompletes(timeout);
+  }
+  /**
+   * Wait until the KafkaStore catches up to the last message in the Kafka topic.
+   */
+  private void waitUntilBootstrapCompletes(int timeoutMs) throws StoreException {
+    long offsetOfLastMessage = getLatestOffsetOfKafkaTopic(timeoutMs) - 1;
     log.info("Wait to catch up until the offset of the last message at " + offsetOfLastMessage);
-    kafkaTopicReader.waitUntilOffset(offsetOfLastMessage, timeout, TimeUnit.MILLISECONDS);
+    kafkaTopicReader.waitUntilOffset(offsetOfLastMessage, timeoutMs, TimeUnit.MILLISECONDS);
     log.debug("Reached offset at " + offsetOfLastMessage);
   }
 
