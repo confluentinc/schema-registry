@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.zookeeper;
 import org.I0Itec.zkclient.ZkClient;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -74,7 +75,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp1.restConnect, firstSchema, firstSchemaExpectedId,
                                       subject);
     // the newly registered schema should be eventually readable on the non-master
-    waitUntilIdExists(restApp2.restConnect, firstSchemaExpectedId, firstSchema,
+    verifyIdAndSchema(restApp2.restConnect, firstSchemaExpectedId, firstSchema,
                       "Registered schema should be found on the non-master");
 
     // test registering a schema to the non-master and finding it on the expected version
@@ -99,7 +100,7 @@ public class MasterElectorTest extends ClusterTestHarness {
                                       secondSchemaExpectedVersion).getSchema());
 
     // the newly registered schema should be eventually readable on the non-master
-    waitUntilIdExists(restApp2.restConnect, secondSchemaExpectedId, secondSchema,
+    verifyIdAndSchema(restApp2.restConnect, secondSchemaExpectedId, secondSchema,
                       "Registered schema should be found on the non-master");
 
     // test registering an existing schema to the master
@@ -329,6 +330,11 @@ public class MasterElectorTest extends ClusterTestHarness {
     // Verify all ids can be fetched
     try {
       for (int id: ids) {
+        waitUntilIdExists(aSlave.restConnect, id,
+                          String.format("Should be possible to fetch id %d from this slave.", id));
+        waitUntilIdExists(aMaster.restConnect, id,
+                          String.format("Should be possible to fetch id %d from this master.", id));
+
         SchemaString slaveResponse = TestUtils.getId(aSlave.restConnect, id);
         SchemaString masterResponse = TestUtils.getId(aMaster.restConnect, id);
         assertEquals(
@@ -552,21 +558,34 @@ public class MasterElectorTest extends ClusterTestHarness {
         newMasterElected, 5000, "A node should have been elected master by now.");
   }
 
-  private void waitUntilIdExists(final String baseUrl, final int expectedId,
-                                 final String expectedSchemaString, String errorMsg) {
-    Callable<Boolean> condition = new Callable<Boolean>() {
+  private void waitUntilIdExists(final String baseUrl, final int expectedId, String errMsg) {
+    Callable<Boolean> canGetSchemaById = new Callable<Boolean>() {
       @Override
       public Boolean call() throws Exception {
         try {
-          String schema = RestUtils.getId(baseUrl,
-                                          RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
-              .getSchemaString();
-          return expectedSchemaString.compareTo(schema) == 0;
+          RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId);
+          return true;
         } catch (RestClientException e) {
           return false;
         }
       }
     };
-    TestUtils.waitUntilTrue(condition, 5000, errorMsg);
+    TestUtils.waitUntilTrue(canGetSchemaById, 5000, errMsg);
+  }
+
+  private void verifyIdAndSchema(final String baseUrl, final int expectedId,
+                                 final String expectedSchemaString, String errMsg) {
+    waitUntilIdExists(baseUrl, expectedId, errMsg);
+    String schemaString = null;
+    try {
+      schemaString = RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
+          .getSchemaString();
+    } catch (IOException e) {
+      fail(errMsg);
+    } catch (RestClientException e) {
+      fail(errMsg);
+    }
+
+    assertEquals(errMsg, expectedSchemaString, schemaString);
   }
 }
