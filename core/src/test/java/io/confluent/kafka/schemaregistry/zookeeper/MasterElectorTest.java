@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
+import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -113,6 +114,20 @@ public class MasterElectorTest extends ClusterTestHarness {
     waitUntilCompatibilityLevelSet(restApp2.restConnect, configSubject,
                                    AvroCompatibilityLevel.FORWARD.name,
                                    "New compatibility level should be FORWARD on the non-master");
+
+    // update config to non-master
+    TestUtils
+        .changeCompatibility(restApp2.restConnect, AvroCompatibilityLevel.NONE, configSubject);
+    assertEquals("New compatibility level should be NONE on the master",
+                 NONE.name,
+                 RestUtils.getConfig(restApp1.restConnect,
+                                     RestUtils.DEFAULT_REQUEST_PROPERTIES,
+                                     configSubject).getCompatibilityLevel());
+
+    // the new config should be eventually readable on the non-master
+    waitUntilCompatibilityLevelSet(restApp2.restConnect, configSubject,
+                                   AvroCompatibilityLevel.NONE.name,
+                                   "New compatibility level should be NONE on the non-master");
 
     // fake an incorrect master and registration should fail
     restApp1.setMaster(null);
