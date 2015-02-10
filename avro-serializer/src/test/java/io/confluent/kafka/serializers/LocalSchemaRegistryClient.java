@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -30,23 +32,51 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
 
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
+  private final Map<String, Map<Schema, Integer>> versionCache;
   private final AtomicInteger ids;
 
   public LocalSchemaRegistryClient() {
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
     idCache = new HashMap<Integer, Schema>();
+    versionCache = new HashMap<String, Map<Schema, Integer>>();
     ids = new AtomicInteger(0);
   }
 
-  private int getIdFromRegistry(Schema schema) throws IOException {
+  private int getIdFromRegistry(String subject, Schema schema) throws IOException {
     for (Map.Entry<Integer, Schema> entry: idCache.entrySet()) {
       if (entry.getValue().toString().equals(schema.toString())) {
+        generateVersion(subject, schema);
         return entry.getKey();
       }
     }
     int id = ids.incrementAndGet();
     idCache.put(id, schema);
+    generateVersion(subject, schema);
     return id;
+  }
+
+  private void generateVersion(String subject, Schema schema) {
+    ArrayList<Integer> versions = getAllVersions(subject);
+    Map<Schema, Integer> schemaVersionMap;
+    int currentVersion;
+    if (versions.isEmpty()) {
+      schemaVersionMap = new HashMap<Schema, Integer>();
+      currentVersion = 1;
+    } else {
+      schemaVersionMap = versionCache.get(subject);
+      currentVersion = versions.get(versions.size() - 1) + 1;
+    }
+    schemaVersionMap.put(schema, currentVersion);
+    versionCache.put(subject, schemaVersionMap);
+  }
+
+  private ArrayList<Integer> getAllVersions(String subject) {
+    ArrayList<Integer> versions = new ArrayList<Integer>();
+    if (versionCache.containsKey(subject)) {
+      versions.addAll(versionCache.get(subject).values());
+      Collections.sort(versions);
+    }
+    return versions;
   }
 
   private Schema getSchemaByIdFromRegistry(int id) throws IOException {
@@ -54,6 +84,15 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       return idCache.get(id);
     } else {
       throw new IOException("Cannot get schema from schema registry!");
+    }
+  }
+
+  private int getVersionFromRegistry(String subject, Schema schema)
+      throws IOException, RestClientException{
+    if (versionCache.containsKey(subject)) {
+      return versionCache.get(subject).get(schema);
+    } else {
+      throw new IOException("Cannot get version from schema registry!");
     }
   }
 
@@ -71,7 +110,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (schemaIdMap.containsKey(schema)) {
       return schemaIdMap.get(schema);
     } else {
-      int id = getIdFromRegistry(schema);
+      int id = getIdFromRegistry(subject, schema);
       schemaIdMap.put(schema, id);
       return id;
     }
@@ -85,6 +124,49 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       Schema schema = getSchemaByIdFromRegistry(id);
       idCache.put(id, schema);
       return schema;
+    }
+  }
+
+  @Override
+  public synchronized int getLatestVersion(String subject)
+      throws IOException, RestClientException {
+    ArrayList<Integer> versions = getAllVersions(subject);
+    if (versions.isEmpty()) {
+      throw new IOException("No schema registered under subject!");
+    } else {
+      return versions.get(versions.size() - 1);
+    }
+  }
+
+  @Override
+  public String getLatestSchema(String subject)
+      throws IOException, RestClientException {
+    int version = getLatestVersion(subject);
+    Map<Schema, Integer> schemaVersionMap = versionCache.get(subject);
+    for( Map.Entry<Schema, Integer> entry: schemaVersionMap.entrySet()) {
+      if (entry.getValue() == version) {
+        return entry.getKey().toString();
+      }
+    }
+    return null;
+  }
+
+  @Override
+  public synchronized int getVersion(String subject, Schema schema)
+      throws IOException, RestClientException{
+    Map<Schema, Integer> schemaVersionMap;
+    if (versionCache.containsKey(subject)) {
+      schemaVersionMap = versionCache.get(subject);
+    } else {
+      schemaVersionMap = new HashMap<Schema, Integer>();
+    }
+
+    if (schemaVersionMap.containsKey(schema)) {
+      return schemaVersionMap.get(schema);
+    }  else {
+      int version = getVersionFromRegistry(subject, schema);
+      schemaVersionMap.put(schema, version);
+      return version;
     }
   }
 }

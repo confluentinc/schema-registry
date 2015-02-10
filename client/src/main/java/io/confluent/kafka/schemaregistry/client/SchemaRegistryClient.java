@@ -26,4 +26,11 @@ public interface SchemaRegistryClient {
   public int register(String subject, Schema schema) throws IOException, RestClientException;
 
   public Schema getByID(int id) throws IOException, RestClientException;
+
+  public int getLatestVersion(String subject) throws IOException, RestClientException;
+
+  public String getLatestSchema(String subject) throws IOException, RestClientException;
+
+  public int getVersion(String subject, Schema schema) throws IOException, RestClientException;
+
 }

@@ -33,6 +33,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final int identityMapCapacity;
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
+  private final Map<String, Map<Schema, Integer>> versionCache;
   private final Schema.Parser parser = new Schema.Parser();
 
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
@@ -40,6 +41,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.identityMapCapacity = identityMapCapacity;
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
     idCache = new HashMap<Integer, Schema>();
+    versionCache = new HashMap<String, Map<Schema, Integer>>();
   }
 
   private int registerAndGetId(String subject, Schema schema)
@@ -55,6 +57,17 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     SchemaString restSchema =
         RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
     return parser.parse(restSchema.getSchemaString());
+  }
+
+
+  private int getVersionFromRegistry(String subject, Schema schema)
+      throws IOException, RestClientException{
+    String schemaString = schema.toString();
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
+        RestUtils.lookUpSubjectVersion(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+    return response.getVersion();
   }
 
   @Override
@@ -88,6 +101,39 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       Schema schema = getSchemaByIdFromRegistry(id);
       idCache.put(id, schema);
       return schema;
+    }
+  }
+
+  @Override
+  public synchronized int getLatestVersion(String subject)
+      throws IOException, RestClientException {
+    return RestUtils.getLatestVersion(
+        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject).getVersion();
+  }
+
+  @Override
+  public synchronized String getLatestSchema(String subject)
+      throws IOException, RestClientException {
+    return RestUtils.getLatestVersion(
+        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject).getSchema();
+  }
+
+  @Override
+  public synchronized int getVersion(String subject, Schema schema)
+      throws IOException, RestClientException{
+    Map<Schema, Integer> schemaVersionMap;
+    if (versionCache.containsKey(subject)) {
+      schemaVersionMap = versionCache.get(subject);
+    } else {
+      schemaVersionMap = new HashMap<Schema, Integer>();
+    }
+
+    if (schemaVersionMap.containsKey(schema)) {
+      return schemaVersionMap.get(schema);
+    }  else {
+      int version = getVersionFromRegistry(subject, schema);
+      schemaVersionMap.put(schema, version);
+      return version;
     }
   }
 }
