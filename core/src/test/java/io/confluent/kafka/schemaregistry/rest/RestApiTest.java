@@ -75,7 +75,7 @@ public class RestApiTest extends ClusterTestHarness {
                      .getAllSubjects(restApp.restConnect, RestUtils.DEFAULT_REQUEST_PROPERTIES));
 
     // test registering and verifying new schemas in subject1
-    int schemaIdCounter = 0;
+    int schemaIdCounter = 1;
     for (int i = 0; i < schemasInSubject1; i++) {
       String schema = allSchemasInSubject1.get(i);
       int expectedVersion = i + 1;
@@ -88,7 +88,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test re-registering existing schemas
     for (int i = 0; i < schemasInSubject1; i++) {
-      int expectedId = i;
+      int expectedId = i + 1;
       String schemaString = allSchemasInSubject1.get(i);
       int foundId = TestUtils.registerSchema(restApp.restConnect, schemaString, subject1);
       assertEquals("Re-registering an existing schema should return the existing version",
@@ -221,7 +221,7 @@ public class RestApiTest extends ClusterTestHarness {
         TestUtils.lookUpSubjectVersion(restApp.restConnect, schema1, subject1).getVersion();
     assertEquals("1st schema under subject1 should have version 1", 1,
                  versionOfRegisteredSchema1Subject1);
-    assertEquals("1st schema registered globally should have id 0", 0,
+    assertEquals("1st schema registered globally should have id 1", 1,
                  idOfRegisteredSchema1Subject1);
 
     int idOfRegisteredSchema2Subject1 =
@@ -230,7 +230,7 @@ public class RestApiTest extends ClusterTestHarness {
         TestUtils.lookUpSubjectVersion(restApp.restConnect, schema2, subject1).getVersion();
     assertEquals("2nd schema under subject1 should have version 2", 2,
                  versionOfRegisteredSchema2Subject1);
-    assertEquals("2nd schema registered globally should have id 1", 1,
+    assertEquals("2nd schema registered globally should have id 2", 2,
                  idOfRegisteredSchema2Subject1);
 
     int idOfRegisteredSchema2Subject2 =
@@ -242,7 +242,7 @@ public class RestApiTest extends ClusterTestHarness {
         1,
         versionOfRegisteredSchema2Subject2);
     assertEquals("Since schema is globally registered but not under subject2, id should not change",
-                 1,
+                 2,
                  idOfRegisteredSchema2Subject2);
   }
 
@@ -358,7 +358,7 @@ public class RestApiTest extends ClusterTestHarness {
     // test getVersion on a non-existing version
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restConnect, schema, 0, subject);
+    TestUtils.registerAndVerifySchema(restApp.restConnect, schema, 1, subject);
     try {
       RestUtils.getVersion(restApp.restConnect,
                            RestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
@@ -375,7 +375,7 @@ public class RestApiTest extends ClusterTestHarness {
     // test getVersion on a non-existing version
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restConnect, schema, 0, subject);
+    TestUtils.registerAndVerifySchema(restApp.restConnect, schema, 1, subject);
     try {
       RestUtils.getVersion(restApp.restConnect,
                            RestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
@@ -386,6 +386,30 @@ public class RestApiTest extends ClusterTestHarness {
                    RestInvalidVersionException.ERROR_CODE,
                    e.getErrorCode());
     }
+  }
+
+  @Test
+  public void testGetVersion() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    String subject = "test";
+    TestUtils.registerAndVerifySchema(restApp.restConnect, schemas.get(0), 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restConnect, schemas.get(1), 2, subject);
+
+    assertEquals("Version 1 schema should match",
+                 schemas.get(0),
+                 RestUtils.getVersion(restApp.restConnect,
+                                      RestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
+                                      1).getSchema());
+
+    assertEquals("Version 2 schema should match",
+                 schemas.get(1),
+                 RestUtils.getVersion(restApp.restConnect,
+                                      RestUtils.DEFAULT_REQUEST_PROPERTIES, subject,
+                                      2).getSchema());
+    assertEquals("Latest schema should be the same as version 2",
+                 schemas.get(1),
+                 RestUtils.getLatestVersion(restApp.restConnect,
+                                      RestUtils.DEFAULT_REQUEST_PROPERTIES, subject).getSchema());
   }
 
   @Test
@@ -404,7 +428,7 @@ public class RestApiTest extends ClusterTestHarness {
   public void testLookUpNonExistentSchemaUnderSubject() throws Exception {
     String subject = "test";
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
-    TestUtils.registerAndVerifySchema(restApp.restConnect, schemas.get(0), 0, subject);
+    TestUtils.registerAndVerifySchema(restApp.restConnect, schemas.get(0), 1, subject);
     TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.NONE, subject);
 
     try {
@@ -428,7 +452,7 @@ public class RestApiTest extends ClusterTestHarness {
   public void testCompatibilityNonExistentVersion() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restConnect, schema, 0, subject);
+    TestUtils.registerAndVerifySchema(restApp.restConnect, schema, 1, subject);
     try {
       TestUtils.testCompatibility(restApp.restConnect, schema, subject, "100");
     } catch (RestClientException rce) {
@@ -440,7 +464,7 @@ public class RestApiTest extends ClusterTestHarness {
   public void testCompatibilityInvalidVersion() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restConnect, schema, 0, subject);
+    TestUtils.registerAndVerifySchema(restApp.restConnect, schema, 1, subject);
     try {
       TestUtils.testCompatibility(restApp.restConnect, schema, subject, "earliest");
     } catch (RestClientException rce) {

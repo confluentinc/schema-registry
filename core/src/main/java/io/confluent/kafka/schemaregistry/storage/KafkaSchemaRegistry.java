@@ -47,6 +47,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
@@ -266,6 +267,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                Schema schema,
                                Map<String, String> headerProperties)
       throws SchemaRegistryException {
+    Schema existingSchema = lookUpSchemaUnderSubject(subject, schema);
+    if (existingSchema != null) {
+      return existingSchema.getId();
+    }
+
     synchronized (masterLock) {
       if (isMaster()) {
         return register(subject, schema);
@@ -275,26 +281,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           return forwardRegisterRequestToMaster(subject, schema.getSchema(),
                                                 masterIdentity.getHost(),
                                                 masterIdentity.getPort(), headerProperties);
-        } else {
-          throw new UnknownMasterException("Register schema request failed since master is "
-                                            + "unknown");
-        }
-      }
-    }
-  }
-
-  public Schema lookUpSchemaUnderSubjectOrForward(
-      String subject, Schema schema, Map<String, String> headerProperties)
-      throws SchemaRegistryRequestForwardingException, UnknownMasterException {
-    synchronized (masterLock) {
-      if (isMaster()) {
-        return lookUpSchemaUnderSubject(subject, schema);
-      } else {
-        // forward registering request to the master
-        if (masterIdentity != null) {
-          return forwardSubjectVersionRequestToMaster(subject, schema.getSchema(),
-                                                      masterIdentity.getHost(),
-                                                      masterIdentity.getPort(), headerProperties);
         } else {
           throw new UnknownMasterException("Register schema request failed since master is "
                                             + "unknown");
@@ -333,6 +319,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * Allocate and lock the next batch of ids. Indicate a lock over the next batch by writing the
    * upper bound of the batch to zookeeper.
    *
+   * The value stored in ZOOKEEPER_SCHEMA_ID_COUNTER in Zookeeper indicates the current
+   * max allocated id for assignment.
+   *
    * Return the start index of the next batch.
    */
   private Integer nextSchemaIdCounterBatch() throws SchemaRegistryStoreException {
@@ -341,7 +330,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     if (!zkClient.exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
       ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
                                    String.valueOf(ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE));
-      return 0;
+      return 1;
     }
     // ZOOKEEPER_SCHEMA_ID_COUNTER exists
     int newSchemaIdCounterDataVersion = -1;
@@ -376,7 +365,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       } catch (InterruptedException ignored) {
       }
     }
-    return schemaIdCounterThreshold;
+    return schemaIdCounterThreshold + 1;
   }
 
   private int forwardRegisterRequestToMaster(String subject, String schemaString, String host,
@@ -402,29 +391,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  private Schema forwardSubjectVersionRequestToMaster(
-      String subject, String schemaString, String host, int port,
-      Map<String, String> headerProperties) throws SchemaRegistryRequestForwardingException {
+  private void forwardUpdateCompatibilityLevelRequestToMaster(
+      String subject, AvroCompatibilityLevel compatibilityLevel, String host, int port,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
     String baseUrl = String.format("http://%s:%d", host, port);
-    RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
-    registerSchemaRequest.setSchema(schemaString);
-    log.debug(String.format("Forwarding schema version search request %s to %s",
-                            registerSchemaRequest, baseUrl));
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(compatibilityLevel.name);
+    log.debug(String.format("Forwarding update config request %s to %s",
+                            configUpdateRequest, baseUrl));
     try {
-      Schema schema =
-          RestUtils.lookUpSubjectVersion(baseUrl, headerProperties, registerSchemaRequest,
-                                         subject);
-      return schema;
+      RestUtils.updateConfig(baseUrl, headerProperties, configUpdateRequest,
+                                        subject);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
-          String.format("Unexpected error while forwarding the registering schema request %s to %s",
-                        registerSchemaRequest, baseUrl),
+          String.format("Unexpected error while forwarding the update config request %s to %s",
+                        configUpdateRequest, baseUrl),
           e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
-      // TODO: Fix this
-//    } catch (RestClientException e) {
-//      throw new SchemaRegistryRequestForwardingException(e);
     }
   }
 
@@ -543,22 +528,34 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   public void updateCompatibilityLevel(String subject, AvroCompatibilityLevel newCompatibilityLevel)
       throws SchemaRegistryStoreException, UnknownMasterException {
+    ConfigKey configKey = new ConfigKey(subject);
+    try {
+      kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
+      log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
+                + " Kafka data store with key " + configKey.toString());
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to write new config value to the store",
+                                             e);
+    }
+  }
+
+  public void updateConfigOrForward(String subject, AvroCompatibilityLevel newCompatibilityLevel,
+                                    Map<String, String> headerProperties)
+      throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
+             UnknownMasterException {
     synchronized (masterLock) {
       if (isMaster()) {
-        ConfigKey configKey = new ConfigKey(subject);
-        try {
-          kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
-          log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
-                    + " Kafka data store with key " + configKey.toString());
-        } catch (StoreException e) {
-          throw new SchemaRegistryStoreException("Failed to write new config value to the store",
-                                                 e);
-        }
+        updateCompatibilityLevel(subject, newCompatibilityLevel);
       } else {
-        // TODO: logic to forward will be included as part of issue#96
-        throw new UnknownMasterException("Config update request failed since this is not the "
-                                          + "master");
-
+        // forward update config request to the master
+        if (masterIdentity != null) {
+          forwardUpdateCompatibilityLevelRequestToMaster(subject, newCompatibilityLevel,
+                                                         masterIdentity.getHost(),
+                                                         masterIdentity.getPort(), headerProperties);
+        } else {
+          throw new UnknownMasterException("Update config request failed since master is "
+                                           + "unknown");
+        }
       }
     }
   }

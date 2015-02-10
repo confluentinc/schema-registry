@@ -77,8 +77,7 @@ public class SubjectsResource {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
-      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectOrForward(subject, schema,
-                                                                        headerProperties);
+      matchingSchema = schemaRegistry.lookUpSchemaUnderSubject(subject, schema);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);

@@ -40,6 +40,41 @@ All API endpoints use a standard error message format for any requests that retu
 
 Although it is good practice to check the status code, you may safely parse the response of any non-DELETE API calls and check for the presence of an ``error_code`` field to detect errors.
 
+Schemas
+----------
+
+.. http:get:: /schemas/ids/{int: id}
+
+   Get the schema string identified by the input id.
+
+   :param int id: the globally unique identifier of the schema
+
+   :>json string schema: Schema string identified by the id
+
+   :statuscode 404:
+      * Error code 40403 -- Schema not found
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend datastore
+
+   **Example request**:
+
+   .. sourcecode:: http
+
+      GET /schemas/ids/1 HTTP/1.1
+      Host: schemaregistry.example.com
+      Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+
+   **Example response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 200 OK
+      Content-Type: application/vnd.schemaregistry.v1+json
+
+      {
+        "schema": "{\"type\": \"string\"}"
+      }
+
 Subjects
 --------
 
@@ -71,42 +106,7 @@ The subjects resource provides a list of all registered subjects in your schema 
 
       ["subject1", "subject2"]
 
-Schemas 
-----------
-
-.. http:get:: /schemas/ids/{id}
-   
-   Get the schema string identified by the input id.
-
-   :param int id: the globally unique identifier of the schema
-
-   :>json string schema: Schema string identified by the id
-
-   :statuscode 404:
-      * Error code 40403 -- Schema not found
-   :statuscode 500: 
-      * Error code 50001 -- Error in the backend datastore
-
-   **Example request**:
-
-   .. sourcecode:: http
-
-      GET /schemas/ids/1 HTTP/1.1
-      Host: schemaregistry.example.com
-      Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
-
-   **Example response**:
-
-   .. sourcecode:: http
-
-      HTTP/1.1 200 OK
-      Content-Type: application/vnd.schemaregistry.v1+json
-
-      {       
-        "schema": "{\"type\": \"string\"}"
-      }
-
-.. http:get:: /subjects/{subject}/versions
+.. http:get:: /subjects/(string: subject)/versions
 
    Get a list of versions registered under the specified subject.
 
@@ -138,7 +138,7 @@ Schemas
         1, 2, 3, 4
       ]
 
-.. http:get:: /subjects/(string:subject)/versions/(versionId:version)
+.. http:get:: /subjects/(string: subject)/versions/(versionId: version)
 
    Get a specific version of the schema registered under this subject
 
@@ -178,11 +178,14 @@ Schemas
         "schema": "{\"type\": \"string\"}"
       }
 
-.. http:post:: /subjects/(string:subject)/versions
+.. http:post:: /subjects/(string: subject)/versions
 
-   Register a new schema under the specified subject. If successfully registered, this returns the unique identifier of this schema in the registry. The returned identifier should be used to retrieve this schema from the registry and is different from the schema's version which is associated with the subject. 
+   Register a new schema under the specified subject. If successfully registered, this returns the unique identifier of this schema in the registry. The returned identifier should be used to retrieve this schema from the schemas resource and is different from the schema's version which is associated with the subject.
+   If the same schema is registered under a different subject, the same identifier will be returned. However, the version of the schema may be different under different subjects.
 
-   A schema should be compatible with the previously registered schemas (if there are any) as per the configured compatibility level. The configured compatibility level can be obtained by issuing a ``GET http:get:: /config/{subject}``. If that returns null, then ``GET http:get:: /config`` 
+   A schema should be compatible with the previously registered schemas (if there are any) as per the configured compatibility level. The configured compatibility level can be obtained by issuing a ``GET http:get:: /config/(string: subject)``. If that returns null, then ``GET http:get:: /config``
+
+   When there are multiple instances of schema registry running in the same cluster, the schema registration request will be forwarded to one of the instances designated as the master. If the master is not available, the client will get an error code indicating that the forwarding has failed.
 
    :param string subject: Subject under which the schema will be registered
    :reqjson schema: The Avro schema string
@@ -193,7 +196,7 @@ Schemas
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
       * Error code 50002 -- Operation timed out
-      * Error code 50003 -- Error while forwarding request to the master
+      * Error code 50003 -- Error while forwarding the request to the master
 
    **Example request**:
 
@@ -203,20 +206,23 @@ Schemas
       Host: schemaregistry.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
 
-      { 
-        "type": "record",
-        "name": "test",
-        "fields":
-           [ 
-             {
-               "type": "string",
-               "name": "field1"
-             },
-             {
-               "type": "integer",
-               "name": "field2"
-             }
-           ]
+      {
+        "schema":
+          "{
+             \"type\": \"record\",
+             \"name\": \"test\",
+             \"fields\":
+               [
+                 {
+                   \"type\": \"string\",
+                   \"name\": \"field1\"
+                 },
+                 {
+                   \"type\": \"integer\",
+                   \"name\": \"field2\"
+                 }
+               ]
+           }"
       }
 
    **Example response**:
@@ -228,7 +234,7 @@ Schemas
 
       1
 
-.. http:post:: /subjects/(string:subject)
+.. http:post:: /subjects/(string: subject)
 
    Check if a schema has already been registered under the specified subject. If so, this returns the schema string along with its globally unique identifier, its version under this subject and the subject name.  
 
@@ -252,21 +258,24 @@ Schemas
       Host: schemaregistry.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
 
-      { 
-        "type": "record",
-        "name": "test",
-        "fields":
-           [ 
-             {
-               "type": "string",
-               "name": "field1"
-             },
-             {
-               "type": "integer",
-               "name": "field2"
-             }
-           ]
-      }
+      {
+	    "schema":
+	       "{
+		      \"type\": \"record\",
+		      \"name\": \"test\",
+		      \"fields\":
+		        [
+		          {
+		            \"type\": \"string\",
+		            \"name\": \"field1\"
+		          },
+		          {
+		            \"type\": \"integer\",
+		            \"name\": \"field2\"
+		          }
+		        ]
+		    }"
+	  }
 
    **Example response**:
 
@@ -280,21 +289,21 @@ Schemas
 	    "id": 1
 	    "version": 3
 	    "schema":           
-	       { 
-		     "type": "record",
-		     "name": "test",
-		     "fields":
+	       "{
+		      \"type\": \"record\",
+		      \"name\": \"test\",
+		      \"fields\":
 		        [ 
 		          {
-		            "type": "string",
-		            "name": "field1"
+		            \"type\": \"string\",
+		            \"name\": \"field1\"
 		          },
 		          {
-		            "type": "integer",
-		            "name": "field2"
+		            \"type\": \"integer\",
+		            \"name\": \"field2\"
 		          }
 		        ]
-		   }
+		    }"
 	  }
 
 Compatibility
@@ -302,9 +311,9 @@ Compatibility
 
 The compatibility resource allows the user to test schemas for compatibility against specific versions of a subject's schema.
 
-.. http:post:: /compatibility/subjects/(string:subject)/versions/(versionId:version)
+.. http:post:: /compatibility/subjects/(string: subject)/versions/(versionId: version)
 
-   Test input schema against a particular version of a subject's schema for compatibility. Note that the compatibility level applied for the check is the configured compatibility level for the subject (``http:get:: /config/(string:subject)``). If this subject's compatibility level was never changed, then the global compatibility level applies (``http:get:: /config``).
+   Test input schema against a particular version of a subject's schema for compatibility. Note that the compatibility level applied for the check is the configured compatibility level for the subject (``http:get:: /config/(string: subject)``). If this subject's compatibility level was never changed, then the global compatibility level applies (``http:get:: /config``).
 
    :param string subject: Subject of the schema version against which compatibility is to be tested
    :param versionId version: Version of the subject's schema against which compatibility is to be tested. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" checks compatibility of the input schema with the last registered schema under the specified subject
@@ -329,19 +338,22 @@ The compatibility resource allows the user to test schemas for compatibility aga
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
 
       { 
-        "type": "record",
-        "name": "test",
-        "fields":
-           [ 
-             {
-               "type": "string",
-               "name": "field1"
-             },
-             {
-               "type": "integer",
-               "name": "field2"
-             }
-           ]
+        "schema":
+          "{
+             \"type\": \"record\",
+             \"name\": \"test\",
+             \"fields\":
+               [
+                 {
+                   \"type\": \"string\",
+                   \"name\": \"field1\"
+                 },
+                 {
+                   \"type\": \"integer\",
+                   \"name\": \"field2\"
+                 }
+               ]
+           }"
       }
 
    **Example response**:
@@ -360,9 +372,11 @@ Config
 
 The config resource allows you to inspect the cluster-level configuration values as well as subject overrides. 
 
-.. http:post:: /config
+.. http:put:: /config
 
    Update global compatibility level.
+
+   When there are multiple instances of schema registry running in the same cluster, the update request will be forwarded to one of the instances designated as the master. If the master is not available, the client will get an error code indicating that the forwarding has failed.
 
    :<json string compatibility: New global compatibility level. Must be one of NONE, FULL, FORWARD, BACKWARD
 
@@ -370,10 +384,11 @@ The config resource allows you to inspect the cluster-level configuration values
       * Error code 42203 -- Invalid compatibility level
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
+      * Error code 50003 -- Error while forwarding the request to the master
 
    .. sourcecode:: http
 
-      POST /consumers/testgroup/ HTTP/1.1
+      PUT /consumers/testgroup/ HTTP/1.1
       Host: kafkaproxy.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
 
@@ -416,7 +431,7 @@ The config resource allows you to inspect the cluster-level configuration values
         "compatibility": "FULL"
       }
 
-.. http:post:: /config/(string:subject)
+.. http:put:: /config/(string: subject)
 
    Update compatibility level for the specified subject.
 
@@ -427,12 +442,13 @@ The config resource allows you to inspect the cluster-level configuration values
       * Error code 42203 -- Invalid compatibility level
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
+      * Error code 50003 -- Error while forwarding the request to the master
 
    **Example request**:
 
    .. sourcecode:: http
 
-      POST /config/test HTTP/1.1
+      PUT /config/test HTTP/1.1
       Host: schemaregistry.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
 
@@ -447,7 +463,7 @@ The config resource allows you to inspect the cluster-level configuration values
       HTTP/1.1 200 OK
       Content-Type: application/vnd.schemaregistry.v1+json
 
-.. http:get:: /config/(string:subject)
+.. http:get:: /config/(string: subject)
 
    Get compatibility level for a subject.
 
