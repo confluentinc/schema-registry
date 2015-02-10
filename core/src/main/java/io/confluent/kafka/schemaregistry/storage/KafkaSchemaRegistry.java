@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import org.I0Itec.zkclient.ZkClient;
+import org.I0Itec.zkclient.exception.ZkNodeExistsException;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.slf4j.Logger;
@@ -387,41 +388,48 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   /**
-   * Allocate and lock the next batch of ids. Indicate a lock over the next batch by writing the
-   * upper bound of the batch to zookeeper.
+   * Allocate and lock the next batch of ids. Signal a global lock over the next batch by writing
+   * the upper bound of the batch to zookeeper.
    *
    * When a schema registry server is initialized, kafka may have preexisting persistent
    * schema -> id assignments, and zookeeper may have preexisting counter data.
    * Therefore, when allocating the next batch of ids, it's necessary to ensure the entire new batch
-   * is both greater than the greatest id in kafka and greater than the
-   * previously recorded batch in zookeeper.
+   * is greater than the greatest id in kafka and also greater than the previously recorded batch
+   * in zookeeper.
    *
    * Return the start index of the next batch.
    */
   private Integer nextSchemaIdCounterBatch() throws SchemaRegistryStoreException {
     int nextIdBatchLowerBound = 0;
 
-    // create ZOOKEEPER_SCHEMA_ID_COUNTER if it already doesn't exist
-    if (!zkClient.exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
-      // Infer next batch from preexisting kafka data (if present)
-      nextIdBatchLowerBound = getNextBatchLowerBoundFromKafkaStore();
-      int nextIdBatchUpperBound = nextIdBatchLowerBound + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
-      ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
-                                   String.valueOf(nextIdBatchUpperBound));
-      return nextIdBatchLowerBound;
-    }
+    while (true) {
 
-    // ZOOKEEPER_SCHEMA_ID_COUNTER exists
-    int newSchemaIdCounterDataVersion = -1;
-    while (newSchemaIdCounterDataVersion < 0) {
-      int zkNextIdBatchLowerBound = 0;
+      if (!zkClient.exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
+        // create ZOOKEEPER_SCHEMA_ID_COUNTER if it already doesn't exist
 
-      // read the latest counter value
-      final ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
-      if (counterValue.getData() != null) {
-        zkNextIdBatchLowerBound = Integer.valueOf(counterValue.getData());
+        try {
+          nextIdBatchLowerBound = getNextBatchLowerBoundFromKafkaStore();
+          int nextIdBatchUpperBound =
+              nextIdBatchLowerBound + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+          ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
+                                       String.valueOf(nextIdBatchUpperBound));
+          return nextIdBatchLowerBound;
+        } catch (ZkNodeExistsException ignore) {
+          // A zombie master may have created this zk node after the initial existence check
+          // Ignore and try again
+        }
+      } else { // ZOOKEEPER_SCHEMA_ID_COUNTER exists
 
+        // read the latest counter value
+        final ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
+        if (counterValue.getData() == null) {
+          throw new SchemaRegistryStoreException(
+              "Failed to read schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
+              " from zookeeper");
+        }
 
+        // Compute the lower bound of next id batch based on zk data and kafkastore data
+        int zkNextIdBatchLowerBound = Integer.valueOf(counterValue.getData());
         if (zkNextIdBatchLowerBound % ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE != 0) {
           int oldZkIdBatchLowerBound = zkNextIdBatchLowerBound;
           zkNextIdBatchLowerBound =
@@ -434,29 +442,30 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
               "zk id counter: " + oldZkIdBatchLowerBound + "\n" +
               "id batch size: " + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
         }
+        nextIdBatchLowerBound =
+            Math.max(zkNextIdBatchLowerBound, getNextBatchLowerBoundFromKafkaStore());
+        String nextIdBatchUpperBound = String.valueOf(nextIdBatchLowerBound +
+                                                ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
 
-      } else {
-        throw new SchemaRegistryStoreException(
-            "Failed to read schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER + " from zookeeper");
+        // conditionally update the zookeeper path with the upper bound of the new id batch.
+        // newSchemaIdCounterDataVersion < 0 indicates a failed conditional update.
+        // Most probable cause is the existence of another master which tries to do the same
+        // counter batch allocation at the same time. If this happens, re-read the value and
+        // continue until one master is determined to be the zombie master.
+        // NOTE: The handling of multiple masters is still a TODO
+        int newSchemaIdCounterDataVersion =
+            ZkUtils.conditionalUpdatePersistentPath(
+              zkClient,
+              ZOOKEEPER_SCHEMA_ID_COUNTER,
+              nextIdBatchUpperBound,
+              counterValue.getStat().getVersion(),
+              null);
+        if (newSchemaIdCounterDataVersion >= 0) {
+          break;
+        }
       }
-      nextIdBatchLowerBound =
-          Math.max(zkNextIdBatchLowerBound, getNextBatchLowerBoundFromKafkaStore());
-
-      // conditionally update the zookeeper path with the upper bound of the new id batch
-      String newCounterValue = String.valueOf(nextIdBatchLowerBound +
-                                              ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
-
-      // newSchemaIdCounterDataVersion < 0 indicates a failed conditional update. Most probable reason is the
-      // existence of another master who also tries to do the same counter batch allocation at
-      // the same time. If this happens, re-read the value and continue until one master is
-      // determined to be the zombie master.
-      // NOTE: The handling of multiple masters is still a TODO
-      newSchemaIdCounterDataVersion = ZkUtils.conditionalUpdatePersistentPath(zkClient,
-                                                  ZOOKEEPER_SCHEMA_ID_COUNTER,
-                                                  newCounterValue,
-                                                  counterValue.getStat().getVersion(),
-                                                  null);
       try {
+        // Wait a bit and attempt id batch allocation again
         Thread.sleep(ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_WRITE_RETRY_BACKOFF_MS);
       } catch (InterruptedException ignored) {
       }
