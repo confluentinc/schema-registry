@@ -47,6 +47,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
@@ -266,6 +267,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                Schema schema,
                                Map<String, String> headerProperties)
       throws SchemaRegistryException {
+    Schema existingSchema = lookUpSchemaUnderSubject(subject, schema);
+    if (existingSchema != null) {
+      return existingSchema.getId();
+    }
+
     synchronized (masterLock) {
       if (isMaster()) {
         return register(subject, schema);
@@ -396,6 +402,28 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the registering schema request %s to %s",
                         registerSchemaRequest, baseUrl),
+          e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private void forwardUpdateCompatibilityLevelRequestToMaster(
+      String subject, AvroCompatibilityLevel compatibilityLevel, String host, int port,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    String baseUrl = String.format("http://%s:%d", host, port);
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(compatibilityLevel.name);
+    log.debug(String.format("Forwarding update config request %s to %s",
+                            configUpdateRequest, baseUrl));
+    try {
+      RestUtils.updateConfig(baseUrl, headerProperties, configUpdateRequest,
+                                        subject);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the update config request %s to %s",
+                        configUpdateRequest, baseUrl),
           e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
@@ -543,22 +571,34 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   public void updateCompatibilityLevel(String subject, AvroCompatibilityLevel newCompatibilityLevel)
       throws SchemaRegistryStoreException, UnknownMasterException {
+    ConfigKey configKey = new ConfigKey(subject);
+    try {
+      kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
+      log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
+                + " Kafka data store with key " + configKey.toString());
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to write new config value to the store",
+                                             e);
+    }
+  }
+
+  public void updateConfigOrForward(String subject, AvroCompatibilityLevel newCompatibilityLevel,
+                                    Map<String, String> headerProperties)
+      throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
+             UnknownMasterException {
     synchronized (masterLock) {
       if (isMaster()) {
-        ConfigKey configKey = new ConfigKey(subject);
-        try {
-          kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
-          log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
-                    + " Kafka data store with key " + configKey.toString());
-        } catch (StoreException e) {
-          throw new SchemaRegistryStoreException("Failed to write new config value to the store",
-                                                 e);
-        }
+        updateCompatibilityLevel(subject, newCompatibilityLevel);
       } else {
-        // TODO: logic to forward will be included as part of issue#96
-        throw new UnknownMasterException("Config update request failed since this is not the "
-                                          + "master");
-
+        // forward update config request to the master
+        if (masterIdentity != null) {
+          forwardUpdateCompatibilityLevelRequestToMaster(subject, newCompatibilityLevel,
+                                                         masterIdentity.getHost(),
+                                                         masterIdentity.getPort(), headerProperties);
+        } else {
+          throw new UnknownMasterException("Update config request failed since master is "
+                                           + "unknown");
+        }
       }
     }
   }
