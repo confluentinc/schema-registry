@@ -67,8 +67,47 @@ The following assumes you have Kafka and an instance of the Schema Registry runn
 Installation
 ------------
 
-Release versions are available from the `Central
-Repository <http://search.maven.org/#search|ga|1|g%3A%22io.confluent%22%20AND%20a%3A%22schema-registry%22>`_.
+.. ifconfig:: platform_docs
+
+   See the :ref:`installation instructions<installation>` for the Confluent
+   Platform. Before starting the Schema Registry you must start Kafka.
+   The :ref:`quickstart<quickstart>` explains how to start Kafka locally for testing.
+
+.. ifconfig:: not platform_docs
+
+   You can download prebuilt versions of the Schema Registry as part of the
+   `Confluent Platform <http://confluent.io/downloads/>`_. To install from
+   source, follow the instructions in the `Development`_ section. Before
+   starting the Schema Registry you must start Kafka.
+
+Starting the Schema Registry service is simple once its dependencies are
+running:
+
+.. sourcecode:: bash
+
+   $ cd confluent-1.0/
+
+   # Start the Schema Registry. The default settings automatically work with the
+   # default settings for local ZooKeeper and Kafka nodes.
+   $ bin/schema-registry-start
+
+If you installed Debian or RPM packages, you can simply run ``schema-registry-start``
+as it will be on your ``PATH``. If you need to override the default
+configuration, add settings to a config file and pass it as an argument when you
+start the service:
+
+.. sourcecode:: bash
+
+   $ bin/schema-registry-start etc/schema-registry/schema-registry.properties
+
+Finally, if you started the service in the background, you can use the following
+command to stop it:
+
+.. sourcecode:: bash
+
+   $ bin/schema-registry-stop
+
+
 
 Deployment
 ----------

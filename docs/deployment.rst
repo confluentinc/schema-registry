@@ -147,15 +147,27 @@ Multi-DC Setup
 
 Overview
 ^^^^^^^^
+What and why:
+If you wish to set up Schema Registry in multiple datacenters... TBD
+if DC fails, need to do something manually to recover
+
+
+Recommended Deployment
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. image:: multi-dc-setup.bmp
+
+Brief explanation of pic - master, slave DC, mirror maker etc.
+where mirror maker runs (recommend that it writes locally, reads remotely)
+
+Important Settings
+^^^^^^^^^^^^^^^^^^
+
 Setting up a schema registry to span multiple datacenters just requires pointing all schema registry nodes to the same Zookeeper cluster (``kafkastore.connection.url``), and ensuring that each schema registry instance shares the same Zookeeper namespace (``schema.registry.zk.namespace``).
 
 Since the Confluent schema registry is designed to be a single master system, and only the master can make writes to the underlying Kafka logs, we have provided a setting called ``master.eligibility`` to provide control over which schema registry nodes are eligible to become master in case of re-election. For added insurance against data center failure, it is possible to replicate the underlying Kafka log data underlying to one or more additional data centers using MirrorMaker.
 
 
-.. image:: multi-dc-setup.bmp
-
-Important Settings
-^^^^^^^^^^^^^^^^^^
 ``kafkastore.connection.url``
 kafkastore.connection.url should be identical across all schema registry nodes.
 
@@ -166,8 +178,12 @@ Namespace under which schema registry related metadata is stored in Zookeeper. T
 A schema registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election.
 
 
-Detailed Example
-^^^^^^^^^^^^^^^^
+Setup
+^^^^^
+
+pre mirror maker - want to create topic w/desired configs - uncleanleader, #replicas,
+where mirror maker runs
+
 Let's set up a simple example ... TBD
 
 -         start_zk(config_dir + zk_a_config)
@@ -185,13 +201,12 @@ Let's set up a simple example ... TBD
 
         start_mirror(config_dir + mirror_consumer_config, config_dir + mirror_producer_config, whitelist="_schemas")
 
-Installation
-^^^^^^^^^^^^
-Suppose your schema registry is working nicely in a single datacenter, DC A, and you wish to expend it to another.
-
 Run book
 ^^^^^^^^
 Suppose in the example above that DC A has gone completely dark. In that case, the schema registries in DC B will have no master, but will continue to be able to serve any request that does not result in a write to the (now dead) underlying Kafka store. This includes GET requests on existing ids and POST requests on schemas already in the registry.
+
+
+If machines in DC A can be brought back up, do so.
 
 If the machines in DC A are brought back up, the schema registries can be restarted in a rolling fashion with their keeping their original configuration settings intact.
 
