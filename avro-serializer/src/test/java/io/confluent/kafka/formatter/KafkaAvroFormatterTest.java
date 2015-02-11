@@ -28,7 +28,7 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.serializers.LocalSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.LocalSchemaRegistryClient;
 import kafka.producer.KeyedMessage;
 
 import static org.junit.Assert.assertEquals;

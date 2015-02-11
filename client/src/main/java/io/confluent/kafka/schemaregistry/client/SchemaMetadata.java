@@ -13,22 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client;
 
-import org.apache.avro.Schema;
+public class SchemaMetadata {
+  private int id;
+  private int version;
+  private String schema;
 
-import java.io.IOException;
+  public SchemaMetadata(int id, int version, String schema) {
+    this.id = id;
+    this.version = version;
+    this.schema = schema;
 
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+  }
 
-public interface SchemaRegistryClient {
+  public int getId() {
+    return id;
+  }
 
-  public int register(String subject, Schema schema) throws IOException, RestClientException;
+  public int getVersion() {
+    return version;
+  }
 
-  public Schema getByID(int id) throws IOException, RestClientException;
-
-  public SchemaMetadata getLatestSchemaMetadata(String subject) throws IOException, RestClientException;
-
-  public int getVersion(String subject, Schema schema) throws IOException, RestClientException;
-
+  public String getSchema() {
+    return schema;
+  }
 }
