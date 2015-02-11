@@ -60,7 +60,7 @@ that version. Our recommended GC tuning looks like this:
 Important Configuration Options
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The full set of configuration options are documented in :ref:`config`.
+The full set of configuration options are documented in :ref:`schemaregistry_config`.
 
 However, there are some logistical configurations that should be changed for production. These changes are necessary because there is no way to set a good default (because it depends on your cluster layout).
 
@@ -168,7 +168,7 @@ A schema registry server with ``master.eligibility`` set to false is guaranteed 
 
 Detailed Example
 ^^^^^^^^^^^^^^^^
-Let's set up a simple example ...
+Let's set up a simple example ... TBD
 
 -         start_zk(config_dir + zk_a_config)
         start_kafka(config_dir + broker_a_config)

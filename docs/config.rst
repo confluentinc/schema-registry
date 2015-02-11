@@ -1,4 +1,4 @@
-.. _config:
+.. _schemaregistry_config:
 
 Configuration Options
 =====================
