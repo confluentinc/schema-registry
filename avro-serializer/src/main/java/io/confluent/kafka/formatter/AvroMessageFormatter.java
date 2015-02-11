@@ -42,12 +42,12 @@ import kafka.tools.MessageFormatter;
  * 1. To read only the value of the messages in JSON
  * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
  *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
- *   --property schema.registry.url=http://localhost:8080
+ *   --property schema.registry.url=http://localhost:8081
  *
  * 2. To read both the key and the value of the messages in JSON
  * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
  *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
- *   --property schema.registry.url=http://localhost:8080 \
+ *   --property schema.registry.url=http://localhost:8081 \
  *   --property print.key=true
  *
  */

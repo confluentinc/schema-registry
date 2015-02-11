@@ -33,25 +33,34 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
   private final EncoderFactory encoderFactory = EncoderFactory.get();
 
-  protected byte[] serializeImpl(String subject, Object record) throws SerializationException {
+  protected byte[] serializeImpl(String subject, Object object) throws SerializationException {
     Schema schema = null;
+    // null needs to treated specially since the client most likely just wants to send
+    // an individual null value instead of making the subject a null type. Also, null in
+    // Kafka has a special meaning for deletion in a topic with the compact retention policy.
+    // Therefore, we will bypass schema registration and return a null value in Kafka, instead
+    // of an Avro encoded null.
+    if (object == null) {
+      return null;
+    }
+
     try {
-      schema = getSchema(record);
+      schema = getSchema(object);
       int id = schemaRegistry.register(subject, schema);
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
-      if (record instanceof byte[]) {
-        out.write((byte[]) record);
+      if (object instanceof byte[]) {
+        out.write((byte[]) object);
       } else {
         BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
         DatumWriter<Object> writer;
-        if (record instanceof SpecificRecord) {
+        if (object instanceof SpecificRecord) {
           writer = new SpecificDatumWriter<Object>(schema);
         } else {
           writer = new GenericDatumWriter<Object>(schema);
         }
-        writer.write(record, encoder);
+        writer.write(object, encoder);
         encoder.flush();
       }
       byte[] bytes = out.toByteArray();

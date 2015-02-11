@@ -29,14 +29,14 @@ Assuming you have the Kafka and Schema Registry code checked out:
 
    # Make a few requests to test the API:
    # Get a list of topics
-   $ curl "http://localhost:8080/topics"
+   $ curl "http://localhost:8081/topics"
      [{"name":"test","num_partitions":3},{"name":"test2","num_partitions":1}]
    # Get info about one partition
-   $ curl "http://localhost:8080/topics/test"
+   $ curl "http://localhost:8081/topics/test"
      {"name":"test","num_partitions":3}
    # Produce a message with value "Kafka" to the topic test
    $ curl -X POST -H "Content-Type: application/vnd.kafka.v1+json" \
-         --data '{"records":[{"value":"S2Fma2E="}]}' "http://localhost:8080/topics/test"
+         --data '{"records":[{"value":"S2Fma2E="}]}' "http://localhost:8081/topics/test"
      {"offsets":[{"partition": 3, "offset": 1}]}
 
 Installation
@@ -59,7 +59,7 @@ where ``server.properties`` contains configuration settings as specified by the
 ``SchemaRegistryConfig`` class. Although the properties file is not required,
 the default configuration is not intended for production. Production deployments
 *should* specify a properties file. By default the server starts bound to port
-8080, does not specify a unique instance ID (required to safely run multiple
+8081, does not specify a unique instance ID (required to safely run multiple
 proxies concurrently), and expects Zookeeper to be available at ``localhost:2181``
 and a Kafka broker at ``localhost:9092``.
 
