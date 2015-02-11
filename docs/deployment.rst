@@ -174,25 +174,27 @@ Namespace under which schema registry related metadata is stored in Zookeeper. T
 ``master.eligibility``
 A schema registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. Schema Registry instances in a "slave" data center should have this set to false, and Schema Registry instances local to the shared Kafka cluster should have this set to true.
 
-
 Setup
 ^^^^^
 
-pre mirror maker - want to create topic w/desired configs - uncleanleader, #replicas,
-where mirror maker runs
+Assuming you have Schema Registry running up and running, here are the recommended steps to expand Schema Registry to another datacenter (call it DC B).
 
+- In DC B, make sure Kafka has ``unclean.leader.election.enable`` set to false.
 
+- In Kafka in DC B, create the ``_schemas`` topic. It should have 1 partition, ``kafkastore.topic.replication.factor`` of 3, and ``min.insync.replicas`` at least 2.
+
+- Start up MirrorMaker in DC B (so reads are remote and writes are local).
+
+- In the Schema Registry config files in DC B, ensure the settings ``kafkastore.connection.url``, ``schema.registry.zk.namespace`` match the instances already running, and ensure ``master.eligibility`` is set to false.
+
+- Start your new Schema Registry instances.
 
 Run book
 ^^^^^^^^
-Suppose in the example above that DC A has gone completely dark. In that case, the schema registries in DC B will have no master, but will continue to be able to serve any request that does not result in a write to the (now dead) underlying Kafka store. This includes GET requests on existing ids and POST requests on schemas already in the registry.
+Suppose you have Schema Registry running in multiple datacenters, and you have lost your "master" datacenter, what do you do? First, note that the remaining Schema Registry instances will continue to be able to serve any request which does not result in a write to Kafka. This includes GET requests on existing ids and POST requests on schemas already in the registry.
 
-
-If machines in DC A can be brought back up, do so.
-
-If the machines in DC A are brought back up, the schema registries can be restarted in a rolling fashion with their keeping their original configuration settings intact.
-
-If it is necessary to point the schema registry nodes in DC B to their local Kafka cluster, the schema registries should be restarted in a rolling fashion with new configurations updating ``kafkastore.connection.url`` to point to the Zookeeper cluster in DC B, and with ``master.eligibility`` set to true. Note that a given node will not be able to register new schemas or be consistent with the new master until after restart.
+- If possible, revive the "master" datacenter by starting Kafka and Schema Registry as before.
+- If you must designate a new datacenter (call it DC B) as "master", update the Schema Registry config files so that ``kafkastore.connection.url`` points to the local ZooKeeper, and change ``master.eligibility`` to true. The restart your Schema Registry instances with these new configs in a rolling fashion.
 
 
 
