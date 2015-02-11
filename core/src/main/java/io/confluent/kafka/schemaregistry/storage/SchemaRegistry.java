@@ -39,6 +39,8 @@ public interface SchemaRegistry {
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
 
+  Schema lookUpSchemaUnderSubject(String subject, Schema schema) throws SchemaRegistryException;
+
   public boolean isCompatible(String subject,
                               String inputSchema,
                               String targetSchema) throws SchemaRegistryException;

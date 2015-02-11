@@ -3,6 +3,14 @@ Serializer and Formatter
 
 In this document, we describe how to use Avro in Kafka java client and Kafka console tools.
 
+Assuming that you have the Schema Registry source code checked out at /tmp/schema-registry, the
+following is how you can obtain all needed jars.
+
+.. sourcecode:: bash
+
+   mvn package
+   The jars can be found at /tmp/schema-registrypackage/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/
+
 Serializer
 ----------
 
@@ -148,14 +156,6 @@ kafka-console-consumer respectively to send and receive Avro data in json format
 To run the Kafka console tools, first make sure that Zookeeper, Kafka and Schema Registry server
 are all started. Second, make sure the jars for AvroMessageReader and AvroMessageFormatter are
 included in the classpath of kafka-console-producer.sh and kafka-console-consumer.sh.
-
-Assuming that you have the Schema Registry source code checked out at /tmp/schema-registry, the
-following is how you can obtain all needed jars.
-
-.. sourcecode:: bash
-
-   mvn package
-   The jars can be found at /tmp/schema-registrypackage/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/
 
 In the following example, we send Avro records in json as the message value (make sure there is no space in the schema string).
 

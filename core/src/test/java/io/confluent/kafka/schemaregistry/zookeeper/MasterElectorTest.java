@@ -132,8 +132,9 @@ public class MasterElectorTest extends ClusterTestHarness {
     // fake an incorrect master and registration should fail
     restApp1.setMaster(null);
     int statusCodeFromRestApp1 = 0;
+    final String failedSchema = "{\"type\":\"string\"}";;
     try {
-      TestUtils.registerSchema(restApp1.restConnect, "failed schema", subject);
+      TestUtils.registerSchema(restApp1.restConnect, failedSchema, subject);
       fail("Registration should fail on the master");
     } catch (RestClientException e) {
       // this is expected.
@@ -142,7 +143,7 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     int statusCodeFromRestApp2 = 0;
     try {
-      TestUtils.registerSchema(restApp2.restConnect, "failed schema", subject);
+      TestUtils.registerSchema(restApp2.restConnect, failedSchema, subject);
       fail("Registration should fail on the non-master");
     } catch (RestClientException e) {
       // this is expected.

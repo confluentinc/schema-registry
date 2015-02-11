@@ -293,8 +293,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * Checks if given schema was ever registered under a subject. If found, it returns the version of
    * the schema under the subject. If not, returns -1
    */
-  public Schema lookUpSchemaUnderSubject(
-      String subject, Schema schema) {
+  public Schema lookUpSchemaUnderSubject(String subject, Schema schema)
+      throws SchemaRegistryException {
+    canonicalizeSchema(schema);
     // see if the schema to be registered already exists
     MD5 md5 = MD5.ofString(schema.getSchema());
     if (this.schemaHashToGuid.containsKey(md5)) {
