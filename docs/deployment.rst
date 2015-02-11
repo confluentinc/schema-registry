@@ -141,29 +141,61 @@ Please refer to the Kafka Operations document for recommendations on operational
 
 .. _mirroring:
 
-Multi-DC setup
+Multi-DC Setup
 ~~~~~~~~~~~~~~
 
-We refer to the process of replicating data between Kafka clusters "mirroring" to avoid confusion with the replication that happens amongst the nodes in a single cluster. Kafka comes with a tool for mirroring data between Kafka clusters. The tool reads from one or more source clusters and writes to a destination cluster, like this:
 
-.. image:: mirror-maker.png
+Overview
+^^^^^^^^
+Setting up a schema registry to span multiple datacenters just requires pointing all schema registry nodes to the same Zookeeper cluster (``kafkastore.connection.url``), and ensuring that each schema registry instance shares the same Zookeeper namespace (``schema.registry.zk.namespace``).
 
-A common use case for this kind of mirroring is to provide a replica in another datacenter. This scenario will be discussed in more detail in the next section.
+Since the Confluent schema registry is designed to be a single master system, and only the master can make writes to the underlying Kafka logs, we have provided a setting called ``master.eligibility`` to provide control over which schema registry nodes are eligible to become master in case of re-election. For added insurance against data center failure, it is possible to replicate the underlying Kafka log data underlying to one or more additional data centers using MirrorMaker.
 
-You can run many such mirroring processes to increase throughput and for fault-tolerance (if one process dies, the others will take overs the additional load).
 
-Data will be read from topics in the source cluster and written to a topic with the same name in the destination cluster. In fact the mirror maker is little more than a Kafka consumer and producer hooked together.
+.. image:: multi-dc-setup.bmp
 
-The source and destination clusters are completely independent entities: they can have different numbers of partitions and the offsets will not be the same. For this reason the mirror cluster is not really intended as a fault-tolerance mechanism (as the consumer position will be different); for that we recommend using normal in-cluster replication. The mirror maker process will, however, retain and use the message key for partitioning so order is preserved on a per-key basis.
+Important Settings
+^^^^^^^^^^^^^^^^^^
+``kafkastore.connection.url``
+kafkastore.connection.url should be identical across all schema registry nodes.
 
-Here is an example showing how to mirror a single topic (named my-topic) from two input clusters:
+``schema.registry.zk.namespace``
+Namespace under which schema registry related metadata is stored in Zookeeper. This setting should be identical across all nodes in the same schema registry.
 
-``bin/kafka-run-class.sh kafka.tools.MirrorMaker --consumer.config consumer-1.properties --consumer.config consumer-2.properties --producer.config producer.properties --whitelist my-topic``
+``master.eligibility``
+A schema registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election.
 
-Note that we specify the list of topics with the ``--whitelist`` option. This option allows any regular expression using Java-style regular expressions. So you could mirror two topics named A and B using ``--whitelist 'A|B'``. Or you could mirror all topics using ``--whitelist '*'``. Make sure to quote any regular expression to ensure the shell doesn't try to expand it as a file path. For convenience we allow the use of ',' instead of '|' to specify a list of topics.
 
-Sometimes it is easier to say what it is that you don't want. Instead of using ``--whitelist`` to say what you want to mirror you can use ``--blacklist`` to say what to exclude. This also takes a regular expression argument.
+Detailed Example
+^^^^^^^^^^^^^^^^
+Let's set up a simple example ...
 
-Combining mirroring with the configuration ``auto.create.topics.enable=true`` makes it possible to have a replica cluster that will automatically create and replicate all data in a source cluster even as new topics are added.
+-         start_zk(config_dir + zk_a_config)
+        start_kafka(config_dir + broker_a_config)
+        start_sr(os.path.join(config_dir, sr_a_config))
+
+        print "Starting up colo B..."
+        start_zk(config_dir + zk_b_config)
+        start_kafka(config_dir + broker_b_config)
+        start_sr(os.path.join(config_dir, sr_b_before_flip))
+
+        cmd = "bin/kafka-topics.sh --zookeeper localhost:2171 --topic _schemas --create --partitions 1 --replication-factor 1 --config unclean.leader.election.enable=false"
+        run_cmd([cmd])
+        time.sleep(1)
+
+        start_mirror(config_dir + mirror_consumer_config, config_dir + mirror_producer_config, whitelist="_schemas")
+
+Installation
+^^^^^^^^^^^^
+Suppose your schema registry is working nicely in a single datacenter, DC A, and you wish to expend it to another.
+
+Run book
+^^^^^^^^
+Suppose in the example above that DC A has gone completely dark. In that case, the schema registries in DC B will have no master, but will continue to be able to serve any request that does not result in a write to the (now dead) underlying Kafka store. This includes GET requests on existing ids and POST requests on schemas already in the registry.
+
+If the machines in DC A are brought back up, the schema registries can be restarted in a rolling fashion with their keeping their original configuration settings intact.
+
+If it is necessary to point the schema registry nodes in DC B to their local Kafka cluster, the schema registries should be restarted in a rolling fashion with new configurations updating ``kafkastore.connection.url`` to point to the Zookeeper cluster in DC B, and with ``master.eligibility`` set to true. Note that a given node will not be able to register new schemas or be consistent with the new master until after restart.
+
 
 
