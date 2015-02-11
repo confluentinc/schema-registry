@@ -1,14 +1,12 @@
 Production Deployment
 ---------------------
 
-This section is not meant to be an exhaustive guide to running your Kafka cluster in production, but it
-covers the key things to consider before putting your cluster live
-
-Three main areas are covered:
+This section is not meant to be an exhaustive guide to running your Schema Registry in production, but it
+covers the key things to consider before putting your cluster live. Three main areas are covered:
 
 * Logistical considerations, such as hardware recommendations and deployment strategies
-* Configuration changes that are more suited to a production environment
-* Post-deployment considerations, such as data rebalancing, multi-data center setup 
+* Configuration more suited to a production environment
+* Post-deployment considerations, such multi-data center setup
 
 .. toctree::
    :maxdepth: 3
@@ -16,21 +14,19 @@ Three main areas are covered:
 Hardware
 ~~~~~~~~
 
-If you’ve been following the normal development path, you’ve probably been playing with schema registry
+If you’ve been following the normal development path, you’ve probably been playing with Schema Registry
 on your laptop or on a small cluster of machines laying around. But when it comes time to deploying 
-Schema Registry to production, there are a few recommendations that you should consider. Nothing is a hard-and-fast rule; 
+Schema Registry to production, there are a few recommendations that you should consider. Nothing is a hard-and-fast rule.
 
 Memory
 ^^^^^^
 
-Schema registry uses Kafka as a commit log to store all registered schemas durably and maintains a few in memory indices to make schema lookups faster. Schemas are stored uncompressed in the in-memory indices. A good estimate of the number of unique schemas registered in a large data-oriented company like LinkedIn is around 10,000. Roughly schema size is 500 bytes on an average. For such an installation, heap size of 1GB would suffice. As such, machines with 16GB of RAM is a decent choice. 
+Schema Registry uses Kafka as a commit log to store all registered schemas durably, and maintains a few in-memory indices to make schema lookups faster. A conservative upper bound on the number of unique schemas registered in a large data-oriented company like LinkedIn is around 10,000. Assuming roughly 1000 bytes heap overhead per schema on average, heap size of 1GB would be more than sufficient.
 
 CPUs
 ^^^^
 
-Most Kafka deployments tend to be rather light on CPU requirements. Though the exact processor setup matters
-less than the other resources. You should choose a modern processor with multiple cores. Common clusters utilize
-24 core machines.
+CPU usage in Schema Registry is light. The most computationally intensive task is checking compatibility of two schemas, an infrequent operation which occurs primarily when new schemas versions are registered under a subject.
 
 If you need to choose between faster CPUs or more cores, choose more cores. The extra concurrency that multiple
 cores offers will far outweigh a slightly faster clock speed.
@@ -38,7 +34,7 @@ cores offers will far outweigh a slightly faster clock speed.
 Disks
 ^^^^^
 
-Schema registry does not have any disk resident data. It currently uses Kafka as a commit log to store all schemas durably and holds in-memory indices of all schemas. As such, the only disk usage comes from storing the log4j logs.
+Schema Registry does not have any disk resident data. It currently uses Kafka as a commit log to store all schemas durably and holds in-memory indices of all schemas. Therefore, the only disk usage comes from storing the log4j logs.
 
 Network
 ^^^^^^^
@@ -49,7 +45,7 @@ Avoid clusters that span multiple data centers, even if the data centers are col
 
 Larger latencies tend to exacerbate problems in distributed systems and make debugging and resolution more difficult.
 
-Often, people might assume the pipe between multiple data centers is robust or low latency. But this is usually not true and network failures might happen at some point. Please refer to our recommended multi-DC setup here.
+Often, people might assume the pipe between multiple data centers is robust or low latency. But this is usually not true and network failures might happen at some point. Please refer to our recommended :ref:`mirroring`.
 
 JVM
 ~~~
@@ -64,7 +60,7 @@ that version. Our recommended GC tuning looks like this:
 Important Configuration Options
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The full set of configuration options are documented here. 
+The full set of configuration options are documented in :ref:`config`.
 
 However, there are some logistical configurations that should be changed for production. These changes are necessary because there is no way to set a good default (because it depends on your cluster layout).
 
@@ -78,15 +74,22 @@ Zookeeper url for the Kafka cluster
 Port to listen on for new connections.
 
 * Type: int
-* Default: 8080
+* Default: 8081
 * Importance: high
 
 ``host.name``
-Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may need to be different from the interface to which the broker binds. If this is not set, it will use the value returned from java.net.InetAddress.getCanonicalHostName().
+Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may need to be different from the interface to which the broker binds. If this is not set, it will use the value returned from ``java.net.InetAddress.getCanonicalHostName()``.
 
 * Type: string
 * Default: ``host.name``
 * Importance: high
+
+.. note::
+
+     Configure ``min.insync.replicas`` on the Kafka server for the schemas topic that stores all registered
+     schemas to be higher than 1. For example, if the ``kafkastore.topic.replication.factor`` is 3, then set
+     ``min.insync.replicas`` on the Kafka server for the ``kafkastore.topic`` to 2. This ensures that the
+     register schema write is considered durable if it gets committed on at least 2 replicas out of 3. Furthermore, it is best to set ``unclean.leader.election.enable`` to false so that a replica outside of the isr is never elected leader (potentially resulting in data loss).
 
 Don't Touch These Settings!
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -94,20 +97,13 @@ Don't Touch These Settings!
 Storage settings
 ^^^^^^^^^^^^^^^^
 
-Schema registry stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for the schema registry database and is the source of truth, writes to this store need to be durable. Schema Registry ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Whenever in doubt, leave these settings alone.
-
-.. note:: 
-
-     Configure ``min.insync.replicas`` on the Kafka server for the schemas topic that stores all registered 
-     schemas to be higher than 1. For example, if the ``kafkastore.topic.replication.factor`` is 3, then set 
-     ``min.insync.replicas`` on the Kafka server for the ``kafkastore.topic`` to 2. This ensures that the 
-     register schema write is considered durable if it gets committed on at least 2 replicas out of 3.
+Schema Registry stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for the Schema Registry database and is the source of truth, writes to this store need to be durable. Schema Registry ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Whenever in doubt, leave these settings alone.
 
 ``kafkastore.topic``
 The single partition topic that acts as the durable log for the data
 
 * Type: string
-* Default: _schemas
+* Default: "_schemas"
 * Importance: high
 
 ``kafkastore.topic.replication.factor``
@@ -131,7 +127,7 @@ The amount of time in milliseconds to wait before attempting to retry a failed w
 * Default: 100
 * Importance: medium
 
-`kafkastore.timeout.ms``
+``kafkastore.timeout.ms``
 The timeout for an operation on the Kafka store. This is the maximum time that a register call blocks.
 
 * Type: int

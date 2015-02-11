@@ -1,3 +1,5 @@
+.. _config:
+
 Configuration Options
 =====================
 ``kafkastore.connection.url``
