@@ -13,19 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.serializers;
+package io.confluent.kafka.schemaregistry.client;
 
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public class LocalSchemaRegistryClient implements SchemaRegistryClient {
@@ -60,7 +59,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     Map<Schema, Integer> schemaVersionMap;
     int currentVersion;
     if (versions.isEmpty()) {
-      schemaVersionMap = new HashMap<Schema, Integer>();
+      schemaVersionMap = new IdentityHashMap<Schema, Integer>();
       currentVersion = 1;
     } else {
       schemaVersionMap = versionCache.get(subject);
@@ -84,15 +83,6 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       return idCache.get(id);
     } else {
       throw new IOException("Cannot get schema from schema registry!");
-    }
-  }
-
-  private int getVersionFromRegistry(String subject, Schema schema)
-      throws IOException, RestClientException{
-    if (versionCache.containsKey(subject)) {
-      return versionCache.get(subject).get(schema);
-    } else {
-      throw new IOException("Cannot get version from schema registry!");
     }
   }
 
@@ -127,8 +117,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
-  @Override
-  public synchronized int getLatestVersion(String subject)
+   private int getLatestVersion(String subject)
       throws IOException, RestClientException {
     ArrayList<Integer> versions = getAllVersions(subject);
     if (versions.isEmpty()) {
@@ -139,34 +128,32 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public String getLatestSchema(String subject)
+  public synchronized SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException {
     int version = getLatestVersion(subject);
+    String schemaString = null;
     Map<Schema, Integer> schemaVersionMap = versionCache.get(subject);
-    for( Map.Entry<Schema, Integer> entry: schemaVersionMap.entrySet()) {
+    for (Map.Entry<Schema, Integer> entry: schemaVersionMap.entrySet()) {
       if (entry.getValue() == version) {
-        return entry.getKey().toString();
+        schemaString = entry.getKey().toString();
       }
     }
-    return null;
+    int id = -1;
+    for (Map.Entry<Integer, Schema> entry: idCache.entrySet()) {
+      if (entry.getValue().toString().equals(schemaString)) {
+         id = entry.getKey();
+      }
+    }
+    return new SchemaMetadata(id, version, schemaString);
   }
 
   @Override
   public synchronized int getVersion(String subject, Schema schema)
       throws IOException, RestClientException{
-    Map<Schema, Integer> schemaVersionMap;
     if (versionCache.containsKey(subject)) {
-      schemaVersionMap = versionCache.get(subject);
+      return versionCache.get(subject).get(schema);
     } else {
-      schemaVersionMap = new HashMap<Schema, Integer>();
-    }
-
-    if (schemaVersionMap.containsKey(schema)) {
-      return schemaVersionMap.get(schema);
-    }  else {
-      int version = getVersionFromRegistry(subject, schema);
-      schemaVersionMap.put(schema, version);
-      return version;
+      throw new IOException("Cannot get version from schema registry!");
     }
   }
 }

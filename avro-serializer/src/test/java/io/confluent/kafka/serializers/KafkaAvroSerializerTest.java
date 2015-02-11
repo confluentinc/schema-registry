@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.LocalSchemaRegistryClient;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
