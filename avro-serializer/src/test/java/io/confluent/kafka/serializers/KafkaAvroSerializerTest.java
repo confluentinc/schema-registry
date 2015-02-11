@@ -112,6 +112,16 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testNull() {
+    SchemaRegistryClient nullSchemaRegistryClient = null;
+    KafkaAvroSerializer nullAvroSerializer = new KafkaAvroSerializer(nullSchemaRegistryClient);
+
+    // null doesn't require schema registration. So serialization should succeed with a null
+    // schema registry client.
+    assertEquals(null, nullAvroSerializer.serialize("test", null));
+  }
+
+  @Test
   public void testKafkaAvroEncoder() {
     byte[] bytes;
     Object obj;
