@@ -157,8 +157,10 @@ Recommended Deployment
 
 .. image:: multi-dc-setup.bmp
 
-Brief explanation of pic - master, slave DC, mirror maker etc.
-where mirror maker runs (recommend that it writes locally, reads remotely)
+In the image above, there are two datacenters - DC A, and DC B. Each of the two datacenters has its own ZooKeeper
+cluster, Kafka cluster, and Schema Registry cluster. Both Schema Registry clusters link to Kafka and ZooKeeper in DC A. Note that the Schema Registry instances in DC B have ``master.eligibility`` set to false, meaning that none can ever be elected master.
+
+To protect against complete loss of DC A, Kafka cluster A (the source) is mirrored to the Kafka cluster B (the target) with Kafka's MirrorMaker tool, which runs local to the target cluster.
 
 Important Settings
 ^^^^^^^^^^^^^^^^^^
@@ -175,7 +177,6 @@ A schema registry server with ``master.eligibility`` set to false is guaranteed 
 
 Setup
 ^^^^^
-
 
 pre mirror maker - want to create topic w/desired configs - uncleanleader, #replicas,
 where mirror maker runs
