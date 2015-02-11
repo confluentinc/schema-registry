@@ -153,7 +153,7 @@ Overview
 ^^^^^^^^
 Setting up a schema registry to span multiple datacenters just requires pointing all schema registry nodes to the same Zookeeper cluster (``kafkastore.connection.url``), and ensuring that each schema registry instance shares the same Zookeeper namespace (``schema.registry.zk.namespace``).
 
-Since the Confluent schema registry is designed to be a single master system, and only the master can make writes to the underlying Kafka logs, we have provided a setting called ``master.eligibility`` to provide control over which schema registry nodes are eligible to become master in case of re-election. For added insurance against data center failure, it is possible to replicate the Kafka log data underlying the schema registry to one or more additional data centers using MirrorMaker.
+Since the Confluent schema registry is designed to be a single master system, and only the master can make writes to the underlying Kafka logs, we have provided a setting called ``master.eligibility`` to provide control over which schema registry nodes are eligible to become master in case of re-election. For added insurance against data center failure, it is possible to replicate the underlying Kafka log data underlying to one or more additional data centers using MirrorMaker.
 
 
 .. image:: multi-dc-setup.bmp
