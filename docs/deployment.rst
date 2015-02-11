@@ -163,43 +163,24 @@ where mirror maker runs (recommend that it writes locally, reads remotely)
 Important Settings
 ^^^^^^^^^^^^^^^^^^
 
-Setting up a schema registry to span multiple datacenters just requires pointing all schema registry nodes to the same Zookeeper cluster (``kafkastore.connection.url``), and ensuring that each schema registry instance shares the same Zookeeper namespace (``schema.registry.zk.namespace``).
-
-Since the Confluent schema registry is designed to be a single master system, and only the master can make writes to the underlying Kafka logs, we have provided a setting called ``master.eligibility`` to provide control over which schema registry nodes are eligible to become master in case of re-election. For added insurance against data center failure, it is possible to replicate the underlying Kafka log data underlying to one or more additional data centers using MirrorMaker.
-
-
 ``kafkastore.connection.url``
-kafkastore.connection.url should be identical across all schema registry nodes.
+kafkastore.connection.url should be identical across all schema registry nodes. By sharing this setting, all Schema Registry instances will point to the same ZooKeeper cluster.
 
 ``schema.registry.zk.namespace``
 Namespace under which schema registry related metadata is stored in Zookeeper. This setting should be identical across all nodes in the same schema registry.
 
 ``master.eligibility``
-A schema registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election.
+A schema registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. Schema Registry instances in a "slave" data center should have this set to false, and Schema Registry instances local to the shared Kafka cluster should have this set to true.
 
 
 Setup
 ^^^^^
 
+
 pre mirror maker - want to create topic w/desired configs - uncleanleader, #replicas,
 where mirror maker runs
 
-Let's set up a simple example ... TBD
 
--         start_zk(config_dir + zk_a_config)
-        start_kafka(config_dir + broker_a_config)
-        start_sr(os.path.join(config_dir, sr_a_config))
-
-        print "Starting up colo B..."
-        start_zk(config_dir + zk_b_config)
-        start_kafka(config_dir + broker_b_config)
-        start_sr(os.path.join(config_dir, sr_b_before_flip))
-
-        cmd = "bin/kafka-topics.sh --zookeeper localhost:2171 --topic _schemas --create --partitions 1 --replication-factor 1 --config unclean.leader.election.enable=false"
-        run_cmd([cmd])
-        time.sleep(1)
-
-        start_mirror(config_dir + mirror_consumer_config, config_dir + mirror_producer_config, whitelist="_schemas")
 
 Run book
 ^^^^^^^^

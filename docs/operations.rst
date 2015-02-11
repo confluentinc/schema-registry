@@ -1,3 +1,5 @@
+.. _schemaregistry_operations:
+
 Schema Registry Operations
 ==========================
 
