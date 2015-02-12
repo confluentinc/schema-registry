@@ -34,7 +34,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
-  private final Schema.Parser parser = new Schema.Parser();
 
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
     this.baseUrl = baseUrl;
@@ -56,7 +55,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
     SchemaString restSchema =
         RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
-    return parser.parse(restSchema.getSchemaString());
+    return new Schema.Parser().parse(restSchema.getSchemaString());
   }
 
 
