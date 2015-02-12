@@ -83,6 +83,10 @@ public class RestUtils {
       SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE =
       new TypeReference<Schema>() {
       };
+  private final static TypeReference<ConfigUpdateRequest>
+      UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE =
+      new TypeReference<ConfigUpdateRequest>() {
+      };
   private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
   /**
@@ -188,14 +192,18 @@ public class RestUtils {
     return response.getIsCompatible();
   }
 
-  public static void updateConfig(String baseUrl, Map<String, String> requestProperties,
-                                  ConfigUpdateRequest configUpdateRequest, String subject)
+  public static ConfigUpdateRequest updateConfig(String baseUrl,
+                                                 Map<String, String> requestProperties,
+                                                 ConfigUpdateRequest configUpdateRequest,
+                                                 String subject)
       throws IOException, RestClientException {
     String url = subject != null ? String.format("%s/config/%s", baseUrl, subject) :
                  String.format("%s/config", baseUrl);
 
-    RestUtils.httpRequest(url, "PUT", configUpdateRequest.toJson().getBytes(),
-                          requestProperties, null);
+    ConfigUpdateRequest response =
+        RestUtils.httpRequest(url, "PUT", configUpdateRequest.toJson().getBytes(),
+                              requestProperties, UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE);
+    return response;
   }
 
   public static Config getConfig(String baseUrl,
@@ -211,11 +219,11 @@ public class RestUtils {
   }
 
   public static SchemaString getId(String baseUrl, Map<String, String> requestProperties,
-                             int id) throws IOException, RestClientException {
+                                   int id) throws IOException, RestClientException {
     String url = String.format("%s/schemas/ids/%d", baseUrl, id);
 
     SchemaString response = RestUtils.httpRequest(url, "GET", null, requestProperties,
-                                            GET_SCHEMA_BY_ID_RESPONSE_TYPE);
+                                                  GET_SCHEMA_BY_ID_RESPONSE_TYPE);
     return response;
   }
 
@@ -230,7 +238,7 @@ public class RestUtils {
   }
 
   public static Schema getLatestVersion(String baseUrl, Map<String, String> requestProperties,
-                                  String subject)
+                                        String subject)
       throws IOException, RestClientException {
     String url = String.format("%s/subjects/%s/versions/latest", baseUrl, subject);
 

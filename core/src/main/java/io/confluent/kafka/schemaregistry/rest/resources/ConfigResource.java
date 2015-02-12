@@ -61,47 +61,48 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @PUT
-  public void updateSubjectLevelConfig(@PathParam("subject") String subject,
-                                       final @HeaderParam("Content-Type") String contentType,
-                                       final @HeaderParam("Accept") String accept,
-                                       ConfigUpdateRequest request) {
-    if (request != null) {
-      Set<String> subjects = null;
-      try {
-        subjects = schemaRegistry.listSubjects();
-      } catch (SchemaRegistryStoreException e) {
-        throw Errors.storeException("Failed to retrieve a list of all subjects"
-                                    + " from the registry", e);
-      } catch (SchemaRegistryException e) {
-        throw Errors.schemaRegistryException("Failed to retrieve a list of all subjects"
-                                             + " from the registry", e);
-      }
-      AvroCompatibilityLevel compatibilityLevel =
-          AvroCompatibilityLevel.forName(request.getCompatibilityLevel());
-      if (compatibilityLevel == null) {
-        throw new RestInvalidCompatibilityException();
-      }
-      try {
-        Map<String, String> headerProperties = new HashMap<String, String>();
-        headerProperties.put("Content-Type", contentType);
-        headerProperties.put("Accept", accept);
-        schemaRegistry.updateConfigOrForward(subject, compatibilityLevel, headerProperties);
-      } catch (SchemaRegistryStoreException e) {
-        throw Errors.storeException("Failed to update compatibility level", e);
-      } catch (UnknownMasterException e) {
-        throw Errors.unknownMasterException("Failed to update compatibility level", e);
-      } catch (SchemaRegistryRequestForwardingException e) {
-        throw Errors.requestForwardingFailedException("Error while forwarding update config request"
-                                                      + " to the master", e);
-      }
-      if (!subjects.contains(subject)) {
-        log.debug("Updated compatibility level for unregistered subject " + subject + " to "
-                  + request.getCompatibilityLevel());
-      } else {
-        log.debug("Updated compatibility level for subject " + subject + " to "
-                  + request.getCompatibilityLevel());
-      }
+  public ConfigUpdateRequest updateSubjectLevelConfig(
+      @PathParam("subject") String subject,
+      final @HeaderParam("Content-Type") String contentType,
+      final @HeaderParam("Accept") String accept,
+      ConfigUpdateRequest request) {
+    Set<String> subjects = null;
+    try {
+      subjects = schemaRegistry.listSubjects();
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Failed to retrieve a list of all subjects"
+                                  + " from the registry", e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Failed to retrieve a list of all subjects"
+                                           + " from the registry", e);
     }
+    AvroCompatibilityLevel compatibilityLevel =
+        AvroCompatibilityLevel.forName(request.getCompatibilityLevel());
+    if (compatibilityLevel == null) {
+      throw new RestInvalidCompatibilityException();
+    }
+    try {
+      Map<String, String> headerProperties = new HashMap<String, String>();
+      headerProperties.put("Content-Type", contentType);
+      headerProperties.put("Accept", accept);
+      schemaRegistry.updateConfigOrForward(subject, compatibilityLevel, headerProperties);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Failed to update compatibility level", e);
+    } catch (UnknownMasterException e) {
+      throw Errors.unknownMasterException("Failed to update compatibility level", e);
+    } catch (SchemaRegistryRequestForwardingException e) {
+      throw Errors.requestForwardingFailedException("Error while forwarding update config request"
+                                                    + " to the master", e);
+    }
+    if (!subjects.contains(subject)) {
+      log.debug("Updated compatibility level for unregistered subject " + subject + " to "
+                + request.getCompatibilityLevel());
+    } else {
+      log.debug("Updated compatibility level for subject " + subject + " to "
+                + request.getCompatibilityLevel());
+    }
+
+    return request;
   }
 
   @Path("/{subject}")
@@ -113,35 +114,36 @@ public class ConfigResource {
       config = new Config(compatibilityLevel == null ? null : compatibilityLevel.name);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get the configs for subject "
-                                                 + subject, e);
+                                  + subject, e);
     }
     return config;
   }
 
   @PUT
-  public void updateTopLevelConfig(final @HeaderParam("Content-Type") String contentType,
-                                   final @HeaderParam("Accept") String accept,
-                                   ConfigUpdateRequest request) {
-    if (request.getCompatibilityLevel() != null) {
-      try {
-        AvroCompatibilityLevel compatibilityLevel =
-            AvroCompatibilityLevel.forName(request.getCompatibilityLevel());
-        if (compatibilityLevel == null) {
-          throw new RestInvalidCompatibilityException();
-        }
-        Map<String, String> headerProperties = new HashMap<String, String>();
-        headerProperties.put("Content-Type", contentType);
-        headerProperties.put("Accept", accept);
-        schemaRegistry.updateConfigOrForward(null, compatibilityLevel, headerProperties);
-      } catch (SchemaRegistryStoreException e) {
-        throw Errors.storeException("Failed to update compatibility level", e);
-      } catch (UnknownMasterException e) {
-        throw Errors.unknownMasterException("Failed to update compatibility level", e);
-      }  catch (SchemaRegistryRequestForwardingException e) {
-        throw Errors.requestForwardingFailedException("Error while forwarding update config request"
-                                                      + " to the master", e);
-      }
+  public ConfigUpdateRequest updateTopLevelConfig(
+      final @HeaderParam("Content-Type") String contentType,
+      final @HeaderParam("Accept") String accept,
+      ConfigUpdateRequest request) {
+    AvroCompatibilityLevel compatibilityLevel =
+        AvroCompatibilityLevel.forName(request.getCompatibilityLevel());
+    if (compatibilityLevel == null) {
+      throw new RestInvalidCompatibilityException();
     }
+    try {
+      Map<String, String> headerProperties = new HashMap<String, String>();
+      headerProperties.put("Content-Type", contentType);
+      headerProperties.put("Accept", accept);
+      schemaRegistry.updateConfigOrForward(null, compatibilityLevel, headerProperties);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Failed to update compatibility level", e);
+    } catch (UnknownMasterException e) {
+      throw Errors.unknownMasterException("Failed to update compatibility level", e);
+    } catch (SchemaRegistryRequestForwardingException e) {
+      throw Errors.requestForwardingFailedException("Error while forwarding update config request"
+                                                    + " to the master", e);
+    }
+
+    return request;
   }
 
   @GET

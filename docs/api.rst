@@ -403,6 +403,10 @@ The config resource allows you to inspect the cluster-level configuration values
       HTTP/1.1 200 OK
       Content-Type: application/vnd.schemaregistry.v1+json
 
+      {
+        "compatibility": "FULL",
+      }
+
 .. http:get:: /config
 
    Get global compatibility level.
@@ -462,6 +466,10 @@ The config resource allows you to inspect the cluster-level configuration values
 
       HTTP/1.1 200 OK
       Content-Type: application/vnd.schemaregistry.v1+json
+
+      {
+        "compatibility": "FULL",
+      }
 
 .. http:get:: /config/(string: subject)
 

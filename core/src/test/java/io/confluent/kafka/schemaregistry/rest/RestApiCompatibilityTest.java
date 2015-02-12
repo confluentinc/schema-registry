@@ -130,7 +130,11 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     }
 
     // change compatibility level to none and try again
-    TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.NONE, null);
+    assertEquals("Changing compatibility level should succeed",
+                 AvroCompatibilityLevel.NONE.name,
+                 TestUtils
+                     .changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.NONE, null)
+                     .getCompatibilityLevel());
 
     try {
       TestUtils.registerSchema(restApp.restConnect, incompatibleSchemaString, subject);
@@ -160,7 +164,11 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
                                      RestUtils.DEFAULT_REQUEST_PROPERTIES,
                                      null).getCompatibilityLevel());
     // change it to forward
-    TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.FORWARD, null);
+    assertEquals("Changing compatibility level should succeed",
+                 AvroCompatibilityLevel.FORWARD.name,
+                 TestUtils
+                     .changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.FORWARD, null)
+                     .getCompatibilityLevel());
 
     // verify that new compatibility level is forward
     assertEquals("New compatibility level should be forward",
@@ -182,7 +190,10 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
                  TestUtils.registerSchema(restApp.restConnect, schemaString2, subject));
 
     // change compatibility to backward
-    TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.BACKWARD, null);
+    assertEquals("Changing compatibility level should succeed",
+                 AvroCompatibilityLevel.BACKWARD.name,
+                 TestUtils.changeCompatibility(restApp.restConnect, AvroCompatibilityLevel.BACKWARD,
+                                               null).getCompatibilityLevel());
 
     // verify that new compatibility level is backward
     assertEquals("Updated compatibility level should be backward",
