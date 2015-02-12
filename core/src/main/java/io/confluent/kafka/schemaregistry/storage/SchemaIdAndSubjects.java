@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.rest.resources;
+package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.HashMap;
 import java.util.Map;

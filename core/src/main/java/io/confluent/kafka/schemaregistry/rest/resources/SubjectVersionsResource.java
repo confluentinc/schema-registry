@@ -24,6 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
@@ -142,7 +143,7 @@ public class SubjectVersionsResource {
                        final @HeaderParam("Content-Type") String contentType,
                        final @HeaderParam("Accept") String accept,
                        @PathParam("subject") String subjectName,
-                       RegisterSchemaRequest request) {
+                       @NotNull RegisterSchemaRequest request) {
 
     Map<String, String> headerProperties = new HashMap<String, String>();
     headerProperties.put("Content-Type", contentType);
