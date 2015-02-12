@@ -486,5 +486,24 @@ public class RestApiTest extends ClusterTestHarness {
                    rce.getErrorCode());
     }
   }
+
+  @Test
+  public void testCanonicalization() throws Exception {
+    // schema string with extra white space
+    String schema = "{   \"type\":   \"string\"}";
+    String subject = "test";
+    assertEquals("Registering a new schema should succeed",
+                 1,
+                 TestUtils.registerSchema(restApp.restConnect, schema, subject));
+
+    assertEquals("Registering the same schema should get back the same id",
+                 1,
+                 TestUtils.registerSchema(restApp.restConnect, schema, subject));
+
+    assertEquals("Lookup the same schema should get back the same id",
+                 1,
+                 TestUtils.lookUpSubjectVersion(restApp.restConnect, schema, subject)
+                     .getId().intValue());
+  }
 }
 
