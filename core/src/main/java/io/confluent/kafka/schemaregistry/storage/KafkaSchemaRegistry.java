@@ -176,15 +176,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   private void createZkNamespace() {
-    String kafkaNamespace = "";
     int kafkaNamespaceIndex = kafkaClusterZkUrl.indexOf("/");
-    if (kafkaNamespaceIndex > 0) {
-      kafkaNamespace = kafkaClusterZkUrl.substring(kafkaNamespaceIndex);
-    }
-    String zkConnForNamespaceCreation = kafkaClusterZkUrl;
-    if (kafkaNamespace.length() > 1) {
-      zkConnForNamespaceCreation = kafkaClusterZkUrl.substring(0, kafkaNamespaceIndex);
-    }
+    String zkConnForNamespaceCreation = kafkaNamespaceIndex > 0 ?
+                                        kafkaClusterZkUrl.substring(0, kafkaNamespaceIndex) :
+                                        kafkaClusterZkUrl;
+
     String schemaRegistryNamespace = "/" + schemaregistryZkNamespace;
     schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;
 
@@ -740,14 +736,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * kafka store.
    */
   private int getNextBatchLowerBoundFromKafkaStore() {
-    synchronized (masterLock) {
-      if (this.getMaxIdInKafkaStore() <= 0) {
-        return 1;
-      }
-
-      int nextBatchLowerBound = 1 + this.getMaxIdInKafkaStore() / ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
-      return 1 + nextBatchLowerBound * ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+    if (this.getMaxIdInKafkaStore() <= 0) {
+      return 1;
     }
+
+    int nextBatchLowerBound = 1 + this.getMaxIdInKafkaStore() / ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+    return 1 + nextBatchLowerBound * ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
   }
 
   /**
