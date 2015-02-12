@@ -50,7 +50,7 @@ public class MasterElectorTest extends ClusterTestHarness {
   private static final int ID_BATCH_SIZE =
       KafkaSchemaRegistry.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
   private static final String ZK_ID_COUNTER_PATH =
-      "/schema.registry" + KafkaSchemaRegistry.ZOOKEEPER_SCHEMA_ID_COUNTER;
+      "/schema_registry" + KafkaSchemaRegistry.ZOOKEEPER_SCHEMA_ID_COUNTER;
 
   @Test
   public void testAutoFailover() throws Exception {
@@ -570,6 +570,18 @@ public class MasterElectorTest extends ClusterTestHarness {
     restApp.start();
     zkIdCounter = getZkIdCounter(zkClient);
     assertEquals("ZK id counter was incorrectly initialized.", 2 * ID_BATCH_SIZE, zkIdCounter);
+    restApp.stop();
+  }
+
+  @Test
+  /** Verify expected value of zk schema id counter when schema registry starts up. */
+  public void testZkCounterOnStartup() throws Exception {
+    RestApp restApp = new RestApp(kafka.utils.TestUtils.choosePort(), zkConnect, KAFKASTORE_TOPIC);
+    restApp.start();
+
+    int zkIdCounter = getZkIdCounter(zkClient);
+    assertEquals("Initial value of ZooKeeper id counter is incorrect.", ID_BATCH_SIZE, zkIdCounter);
+
     restApp.stop();
   }
 
