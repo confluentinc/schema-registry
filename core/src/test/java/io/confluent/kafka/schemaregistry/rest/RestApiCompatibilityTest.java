@@ -46,7 +46,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
         .canonicalString;
-    int expectedIdSchema1 = 0;
+    int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
                  expectedIdSchema1,
                  TestUtils.registerSchema(restApp.restConnect, schemaString1, subject));
@@ -89,7 +89,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}"
     ).canonicalString;
-    int expectedIdSchema2 = 1;
+    int expectedIdSchema2 = 2;
     assertEquals("Registering a compatible schema should succeed",
                  expectedIdSchema2,
                  TestUtils.registerSchema(restApp.restConnect, schemaString2, subject));
@@ -106,7 +106,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
         .canonicalString;
-    int expectedIdSchema1 = 0;
+    int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
                  expectedIdSchema1,
                  TestUtils.registerSchema(restApp.restConnect, schemaString1, subject));
@@ -149,7 +149,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString;
-    int expectedIdSchema1 = 0;
+    int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
                  expectedIdSchema1,
                  TestUtils.registerSchema(restApp.restConnect, schemaString1, subject));
@@ -176,7 +176,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"}]}").canonicalString;
-    int expectedIdSchema2 = 1;
+    int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
                  expectedIdSchema2,
                  TestUtils.registerSchema(restApp.restConnect, schemaString2, subject));
@@ -217,7 +217,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"},"
         + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"foo\"}]}").canonicalString;
-    int expectedIdSchema4 = 2;
+    int expectedIdSchema4 = 3;
     assertEquals("Registering should succeed with backwards compatible schema",
                  expectedIdSchema4,
                  TestUtils.registerSchema(restApp.restConnect, schemaString4, subject));

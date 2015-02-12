@@ -4,28 +4,21 @@ Configuration Options
   Zookeeper url for the Kafka cluster
 
   * Type: string
-  * Default: 
+  * Default: ""
   * Importance: high
 
 ``avro.compatibility.level``
   The avro compatibility type. Valid values are: none (new schema can be any valid avro schema), backward (new schema can read data produced by latest registered schema), forward (latest registered schema can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema)
 
   * Type: string
-  * Default: backward
-  * Importance: high
-
-``debug``
-  Boolean indicating whether extra debugging information is generated in some error response entities.
-
-  * Type: boolean
-  * Default: true
+  * Default: "backward"
   * Importance: high
 
 ``kafkastore.topic``
   The durable single partition topic that actsas the durable log for the data
 
   * Type: string
-  * Default: _schemas
+  * Default: "_schemas"
   * Importance: high
 
 ``kafkastore.topic.replication.factor``
@@ -35,18 +28,11 @@ Configuration Options
   * Default: 3
   * Importance: high
 
-``port``
-  Port to listen on for new connections.
-
-  * Type: int
-  * Default: 8080
-  * Importance: high
-
 ``response.mediatype.default``
   The default response media type that should be used if no specify types are requested in an Accept header.
 
   * Type: string
-  * Default: application/vnd.schemaregistry.v1+json
+  * Default: "application/vnd.schemaregistry.v1+json"
   * Importance: high
 
 ``response.mediatype.preferred``
@@ -63,6 +49,13 @@ Configuration Options
   * Default: -1
   * Importance: medium
 
+``kafkastore.init.timeout.ms``
+  The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
+
+  * Type: int
+  * Default: 5000
+  * Importance: medium
+
 ``kafkastore.timeout.ms``
   The timeout for an operation on the Kafka store
 
@@ -71,7 +64,7 @@ Configuration Options
   * Importance: medium
 
 ``kafkastore.write.max.retries``
-  Retry the register schema write up to this many times on failure
+  Retry a failed register schema request to the underlying Kafka store up to this many times,  for example in case of a Kafka broker failure
 
   * Type: int
   * Default: 5
@@ -84,11 +77,18 @@ Configuration Options
   * Default: 100
   * Importance: medium
 
+``debug``
+  Boolean indicating whether extra debugging information is generated in some error response entities.
+
+  * Type: boolean
+  * Default: false
+  * Importance: low
+
 ``host.name``
   The host name advertised in Zookeeper
 
   * Type: string
-  * Default: localhost
+  * Default: "localhost"
   * Importance: low
 
 ``kafkastore.zk.session.timeout.ms``
@@ -109,7 +109,7 @@ Configuration Options
   Prefix to apply to metric names for the default JMX reporter.
 
   * Type: string
-  * Default: schema-registry
+  * Default: "kafka.schema.registry"
   * Importance: low
 
 ``metrics.num.samples``
@@ -126,11 +126,18 @@ Configuration Options
   * Default: 30000
   * Importance: low
 
+``port``
+  Port to listen on for new connections.
+
+  * Type: int
+  * Default: 8081
+  * Importance: low
+
 ``request.logger.name``
   Name of the SLF4J logger to write the NCSA Common Log Format request log.
 
   * Type: string
-  * Default: io.confluent.rest-utils.requests
+  * Default: "io.confluent.rest-utils.requests"
   * Importance: low
 
 ``shutdown.graceful.ms``
@@ -139,5 +146,4 @@ Configuration Options
   * Type: int
   * Default: 1000
   * Importance: low
-
 

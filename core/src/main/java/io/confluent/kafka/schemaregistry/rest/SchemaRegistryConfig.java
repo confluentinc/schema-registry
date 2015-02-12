@@ -30,6 +30,8 @@ import static io.confluent.common.config.ConfigDef.Range.atLeast;
 
 public class SchemaRegistryConfig extends RestConfig {
 
+  private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
+
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   /**
    * <code>kafkastore.zk.session.timeout.ms</code>
@@ -63,6 +65,10 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>kafkastore.timeout.ms</code>
    */
   public static final String KAFKASTORE_TIMEOUT_CONFIG = "kafkastore.timeout.ms";
+  /**
+   * <code>kafkastore.init.timeout.ms</code>
+   */
+  public static final String KAFKASTORE_INIT_TIMEOUT_CONFIG = "kafkastore.init.timeout.ms";
   /**
    * <code>kafkastore.commit.interval.ms</code>
    */
@@ -107,6 +113,9 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC =
       "The amount of time in milliseconds to wait before attempting to retry a failed write "
       + "to the Kafka store";
+  protected static final String KAFKASTORE_INIT_TIMEOUT_DOC =
+      "The timeout for initialization of the Kafka store, including creation of the Kafka topic "
+      + "that stores schema data.";
   protected static final String KAFKASTORE_TIMEOUT_DOC =
       "The timeout for an operation on the Kafka store";
   protected static final String KAFKASTORE_COMMIT_INTERVAL_MS_DOC =
@@ -126,6 +135,8 @@ public class SchemaRegistryConfig extends RestConfig {
   private static final ConfigDef config;
   static {
     config = baseConfigDef()
+        .defineOverride(PORT_CONFIG, ConfigDef.Type.INT, SCHEMAREGISTRY_PORT_DEFAULT,
+                        ConfigDef.Importance.LOW, PORT_CONFIG_DOC)
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
                         io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES,
                         ConfigDef.Importance.HIGH,
@@ -151,6 +162,8 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(KAFKASTORE_WRITE_RETRY_BACKOFF_MS_CONFIG, ConfigDef.Type.INT,
                 DEFAULT_KAFKASTORE_WRITE_RETRY_BACKOFF_MS, ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC)
+        .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 5000, atLeast(0),
+                ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC)
         .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC)
         .define(KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT,

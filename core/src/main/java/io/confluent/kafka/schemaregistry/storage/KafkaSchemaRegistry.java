@@ -49,6 +49,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
@@ -303,7 +304,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
         schema.setVersion(newVersion);
 
-        if (schemaId > 0) {
+        if (schemaId >= 0) {
           schema.setId(schemaId);
         } else {
           schema.setId(schemaIdCounter.getAndIncrement());
@@ -332,6 +333,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                Schema schema,
                                Map<String, String> headerProperties)
       throws SchemaRegistryException {
+    Schema existingSchema = lookUpSchemaUnderSubject(subject, schema);
+    if (existingSchema != null) {
+      return existingSchema.getId();
+    }
+
     synchronized (masterLock) {
       if (isMaster()) {
         return register(subject, schema);
@@ -349,32 +355,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  public Schema lookUpSchemaUnderSubjectOrForward(
-      String subject, Schema schema, Map<String, String> headerProperties)
-      throws SchemaRegistryRequestForwardingException, UnknownMasterException {
-    synchronized (masterLock) {
-      if (isMaster()) {
-        return lookUpSchemaUnderSubject(subject, schema);
-      } else {
-        // forward registering request to the master
-        if (masterIdentity != null) {
-          return forwardSubjectVersionRequestToMaster(subject, schema.getSchema(),
-                                                      masterIdentity.getHost(),
-                                                      masterIdentity.getPort(), headerProperties);
-        } else {
-          throw new UnknownMasterException("Register schema request failed since master is "
-                                            + "unknown");
-        }
-      }
-    }
-  }
-
   /**
    * Checks if given schema was ever registered under a subject. If found, it returns the version of
    * the schema under the subject. If not, returns -1
    */
-  public Schema lookUpSchemaUnderSubject(
-      String subject, Schema schema) {
+  public Schema lookUpSchemaUnderSubject(String subject, Schema schema)
+      throws SchemaRegistryException {
+    canonicalizeSchema(schema);
     // see if the schema to be registered already exists
     MD5 md5 = MD5.ofString(schema.getSchema());
     if (this.schemaHashToGuid.containsKey(md5)) {
@@ -399,6 +386,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * Allocate and lock the next batch of ids. Signal a global lock over the next batch by writing
    * the upper bound of the batch to zookeeper.
    *
+   * The value stored in ZOOKEEPER_SCHEMA_ID_COUNTER in Zookeeper indicates the current
+   * max allocated id for assignment.
+   * 
    * When a schema registry server is initialized, kafka may have preexisting persistent
    * schema -> id assignments, and zookeeper may have preexisting counter data.
    * Therefore, when allocating the next batch of ids, it's necessary to ensure the entire new batch
@@ -408,7 +398,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * Return the start index of the next batch.
    */
   private Integer nextSchemaIdCounterBatch() throws SchemaRegistryStoreException {
-    int nextIdBatchLowerBound = 0;
+    int nextIdBatchLowerBound = 1;
 
     while (true) {
 
@@ -417,8 +407,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
         try {
           nextIdBatchLowerBound = getNextBatchLowerBoundFromKafkaStore();
-          int nextIdBatchUpperBound =
-              nextIdBatchLowerBound + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+          int nextIdBatchUpperBound = getInclusiveUpperBound(nextIdBatchLowerBound);
           ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
                                        String.valueOf(nextIdBatchUpperBound));
           return nextIdBatchLowerBound;
@@ -437,23 +426,28 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         }
 
         // Compute the lower bound of next id batch based on zk data and kafkastore data
-        int zkNextIdBatchLowerBound = Integer.valueOf(counterValue.getData());
-        if (zkNextIdBatchLowerBound % ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE != 0) {
-          int oldZkIdBatchLowerBound = zkNextIdBatchLowerBound;
-          zkNextIdBatchLowerBound =
-              (1 + zkNextIdBatchLowerBound / ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE) *
-              ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+        int zkIdCounterValue = Integer.valueOf(counterValue.getData());
+        int zkNextIdBatchLowerBound = zkIdCounterValue + 1;
+        if (zkIdCounterValue % ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE != 0) {
+          // ZooKeeper id counter should be an integer multiple of id batch size in normal
+          // operation; handle corrupted/stale id counter data gracefully by bumping
+          // up to the next id batch
+
+          // fixedZkIdCounterValue is the smallest multiple of
+          // ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE greater than the bad zkIdCounterValue
+          int fixedZkIdCounterValue = ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE *
+                                      (1 + zkIdCounterValue / ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
+          zkNextIdBatchLowerBound = fixedZkIdCounterValue + 1;
 
           log.warn(
               "Zookeeper schema id counter is not an integer multiple of id batch size." +
               " Zookeeper may have stale id counter data.\n" +
-              "zk id counter: " + oldZkIdBatchLowerBound + "\n" +
+              "zk id counter: " + zkIdCounterValue + "\n" +
               "id batch size: " + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
         }
         nextIdBatchLowerBound =
             Math.max(zkNextIdBatchLowerBound, getNextBatchLowerBoundFromKafkaStore());
-        String nextIdBatchUpperBound = String.valueOf(nextIdBatchLowerBound +
-                                                ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE);
+        String nextIdBatchUpperBound = String.valueOf(getInclusiveUpperBound(nextIdBatchLowerBound));
 
         // conditionally update the zookeeper path with the upper bound of the new id batch.
         // newSchemaIdCounterDataVersion < 0 indicates a failed conditional update.
@@ -505,29 +499,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
   }
 
-  private Schema forwardSubjectVersionRequestToMaster(
-      String subject, String schemaString, String host, int port,
-      Map<String, String> headerProperties) throws SchemaRegistryRequestForwardingException {
+  private void forwardUpdateCompatibilityLevelRequestToMaster(
+      String subject, AvroCompatibilityLevel compatibilityLevel, String host, int port,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
     String baseUrl = String.format("http://%s:%d", host, port);
-    RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
-    registerSchemaRequest.setSchema(schemaString);
-    log.debug(String.format("Forwarding schema version search request %s to %s",
-                            registerSchemaRequest, baseUrl));
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(compatibilityLevel.name);
+    log.debug(String.format("Forwarding update config request %s to %s",
+                            configUpdateRequest, baseUrl));
     try {
-      Schema schema =
-          RestUtils.lookUpSubjectVersion(baseUrl, headerProperties, registerSchemaRequest,
-                                         subject);
-      return schema;
+      RestUtils.updateConfig(baseUrl, headerProperties, configUpdateRequest,
+                                        subject);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
-          String.format("Unexpected error while forwarding the registering schema request %s to %s",
-                        registerSchemaRequest, baseUrl),
+          String.format("Unexpected error while forwarding the update config request %s to %s",
+                        configUpdateRequest, baseUrl),
           e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
-      // TODO: Fix this
-//    } catch (RestClientException e) {
-//      throw new SchemaRegistryRequestForwardingException(e);
     }
   }
 
@@ -646,22 +636,34 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   public void updateCompatibilityLevel(String subject, AvroCompatibilityLevel newCompatibilityLevel)
       throws SchemaRegistryStoreException, UnknownMasterException {
+    ConfigKey configKey = new ConfigKey(subject);
+    try {
+      kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
+      log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
+                + " Kafka data store with key " + configKey.toString());
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to write new config value to the store",
+                                             e);
+    }
+  }
+
+  public void updateConfigOrForward(String subject, AvroCompatibilityLevel newCompatibilityLevel,
+                                    Map<String, String> headerProperties)
+      throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
+             UnknownMasterException {
     synchronized (masterLock) {
       if (isMaster()) {
-        ConfigKey configKey = new ConfigKey(subject);
-        try {
-          kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
-          log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
-                    + " Kafka data store with key " + configKey.toString());
-        } catch (StoreException e) {
-          throw new SchemaRegistryStoreException("Failed to write new config value to the store",
-                                                 e);
-        }
+        updateCompatibilityLevel(subject, newCompatibilityLevel);
       } else {
-        // TODO: logic to forward will be included as part of issue#96
-        throw new UnknownMasterException("Config update request failed since this is not the "
-                                          + "master");
-
+        // forward update config request to the master
+        if (masterIdentity != null) {
+          forwardUpdateCompatibilityLevelRequestToMaster(subject, newCompatibilityLevel,
+                                                         masterIdentity.getHost(),
+                                                         masterIdentity.getPort(), headerProperties);
+        } else {
+          throw new UnknownMasterException("Update config request failed since master is "
+                                           + "unknown");
+        }
       }
     }
   }
@@ -725,6 +727,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     return this.maxIdInStore;
   }
 
+  /** This should only be updated by the KafkastoreReaderThread. */
   void setMaxIdInStore(int id) {
     this.maxIdInStore = id;
   }
@@ -735,12 +738,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    */
   private int getNextBatchLowerBoundFromKafkaStore() {
     synchronized (masterLock) {
-      if (this.getMaxIdInStore() < 0) {
-        return 0;
+      if (this.getMaxIdInStore() <= 0) {
+        return 1;
       }
 
       int nextBatchLowerBound = 1 + this.getMaxIdInStore() / ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
-      return nextBatchLowerBound * ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+      return 1 + nextBatchLowerBound * ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
     }
+  }
+
+  /**
+   * E.g. if inclusiveLowerBound is 61, and BATCH_SIZE is 20, the inclusiveUpperBound should be 80.
+   */
+  private int getInclusiveUpperBound(int inclusiveLowerBound) {
+    return inclusiveLowerBound + ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE - 1;
   }
 }
