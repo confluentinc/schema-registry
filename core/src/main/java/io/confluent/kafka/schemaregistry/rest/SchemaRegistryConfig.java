@@ -77,7 +77,7 @@ public class SchemaRegistryConfig extends RestConfig {
   // TODO: turn off offset commit by default for now since we only have an in-memory store
   private static final int KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT = OFFSET_COMMIT_OFF;
   /**
-   * <code>advertised.host.name</code>
+   * <code>host.name</code>
    */
   public static final String HOST_NAME_CONFIG = "host.name";
   /**
