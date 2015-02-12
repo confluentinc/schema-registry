@@ -84,8 +84,8 @@ public class SchemaRegistryConfig extends RestConfig {
   /**
    * <code>cluster.name</code>* 
    */
-  public static final String CLUSTER_NAME = "cluster.name";
-  public static final String DEFAULT_CLUSTER_NAME = "schema.registry";
+  public static final String SCHEMAREGISTRY_ZK_NAMESPACE = "schema.registry.zk.namespace";
+  public static final String DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE = "schema_registry";
   /**
    * <code>advertised.host.name</code>
    */
@@ -96,9 +96,10 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper url for the Kafka cluster";
-  protected static final String CLUSTER_NAME_DOC = 
-      "The string that is used as the zookeeper namespace for storing a schema registry cluster's " 
-      + "metadata. This also serves as an identifier for a schema registry cluster";
+  protected static final String SCHEMAREGISTRY_ZK_NAMESPACE_DOC =
+      "The string that is used as the zookeeper namespace for storing schema registry "
+      + "metadata. SchemaRegistry instances which are part of the same schema registry service "
+      + "should have the same ZooKeeper namespace.";
   protected static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC =
       "Zookeeper session timeout";
   protected static final String KAFKASTORE_TOPIC_DOC =
@@ -147,8 +148,9 @@ public class SchemaRegistryConfig extends RestConfig {
                         RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
         .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
                 KAFKASTORE_CONNECTION_URL_DOC)
-        .define(CLUSTER_NAME, ConfigDef.Type.STRING, DEFAULT_CLUSTER_NAME, 
-                ConfigDef.Importance.LOW, CLUSTER_NAME_DOC)
+        .define(SCHEMAREGISTRY_ZK_NAMESPACE, ConfigDef.Type.STRING,
+                DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
+                ConfigDef.Importance.LOW, SCHEMAREGISTRY_ZK_NAMESPACE_DOC)
         .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 30000, atLeast(0),
                 ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC)
         .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKASTORE_TOPIC,

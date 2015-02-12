@@ -91,7 +91,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
   private final AvroCompatibilityLevel defaultCompatibilityLevel;
-  private final String clusterName;
+  private final String schemaregistryZkNamespace;
   private final String kafkaClusterZkUrl;
   private String schemaRegistryZkUrl;
   private ZkClient zkClient;
@@ -119,7 +119,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       throws SchemaRegistryException {
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
-    clusterName = config.getString(SchemaRegistryConfig.CLUSTER_NAME);
+    schemaregistryZkNamespace = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
     isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
     kafkaClusterZkUrl =
@@ -186,7 +186,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     if (kafkaNamespace.length() > 1) {
       zkConnForNamespaceCreation = kafkaClusterZkUrl.substring(0, kafkaNamespaceIndex);
     }
-    String schemaRegistryNamespace = "/" + clusterName;
+    String schemaRegistryNamespace = "/" + schemaregistryZkNamespace;
     schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;
 
     ZkClient zkClientForNamespaceCreation = new ZkClient(zkConnForNamespaceCreation,
