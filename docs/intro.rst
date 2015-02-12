@@ -117,15 +117,14 @@ classpath correctly, you can start a server with:
 
 .. sourcecode:: bash
 
-   $ java io.confluent.kafka.schemaregistry.rest [server.properties]
+   $ bin/schema-registry-start [schema-registry.properties]
 
-where ``server.properties`` contains configuration settings as specified by the
+where ``schema-registry.properties`` contains configuration settings as specified by the
 ``SchemaRegistryConfig`` class. Although the properties file is not required,
 the default configuration is not intended for production. Production deployments
 *should* specify a properties file. By default the server starts bound to port
-8081, does not specify a unique instance ID (required to safely run multiple
-proxies concurrently), and expects Zookeeper to be available at ``localhost:2181``
-and a Kafka broker at ``localhost:9092``.
+8081, expects Zookeeper to be available at ``localhost:2181``, and a Kafka broker
+at ``localhost:9092``.
 
 Development
 -----------
