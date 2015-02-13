@@ -61,7 +61,7 @@ public class StoreUtils {
     KafkaStore<String, String> kafkaStore =
         new KafkaStore<String, String>(config, new StringMessageHandler(),
                                        StringSerializer.INSTANCE,
-                                       inMemoryStore, zkClient);
+                                       inMemoryStore);
     try {
       kafkaStore.init();
     } catch (StoreInitializationException e) {

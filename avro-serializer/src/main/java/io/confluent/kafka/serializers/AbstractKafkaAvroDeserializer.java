@@ -40,6 +40,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
 
   protected Object deserialize(byte[] payload) throws SerializationException {
     int id = -1;
+    if (payload == null) {
+      return null;
+    }
     try {
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();

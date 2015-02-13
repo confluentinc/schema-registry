@@ -26,6 +26,19 @@ for library in "confluent-common" "rest-utils" "schema-registry"; do
   CLASSPATH=$CLASSPATH:$base_dir/share/java/$library/*      
 done
 
+# logj4 settings
+if [ "x$SCHEMA_REGISTRY_LOG4J_OPTS" = "x" ]; then
+  # Test for files from dev -> packages so this will work as expected in dev if you have packages
+  # installed
+  if [ -e "$base_dir/config/log4j.properties" ]; then # Dev environment
+    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/log4j.properties"
+  elif [ -e "$base_dir/../etc/schema-registry/log4j.properties" ]; then # Simple zip file layout
+    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../etc/schema-registry/log4j.properties"
+  elif [ -e "/etc/schema-registry/log4j.properties" ]; then # Normal install layout
+    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:/etc/schema-registry/log4j.properties"
+  fi
+fi
+
 # JMX settings
 if [ -z "$SCHEMA_REGISTRY_JMX_OPTS" ]; then
   SCHEMA_REGISTRY_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false "
@@ -83,7 +96,7 @@ fi
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
-  nohup $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$@" 2>&1 < /dev/null &
+  nohup $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$@" 2>&1 < /dev/null &
 else
-  exec $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$@"
+  exec $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$@"
 fi

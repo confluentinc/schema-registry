@@ -19,8 +19,6 @@ package io.confluent.kafka.schemaregistry.storage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.confluent.kafka.schemaregistry.rest.resources.SchemaIdAndSubjects;
-
 public class KafkaStoreMessageHandler
     implements StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> {
 
@@ -43,6 +41,11 @@ public class KafkaStoreMessageHandler
       SchemaValue schemaObj = (SchemaValue) schema;
       SchemaKey schemaKey = (SchemaKey) key;
       schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
+
+      // Update the maximum id seen so far
+      if (schemaRegistry.getMaxIdInKafkaStore() < schemaObj.getId()) {
+        schemaRegistry.setMaxIdInKafkaStore(schemaObj.getId());
+      }
 
       MD5 md5 = MD5.ofString(schemaObj.getSchema());
       SchemaIdAndSubjects schemaIdAndSubjects = schemaRegistry.schemaHashToGuid.get(md5);

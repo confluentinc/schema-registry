@@ -76,7 +76,9 @@ public abstract class AbstractKafkaAvroSerDe {
     } else if (object instanceof IndexedRecord) {
       return ((IndexedRecord) object).getSchema();
     } else {
-      throw new IllegalArgumentException("Invalid Avro type!");
+      throw new IllegalArgumentException(
+          "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, " +
+          "Float, Double, String, byte[] and IndexedRecord");
     }
   }
 

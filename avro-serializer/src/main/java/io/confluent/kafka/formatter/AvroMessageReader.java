@@ -45,7 +45,7 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
  * 1. Send Avro string as value. (make sure there is no space in the schema string)
  * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
  *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
- *   --property schema.registry.url=http://localhost:8080 \
+ *   --property schema.registry.url=http://localhost:8081 \
  *   --property value.schema='{"type":"string"}'
  *
  * In the shell, type in the following.
@@ -55,7 +55,7 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
  * 2. Send Avro record as value.
  * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
  *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
- *   --property schema.registry.url=http://localhost:8080 \
+ *   --property schema.registry.url=http://localhost:8081 \
  *   --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
  *
  * In the shell, type in the following.
@@ -64,7 +64,7 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
  * 3. Send Avro string as key and Avro record as value.
  * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
  *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
- *   --property schema.registry.url=http://localhost:8080 \
+ *   --property schema.registry.url=http://localhost:8081 \
  *   --property parse.key=true \
  *   --property key.schema='{"type":"string"}' \
  *   --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'

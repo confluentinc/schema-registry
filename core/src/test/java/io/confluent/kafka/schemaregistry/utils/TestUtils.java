@@ -149,14 +149,14 @@ public class TestUtils {
                  expected, versions.size());
   }
 
-  public static void changeCompatibility(String baseUrl,
+  public static ConfigUpdateRequest changeCompatibility(String baseUrl,
                                          AvroCompatibilityLevel newCompatibilityLevel,
                                          String subject)
       throws IOException, RestClientException {
     ConfigUpdateRequest request = new ConfigUpdateRequest();
     request.setCompatibilityLevel(newCompatibilityLevel.name);
 
-    RestUtils.updateConfig(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+    return RestUtils.updateConfig(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
   }
 
   /**

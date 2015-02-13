@@ -33,13 +33,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final int identityMapCapacity;
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
-  private final Schema.Parser parser = new Schema.Parser();
+  private final Map<String, Map<Schema, Integer>> versionCache;
 
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
     this.baseUrl = baseUrl;
     this.identityMapCapacity = identityMapCapacity;
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
     idCache = new HashMap<Integer, Schema>();
+    versionCache = new HashMap<String, Map<Schema, Integer>>();
   }
 
   private int registerAndGetId(String subject, Schema schema)
@@ -54,7 +55,18 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
     SchemaString restSchema =
         RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
-    return parser.parse(restSchema.getSchemaString());
+    return new Schema.Parser().parse(restSchema.getSchemaString());
+  }
+
+
+  private int getVersionFromRegistry(String subject, Schema schema)
+      throws IOException, RestClientException{
+    String schemaString = schema.toString();
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
+        RestUtils.lookUpSubjectVersion(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+    return response.getVersion();
   }
 
   @Override
@@ -88,6 +100,40 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       Schema schema = getSchemaByIdFromRegistry(id);
       idCache.put(id, schema);
       return schema;
+    }
+  }
+
+  @Override
+  public synchronized SchemaMetadata getLatestSchemaMetadata(String subject)
+      throws IOException, RestClientException {
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
+     = RestUtils.getLatestVersion(
+        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
+    int id = response.getId();
+    int version = response.getVersion();
+    String schema = response.getSchema();
+    return new SchemaMetadata(id, version, schema);
+  }
+
+  @Override
+  public synchronized int getVersion(String subject, Schema schema)
+      throws IOException, RestClientException{
+    Map<Schema, Integer> schemaVersionMap;
+    if (versionCache.containsKey(subject)) {
+      schemaVersionMap = versionCache.get(subject);
+    } else {
+      schemaVersionMap = new IdentityHashMap<Schema, Integer>();
+    }
+
+    if (schemaVersionMap.containsKey(schema)) {
+      return schemaVersionMap.get(schema);
+    }  else {
+      if (schemaVersionMap.size() >= identityMapCapacity) {
+        throw new IllegalStateException("Two many schema objects created for " + subject + "!");
+      }
+      int version = getVersionFromRegistry(subject, schema);
+      schemaVersionMap.put(schema, version);
+      return version;
     }
   }
 }

@@ -3,15 +3,25 @@ Serializer and Formatter
 
 In this document, we describe how to use Avro in Kafka java client and Kafka console tools.
 
+Assuming that you have the Schema Registry source code checked out at /tmp/schema-registry, the
+following is how you can obtain all needed jars.
+
+.. sourcecode:: bash
+
+   mvn package
+   The jars can be found at /tmp/schema-registrypackage/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/
+
 Serializer
 ----------
 
-You can plug KafkaAvroSerializer into KafkaProducer to send messages of any Avro type (both
-primitive and complex) to Kafka. The following are the java types supported by Avro: null, Boolean,
-Integer, Long, Float, Double, String, byte[], and IndexedRecord. Sending data of other types to
-KafkaAvroSerializer will cause a SerializationException. When sending a message to a topic *t*,
-the Avro schema for the key and the value will be automatically registered in the Schema Registry
-server under the subject *t-key* and *t-value*, respectively, if the compatibility test passes.
+You can plug KafkaAvroSerializer into KafkaProducer to send messages of Avro type to Kafka.
+Currently, we support primitive types of null, Boolean, Integer, Long, Float, Double, String,
+byte[], and complex type of IndexedRecord. Sending data of other types to KafkaAvroSerializer will
+cause a SerializationException. Typically, IndexedRecord will be used for the value of the Kafka
+message. If used, the key of the Kafka message is often of one of the primitive types. When sending
+a message to a topic *t*, the Avro schema for the key and the value will be automatically registered
+in the schema registry under the subject *t-key* and *t-value*, respectively, if the compatibility
+test passes. The only exception is that the null type is never registered in the schema registry.
 
 In the following example, we send a message with key of type string and value of type Avro record
 to Kafka. A SerializationException may occur during the send call, if the data is not well formed.
@@ -32,7 +42,7 @@ to Kafka. A SerializationException may occur during the send call, if the data i
               io.confluent.kafka.serializers.KafkaAvroSerializer.class);
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               io.confluent.kafka.serializers.KafkaAvroSerializer.class);
-    props.put("schema.registry.url", "http://localhost:8080");
+    props.put("schema.registry.url", "http://localhost:8081");
     KafkaProducer producer = new KafkaProducer(props);
 
     String key = "key1";
@@ -68,7 +78,7 @@ not well formed.
     Properties props = new Properties();
     props.put("zookeeper.connect", "localhost:2181");
     props.put("group.id", "group1");
-    props.put("schema.registry.url", "http://localhost:8080");
+    props.put("schema.registry.url", "http://localhost:8081");
 
     Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
     topicCountMap.put(topic, new Integer(1));
@@ -122,7 +132,7 @@ the key and therefore there is no schema registration for the key.
     props.put("serializer.class", "io.confluent.kafka.serializers.KafkaAvroEncoder");
     props.put("key.serializer.class", "kafka.serializer.StringEncoder");
     props.put("metadata.broker.list", brokerList);
-    props.put("schema.registry.url", "http://localhost:8080");
+    props.put("schema.registry.url", "http://localhost:8081");
 
     Producer producer = new Producer<String, Object>(new ProducerConfig(props));
     String key = "key1";
@@ -147,14 +157,6 @@ To run the Kafka console tools, first make sure that Zookeeper, Kafka and Schema
 are all started. Second, make sure the jars for AvroMessageReader and AvroMessageFormatter are
 included in the classpath of kafka-console-producer.sh and kafka-console-consumer.sh.
 
-Assuming that you have the Schema Registry source code checked out at /tmp/schema-registry, the
-following is how you can obtain all needed jars.
-
-.. sourcecode:: bash
-
-   mvn package
-   The jars can be found at /tmp/schema-registrypackage/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/
-
 In the following example, we send Avro records in json as the message value (make sure there is no space in the schema string).
 
 .. sourcecode:: bash
@@ -162,7 +164,7 @@ In the following example, we send Avro records in json as the message value (mak
    CLASSPATH=/tmp/schema-registry/package/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/* \
    bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
      --line-reader io.confluent.kafka.formatter.AvroMessageReader \
-     --property schema.registry.url=http://localhost:8080 \
+     --property schema.registry.url=http://localhost:8081 \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
 
    In the shell, type in the following.
@@ -175,7 +177,7 @@ In the following example, we read the value of the messages in json.
    CLASSPATH=/tmp/schema-registry/package/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/* \
    bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
      --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
-     --property schema.registry.url=http://localhost:8080
+     --property schema.registry.url=http://localhost:8081
 
    You should see following in the console.
      {"f1": "value1"}
@@ -189,7 +191,7 @@ message, respectively.
    CLASSPATH=/tmp/schema-registry/package/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/* \
    bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t2 \
      --line-reader io.confluent.kafka.formatter.AvroMessageReader \
-     --property schema.registry.url=http://localhost:8080 \
+     --property schema.registry.url=http://localhost:8081 \
      --property parse.key=true \
      --property key.schema='{"type":"string"}' \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
@@ -204,7 +206,7 @@ In the following example, we read both the key and the value of the messages in 
    CLASSPATH=/tmp/schema-registry/package/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/* \
    bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t2 \
      --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
-     --property schema.registry.url=http://localhost:8080 \
+     --property schema.registry.url=http://localhost:8081 \
      --property print.key=true
 
    You should see following in the console.

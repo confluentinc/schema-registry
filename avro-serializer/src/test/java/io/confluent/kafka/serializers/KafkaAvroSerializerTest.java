@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.LocalSchemaRegistryClient;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -109,6 +110,16 @@ public class KafkaAvroSerializerTest {
     bytes = avroSerializer.serialize(topic, "abc".getBytes());
     obj = avroDecoder.fromBytes(bytes);
     assertArrayEquals("abc".getBytes(), (byte[]) obj);
+  }
+
+  @Test
+  public void testNull() {
+    SchemaRegistryClient nullSchemaRegistryClient = null;
+    KafkaAvroSerializer nullAvroSerializer = new KafkaAvroSerializer(nullSchemaRegistryClient);
+
+    // null doesn't require schema registration. So serialization should succeed with a null
+    // schema registry client.
+    assertEquals(null, nullAvroSerializer.serialize("test", null));
   }
 
   @Test
