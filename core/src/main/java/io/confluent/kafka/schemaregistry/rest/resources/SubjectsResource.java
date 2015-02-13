@@ -89,16 +89,6 @@ public class SubjectsResource {
     asyncResponse.resume(matchingSchema);
   }
 
-  @Path("/{subject}/versions")
-  public SubjectVersionsResource getSchemas(@PathParam("subject") String subject) {
-    if (subject != null) {
-      subject = subject.trim();
-    } else {
-      throw Errors.subjectNotFoundException();
-    }
-    return new SubjectVersionsResource(schemaRegistry, subject);
-  }
-
   @GET
   @Valid
   @PerformanceMetric("subjects.list")
