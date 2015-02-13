@@ -254,7 +254,7 @@ public class MasterElectorTest extends ClusterTestHarness {
    */
   public void testSlaveIsNeverMaster() throws Exception {
     int numSlaves = 2;
-    int numMasters = 2;
+    int numMasters = 30;
 
     Set<RestApp> slaveApps = new HashSet<RestApp>();
     RestApp aSlave = null;

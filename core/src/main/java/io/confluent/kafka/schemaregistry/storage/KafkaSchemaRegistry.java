@@ -92,12 +92,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final AvroCompatibilityLevel defaultCompatibilityLevel;
   private final String schemaregistryZkNamespace;
   private final String kafkaClusterZkUrl;
+  private final int zkSessionTimeoutMs;
+  private final boolean isEligibleForMasterElector;
   private String schemaRegistryZkUrl;
   private ZkClient zkClient;
-  private final int zkSessionTimeoutMs;
   private SchemaRegistryIdentity masterIdentity;
   private ZookeeperMasterElector masterElector = null;
-  private final boolean isEligibleForMasterElector;
   private Metrics metrics;
   private Sensor masterNodeSensor;
 
@@ -225,24 +225,26 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
 
     synchronized (masterLock) {
-      masterIdentity = schemaRegistryIdentity;
-      if (isMaster()) {
-        // To become the master, wait until the Kafka store is fully caught up.
-        try {
-          kafkaStore.waitUntilBootstrapCompletes();
-        } catch (StoreTimeoutException stoe) {
-          throw new SchemaRegistryTimeoutException("Bootstrap timed out", stoe);
-        } catch (StoreException se) {
-          throw new SchemaRegistryStoreException("Error while bootstrapping schema registry" 
-                                                 + " from the Kafka store log", se);
+      if ((masterIdentity != null && !masterIdentity.equals(schemaRegistryIdentity))
+          || masterIdentity == null) {
+        masterIdentity = schemaRegistryIdentity;
+        if (isMaster()) {
+          // To become the master, wait until the Kafka store is fully caught up.
+          try {
+            kafkaStore.waitUntilBootstrapCompletes();
+          } catch (StoreTimeoutException stoe) {
+            throw new SchemaRegistryTimeoutException("Bootstrap timed out", stoe);
+          } catch (StoreException se) {
+            throw new SchemaRegistryStoreException("Error while bootstrapping schema registry"
+                                                   + " from the Kafka store log", se);
+          }
+          nextAvailableSchemaId = nextSchemaIdCounterBatch();
+          idBatchInclusiveUpperBound = getInclusiveUpperBound(nextAvailableSchemaId);
+
+          masterNodeSensor.record(1.0);
+        } else {
+          masterNodeSensor.record(0.0);
         }
-        nextAvailableSchemaId = nextSchemaIdCounterBatch();
-        idBatchInclusiveUpperBound = getInclusiveUpperBound(nextAvailableSchemaId);
-
-
-        masterNodeSensor.record(1.0);
-      } else {
-        masterNodeSensor.record(0.0);
       }
     }
   }

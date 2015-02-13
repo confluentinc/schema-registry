@@ -97,7 +97,8 @@ public class ZookeeperMasterElector {
         log.error("Can't parse schema registry identity json string " + masterIdentityString);
       }
     } catch (ZkNoNodeException znne) {
-      // just let it go; we will get another handleDataDeleted event
+      // NOTE: masterIdentity is already initialized to null. The master will then be updated to 
+      // null so register requests directed to this node can throw the right error code back
     }
     schemaRegistry.setMaster(masterIdentity);
   }
@@ -120,6 +121,8 @@ public class ZookeeperMasterElector {
       try {
         if (!isEligibleForMasterElection) {
           readCurrentMaster();
+        } else {
+          electMaster();
         }
       } catch (SchemaRegistryException e) {
         log.error("Error while reading the schema registry master", e);
