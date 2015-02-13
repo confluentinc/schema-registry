@@ -111,18 +111,23 @@ public class ZookeeperMasterElector {
     }
     
     /**
-     * Called when the leader information stored in zookeeper has changed. Record the new leader in
-     * memory
+     * Called when the master information stored in ZooKeeper has changed (or, in some cases,
+     * deleted).
+     *
+     * ** Note ** The ZkClient library has unexpected behavior - under certain conditions,
+     * handleDataChange may be called instead of handleDataDeleted when the ephemeral node holding
+     * MASTER_PATH is deleted. Therefore it is necessary to call electMaster() here to ensure
+     * every eligible node participates in election after a deletion event.
      *
      * @throws Exception On any error.
      */
     @Override
     public void handleDataChange(String dataPath, Object data) {
       try {
-        if (!isEligibleForMasterElection) {
-          readCurrentMaster();
-        } else {
+        if (isEligibleForMasterElection) {
           electMaster();
+        } else {
+          readCurrentMaster();
         }
       } catch (SchemaRegistryException e) {
         log.error("Error while reading the schema registry master", e);
@@ -130,7 +135,7 @@ public class ZookeeperMasterElector {
     }
 
     /**
-     * Called when the leader information stored in zookeeper has been delete. Try to elect as the
+     * Called when the master information stored in zookeeper has been deleted. Try to elect as the
      * leader
      *
      * @throws Exception On any error.

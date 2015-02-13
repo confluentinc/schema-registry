@@ -90,7 +90,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
   private final AvroCompatibilityLevel defaultCompatibilityLevel;
-  private final String schemaregistryZkNamespace;
+  private final String schemaRegistryZkNamespace;
   private final String kafkaClusterZkUrl;
   private final int zkSessionTimeoutMs;
   private final boolean isEligibleForMasterElector;
@@ -118,7 +118,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       throws SchemaRegistryException {
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
-    schemaregistryZkNamespace = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
+    schemaRegistryZkNamespace = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
     isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
     kafkaClusterZkUrl =
@@ -181,7 +181,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                                         kafkaClusterZkUrl.substring(0, kafkaNamespaceIndex) :
                                         kafkaClusterZkUrl;
 
-    String schemaRegistryNamespace = "/" + schemaregistryZkNamespace;
+    String schemaRegistryNamespace = "/" + schemaRegistryZkNamespace;
     schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;
 
     ZkClient zkClientForNamespaceCreation = new ZkClient(zkConnForNamespaceCreation,
@@ -209,43 +209,42 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   /**
    * 'Inform' this SchemaRegistry instance which SchemaRegistry is the current master.
    * If this instance is set as the new master, ensure it is up-to-date with data in
-   * the kafka store, and tell Zookeeper to allocate the next batch of IDs.
+   * the kafka store, and tell Zookeeper to allocate the next batch of schema IDs.
    *
-   * @param schemaRegistryIdentity Identity of the current master. null means no master is alive.
+   * @param newMaster Identity of the current master. null means no master is alive.
    * @throws SchemaRegistryException
    */
-  public void setMaster(@Nullable SchemaRegistryIdentity schemaRegistryIdentity)
+  public void setMaster(@Nullable SchemaRegistryIdentity newMaster)
       throws SchemaRegistryTimeoutException, SchemaRegistryStoreException {
-    log.debug("Setting the master to " + schemaRegistryIdentity);
+    log.debug("Setting the master to " + newMaster);
 
     // Only schema registry instances eligible for master can be set to master
-    if (schemaRegistryIdentity != null && !schemaRegistryIdentity.getMasterEligibility()) {
+    if (newMaster != null && !newMaster.getMasterEligibility()) {
       throw new IllegalStateException(
-          "Tried to set an ineligible node to master: " + schemaRegistryIdentity);
+          "Tried to set an ineligible node to master: " + newMaster);
     }
 
     synchronized (masterLock) {
-      if ((masterIdentity != null && !masterIdentity.equals(schemaRegistryIdentity))
-          || masterIdentity == null) {
-        masterIdentity = schemaRegistryIdentity;
-        if (isMaster()) {
-          // To become the master, wait until the Kafka store is fully caught up.
-          try {
-            kafkaStore.waitUntilBootstrapCompletes();
-          } catch (StoreTimeoutException stoe) {
-            throw new SchemaRegistryTimeoutException("Bootstrap timed out", stoe);
-          } catch (StoreException se) {
-            throw new SchemaRegistryStoreException("Error while bootstrapping schema registry"
-                                                   + " from the Kafka store log", se);
-          }
-          nextAvailableSchemaId = nextSchemaIdCounterBatch();
-          idBatchInclusiveUpperBound = getInclusiveUpperBound(nextAvailableSchemaId);
+      SchemaRegistryIdentity previousMaster = masterIdentity;
+      masterIdentity = newMaster;
 
-          masterNodeSensor.record(1.0);
-        } else {
-          masterNodeSensor.record(0.0);
+      if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {
+        // The master has changed to this SchemaRegistry instance
+        // To become the master, wait until the Kafka store is fully caught up.
+        try {
+          kafkaStore.waitUntilBootstrapCompletes();
+        } catch (StoreTimeoutException stoe) {
+          throw new SchemaRegistryTimeoutException("Bootstrap timed out", stoe);
+        } catch (StoreException se) {
+          throw new SchemaRegistryStoreException("Error while bootstrapping schema registry"
+                                                 + " from the Kafka store log", se);
         }
+
+        nextAvailableSchemaId = nextSchemaIdCounterBatch();
+        idBatchInclusiveUpperBound = getInclusiveUpperBound(nextAvailableSchemaId);
       }
+
+      masterNodeSensor.record(isMaster() ? 1.0 : 0.0);
     }
   }
 
