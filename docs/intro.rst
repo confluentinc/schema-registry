@@ -1,3 +1,5 @@
+.. _schemaregistry_intro:
+
 Schema Registry
 ================
 
@@ -71,7 +73,8 @@ Installation
 
    See the :ref:`installation instructions<installation>` for the Confluent
    Platform. Before starting the Schema Registry you must start Kafka.
-   The :ref:`quickstart<quickstart>` explains how to start Kafka locally for testing.
+   The :ref:`Confluent Platform quickstart<quickstart>` explains how to start
+   these services locally for testing.
 
 .. ifconfig:: not platform_docs
 
@@ -87,33 +90,26 @@ running:
 
    $ cd confluent-1.0/
 
-   # Start the Schema Registry. The default settings automatically work with the
-   # default settings for local ZooKeeper and Kafka nodes.
-   $ bin/schema-registry-start
-
-If you installed Debian or RPM packages, you can simply run ``schema-registry-start``
-as it will be on your ``PATH``. If you need to override the default
-configuration, add settings to a config file and pass it as an argument when you
-start the service:
-
-.. sourcecode:: bash
-
+   # The default settings in schema-registry.properties work automatically with
+   # the default settings for local ZooKeeper and Kafka nodes.
    $ bin/schema-registry-start etc/schema-registry/schema-registry.properties
 
-Finally, if you started the service in the background, you can use the following
-command to stop it:
+If you installed Debian or RPM packages, you can simply run ``schema-registry-start``
+as it will be on your ``PATH``. If you started the service in the background,
+you can use the following command to stop it:
 
 .. sourcecode:: bash
 
    $ bin/schema-registry-stop
 
 
-
 Deployment
 ----------
 
-The REST interface to schema registry includes a built-in Jetty server. Assuming you've configured your
-classpath correctly, you can start a server with:
+The REST interface to schema registry includes a built-in Jetty server. The
+wrapper scripts ``bin/schema-registry-start`` and ``bin/schema-registry-stop``
+are the recommended method of starting and stopping the service. However, you
+can also start the server directly yourself:
 
 .. sourcecode:: bash
 
@@ -126,17 +122,47 @@ the default configuration is not intended for production. Production deployments
 8081, expects Zookeeper to be available at ``localhost:2181``, and a Kafka broker
 at ``localhost:9092``.
 
+
 Development
 -----------
 
 To build a development version, you may need a development versions of
-`io.confluent.common <https://github.com/confluentinc/common>`_ and
-`io.confluent.rest-utils <https://github.com/confluentinc/rest-utils>`_.  After
-installing ``common`` and ``rest-utils`` and compiling with Maven, you can run an instance of the schema registry REST server against a local Kafka cluster (using the default configuration included with Kafka):
+`common <https://github.com/confluentinc/common>`_ and
+`rest-utils <https://github.com/confluentinc/rest-utils>`_.  After
+installing these, you can build the Schema Registry
+with Maven. All the standard lifecycle phases work. During development, use
 
 .. sourcecode:: bash
 
-    $ mvn exec:java
+   $ mvn compile
+
+to build,
+
+.. sourcecode:: bash
+
+   $ mvn test
+
+to run the unit and integration tests, and
+
+.. sourcecode:: bash
+
+     $ mvn exec:java
+
+to run an instance of the Schema Registry against a local Kafka cluster (using
+the default configuration included with Kafka).
+
+To create a packaged version, optionally skipping the tests:
+
+.. sourcecode:: bash
+
+    $ mvn package [-DskipTests]
+
+This will produce two versions ready for production:
+``package/target/package-$VERSION-package`` contains a directory layout similar
+to the packaged binary versions and
+``package/target/package-$VERSION-standalone.jar`` is an uber-jar including all
+the dependencies.
+
 
 Contribute
 ----------
@@ -147,4 +173,4 @@ Contribute
 License
 -------
 
-The project is licensed under the Apache 2 license.
+The Schema Registry is licensed under the Apache 2 license.

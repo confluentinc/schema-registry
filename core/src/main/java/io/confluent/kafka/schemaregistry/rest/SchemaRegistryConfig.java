@@ -109,8 +109,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "The interval to commit offsets while consuming the Kafka topic";
   protected static final String HOST_DOC = "The host name advertised in Zookeeper";
   protected static final String COMPATIBILITY_DOC =
-      "The avro compatibility type. Valid values are: "
-      + "none (new schema can be any valid avro schema), "
+      "The Avro compatibility type. Valid values are: "
+      + "none (new schema can be any valid Avro schema), "
       + "backward (new schema can read data produced by latest registered schema), "
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema)";
@@ -167,7 +167,7 @@ public class SchemaRegistryConfig extends RestConfig {
     String compatibilityTypeString = getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG);
     compatibilityType = AvroCompatibilityLevel.forName(compatibilityTypeString);
     if (compatibilityType == null) {
-      throw new RestConfigException("Unknown avro compatibility level: " + compatibilityTypeString);
+      throw new RestConfigException("Unknown Avro compatibility level: " + compatibilityTypeString);
     }
   }
 
@@ -180,7 +180,7 @@ public class SchemaRegistryConfig extends RestConfig {
     String compatibilityTypeString = getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG);
     compatibilityType = AvroCompatibilityLevel.forName(compatibilityTypeString);
     if (compatibilityType == null) {
-      throw new RestConfigException("Unknown avro compatibility level: " + compatibilityTypeString);
+      throw new RestConfigException("Unknown Avro compatibility level: " + compatibilityTypeString);
     }
   }
 

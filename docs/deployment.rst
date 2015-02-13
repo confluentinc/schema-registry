@@ -54,8 +54,10 @@ We recommend running JDK 1.7 u51, and using the G1 collector. If you do this (an
 sure you're on u51. We tried out u21 in testing, but we had a number of problems with the GC implementation in 
 that version. Our recommended GC tuning looks like this:
 
-``-Xms1g -Xmx1g -XX:PermSize=48m -XX:MaxPermSize=48m -XX:+UseG1GC
--XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35``
+.. sourcecode:: bash
+
+   -Xms1g -Xmx1g -XX:PermSize=48m -XX:MaxPermSize=48m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 \
+          -XX:InitiatingHeapOccupancyPercent=35
 
 Important Configuration Options
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -194,6 +196,3 @@ Let's say you have Schema Registry running in multiple datacenters, and you have
 - If possible, revive the "master" datacenter by starting Kafka and Schema Registry as before.
 
 - If you must designate a new datacenter (call it DC B) as "master", update the Schema Registry config files so that ``kafkastore.connection.url`` points to the local ZooKeeper, and change ``master.eligibility`` to true. The restart your Schema Registry instances with these new configs in a rolling fashion.
-
-
-
