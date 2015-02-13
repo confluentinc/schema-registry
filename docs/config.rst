@@ -1,24 +1,26 @@
+.. _schemaregistry_config:
+
 Configuration Options
 =====================
 ``kafkastore.connection.url``
   Zookeeper url for the Kafka cluster
 
   * Type: string
-  * Default: ""
+  * Default:
   * Importance: high
 
 ``avro.compatibility.level``
-  The avro compatibility type. Valid values are: none (new schema can be any valid avro schema), backward (new schema can read data produced by latest registered schema), forward (latest registered schema can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema)
+  The Avro compatibility type. Valid values are: none (new schema can be any valid Avro schema), backward (new schema can read data produced by latest registered schema), forward (latest registered schema can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema)
 
   * Type: string
-  * Default: "backward"
+  * Default: backward
   * Importance: high
 
 ``kafkastore.topic``
   The durable single partition topic that actsas the durable log for the data
 
   * Type: string
-  * Default: "_schemas"
+  * Default: _schemas
   * Importance: high
 
 ``kafkastore.topic.replication.factor``
@@ -32,7 +34,7 @@ Configuration Options
   The default response media type that should be used if no specify types are requested in an Accept header.
 
   * Type: string
-  * Default: "application/vnd.schemaregistry.v1+json"
+  * Default: application/vnd.schemaregistry.v1+json
   * Importance: high
 
 ``response.mediatype.preferred``
@@ -88,7 +90,7 @@ Configuration Options
   The host name advertised in Zookeeper
 
   * Type: string
-  * Default: "localhost"
+  * Default: thor
   * Importance: low
 
 ``kafkastore.zk.session.timeout.ms``
@@ -109,7 +111,7 @@ Configuration Options
   Prefix to apply to metric names for the default JMX reporter.
 
   * Type: string
-  * Default: "kafka.schema.registry"
+  * Default: kafka.schema.registry
   * Importance: low
 
 ``metrics.num.samples``
@@ -137,7 +139,7 @@ Configuration Options
   Name of the SLF4J logger to write the NCSA Common Log Format request log.
 
   * Type: string
-  * Default: "io.confluent.rest-utils.requests"
+  * Default: io.confluent.rest-utils.requests
   * Importance: low
 
 ``shutdown.graceful.ms``
@@ -146,4 +148,3 @@ Configuration Options
   * Type: int
   * Default: 1000
   * Importance: low
-

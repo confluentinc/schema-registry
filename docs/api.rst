@@ -26,7 +26,7 @@ you cannot be certain it is available yet.
 Errors
 ^^^^^^
 
-All API endpoints use a standard error message format for any requests that return an HTTP status indicating an error (any 400 or 500 statuses). For example, an request entity that omits a required field may generate the following response:
+All API endpoints use a standard error message format for any requests that return an HTTP status indicating an error (any 400 or 500 statuses). For example, a request entity that omits a required field may generate the following response:
 
    .. sourcecode:: http
 
@@ -388,7 +388,7 @@ The config resource allows you to inspect the cluster-level configuration values
 
    .. sourcecode:: http
 
-      PUT /consumers/testgroup/ HTTP/1.1
+      PUT /config HTTP/1.1
       Host: kafkaproxy.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
 
