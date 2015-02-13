@@ -52,6 +52,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 
+@Path("/subjects/{subject}/versions")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
            Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
            Versions.JSON_WEIGHTED})
@@ -62,18 +63,17 @@ public class SubjectVersionsResource {
 
   private static final Logger log = LoggerFactory.getLogger(SubjectVersionsResource.class);
 
-  private final String subject;
   private final KafkaSchemaRegistry schemaRegistry;
 
-  public SubjectVersionsResource(KafkaSchemaRegistry registry, String subject) {
+  public SubjectVersionsResource(KafkaSchemaRegistry registry) {
     this.schemaRegistry = registry;
-    this.subject = subject;
   }
 
   @GET
   @Path("/{version}")
   @PerformanceMetric("subjects.versions.get-schema")
-  public Schema getSchema(@PathParam("version") String version) {
+  public Schema getSchema(@PathParam("subject") String subject,
+                          @PathParam("version") String version) {
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
@@ -83,9 +83,9 @@ public class SubjectVersionsResource {
     Schema schema = null;
     String errorMessage = null;
     try {
-      schema = schemaRegistry.get(this.subject, versionId.getVersionId());
+      schema = schemaRegistry.get(subject, versionId.getVersionId());
       if (schema == null) {
-        if (!schemaRegistry.listSubjects().contains(this.subject)) {
+        if (!schemaRegistry.listSubjects().contains(subject)) {
           throw Errors.subjectNotFoundException();
         } else {
           throw Errors.versionNotFoundException();
@@ -93,7 +93,7 @@ public class SubjectVersionsResource {
       }
     } catch (SchemaRegistryStoreException e) {
       errorMessage =
-          "Error while retrieving schema for subject " + this.subject + " with version " +
+          "Error while retrieving schema for subject " + subject + " with version " +
           version + " from the schema registry";
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -107,14 +107,14 @@ public class SubjectVersionsResource {
 
   @GET
   @PerformanceMetric("subjects.versions.list")
-  public List<Integer> list() {
+  public List<Integer> list(@PathParam("subject") String subject) {
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
     String errorMessage = "Error while validating that subject " +
-                          this.subject + " exists in the registry";
+                          subject + " exists in the registry";
     try {
-      if (!schemaRegistry.listSubjects().contains(this.subject)) {
+      if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
     } catch (SchemaRegistryStoreException e) {
@@ -122,9 +122,9 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    errorMessage = "Error while listing all versions for subject " + this.subject;
+    errorMessage = "Error while listing all versions for subject " + subject;
     try {
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(this.subject);
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
