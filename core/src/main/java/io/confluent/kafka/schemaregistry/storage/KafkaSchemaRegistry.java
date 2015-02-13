@@ -62,7 +62,6 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
-import io.confluent.kafka.schemaregistry.rest.resources.SchemaIdAndSubjects;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;

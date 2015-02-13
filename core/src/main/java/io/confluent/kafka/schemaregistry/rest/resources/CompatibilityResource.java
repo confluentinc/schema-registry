@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
@@ -68,7 +69,7 @@ public class CompatibilityResource {
                                        final @HeaderParam("Accept") String accept,
                                        @PathParam("subject") String subject,
                                        @PathParam("version") String version,
-                                       RegisterSchemaRequest request) {
+                                       @NotNull RegisterSchemaRequest request) {
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
     Map<String, String> headerProperties = new HashMap<String, String>();

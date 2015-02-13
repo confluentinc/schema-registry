@@ -82,12 +82,12 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String MASTER_ELIGIBILITY = "master.eligibility";
   public static final boolean DEFAULT_MASTER_ELIGIBILITY = true;
   /**
-   * <code>cluster.name</code>* 
+   * <code>schema.registry.zk.name</code>* 
    */
   public static final String SCHEMAREGISTRY_ZK_NAMESPACE = "schema.registry.zk.namespace";
   public static final String DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE = "schema_registry";
   /**
-   * <code>advertised.host.name</code>
+   * <code>host.name</code>
    */
   public static final String HOST_NAME_CONFIG = "host.name";
   /**

@@ -19,8 +19,6 @@ package io.confluent.kafka.schemaregistry.storage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.confluent.kafka.schemaregistry.rest.resources.SchemaIdAndSubjects;
-
 public class KafkaStoreMessageHandler
     implements StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> {
 

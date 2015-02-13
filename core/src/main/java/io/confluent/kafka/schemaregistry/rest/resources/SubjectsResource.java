@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
@@ -66,7 +67,7 @@ public class SubjectsResource {
                                        final @HeaderParam("Content-Type") String contentType,
                                        final @HeaderParam("Accept") String accept,
                                        @PathParam("subject") String subject,
-                                       RegisterSchemaRequest request) {
+                                       @NotNull RegisterSchemaRequest request) {
     // returns version if the schema exists. Otherwise returns 404
     Map<String, String> headerProperties = new HashMap<String, String>();
     headerProperties.put("Content-Type", contentType);
