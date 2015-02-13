@@ -113,17 +113,16 @@ public class CompatibilityResource {
       }
     } else {
       try {
-      isCompatible =
-          schemaRegistry
-              .isCompatible(subject, request.getSchema(), schemaForSpecifiedVersion.getSchema());
+        isCompatible = schemaRegistry
+                .isCompatible(subject, request.getSchema(), schemaForSpecifiedVersion.getSchema());
       } catch (InvalidSchemaException e) {
         throw Errors.invalidAvroException("Invalid input schema " + request.getSchema(), e);
       } catch (SchemaRegistryStoreException e) {
-        throw Errors.storeException("Error while getting compatibility level for"
-                                                   + " subject " + subject, e);
+        throw Errors.storeException(
+            "Error while getting compatibility level for subject " + subject, e);
       } catch (SchemaRegistryException e) {
-        throw Errors.schemaRegistryException("Error while getting compatibility level for"
-                                             + " subject " + subject, e);
+        throw Errors.schemaRegistryException(
+            "Error while getting compatibility level for subject " + subject, e);
       }
       compatibilityCheckResponse.setIsCompatible(isCompatible);
       asyncResponse.resume(compatibilityCheckResponse);

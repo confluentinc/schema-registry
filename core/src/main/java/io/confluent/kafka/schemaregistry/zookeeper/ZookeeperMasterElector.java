@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
@@ -34,7 +35,7 @@ import kafka.utils.ZkUtils;
 public class ZookeeperMasterElector {
 
   private static final Logger log = LoggerFactory.getLogger(ZookeeperMasterElector.class);
-  private static final String MASTER_PATH = "/schema-registry-master";
+  private static final String MASTER_PATH = "/schema_registry_master";
 
   private final ZkClient zkClient;
   private final SchemaRegistryIdentity myIdentity;
@@ -42,9 +43,11 @@ public class ZookeeperMasterElector {
   private final KafkaSchemaRegistry schemaRegistry;
 
 
-  public ZookeeperMasterElector(ZkClient zkClient, SchemaRegistryIdentity myIdentity,
-                                KafkaSchemaRegistry schemaRegistry)
-      throws SchemaRegistryStoreException, SchemaRegistryTimeoutException {
+  public ZookeeperMasterElector(ZkClient zkClient, 
+                                SchemaRegistryIdentity myIdentity,
+                                KafkaSchemaRegistry schemaRegistry, 
+                                boolean isEligibleForMasterElection)
+      throws SchemaRegistryTimeoutException, SchemaRegistryStoreException {
     this.zkClient = zkClient;
     this.myIdentity = myIdentity;
     try {
@@ -55,63 +58,105 @@ public class ZookeeperMasterElector {
     }
     this.schemaRegistry = schemaRegistry;
 
-    zkClient.subscribeStateChanges(new SessionExpirationListener());
-    zkClient.subscribeDataChanges(MASTER_PATH, new MasterChangeListener());
-    electMaster();
+    zkClient.subscribeStateChanges(new SessionExpirationListener(isEligibleForMasterElection));
+    zkClient.subscribeDataChanges(MASTER_PATH, 
+                                  new MasterChangeListener(isEligibleForMasterElection));
+    if (isEligibleForMasterElection) {
+      electMaster();  
+    } else {
+      readCurrentMaster();
+    }    
   }
 
   public void close() {
     zkClient.unsubscribeAll();
   }
 
-  public void electMaster() throws SchemaRegistryStoreException, SchemaRegistryTimeoutException {
+  public void electMaster() throws
+      SchemaRegistryStoreException, SchemaRegistryTimeoutException {
     SchemaRegistryIdentity masterIdentity = null;
     try {
       ZkUtils.createEphemeralPathExpectConflict(zkClient, MASTER_PATH, myIdentityString);
       log.info("Successfully elected the new master: " + myIdentityString);
       masterIdentity = myIdentity;
+      schemaRegistry.setMaster(masterIdentity);
     } catch (ZkNodeExistsException znee) {
-      // If someone else has written the path, read the new master back
+      readCurrentMaster();
+    }
+  }
+
+  public void readCurrentMaster()
+      throws SchemaRegistryTimeoutException, SchemaRegistryStoreException {
+    SchemaRegistryIdentity masterIdentity = null;
+    // If someone else has written the path, read the new master back
+    try {
+      String masterIdentityString = ZkUtils.readData(zkClient, MASTER_PATH)._1();
       try {
-        String masterIdentityString = ZkUtils.readData(zkClient, MASTER_PATH)._1();
-        try {
-          masterIdentity = SchemaRegistryIdentity.fromJson(masterIdentityString);
-        } catch (IOException ioe) {
-          log.error("Can't parse schema registry identity json string " + masterIdentityString);
-        }
-      } catch (ZkNoNodeException znne) {
-        // just let it go; we will get another handleDataDeleted event
+        masterIdentity = SchemaRegistryIdentity.fromJson(masterIdentityString);
+      } catch (IOException ioe) {
+        log.error("Can't parse schema registry identity json string " + masterIdentityString);
       }
+    } catch (ZkNoNodeException znne) {
+      // NOTE: masterIdentity is already initialized to null. The master will then be updated to 
+      // null so register requests directed to this node can throw the right error code back
     }
     schemaRegistry.setMaster(masterIdentity);
   }
-
+  
   private class MasterChangeListener implements IZkDataListener {
-
+    private final boolean isEligibleForMasterElection;
+    
+    public MasterChangeListener(boolean isEligibleForMasterElection) {
+      this.isEligibleForMasterElection = isEligibleForMasterElection;  
+    }
+    
     /**
-     * Called when the leader information stored in zookeeper has changed. Record the new leader in
-     * memory
+     * Called when the master information stored in ZooKeeper has changed (or, in some cases,
+     * deleted).
+     *
+     * ** Note ** The ZkClient library has unexpected behavior - under certain conditions,
+     * handleDataChange may be called instead of handleDataDeleted when the ephemeral node holding
+     * MASTER_PATH is deleted. Therefore it is necessary to call electMaster() here to ensure
+     * every eligible node participates in election after a deletion event.
      *
      * @throws Exception On any error.
      */
     @Override
     public void handleDataChange(String dataPath, Object data) {
-      // no need to handle
+      try {
+        if (isEligibleForMasterElection) {
+          electMaster();
+        } else {
+          readCurrentMaster();
+        }
+      } catch (SchemaRegistryException e) {
+        log.error("Error while reading the schema registry master", e);
+      }
     }
 
     /**
-     * Called when the leader information stored in zookeeper has been delete. Try to elect as the
+     * Called when the master information stored in zookeeper has been deleted. Try to elect as the
      * leader
      *
      * @throws Exception On any error.
      */
     @Override
     public void handleDataDeleted(String dataPath) throws Exception {
-      electMaster();
+      if (isEligibleForMasterElection) {
+        electMaster();  
+      } else {
+        schemaRegistry.setMaster(null);
+      }      
     }
   }
 
   private class SessionExpirationListener implements IZkStateListener {
+
+    private final boolean isEligibleForMasterElection;
+
+    public SessionExpirationListener(boolean isEligibleForMasterElection) {
+      this.isEligibleForMasterElection = isEligibleForMasterElection;
+    }
 
     @Override
     public void handleStateChanged(Watcher.Event.KeeperState state) {
@@ -126,7 +171,11 @@ public class ZookeeperMasterElector {
      */
     @Override
     public void handleNewSession() throws Exception {
-      electMaster();
+      if (isEligibleForMasterElection) {
+        electMaster();  
+      } else {
+        readCurrentMaster();
+      }
     }
   }
 }
