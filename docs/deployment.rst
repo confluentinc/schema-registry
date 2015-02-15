@@ -45,7 +45,7 @@ Avoid clusters that span multiple data centers, even if the data centers are col
 
 Larger latencies tend to exacerbate problems in distributed systems and make debugging and resolution more difficult.
 
-Often, people might assume the pipe between multiple data centers is robust or low latency. But this is usually not true and network failures might happen at some point. Please refer to our recommended :ref:`mirroring`.
+Often, people might assume the pipe between multiple data centers is robust or low latency. But this is usually not true and network failures might happen at some point. Please refer to our recommended :ref:`schemaregistry_mirroring`.
 
 JVM
 ~~~
@@ -141,7 +141,7 @@ Kafka & ZooKeeper
 
 Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and ZooKeeper.
 
-.. _mirroring:
+.. _schemaregistry_mirroring:
 
 Multi-DC Setup
 ~~~~~~~~~~~~~~
