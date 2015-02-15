@@ -150,34 +150,32 @@ the key and therefore there is no schema registration for the key.
 Formatter
 ---------
 
-You can plug AvroMessageReader and AvroMessageFormatter into kafka-console-producer and
-kafka-console-consumer respectively to send and receive Avro data in json format from the console.
+You can use kafka-avro-console-producer and kafka-avro-console-consumer respectively to send and
+receive Avro data in json format from the console. Under the hood, they use AvroMessageReader and
+AvroMessageFormatter to convert between Avro and json.
 
 To run the Kafka console tools, first make sure that Zookeeper, Kafka and Schema Registry server
-are all started. Second, make sure the jars for AvroMessageReader and AvroMessageFormatter are
-included in the classpath of kafka-console-producer.sh and kafka-console-consumer.sh.
+are all started. Also, in the following examples, we use the default value of schema registry url.
+You can configure that by supplying ``--property schema.registry.url=address of your schema registry``
+in the commandline arguments of kafka-avro-console-producer and kafka-avro-console-consumer.
 
 In the following example, we send Avro records in json as the message value (make sure there is no space in the schema string).
 
 .. sourcecode:: bash
 
-   CLASSPATH=/tmp/schema-registry/package/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/* \
-   bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
-     --line-reader io.confluent.kafka.formatter.AvroMessageReader \
-     --property schema.registry.url=http://localhost:8081 \
+   bin/kafka-avro-console-producer --broker-list localhost:9092 --topic t1 \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
 
    In the shell, type in the following.
      {"f1": "value1"}
 
+
 In the following example, we read the value of the messages in json.
 
 .. sourcecode:: bash
 
-   CLASSPATH=/tmp/schema-registry/package/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/* \
-   bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
-     --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
-     --property schema.registry.url=http://localhost:8081
+   bin/kafka-avro-console-consumer --consumer.config config/consumer.properties --topic t1 \
+     --zookeeper localhost:2181 \
 
    You should see following in the console.
      {"f1": "value1"}
@@ -188,10 +186,7 @@ message, respectively.
 
 .. sourcecode:: bash
 
-   CLASSPATH=/tmp/schema-registry/package/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/* \
-   bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t2 \
-     --line-reader io.confluent.kafka.formatter.AvroMessageReader \
-     --property schema.registry.url=http://localhost:8081 \
+   bin/kafka-avro-console-producer --broker-list localhost:9092 --topic t2 \
      --property parse.key=true \
      --property key.schema='{"type":"string"}' \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
@@ -203,10 +198,8 @@ In the following example, we read both the key and the value of the messages in 
 
 .. sourcecode:: bash
 
-   CLASSPATH=/tmp/schema-registry/package/target/package-0.1-SNAPSHOT-package/share/java/avro-serializer/* \
-   bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t2 \
-     --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
-     --property schema.registry.url=http://localhost:8081 \
+   bin/kafka-avro-console-consumer --consumer.config config/consumer.properties --topic t2 \
+     --zookeeper localhost:2181 \
      --property print.key=true
 
    You should see following in the console.
