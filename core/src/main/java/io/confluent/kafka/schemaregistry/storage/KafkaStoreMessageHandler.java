@@ -52,7 +52,9 @@ public class KafkaStoreMessageHandler
       if (schemaIdAndSubjects == null) {
         schemaIdAndSubjects = new SchemaIdAndSubjects(schemaObj.getId());
       }
+    
       schemaIdAndSubjects.addSubjectAndVersion(schemaKey.getSubject(), schemaKey.getVersion());
+      schemaIdAndSubjects.setSchemaId(schemaObj.getId());
       schemaRegistry.schemaHashToGuid.put(md5, schemaIdAndSubjects);
     }
   }
