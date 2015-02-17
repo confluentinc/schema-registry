@@ -54,7 +54,7 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String KAFKASTORE_WRITE_MAX_RETRIES_CONFIG =
       "kafkastore.write.max.retries";
-  public static final int DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES = 5;
+  public static final int DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES = Integer.MAX_VALUE;
   /**
    * <code>kafkastore.write.retry.backoff.ms</code>
    */
@@ -109,8 +109,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "The desired replication factor of the schema topic. The actual replication factor " +
       "will be the smaller of this value and the number of live Kafka brokers.";
   protected static final String KAFKASTORE_WRITE_RETRIES_DOC =
-      "Retry a failed register schema request to the underlying Kafka store up to this many times, "
-      + " for example in case of a Kafka broker failure";
+      "Setting for the producer producing to the underlying Kafka logs. "
+      + "The producer will retry failed writes up to this many times, for example in case of" 
+      + "a Kafka broker failure. This should be set to the maximum possible value to help ensure"
+      + " consistency between the Kafka Schema Registry caches and the Kafka logs.";
   protected static final String KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC =
       "The amount of time in milliseconds to wait before attempting to retry a failed write "
       + "to the Kafka store";
@@ -159,7 +161,7 @@ public class SchemaRegistryConfig extends RestConfig {
                 DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR,
                 ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC)
         .define(KAFKASTORE_WRITE_MAX_RETRIES_CONFIG, ConfigDef.Type.INT,
-                DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES, ConfigDef.Importance.MEDIUM,
+                DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES, ConfigDef.Importance.HIGH,
                 KAFKASTORE_WRITE_RETRIES_DOC)
         .define(KAFKASTORE_WRITE_RETRY_BACKOFF_MS_CONFIG, ConfigDef.Type.INT,
                 DEFAULT_KAFKASTORE_WRITE_RETRY_BACKOFF_MS, ConfigDef.Importance.MEDIUM,
