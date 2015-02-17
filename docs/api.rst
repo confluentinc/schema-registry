@@ -42,6 +42,59 @@ All API endpoints use a standard error message format for any requests that retu
 
 Although it is good practice to check the status code, you may safely parse the response of any non-DELETE API calls and check for the presence of an ``error_code`` field to detect errors.
 
+Compatibility
+^^^^^^^^^^^^^
+The schema registry server can enforce certain compatibility rules when new schemas are registered in a subject. Currently, we support the following compatibility rules.
+
+  * ``BACKWARD`` compatibility (default): A new schema is backward compatible if it can be used to read the data written in all previous schemas. Backward compatibility is useful for loading data into systems like Hive. The Hive query can always use the latest schema to read the data of all versions.
+  * ``FORWARD`` compatibility: A new schema is forward compatible if all previous schemas can read data written in this schema. Forward compatibility is useful for consumer applications that can only deal with data in a particular version that may not always be the latest version.
+  * ``FULL`` compatibility: A new schema is fully compatible if it’s both backward and forward compatible.
+  * ``NONE`` compatibility: A new schema can be any schema as long as it’s a valid Avro.
+
+For example, consider the following schemas:
+
+.. sourcecode:: http
+
+   SchemaA:
+   {
+      "type": "record",
+      "name": "User",
+      "fields": [
+         {"name": "name", "type": "string"},
+         {"name": "id",  "type": "int"}
+      ]
+   }
+   
+   SchemaB:
+   {
+      "type": "record",
+      "name": "User",
+      "fields": [
+         {"name": "name", "type": "string"},
+         {"name": "id", "type": "long"},
+         {"favorite_color": "height", "type": "string", "default": "blue"}
+      ]
+   }
+   
+   SchemaC:
+   {
+      "type": "record",
+      "name": "User",
+      "fields": [
+         {"name": "name", "type": "string"},
+         {"name": "id", "type": "long"}
+      ]
+   }
+
+SchemaA can be versioned to SchemaB in a ``BACKWARD`` compatible way, because SchemaB can be used to read data written with SchemaA. However, SchemaB is not ``FORWARD`` compatible with SchemaA: if SchemaA is used to write data, reading that same data with SchemaB would result in type demotion from "long" to "int" and potential corruption of the "id" field.
+
+SchemaC is ``FORWARD`` compatible with SchemaB because SchemaB can read any data written using SchemaC. SchemaC is also ``BACKWARD`` compatible with SchemaB because data written with SchemaB can be read using SchemaC - in this case, the "favorite_color" field will simply be ignored. SchemaB and SchemaC are therefore ``FULL`` compatible.
+
+The Schema Registry defaults to ``BACKWARD`` compatibility. In the majority of use cases, data written using old schema versions should continue be readable as your data evolves, so ``BACKWARD`` compatibility recommended unless you have specific reasons to use another.
+
+More details on Avro schema resolution can be found `here <http://avro.apache.org/docs/1.7.7/spec.html#Schema+Resolution>`_.
+
+
 Schemas
 ----------
 
