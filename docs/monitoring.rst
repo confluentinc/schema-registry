@@ -36,6 +36,13 @@ Global Metrics
   ``master-slave-role``
     The current role of this Schema Registry instance. A value of 1 indicates this instance is
     the master, 0 indicates it is a slave.
+  
+**MBean: kafka.producer:type=producer-topic-metrics,client-id=schema-registry,topic=_schemas**
+
+  ``record-retry-rate``
+    The current rate of retries for the producer producing new schemas to the underlying Kafka logs.
+    This value should be 0 most of the time. A value greater than 0 may indicate a Kafka broker
+    failure.
 
 
 Per-Endpoint Metrics

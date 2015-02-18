@@ -52,7 +52,31 @@ public class KafkaStoreMessageHandler
       if (schemaIdAndSubjects == null) {
         schemaIdAndSubjects = new SchemaIdAndSubjects(schemaObj.getId());
       }
+    
       schemaIdAndSubjects.addSubjectAndVersion(schemaKey.getSubject(), schemaKey.getVersion());
+      
+
+      int prevId = schemaIdAndSubjects.getSchemaId();
+      if (schemaObj.getId() != prevId) {
+        // Protect against potential inconsistency in the local caches caused by multiple Kafka 
+        // records with different ids associated with same subject/version key
+        // This should be impossible, but if it happens, log a warning and gracefully update
+        // the local cache. See https://github.com/confluentinc/schema-registry/issues/134
+        String overwriteWarning = 
+            schemaObj.getId() > prevId ? 
+            "Overwriting previous id in local cache with new id found in Kafka." : 
+            "";
+        String warning = 
+            "Multiple ids in Kafka point to the same subject/version."
+            + "Subject: " + schemaKey.getSubject() + ", Version: " + schemaKey.getVersion()
+            + overwriteWarning
+            + "Previous id: " + prevId + ", new id: " + schemaObj.getId();
+        log.warn(warning);
+        if (schemaObj.getId() > prevId) {
+          schemaIdAndSubjects.setSchemaId(schemaObj.getId());
+        }
+      }
+      
       schemaRegistry.schemaHashToGuid.put(md5, schemaIdAndSubjects);
     }
   }

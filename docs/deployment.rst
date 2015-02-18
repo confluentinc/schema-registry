@@ -115,12 +115,12 @@ The desired replication factor of the schema topic. The actual replication facto
 * Default: 3
 * Importance: high
 
-``kafkastore.write.max.retries``
-Retry the register schema write up to this many times on failure
+``kafkastore.write.max.retries`` 
+Setting for the producer producing to the underlying Kafka logs. The producer will retry failed writes up to this many times, for example in case of a Kafka broker failure. This should be set to the maximum possible value to help ensure consistency between the Kafka Schema Registry caches and the Kafka logs.
 
-* Type: int
-* Default: 5
-* Importance: medium
+  * Type: int
+  * Default: ``Integer.MAX_VALUE``
+  * Importance: high
 
 ``kafkastore.write.retry.backoff.ms``
 The amount of time in milliseconds to wait before attempting to retry a failed write to the Kafka store
@@ -132,9 +132,9 @@ The amount of time in milliseconds to wait before attempting to retry a failed w
 ``kafkastore.timeout.ms``
 The timeout for an operation on the Kafka store. This is the maximum time that a register call blocks.
 
-* Type: int
-* Default: 500
-* Importance: medium
+  * Type: int
+  * Default: Integer.MAX_VALUE
+  * Importance: high
 
 Kafka & ZooKeeper
 ~~~~~~~~~~~~~~~~~

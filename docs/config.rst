@@ -59,18 +59,17 @@ Configuration Options
   * Importance: medium
 
 ``kafkastore.timeout.ms``
-  The timeout for an operation on the Kafka store
+  The timeout for an operation on the Kafka store. This is the maximum time that a register call blocks.
+  * Type: int
+  * Default: Integer.MAX_VALUE
+  * Importance: high
+
+``kafkastore.write.max.retries`` 
+  Setting for the producer producing to the underlying Kafka logs. The producer will retry failed writes up to this many times, for example in case of a Kafka broker failure. This should be set to the maximum possible value to help ensure consistency between the Kafka Schema Registry caches and the Kafka logs.
 
   * Type: int
-  * Default: 500
-  * Importance: medium
-
-``kafkastore.write.max.retries``
-  Retry a failed register schema request to the underlying Kafka store up to this many times,  for example in case of a Kafka broker failure
-
-  * Type: int
-  * Default: 5
-  * Importance: medium
+  * Default: ``Integer.MAX_VALUE``
+  * Importance: high
 
 ``kafkastore.write.retry.backoff.ms``
   The amount of time in milliseconds to wait before attempting to retry a failed write to the Kafka store
@@ -87,7 +86,7 @@ Configuration Options
   * Importance: low
 
 ``host.name``
-  The host name advertised in Zookeeper
+  The host name advertised in ZooKeeper
 
   * Type: string
   * Default: thor

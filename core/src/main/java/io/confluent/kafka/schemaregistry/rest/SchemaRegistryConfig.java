@@ -54,7 +54,7 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String KAFKASTORE_WRITE_MAX_RETRIES_CONFIG =
       "kafkastore.write.max.retries";
-  public static final int DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES = 5;
+  public static final int DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES = Integer.MAX_VALUE;
   /**
    * <code>kafkastore.write.retry.backoff.ms</code>
    */
@@ -65,6 +65,7 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>kafkastore.timeout.ms</code>
    */
   public static final String KAFKASTORE_TIMEOUT_CONFIG = "kafkastore.timeout.ms";
+  public static final int DEFAULT_KAFKASTORE_TIMEOUT = Integer.MAX_VALUE;
   /**
    * <code>kafkastore.init.timeout.ms</code>
    */
@@ -109,8 +110,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "The desired replication factor of the schema topic. The actual replication factor " +
       "will be the smaller of this value and the number of live Kafka brokers.";
   protected static final String KAFKASTORE_WRITE_RETRIES_DOC =
-      "Retry a failed register schema request to the underlying Kafka store up to this many times, "
-      + " for example in case of a Kafka broker failure";
+      "Setting for the producer producing to the underlying Kafka logs. "
+      + "The producer will retry failed writes up to this many times, for example in case of" 
+      + "a Kafka broker failure. This should be set to the maximum possible value to help ensure"
+      + " consistency between the Kafka Schema Registry caches and the Kafka logs.";
   protected static final String KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC =
       "The amount of time in milliseconds to wait before attempting to retry a failed write "
       + "to the Kafka store";
@@ -118,7 +121,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for initialization of the Kafka store, including creation of the Kafka topic "
       + "that stores schema data.";
   protected static final String KAFKASTORE_TIMEOUT_DOC =
-      "The timeout for an operation on the Kafka store";
+      "The timeout for an operation on the Kafka store. "
+      + "This is the maximum time that a register call blocks.";
   protected static final String KAFKASTORE_COMMIT_INTERVAL_MS_DOC =
       "The interval to commit offsets while consuming the Kafka topic";
   protected static final String HOST_DOC = "The host name advertised in Zookeeper";
@@ -159,15 +163,15 @@ public class SchemaRegistryConfig extends RestConfig {
                 DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR,
                 ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC)
         .define(KAFKASTORE_WRITE_MAX_RETRIES_CONFIG, ConfigDef.Type.INT,
-                DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES, ConfigDef.Importance.MEDIUM,
+                DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES, ConfigDef.Importance.HIGH,
                 KAFKASTORE_WRITE_RETRIES_DOC)
         .define(KAFKASTORE_WRITE_RETRY_BACKOFF_MS_CONFIG, ConfigDef.Type.INT,
                 DEFAULT_KAFKASTORE_WRITE_RETRY_BACKOFF_MS, ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC)
         .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 5000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC)
-        .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
-                ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC)
+        .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, DEFAULT_KAFKASTORE_TIMEOUT, atLeast(0),
+                ConfigDef.Importance.HIGH, KAFKASTORE_TIMEOUT_DOC)
         .define(KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT,
                 KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT, ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_COMMIT_INTERVAL_MS_DOC)

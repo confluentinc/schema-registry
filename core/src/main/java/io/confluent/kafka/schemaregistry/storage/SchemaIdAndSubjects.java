@@ -52,6 +52,9 @@ public class SchemaIdAndSubjects {
   public int getSchemaId() {
     return this.id;
   }
+  public void setSchemaId(int id) {
+    this.id = id;
+  }
 
   @Override
   public boolean equals(Object o) {

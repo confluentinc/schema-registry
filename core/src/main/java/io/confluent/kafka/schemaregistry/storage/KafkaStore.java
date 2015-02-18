@@ -101,7 +101,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.storeUpdateHandler = storeUpdateHandler;
     this.serializer = serializer;
     this.localStore = localStore;
-    // TODO: Do not use the commit interval until the decision on the embedded store is done
     int commitInterval = config.getInt(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG);
     int zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
@@ -143,6 +142,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.RETRIES_CONFIG, this.numRetries);
     props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, this.writeRetryBackoffMs);
+    props.put(ProducerConfig.CLIENT_ID_CONFIG, this.CLIENT_ID);
     producer = new KafkaProducer<byte[],byte[]>(props);
 
     // start the background thread that subscribes to the Kafka topic and applies updates
