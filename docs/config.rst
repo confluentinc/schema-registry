@@ -59,11 +59,10 @@ Configuration Options
   * Importance: medium
 
 ``kafkastore.timeout.ms``
-  The timeout for an operation on the Kafka store
-
+  The timeout for an operation on the Kafka store. This is the maximum time that a register call blocks.
   * Type: int
-  * Default: 500
-  * Importance: medium
+  * Default: Integer.MAX_VALUE
+  * Importance: high
 
 ``kafkastore.write.max.retries`` 
   Setting for the producer producing to the underlying Kafka logs. The producer will retry failed writes up to this many times, for example in case of a Kafka broker failure. This should be set to the maximum possible value to help ensure consistency between the Kafka Schema Registry caches and the Kafka logs.

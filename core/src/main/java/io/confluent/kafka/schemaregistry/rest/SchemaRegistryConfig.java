@@ -65,6 +65,7 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>kafkastore.timeout.ms</code>
    */
   public static final String KAFKASTORE_TIMEOUT_CONFIG = "kafkastore.timeout.ms";
+  public static final int DEFAULT_KAFKASTORE_TIMEOUT = Integer.MAX_VALUE;
   /**
    * <code>kafkastore.init.timeout.ms</code>
    */
@@ -120,7 +121,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for initialization of the Kafka store, including creation of the Kafka topic "
       + "that stores schema data.";
   protected static final String KAFKASTORE_TIMEOUT_DOC =
-      "The timeout for an operation on the Kafka store";
+      "The timeout for an operation on the Kafka store. "
+      + "This is the maximum time that a register call blocks.";
   protected static final String KAFKASTORE_COMMIT_INTERVAL_MS_DOC =
       "The interval to commit offsets while consuming the Kafka topic";
   protected static final String HOST_DOC = "The host name advertised in Zookeeper";
@@ -168,8 +170,8 @@ public class SchemaRegistryConfig extends RestConfig {
                 KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC)
         .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 5000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC)
-        .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
-                ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC)
+        .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, DEFAULT_KAFKASTORE_TIMEOUT, atLeast(0),
+                ConfigDef.Importance.HIGH, KAFKASTORE_TIMEOUT_DOC)
         .define(KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT,
                 KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT, ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_COMMIT_INTERVAL_MS_DOC)
