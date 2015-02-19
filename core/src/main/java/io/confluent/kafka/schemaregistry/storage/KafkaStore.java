@@ -44,13 +44,8 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutExceptio
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
 import kafka.admin.AdminUtils;
-import kafka.client.ClientUtils;
 import kafka.cluster.Broker;
-import kafka.common.TopicAndPartition;
 import kafka.common.TopicExistsException;
-import kafka.consumer.SimpleConsumer;
-import kafka.javaapi.TopicMetadata;
-import kafka.javaapi.TopicMetadataResponse;
 import kafka.log.LogConfig;
 import kafka.utils.ZkUtils;
 import scala.collection.JavaConversions;
@@ -155,7 +150,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     kafkaTopicReader.start();
 
     try {
-      waitUntilBootstrapCompletes(initTimeout);
+      waitUntilKafkaReaderReachesLastOffset(initTimeout);
     } catch (StoreException e) {
       throw new StoreInitializationException(e);
     }
@@ -225,14 +220,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
   /**
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.
    */
-  public void waitUntilBootstrapCompletes() throws StoreException {
-    waitUntilBootstrapCompletes(timeout);
+  public void waitUntilKafkaReaderReachesLastOffset() throws StoreException {
+    waitUntilKafkaReaderReachesLastOffset(timeout);
   }
   /**
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.
    */
-  private void waitUntilBootstrapCompletes(int timeoutMs) throws StoreException {
-    long offsetOfLastMessage = getLatestOffset(timeoutMs) - 1;
+  private void waitUntilKafkaReaderReachesLastOffset(int timeoutMs) throws StoreException {
+    long offsetOfLastMessage = getLatestOffset(timeoutMs);
     log.info("Wait to catch up until the offset of the last message at " + offsetOfLastMessage);
     kafkaTopicReader.waitUntilOffset(offsetOfLastMessage, timeoutMs, TimeUnit.MILLISECONDS);
     log.debug("Reached offset at " + offsetOfLastMessage);
@@ -333,7 +328,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   /**
-   *  
+   * Return the latest offset of the store topic. 
+   * 
+   * The most reliable way to do so in face of potential Kafka broker failure is to produce
+   * successfully to the Kafka topic and get the offset of the returned metadata.
+   * 
+   * If the most recent write to Kafka was successful (signaled by lastWrittenOffset >= 0), 
+   * return that offset, otherwise write a "Noop key" to Kafka in order to find the latest offset.
    */
   private long getLatestOffset(int timeoutMs) throws StoreException {
     ProducerRecord<byte[], byte[]> producerRecord = null;
@@ -350,60 +351,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
     
     Future<RecordMetadata> ack = producer.send(producerRecord);
-
     RecordMetadata metadata = null;
     try {
       metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
       this.lastWrittenOffset = metadata.offset();
       return this.lastWrittenOffset;
     } catch (Exception e) {
-      throw new StoreException("Failed to write noop key.");
+      throw new StoreException("Failed to write noop key to kafka store.");
     }
-  }
-
-  /**
-   * Get the latest offset of the Kafka topic that has a single partition.
-   */
-  private long getLatestOffsetOfKafkaTopic(int timeoutMs) throws StoreException {
-    long start = System.currentTimeMillis();
-    do {
-      Set<String> topics = new HashSet<String>();
-      topics.add(topic);
-      scala.collection.mutable.Set<String> topicsScalaSet = JavaConversions.asScalaSet(topics);
-      TopicMetadataResponse topicMetadataResponse =
-          new kafka.javaapi.TopicMetadataResponse(
-              ClientUtils.fetchTopicMetadata(topicsScalaSet, brokerSeq, CLIENT_ID, timeoutMs, 0));
-      if (topicMetadataResponse.topicsMetadata().size() <= 0) {
-        // topic doesn't exist yet
-        return 0L;
-      }
-
-      TopicMetadata topicMetadata = topicMetadataResponse.topicsMetadata().get(0);
-      // only try to proceed if there weren't other, possibly temporary errors, e.g. leader election
-      if (topicMetadata.errorCode() == 0) {
-        Broker leader = topicMetadata.partitionsMetadata().get(0).leader();
-        if (leader != null) {
-          try {
-            SimpleConsumer simpleConsumer = new SimpleConsumer(
-                leader.host(), leader.port(), timeoutMs, SOCKET_BUFFER_SIZE, CLIENT_ID);
-            TopicAndPartition topicAndPartition = new TopicAndPartition(topic, 0);
-            return simpleConsumer.earliestOrLatestOffset(
-                topicAndPartition, LATEST_OFFSET, CONSUMER_ID);
-          } catch (Exception e) {
-            log.warn("Exception while fetch the latest offset", e);
-          }
-        }
-      }
-
-      try {
-        // backoff a bit
-        Thread.sleep(10);
-      } catch (InterruptedException e) {
-        // let it go
-      }
-    } while (System.currentTimeMillis() - start <= timeoutMs);
-
-    throw new StoreTimeoutException(
-        String.format("Can't fetch latest offset of Kafka topic %s after %d ms", topic, timeoutMs));
   }
 }

@@ -231,7 +231,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         // The master has changed to this SchemaRegistry instance
         // To become the master, wait until the Kafka store is fully caught up.
         try {
-          kafkaStore.waitUntilBootstrapCompletes();
+          kafkaStore.waitUntilKafkaReaderReachesLastOffset();
         } catch (StoreTimeoutException stoe) {
           throw new SchemaRegistryTimeoutException("Bootstrap timed out", stoe);
         } catch (StoreException se) {
@@ -270,7 +270,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                       Schema schema)
       throws SchemaRegistryException {
     try {
-      kafkaStore.waitUntilBootstrapCompletes();
+      // Ensure cache is up-to-date before any potential writes
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset();
 
       // see if the schema to be registered already exists
       AvroSchema avroSchema = canonicalizeSchema(schema);
