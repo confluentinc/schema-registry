@@ -81,6 +81,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private KafkaProducer<byte[],byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
   private final K noopKey;
+  private long lastWrittenOffset = -1;
 
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
@@ -250,9 +251,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreException("Key should not be null");
     }
 
-    //
-    waitUntilBootstrapCompletes(timeout);
-    
     // write to the Kafka topic
     ProducerRecord<byte[], byte[]> producerRecord = null;
     try {
@@ -265,10 +263,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
                                + "record", e);
     }
     Future<RecordMetadata> ack = producer.send(producerRecord);
+    boolean knownSuccessfulProduce = false;
     try {
       RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
       log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
-      kafkaTopicReader.waitUntilOffset(recordMetadata.offset(), timeout, TimeUnit.MILLISECONDS);
+      this.lastWrittenOffset = recordMetadata.offset();
+      knownSuccessfulProduce = true;
+      kafkaTopicReader.waitUntilOffset(this.lastWrittenOffset, timeout, TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
       throw new StoreException("Put operation interrupted while waiting for an ack from Kafka", e);
     } catch (ExecutionException e) {
@@ -278,6 +279,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
           "Put operation timed out while waiting for an ack from Kafka", e);
     } catch (KafkaException ke) {
       throw new StoreException("Put operation to Kafka failed", ke);
+    }
+    finally {
+      if (!knownSuccessfulProduce) {
+        this.lastWrittenOffset = -1;
+      }
     }
   }
 
@@ -332,6 +338,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private long getLatestOffset(int timeoutMs) throws StoreException {
     ProducerRecord<byte[], byte[]> producerRecord = null;
     
+    if (this.lastWrittenOffset >= 0) {
+      return this.lastWrittenOffset;
+    }
+    
     try {
       producerRecord =
           new ProducerRecord<byte[], byte[]>(topic, 0, this.serializer.serializeKey(noopKey), null);
@@ -344,11 +354,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
     RecordMetadata metadata = null;
     try {
       metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
+      this.lastWrittenOffset = metadata.offset();
+      return this.lastWrittenOffset;
     } catch (Exception e) {
       throw new StoreException("Failed to write noop key.");
     }
-    
-    return metadata.offset();
   }
 
   /**
