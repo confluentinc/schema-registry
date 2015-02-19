@@ -57,6 +57,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private ConsumerConnector consumer;
   private long offsetInSchemasTopic = -1L;
   private long lastCommitTime = 0L;
+  private final K noopKey;
 
   public KafkaStoreReaderThread(ZkClient zkClient,
                                 String kafkaClusterZkUrl,
@@ -65,7 +66,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 int commitInterval,
                                 StoreUpdateHandler<K, V> storeUpdateHandler,
                                 Serializer<K, V> serializer,
-                                Store<K, V> localStore) {
+                                Store<K, V> localStore,
+                                K noopKey) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     offsetUpdateLock = new ReentrantLock();
     offsetReachedThreshold = offsetUpdateLock.newCondition();
@@ -75,6 +77,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.serializer = serializer;
     this.localStore = localStore;
     this.commitInterval = commitInterval;
+    this.noopKey = noopKey;
 
     offsetInSchemasTopic = offsetOfLastConsumedMessage(zkClient, groupId, topic);
     log.info("Initialized the consumer offset to " + offsetInSchemasTopic);
@@ -127,39 +130,42 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         } catch (SerializationException e) {
           log.error("Failed to deserialize the schema or config key", e);
         }
-        V message = null;
-        try {
-          message =
-              messageBytes == null ? null : serializer.deserializeValue(messageKey, messageBytes);
-        } catch (SerializationException e) {
-          // TODO: fail just this operation or all subsequent operations?
-          log.error("Failed to deserialize a schema or config update", e);
-        }
-        try {
-          log.trace("Applying update (" + messageKey + "," + message + ") to the local " +
-                    "store");
-          if (message == null) {
-            localStore.delete(messageKey);
-          } else {
-            localStore.put(messageKey, message);
-          }
-          this.storeUpdateHandler.handleUpdate(messageKey, message);
+        
+        if (!messageKey.equals(noopKey)) {
+          V message = null;
           try {
-            offsetUpdateLock.lock();
-            offsetInSchemasTopic = messageAndMetadata.offset();
-            offsetReachedThreshold.signalAll();
-          } finally {
-            offsetUpdateLock.unlock();
+            message =
+                messageBytes == null ? null : serializer.deserializeValue(messageKey, messageBytes);
+          } catch (SerializationException e) {
+            // TODO: fail just this operation or all subsequent operations?
+            log.error("Failed to deserialize a schema or config update", e);
           }
-        } catch (StoreException se) {
-          /**
-           * TODO: maybe retry for a configurable amount before logging a failure?
-           * TODO: maybe fail all subsequent operations of the store if retries fail
-           * Only 2 operations make sense if this happens -
-           * 1. Restart the store hoping that it works subsequently
-           * 2. Look into the issue manually
-           */
-          log.error("Failed to add record from the Kafka topic" + topic + " the local store");
+          try {
+            log.trace("Applying update (" + messageKey + "," + message + ") to the local " +
+                      "store");
+            if (message == null) {
+              localStore.delete(messageKey);
+            } else {
+              localStore.put(messageKey, message);
+            }
+            this.storeUpdateHandler.handleUpdate(messageKey, message);
+            try {
+              offsetUpdateLock.lock();
+              offsetInSchemasTopic = messageAndMetadata.offset();
+              offsetReachedThreshold.signalAll();
+            } finally {
+              offsetUpdateLock.unlock();
+            }
+          } catch (StoreException se) {
+            /**
+             * TODO: maybe retry for a configurable amount before logging a failure?
+             * TODO: maybe fail all subsequent operations of the store if retries fail
+             * Only 2 operations make sense if this happens -
+             * 1. Restart the store hoping that it works subsequently
+             * 2. Look into the issue manually
+             */
+            log.error("Failed to add record from the Kafka topic" + topic + " the local store");
+          }
         }
       }
     } catch (ConsumerTimeoutException cte) {

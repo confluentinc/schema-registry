@@ -80,11 +80,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final ZkClient zkClient;
   private KafkaProducer<byte[],byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
+  private final K noopKey;
 
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
                     Serializer<K, V> serializer,
-                    Store<K, V> localStore) {
+                    Store<K, V> localStore,
+                    K noopKey) {
     this.kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
@@ -101,6 +103,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.storeUpdateHandler = storeUpdateHandler;
     this.serializer = serializer;
     this.localStore = localStore;
+    this.noopKey = noopKey;
+    
     // TODO: Do not use the commit interval until the decision on the embedded store is done
     int commitInterval = config.getInt(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG);
     int zkSessionTimeoutMs =
@@ -110,8 +114,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<K, V>(zkClient, kafkaClusterZkUrl, topic, groupId,
                                          Integer.MIN_VALUE, this.storeUpdateHandler,
-                                         serializer, this.localStore);
+                                         serializer, this.localStore, this.noopKey);
     this.brokerSeq = ZkUtils.getAllBrokersInCluster(zkClient);
+
   }
 
   @Override
@@ -226,7 +231,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.
    */
   private void waitUntilBootstrapCompletes(int timeoutMs) throws StoreException {
-    long offsetOfLastMessage = getLatestOffsetOfKafkaTopic(timeoutMs) - 1;
+    long offsetOfLastMessage = getLatestOffset(timeoutMs) - 1;
     log.info("Wait to catch up until the offset of the last message at " + offsetOfLastMessage);
     kafkaTopicReader.waitUntilOffset(offsetOfLastMessage, timeoutMs, TimeUnit.MILLISECONDS);
     log.debug("Reached offset at " + offsetOfLastMessage);
@@ -244,6 +249,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
     if (key == null) {
       throw new StoreException("Key should not be null");
     }
+
+    //
+    waitUntilBootstrapCompletes(timeout);
+    
     // write to the Kafka topic
     ProducerRecord<byte[], byte[]> producerRecord = null;
     try {
@@ -315,6 +324,31 @@ public class KafkaStore<K, V> implements Store<K, V> {
     if (!initialized.get()) {
       throw new StoreException("Illegal state. Store not initialized yet");
     }
+  }
+
+  /**
+   *  
+   */
+  private long getLatestOffset(int timeoutMs) throws StoreException {
+    ProducerRecord<byte[], byte[]> producerRecord = null;
+    
+    try {
+      producerRecord =
+          new ProducerRecord<byte[], byte[]>(topic, 0, this.serializer.serializeKey(noopKey), null);
+    } catch (SerializationException e) {
+      throw new StoreException("Failed to serialize noop key.");
+    }
+    
+    Future<RecordMetadata> ack = producer.send(producerRecord);
+
+    RecordMetadata metadata = null;
+    try {
+      metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
+    } catch (Exception e) {
+      throw new StoreException("Failed to write noop key.");
+    }
+    
+    return metadata.offset();
   }
 
   /**
