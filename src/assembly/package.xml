@@ -39,6 +39,7 @@
         <dependencySet>
             <outputDirectory>share/java/schema-registry</outputDirectory>
             <useProjectArtifact>true</useProjectArtifact>
+            <scope>runtime</scope>
             <useTransitiveFiltering>true</useTransitiveFiltering>
             <excludes>
                 <exclude>io.confluent:rest-utils</exclude>
@@ -49,6 +50,7 @@
         <dependencySet>
             <outputDirectory>share/java/avro-serializer</outputDirectory>
             <useProjectArtifact>true</useProjectArtifact>
+            <scope>runtime</scope>
             <useTransitiveFiltering>true</useTransitiveFiltering>
             <includes>
                 <include>io.confluent:kafka-avro-serializer</include>

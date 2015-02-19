@@ -11,7 +11,7 @@
     </parent>
 
     <groupId>io.confluent</groupId>
-    <artifactId>package</artifactId>
+    <artifactId>kafka-schema-registry-package</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-package</name>
 
@@ -32,6 +32,14 @@
             <artifactId>kafka-schema-registry</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- kafka -> zookeeper -> jline ends up including junit 3.8.1 here. Explicitly list the
+             dependency and scope it to test to avoid pulling it in -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -42,7 +50,6 @@
                 <configuration>
                     <descriptors>
                         <descriptor>src/assembly/development.xml</descriptor>
-                        <descriptor>src/assembly/standalone.xml</descriptor>
                         <descriptor>src/assembly/package.xml</descriptor>
                     </descriptors>
                     <archive>
@@ -61,7 +68,24 @@
                     </execution>
                 </executions>
             </plugin>
-
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>standalone</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <configuration>
+                            <descriptors>
+                                <descriptor>src/assembly/standalone.xml</descriptor>
+                            </descriptors>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

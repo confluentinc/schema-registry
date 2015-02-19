@@ -9,6 +9,30 @@
     <packaging>pom</packaging>
     <version>0.1-SNAPSHOT</version>
     <name>kafka-schema-registry-parent</name>
+    <organization>
+        <name>Confluent, Inc.</name>
+        <url>http://confluent.io</url>
+    </organization>
+    <url>http://confluent.io</url>
+    <description>
+        Schema Registry provides a RESTful interface for storing and retrieving versioned Avro
+        schemas for use with Kafka.
+    </description>
+
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <connection>scm:git:git://github.com/confluentinc/schema-registry.git</connection>
+        <developerConnection>scm:git:git@github.com:confluentinc/schema-registry.git</developerConnection>
+        <url>https://github.com/confluentinc/schema-registry</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <modules>
         <module>core</module>
