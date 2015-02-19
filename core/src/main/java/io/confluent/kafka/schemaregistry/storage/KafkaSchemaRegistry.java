@@ -270,6 +270,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                       Schema schema)
       throws SchemaRegistryException {
     try {
+      kafkaStore.waitUntilBootstrapCompletes();
+
       // see if the schema to be registered already exists
       AvroSchema avroSchema = canonicalizeSchema(schema);
       MD5 md5 = MD5.ofString(schema.getSchema());
