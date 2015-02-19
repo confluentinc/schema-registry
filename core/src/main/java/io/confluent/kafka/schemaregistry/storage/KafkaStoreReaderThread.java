@@ -57,6 +57,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private ConsumerConnector consumer;
   private long offsetInSchemasTopic = -1L;
   private long lastCommitTime = 0L;
+  // Noop key is only used to help reliably determine last offset; reader thread ignores 
+  // messages with this key
   private final K noopKey;
 
   public KafkaStoreReaderThread(ZkClient zkClient,
@@ -188,7 +190,11 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     super.shutdown();
   }
 
-  public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) {
+  public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) throws StoreException {
+    if (offset < 0) {
+      throw new StoreException("KafkaStoreReaderThread can't wait for a negative offset.");
+    }
+    
     try {
       offsetUpdateLock.lock();
       long timeoutNs = TimeUnit.NANOSECONDS.convert(timeout, timeUnit);

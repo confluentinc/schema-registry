@@ -75,6 +75,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final ZkClient zkClient;
   private KafkaProducer<byte[],byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
+  // Noop key is only used to help reliably determine last offset; reader thread ignores
+  // messages with this key
   private final K noopKey;
   private long lastWrittenOffset = -1;
 
@@ -258,13 +260,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
                                + "record", e);
     }
     Future<RecordMetadata> ack = producer.send(producerRecord);
-    boolean knownSuccessfulProduce = false;
+    boolean knownSuccessfulWrite = false;
     try {
       RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
       log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
       this.lastWrittenOffset = recordMetadata.offset();
-      knownSuccessfulProduce = true;
       kafkaTopicReader.waitUntilOffset(this.lastWrittenOffset, timeout, TimeUnit.MILLISECONDS);
+      knownSuccessfulWrite = true;
     } catch (InterruptedException e) {
       throw new StoreException("Put operation interrupted while waiting for an ack from Kafka", e);
     } catch (ExecutionException e) {
@@ -276,7 +278,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreException("Put operation to Kafka failed", ke);
     }
     finally {
-      if (!knownSuccessfulProduce) {
+      if (!knownSuccessfulWrite) {
         this.lastWrittenOffset = -1;
       }
     }
