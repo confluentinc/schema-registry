@@ -164,7 +164,7 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(KAFKASTORE_WRITE_RETRY_BACKOFF_MS_CONFIG, ConfigDef.Type.INT,
                 DEFAULT_KAFKASTORE_WRITE_RETRY_BACKOFF_MS, ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC)
-        .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 5000, atLeast(0),
+        .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 30000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC)
         .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC)
