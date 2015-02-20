@@ -137,16 +137,19 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         
         if (messageKey.equals(noopKey)) {
           // If it's a noop, update local offset counter and do nothing else
-          offsetUpdateLock.lock();
-          offsetInSchemasTopic = messageAndMetadata.offset();
-          offsetUpdateLock.unlock();
+          try {
+            offsetUpdateLock.lock();
+            offsetInSchemasTopic = messageAndMetadata.offset();
+            offsetReachedThreshold.signalAll();
+          } finally {
+            offsetUpdateLock.unlock();
+          }
         } else {
           V message = null;
           try {
             message =
                 messageBytes == null ? null : serializer.deserializeValue(messageKey, messageBytes);
           } catch (SerializationException e) {
-            // TODO: fail just this operation or all subsequent operations?
             log.error("Failed to deserialize a schema or config update", e);
           }
           try {
@@ -166,13 +169,6 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
               offsetUpdateLock.unlock();
             }
           } catch (StoreException se) {
-            /**
-             * TODO: maybe retry for a configurable amount before logging a failure?
-             * TODO: maybe fail all subsequent operations of the store if retries fail
-             * Only 2 operations make sense if this happens -
-             * 1. Restart the store hoping that it works subsequently
-             * 2. Look into the issue manually
-             */
             log.error("Failed to add record from the Kafka topic" + topic + " the local store");
           }
         }
@@ -185,9 +181,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       throw new IllegalStateException(
           "ConsumerIterator threw MessageSizeTooLargeException. A schema has been written that "
           + "exceeds the default maximum fetch size.", mstle);
-    }
-    catch (RuntimeException e) {
-      log.error("KafkaStoreReader thread has died for an unkown reason.");
+    } catch (RuntimeException e) {
+      log.error("KafkaStoreReader thread has died for an unknown reason.");
       throw new RuntimeException(e);
     }
     

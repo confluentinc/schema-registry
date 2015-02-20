@@ -44,7 +44,7 @@ public class NoopKey extends SchemaRegistryKey {
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("{magic=" + this.magicByte + ",");
-    sb.append("keytype=" + this.keyType.keyType);
+    sb.append("keytype=" + this.keyType.keyType + "}");
     return sb.toString();
   }
 }

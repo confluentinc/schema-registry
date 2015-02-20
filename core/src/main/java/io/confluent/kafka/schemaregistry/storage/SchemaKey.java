@@ -63,18 +63,11 @@ public class SchemaKey extends SchemaRegistryKey {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
+    if (!super.equals(o)) {
       return false;
     }
 
     SchemaKey that = (SchemaKey) o;
-
-    if (!super.equals(o)) {
-      return false;
-    }
     if (!subject.equals(that.subject)) {
       return false;
     }
