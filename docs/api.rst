@@ -6,6 +6,26 @@ API Reference
 Overview
 --------
 
+Compatibility
+^^^^^^^^^^^^^
+
+The schema registry server can enforce certain compatibility rules when new schemas are registered in a subject. Currently, we support the following compatibility rules.
+
+  * Backward compatibility (default): A new schema is backward compatible if it can be used to read the data written in all previous schemas. Backward compatibility is useful for loading data into systems like Hadoop since one can always query data of all versions using the latest schema.
+  * Forward compatibility: A new schema is forward compatible if all previous schemas can read data written in this schema. Forward compatibility is useful for consumer applications that can only deal with data in a particular version that may not always be the latest version.
+  * Full compatibility: A new schema is fully compatible if it’s both backward and forward compatible.
+  * No compatibility: A new schema can be any schema as long as it’s a valid Avro.
+
+We recommend keeping the default backward compatibility since it's common to have all data loaded into Hadoop.
+
+.. ifconfig:: platform_docs
+
+   More details on Avro schema resolution can be found :ref:`here <serialization_and_evolution>`.
+
+.. ifconfig:: not platform_docs
+
+   More details on Avro schema resolution can be found `here <http://avro.apache.org/docs/1.7.7/spec.html#Schema+Resolution>`_.
+
 Content Types
 ^^^^^^^^^^^^^
 
@@ -41,6 +61,7 @@ All API endpoints use a standard error message format for any requests that retu
       }
 
 Although it is good practice to check the status code, you may safely parse the response of any non-DELETE API calls and check for the presence of an ``error_code`` field to detect errors.
+
 
 Schemas
 ----------
