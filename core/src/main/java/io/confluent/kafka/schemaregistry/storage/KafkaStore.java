@@ -120,8 +120,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
   @Override
   public void init() throws StoreInitializationException {
     if (initialized.get()) {
-      throw new StoreInitializationException("Illegal state while initializing store. Store "
-                                             + "was already initialized");
+      throw new StoreInitializationException(
+          "Illegal state while initializing store. Store was already initialized");
     }
 
     // create the schema topic if needed
@@ -222,13 +222,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   /**
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.
    */
-  public void waitUntilKafkaReaderReachesLastOffset() throws StoreException {
-    waitUntilKafkaReaderReachesLastOffset(timeout);
-  }
-  /**
-   * Wait until the KafkaStore catches up to the last message in the Kafka topic.
-   */
-  private void waitUntilKafkaReaderReachesLastOffset(int timeoutMs) throws StoreException {
+  public void waitUntilKafkaReaderReachesLastOffset(int timeoutMs) throws StoreException {
     long offsetOfLastMessage = getLatestOffset(timeoutMs);
     log.info("Wait to catch up until the offset of the last message at " + offsetOfLastMessage);
     kafkaTopicReader.waitUntilOffset(offsetOfLastMessage, timeoutMs, TimeUnit.MILLISECONDS);
@@ -322,6 +316,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
     localStore.close();
     log.debug("Kafka store shut down complete");
   }
+  
+  /** For testing. */
+  KafkaStoreReaderThread<K, V> getKafkaStoreReaderThread() {
+    return this.kafkaTopicReader;
+  }
 
   private void assertInitialized() throws StoreException {
     if (!initialized.get()) {
@@ -336,7 +335,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * successfully to the Kafka topic and get the offset of the returned metadata.
    * 
    * If the most recent write to Kafka was successful (signaled by lastWrittenOffset >= 0), 
-   * return that offset, otherwise write a "Noop key" to Kafka in order to find the latest offset.
+   * immediately return that offset. Otherwise write a "Noop key" to Kafka in order to find the
+   * latest offset.
    */
   private long getLatestOffset(int timeoutMs) throws StoreException {
     ProducerRecord<byte[], byte[]> producerRecord = null;

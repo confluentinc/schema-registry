@@ -29,7 +29,9 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import kafka.common.MessageSizeTooLargeException;
 import kafka.consumer.ConsumerConfig;
 import kafka.consumer.ConsumerIterator;
 import kafka.consumer.ConsumerTimeoutException;
@@ -133,7 +135,12 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           log.error("Failed to deserialize the schema or config key", e);
         }
         
-        if (!messageKey.equals(noopKey)) {
+        if (messageKey.equals(noopKey)) {
+          // If it's a noop, update local offset counter and do nothing else
+          offsetUpdateLock.lock();
+          offsetInSchemasTopic = messageAndMetadata.offset();
+          offsetUpdateLock.unlock();
+        } else {
           V message = null;
           try {
             message =
@@ -171,8 +178,19 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         }
       }
     } catch (ConsumerTimeoutException cte) {
-      // do nothing
+      // Expect ConsumerTimeout == -1, so this *should* never happen
+      throw new IllegalStateException(
+          "KafkaStoreReaderThread's ConsumerIterator timed out despite expected infinite timeout.");
+    } catch (MessageSizeTooLargeException mstle) {
+      throw new IllegalStateException(
+          "ConsumerIterator threw MessageSizeTooLargeException. A schema has been written that "
+          + "exceeds the default maximum fetch size.", mstle);
     }
+    catch (RuntimeException e) {
+      log.error("KafkaStoreReader thread has died for an unkown reason.");
+      throw new RuntimeException(e);
+    }
+    
     if (commitInterval > 0 && System.currentTimeMillis() - lastCommitTime > commitInterval) {
       log.debug("Committing offsets");
       consumer.commitOffsets(true);
@@ -181,6 +199,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   @Override
   public void shutdown() {
+    log.debug("Starting shutdown of KafkaStoreReaderThread.");
     if (consumer != null) {
       consumer.shutdown();
     }
@@ -188,6 +207,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       localStore.close();
     }
     super.shutdown();
+    log.info("KafkaStoreReaderThread shutdown complete.");
   }
 
   public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) throws StoreException {
@@ -208,6 +228,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       }
     } finally {
       offsetUpdateLock.unlock();
+    }
+    
+    if (offsetInSchemasTopic < offset) {
+      throw new StoreTimeoutException(
+          "KafkaStoreReaderThread failed to reach target offset within the timeout interval. "
+          + "targetOffset: " + offset + ", offsetReached: " + offsetInSchemasTopic 
+          + ", timeout(ms): " + TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
     }
   }
 }

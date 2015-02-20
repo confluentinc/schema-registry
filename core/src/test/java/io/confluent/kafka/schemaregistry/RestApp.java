@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 
 public class RestApp {
@@ -80,5 +81,9 @@ public class RestApp {
 
   public SchemaRegistryIdentity masterIdentity() {
     return restApp.schemaRegistry().masterIdentity();
+  }
+  
+  public SchemaRegistry schemaRegistry() {
+    return restApp.schemaRegistry();
   }
 }

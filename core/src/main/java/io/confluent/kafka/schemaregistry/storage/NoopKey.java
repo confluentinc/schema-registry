@@ -32,16 +32,12 @@ public class NoopKey extends SchemaRegistryKey {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-
-    return o != null && o.getClass().equals(this.getClass());
+    return super.equals(o);
   }
 
   @Override
   public int hashCode() {
-    return this.getClass().hashCode();
+    return super.hashCode();
   }
 
   @Override
