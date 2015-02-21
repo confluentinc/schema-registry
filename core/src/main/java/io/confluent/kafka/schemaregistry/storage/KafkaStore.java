@@ -270,7 +270,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
     finally {
       if (!knownSuccessfulWrite) {
-        this.lastWrittenOffset = -1;
+        this.lastWrittenOffset = -1L;
       }
     }
   }
