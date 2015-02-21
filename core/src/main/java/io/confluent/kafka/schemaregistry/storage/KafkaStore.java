@@ -223,6 +223,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
     log.debug("Reached offset at " + offsetOfLastMessage);
   }
 
+  public void markLastWrittenOffsetInvalid() {
+    lastWrittenOffset = -1L;
+  }
+
   @Override
   public V get(K key) throws StoreException {
     assertInitialized();

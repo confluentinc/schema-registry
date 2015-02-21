@@ -233,6 +233,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {
         nextAvailableSchemaId = nextSchemaIdCounterBatch();
         idBatchInclusiveUpperBound = getInclusiveUpperBound(nextAvailableSchemaId);
+
+        // The new master may not know the exact last offset in the Kafka log. So, mark the
+        // last offset invalid here and let the logic in register() deal with it later.
+        kafkaStore.markLastWrittenOffsetInvalid();
       }
 
       masterNodeSensor.record(isMaster() ? 1.0 : 0.0);
