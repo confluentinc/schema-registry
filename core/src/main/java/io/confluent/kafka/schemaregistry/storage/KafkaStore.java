@@ -247,10 +247,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreException("Error serializing schema while creating the Kafka produce "
                                + "record", e);
     }
-    Future<RecordMetadata> ack = producer.send(producerRecord);
+
     boolean knownSuccessfulWrite = false;
     try {
+      log.trace("Sending record to KafkaStore topic: " + producerRecord);
+      Future<RecordMetadata> ack = producer.send(producerRecord);
       RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
+      
       log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
       this.lastWrittenOffset = recordMetadata.offset();
       kafkaTopicReader.waitUntilOffset(this.lastWrittenOffset, timeout, TimeUnit.MILLISECONDS);
@@ -346,14 +349,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreException("Failed to serialize noop key.");
     }
     
-    Future<RecordMetadata> ack = producer.send(producerRecord);
-    RecordMetadata metadata = null;
     try {
-      metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
+      log.trace("Sending Noop record to KafkaStore to find last offset.");
+      Future<RecordMetadata> ack = producer.send(producerRecord);
+      RecordMetadata metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
       this.lastWrittenOffset = metadata.offset();
       return this.lastWrittenOffset;
     } catch (Exception e) {
-      throw new StoreException("Failed to write noop key to kafka store.");
+      throw new StoreException("Failed to write Noop record to kafka store.");
     }
   }
 }
