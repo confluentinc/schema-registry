@@ -65,20 +65,6 @@ Configuration Options
   * Default: 500
   * Importance: medium
 
-``kafkastore.write.max.retries``
-  Retry a failed register schema request to the underlying Kafka store up to this many times,  for example in case of a Kafka broker failure
-
-  * Type: int
-  * Default: 5
-  * Importance: medium
-
-``kafkastore.write.retry.backoff.ms``
-  The amount of time in milliseconds to wait before attempting to retry a failed write to the Kafka store
-
-  * Type: int
-  * Default: 100
-  * Importance: medium
-
 ``debug``
   Boolean indicating whether extra debugging information is generated in some error response entities.
 

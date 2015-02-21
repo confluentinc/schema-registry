@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.storage.ConfigValue;
+import io.confluent.kafka.schemaregistry.storage.NoopKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.confluent.kafka.schemaregistry.storage.ConfigKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
@@ -80,16 +81,23 @@ public class SchemaRegistrySerializer
         keyType = SchemaRegistryKeyType.forName((String) keyObj.get("keytype"));
         if (keyType == SchemaRegistryKeyType.CONFIG) {
           schemaKey = new ObjectMapper().readValue(key, ConfigKey.class);
+        } else if (keyType == SchemaRegistryKeyType.NOOP) {
+          schemaKey = new ObjectMapper().readValue(key, NoopKey.class);
         } else {
           schemaKey = new ObjectMapper().readValue(key, SchemaKey.class);
         }
       } catch (JsonProcessingException e) {
-        if (keyType == SchemaRegistryKeyType.CONFIG) {
-          throw new SerializationException("Failed to deserialize CONFIG key", e);
-        } else {
-          throw new SerializationException("Failed to deserialize SCHEMA key", e);
-        }
 
+        String type = "unknown";
+        if (keyType == SchemaRegistryKeyType.CONFIG) {
+          type = SchemaRegistryKeyType.CONFIG.name();
+        } else if (keyType == SchemaRegistryKeyType.SCHEMA) {
+          type = SchemaRegistryKeyType.SCHEMA.name();
+        } else if (keyType == SchemaRegistryKeyType.NOOP) {
+          type = SchemaRegistryKeyType.NOOP.name();
+        } 
+        
+        throw new SerializationException("Failed to deserialize " + type + " key", e);
       }
     } catch (IOException e) {
       throw new SerializationException("Error while deserializing schema key", e);

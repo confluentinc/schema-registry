@@ -29,7 +29,9 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import kafka.common.MessageSizeTooLargeException;
 import kafka.consumer.ConsumerConfig;
 import kafka.consumer.ConsumerIterator;
 import kafka.consumer.ConsumerTimeoutException;
@@ -57,6 +59,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private ConsumerConnector consumer;
   private long offsetInSchemasTopic = -1L;
   private long lastCommitTime = 0L;
+  // Noop key is only used to help reliably determine last offset; reader thread ignores 
+  // messages with this key
+  private final K noopKey;
 
   public KafkaStoreReaderThread(ZkClient zkClient,
                                 String kafkaClusterZkUrl,
@@ -65,7 +70,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 int commitInterval,
                                 StoreUpdateHandler<K, V> storeUpdateHandler,
                                 Serializer<K, V> serializer,
-                                Store<K, V> localStore) {
+                                Store<K, V> localStore,
+                                K noopKey) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     offsetUpdateLock = new ReentrantLock();
     offsetReachedThreshold = offsetUpdateLock.newCondition();
@@ -75,6 +81,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.serializer = serializer;
     this.localStore = localStore;
     this.commitInterval = commitInterval;
+    this.noopKey = noopKey;
 
     offsetInSchemasTopic = offsetOfLastConsumedMessage(zkClient, groupId, topic);
     log.info("Initialized the consumer offset to " + offsetInSchemasTopic);
@@ -127,23 +134,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         } catch (SerializationException e) {
           log.error("Failed to deserialize the schema or config key", e);
         }
-        V message = null;
-        try {
-          message =
-              messageBytes == null ? null : serializer.deserializeValue(messageKey, messageBytes);
-        } catch (SerializationException e) {
-          // TODO: fail just this operation or all subsequent operations?
-          log.error("Failed to deserialize a schema or config update", e);
-        }
-        try {
-          log.trace("Applying update (" + messageKey + "," + message + ") to the local " +
-                    "store");
-          if (message == null) {
-            localStore.delete(messageKey);
-          } else {
-            localStore.put(messageKey, message);
-          }
-          this.storeUpdateHandler.handleUpdate(messageKey, message);
+        
+        if (messageKey.equals(noopKey)) {
+          // If it's a noop, update local offset counter and do nothing else
           try {
             offsetUpdateLock.lock();
             offsetInSchemasTopic = messageAndMetadata.offset();
@@ -151,20 +144,48 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           } finally {
             offsetUpdateLock.unlock();
           }
-        } catch (StoreException se) {
-          /**
-           * TODO: maybe retry for a configurable amount before logging a failure?
-           * TODO: maybe fail all subsequent operations of the store if retries fail
-           * Only 2 operations make sense if this happens -
-           * 1. Restart the store hoping that it works subsequently
-           * 2. Look into the issue manually
-           */
-          log.error("Failed to add record from the Kafka topic" + topic + " the local store");
+        } else {
+          V message = null;
+          try {
+            message =
+                messageBytes == null ? null : serializer.deserializeValue(messageKey, messageBytes);
+          } catch (SerializationException e) {
+            log.error("Failed to deserialize a schema or config update", e);
+          }
+          try {
+            log.trace("Applying update (" + messageKey + "," + message + ") to the local " +
+                      "store");
+            if (message == null) {
+              localStore.delete(messageKey);
+            } else {
+              localStore.put(messageKey, message);
+            }
+            this.storeUpdateHandler.handleUpdate(messageKey, message);
+            try {
+              offsetUpdateLock.lock();
+              offsetInSchemasTopic = messageAndMetadata.offset();
+              offsetReachedThreshold.signalAll();
+            } finally {
+              offsetUpdateLock.unlock();
+            }
+          } catch (StoreException se) {
+            log.error("Failed to add record from the Kafka topic" + topic + " the local store");
+          }
         }
       }
     } catch (ConsumerTimeoutException cte) {
-      // do nothing
+      // Expect ConsumerTimeout == -1, so this *should* never happen
+      throw new IllegalStateException(
+          "KafkaStoreReaderThread's ConsumerIterator timed out despite expected infinite timeout.");
+    } catch (MessageSizeTooLargeException mstle) {
+      throw new IllegalStateException(
+          "ConsumerIterator threw MessageSizeTooLargeException. A schema has been written that "
+          + "exceeds the default maximum fetch size.", mstle);
+    } catch (RuntimeException e) {
+      log.error("KafkaStoreReader thread has died for an unknown reason.");
+      throw new RuntimeException(e);
     }
+    
     if (commitInterval > 0 && System.currentTimeMillis() - lastCommitTime > commitInterval) {
       log.debug("Committing offsets");
       consumer.commitOffsets(true);
@@ -173,6 +194,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   @Override
   public void shutdown() {
+    log.debug("Starting shutdown of KafkaStoreReaderThread.");
     if (consumer != null) {
       consumer.shutdown();
     }
@@ -180,9 +202,14 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       localStore.close();
     }
     super.shutdown();
+    log.info("KafkaStoreReaderThread shutdown complete.");
   }
 
-  public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) {
+  public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) throws StoreException {
+    if (offset < 0) {
+      throw new StoreException("KafkaStoreReaderThread can't wait for a negative offset.");
+    }
+    
     try {
       offsetUpdateLock.lock();
       long timeoutNs = TimeUnit.NANOSECONDS.convert(timeout, timeUnit);
@@ -196,6 +223,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       }
     } finally {
       offsetUpdateLock.unlock();
+    }
+    
+    if (offsetInSchemasTopic < offset) {
+      throw new StoreTimeoutException(
+          "KafkaStoreReaderThread failed to reach target offset within the timeout interval. "
+          + "targetOffset: " + offset + ", offsetReached: " + offsetInSchemasTopic 
+          + ", timeout(ms): " + TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
     }
   }
 }

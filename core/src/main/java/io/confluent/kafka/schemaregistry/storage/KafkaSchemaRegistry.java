@@ -92,6 +92,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final String schemaRegistryZkNamespace;
   private final String kafkaClusterZkUrl;
   private final int zkSessionTimeoutMs;
+  private final int kafkaStoreTimeoutMs;
   private final boolean isEligibleForMasterElector;
   private String schemaRegistryZkUrl;
   private ZkClient zkClient;
@@ -117,13 +118,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       throws SchemaRegistryException {
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
-    schemaRegistryZkNamespace = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
-    isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
-    myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
-    kafkaClusterZkUrl =
+    this.schemaRegistryZkNamespace = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
+    this.isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
+    this.myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
+    this.kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
-    zkSessionTimeoutMs =
+    this.zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
+    this.kafkaStoreTimeoutMs = 
+        config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
@@ -133,7 +136,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
             config,
             new KafkaStoreMessageHandler(this),
             this.serializer,
-            new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>());
+            new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>(), new NoopKey());
     MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
             .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
@@ -228,17 +231,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       masterIdentity = newMaster;
 
       if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {
-        // The master has changed to this SchemaRegistry instance
-        // To become the master, wait until the Kafka store is fully caught up.
-        try {
-          kafkaStore.waitUntilBootstrapCompletes();
-        } catch (StoreTimeoutException stoe) {
-          throw new SchemaRegistryTimeoutException("Bootstrap timed out", stoe);
-        } catch (StoreException se) {
-          throw new SchemaRegistryStoreException("Error while bootstrapping schema registry"
-                                                 + " from the Kafka store log", se);
-        }
-
         nextAvailableSchemaId = nextSchemaIdCounterBatch();
         idBatchInclusiveUpperBound = getInclusiveUpperBound(nextAvailableSchemaId);
       }
@@ -270,6 +262,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                       Schema schema)
       throws SchemaRegistryException {
     try {
+      // Ensure cache is up-to-date before any potential writes
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(kafkaStoreTimeoutMs);
+
       // see if the schema to be registered already exists
       AvroSchema avroSchema = canonicalizeSchema(schema);
       MD5 md5 = MD5.ofString(schema.getSchema());
@@ -697,6 +692,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     }
     return compatibility.compatibilityChecker
         .isCompatible(newAvroSchema.schemaObj, latestAvroSchema.schemaObj);
+  }
+  
+  /** For testing. */
+  KafkaStore<SchemaRegistryKey, SchemaRegistryValue> getKafkaStore() {
+    return this.kafkaStore;
   }
 
   private Vector<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas) {

@@ -44,13 +44,8 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutExceptio
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
 import kafka.admin.AdminUtils;
-import kafka.client.ClientUtils;
 import kafka.cluster.Broker;
-import kafka.common.TopicAndPartition;
 import kafka.common.TopicExistsException;
-import kafka.consumer.SimpleConsumer;
-import kafka.javaapi.TopicMetadata;
-import kafka.javaapi.TopicMetadataResponse;
 import kafka.log.LogConfig;
 import kafka.utils.ZkUtils;
 import scala.collection.JavaConversions;
@@ -67,8 +62,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final String kafkaClusterZkUrl;
   private final String topic;
   private final int desiredReplicationFactor;
-  private final int numRetries;
-  private final int writeRetryBackoffMs;
   private final String groupId;
   private final StoreUpdateHandler<K, V> storeUpdateHandler;
   private final Serializer<K, V> serializer;
@@ -80,19 +73,21 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final ZkClient zkClient;
   private KafkaProducer<byte[],byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
+  // Noop key is only used to help reliably determine last offset; reader thread ignores
+  // messages with this key
+  private final K noopKey;
+  private volatile long lastWrittenOffset = -1L;
 
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
                     Serializer<K, V> serializer,
-                    Store<K, V> localStore) {
+                    Store<K, V> localStore,
+                    K noopKey) {
     this.kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
-    this.numRetries = config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
-    this.writeRetryBackoffMs =
-        config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_RETRY_BACKOFF_MS_CONFIG);
     this.groupId = String.format("schema-registry-%s-%d",
                                  config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
                                  config.getInt(SchemaRegistryConfig.PORT_CONFIG));
@@ -101,6 +96,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.storeUpdateHandler = storeUpdateHandler;
     this.serializer = serializer;
     this.localStore = localStore;
+    this.noopKey = noopKey;
+    
     // TODO: Do not use the commit interval until the decision on the embedded store is done
     int commitInterval = config.getInt(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG);
     int zkSessionTimeoutMs =
@@ -110,15 +107,16 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<K, V>(zkClient, kafkaClusterZkUrl, topic, groupId,
                                          Integer.MIN_VALUE, this.storeUpdateHandler,
-                                         serializer, this.localStore);
+                                         serializer, this.localStore, this.noopKey);
     this.brokerSeq = ZkUtils.getAllBrokersInCluster(zkClient);
+
   }
 
   @Override
   public void init() throws StoreInitializationException {
     if (initialized.get()) {
-      throw new StoreInitializationException("Illegal state while initializing store. Store "
-                                             + "was already initialized");
+      throw new StoreInitializationException(
+          "Illegal state while initializing store. Store was already initialized");
     }
 
     // create the schema topic if needed
@@ -141,15 +139,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
-    props.put(ProducerConfig.RETRIES_CONFIG, this.numRetries);
-    props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, this.writeRetryBackoffMs);
+    props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
     producer = new KafkaProducer<byte[],byte[]>(props);
 
     // start the background thread that subscribes to the Kafka topic and applies updates
     kafkaTopicReader.start();
 
     try {
-      waitUntilBootstrapCompletes(initTimeout);
+      waitUntilKafkaReaderReachesLastOffset(initTimeout);
     } catch (StoreException e) {
       throw new StoreInitializationException(e);
     }
@@ -219,14 +216,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
   /**
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.
    */
-  public void waitUntilBootstrapCompletes() throws StoreException {
-    waitUntilBootstrapCompletes(timeout);
-  }
-  /**
-   * Wait until the KafkaStore catches up to the last message in the Kafka topic.
-   */
-  private void waitUntilBootstrapCompletes(int timeoutMs) throws StoreException {
-    long offsetOfLastMessage = getLatestOffsetOfKafkaTopic(timeoutMs) - 1;
+  public void waitUntilKafkaReaderReachesLastOffset(int timeoutMs) throws StoreException {
+    long offsetOfLastMessage = getLatestOffset(timeoutMs);
     log.info("Wait to catch up until the offset of the last message at " + offsetOfLastMessage);
     kafkaTopicReader.waitUntilOffset(offsetOfLastMessage, timeoutMs, TimeUnit.MILLISECONDS);
     log.debug("Reached offset at " + offsetOfLastMessage);
@@ -244,6 +235,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     if (key == null) {
       throw new StoreException("Key should not be null");
     }
+
     // write to the Kafka topic
     ProducerRecord<byte[], byte[]> producerRecord = null;
     try {
@@ -255,11 +247,17 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreException("Error serializing schema while creating the Kafka produce "
                                + "record", e);
     }
-    Future<RecordMetadata> ack = producer.send(producerRecord);
+
+    boolean knownSuccessfulWrite = false;
     try {
+      log.trace("Sending record to KafkaStore topic: " + producerRecord);
+      Future<RecordMetadata> ack = producer.send(producerRecord);
       RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
+      
       log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
-      kafkaTopicReader.waitUntilOffset(recordMetadata.offset(), timeout, TimeUnit.MILLISECONDS);
+      this.lastWrittenOffset = recordMetadata.offset();
+      kafkaTopicReader.waitUntilOffset(this.lastWrittenOffset, timeout, TimeUnit.MILLISECONDS);
+      knownSuccessfulWrite = true;
     } catch (InterruptedException e) {
       throw new StoreException("Put operation interrupted while waiting for an ack from Kafka", e);
     } catch (ExecutionException e) {
@@ -269,6 +267,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
           "Put operation timed out while waiting for an ack from Kafka", e);
     } catch (KafkaException ke) {
       throw new StoreException("Put operation to Kafka failed", ke);
+    }
+    finally {
+      if (!knownSuccessfulWrite) {
+        this.lastWrittenOffset = -1L;
+      }
     }
   }
 
@@ -310,6 +313,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
     localStore.close();
     log.debug("Kafka store shut down complete");
   }
+  
+  /** For testing. */
+  KafkaStoreReaderThread<K, V> getKafkaStoreReaderThread() {
+    return this.kafkaTopicReader;
+  }
 
   private void assertInitialized() throws StoreException {
     if (!initialized.get()) {
@@ -318,48 +326,37 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   /**
-   * Get the latest offset of the Kafka topic that has a single partition.
+   * Return the latest offset of the store topic. 
+   * 
+   * The most reliable way to do so in face of potential Kafka broker failure is to produce
+   * successfully to the Kafka topic and get the offset of the returned metadata.
+   * 
+   * If the most recent write to Kafka was successful (signaled by lastWrittenOffset >= 0), 
+   * immediately return that offset. Otherwise write a "Noop key" to Kafka in order to find the
+   * latest offset.
    */
-  private long getLatestOffsetOfKafkaTopic(int timeoutMs) throws StoreException {
-    long start = System.currentTimeMillis();
-    do {
-      Set<String> topics = new HashSet<String>();
-      topics.add(topic);
-      scala.collection.mutable.Set<String> topicsScalaSet = JavaConversions.asScalaSet(topics);
-      TopicMetadataResponse topicMetadataResponse =
-          new kafka.javaapi.TopicMetadataResponse(
-              ClientUtils.fetchTopicMetadata(topicsScalaSet, brokerSeq, CLIENT_ID, timeoutMs, 0));
-      if (topicMetadataResponse.topicsMetadata().size() <= 0) {
-        // topic doesn't exist yet
-        return 0L;
-      }
-
-      TopicMetadata topicMetadata = topicMetadataResponse.topicsMetadata().get(0);
-      // only try to proceed if there weren't other, possibly temporary errors, e.g. leader election
-      if (topicMetadata.errorCode() == 0) {
-        Broker leader = topicMetadata.partitionsMetadata().get(0).leader();
-        if (leader != null) {
-          try {
-            SimpleConsumer simpleConsumer = new SimpleConsumer(
-                leader.host(), leader.port(), timeoutMs, SOCKET_BUFFER_SIZE, CLIENT_ID);
-            TopicAndPartition topicAndPartition = new TopicAndPartition(topic, 0);
-            return simpleConsumer.earliestOrLatestOffset(
-                topicAndPartition, LATEST_OFFSET, CONSUMER_ID);
-          } catch (Exception e) {
-            log.warn("Exception while fetch the latest offset", e);
-          }
-        }
-      }
-
-      try {
-        // backoff a bit
-        Thread.sleep(10);
-      } catch (InterruptedException e) {
-        // let it go
-      }
-    } while (System.currentTimeMillis() - start <= timeoutMs);
-
-    throw new StoreTimeoutException(
-        String.format("Can't fetch latest offset of Kafka topic %s after %d ms", topic, timeoutMs));
+  private long getLatestOffset(int timeoutMs) throws StoreException {
+    ProducerRecord<byte[], byte[]> producerRecord = null;
+    
+    if (this.lastWrittenOffset >= 0) {
+      return this.lastWrittenOffset;
+    }
+    
+    try {
+      producerRecord =
+          new ProducerRecord<byte[], byte[]>(topic, 0, this.serializer.serializeKey(noopKey), null);
+    } catch (SerializationException e) {
+      throw new StoreException("Failed to serialize noop key.");
+    }
+    
+    try {
+      log.trace("Sending Noop record to KafkaStore to find last offset.");
+      Future<RecordMetadata> ack = producer.send(producerRecord);
+      RecordMetadata metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
+      this.lastWrittenOffset = metadata.offset();
+      return this.lastWrittenOffset;
+    } catch (Exception e) {
+      throw new StoreException("Failed to write Noop record to kafka store.");
+    }
   }
 }
