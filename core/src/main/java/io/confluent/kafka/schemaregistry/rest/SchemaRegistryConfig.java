@@ -146,7 +146,7 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,
                 DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR,
                 ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC)
-        .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 30000, atLeast(0),
+        .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC)
         .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC)
