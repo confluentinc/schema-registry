@@ -54,7 +54,7 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String KAFKASTORE_WRITE_MAX_RETRIES_CONFIG =
       "kafkastore.write.max.retries";
-  public static final int DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES = 5;
+  public static final int DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES = 0;
   /**
    * <code>kafkastore.write.retry.backoff.ms</code>
    */

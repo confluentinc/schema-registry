@@ -78,7 +78,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   // Noop key is only used to help reliably determine last offset; reader thread ignores
   // messages with this key
   private final K noopKey;
-  private long lastWrittenOffset = -1;
+  private volatile long lastWrittenOffset = -1L;
 
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,

@@ -231,17 +231,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       masterIdentity = newMaster;
 
       if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {
-        // The master has changed to this SchemaRegistry instance
-        // To become the master, wait until the Kafka store is fully caught up.
-        try {
-          kafkaStore.waitUntilKafkaReaderReachesLastOffset(kafkaStoreTimeoutMs);
-        } catch (StoreTimeoutException stoe) {
-          throw new SchemaRegistryTimeoutException("Bootstrap timed out", stoe);
-        } catch (StoreException se) {
-          throw new SchemaRegistryStoreException("Error while bootstrapping schema registry"
-                                                 + " from the Kafka store log", se);
-        }
-
         nextAvailableSchemaId = nextSchemaIdCounterBatch();
         idBatchInclusiveUpperBound = getInclusiveUpperBound(nextAvailableSchemaId);
       }
