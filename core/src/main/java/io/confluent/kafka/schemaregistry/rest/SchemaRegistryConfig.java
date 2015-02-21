@@ -50,18 +50,6 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.topic.replication.factor";
   public static final int DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR = 3;
   /**
-   * <code>kafkastore.write.max.retries</code>
-   */
-  public static final String KAFKASTORE_WRITE_MAX_RETRIES_CONFIG =
-      "kafkastore.write.max.retries";
-  public static final int DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES = 0;
-  /**
-   * <code>kafkastore.write.retry.backoff.ms</code>
-   */
-  public static final String KAFKASTORE_WRITE_RETRY_BACKOFF_MS_CONFIG =
-      "kafkastore.write.retry.backoff.ms";
-  public static final int DEFAULT_KAFKASTORE_WRITE_RETRY_BACKOFF_MS = 100;
-  /**
    * <code>kafkastore.timeout.ms</code>
    */
   public static final String KAFKASTORE_TIMEOUT_CONFIG = "kafkastore.timeout.ms";
@@ -158,12 +146,6 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,
                 DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR,
                 ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC)
-        .define(KAFKASTORE_WRITE_MAX_RETRIES_CONFIG, ConfigDef.Type.INT,
-                DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES, ConfigDef.Importance.MEDIUM,
-                KAFKASTORE_WRITE_RETRIES_DOC)
-        .define(KAFKASTORE_WRITE_RETRY_BACKOFF_MS_CONFIG, ConfigDef.Type.INT,
-                DEFAULT_KAFKASTORE_WRITE_RETRY_BACKOFF_MS, ConfigDef.Importance.MEDIUM,
-                KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC)
         .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 30000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC)
         .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),

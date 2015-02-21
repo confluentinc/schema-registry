@@ -62,8 +62,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final String kafkaClusterZkUrl;
   private final String topic;
   private final int desiredReplicationFactor;
-  private final int numRetries;
-  private final int writeRetryBackoffMs;
   private final String groupId;
   private final StoreUpdateHandler<K, V> storeUpdateHandler;
   private final Serializer<K, V> serializer;
@@ -90,9 +88,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
-    this.numRetries = config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
-    this.writeRetryBackoffMs =
-        config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_RETRY_BACKOFF_MS_CONFIG);
     this.groupId = String.format("schema-registry-%s-%d",
                                  config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
                                  config.getInt(SchemaRegistryConfig.PORT_CONFIG));
@@ -144,8 +139,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
-    props.put(ProducerConfig.RETRIES_CONFIG, this.numRetries);
-    props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, this.writeRetryBackoffMs);
+    props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
     producer = new KafkaProducer<byte[],byte[]>(props);
 
     // start the background thread that subscribes to the Kafka topic and applies updates
