@@ -1,0 +1,27 @@
+The following libraries are included in packaged versions of this project:
+
+* Apache log4j
+ * COPYRIGHT: Copyright 2010 The Apache Software Foundation
+ * LICENSE: licenses/LICENSE.apache2.txt
+ * NOTICE: licenses/NOTICE.log4j.txt
+ * HOMEPAGE: http://logging.apache.org/log4j/1.2/
+
+* Apache ZooKeeper
+ * COPYRIGHT: Copyright 2009-2014 The Apache Software Foundation
+ * LICENSE: licenses/LICENSE.apache2.txt
+ * NOTICE: licenses/NOTICE.zookeeper.txt
+ * HOMEPAGE: http://zookeeper.apache.org/
+
+* jline
+ * COPYRIGHT: Copyright (c) 2002-2006, Marc Prud'hommeaux <mwp1@cornell.edu>
+ * LICENSE: licenses/LICENSE.bsd.txt
+ * HOMEPAGE: http://jline.sourceforge.net/
+
+* SLF4J
+ * COPYRIGHT: Copyright (c) 2004-2013 QOS.ch
+ * LICENSE: licenses/LICENSE.mit.txt
+ * HOMEPAGE: http://www.slf4j.org/
+
+* ZkClient
+ * LICENSE: licenses/LICENSE.apache2.txt
+ * HOMEPAGE: https://github.com/sgroschupf/zkclient
