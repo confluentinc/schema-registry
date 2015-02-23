@@ -18,6 +18,7 @@
                 <include>README*</include>
                 <include>LICENSE*</include>
                 <include>NOTICE*</include>
+                <include>licenses/</include>
             </includes>
         </fileSet>
         <fileSet>
