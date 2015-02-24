@@ -6,6 +6,8 @@ The Schema Registry is a distributed storage layer for Avro Schemas which uses K
 * Kafka provides the durable backend, and functions as a write-ahead changelog for the state of the Schema Registry and the schemas it contains.
 * The Schema Registry is designed to be distributed, with single-master architecture, and ZooKeeper coordinates master election.
 
+.. image:: schema-registry-design.png
+
 Batch ID allocation
 ~~~~~~~~~~~~~~~~~~~
 Schema IDs are allocated in batches by the current Schema Registry master and handed out one by one to newly registered schemas. '/<schema.registry.zk.namespace>/schema_id_counter' path holds the upper bound on the current batch, and new batch allocation is triggered by both master election and exhaustion of the current batch. This batch allocation helps guard against potential zombie-master scenarios, (for example, if the previous master had a GC pause that lasted longer than the ZooKeeper timeout, triggering master reelection).
