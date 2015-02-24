@@ -14,5 +14,6 @@ Contents:
    intro 
    api
    config
-   operations 
+   design
+   operations
    serializer-formatter
