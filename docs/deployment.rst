@@ -140,7 +140,7 @@ Spanning multiple datacenters with your Schema Registry provides additional prot
 Recommended Deployment
 ^^^^^^^^^^^^^^^^^^^^^^
 
-.. image:: multi-dc-setup.bmp
+.. image:: multi-dc-setup.png
 
 In the image above, there are two datacenters - DC A, and DC B. Each of the two datacenters has its own ZooKeeper
 cluster, Kafka cluster, and Schema Registry cluster. Both Schema Registry clusters link to Kafka and ZooKeeper in DC A. Note that the Schema Registry instances in DC B have ``master.eligibility`` set to false, meaning that none can ever be elected master.
