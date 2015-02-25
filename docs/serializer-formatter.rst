@@ -189,8 +189,8 @@ In the following example, we read the value of the messages in JSON.
 
 .. sourcecode:: bash
 
-   bin/kafka-avro-console-consumer --consumer.config config/consumer.properties --topic t1 \
-     --zookeeper localhost:2181 \
+   bin/kafka-avro-console-consumer --topic t1 \
+     --zookeeper localhost:2181
 
    You should see following in the console.
      {"f1": "value1"}
@@ -213,7 +213,7 @@ In the following example, we read both the key and the value of the messages in 
 
 .. sourcecode:: bash
 
-   bin/kafka-avro-console-consumer --consumer.config config/consumer.properties --topic t2 \
+   bin/kafka-avro-console-consumer --topic t2 \
      --zookeeper localhost:2181 \
      --property print.key=true
 
