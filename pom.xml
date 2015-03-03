@@ -60,6 +60,14 @@
         <maven-assembly.version>2.6</maven-assembly.version>
     </properties>
 
+    <repositories>
+        <repository>
+            <id>confluent</id>
+            <name>Confluent</name>
+            <url>http://packages.confluent.io/maven/</url>
+        </repository>
+    </repositories>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
