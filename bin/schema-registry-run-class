@@ -32,8 +32,8 @@ if [ "x$SCHEMA_REGISTRY_LOG4J_OPTS" = "x" ]; then
   # installed
   if [ -e "$base_dir/config/log4j.properties" ]; then # Dev environment
     SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/log4j.properties"
-  elif [ -e "$base_dir/../etc/schema-registry/log4j.properties" ]; then # Simple zip file layout
-    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../etc/schema-registry/log4j.properties"
+  elif [ -e "$base_dir/etc/schema-registry/log4j.properties" ]; then # Simple zip file layout
+    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/etc/schema-registry/log4j.properties"
   elif [ -e "/etc/schema-registry/log4j.properties" ]; then # Normal install layout
     SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:/etc/schema-registry/log4j.properties"
   fi
