@@ -72,8 +72,8 @@ if [ -z "$SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS" ]; then
 fi
 
 
-while [ $# -gt 0 ]; do
-  COMMAND=$1
+while [ $# -gt 1 ]; do
+  COMMAND=$2
   case $COMMAND in
     -help)
       HELP="true"
