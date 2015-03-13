@@ -28,12 +28,17 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
     this.schemaRegistry = schemaRegistry;
   }
 
+  public KafkaAvroDecoder(SchemaRegistryClient schemaRegistry, VerifiableProperties props) {
+    this.schemaRegistry = schemaRegistry;
+    setProperties(props);
+  }
+
   /**
    * Constructor used by Kafka consumer.
    */
   public KafkaAvroDecoder(VerifiableProperties props) {
     if (props == null) {
-      throw new ConfigException("Missing schema registry url!");
+      throw new ConfigException("Missing properties!");
     }
     String url = props.getProperty(SCHEMA_REGISTRY_URL);
     if (url == null) {
@@ -41,6 +46,12 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
     }
     int maxSchemaObject = props.getInt(MAX_SCHEMAS_PER_SUBJECT, DEFAULT_MAX_SCHEMAS_PER_SUBJECT);
     schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject);
+
+    setProperties(props);
+  }
+
+  private void setProperties(VerifiableProperties props) {
+    useSpecificAvroReader = props.getBoolean(SPECIFIC_AVRO_READER, false);
   }
 
   @Override

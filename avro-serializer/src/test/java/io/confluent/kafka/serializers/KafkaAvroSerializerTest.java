@@ -22,11 +22,17 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
+
+import java.util.Properties;
+
+import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.LocalSchemaRegistryClient;
+import kafka.utils.VerifiableProperties;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class KafkaAvroSerializerTest {
@@ -36,6 +42,7 @@ public class KafkaAvroSerializerTest {
   private final KafkaAvroEncoder avroEncoder;
   private final KafkaAvroDecoder avroDecoder;
   private final String topic;
+  private final KafkaAvroDecoder specificAvroDecoder;
 
   public KafkaAvroSerializerTest() {
     schemaRegistry = new LocalSchemaRegistryClient();
@@ -43,6 +50,10 @@ public class KafkaAvroSerializerTest {
     avroEncoder = new KafkaAvroEncoder(schemaRegistry);
     avroDecoder = new KafkaAvroDecoder(schemaRegistry);
     topic = "test";
+
+    Properties props = new Properties();
+    props.setProperty(KafkaAvroDecoder.SPECIFIC_AVRO_READER, "true");
+    specificAvroDecoder = new KafkaAvroDecoder(schemaRegistry, new VerifiableProperties(props));
   }
 
   private IndexedRecord createAvroRecord() {
@@ -54,6 +65,10 @@ public class KafkaAvroSerializerTest {
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
     return avroRecord;
+  }
+
+  private IndexedRecord createSpecificAvroRecord() {
+    return User.newBuilder().setName("testUser").build();
   }
 
   private IndexedRecord createInvalidAvroRecord() {
@@ -110,6 +125,40 @@ public class KafkaAvroSerializerTest {
     bytes = avroSerializer.serialize(topic, "abc".getBytes());
     obj = avroDecoder.fromBytes(bytes);
     assertArrayEquals("abc".getBytes(), (byte[]) obj);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerSpecificRecord() {
+    byte[] bytes;
+    Object obj;
+
+    IndexedRecord avroRecord = createSpecificAvroRecord();
+    bytes = avroSerializer.serialize(topic, avroRecord);
+
+    obj = avroDecoder.fromBytes(bytes);
+    assertTrue("Returned object should be a GenericData Record", GenericData.Record.class.isInstance(obj));
+
+    obj = specificAvroDecoder.fromBytes(bytes);
+    assertTrue("Returned object should be a io.confluent.kafka.example.User", User.class.isInstance(obj));
+    assertEquals(avroRecord, obj);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerNonexistantSpecificRecord() {
+    byte[] bytes;
+
+    IndexedRecord avroRecord = createAvroRecord();
+    bytes = avroSerializer.serialize(topic, avroRecord);
+
+    try {
+      specificAvroDecoder.fromBytes(bytes);
+      fail("Did not throw an exception when class for specific avro record does not exist.");
+    } catch (SerializationException e) {
+      // this is expected
+    } catch (Exception e) {
+      fail("Threw the incorrect exception when class for specific avro record does not exist.");
+    }
+
   }
 
   @Test
