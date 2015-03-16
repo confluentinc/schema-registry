@@ -90,6 +90,9 @@ To build a development version, you may need a development versions of
 installing these, you can build the Schema Registry
 with Maven.
 
+This project uses the [Google java code style](https://google-styleguide.googlecode.com/svn/trunk/javaguide.html)
+to keep code clean and consistant.
+
 Contribute
 ----------
 
