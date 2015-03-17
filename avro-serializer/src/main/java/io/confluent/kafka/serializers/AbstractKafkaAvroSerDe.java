@@ -32,9 +32,9 @@ public abstract class AbstractKafkaAvroSerDe {
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
 
-  protected final String SCHEMA_REGISTRY_URL = "schema.registry.url";
-  protected final String MAX_SCHEMAS_PER_SUBJECT = "max.schemas.per.subject";
-  protected final int DEFAULT_MAX_SCHEMAS_PER_SUBJECT = 1000;
+  protected static final String SCHEMA_REGISTRY_URL = "schema.registry.url";
+  protected static final String MAX_SCHEMAS_PER_SUBJECT = "max.schemas.per.subject";
+  protected static final int DEFAULT_MAX_SCHEMAS_PER_SUBJECT = 1000;
   private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
 
