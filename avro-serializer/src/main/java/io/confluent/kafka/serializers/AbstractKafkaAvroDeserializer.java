@@ -19,16 +19,23 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.specific.SpecificData;
+import org.apache.avro.specific.SpecificDatumReader;
+import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
+  protected boolean useSpecificAvroReader = false;
+  private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<String, Schema>();
 
   private ByteBuffer getByteBuffer(byte[] payload) {
     ByteBuffer buffer = ByteBuffer.wrap(payload);
@@ -54,7 +61,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         return bytes;
       }
       int start = buffer.position() + buffer.arrayOffset();
-      DatumReader<Object> reader = new GenericDatumReader<Object>(schema);
+      DatumReader reader = getDatumReader(schema);
       Object object =
           reader.read(null, decoderFactory.binaryDecoder(buffer.array(), start, length, null));
 
@@ -70,5 +77,36 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       // avro deserialization may throw AvroRuntimeException, NullPointerException, etc
       throw new SerializationException("Error deserializing Avro message for id " + id, e);
     }
+  }
+
+  private DatumReader getDatumReader(Schema writerSchema) {
+    if (useSpecificAvroReader) {
+      return new SpecificDatumReader(writerSchema, getReaderSchema(writerSchema));
+    } else {
+      return new GenericDatumReader(writerSchema);
+    }
+  }
+
+  private Schema getReaderSchema(Schema writerSchema) {
+    Schema readerSchema = readerSchemaCache.get(writerSchema.getFullName());
+    if (readerSchema == null) {
+      Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
+      if (readerClass != null) {
+        try {
+          readerSchema = readerClass.newInstance().getSchema();
+        } catch (InstantiationException e) {
+          throw new SerializationException(writerSchema.getFullName() + " specified by the " +
+            "writers schema could not be instantiated to find the readers schema.");
+        } catch (IllegalAccessException e) {
+          throw new SerializationException(writerSchema.getFullName() + " specified by the " +
+            "writers schema is not allowed to be instantiated to find the readers schema.");
+        }
+        readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
+      } else {
+        throw new SerializationException("Could not find class " +  writerSchema.getFullName() +
+          " specified in writer's schema whilst finding reader's schema for a SpecificRecord.");
+      }
+    }
+    return readerSchema;
   }
 }
