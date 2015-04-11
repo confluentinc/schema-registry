@@ -42,11 +42,13 @@ public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Enc
     if (props == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    String url = props.getProperty(SCHEMA_REGISTRY_URL);
+    String url = props.getProperty(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    int maxSchemaObject = props.getInt(MAX_SCHEMAS_PER_SUBJECT, DEFAULT_MAX_SCHEMAS_PER_SUBJECT);
+    int maxSchemaObject = props.getInt(
+        AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG,
+        AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
     schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject);
   }
 

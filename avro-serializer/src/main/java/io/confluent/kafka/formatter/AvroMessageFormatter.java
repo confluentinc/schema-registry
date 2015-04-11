@@ -31,6 +31,7 @@ import java.util.Properties;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import kafka.tools.MessageFormatter;
 
 /**
@@ -78,11 +79,12 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     if (props == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    String url = props.getProperty(SCHEMA_REGISTRY_URL);
+    String url = props.getProperty(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    schemaRegistry = new CachedSchemaRegistryClient(url, DEFAULT_MAX_SCHEMAS_PER_SUBJECT);
+    schemaRegistry = new CachedSchemaRegistryClient(
+        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
 
     if (props.containsKey("print.key")) {
       printKey = props.getProperty("print.key").trim().toLowerCase().equals("true");

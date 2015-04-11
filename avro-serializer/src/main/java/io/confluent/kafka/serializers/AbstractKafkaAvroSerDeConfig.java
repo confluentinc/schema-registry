@@ -1,0 +1,52 @@
+/**
+ * Copyright 2015 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ **/
+
+package io.confluent.kafka.serializers;
+
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+
+import java.util.Map;
+
+/**
+ * Base class for configs for serializers and deserializers, defining a few common configs and
+ * defaults.
+ */
+public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
+
+  public static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
+  public static final String SCHEMA_REGISTRY_URL_DOC =
+      "URL for a schema registry instance that should be used to register or look up schemas.";
+
+  public static final String MAX_SCHEMAS_PER_SUBJECT_CONFIG = "max.schemas.per.subject";
+  public static final int MAX_SCHEMAS_PER_SUBJECT_DEFAULT = 1000;
+  public static final String MAX_SCHEMAS_PER_SUBJECT_DOC =
+      "Maximum number of schemas to create or cache locally.";
+
+  public static ConfigDef baseConfigDef() {
+    return new ConfigDef()
+        .define(SCHEMA_REGISTRY_URL_CONFIG, Type.STRING,
+                Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
+        .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
+                Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC);
+  }
+
+  public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
+    super(config, props);
+  }
+}
