@@ -350,7 +350,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       producerRecord =
           new ProducerRecord<byte[], byte[]>(topic, 0, this.serializer.serializeKey(noopKey), null);
     } catch (SerializationException e) {
-      throw new StoreException("Failed to serialize noop key.");
+      throw new StoreException("Failed to serialize noop key.", e);
     }
     
     try {
@@ -360,7 +360,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       this.lastWrittenOffset = metadata.offset();
       return this.lastWrittenOffset;
     } catch (Exception e) {
-      throw new StoreException("Failed to write Noop record to kafka store.");
+      throw new StoreException("Failed to write Noop record to kafka store.", e);
     }
   }
 }
