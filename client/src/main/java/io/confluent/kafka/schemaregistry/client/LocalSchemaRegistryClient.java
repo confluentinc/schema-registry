@@ -16,12 +16,16 @@
 package io.confluent.kafka.schemaregistry.client;
 
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaValidationException;
+import org.apache.avro.SchemaValidator;
+import org.apache.avro.SchemaValidatorBuilder;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -29,15 +33,18 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 
 public class LocalSchemaRegistryClient implements SchemaRegistryClient {
 
+  private static String DEFAULT_COMPATIBILITY = "FULL";
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
+  private final Map<String, String> configCache;
   private final AtomicInteger ids;
 
   public LocalSchemaRegistryClient() {
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
     idCache = new HashMap<Integer, Schema>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();
+    configCache = new HashMap<String, String>();
     ids = new AtomicInteger(0);
   }
 
@@ -155,5 +162,51 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     } else {
       throw new IOException("Cannot get version from schema registry!");
     }
+  }
+  
+  @Override
+  public boolean testCompatibility(String subject, Schema newSchema) throws IOException,
+      RestClientException {
+    SchemaMetadata latestSchemaMetadata = getLatestSchemaMetadata(subject);
+    Schema latestSchema = getSchemaByIdFromRegistry(latestSchemaMetadata.getId());
+    String config = configCache.getOrDefault(subject, DEFAULT_COMPATIBILITY);
+    SchemaValidator validator = null;
+    if ("FULL".equals(config)) {
+      validator = new SchemaValidatorBuilder().mutualReadStrategy().validateLatest();
+    } else if ("FORWARD".equals(config)) {
+      validator = new SchemaValidatorBuilder().canBeReadStrategy().validateLatest();
+    } else if ("BACKWARD".equals(config)) {
+      validator = new SchemaValidatorBuilder().canReadStrategy().validateLatest();
+    } else if ("NONE".equals(config)) {
+      validator = new SchemaValidator() {
+        @Override
+        public void validate(Schema schema, Iterable<Schema> schemas)
+            throws SchemaValidationException {
+          // do nothing
+        }
+      };
+    }
+
+    List<Schema> schemas = new ArrayList<Schema>();
+    schemas.add(latestSchema);
+
+    try {
+      validator.validate(newSchema, schemas);
+    } catch (SchemaValidationException e) {
+      return false;
+    }
+    return true;
+  }
+
+  @Override
+  public String updateCompatibility(String subject, String compatibility) throws IOException,
+      RestClientException {
+    configCache.put(subject, compatibility);
+    return compatibility;
+  }
+
+  @Override
+  public String getCompatibility(String subject) throws IOException, RestClientException {
+    return configCache.get(subject);
   }
 }

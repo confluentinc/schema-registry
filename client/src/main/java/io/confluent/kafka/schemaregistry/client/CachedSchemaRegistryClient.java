@@ -22,7 +22,9 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
@@ -135,5 +137,30 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       schemaVersionMap.put(schema, version);
       return version;
     }
+  }
+  
+  @Override
+  public boolean testCompatibility(String subject, Schema schema) throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schema.toString());
+    String version = "latest";
+    
+    boolean isCompatibility = RestUtils.testCompatibility(
+        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject, version);
+    return isCompatibility;
+  }
+
+  @Override
+  public String updateCompatibility(String subject, String compatibility) throws IOException, RestClientException {
+    ConfigUpdateRequest request = new ConfigUpdateRequest();
+    request.setCompatibilityLevel(compatibility);
+    ConfigUpdateRequest response = RestUtils.updateConfig(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+    return response.getCompatibilityLevel();
+  }
+
+  @Override
+  public String getCompatibility(String subject) throws IOException, RestClientException {
+    Config response = RestUtils.getConfig(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
+    return response.getCompatibilityLevel();
   }
 }
