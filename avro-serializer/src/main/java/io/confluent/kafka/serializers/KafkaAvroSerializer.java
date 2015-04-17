@@ -15,7 +15,13 @@
  */
 package io.confluent.kafka.serializers;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.specific.SpecificDatumWriter;
+import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -26,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements Serializer<Object> {
 
   private boolean isKey;
+  private Class genericAvroDatumWriter;
 
   /**
    * Constructor used by Kafka producer.
@@ -34,8 +41,11 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   }
 
-  public KafkaAvroSerializer(SchemaRegistryClient client) {
+  public KafkaAvroSerializer(SchemaRegistryClient client,
+                             Class datumWriter)
+  {
     schemaRegistry = client;
+    genericAvroDatumWriter = datumWriter;
   }
 
   @Override
@@ -53,7 +63,21 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
       schemaRegistry = new CachedSchemaRegistryClient(
           (String) url, (Integer) maxSchemaObject);
     }
-
+    Object datumWriterClassName = configs.get(GENERIC_AVRO_DATUM_WRITER_CLASS);
+    if (datumWriterClassName == null) {
+      genericAvroDatumWriter = GenericDatumWriter.class;
+    } else {
+      try {
+        Class datumWriterImpl = Class.forName((String) datumWriterClassName);
+        if(!datumWriterImpl.isInstance(DatumWriter.class)) {
+          throw new ConfigException("Avro DatumWriter implementation " + datumWriterImpl.getName() + " is not an instance of " + DatumWriter.class.getName());
+        } else {
+          genericAvroDatumWriter = datumWriterImpl;
+        }
+      } catch (ClassNotFoundException e) {
+        throw new ConfigException("Avro DatumWriter implementation " + datumWriterClassName + " could not be found");
+      }
+    }
   }
 
   @Override
@@ -65,6 +89,23 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
       subject = topic + "-value";
     }
     return serializeImpl(subject, record);
+  }
+
+  @Override
+  protected DatumWriter<Object> getDatumWriter(Schema schema, Object object) {
+    if (object instanceof SpecificRecord) {
+      return new SpecificDatumWriter<Object>(schema);
+    } else {
+      try {
+        DatumWriter<Object> datumWriter = (DatumWriter<Object>) genericAvroDatumWriter.newInstance();
+        datumWriter.setSchema(schema);
+        return datumWriter;
+      } catch (InstantiationException e) {
+        throw new SerializationException("Unable to instantiate DataWriter of type " + genericAvroDatumWriter.getName(), e);
+      } catch (IllegalAccessException e) {
+        throw new SerializationException("Unable to instantiate DataWriter of type " + genericAvroDatumWriter.getName(), e);
+      }
+    }
   }
 
   @Override

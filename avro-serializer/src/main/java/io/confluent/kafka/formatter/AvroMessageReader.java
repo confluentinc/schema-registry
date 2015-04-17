@@ -18,8 +18,12 @@ package io.confluent.kafka.formatter;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.DatumReader;
+import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.specific.SpecificDatumWriter;
+import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -201,5 +205,15 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
   @Override
   public void close() {
     // nothing to do
+  }
+
+  @Override
+  protected DatumWriter<Object> getDatumWriter(Schema schema, Object object) {
+    if (object instanceof SpecificRecord) {
+      return new SpecificDatumWriter<Object>(schema);
+    } else {
+      return new GenericDatumWriter<Object>(schema);
+    }
+
   }
 }

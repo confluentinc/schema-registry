@@ -15,15 +15,14 @@
  */
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.generic.GenericContainer;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -35,6 +34,7 @@ public abstract class AbstractKafkaAvroSerDe {
   protected static final String SCHEMA_REGISTRY_URL = "schema.registry.url";
   protected static final String MAX_SCHEMAS_PER_SUBJECT = "max.schemas.per.subject";
   protected static final String SPECIFIC_AVRO_READER = "specific.avro.reader";
+  protected static final String GENERIC_AVRO_DATUM_WRITER_CLASS = "generic.avro.writer.class";
   protected final int DEFAULT_MAX_SCHEMAS_PER_SUBJECT = 1000;
   private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
@@ -74,8 +74,8 @@ public abstract class AbstractKafkaAvroSerDe {
       return primitiveSchemas.get("String");
     } else if (object instanceof byte[]) {
       return primitiveSchemas.get("Bytes");
-    } else if (object instanceof IndexedRecord) {
-      return ((IndexedRecord) object).getSchema();
+    } else if (object instanceof GenericContainer) {
+      return ((GenericContainer) object).getSchema();
     } else {
       throw new IllegalArgumentException(
           "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, " +

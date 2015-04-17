@@ -17,6 +17,7 @@ package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.errors.SerializationException;
@@ -46,7 +47,7 @@ public class KafkaAvroSerializerTest {
 
   public KafkaAvroSerializerTest() {
     schemaRegistry = new LocalSchemaRegistryClient();
-    avroSerializer = new KafkaAvroSerializer(schemaRegistry);
+    avroSerializer = new KafkaAvroSerializer(schemaRegistry, GenericDatumWriter.class);
     avroEncoder = new KafkaAvroEncoder(schemaRegistry);
     avroDecoder = new KafkaAvroDecoder(schemaRegistry);
     topic = "test";
@@ -164,7 +165,7 @@ public class KafkaAvroSerializerTest {
   @Test
   public void testNull() {
     SchemaRegistryClient nullSchemaRegistryClient = null;
-    KafkaAvroSerializer nullAvroSerializer = new KafkaAvroSerializer(nullSchemaRegistryClient);
+    KafkaAvroSerializer nullAvroSerializer = new KafkaAvroSerializer(nullSchemaRegistryClient, GenericDatumWriter.class);
 
     // null doesn't require schema registration. So serialization should succeed with a null
     // schema registry client.

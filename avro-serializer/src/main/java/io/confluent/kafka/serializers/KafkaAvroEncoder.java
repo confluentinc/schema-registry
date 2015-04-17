@@ -15,7 +15,12 @@
  */
 package io.confluent.kafka.serializers;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.specific.SpecificDatumWriter;
+import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -58,5 +63,15 @@ public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Enc
     } else {
       throw new SerializationException("Primitive types are not supported yet");
     }
+  }
+
+  @Override
+  protected DatumWriter<Object> getDatumWriter(Schema schema, Object object) {
+    if (object instanceof SpecificRecord) {
+      return new SpecificDatumWriter<Object>(schema);
+    } else {
+      return new GenericDatumWriter<Object>(schema);
+    }
+
   }
 }

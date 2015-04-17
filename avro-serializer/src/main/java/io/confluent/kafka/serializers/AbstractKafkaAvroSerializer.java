@@ -16,12 +16,9 @@
 package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.specific.SpecificDatumWriter;
-import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayOutputStream;
@@ -54,12 +51,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
         out.write((byte[]) object);
       } else {
         BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
-        DatumWriter<Object> writer;
-        if (object instanceof SpecificRecord) {
-          writer = new SpecificDatumWriter<Object>(schema);
-        } else {
-          writer = new GenericDatumWriter<Object>(schema);
-        }
+        DatumWriter<Object> writer = getDatumWriter(schema, object);
         writer.write(object, encoder);
         encoder.flush();
       }
@@ -76,4 +68,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
       throw new SerializationException("Error serializing Avro message", e);
     }
   }
+
+  protected abstract DatumWriter<Object> getDatumWriter(Schema schema, Object object);
+
 }
