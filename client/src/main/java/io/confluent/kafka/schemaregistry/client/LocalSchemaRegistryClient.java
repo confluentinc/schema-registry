@@ -33,18 +33,18 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 
 public class LocalSchemaRegistryClient implements SchemaRegistryClient {
 
-  private static String DEFAULT_COMPATIBILITY = "FULL";
+  private String defaultCompatibility = "BACKWARD";
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
-  private final Map<String, String> configCache;
+  private final Map<String, String> compatibilityCache;
   private final AtomicInteger ids;
 
   public LocalSchemaRegistryClient() {
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
     idCache = new HashMap<Integer, Schema>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();
-    configCache = new HashMap<String, String>();
+    compatibilityCache = new HashMap<String, String>();
     ids = new AtomicInteger(0);
   }
 
@@ -169,7 +169,10 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       RestClientException {
     SchemaMetadata latestSchemaMetadata = getLatestSchemaMetadata(subject);
     Schema latestSchema = getSchemaByIdFromRegistry(latestSchemaMetadata.getId());
-    String config = configCache.getOrDefault(subject, DEFAULT_COMPATIBILITY);
+    String config = compatibilityCache.get(subject);
+    if (config == null) {
+      config = defaultCompatibility;
+    }
     SchemaValidator validator = null;
     if ("FULL".equals(config)) {
       validator = new SchemaValidatorBuilder().mutualReadStrategy().validateLatest();
@@ -201,12 +204,22 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public String updateCompatibility(String subject, String compatibility) throws IOException,
       RestClientException {
-    configCache.put(subject, compatibility);
+    if (subject == null) {
+      defaultCompatibility = compatibility;
+      return compatibility;
+    }
+    // check if subject is registered
+    getLatestVersion(subject);
+    compatibilityCache.put(subject, compatibility);
     return compatibility;
   }
 
   @Override
   public String getCompatibility(String subject) throws IOException, RestClientException {
-    return configCache.get(subject);
+    String compatibility = compatibilityCache.get(subject);
+    if (compatibility == null) {
+      compatibility = defaultCompatibility;
+    }
+    return compatibility;
   }
 }
