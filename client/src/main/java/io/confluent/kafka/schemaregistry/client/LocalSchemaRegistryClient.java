@@ -25,19 +25,23 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public class LocalSchemaRegistryClient implements SchemaRegistryClient {
 
+  private String defaultCompatibility = "BACKWARD";
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
+  private final Map<String, String> compatibilityCache;
   private final AtomicInteger ids;
 
   public LocalSchemaRegistryClient() {
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
     idCache = new HashMap<Integer, Schema>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();
+    compatibilityCache = new HashMap<String, String>();
     ids = new AtomicInteger(0);
   }
 
@@ -155,5 +159,43 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     } else {
       throw new IOException("Cannot get version from schema registry!");
     }
+  }
+  
+  @Override
+  public boolean testCompatibility(String subject, Schema newSchema) throws IOException,
+      RestClientException {
+    SchemaMetadata latestSchemaMetadata = getLatestSchemaMetadata(subject);
+    Schema latestSchema = getSchemaByIdFromRegistry(latestSchemaMetadata.getId());
+    String compatibility = compatibilityCache.get(subject);
+    if (compatibility == null) {
+      compatibility = defaultCompatibility;
+    }
+    
+    AvroCompatibilityLevel compatibilityLevel = AvroCompatibilityLevel.forName(compatibility);
+    if (compatibilityLevel == null) {
+      return false;
+    }
+    
+    return compatibilityLevel.compatibilityChecker.isCompatible(newSchema, latestSchema);
+  }
+
+  @Override
+  public String updateCompatibility(String subject, String compatibility) throws IOException,
+      RestClientException {
+    if (subject == null) {
+      defaultCompatibility = compatibility;
+      return compatibility;
+    }
+    compatibilityCache.put(subject, compatibility);
+    return compatibility;
+  }
+
+  @Override
+  public String getCompatibility(String subject) throws IOException, RestClientException {
+    String compatibility = compatibilityCache.get(subject);
+    if (compatibility == null) {
+      compatibility = defaultCompatibility;
+    }
+    return compatibility;
   }
 }
