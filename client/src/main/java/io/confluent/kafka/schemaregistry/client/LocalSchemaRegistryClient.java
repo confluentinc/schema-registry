@@ -16,19 +16,16 @@
 package io.confluent.kafka.schemaregistry.client;
 
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaValidationException;
-import org.apache.avro.SchemaValidator;
-import org.apache.avro.SchemaValidatorBuilder;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public class LocalSchemaRegistryClient implements SchemaRegistryClient {
@@ -169,36 +166,17 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       RestClientException {
     SchemaMetadata latestSchemaMetadata = getLatestSchemaMetadata(subject);
     Schema latestSchema = getSchemaByIdFromRegistry(latestSchemaMetadata.getId());
-    String config = compatibilityCache.get(subject);
-    if (config == null) {
-      config = defaultCompatibility;
+    String compatibility = compatibilityCache.get(subject);
+    if (compatibility == null) {
+      compatibility = defaultCompatibility;
     }
-    SchemaValidator validator = null;
-    if ("FULL".equals(config)) {
-      validator = new SchemaValidatorBuilder().mutualReadStrategy().validateLatest();
-    } else if ("FORWARD".equals(config)) {
-      validator = new SchemaValidatorBuilder().canBeReadStrategy().validateLatest();
-    } else if ("BACKWARD".equals(config)) {
-      validator = new SchemaValidatorBuilder().canReadStrategy().validateLatest();
-    } else if ("NONE".equals(config)) {
-      validator = new SchemaValidator() {
-        @Override
-        public void validate(Schema schema, Iterable<Schema> schemas)
-            throws SchemaValidationException {
-          // do nothing
-        }
-      };
-    }
-
-    List<Schema> schemas = new ArrayList<Schema>();
-    schemas.add(latestSchema);
-
-    try {
-      validator.validate(newSchema, schemas);
-    } catch (SchemaValidationException e) {
+    
+    AvroCompatibilityLevel compatibilityLevel = AvroCompatibilityLevel.forName(compatibility);
+    if (compatibilityLevel == null) {
       return false;
     }
-    return true;
+    
+    return compatibilityLevel.compatibilityChecker.isCompatible(newSchema, latestSchema);
   }
 
   @Override
@@ -208,8 +186,6 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       defaultCompatibility = compatibility;
       return compatibility;
     }
-    // check if subject is registered
-    getLatestVersion(subject);
     compatibilityCache.put(subject, compatibility);
     return compatibility;
   }
