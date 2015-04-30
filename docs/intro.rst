@@ -64,7 +64,7 @@ The following assumes you have Kafka and an instance of the Schema Registry runn
     # Update compatibility requirements under the subject "Kafka-value"
     $ curl -X PUT -i -H "Content-Type: application/vnd.schemaregistry.v1+json" \
         --data '{"compatibility": "BACKWARD"}' \
-        http://localhost:8081/config
+        http://localhost:8081/config/Kafka-value
 
 Installation
 ------------
