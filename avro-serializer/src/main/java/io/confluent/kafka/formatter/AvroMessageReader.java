@@ -30,6 +30,7 @@ import java.io.InputStreamReader;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import kafka.common.KafkaException;
 import kafka.producer.KeyedMessage;
 import kafka.tools.ConsoleProducer.MessageReader;
@@ -120,11 +121,12 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
       ignoreError = props.getProperty("ignore.error").trim().toLowerCase().equals("true");
     }
     reader = new BufferedReader(new InputStreamReader(inputStream));
-    String url = props.getProperty(SCHEMA_REGISTRY_URL);
+    String url = props.getProperty(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    schemaRegistry = new CachedSchemaRegistryClient(url, DEFAULT_MAX_SCHEMAS_PER_SUBJECT);
+    schemaRegistry = new CachedSchemaRegistryClient(
+        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
     if (!props.containsKey("value.schema")) {
       throw new ConfigException("Must provide the Avro schema string in value.schema");
     }

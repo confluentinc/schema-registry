@@ -15,9 +15,6 @@
  */
 package io.confluent.kafka.serializers;
 
-import org.apache.kafka.common.config.ConfigException;
-
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import kafka.serializer.Decoder;
 import kafka.utils.VerifiableProperties;
@@ -30,28 +27,14 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
 
   public KafkaAvroDecoder(SchemaRegistryClient schemaRegistry, VerifiableProperties props) {
     this.schemaRegistry = schemaRegistry;
-    setProperties(props);
+    configureNonClientProperties(deserializerConfig(props));
   }
 
   /**
    * Constructor used by Kafka consumer.
    */
   public KafkaAvroDecoder(VerifiableProperties props) {
-    if (props == null) {
-      throw new ConfigException("Missing properties!");
-    }
-    String url = props.getProperty(SCHEMA_REGISTRY_URL);
-    if (url == null) {
-      throw new ConfigException("Missing schema registry url!");
-    }
-    int maxSchemaObject = props.getInt(MAX_SCHEMAS_PER_SUBJECT, DEFAULT_MAX_SCHEMAS_PER_SUBJECT);
-    schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject);
-
-    setProperties(props);
-  }
-
-  private void setProperties(VerifiableProperties props) {
-    useSpecificAvroReader = props.getBoolean(SPECIFIC_AVRO_READER, false);
+    configure(new KafkaAvroDeserializerConfig(props.props()));
   }
 
   @Override

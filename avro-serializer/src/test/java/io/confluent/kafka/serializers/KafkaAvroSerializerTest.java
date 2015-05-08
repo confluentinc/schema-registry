@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 
+import java.util.HashMap;
 import java.util.Properties;
 
 import io.confluent.kafka.example.User;
@@ -40,20 +41,34 @@ public class KafkaAvroSerializerTest {
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer;
   private final KafkaAvroEncoder avroEncoder;
+  private final KafkaAvroDeserializer avroDeserializer;
   private final KafkaAvroDecoder avroDecoder;
   private final String topic;
+  private final KafkaAvroDeserializer specificAvroDeserializer;
   private final KafkaAvroDecoder specificAvroDecoder;
 
   public KafkaAvroSerializerTest() {
     schemaRegistry = new LocalSchemaRegistryClient();
     avroSerializer = new KafkaAvroSerializer(schemaRegistry);
     avroEncoder = new KafkaAvroEncoder(schemaRegistry);
+    avroDeserializer = new KafkaAvroDeserializer(schemaRegistry);
     avroDecoder = new KafkaAvroDecoder(schemaRegistry);
     topic = "test";
 
-    Properties props = new Properties();
-    props.setProperty(KafkaAvroDecoder.SPECIFIC_AVRO_READER, "true");
-    specificAvroDecoder = new KafkaAvroDecoder(schemaRegistry, new VerifiableProperties(props));
+    HashMap<String, String> specificDeserializerProps = new HashMap<String, String>();
+    // Intentionally invalid schema registry URL to satisfy the config class's requirement that
+    // it be set.
+    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificDeserializerProps);
+
+    Properties specificDecoderProps = new Properties();
+    specificDecoderProps.setProperty(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    specificDecoderProps.setProperty(
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    specificAvroDecoder = new KafkaAvroDecoder(
+        schemaRegistry, new VerifiableProperties(specificDecoderProps));
   }
 
   private IndexedRecord createAvroRecord() {
@@ -88,43 +103,42 @@ public class KafkaAvroSerializerTest {
   @Test
   public void testKafkaAvroSerializer() {
     byte[] bytes;
-    Object obj;
     IndexedRecord avroRecord = createAvroRecord();
     bytes = avroSerializer.serialize(topic, avroRecord);
-    obj = avroDecoder.fromBytes(bytes);
-    assertEquals(avroRecord, obj);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, null);
-    obj = avroDecoder.fromBytes(bytes);
-    assertEquals(null, obj);
+    assertEquals(null, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(null, avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, true);
-    obj = avroDecoder.fromBytes(bytes);
-    assertEquals(true, obj);
+    assertEquals(true, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(true, avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, 123);
-    obj = avroDecoder.fromBytes(bytes);
-    assertEquals(123, obj);
+    assertEquals(123, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(123, avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, 345L);
-    obj = avroDecoder.fromBytes(bytes);
-    assertEquals(345l, obj);
+    assertEquals(345l, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(345l, avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, 1.23f);
-    obj = avroDecoder.fromBytes(bytes);
-    assertEquals(1.23f, obj);
+    assertEquals(1.23f, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(1.23f, avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, 2.34d);
-    obj = avroDecoder.fromBytes(bytes);
-    assertEquals(2.34, obj);
+    assertEquals(2.34, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(2.34, avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, "abc");
-    obj = avroDecoder.fromBytes(bytes);
-    assertEquals("abc", obj);
+    assertEquals("abc", avroDeserializer.deserialize(topic, bytes));
+    assertEquals("abc", avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, "abc".getBytes());
-    obj = avroDecoder.fromBytes(bytes);
-    assertArrayEquals("abc".getBytes(), (byte[]) obj);
+    assertArrayEquals("abc".getBytes(), (byte[])avroDeserializer.deserialize(topic, bytes));
+    assertArrayEquals("abc".getBytes(), (byte[])avroDecoder.fromBytes(bytes));
   }
 
   @Test
@@ -141,6 +155,10 @@ public class KafkaAvroSerializerTest {
     obj = specificAvroDecoder.fromBytes(bytes);
     assertTrue("Returned object should be a io.confluent.kafka.example.User", User.class.isInstance(obj));
     assertEquals(avroRecord, obj);
+
+    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    assertTrue("Returned object should be a io.confluent.kafka.example.User", User.class.isInstance(obj));
+    assertEquals(avroRecord, obj);
   }
 
   @Test
@@ -152,6 +170,15 @@ public class KafkaAvroSerializerTest {
 
     try {
       specificAvroDecoder.fromBytes(bytes);
+      fail("Did not throw an exception when class for specific avro record does not exist.");
+    } catch (SerializationException e) {
+      // this is expected
+    } catch (Exception e) {
+      fail("Threw the incorrect exception when class for specific avro record does not exist.");
+    }
+
+    try {
+      specificAvroDeserializer.deserialize(topic, bytes);
       fail("Did not throw an exception when class for specific avro record does not exist.");
     } catch (SerializationException e) {
       // this is expected
