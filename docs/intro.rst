@@ -23,24 +23,19 @@ The following assumes you have Kafka and an instance of the Schema Registry runn
          http://localhost:8081/subjects/Kafka-value/versions
 
     # List all subjects
-    $ curl -X GET -i -H "Content-Type: application/vnd.schemaregistry.v1+json" \
-        http://localhost:8081/subjects
+    $ curl -X GET -i http://localhost:8081/subjects
 
     # List all schema versions registered under the subject "Kafka-value"
-    $ curl -X GET -i -H "Content-Type: application/vnd.schemaregistry.v1+json" \
-        http://localhost:8081/subjects/Kafka-value/versions
+    $ curl -X GET -i http://localhost:8081/subjects/Kafka-value/versions
 
     # Fetch a schema by globally unique id 1
-    $ curl -X GET -i -H "Content-Type: application/vnd.schemaregistry.v1+json" \
-        http://localhost:8081/schemas/ids/1
+    $ curl -X GET -i http://localhost:8081/schemas/ids/1
 
     # Fetch version 1 of the schema registered under subject "Kafka-value"
-    $ curl -X GET -i -H "Content-Type: application/vnd.schemaregistry.v1+json" \
-        http://localhost:8081/subjects/Kafka-value/versions/1
+    $ curl -X GET -i http://localhost:8081/subjects/Kafka-value/versions/1
 
     # Fetch the most recently registered schema under subject "Kafka-value"
-    $ curl -X GET -i -H "Content-Type: application/vnd.schemaregistry.v1+json" \
-        http://localhost:8081/subjects/Kafka-value/versions/latest
+    $ curl -X GET -i http://localhost:8081/subjects/Kafka-value/versions/latest
 
     # Check whether a schema has been registered under subject "Kafka-key"
     $ curl -X POST -i -H "Content-Type: application/vnd.schemaregistry.v1+json" \
@@ -53,8 +48,7 @@ The following assumes you have Kafka and an instance of the Schema Registry runn
         http://localhost:8081/compatibility/subjects/Kafka-value/versions/latest
 
     # Get top level config
-    $ curl -X GET -i -H "Content-Type: application/vnd.schemaregistry.v1+json" \
-        http://localhost:8081/config
+    $ curl -X GET -i http://localhost:8081/config
 
     # Update compatibility requirements globally
     $ curl -X PUT -i -H "Content-Type: application/vnd.schemaregistry.v1+json" \
