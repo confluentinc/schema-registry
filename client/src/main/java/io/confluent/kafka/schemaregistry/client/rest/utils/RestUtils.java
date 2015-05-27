@@ -154,6 +154,33 @@ public class RestUtils {
     }
   }
 
+  public static <T> T httpRequest(UrlRetryList baseUrls, String path, String method,
+                                  byte[] requestBodyData, Map<String, String> requestProperties,
+                                  TypeReference<T> responseFormat) throws IOException, RestClientException {
+    for (int i = 0, n = baseUrls.size(); i < n; i++) {
+      String baseUrl = baseUrls.current();
+      try {
+        return httpRequest(baseUrl + path, method, requestBodyData, requestProperties, responseFormat);
+      } catch (IOException e) {
+        baseUrls.fail(baseUrl);
+        if (i == n-1) throw e; // Raise the exception since we have no more urls to try
+      }
+    }
+    throw new IOException("Internal HTTP retry error"); // Can't get here
+  }
+
+  public static Schema lookUpSubjectVersion(UrlRetryList baseUrl, Map<String, String> requestProperties,
+                                            RegisterSchemaRequest registerSchemaRequest,
+                                            String subject)
+          throws IOException, RestClientException {
+    String path = String.format("/subjects/%s", subject);
+
+    Schema schema = RestUtils.httpRequest(baseUrl, path, "POST", registerSchemaRequest.toJson().getBytes(),
+                    requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
+
+    return schema;
+  }
+
   public static Schema lookUpSubjectVersion(String baseUrl, Map<String, String> requestProperties,
                                             RegisterSchemaRequest registerSchemaRequest,
                                             String subject)
@@ -166,6 +193,17 @@ public class RestUtils {
     return response;
   }
 
+  public static int registerSchema(UrlRetryList baseUrls, Map<String, String> requestProperties,
+                                   RegisterSchemaRequest registerSchemaRequest, String subject)
+          throws IOException, RestClientException {
+    String path = String.format("/subjects/%s/versions", subject);
+
+    RegisterSchemaResponse response = RestUtils.httpRequest(baseUrls, path, "POST",
+            registerSchemaRequest.toJson().getBytes(), requestProperties, REGISTER_RESPONSE_TYPE);
+
+    return response.getId();
+  }
+
   public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
                                    RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException, RestClientException {
@@ -175,6 +213,19 @@ public class RestUtils {
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
                               requestProperties, REGISTER_RESPONSE_TYPE);
     return response.getId();
+  }
+
+  public static boolean testCompatibility(UrlRetryList baseUrl, Map<String, String> requestProperties,
+                                          RegisterSchemaRequest registerSchemaRequest,
+                                          String subject,
+                                          String version)
+          throws IOException, RestClientException {
+    String path = String.format("/compatibility/subjects/%s/versions/%s", subject, version);
+
+    CompatibilityCheckResponse response =
+            RestUtils.httpRequest(baseUrl, path, "POST", registerSchemaRequest.toJson().getBytes(),
+                    requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
+    return response.getIsCompatible();
   }
 
   public static boolean testCompatibility(String baseUrl, Map<String, String> requestProperties,
@@ -190,6 +241,19 @@ public class RestUtils {
         RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
                               requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
     return response.getIsCompatible();
+  }
+
+  public static ConfigUpdateRequest updateConfig(UrlRetryList baseUrl,
+                                                 Map<String, String> requestProperties,
+                                                 ConfigUpdateRequest configUpdateRequest,
+                                                 String subject)
+          throws IOException, RestClientException {
+    String path = subject != null ? String.format("/config/%s", subject) : "/config";
+
+    ConfigUpdateRequest response =
+            RestUtils.httpRequest(baseUrl, path, "PUT", configUpdateRequest.toJson().getBytes(),
+                    requestProperties, UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE);
+    return response;
   }
 
   /**
@@ -209,6 +273,17 @@ public class RestUtils {
     return response;
   }
 
+  public static Config getConfig(UrlRetryList baseUrl,
+                                 Map<String, String> requestProperties,
+                                 String subject)
+          throws IOException, RestClientException {
+    String path = subject != null ? String.format("/config/%s", subject) : "/config";
+
+    Config config =
+            RestUtils.httpRequest(baseUrl, path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
+    return config;
+  }
+
   public static Config getConfig(String baseUrl,
                                  Map<String, String> requestProperties,
                                  String subject)
@@ -219,6 +294,15 @@ public class RestUtils {
     Config config =
         RestUtils.httpRequest(url, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
     return config;
+  }
+
+  public static SchemaString getId(UrlRetryList baseUrl, Map<String, String> requestProperties,
+                                   int id) throws IOException, RestClientException {
+    String path = String.format("/schemas/ids/%d", id);
+
+    SchemaString response = RestUtils.httpRequest(baseUrl, path, "GET", null, requestProperties,
+            GET_SCHEMA_BY_ID_RESPONSE_TYPE);
+    return response;
   }
 
   public static SchemaString getId(String baseUrl, Map<String, String> requestProperties,
@@ -237,6 +321,16 @@ public class RestUtils {
 
     Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
                                             GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
+    return response;
+  }
+
+  public static Schema getLatestVersion(UrlRetryList baseUrl, Map<String, String> requestProperties,
+                                        String subject)
+          throws IOException, RestClientException {
+    String path = String.format("/subjects/%s/versions/latest", subject);
+
+    Schema response = RestUtils.httpRequest(baseUrl, path, "GET", null, requestProperties,
+            GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
     return response;
   }
 

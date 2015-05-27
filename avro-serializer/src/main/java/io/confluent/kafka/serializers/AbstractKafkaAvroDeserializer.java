@@ -45,7 +45,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       String url = config.getString(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG);
       int  maxSchemaObject = config
           .getInt(KafkaAvroDeserializerConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
-      schemaRegistry = new CachedSchemaRegistryClient(
+      schemaRegistry = CachedSchemaRegistryClient.newInstance(
           url, maxSchemaObject);
       configureNonClientProperties(config);
     } catch (io.confluent.common.config.ConfigException e) {
