@@ -48,10 +48,10 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
     Object maxSchemaObject = configs.get(
         AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
     if (maxSchemaObject == null) {
-      schemaRegistry = CachedSchemaRegistryClient.newInstance(
+      schemaRegistry = new CachedSchemaRegistryClient(
           (String) url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
     } else {
-      schemaRegistry = CachedSchemaRegistryClient.newInstance(
+      schemaRegistry = new CachedSchemaRegistryClient(
           (String) url, (Integer) maxSchemaObject);
     }
   }

@@ -83,7 +83,7 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    schemaRegistry = CachedSchemaRegistryClient.newInstance(
+    schemaRegistry = new CachedSchemaRegistryClient(
         url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
 
     if (props.containsKey("print.key")) {

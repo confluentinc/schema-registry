@@ -40,13 +40,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
 
-  public static CachedSchemaRegistryClient newInstance(String baseUrlConfig, int identityMapCapacity) {
-    List<String> baseUrls = Arrays.asList(baseUrlConfig.split("\\s*,\\s*"));
-    if (baseUrls.isEmpty()) {
-      throw new IllegalArgumentException("Missing required schema registry url list");
-    }
-
-    return new CachedSchemaRegistryClient(baseUrls, identityMapCapacity);
+  public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
+    this(parseBaseUrl(baseUrl), identityMapCapacity);
   }
 
   public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity) {
@@ -176,4 +171,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     Config response = RestUtils.getConfig(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
     return response.getCompatibilityLevel();
   }
+
+  private static List<String> parseBaseUrl(String baseUrl) {
+    List<String> baseUrls = Arrays.asList(baseUrl.split("\\s*,\\s*"));
+    if (baseUrls.isEmpty()) {
+      throw new IllegalArgumentException("Missing required schema registry url list");
+    }
+    return baseUrls;
+  }
+
 }

@@ -125,7 +125,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    schemaRegistry = CachedSchemaRegistryClient.newInstance(
+    schemaRegistry = new CachedSchemaRegistryClient(
         url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
     if (!props.containsKey("value.schema")) {
       throw new ConfigException("Must provide the Avro schema string in value.schema");

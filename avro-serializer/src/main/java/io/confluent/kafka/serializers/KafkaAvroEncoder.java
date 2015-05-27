@@ -49,7 +49,7 @@ public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Enc
     int maxSchemaObject = props.getInt(
         AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG,
         AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
-    schemaRegistry = CachedSchemaRegistryClient.newInstance(url, maxSchemaObject);
+    schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject);
   }
 
   @Override
