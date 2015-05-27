@@ -15,11 +15,14 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
@@ -31,14 +34,23 @@ import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 
 public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
-  private final String baseUrl;
+  private UrlList baseUrls;
   private final int identityMapCapacity;
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
 
-  public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
-    this.baseUrl = baseUrl;
+  public static CachedSchemaRegistryClient newInstance(String baseUrlConfig, int identityMapCapacity) {
+    List<String> baseUrls = Arrays.asList(baseUrlConfig.split("\\s*,\\s*"));
+    if (baseUrls.isEmpty()) {
+      throw new IllegalArgumentException("Missing required schema registry url list");
+    }
+
+    return new CachedSchemaRegistryClient(baseUrls, identityMapCapacity);
+  }
+
+  public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity) {
+    this.baseUrls = new UrlList(baseUrls);
     this.identityMapCapacity = identityMapCapacity;
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
     idCache = new HashMap<Integer, Schema>();
@@ -50,13 +62,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     String schemaString = schema.toString();
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
-    return RestUtils.registerSchema(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                    request, subject);
+    return RestUtils.registerSchema(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES,
+            request, subject);
   }
 
   private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
     SchemaString restSchema =
-        RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
+        RestUtils.getId(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
     return new Schema.Parser().parse(restSchema.getSchemaString());
   }
 
@@ -67,7 +79,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
-        RestUtils.lookUpSubjectVersion(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+        RestUtils.lookUpSubjectVersion(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
     return response.getVersion();
   }
 
@@ -110,7 +122,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
      = RestUtils.getLatestVersion(
-        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
+        baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
     int id = response.getId();
     int version = response.getVersion();
     String schema = response.getSchema();
@@ -147,7 +159,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     String version = "latest";
     
     boolean isCompatibility = RestUtils.testCompatibility(
-        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject, version);
+        baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject, version);
     return isCompatibility;
   }
 
@@ -155,13 +167,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public String updateCompatibility(String subject, String compatibility) throws IOException, RestClientException {
     ConfigUpdateRequest request = new ConfigUpdateRequest();
     request.setCompatibilityLevel(compatibility);
-    ConfigUpdateRequest response = RestUtils.updateConfig(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+    ConfigUpdateRequest response = RestUtils.updateConfig(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
     return response.getCompatibilityLevel();
   }
 
   @Override
   public String getCompatibility(String subject) throws IOException, RestClientException {
-    Config response = RestUtils.getConfig(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
+    Config response = RestUtils.getConfig(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
     return response.getCompatibilityLevel();
   }
 }

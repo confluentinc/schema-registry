@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -42,11 +43,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
 
   protected void configure(KafkaAvroDeserializerConfig config) {
     try {
-      String url = config.getString(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG);
+      List<String> urls = config.getList(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG);
       int  maxSchemaObject = config
           .getInt(KafkaAvroDeserializerConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
-      schemaRegistry = new CachedSchemaRegistryClient(
-          url, maxSchemaObject);
+      schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject);
       configureNonClientProperties(config);
     } catch (io.confluent.common.config.ConfigException e) {
       throw new ConfigException(e.getMessage());

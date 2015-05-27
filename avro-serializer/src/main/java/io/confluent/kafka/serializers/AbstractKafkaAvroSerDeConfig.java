@@ -31,7 +31,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
   public static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
   public static final String SCHEMA_REGISTRY_URL_DOC =
-      "URL for a schema registry instance that should be used to register or look up schemas.";
+      "Comma-separated list of URLs for schema registry instances that can be used to register or look up schemas.";
 
   public static final String MAX_SCHEMAS_PER_SUBJECT_CONFIG = "max.schemas.per.subject";
   public static final int MAX_SCHEMAS_PER_SUBJECT_DEFAULT = 1000;
@@ -40,7 +40,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
-        .define(SCHEMA_REGISTRY_URL_CONFIG, Type.STRING,
+        .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
                 Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
                 Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC);
