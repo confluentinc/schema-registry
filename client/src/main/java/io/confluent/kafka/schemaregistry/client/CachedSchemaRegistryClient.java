@@ -41,7 +41,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Schema, Integer>> versionCache;
 
   public static CachedSchemaRegistryClient newInstance(String baseUrlConfig, int identityMapCapacity) {
-    List<String> baseUrls = Arrays.asList(baseUrlConfig.split(","));
+    List<String> baseUrls = Arrays.asList(baseUrlConfig.split("\\s*,\\s*"));
+    if (baseUrls.isEmpty()) {
+      throw new IllegalArgumentException("Missing required schema registry url list");
+    }
+
     return new CachedSchemaRegistryClient(baseUrls, identityMapCapacity);
   }
 
