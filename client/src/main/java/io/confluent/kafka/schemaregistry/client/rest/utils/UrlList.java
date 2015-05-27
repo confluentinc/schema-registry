@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.client.rest.utils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -26,18 +27,26 @@ import java.util.concurrent.atomic.AtomicInteger;
  * and we'll move on to the next url (returning back to the start if we have to).
  *
  */
-public class UrlRetryList {
+public class UrlList {
   private final AtomicInteger index;
   private final List<String> urls;
 
-  public UrlRetryList(List<String> urls) {
+  public UrlList(List<String> urls) {
+    if (urls.isEmpty()) {
+      throw new IllegalArgumentException("Expected at least one URL to be passed in constructor");
+    }
+
     this.urls = new ArrayList<String>(urls);
     this.index = new AtomicInteger(0);
   }
 
+  public UrlList(String url) {
+    this(Arrays.asList(url));
+  }
+
   /**
    * Get the current url
-   * @return
+   * @return the url
    */
   public String current() {
     return urls.get(index.get());

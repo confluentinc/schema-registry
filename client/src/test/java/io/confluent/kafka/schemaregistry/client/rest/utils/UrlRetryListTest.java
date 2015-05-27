@@ -28,7 +28,7 @@ public class UrlRetryListTest {
     String url1 = "http://foo.com";
     String url2 = "http://bar.com";
 
-    UrlRetryList urls = new UrlRetryList(Arrays.asList(url1, url2));
+    UrlList urls = new UrlList(Arrays.asList(url1, url2));
     assertEquals(2, urls.size());
     assertEquals(url1, urls.current());
 

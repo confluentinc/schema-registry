@@ -15,17 +15,15 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
-import io.confluent.kafka.schemaregistry.client.rest.utils.UrlRetryList;
+import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -36,7 +34,7 @@ import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 
 public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
-  private UrlRetryList baseUrls;
+  private UrlList baseUrls;
   private final int identityMapCapacity;
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
@@ -48,7 +46,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity) {
-    this.baseUrls = new UrlRetryList(baseUrls);
+    this.baseUrls = new UrlList(baseUrls);
     this.identityMapCapacity = identityMapCapacity;
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
     idCache = new HashMap<Integer, Schema>();

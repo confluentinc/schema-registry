@@ -154,7 +154,7 @@ public class RestUtils {
     }
   }
 
-  public static <T> T httpRequest(UrlRetryList baseUrls, String path, String method,
+  public static <T> T httpRequest(UrlList baseUrls, String path, String method,
                                   byte[] requestBodyData, Map<String, String> requestProperties,
                                   TypeReference<T> responseFormat) throws IOException, RestClientException {
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
@@ -169,7 +169,7 @@ public class RestUtils {
     throw new IOException("Internal HTTP retry error"); // Can't get here
   }
 
-  public static Schema lookUpSubjectVersion(UrlRetryList baseUrl, Map<String, String> requestProperties,
+  public static Schema lookUpSubjectVersion(UrlList baseUrl, Map<String, String> requestProperties,
                                             RegisterSchemaRequest registerSchemaRequest,
                                             String subject)
           throws IOException, RestClientException {
@@ -185,15 +185,11 @@ public class RestUtils {
                                             RegisterSchemaRequest registerSchemaRequest,
                                             String subject)
       throws IOException, RestClientException {
-    String url = String.format("%s/subjects/%s", baseUrl, subject);
-
-    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
-        RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
-                              requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
-    return response;
+    return lookUpSubjectVersion(new UrlList(baseUrl), requestProperties,
+            registerSchemaRequest, subject);
   }
 
-  public static int registerSchema(UrlRetryList baseUrls, Map<String, String> requestProperties,
+  public static int registerSchema(UrlList baseUrls, Map<String, String> requestProperties,
                                    RegisterSchemaRequest registerSchemaRequest, String subject)
           throws IOException, RestClientException {
     String path = String.format("/subjects/%s/versions", subject);
@@ -207,15 +203,11 @@ public class RestUtils {
   public static int registerSchema(String baseUrl, Map<String, String> requestProperties,
                                    RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException, RestClientException {
-    String url = String.format("%s/subjects/%s/versions", baseUrl, subject);
-
-    RegisterSchemaResponse response =
-        RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
-                              requestProperties, REGISTER_RESPONSE_TYPE);
-    return response.getId();
+    return registerSchema(new UrlList(baseUrl), requestProperties,
+            registerSchemaRequest, subject);
   }
 
-  public static boolean testCompatibility(UrlRetryList baseUrl, Map<String, String> requestProperties,
+  public static boolean testCompatibility(UrlList baseUrl, Map<String, String> requestProperties,
                                           RegisterSchemaRequest registerSchemaRequest,
                                           String subject,
                                           String version)
@@ -233,17 +225,11 @@ public class RestUtils {
                                           String subject,
                                           String version)
       throws IOException, RestClientException {
-    String
-        url =
-        String.format("%s/compatibility/subjects/%s/versions/%s", baseUrl, subject, version);
-
-    CompatibilityCheckResponse response =
-        RestUtils.httpRequest(url, "POST", registerSchemaRequest.toJson().getBytes(),
-                              requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
-    return response.getIsCompatible();
+    return testCompatibility(new UrlList(baseUrl), requestProperties, registerSchemaRequest,
+            subject, version);
   }
 
-  public static ConfigUpdateRequest updateConfig(UrlRetryList baseUrl,
+  public static ConfigUpdateRequest updateConfig(UrlList baseUrl,
                                                  Map<String, String> requestProperties,
                                                  ConfigUpdateRequest configUpdateRequest,
                                                  String subject)
@@ -264,16 +250,10 @@ public class RestUtils {
                                                  ConfigUpdateRequest configUpdateRequest,
                                                  String subject)
       throws IOException, RestClientException {
-    String url = subject != null ? String.format("%s/config/%s", baseUrl, subject) :
-                 String.format("%s/config", baseUrl);
-
-    ConfigUpdateRequest response =
-        RestUtils.httpRequest(url, "PUT", configUpdateRequest.toJson().getBytes(),
-                              requestProperties, UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE);
-    return response;
+    return updateConfig(new UrlList(baseUrl), requestProperties, configUpdateRequest, subject);
   }
 
-  public static Config getConfig(UrlRetryList baseUrl,
+  public static Config getConfig(UrlList baseUrl,
                                  Map<String, String> requestProperties,
                                  String subject)
           throws IOException, RestClientException {
@@ -288,15 +268,10 @@ public class RestUtils {
                                  Map<String, String> requestProperties,
                                  String subject)
       throws IOException, RestClientException {
-    String url = subject != null ? String.format("%s/config/%s", baseUrl, subject) :
-                 String.format("%s/config", baseUrl);
-
-    Config config =
-        RestUtils.httpRequest(url, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
-    return config;
+    return getConfig(new UrlList(baseUrl), requestProperties, subject);
   }
 
-  public static SchemaString getId(UrlRetryList baseUrl, Map<String, String> requestProperties,
+  public static SchemaString getId(UrlList baseUrl, Map<String, String> requestProperties,
                                    int id) throws IOException, RestClientException {
     String path = String.format("/schemas/ids/%d", id);
 
@@ -307,11 +282,7 @@ public class RestUtils {
 
   public static SchemaString getId(String baseUrl, Map<String, String> requestProperties,
                                    int id) throws IOException, RestClientException {
-    String url = String.format("%s/schemas/ids/%d", baseUrl, id);
-
-    SchemaString response = RestUtils.httpRequest(url, "GET", null, requestProperties,
-                                                  GET_SCHEMA_BY_ID_RESPONSE_TYPE);
-    return response;
+    return getId(new UrlList(baseUrl), requestProperties, id);
   }
 
   public static Schema getVersion(String baseUrl, Map<String, String> requestProperties,
@@ -324,7 +295,7 @@ public class RestUtils {
     return response;
   }
 
-  public static Schema getLatestVersion(UrlRetryList baseUrl, Map<String, String> requestProperties,
+  public static Schema getLatestVersion(UrlList baseUrl, Map<String, String> requestProperties,
                                         String subject)
           throws IOException, RestClientException {
     String path = String.format("/subjects/%s/versions/latest", subject);
@@ -337,11 +308,7 @@ public class RestUtils {
   public static Schema getLatestVersion(String baseUrl, Map<String, String> requestProperties,
                                         String subject)
       throws IOException, RestClientException {
-    String url = String.format("%s/subjects/%s/versions/latest", baseUrl, subject);
-
-    Schema response = RestUtils.httpRequest(url, "GET", null, requestProperties,
-                                            GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
-    return response;
+    return getLatestVersion(new UrlList(baseUrl), requestProperties, subject);
   }
 
   public static List<Integer> getAllVersions(String baseUrl, Map<String, String> requestProperties,
