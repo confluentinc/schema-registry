@@ -28,7 +28,7 @@ import java.util.Properties;
 
 import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.LocalSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import kafka.utils.VerifiableProperties;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -48,7 +48,7 @@ public class KafkaAvroSerializerTest {
   private final KafkaAvroDecoder specificAvroDecoder;
 
   public KafkaAvroSerializerTest() {
-    schemaRegistry = new LocalSchemaRegistryClient();
+    schemaRegistry = new MockSchemaRegistryClient();
     avroSerializer = new KafkaAvroSerializer(schemaRegistry);
     avroEncoder = new KafkaAvroEncoder(schemaRegistry);
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry);
