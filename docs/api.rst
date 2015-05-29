@@ -255,7 +255,7 @@ The subjects resource provides a list of all registered subjects in your schema 
       HTTP/1.1 200 OK
       Content-Type: application/vnd.schemaregistry.v1+json
 
-      1
+      {"id":1}
 
 .. http:post:: /subjects/(string: subject)
 
