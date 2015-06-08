@@ -24,6 +24,14 @@ import java.io.IOException;
 public class SchemaString {
   private String schemaString;
 
+  public SchemaString() {
+
+  }
+
+  public SchemaString(String schemaString) {
+    this.schemaString = schemaString;
+  }
+
   public static SchemaString fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, SchemaString.class);
   }

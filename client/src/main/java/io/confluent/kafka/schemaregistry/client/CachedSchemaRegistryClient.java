@@ -15,6 +15,12 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import org.apache.avro.Schema;
 
@@ -25,15 +31,9 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
-
 public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
+  private RestService restService;
   private UrlList baseUrls;
   private final int identityMapCapacity;
   private final Map<String, Map<Schema, Integer>> schemaCache;
@@ -44,12 +44,21 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this(parseBaseUrl(baseUrl), identityMapCapacity);
   }
 
+  public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity, RestService restService) {
+    this(parseBaseUrl(baseUrl), identityMapCapacity, restService);
+  }
+
   public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity) {
+    this(baseUrls, identityMapCapacity, new RestService());
+  }
+
+  public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity, RestService restService) {
     this.baseUrls = new UrlList(baseUrls);
     this.identityMapCapacity = identityMapCapacity;
-    schemaCache = new HashMap<String, Map<Schema, Integer>>();
-    idCache = new HashMap<Integer, Schema>();
-    versionCache = new HashMap<String, Map<Schema, Integer>>();
+    this.schemaCache = new HashMap<String, Map<Schema, Integer>>();
+    this.idCache = new HashMap<Integer, Schema>();
+    this.versionCache = new HashMap<String, Map<Schema, Integer>>();
+    this.restService = restService;
   }
 
   private int registerAndGetId(String subject, Schema schema)
@@ -57,16 +66,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     String schemaString = schema.toString();
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
-    return RestUtils.registerSchema(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES,
-            request, subject);
+    return restService.registerSchema(baseUrls, request, subject);
   }
 
   private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
-    SchemaString restSchema =
-        RestUtils.getId(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
+    SchemaString restSchema = restService.getId(baseUrls, id);
     return new Schema.Parser().parse(restSchema.getSchemaString());
   }
-
 
   private int getVersionFromRegistry(String subject, Schema schema)
       throws IOException, RestClientException{
@@ -74,7 +80,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
-        RestUtils.lookUpSubjectVersion(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+        restService.lookUpSubjectVersion(baseUrls, request, subject);
     return response.getVersion();
   }
 
@@ -116,8 +122,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public synchronized SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
-     = RestUtils.getLatestVersion(
-        baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
+     = restService.getLatestVersion(baseUrls, subject);
     int id = response.getId();
     int version = response.getVersion();
     String schema = response.getSchema();
@@ -153,8 +158,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     request.setSchema(schema.toString());
     String version = "latest";
     
-    boolean isCompatibility = RestUtils.testCompatibility(
-        baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject, version);
+    boolean isCompatibility = restService.testCompatibility(
+        baseUrls, request, subject, version);
     return isCompatibility;
   }
 
@@ -162,13 +167,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public String updateCompatibility(String subject, String compatibility) throws IOException, RestClientException {
     ConfigUpdateRequest request = new ConfigUpdateRequest();
     request.setCompatibilityLevel(compatibility);
-    ConfigUpdateRequest response = RestUtils.updateConfig(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+    ConfigUpdateRequest response = restService.updateConfig(baseUrls, request, subject);
     return response.getCompatibilityLevel();
   }
 
   @Override
   public String getCompatibility(String subject) throws IOException, RestClientException {
-    Config response = RestUtils.getConfig(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
+    Config response = restService.getConfig(baseUrls, subject);
     return response.getCompatibilityLevel();
   }
 
