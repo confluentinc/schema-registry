@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry;
 
 
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import org.eclipse.jetty.server.Server;
 
 import java.util.Properties;
@@ -30,9 +31,10 @@ import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 public class RestApp {
 
   public final Properties prop;
-  public final String restConnect;
+  public final RestService restService;
   public SchemaRegistryRestApplication restApp;
   public Server restServer;
+  public String restConnect;
 
   public RestApp(int port, String zkConnect, String kafkaTopic) {
     this(port, zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name);
@@ -51,6 +53,7 @@ public class RestApp {
     prop.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, compatibilityType);
     prop.put(SchemaRegistryConfig.MASTER_ELIGIBILITY, masterEligibility);
     restConnect = String.format("http://localhost:%d", port);
+    restService = new RestService(restConnect);
   }
 
   public void start() throws Exception {

@@ -1,21 +1,42 @@
+/**
+ * Copyright 2015 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.confluent.kafka.schemaregistry.client;
 
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import org.apache.avro.Schema;
 import org.junit.Test;
 
-import static org.easymock.EasyMock.*;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.anyString;
+import static org.easymock.EasyMock.createMock;
+import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class CachedSchemaRegistryClientTest {
 
   @Test
-  public void testIdCache() throws Exception {
+  public void testRegisterSchemaCache() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient("localhost:8080", 20, restService);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
 
     String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema = new Schema.Parser().parse(schema);
@@ -23,9 +44,69 @@ public class CachedSchemaRegistryClientTest {
     String subject = "foo";
     int id = 25;
 
-    expect(restService.registerSchema(anyObject(UrlList.class), anyObject(RegisterSchemaRequest.class), anyString()))
+    // Expect one call to register schema
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class), anyString()))
             .andReturn(id);
-    expect(restService.getId(anyObject(UrlList.class), eq(id)))
+
+    replay(restService);
+
+    assertEquals(id, client.register(subject, avroSchema));
+    assertEquals(id, client.register(subject, avroSchema)); // hit the cache
+
+    verify(restService);
+  }
+
+  @Test
+  public void testRegisterOverCapacity() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 1); // capacity is just one
+
+    String schema1 = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
+    Schema avroSchema1 = new Schema.Parser().parse(schema1);
+
+    String schema2 = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [" +
+            "{ \"name\": \"name\", \"type\": \"string\" }," +
+            "{ \"name\": \"blah\", \"type\": \"string\" }" +
+            "]}";
+    Schema avroSchema2 = new Schema.Parser().parse(schema2);
+
+
+    String subject = "foo";
+    int id = 25;
+
+    // Expect one call to register schema (the second one will fail)
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class), anyString()))
+            .andReturn(id);
+
+    replay(restService);
+
+    assertEquals(id, client.register(subject, avroSchema1));
+    try {
+      // This call should exceed the identityMapCapacity
+      assertEquals(id, client.register(subject, avroSchema2));
+      fail();
+    } catch (IllegalStateException e) {
+    }
+
+    verify(restService);
+  }
+
+  @Test
+  public void testIdCache() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
+
+    String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
+    Schema avroSchema = new Schema.Parser().parse(schema);
+
+    String subject = "foo";
+    int id = 25;
+
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class), anyString()))
+            .andReturn(id);
+
+    // Expect only one call to getId (the rest should hit the cache)
+    expect(restService.getId(id))
             .andReturn(new SchemaString(schema));
 
     replay(restService);
@@ -40,7 +121,7 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testVersionCache() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient("localhost:8080", 20, restService);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
 
     String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema = new Schema.Parser().parse(schema);
@@ -49,9 +130,11 @@ public class CachedSchemaRegistryClientTest {
     int id = 25;
     int version = 7;
 
-    expect(restService.registerSchema(anyObject(UrlList.class), anyObject(RegisterSchemaRequest.class), anyString()))
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class), anyString()))
             .andReturn(id);
-    expect(restService.lookUpSubjectVersion(anyObject(UrlList.class), anyObject(RegisterSchemaRequest.class), eq(subject)))
+
+    // Expect only one call to lookup the subject (the rest should hit the cache)
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class), eq(subject)))
             .andReturn(new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(subject, version, id, schema));
 
     replay(restService);

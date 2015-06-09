@@ -15,6 +15,9 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
+import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -23,14 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
-import io.confluent.kafka.schemaregistry.utils.TestUtils;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
@@ -55,7 +50,7 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
   @Test
   public void testWaitUntilOffset() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
-    int id1 = TestUtils.registerSchema(restApp.restConnect, schema, "subject1");
+    int id1 = TestUtils.registerSchema(restApp.restService, schema, "subject1");
 
     KafkaSchemaRegistry sr = (KafkaSchemaRegistry) restApp.schemaRegistry();
     KafkaStoreReaderThread readerThread = sr.getKafkaStore().getKafkaStoreReaderThread();

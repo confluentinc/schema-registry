@@ -16,22 +16,23 @@
 
 package io.confluent.kafka.schemaregistry.tools;
 
-import java.io.IOException;
-
 import io.confluent.common.utils.AbstractPerformanceTest;
 import io.confluent.common.utils.PerformanceStats;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
+
+import java.io.IOException;
 
 public class SchemaRegistryPerformance extends AbstractPerformanceTest {
 
   long targetRegisteredSchemas;
   long targetSchemasPerSec;
   String baseUrl;
+  RestService restService;
   String subject;
   long registeredSchemas = 0;
 
@@ -60,6 +61,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
                                    long targetSchemasPerSec) throws Exception {
     super(numSchemas);
     this.baseUrl = baseUrl;
+    this.restService = new RestService(baseUrl);
     this.subject = subject;
     this.targetRegisteredSchemas = numSchemas;
     this.targetSchemasPerSec = targetSchemasPerSec;
@@ -67,7 +69,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
     // No compatibility verification
     ConfigUpdateRequest request = new ConfigUpdateRequest();
     request.setCompatibilityLevel(AvroCompatibilityLevel.NONE.name);
-    RestUtils.updateConfig(this.baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, null);
+    restService.updateConfig(request, null);
   }
 
   // sequential schema maker
@@ -87,8 +89,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
     registerSchemaRequest.setSchema(schema);
 
     try {
-      RestUtils.registerSchema(this.baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES,
-                               registerSchemaRequest, this.subject);
+      restService.registerSchema(registerSchemaRequest, this.subject);
       registeredSchemas++;
     } catch (IOException e) {
       System.out.println("Problem registering schema: " + e.getMessage());
