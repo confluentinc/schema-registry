@@ -521,5 +521,5 @@ The config resource allows you to inspect the cluster-level configuration values
 	  Content-Type: application/vnd.schemaregistry.v1+json
 
 	  {
-	     "compatibility": "FULL"
+	     "compatibilityLevel": "FULL"
 	  }
