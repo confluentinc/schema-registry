@@ -19,7 +19,6 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 
@@ -55,10 +54,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private int registerAndGetId(String subject, Schema schema)
       throws IOException, RestClientException {
-    String schemaString = schema.toString();
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
-    return restService.registerSchema(request, subject);
+    return restService.registerSchema(schema.toString(), subject);
   }
 
   private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
@@ -68,11 +64,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private int getVersionFromRegistry(String subject, Schema schema)
       throws IOException, RestClientException{
-    String schemaString = schema.toString();
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
-        restService.lookUpSubjectVersion(request, subject);
+        restService.lookUpSubjectVersion(schema.toString(), subject);
     return response.getVersion();
   }
 
@@ -146,18 +139,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   
   @Override
   public boolean testCompatibility(String subject, Schema schema) throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schema.toString());
-    String version = "latest";
-    
-    return restService.testCompatibility(request, subject, version);
+    return restService.testCompatibility(schema.toString(), subject, "latest");
   }
 
   @Override
   public String updateCompatibility(String subject, String compatibility) throws IOException, RestClientException {
-    ConfigUpdateRequest request = new ConfigUpdateRequest();
-    request.setCompatibilityLevel(compatibility);
-    ConfigUpdateRequest response = restService.updateConfig(request, subject);
+    ConfigUpdateRequest response = restService.updateCompatibility(compatibility, subject);
     return response.getCompatibilityLevel();
   }
 

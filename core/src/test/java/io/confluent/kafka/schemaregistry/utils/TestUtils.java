@@ -15,12 +15,8 @@
  */
 package io.confluent.kafka.schemaregistry.utils;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 import java.io.File;
@@ -97,31 +93,6 @@ public class TestUtils {
     }
   }
 
-  public static int registerSchema(RestService restService, String schemaString, String subject)
-      throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
-
-    return restService.registerSchema(request, subject);
-  }
-
-  public static Schema lookUpSubjectVersion(RestService restService, String schemaString, String subject)
-      throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
-
-    return restService.lookUpSubjectVersion(request, subject);
-  }
-
-  public static boolean testCompatibility(RestService restService, String schemaString, String subject,
-                                          String version)
-      throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
-
-    return restService.testCompatibility(request, subject, version);
-  }
-
   /**
    * Helper method which checks the number of versions registered under the given subject.
    */
@@ -133,16 +104,6 @@ public class TestUtils {
                  expected, versions.size());
   }
 
-  public static ConfigUpdateRequest changeCompatibility(RestService restService,
-                                         AvroCompatibilityLevel newCompatibilityLevel,
-                                         String subject)
-      throws IOException, RestClientException {
-    ConfigUpdateRequest request = new ConfigUpdateRequest();
-    request.setCompatibilityLevel(newCompatibilityLevel.name);
-
-    return restService.updateConfig(request, subject);
-  }
-
   /**
    * Register a new schema and verify that it can be found on the expected version.
    */
@@ -151,7 +112,7 @@ public class TestUtils {
       throws IOException, RestClientException {
     assertEquals("Registering a new schema should succeed",
                  expectedId,
-                 TestUtils.registerSchema(restService, schemaString, subject));
+                 restService.registerSchema(schemaString, subject));
 
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",

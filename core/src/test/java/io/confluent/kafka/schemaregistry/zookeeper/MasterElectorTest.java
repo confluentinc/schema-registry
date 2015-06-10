@@ -74,10 +74,10 @@ public class MasterElectorTest extends ClusterTestHarness {
     // test registering a schema to the master and finding it on the expected version
     final String firstSchema = avroSchemas.get(0);
     final int firstSchemaExpectedId = 1;
-    TestUtils.registerAndVerifySchema(restApp1.restService, firstSchema, firstSchemaExpectedId,
+    TestUtils.registerAndVerifySchema(restApp1.restClient, firstSchema, firstSchemaExpectedId,
                                       subject);
     // the newly registered schema should be eventually readable on the non-master
-    verifyIdAndSchema(restApp2.restService, firstSchemaExpectedId, firstSchema,
+    verifyIdAndSchema(restApp2.restClient, firstSchemaExpectedId, firstSchema,
                       "Registered schema should be found on the non-master");
 
     // test registering a schema to the non-master and finding it on the expected version
@@ -85,55 +85,55 @@ public class MasterElectorTest extends ClusterTestHarness {
     final int secondSchemaExpectedId = 2;
     final int secondSchemaExpectedVersion = 2;
     assertEquals("Registering a new schema to the non-master should succeed",
-                 secondSchemaExpectedId,
-                 TestUtils.registerSchema(restApp2.restService, secondSchema, subject));
+            secondSchemaExpectedId,
+            restApp2.restClient.registerSchema(secondSchema, subject));
 
     // the newly registered schema should be immediately readable on the master using the id
     assertEquals("Registered schema should be found on the master",
             secondSchema,
-            restApp1.restService.getId(secondSchemaExpectedId).getSchemaString());
+            restApp1.restClient.getId(secondSchemaExpectedId).getSchemaString());
 
     // the newly registered schema should be immediately readable on the master using the version
     assertEquals("Registered schema should be found on the master",
             secondSchema,
-            restApp1.restService.getVersion(subject,
+            restApp1.restClient.getVersion(subject,
                     secondSchemaExpectedVersion).getSchema());
 
     // the newly registered schema should be eventually readable on the non-master
-    verifyIdAndSchema(restApp2.restService, secondSchemaExpectedId, secondSchema,
+    verifyIdAndSchema(restApp2.restClient, secondSchemaExpectedId, secondSchema,
                       "Registered schema should be found on the non-master");
 
     // test registering an existing schema to the master
     assertEquals("Registering an existing schema to the master should return its id",
                  secondSchemaExpectedId,
-                 TestUtils.registerSchema(restApp1.restService, secondSchema, subject));
+                 restApp1.restClient.registerSchema(secondSchema, subject));
 
     // test registering an existing schema to the non-master
     assertEquals("Registering an existing schema to the non-master should return its id",
-                 secondSchemaExpectedId,
-                 TestUtils.registerSchema(restApp2.restService, secondSchema, subject));
+            secondSchemaExpectedId,
+            restApp2.restClient.registerSchema(secondSchema, subject));
 
     // update config to master
-    TestUtils
-        .changeCompatibility(restApp1.restService, AvroCompatibilityLevel.FORWARD, configSubject);
+    restApp1.restClient
+        .updateCompatibility(AvroCompatibilityLevel.FORWARD.name, configSubject);
     assertEquals("New compatibility level should be FORWARD on the master",
                  FORWARD.name,
-                 restApp1.restService.getConfig(configSubject).getCompatibilityLevel());
+                 restApp1.restClient.getConfig(configSubject).getCompatibilityLevel());
 
     // the new config should be eventually readable on the non-master
-    waitUntilCompatibilityLevelSet(restApp2.restService, configSubject,
+    waitUntilCompatibilityLevelSet(restApp2.restClient, configSubject,
                                    AvroCompatibilityLevel.FORWARD.name,
                                    "New compatibility level should be FORWARD on the non-master");
 
     // update config to non-master
-    TestUtils
-        .changeCompatibility(restApp2.restService, AvroCompatibilityLevel.NONE, configSubject);
+    restApp2.restClient
+        .updateCompatibility(AvroCompatibilityLevel.NONE.name, configSubject);
     assertEquals("New compatibility level should be NONE on the master",
                  NONE.name,
-                 restApp1.restService.getConfig(configSubject).getCompatibilityLevel());
+                 restApp1.restClient.getConfig(configSubject).getCompatibilityLevel());
 
     // the new config should be eventually readable on the non-master
-    waitUntilCompatibilityLevelSet(restApp2.restService, configSubject,
+    waitUntilCompatibilityLevelSet(restApp2.restClient, configSubject,
                                    AvroCompatibilityLevel.NONE.name,
                                    "New compatibility level should be NONE on the non-master");
 
@@ -142,7 +142,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     int statusCodeFromRestApp1 = 0;
     final String failedSchema = "{\"type\":\"string\"}";;
     try {
-      TestUtils.registerSchema(restApp1.restService, failedSchema, subject);
+      restApp1.restClient.registerSchema(failedSchema, subject);
       fail("Registration should fail on the master");
     } catch (RestClientException e) {
       // this is expected.
@@ -151,7 +151,7 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     int statusCodeFromRestApp2 = 0;
     try {
-      TestUtils.registerSchema(restApp2.restService, failedSchema, subject);
+      restApp2.restClient.registerSchema(failedSchema, subject);
       fail("Registration should fail on the non-master");
     } catch (RestClientException e) {
       // this is expected.
@@ -166,8 +166,8 @@ public class MasterElectorTest extends ClusterTestHarness {
     // update config should fail if master is not available
     int updateConfigStatusCodeFromRestApp1 = 0;
     try {
-      TestUtils.changeCompatibility(restApp1.restService, AvroCompatibilityLevel.FORWARD,
-                                    configSubject);
+      restApp1.restClient.updateCompatibility(AvroCompatibilityLevel.FORWARD.name,
+              configSubject);
       fail("Update config should fail on the master");
     } catch (RestClientException e) {
       // this is expected.
@@ -176,8 +176,8 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     int updateConfigStatusCodeFromRestApp2 = 0;
     try {
-      TestUtils.changeCompatibility(restApp2.restService, AvroCompatibilityLevel.FORWARD,
-                                    configSubject);
+      restApp2.restClient.updateCompatibility(AvroCompatibilityLevel.FORWARD.name,
+              configSubject);
       fail("Update config should fail on the non-master");
     } catch (RestClientException e) {
       // this is expected.
@@ -191,8 +191,8 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     // test registering an existing schema to the non-master when the master is not available
     assertEquals("Registering an existing schema to the non-master should return its id",
-                 secondSchemaExpectedId,
-                 TestUtils.registerSchema(restApp2.restService, secondSchema, subject));
+            secondSchemaExpectedId,
+            restApp2.restClient.registerSchema(secondSchema, subject));
 
     // set the correct master identity back
     restApp1.setMaster(restApp1.myIdentity());
@@ -202,8 +202,8 @@ public class MasterElectorTest extends ClusterTestHarness {
     final int thirdSchemaExpectedVersion = 3;
     final int thirdSchemaExpectedId = ID_BATCH_SIZE + 1;
     assertEquals("Registering a new schema to the master should succeed",
-                 thirdSchemaExpectedId,
-                 TestUtils.registerSchema(restApp1.restService, thirdSchema, subject));
+            thirdSchemaExpectedId,
+            restApp1.restClient.registerSchema(thirdSchema, subject));
 
     // stop schema registry instance 1; instance 2 should become the new master
     restApp1.stop();
@@ -219,18 +219,18 @@ public class MasterElectorTest extends ClusterTestHarness {
     // the latest version should be immediately available on the new master using the id
     assertEquals("Latest version should be found on the new master",
             thirdSchema,
-            restApp2.restService.getId(thirdSchemaExpectedId).getSchemaString());
+            restApp2.restClient.getId(thirdSchemaExpectedId).getSchemaString());
 
     // the latest version should be immediately available on the new master using the version
     assertEquals("Latest version should be found on the new master",
             thirdSchema,
-            restApp2.restService.getVersion(subject,
+            restApp2.restClient.getVersion(subject,
                     thirdSchemaExpectedVersion).getSchema());
 
     // register a schema to the new master
     final String fourthSchema = avroSchemas.get(3);
     final int fourthSchemaExpectedId = 2 * ID_BATCH_SIZE + 1;
-    TestUtils.registerAndVerifySchema(restApp2.restService, fourthSchema,
+    TestUtils.registerAndVerifySchema(restApp2.restClient, fourthSchema,
                                       fourthSchemaExpectedId,
                                       subject);
 
@@ -342,7 +342,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     // Try to register schemas to a slave - should fail
     boolean successfullyRegistered = false;
     try {
-      TestUtils.registerSchema(aSlave.restService, schemas.get(0), subject);
+      aSlave.restClient.registerSchema(schemas.get(0), subject);
       successfullyRegistered = true;
     } catch (RestClientException e) {
       // registration should fail
@@ -366,7 +366,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     // Try to register to a master cluster node - should succeed
     try {
       for (String schema : schemas) {
-        ids.add(TestUtils.registerSchema(aMaster.restService, schema, subject));
+        ids.add(aMaster.restClient.registerSchema(schema, subject));
       }
     } catch (RestClientException e) {
       fail("It should be possible to register schemas when a master cluster is present.");
@@ -375,7 +375,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     // Try to register to a slave cluster node - should succeed
     String anotherSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {
-      ids.add(TestUtils.registerSchema(aSlave.restService, anotherSchema, subject));
+      ids.add(aSlave.restClient.registerSchema(anotherSchema, subject));
     } catch (RestClientException e) {
       fail("Should be possible register a schema through slave cluster.");
     }
@@ -383,13 +383,13 @@ public class MasterElectorTest extends ClusterTestHarness {
     // Verify all ids can be fetched
     try {
       for (int id: ids) {
-        waitUntilIdExists(aSlave.restService, id,
+        waitUntilIdExists(aSlave.restClient, id,
                           String.format("Should be possible to fetch id %d from this slave.", id));
-        waitUntilIdExists(aMaster.restService, id,
+        waitUntilIdExists(aMaster.restClient, id,
                           String.format("Should be possible to fetch id %d from this master.", id));
 
-        SchemaString slaveResponse = aSlave.restService.getId(id);
-        SchemaString masterResponse = aMaster.restService.getId(id);
+        SchemaString slaveResponse = aSlave.restClient.getId(id);
+        SchemaString masterResponse = aMaster.restClient.getId(id);
         assertEquals(
             "Master and slave responded with different schemas when queried with the same id.",
             slaveResponse.getSchemaString(), masterResponse.getSchemaString());
@@ -410,7 +410,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     anotherSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     successfullyRegistered = false;
     try {
-      TestUtils.registerSchema(aSlave.restService, anotherSchema, subject);
+      aSlave.restClient.registerSchema(anotherSchema, subject);
       successfullyRegistered = true;
     } catch (RestClientException e) {
       // should fail
@@ -422,9 +422,9 @@ public class MasterElectorTest extends ClusterTestHarness {
     try {
 
       for (int id: ids) {
-        SchemaString schemaString = aSlave.restService.getId(id);
+        SchemaString schemaString = aSlave.restClient.getId(id);
       }
-      List<Integer> versions = aSlave.restService.getAllVersions(subject);
+      List<Integer> versions = aSlave.restClient.getAllVersions(subject);
       assertEquals("Number of ids should match number of versions.", ids.size(), versions.size());
     } catch (RestClientException e) {
       fail("Should be possible to fetch registered schemas even with no masters present.");
@@ -452,7 +452,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     Set<Integer> ids = new HashSet<Integer>();
     int maxId = -1;
     for (int i = 0; i < ID_BATCH_SIZE / 2; i++) {
-      int newId = TestUtils.registerSchema(restApp1.restService, schemas.get(i), subject);
+      int newId = restApp1.restClient.registerSchema(schemas.get(i), subject);
       ids.add(newId);
 
       // Sanity check - ids should be increasing
@@ -468,7 +468,7 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     // Make sure ids are still increasing
     String anotherSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
-    int newId = TestUtils.registerSchema(restApp1.restService, anotherSchema, subject);
+    int newId = restApp1.restClient.registerSchema(anotherSchema, subject);
     assertTrue("Next assigned id should be greater than all previous.", newId > maxId);
     maxId = newId;
 
@@ -494,7 +494,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     ZkUtils.updatePersistentPath(zkClient, ZK_ID_COUNTER_PATH, "0");
     schemas = TestUtils.getRandomCanonicalAvroString(ID_BATCH_SIZE);
     for (int i = 0; i < ID_BATCH_SIZE; i++) {
-      newId = TestUtils.registerSchema(restApp2.restService, schemas.get(i), subject);
+      newId = restApp2.restClient.registerSchema(schemas.get(i), subject);
       ids.add(newId);
 
       // Sanity check - ids should be increasing
@@ -545,9 +545,9 @@ public class MasterElectorTest extends ClusterTestHarness {
     RestApp restApp = new RestApp(kafka.utils.TestUtils.choosePort(), zkConnect, KAFKASTORE_TOPIC);
     restApp.start();
     for (String schema: schemas) {
-      int id = TestUtils.registerSchema(restApp.restService, schema, subject);
+      int id = restApp.restClient.registerSchema(schema, subject);
       ids.add(id);
-      waitUntilIdExists(restApp.restService, id, "Expected id to be available.");
+      waitUntilIdExists(restApp.restClient, id, "Expected id to be available.");
     }
     restApp.stop();
 

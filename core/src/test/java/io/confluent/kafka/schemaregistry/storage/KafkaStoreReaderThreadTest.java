@@ -50,7 +50,7 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
   @Test
   public void testWaitUntilOffset() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
-    int id1 = TestUtils.registerSchema(restApp.restService, schema, "subject1");
+    int id1 = restApp.restClient.registerSchema(schema, "subject1");
 
     KafkaSchemaRegistry sr = (KafkaSchemaRegistry) restApp.schemaRegistry();
     KafkaStoreReaderThread readerThread = sr.getKafkaStore().getKafkaStoreReaderThread();

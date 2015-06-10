@@ -31,7 +31,7 @@ import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 public class RestApp {
 
   public final Properties prop;
-  public final RestService restService;
+  public final RestService restClient;
   public SchemaRegistryRestApplication restApp;
   public Server restServer;
   public String restConnect;
@@ -53,7 +53,7 @@ public class RestApp {
     prop.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, compatibilityType);
     prop.put(SchemaRegistryConfig.MASTER_ELIGIBILITY, masterEligibility);
     restConnect = String.format("http://localhost:%d", port);
-    restService = new RestService(restConnect);
+    restClient = new RestService(restConnect);
   }
 
   public void start() throws Exception {

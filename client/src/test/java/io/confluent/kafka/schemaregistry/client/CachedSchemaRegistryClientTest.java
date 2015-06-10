@@ -17,11 +17,9 @@ package io.confluent.kafka.schemaregistry.client;
 
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import org.apache.avro.Schema;
 import org.junit.Test;
 
-import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.eq;
@@ -45,7 +43,7 @@ public class CachedSchemaRegistryClientTest {
     int id = 25;
 
     // Expect one call to register schema
-    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class), anyString()))
+    expect(restService.registerSchema(anyString(), eq(subject)))
             .andReturn(id);
 
     replay(restService);
@@ -75,7 +73,7 @@ public class CachedSchemaRegistryClientTest {
     int id = 25;
 
     // Expect one call to register schema (the second one will fail)
-    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class), anyString()))
+    expect(restService.registerSchema(anyString(), eq(subject)))
             .andReturn(id);
 
     replay(restService);
@@ -102,7 +100,7 @@ public class CachedSchemaRegistryClientTest {
     String subject = "foo";
     int id = 25;
 
-    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class), anyString()))
+    expect(restService.registerSchema(anyString(), eq(subject)))
             .andReturn(id);
 
     // Expect only one call to getId (the rest should hit the cache)
@@ -130,11 +128,11 @@ public class CachedSchemaRegistryClientTest {
     int id = 25;
     int version = 7;
 
-    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class), anyString()))
+    expect(restService.registerSchema(anyString(), eq(subject)))
             .andReturn(id);
 
     // Expect only one call to lookup the subject (the rest should hit the cache)
-    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class), eq(subject)))
+    expect(restService.lookUpSubjectVersion(anyString(), eq(subject)))
             .andReturn(new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(subject, version, id, schema));
 
     replay(restService);

@@ -21,7 +21,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleAvroSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
-import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -46,8 +45,8 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         .canonicalString;
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
-                 expectedIdSchema1,
-                 TestUtils.registerSchema(restApp.restService, schemaString1, subject));
+            expectedIdSchema1,
+            restApp.restClient.registerSchema(schemaString1, subject));
 
     // register an incompatible avro
     String incompatibleSchemaString = AvroUtils.parseSchema(
@@ -58,7 +57,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + " {\"type\":\"string\",\"name\":\"f2\"}]}"
     ).canonicalString;
     try {
-      TestUtils.registerSchema(restApp.restService, incompatibleSchemaString, subject);
+      restApp.restClient.registerSchema(incompatibleSchemaString, subject);
       fail("Registering an incompatible schema should fail");
     } catch (RestClientException e) {
       // this is expected.
@@ -70,7 +69,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     // register a non-avro
     String nonAvroSchemaString = "non-avro schema string";
     try {
-      TestUtils.registerSchema(restApp.restService, nonAvroSchemaString, subject);
+      restApp.restClient.registerSchema(nonAvroSchemaString, subject);
       fail("Registering a non-avro schema should fail");
     } catch (RestClientException e) {
       // this is expected.
@@ -90,7 +89,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering a compatible schema should succeed",
                  expectedIdSchema2,
-                 TestUtils.registerSchema(restApp.restService, schemaString2, subject));
+                 restApp.restClient.registerSchema(schemaString2, subject));
   }
 
   @Test
@@ -106,8 +105,8 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         .canonicalString;
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
-                 expectedIdSchema1,
-                 TestUtils.registerSchema(restApp.restService, schemaString1, subject));
+            expectedIdSchema1,
+            restApp.restClient.registerSchema(schemaString1, subject));
 
     // register an incompatible avro
     String incompatibleSchemaString = AvroUtils.parseSchema(
@@ -118,7 +117,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + " {\"type\":\"string\",\"name\":\"f2\"}]}"
     ).canonicalString;
     try {
-      TestUtils.registerSchema(restApp.restService, incompatibleSchemaString, subject);
+      restApp.restClient.registerSchema(incompatibleSchemaString, subject);
       fail("Registering an incompatible schema should fail");
     } catch (RestClientException e) {
       // this is expected.
@@ -129,13 +128,13 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     // change compatibility level to none and try again
     assertEquals("Changing compatibility level should succeed",
-                 AvroCompatibilityLevel.NONE.name,
-                 TestUtils
-                     .changeCompatibility(restApp.restService, AvroCompatibilityLevel.NONE, null)
-                     .getCompatibilityLevel());
+            AvroCompatibilityLevel.NONE.name,
+            restApp.restClient
+                    .updateCompatibility(AvroCompatibilityLevel.NONE.name, null)
+                    .getCompatibilityLevel());
 
     try {
-      TestUtils.registerSchema(restApp.restService, incompatibleSchemaString, subject);
+      restApp.restClient.registerSchema(incompatibleSchemaString, subject);
     } catch (RestClientException e) {
       fail("Registering an incompatible schema should succeed after bumping down the compatibility "
            + "level to none");
@@ -153,23 +152,23 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString;
     int expectedIdSchema1 = 1;
     assertEquals("Registering should succeed",
-                 expectedIdSchema1,
-                 TestUtils.registerSchema(restApp.restService, schemaString1, subject));
+            expectedIdSchema1,
+            restApp.restClient.registerSchema(schemaString1, subject));
     // verify that default compatibility level is backward
     assertEquals("Default compatibility level should be backward",
             AvroCompatibilityLevel.BACKWARD.name,
-            restApp.restService.getConfig(null).getCompatibilityLevel());
+            restApp.restClient.getConfig(null).getCompatibilityLevel());
     // change it to forward
     assertEquals("Changing compatibility level should succeed",
-                 AvroCompatibilityLevel.FORWARD.name,
-                 TestUtils
-                     .changeCompatibility(restApp.restService, AvroCompatibilityLevel.FORWARD, null)
-                     .getCompatibilityLevel());
+            AvroCompatibilityLevel.FORWARD.name,
+            restApp.restClient
+                    .updateCompatibility(AvroCompatibilityLevel.FORWARD.name, null)
+                    .getCompatibilityLevel());
 
     // verify that new compatibility level is forward
     assertEquals("New compatibility level should be forward",
             AvroCompatibilityLevel.FORWARD.name,
-            restApp.restService.getConfig(null).getCompatibilityLevel());
+            restApp.restClient.getConfig(null).getCompatibilityLevel());
 
     // register schema that is forward compatible with schemaString1
     String schemaString2 = AvroUtils.parseSchema(
@@ -181,18 +180,18 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     int expectedIdSchema2 = 2;
     assertEquals("Registering should succeed",
                  expectedIdSchema2,
-                 TestUtils.registerSchema(restApp.restService, schemaString2, subject));
+                 restApp.restClient.registerSchema(schemaString2, subject));
 
     // change compatibility to backward
     assertEquals("Changing compatibility level should succeed",
-                 AvroCompatibilityLevel.BACKWARD.name,
-                 TestUtils.changeCompatibility(restApp.restService, AvroCompatibilityLevel.BACKWARD,
-                                               null).getCompatibilityLevel());
+            AvroCompatibilityLevel.BACKWARD.name,
+            restApp.restClient.updateCompatibility(AvroCompatibilityLevel.BACKWARD.name,
+                    null).getCompatibilityLevel());
 
     // verify that new compatibility level is backward
     assertEquals("Updated compatibility level should be backward",
             AvroCompatibilityLevel.BACKWARD.name,
-            restApp.restService.getConfig(null).getCompatibilityLevel());
+            restApp.restClient.getConfig(null).getCompatibilityLevel());
 
             // register forward compatible schema, which should fail
             String schemaString3 = AvroUtils.parseSchema(
@@ -203,7 +202,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
                     + " {\"type\":\"string\",\"name\":\"f2\"},"
                     + " {\"type\":\"string\",\"name\":\"f3\"}]}").canonicalString;
     try {
-      TestUtils.registerSchema(restApp.restService, schemaString3, subject);
+      restApp.restClient.registerSchema(schemaString3, subject);
       fail("Registering a forward compatible schema should fail");
     } catch (RestClientException e) {
       // this is expected.
@@ -222,7 +221,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"foo\"}]}").canonicalString;
     int expectedIdSchema4 = 3;
     assertEquals("Registering should succeed with backwards compatible schema",
-                 expectedIdSchema4,
-                 TestUtils.registerSchema(restApp.restService, schemaString4, subject));
+            expectedIdSchema4,
+            restApp.restClient.registerSchema(schemaString4, subject));
   }
 }

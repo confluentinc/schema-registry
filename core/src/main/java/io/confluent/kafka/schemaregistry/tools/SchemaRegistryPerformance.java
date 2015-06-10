@@ -84,12 +84,10 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
 
   @Override
   protected void doIteration(PerformanceStats.Callback cb) {
-    RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
     String schema = makeSchema(this.registeredSchemas);
-    registerSchemaRequest.setSchema(schema);
 
     try {
-      restService.registerSchema(registerSchemaRequest, this.subject);
+      restService.registerSchema(schema, this.subject);
       registeredSchemas++;
     } catch (IOException e) {
       System.out.println("Problem registering schema: " + e.getMessage());

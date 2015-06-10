@@ -180,6 +180,13 @@ public class RestService {
     throw new IOException("Internal HTTP retry error"); // Can't get here
   }
 
+  public Schema lookUpSubjectVersion(String schemaString, String subject)
+          throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    return lookUpSubjectVersion(request, subject);
+  }
+
   public Schema lookUpSubjectVersion(RegisterSchemaRequest registerSchemaRequest,
                                      String subject)
           throws IOException, RestClientException {
@@ -198,6 +205,13 @@ public class RestService {
     return schema;
   }
 
+  public int registerSchema(String schemaString, String subject)
+          throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    return registerSchema(request, subject);
+  }
+
   public int registerSchema(RegisterSchemaRequest registerSchemaRequest, String subject)
           throws IOException, RestClientException {
     return registerSchema(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject);
@@ -212,6 +226,13 @@ public class RestService {
             registerSchemaRequest.toJson().getBytes(), requestProperties, REGISTER_RESPONSE_TYPE);
 
     return response.getId();
+  }
+
+  public boolean testCompatibility(String schemaString, String subject, String version)
+          throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    return testCompatibility(request, subject, version);
   }
 
   public boolean testCompatibility(RegisterSchemaRequest registerSchemaRequest,
@@ -233,6 +254,13 @@ public class RestService {
             httpRequest(path, "POST", registerSchemaRequest.toJson().getBytes(),
                     requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
     return response.getIsCompatible();
+  }
+
+  public ConfigUpdateRequest updateCompatibility(String compatibility, String subject)
+          throws IOException, RestClientException {
+    ConfigUpdateRequest request = new ConfigUpdateRequest();
+    request.setCompatibilityLevel(compatibility);
+    return updateConfig(request, subject);
   }
 
   public ConfigUpdateRequest updateConfig(ConfigUpdateRequest configUpdateRequest,
