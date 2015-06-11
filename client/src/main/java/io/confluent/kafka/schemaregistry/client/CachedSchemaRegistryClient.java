@@ -15,66 +15,57 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
-import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
-
 public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
-  private UrlList baseUrls;
+  private final RestService restService;
   private final int identityMapCapacity;
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
 
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
-    this(parseBaseUrl(baseUrl), identityMapCapacity);
+    this(new RestService(baseUrl), identityMapCapacity);
   }
 
   public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity) {
-    this.baseUrls = new UrlList(baseUrls);
+    this(new RestService(baseUrls), identityMapCapacity);
+  }
+
+  public CachedSchemaRegistryClient(RestService restService, int identityMapCapacity) {
     this.identityMapCapacity = identityMapCapacity;
-    schemaCache = new HashMap<String, Map<Schema, Integer>>();
-    idCache = new HashMap<Integer, Schema>();
-    versionCache = new HashMap<String, Map<Schema, Integer>>();
+    this.schemaCache = new HashMap<String, Map<Schema, Integer>>();
+    this.idCache = new HashMap<Integer, Schema>();
+    this.versionCache = new HashMap<String, Map<Schema, Integer>>();
+    this.restService = restService;
   }
 
   private int registerAndGetId(String subject, Schema schema)
       throws IOException, RestClientException {
-    String schemaString = schema.toString();
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
-    return RestUtils.registerSchema(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES,
-            request, subject);
+    return restService.registerSchema(schema.toString(), subject);
   }
 
   private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
-    SchemaString restSchema =
-        RestUtils.getId(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
+    SchemaString restSchema = restService.getId(id);
     return new Schema.Parser().parse(restSchema.getSchemaString());
   }
 
-
   private int getVersionFromRegistry(String subject, Schema schema)
       throws IOException, RestClientException{
-    String schemaString = schema.toString();
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
-        RestUtils.lookUpSubjectVersion(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+        restService.lookUpSubjectVersion(schema.toString(), subject);
     return response.getVersion();
   }
 
@@ -116,8 +107,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public synchronized SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
-     = RestUtils.getLatestVersion(
-        baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
+     = restService.getLatestVersion(subject);
     int id = response.getId();
     int version = response.getVersion();
     String schema = response.getSchema();
@@ -149,35 +139,20 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   
   @Override
   public boolean testCompatibility(String subject, Schema schema) throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schema.toString());
-    String version = "latest";
-    
-    boolean isCompatibility = RestUtils.testCompatibility(
-        baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject, version);
-    return isCompatibility;
+    return restService.testCompatibility(schema.toString(), subject, "latest");
   }
 
   @Override
   public String updateCompatibility(String subject, String compatibility) throws IOException, RestClientException {
-    ConfigUpdateRequest request = new ConfigUpdateRequest();
-    request.setCompatibilityLevel(compatibility);
-    ConfigUpdateRequest response = RestUtils.updateConfig(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
+    ConfigUpdateRequest response = restService.updateCompatibility(compatibility, subject);
     return response.getCompatibilityLevel();
   }
 
   @Override
   public String getCompatibility(String subject) throws IOException, RestClientException {
-    Config response = RestUtils.getConfig(baseUrls, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
+    Config response = restService.getConfig(subject);
     return response.getCompatibilityLevel();
   }
 
-  private static List<String> parseBaseUrl(String baseUrl) {
-    List<String> baseUrls = Arrays.asList(baseUrl.split("\\s*,\\s*"));
-    if (baseUrls.isEmpty()) {
-      throw new IllegalArgumentException("Missing required schema registry url list");
-    }
-    return baseUrls;
-  }
 
 }

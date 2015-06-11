@@ -15,24 +15,6 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import org.I0Itec.zkclient.ZkClient;
-import org.I0Itec.zkclient.exception.ZkNodeExistsException;
-import org.apache.avro.reflect.Nullable;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.Vector;
-import java.util.concurrent.TimeUnit;
-
 import io.confluent.common.metrics.JmxReporter;
 import io.confluent.common.metrics.MetricConfig;
 import io.confluent.common.metrics.MetricName;
@@ -46,12 +28,13 @@ import io.confluent.common.utils.zookeeper.ZkUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
+import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
@@ -70,6 +53,23 @@ import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerialize
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 import io.confluent.rest.exceptions.RestException;
+import org.I0Itec.zkclient.ZkClient;
+import org.I0Itec.zkclient.exception.ZkNodeExistsException;
+import org.apache.avro.reflect.Nullable;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Vector;
+import java.util.concurrent.TimeUnit;
 
 public class KafkaSchemaRegistry implements SchemaRegistry {
 
@@ -97,6 +97,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private String schemaRegistryZkUrl;
   private ZkClient zkClient;
   private SchemaRegistryIdentity masterIdentity;
+  private RestService masterRestService;
   private ZookeeperMasterElector masterElector = null;
   private Metrics metrics;
   private Sensor masterNodeSensor;
@@ -230,13 +231,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       SchemaRegistryIdentity previousMaster = masterIdentity;
       masterIdentity = newMaster;
 
-      if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {
-        nextAvailableSchemaId = nextSchemaIdCounterBatch();
-        idBatchInclusiveUpperBound = getInclusiveUpperBound(nextAvailableSchemaId);
+      if (masterIdentity == null) {
+        masterRestService = null;
+      } else {
+        masterRestService = new RestService(String.format("http://%s:%d",
+                masterIdentity.getHost(), masterIdentity.getPort()));
+      }
 
-        // The new master may not know the exact last offset in the Kafka log. So, mark the
-        // last offset invalid here and let the logic in register() deal with it later.
-        kafkaStore.markLastWrittenOffsetInvalid();
+      if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {
+          nextAvailableSchemaId = nextSchemaIdCounterBatch();
+          idBatchInclusiveUpperBound = getInclusiveUpperBound(nextAvailableSchemaId);
+
+          // The new master may not know the exact last offset in the Kafka log. So, mark the
+          // last offset invalid here and let the logic in register() deal with it later.
+          kafkaStore.markLastWrittenOffsetInvalid();
       }
 
       masterNodeSensor.record(isMaster() ? 1.0 : 0.0);
@@ -339,9 +347,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
-          return forwardRegisterRequestToMaster(subject, schema.getSchema(),
-                                                masterIdentity.getHost(),
-                                                masterIdentity.getPort(), headerProperties);
+          return forwardRegisterRequestToMaster(subject, schema.getSchema(), headerProperties);
         } else {
           throw new UnknownMasterException("Register schema request failed since master is "
                                             + "unknown");
@@ -469,18 +475,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     return nextIdBatchLowerBound;
   }
 
-  private int forwardRegisterRequestToMaster(String subject, String schemaString, String host,
-                                             int port,
+  private int forwardRegisterRequestToMaster(String subject, String schemaString,
                                              Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
-    String baseUrl = String.format("http://%s:%d", host, port);
+    UrlList baseUrl = masterRestService.getBaseUrls();
+
     RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
     registerSchemaRequest.setSchema(schemaString);
     log.debug(String.format("Forwarding registering schema request %s to %s",
                             registerSchemaRequest, baseUrl));
     try {
-      int id = RestUtils.registerSchema(baseUrl, headerProperties, registerSchemaRequest,
-                                        subject);
+      int id = masterRestService.registerSchema(headerProperties, registerSchemaRequest, subject);
       return id;
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
@@ -493,17 +498,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   private void forwardUpdateCompatibilityLevelRequestToMaster(
-      String subject, AvroCompatibilityLevel compatibilityLevel, String host, int port,
+      String subject, AvroCompatibilityLevel compatibilityLevel,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
-    String baseUrl = String.format("http://%s:%d", host, port);
+    UrlList baseUrl = masterRestService.getBaseUrls();
+
     ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
     configUpdateRequest.setCompatibilityLevel(compatibilityLevel.name);
     log.debug(String.format("Forwarding update config request %s to %s",
                             configUpdateRequest, baseUrl));
     try {
-      RestUtils.updateConfig(baseUrl, headerProperties, configUpdateRequest,
-                                        subject);
+      masterRestService.updateConfig(headerProperties, configUpdateRequest, subject);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the update config request %s to %s",
@@ -651,8 +656,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         // forward update config request to the master
         if (masterIdentity != null) {
           forwardUpdateCompatibilityLevelRequestToMaster(subject, newCompatibilityLevel,
-                                                         masterIdentity.getHost(),
-                                                         masterIdentity.getPort(), headerProperties);
+                                                         headerProperties);
         } else {
           throw new UnknownMasterException("Update config request failed since master is "
                                            + "unknown");

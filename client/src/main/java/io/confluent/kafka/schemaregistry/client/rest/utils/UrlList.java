@@ -33,7 +33,7 @@ public class UrlList {
   private final List<String> urls;
 
   public UrlList(List<String> urls) {
-    if (urls.isEmpty()) {
+    if (urls == null || urls.isEmpty()) {
       throw new IllegalArgumentException("Expected at least one URL to be passed in constructor");
     }
 
@@ -73,4 +73,10 @@ public class UrlList {
   public int size() {
     return urls.size();
   }
+
+  @Override
+  public String toString() {
+    return urls.toString();
+  }
+
 }

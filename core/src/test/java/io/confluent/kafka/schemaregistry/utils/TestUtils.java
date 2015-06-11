@@ -15,21 +15,16 @@
  */
 package io.confluent.kafka.schemaregistry.utils;
 
+import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
-
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
-import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.rest.utils.RestUtils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -98,82 +93,32 @@ public class TestUtils {
     }
   }
 
-  public static int registerSchema(String baseUrl, String schemaString, String subject)
-      throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
-
-    return RestUtils.registerSchema(
-        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
-  }
-
-  public static Schema lookUpSubjectVersion(String baseUrl, String schemaString, String subject)
-      throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
-
-    return RestUtils.lookUpSubjectVersion(
-        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
-  }
-
-  public static boolean testCompatibility(String baseUrl, String schemaString, String subject,
-                                          String version)
-      throws IOException, RestClientException {
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemaString);
-
-    return RestUtils.testCompatibility(
-        baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject, version);
-  }
-
-  public static SchemaString getId(String baseUrl, int id)
-      throws IOException, RestClientException {
-    return RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, id);
-  }
-
-  public static List<Integer> getSubjectVersions(String baseUrl, String subject)
-      throws IOException, RestClientException {
-    return RestUtils.getAllVersions(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, subject);
-  }
-
   /**
    * Helper method which checks the number of versions registered under the given subject.
    */
-  public static void checkNumberOfVersions(String baseUrl, int expected, String subject)
+  public static void checkNumberOfVersions(RestService restService, int expected, String subject)
       throws IOException, RestClientException {
-    List<Integer> versions = RestUtils.getAllVersions(baseUrl,
-                                                      RestUtils.DEFAULT_REQUEST_PROPERTIES,
-                                                      subject);
+    List<Integer> versions = restService.getAllVersions(subject);
     assertEquals("Expected " + expected + " registered versions under subject " + subject +
                  ", but found " + versions.size(),
                  expected, versions.size());
   }
 
-  public static ConfigUpdateRequest changeCompatibility(String baseUrl,
-                                         AvroCompatibilityLevel newCompatibilityLevel,
-                                         String subject)
-      throws IOException, RestClientException {
-    ConfigUpdateRequest request = new ConfigUpdateRequest();
-    request.setCompatibilityLevel(newCompatibilityLevel.name);
-
-    return RestUtils.updateConfig(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, request, subject);
-  }
-
   /**
    * Register a new schema and verify that it can be found on the expected version.
    */
-  public static void registerAndVerifySchema(String baseUrl, String schemaString,
+  public static void registerAndVerifySchema(RestService restService, String schemaString,
                                              int expectedId, String subject)
       throws IOException, RestClientException {
     assertEquals("Registering a new schema should succeed",
                  expectedId,
-                 TestUtils.registerSchema(baseUrl, schemaString, subject));
+                 restService.registerSchema(schemaString, subject));
 
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",
-                 schemaString,
-                 RestUtils.getId(baseUrl, RestUtils.DEFAULT_REQUEST_PROPERTIES, expectedId)
-                     .getSchemaString());
+            schemaString,
+            restService.getId(expectedId).getSchemaString());
+
   }
 
   public static List<String> getRandomCanonicalAvroString(int num) {
