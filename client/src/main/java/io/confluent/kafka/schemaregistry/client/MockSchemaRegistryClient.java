@@ -28,7 +28,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
-public class LocalSchemaRegistryClient implements SchemaRegistryClient {
+/**
+ * Mock implementation of SchemaRegistryClient that can be used for tests. This version is NOT
+ * thread safe. Schema data is stored in memory and is not persistent or shared across instances.
+ */
+public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private String defaultCompatibility = "BACKWARD";
   private final Map<String, Map<Schema, Integer>> schemaCache;
@@ -37,7 +41,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, String> compatibilityCache;
   private final AtomicInteger ids;
 
-  public LocalSchemaRegistryClient() {
+  public MockSchemaRegistryClient() {
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
     idCache = new HashMap<Integer, Schema>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();

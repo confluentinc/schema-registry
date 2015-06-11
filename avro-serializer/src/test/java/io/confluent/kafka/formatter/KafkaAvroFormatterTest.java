@@ -28,7 +28,7 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.LocalSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import kafka.producer.KeyedMessage;
 
 import static org.junit.Assert.assertEquals;
@@ -49,7 +49,7 @@ public class KafkaAvroFormatterTest {
     Schema.Parser parser = new Schema.Parser();
     recordSchema = parser.parse(userSchema);
     intSchema = parser.parse("{\"type\" : \"int\"}");
-    schemaRegistry = new LocalSchemaRegistryClient();
+    schemaRegistry = new MockSchemaRegistryClient();
   }
 
   @Test
