@@ -30,7 +30,7 @@ public class KafkaJsonSerializerTest {
 
   @Test
   public void serialize() throws Exception {
-    KafkaJsonSerializer serializer = new KafkaJsonSerializer();
+    KafkaJsonSerializer<Object> serializer = new KafkaJsonSerializer<Object>();
     serializer.configure(Collections.<String, Object>emptyMap(), false);
 
     Map<String, Object> message = new HashMap<String, Object>();
