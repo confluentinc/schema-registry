@@ -29,8 +29,8 @@ public class KafkaJsonSerializer<T> implements Serializer<T> {
 
   private ObjectMapper objectMapper;
 
-  /**a
-   * default constructor needed by Kafka
+  /**
+   * Default constructor needed by Kafka
    */
   public KafkaJsonSerializer() {
 
@@ -42,7 +42,7 @@ public class KafkaJsonSerializer<T> implements Serializer<T> {
   }
 
   protected void configure(KafkaJsonSerializerConfig config) {
-    boolean prettyPrint = config.getBoolean(KafkaJsonSerializerConfig.JSON_PRETTY_PRINT);
+    boolean prettyPrint = config.getBoolean(KafkaJsonSerializerConfig.JSON_INDENT_OUTPUT);
     this.objectMapper = new ObjectMapper();
     this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
   }

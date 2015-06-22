@@ -22,11 +22,10 @@ import java.util.Map;
 
 public class KafkaJsonDecoderConfig extends AbstractConfig {
 
-  public static final String IGNORE_UNKNOWN_PROPERTIES = "json.ignore.unknown.properties";
-  public static final boolean IGNORE_UNKNOWN_PROPERTIES_DEFAULT = false;
-  public static final String IGNORE_UNKNOWN_PROPERTIES_DOC =
-          "Whether unknown JSON properties should be ignored";
-
+  public static final String FAIL_UNKNOWN_PROPERTIES = "json.fail.unknown.properties";
+  public static final boolean FAIL_UNKNOWN_PROPERTIES_DEFAULT = true;
+  public static final String FAIL_UNKNOWN_PROPERTIES_DOC =
+          "Whether to fail deserialization if unknown JSON properties are encountered";
 
   public KafkaJsonDecoderConfig(Map<?, ?> props) {
     super(baseConfig(), props);
@@ -38,8 +37,8 @@ public class KafkaJsonDecoderConfig extends AbstractConfig {
 
   protected static ConfigDef baseConfig() {
     return new ConfigDef()
-            .define(IGNORE_UNKNOWN_PROPERTIES, ConfigDef.Type.BOOLEAN, IGNORE_UNKNOWN_PROPERTIES_DEFAULT,
-                    ConfigDef.Importance.LOW, IGNORE_UNKNOWN_PROPERTIES_DOC);
+            .define(FAIL_UNKNOWN_PROPERTIES, ConfigDef.Type.BOOLEAN, FAIL_UNKNOWN_PROPERTIES_DEFAULT,
+                    ConfigDef.Importance.LOW, FAIL_UNKNOWN_PROPERTIES_DOC);
   }
 
 }

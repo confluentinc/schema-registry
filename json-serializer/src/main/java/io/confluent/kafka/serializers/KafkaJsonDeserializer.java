@@ -31,7 +31,7 @@ public class KafkaJsonDeserializer<T> implements Deserializer<T> {
   private Class<T> type;
 
   /**
-   * default constructor needed by Kafka
+   * Default constructor needed by Kafka
    */
   public KafkaJsonDeserializer() {
 
@@ -46,8 +46,8 @@ public class KafkaJsonDeserializer<T> implements Deserializer<T> {
     this.objectMapper = new ObjectMapper();
     this.type = type;
 
-    boolean ignoreUnknownProperties = config.getBoolean(KafkaJsonDeserializerConfig.IGNORE_UNKNOWN_PROPERTIES);
-    this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, !ignoreUnknownProperties);
+    boolean failUnknownProperties = config.getBoolean(KafkaJsonDeserializerConfig.FAIL_UNKNOWN_PROPERTIES);
+    this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, failUnknownProperties);
   }
 
   @SuppressWarnings("unchecked")

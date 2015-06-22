@@ -22,17 +22,17 @@ import java.util.Map;
 
 public class KafkaJsonSerializerConfig extends AbstractConfig {
 
-  public static final String JSON_PRETTY_PRINT = "json.pretty.print";
-  public static final boolean JSON_PRETTY_PRINT_DEFAULT = false;
-  public static final String JSON_PRETTY_PRINT_DOC =
-          "Whether JSON should be pretty-printed";
+  public static final String JSON_INDENT_OUTPUT = "json.indent.output";
+  public static final boolean JSON_INDENT_OUTPUT_DEFAULT = false;
+  public static final String JSON_INDENT_OUTPUT_DOC =
+          "Whether JSON output should be indented (\"pretty-printed\")";
 
   private static ConfigDef config;
 
   static {
     config = new ConfigDef()
-            .define(JSON_PRETTY_PRINT, ConfigDef.Type.BOOLEAN, JSON_PRETTY_PRINT_DEFAULT,
-                    ConfigDef.Importance.LOW, JSON_PRETTY_PRINT_DOC);
+            .define(JSON_INDENT_OUTPUT, ConfigDef.Type.BOOLEAN, JSON_INDENT_OUTPUT_DEFAULT,
+                    ConfigDef.Importance.LOW, JSON_INDENT_OUTPUT_DOC);
   }
 
   public KafkaJsonSerializerConfig(Map<?, ?> props) {
