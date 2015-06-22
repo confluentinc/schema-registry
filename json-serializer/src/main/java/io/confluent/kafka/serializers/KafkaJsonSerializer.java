@@ -16,6 +16,7 @@
 package io.confluent.kafka.serializers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -24,18 +25,30 @@ import java.util.Map;
 /**
  * Serialize objects to UTF-8 JSON. This works with any object which is serializable with Jackson.
  */
-public class KafkaJsonSerializer implements Serializer<Object> {
+public class KafkaJsonSerializer<T> implements Serializer<T> {
 
   private ObjectMapper objectMapper;
 
-  @Override
-  public void configure(Map<String, ?> config, boolean isKey) {
-    // TODO: Any deserialization settings we want to expose?
-    this.objectMapper = new ObjectMapper();
+  /**
+   * Default constructor needed by Kafka
+   */
+  public KafkaJsonSerializer() {
+
   }
 
   @Override
-  public byte[] serialize(String topic, Object data) {
+  public void configure(Map<String, ?> config, boolean isKey) {
+    configure(new KafkaJsonSerializerConfig(config));
+  }
+
+  protected void configure(KafkaJsonSerializerConfig config) {
+    boolean prettyPrint = config.getBoolean(KafkaJsonSerializerConfig.JSON_INDENT_OUTPUT);
+    this.objectMapper = new ObjectMapper();
+    this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
+  }
+
+  @Override
+  public byte[] serialize(String topic, T data) {
     try {
       return objectMapper.writeValueAsBytes(data);
     } catch (Exception e) {
