@@ -84,7 +84,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       return schemaIdMap.get(schema);
     } else {
       if (schemaIdMap.size() >= identityMapCapacity) {
-        throw new IllegalStateException("Two many schema objects created for " + subject + "!");
+        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
       }
       int id = registerAndGetId(subject, schema);
       schemaIdMap.put(schema, id);
@@ -129,7 +129,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       return schemaVersionMap.get(schema);
     }  else {
       if (schemaVersionMap.size() >= identityMapCapacity) {
-        throw new IllegalStateException("Two many schema objects created for " + subject + "!");
+        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
       }
       int version = getVersionFromRegistry(subject, schema);
       schemaVersionMap.put(schema, version);
