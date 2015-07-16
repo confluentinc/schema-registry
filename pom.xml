@@ -43,15 +43,15 @@
     </modules>
 
     <properties>
-        <jersey.version>2.6</jersey.version>
+        <jersey.version>2.19</jersey.version>
         <confluent-common.version>2.0-SNAPSHOT</confluent-common.version>
         <kafka.version>0.8.2.0-cp</kafka.version>
         <kafka.scala.version>2.10</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
         <restutils.version>2.0-SNAPSHOT</restutils.version>
         <avro.version>1.7.7</avro.version>
-        <jackson.version>2.4.3</jackson.version>
-        <junit.version>4.11</junit.version>
+        <jackson.version>2.5.4</jackson.version>
+        <junit.version>4.12</junit.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 

@@ -21,8 +21,9 @@ Global Metrics
   ``connections-active``
     Total number of active TCP connections.
 
-  ``connections-accepted-rate``
-    The average rate per second of accepted TCP connections.
+  ``connections-accepted-rate`` (deprecated since 2.0)
+    * In 1.x: The average rate per second of accepted TCP connections.
+    * In 2.x: Same as ``connections-opened-rate``.
 
   ``connections-opened-rate``
     The average rate per second of opened TCP connections.
