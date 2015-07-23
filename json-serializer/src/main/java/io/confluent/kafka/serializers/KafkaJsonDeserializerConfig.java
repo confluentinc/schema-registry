@@ -15,7 +15,7 @@
  **/
 package io.confluent.kafka.serializers;
 
-import org.apache.kafka.common.config.ConfigDef;
+import io.confluent.common.config.ConfigDef;
 
 import java.util.Map;
 
