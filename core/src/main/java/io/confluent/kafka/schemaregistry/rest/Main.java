@@ -23,6 +23,14 @@ import java.io.IOException;
 
 import io.confluent.rest.RestConfigException;
 
+/**
+ * @deprecated
+ * This duplicates code in {@link io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain}
+ * for compatibility.
+ *
+ * See https://github.com/confluentinc/schema-registry/issues/194
+ */
+@Deprecated
 public class Main {
 
   private static final Logger log = LoggerFactory.getLogger(Main.class);
