@@ -26,30 +26,30 @@ import io.confluent.rest.RestConfigException;
 
 public class SchemaRegistryMain {
 
-    private static final Logger log = LoggerFactory.getLogger(SchemaRegistryMain.class);
+private static final Logger log = LoggerFactory.getLogger(SchemaRegistryMain.class);
 
-    /**
-     * Starts an embedded Jetty server running the REST server.
-     */
-    public static void main(String[] args) throws IOException {
+/**
+* Starts an embedded Jetty server running the REST server.
+*/
+public static void main(String[] args) throws IOException {
 
-        try {
-            if (args.length != 1) {
-                log.error("Properties file is required to start the schema registry REST instance");
-                System.exit(1);
-            }
-            SchemaRegistryConfig config = new SchemaRegistryConfig(args[0]);
-            SchemaRegistryRestApplication app = new SchemaRegistryRestApplication(config);
-            Server server = app.createServer();
-            server.start();
-            log.info("Server started, listening for requests...");
-            server.join();
-        } catch (RestConfigException e) {
-            log.error("Server configuration failed: ", e);
-            System.exit(1);
-        } catch (Exception e) {
-            log.error("Server died unexpectedly: ", e);
-            System.exit(1);
-        }
+  try {
+    if (args.length != 1) {
+      log.error("Properties file is required to start the schema registry REST instance");
+      System.exit(1);
     }
+    SchemaRegistryConfig config = new SchemaRegistryConfig(args[0]);
+    SchemaRegistryRestApplication app = new SchemaRegistryRestApplication(config);
+    Server server = app.createServer();
+    server.start();
+    log.info("Server started, listening for requests...");
+    server.join();
+  } catch (RestConfigException e) {
+      log.error("Server configuration failed: ", e);
+      System.exit(1);
+    } catch (Exception e) {
+      log.error("Server died unexpectedly: ", e);
+      System.exit(1);
+    }
+  }
 }
