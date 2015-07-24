@@ -93,7 +93,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <mainClass>io.confluent.kafka.schemaregistry.rest.Main</mainClass>
+                    <mainClass>io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain</mainClass>
                 </configuration>
             </plugin>
         </plugins>

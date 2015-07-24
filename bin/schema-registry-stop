@@ -14,4 +14,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-exec $(dirname $0)/schema-registry-stop-service io.confluent.kafka.schemaregistry.rest.Main
+# When stopping, search for both the current SchemaRegistryMain class and the deprecated Main class.
+exec $(dirname $0)/schema-registry-stop-service "(io.confluent.kafka.schemaregistry.rest.Main)|(io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain)"
