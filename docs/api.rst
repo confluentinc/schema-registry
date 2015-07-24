@@ -196,7 +196,7 @@ The subjects resource provides a list of all registered subjects in your schema 
       Content-Type: application/vnd.schemaregistry.v1+json
 
       {
-        "name": 1,
+        "name": "test",
         "version": 1,
         "schema": "{\"type\": \"string\"}"
       }
