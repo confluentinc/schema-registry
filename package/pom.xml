@@ -54,7 +54,7 @@
                     </descriptors>
                     <archive>
                         <manifest>
-                            <mainClass>io.confluent.kafka.schemaregistry.rest.Main</mainClass>
+                            <mainClass>io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
