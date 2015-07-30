@@ -16,6 +16,7 @@
 package io.confluent.kafka.serializers;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -26,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements Serializer<Object> {
 
   private boolean isKey;
+  private boolean enableAutoSchemaRegistrationConfig = true;
 
   /**
    * Constructor used by Kafka producer.
@@ -45,6 +47,8 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
     if (url == null) {
       throw new ConfigException("Missing Schema registry url!");
     }
+    enableAutoSchemaRegistrationConfig = Boolean.FALSE.equals(configs.get(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG));
+
     Object maxSchemaObject = configs.get(
         AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
     if (maxSchemaObject == null) {
@@ -64,11 +68,19 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
     } else {
       subject = topic + "-value";
     }
+    if (!enableAutoSchemaRegistrationConfig) {
+        throw new SerializationException("Auto Schema Registration is not enabled");
+    }
     return serializeImpl(subject, record);
   }
 
   @Override
   public void close() {
 
+  }
+
+  /* Unit test */
+  void setEnableAutoSchemaRegistrationConfig(boolean enableAutoSchemaRegistrationConfig) {
+      this.enableAutoSchemaRegistrationConfig = enableAutoSchemaRegistrationConfig;
   }
 }

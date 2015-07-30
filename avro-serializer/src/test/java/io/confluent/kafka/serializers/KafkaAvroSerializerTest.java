@@ -35,6 +35,8 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class KafkaAvroSerializerTest {
 
@@ -232,4 +234,29 @@ public class KafkaAvroSerializerTest {
       // this is expected
     }
   }
+
+  @Test (expected = SerializationException.class)
+  public void testDisableAutoSchemaRegistration() {
+      IndexedRecord avroRecord = createAvroRecord();
+      avroSerializer.setEnableAutoSchemaRegistrationConfig(false);
+      byte [] bytes = null;
+      try {
+          bytes = avroSerializer.serialize(topic, avroRecord);
+      } finally {
+          assertNull(bytes);
+      }
+  }
+
+  @Test
+  public void testEnableAutoSchemaRegistration() {
+       IndexedRecord avroRecord = createAvroRecord();
+       byte [] bytes = null;
+
+       bytes = avroSerializer.serialize(topic, avroRecord);
+
+       assertNotNull(bytes);
+       Object obj = avroDecoder.fromBytes(bytes);
+       assertEquals(avroRecord, obj);
+  }
+
 }
