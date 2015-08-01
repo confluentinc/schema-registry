@@ -35,21 +35,31 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
+  private boolean enableAutoSchemaRegistry = true;
 
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
-    this(new RestService(baseUrl), identityMapCapacity);
+    this(new RestService(baseUrl), identityMapCapacity, true);
+  }
+
+  public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity, boolean enableAutoSchemaRegistry) {
+    this(new RestService(baseUrl), identityMapCapacity, enableAutoSchemaRegistry);
   }
 
   public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity) {
-    this(new RestService(baseUrls), identityMapCapacity);
+    this(new RestService(baseUrls), identityMapCapacity, true);
   }
 
-  public CachedSchemaRegistryClient(RestService restService, int identityMapCapacity) {
+  public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity, boolean enableAutoSchemaRegistry) {
+    this(new RestService(baseUrls), identityMapCapacity, enableAutoSchemaRegistry);
+  }
+
+  public CachedSchemaRegistryClient(RestService restService, int identityMapCapacity, boolean enableAutoSchemaRegistry) {
     this.identityMapCapacity = identityMapCapacity;
     this.schemaCache = new HashMap<String, Map<Schema, Integer>>();
     this.idCache = new HashMap<Integer, Schema>();
     this.versionCache = new HashMap<String, Map<Schema, Integer>>();
     this.restService = restService;
+    this.enableAutoSchemaRegistry = enableAutoSchemaRegistry;
   }
 
   private int registerAndGetId(String subject, Schema schema)
@@ -67,6 +77,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
         restService.lookUpSubjectVersion(schema.toString(), subject);
     return response.getVersion();
+  }
+
+  public boolean isAutoSchemaRegistryEnabled() {
+    return enableAutoSchemaRegistry;
   }
 
   @Override
@@ -154,5 +168,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return response.getCompatibilityLevel();
   }
 
+  /* Junit test case */
+  public void setAutoSchemaRegistryEnabled(boolean flag){
+    //Mock class us used for unit test cases, hence no need to set here
+  }
 
 }

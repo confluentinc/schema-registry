@@ -46,6 +46,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
 
     try {
       schema = getSchema(object);
+      boolean enableAutoSchemaRegistry = schemaRegistry.isAutoSchemaRegistryEnabled();
+
+      if(!enableAutoSchemaRegistry && schemaRegistry.getVersion(subject,schema) <=0 ) {
+        throw new SerializationException("Auto schema registration is not enabled");
+      }
+
       int id = schemaRegistry.register(subject, schema);
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);

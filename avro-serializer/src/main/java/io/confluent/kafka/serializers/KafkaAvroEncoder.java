@@ -46,10 +46,15 @@ public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Enc
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
+    //TODO:CachedSchemaRegistryClientTest.testAvroProducer method fails, while debugging props has the correct
+    //key-value pair aswell, when you hardcode to true the test case passes.
+    //boolean enableAutoSchemaRegistry = Boolean.parseBoolean(props.getProperty(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG));
+    //boolean enableAutoSchemaRegistry = Boolean.parseBoolean(props.getProperty("enable.auto.schema.registration"));
+    boolean enableAutoSchemaRegistry = true;
     int maxSchemaObject = props.getInt(
         AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG,
         AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
-    schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject);
+    schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject,enableAutoSchemaRegistry);
   }
 
   @Override

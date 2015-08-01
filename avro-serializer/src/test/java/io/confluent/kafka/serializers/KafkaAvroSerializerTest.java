@@ -20,6 +20,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.errors.SerializationException;
+import org.junit.Before;
 import org.junit.Test;
 
 
@@ -40,16 +41,17 @@ import static org.junit.Assert.assertNull;
 
 public class KafkaAvroSerializerTest {
 
-  private final SchemaRegistryClient schemaRegistry;
-  private final KafkaAvroSerializer avroSerializer;
-  private final KafkaAvroEncoder avroEncoder;
-  private final KafkaAvroDeserializer avroDeserializer;
-  private final KafkaAvroDecoder avroDecoder;
-  private final String topic;
-  private final KafkaAvroDeserializer specificAvroDeserializer;
-  private final KafkaAvroDecoder specificAvroDecoder;
+  private SchemaRegistryClient schemaRegistry;
+  private KafkaAvroSerializer avroSerializer;
+  private KafkaAvroEncoder avroEncoder;
+  private KafkaAvroDeserializer avroDeserializer;
+  private KafkaAvroDecoder avroDecoder;
+  private String topic;
+  private KafkaAvroDeserializer specificAvroDeserializer;
+  private KafkaAvroDecoder specificAvroDecoder;
 
-  public KafkaAvroSerializerTest() {
+  @Before
+  public void setup() {
     schemaRegistry = new MockSchemaRegistryClient();
     avroSerializer = new KafkaAvroSerializer(schemaRegistry);
     avroEncoder = new KafkaAvroEncoder(schemaRegistry);
@@ -235,28 +237,40 @@ public class KafkaAvroSerializerTest {
     }
   }
 
+  @Test
+  public void testEnableAutoSchemaRegistrationWhenSchemaVersionExists() {
+    IndexedRecord avroRecord = createAvroRecord();
+    byte [] bytes = null;
+
+    bytes = avroSerializer.serialize(topic, avroRecord);
+
+    assertNotNull(bytes);
+    Object obj = avroDecoder.fromBytes(bytes);
+    assertEquals(avroRecord, obj);
+  }
+
+  @Test
+  public void testDisableAutoSchemaRegistrationWhenNoVersion() {
+    IndexedRecord avroRecord = createAvroRecord();
+
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+
+    assertNotNull(bytes);
+    Object obj = avroDecoder.fromBytes(bytes);
+    assertEquals(avroRecord, obj);
+  }
+
   @Test (expected = SerializationException.class)
-  public void testDisableAutoSchemaRegistration() {
+  public void testDisableAutoSchemaRegistrationWithNoVersion() {
       IndexedRecord avroRecord = createAvroRecord();
-      avroSerializer.setEnableAutoSchemaRegistrationConfig(false);
+      schemaRegistry.setAutoSchemaRegistryEnabled(false);
+
       byte [] bytes = null;
       try {
           bytes = avroSerializer.serialize(topic, avroRecord);
       } finally {
           assertNull(bytes);
       }
-  }
-
-  @Test
-  public void testEnableAutoSchemaRegistration() {
-       IndexedRecord avroRecord = createAvroRecord();
-       byte [] bytes = null;
-
-       bytes = avroSerializer.serialize(topic, avroRecord);
-
-       assertNotNull(bytes);
-       Object obj = avroDecoder.fromBytes(bytes);
-       assertEquals(avroRecord, obj);
   }
 
 }
