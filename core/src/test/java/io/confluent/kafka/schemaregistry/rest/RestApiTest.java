@@ -240,7 +240,6 @@ public class RestApiTest extends ClusterTestHarness {
 
   @Test
   public void testConfigDefaults() throws Exception {
-    String subject = "testSubject";
     assertEquals("Default compatibility level should be none for this test instance",
             NONE.name,
             restApp.restClient.getConfig(null).getCompatibilityLevel());
@@ -251,11 +250,6 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("New compatibility level should be forward for this test instance",
             FORWARD.name,
             restApp.restClient.getConfig(null).getCompatibilityLevel());
-
-    assertNull("Default compatibility level should not match current top level config for this "
-                    + "subject",
-            restApp.restClient.getConfig(subject).getCompatibilityLevel());
-
   }
 
   @Test
@@ -447,7 +441,7 @@ public class RestApiTest extends ClusterTestHarness {
       restApp.restClient.getConfig("non-existent-subject");
     } catch (RestClientException rce) {
       assertEquals("Subject not found",
-                   Response.Status.NOT_FOUND.getStatusCode(),
+                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
                    rce.getErrorCode());
     }
   }

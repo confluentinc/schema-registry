@@ -45,6 +45,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
@@ -564,6 +565,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     SchemaString schemaString = new SchemaString();
     schemaString.setSchemaString(schema.getSchema());
     return schemaString;
+  }
+
+  @Override
+  public boolean hasSubjectConfig(String subject) throws SchemaRegistryStoreException {
+      ConfigKey subjectConfigKey = new ConfigKey(subject);
+      ConfigValue config = null;
+      try {
+          config = (ConfigValue) kafkaStore.get(subjectConfigKey);
+      } catch (StoreException e) {
+          throw new SchemaRegistryStoreException("Failed to read config from the kafka store", e);
+      }
+
+      return config != null;
   }
 
   @Override

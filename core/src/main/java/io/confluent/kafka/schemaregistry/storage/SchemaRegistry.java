@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 
 public interface SchemaRegistry {
 
@@ -32,6 +33,8 @@ public interface SchemaRegistry {
   Schema get(String subject, int version) throws SchemaRegistryException;
 
   SchemaString get(int id) throws SchemaRegistryException;
+
+  boolean hasSubjectConfig(String subject) throws SchemaRegistryStoreException;
 
   Set<String> listSubjects() throws SchemaRegistryException;
 
