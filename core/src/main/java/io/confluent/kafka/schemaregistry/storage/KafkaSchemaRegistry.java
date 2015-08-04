@@ -568,19 +568,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public boolean hasSubjectConfig(String subject) throws SchemaRegistryStoreException {
-      ConfigKey subjectConfigKey = new ConfigKey(subject);
-      ConfigValue config = null;
-      try {
-          config = (ConfigValue) kafkaStore.get(subjectConfigKey);
-      } catch (StoreException e) {
-          throw new SchemaRegistryStoreException("Failed to read config from the kafka store", e);
-      }
-
-      return config != null;
-  }
-
-  @Override
   public Set<String> listSubjects() throws SchemaRegistryException {
     try {
       Iterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys();
