@@ -34,8 +34,6 @@ public interface SchemaRegistry {
 
   SchemaString get(int id) throws SchemaRegistryException;
 
-  boolean hasSubjectConfig(String subject) throws SchemaRegistryStoreException;
-
   Set<String> listSubjects() throws SchemaRegistryException;
 
   Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException;

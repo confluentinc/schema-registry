@@ -439,6 +439,9 @@ public class RestApiTest extends ClusterTestHarness {
   public void testGetConfigNonExistentSubject() throws Exception {
     try {
       restApp.restClient.getConfig("non-existent-subject");
+      fail("Should have failed with a "
+                + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
+                + " error code (subject not found)");
     } catch (RestClientException rce) {
       assertEquals("Subject not found",
                    Errors.SUBJECT_NOT_FOUND_ERROR_CODE,

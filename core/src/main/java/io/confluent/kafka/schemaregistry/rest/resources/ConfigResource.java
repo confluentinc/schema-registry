@@ -111,10 +111,10 @@ public class ConfigResource {
   public Config getSubjectLevelConfig(@PathParam("subject") String subject) {
     Config config = null;
     try {
-      if(!schemaRegistry.hasSubjectConfig(subject)) {
+      AvroCompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(subject);
+      if (compatibilityLevel == null) {
           throw Errors.subjectNotFoundException();
       }
-      AvroCompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(subject);
       config = new Config(compatibilityLevel == null ? null : compatibilityLevel.name);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get the configs for subject "
