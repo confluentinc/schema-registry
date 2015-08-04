@@ -15,7 +15,6 @@
  */
 package io.confluent.kafka.formatter;
 
-import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -84,8 +83,6 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-
-    boolean enableAutoSchemaRegistry = Boolean.parseBoolean(props.getProperty(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG));
     schemaRegistry = new CachedSchemaRegistryClient(
         url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
 
