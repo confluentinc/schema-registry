@@ -59,6 +59,7 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader);
+    avroReader.setEnableAutoSchemaRegistration(true);
     KeyedMessage keyedMessage = avroReader.readMessage();
 
     byte[] serializedValue = (byte[]) keyedMessage.message();
@@ -78,6 +79,7 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, intSchema, recordSchema, "topic1", true, reader);
+    avroReader.setEnableAutoSchemaRegistration(true);
     KeyedMessage keyedMessage = avroReader.readMessage();
 
     byte[] serializedKey = (byte[]) keyedMessage.key();

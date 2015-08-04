@@ -87,7 +87,7 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
 
     boolean enableAutoSchemaRegistry = Boolean.parseBoolean(props.getProperty(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG));
     schemaRegistry = new CachedSchemaRegistryClient(
-        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, enableAutoSchemaRegistry);
+        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
 
     if (props.containsKey("print.key")) {
       printKey = props.getProperty("print.key").trim().toLowerCase().equals("true");

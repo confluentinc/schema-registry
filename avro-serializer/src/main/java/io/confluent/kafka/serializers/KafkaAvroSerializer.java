@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements Serializer<Object> {
 
   private boolean isKey;
+  private boolean enableAutoSchemaRegistration;
 
   /**
    * Constructor used by Kafka producer.
@@ -45,17 +46,16 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
     if (url == null) {
       throw new ConfigException("Missing Schema registry url!");
     }
-    boolean enableAutoSchemaRegistry = (Boolean) configs.get(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG);
-
     Object maxSchemaObject = configs.get(
         AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
     if (maxSchemaObject == null) {
       schemaRegistry = new CachedSchemaRegistryClient(
-          (String) url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, enableAutoSchemaRegistry);
+          (String) url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
     } else {
       schemaRegistry = new CachedSchemaRegistryClient(
-          (String) url, (Integer) maxSchemaObject, enableAutoSchemaRegistry);
+          (String) url, (Integer) maxSchemaObject);
     }
+    enableAutoSchemaRegistration = (Boolean) configs.get(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG);
   }
 
   @Override
@@ -66,12 +66,16 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
     } else {
       subject = topic + "-value";
     }
-    return serializeImpl(subject, record);
+    return serializeImpl(subject, record, enableAutoSchemaRegistration);
   }
 
   @Override
   public void close() {
 
+  }
+
+  void setEnableAutoSchemaRegistration(boolean flag) {
+    this.enableAutoSchemaRegistration = flag;
   }
 
 }

@@ -73,6 +73,8 @@ public class KafkaAvroSerializerTest {
         KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
     specificAvroDecoder = new KafkaAvroDecoder(
         schemaRegistry, new VerifiableProperties(specificDecoderProps));
+    avroSerializer.setEnableAutoSchemaRegistration(true);
+    avroEncoder.setEnableAutoSchemaRegistration(true);
   }
 
   private IndexedRecord createAvroRecord() {
@@ -263,7 +265,7 @@ public class KafkaAvroSerializerTest {
   @Test (expected = SerializationException.class)
   public void testDisableAutoSchemaRegistrationWithNoVersion() {
       IndexedRecord avroRecord = createAvroRecord();
-      schemaRegistry.setAutoSchemaRegistryEnabled(false);
+      avroSerializer.setEnableAutoSchemaRegistration(false);
 
       byte [] bytes = null;
       try {

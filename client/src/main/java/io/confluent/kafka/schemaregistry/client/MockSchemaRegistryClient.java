@@ -40,7 +40,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Schema, Integer>> versionCache;
   private final Map<String, String> compatibilityCache;
   private final AtomicInteger ids;
-  private boolean enableAutoSchemaRegistry = true;
 
   public MockSchemaRegistryClient() {
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
@@ -93,10 +92,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     } else {
       throw new IOException("Cannot get schema from schema registry!");
     }
-  }
-
-  public boolean isAutoSchemaRegistryEnabled() {
-    return enableAutoSchemaRegistry;
   }
 
   @Override
@@ -206,11 +201,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       compatibility = defaultCompatibility;
     }
     return compatibility;
-  }
-
-  /* Unit test cases */
-  public void setAutoSchemaRegistryEnabled(boolean flag) {
-    this.enableAutoSchemaRegistry = flag;
   }
 
 }

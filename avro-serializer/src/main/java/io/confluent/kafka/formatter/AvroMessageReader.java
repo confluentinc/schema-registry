@@ -87,6 +87,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
   private Schema valueSchema = null;
   private String keySubject = null;
   private String valueSubject = null;
+  private boolean enableAutoSchemaRegistration;
 
   /**
    * Constructor needed by kafka console producer.
@@ -127,9 +128,8 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
       throw new ConfigException("Missing schema registry url!");
     }
 
-    boolean enableAutoSchemaRegistry = Boolean.parseBoolean(props.getProperty(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG));
     schemaRegistry = new CachedSchemaRegistryClient(
-        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, enableAutoSchemaRegistry);
+        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
     if (!props.containsKey("value.schema")) {
       throw new ConfigException("Must provide the Avro schema string in value.schema");
     }
@@ -146,6 +146,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     }
     keySubject = topic + "-key";
     valueSubject = topic + "-value";
+    enableAutoSchemaRegistration = (boolean) props.get(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG);
   }
 
   @Override
@@ -157,14 +158,14 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
       }
       if (!parseKey) {
         Object value = jsonToAvro(line, valueSchema);
-        byte[] serializedValue = serializeImpl(valueSubject, value);
+        byte[] serializedValue = serializeImpl(valueSubject, value, enableAutoSchemaRegistration);
         return new KeyedMessage<byte[], byte[]>(topic, serializedValue);
       } else {
         int keyIndex = line.indexOf(keySeparator);
         if (keyIndex < 0) {
           if (ignoreError) {
             Object value = jsonToAvro(line, valueSchema);
-            byte[] serializedValue = serializeImpl(valueSubject, value);
+            byte[] serializedValue = serializeImpl(valueSubject, value, enableAutoSchemaRegistration);
             return new KeyedMessage<byte[], byte[]>(topic, serializedValue);
           } else {
             throw new KafkaException("No key found in line " + line);
@@ -174,9 +175,9 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
           String valueString = (keyIndex + keySeparator.length() > line.length()) ?
                                "" : line.substring(keyIndex + keySeparator.length());
           Object key = jsonToAvro(keyString, keySchema);
-          byte[] serializedKey = serializeImpl(keySubject, key);
+          byte[] serializedKey = serializeImpl(keySubject, key, enableAutoSchemaRegistration);
           Object value = jsonToAvro(valueString, valueSchema);
-          byte[] serializedValue = serializeImpl(valueSubject, value);
+          byte[] serializedValue = serializeImpl(valueSubject, value, enableAutoSchemaRegistration);
           return new KeyedMessage<byte[], byte[]>(topic, serializedKey, serializedValue);
         }
       }
@@ -206,5 +207,9 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
   @Override
   public void close() {
     // nothing to do
+  }
+
+  void setEnableAutoSchemaRegistration(boolean flag) {
+    this.enableAutoSchemaRegistration = flag;
   }
 }

@@ -30,6 +30,7 @@ import kafka.utils.VerifiableProperties;
  * default, the encoder will use record name as topic.
  */
 public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Encoder<Object> {
+  private boolean enableAutoSchemaRegistration;
 
   public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
@@ -46,24 +47,25 @@ public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Enc
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    //TODO:CachedSchemaRegistryClientTest.testAvroProducer method fails, while debugging props has the correct
-    //key-value pair aswell, when you hardcode to true the test case passes.
-    //boolean enableAutoSchemaRegistry = Boolean.parseBoolean(props.getProperty(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG));
-    //boolean enableAutoSchemaRegistry = Boolean.parseBoolean(props.getProperty("enable.auto.schema.registration"));
-    boolean enableAutoSchemaRegistry = true;
+
     int maxSchemaObject = props.getInt(
-        AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG,
-        AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
-    schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject,enableAutoSchemaRegistry);
+            AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG,
+            AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
+    schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject);
+    enableAutoSchemaRegistration = props.getBoolean(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG);
   }
 
   @Override
   public byte[] toBytes(Object object) {
     if (object instanceof IndexedRecord) {
       String subject = ((IndexedRecord) object).getSchema().getName() + "-value";
-      return serializeImpl(subject, object);
+      return serializeImpl(subject, object, enableAutoSchemaRegistration);
     } else {
       throw new SerializationException("Primitive types are not supported yet");
     }
+  }
+
+  void setEnableAutoSchemaRegistration(boolean flag) {
+    this.enableAutoSchemaRegistration = flag;
   }
 }

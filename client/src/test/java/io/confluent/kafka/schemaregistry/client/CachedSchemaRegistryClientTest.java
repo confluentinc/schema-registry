@@ -31,12 +31,10 @@ import static org.junit.Assert.fail;
 
 public class CachedSchemaRegistryClientTest {
 
-  private static final boolean ENABLE_AUTO_SCHEMA_REGISTRY_TRUE = true;
-
   @Test
   public void testRegisterSchemaCache() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20, ENABLE_AUTO_SCHEMA_REGISTRY_TRUE);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
 
     String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema = new Schema.Parser().parse(schema);
@@ -59,7 +57,7 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testRegisterOverCapacity() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 1, ENABLE_AUTO_SCHEMA_REGISTRY_TRUE); // capacity is just one
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 1); // capacity is just one
 
     String schema1 = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema1 = new Schema.Parser().parse(schema1);
@@ -94,7 +92,7 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testIdCache() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20, ENABLE_AUTO_SCHEMA_REGISTRY_TRUE);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
 
     String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema = new Schema.Parser().parse(schema);
@@ -121,7 +119,7 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testVersionCache() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20, ENABLE_AUTO_SCHEMA_REGISTRY_TRUE);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
 
     String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema = new Schema.Parser().parse(schema);

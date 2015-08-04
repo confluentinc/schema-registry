@@ -35,31 +35,22 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
-  private boolean enableAutoSchemaRegistry = true;
+
 
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
-    this(new RestService(baseUrl), identityMapCapacity, true);
-  }
-
-  public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity, boolean enableAutoSchemaRegistry) {
-    this(new RestService(baseUrl), identityMapCapacity, enableAutoSchemaRegistry);
+    this(new RestService(baseUrl), identityMapCapacity);
   }
 
   public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity) {
-    this(new RestService(baseUrls), identityMapCapacity, true);
+    this(new RestService(baseUrls), identityMapCapacity);
   }
 
-  public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity, boolean enableAutoSchemaRegistry) {
-    this(new RestService(baseUrls), identityMapCapacity, enableAutoSchemaRegistry);
-  }
-
-  public CachedSchemaRegistryClient(RestService restService, int identityMapCapacity, boolean enableAutoSchemaRegistry) {
+  public CachedSchemaRegistryClient(RestService restService, int identityMapCapacity) {
     this.identityMapCapacity = identityMapCapacity;
     this.schemaCache = new HashMap<String, Map<Schema, Integer>>();
     this.idCache = new HashMap<Integer, Schema>();
     this.versionCache = new HashMap<String, Map<Schema, Integer>>();
     this.restService = restService;
-    this.enableAutoSchemaRegistry = enableAutoSchemaRegistry;
   }
 
   private int registerAndGetId(String subject, Schema schema)
@@ -77,10 +68,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
         restService.lookUpSubjectVersion(schema.toString(), subject);
     return response.getVersion();
-  }
-
-  public boolean isAutoSchemaRegistryEnabled() {
-    return enableAutoSchemaRegistry;
   }
 
   @Override
