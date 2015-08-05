@@ -40,7 +40,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 public class KafkaAvroSerializerTest {
-
+  private static final boolean ENABLE_AUTO_SCHEMA_REGISTRATION = true;
+  private static final boolean SCHEMA_VERSION_EXISTS_IN_MOCK = true;
   private SchemaRegistryClient schemaRegistry;
   private KafkaAvroSerializer avroSerializer;
   private KafkaAvroEncoder avroEncoder;
@@ -52,9 +53,9 @@ public class KafkaAvroSerializerTest {
 
   @Before
   public void setup() {
-    schemaRegistry = new MockSchemaRegistryClient();
-    avroSerializer = new KafkaAvroSerializer(schemaRegistry);
-    avroEncoder = new KafkaAvroEncoder(schemaRegistry);
+    schemaRegistry = new MockSchemaRegistryClient(!SCHEMA_VERSION_EXISTS_IN_MOCK);
+    avroSerializer = new KafkaAvroSerializer(schemaRegistry, ENABLE_AUTO_SCHEMA_REGISTRATION);
+    avroEncoder = new KafkaAvroEncoder(schemaRegistry, ENABLE_AUTO_SCHEMA_REGISTRATION);
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry);
     avroDecoder = new KafkaAvroDecoder(schemaRegistry);
     topic = "test";
@@ -73,8 +74,30 @@ public class KafkaAvroSerializerTest {
         KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
     specificAvroDecoder = new KafkaAvroDecoder(
         schemaRegistry, new VerifiableProperties(specificDecoderProps));
-    avroSerializer.setEnableAutoSchemaRegistration(true);
-    avroEncoder.setEnableAutoSchemaRegistration(true);
+  }
+
+  public void setupWithSchemaRegistryWithDisabledAutoSchemaRegistry() {
+    schemaRegistry = new MockSchemaRegistryClient(SCHEMA_VERSION_EXISTS_IN_MOCK);
+    avroSerializer = new KafkaAvroSerializer(schemaRegistry, !ENABLE_AUTO_SCHEMA_REGISTRATION);
+    avroEncoder = new KafkaAvroEncoder(schemaRegistry, ENABLE_AUTO_SCHEMA_REGISTRATION);
+    avroDeserializer = new KafkaAvroDeserializer(schemaRegistry);
+    avroDecoder = new KafkaAvroDecoder(schemaRegistry);
+    topic = "test";
+
+    HashMap<String, String> specificDeserializerProps = new HashMap<String, String>();
+    // Intentionally invalid schema registry URL to satisfy the config class's requirement that
+    // it be set.
+    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificDeserializerProps);
+
+    Properties specificDecoderProps = new Properties();
+    specificDecoderProps.setProperty(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    specificDecoderProps.setProperty(
+            KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    specificAvroDecoder = new KafkaAvroDecoder(
+            schemaRegistry, new VerifiableProperties(specificDecoderProps));
   }
 
   private IndexedRecord createAvroRecord() {
@@ -197,7 +220,7 @@ public class KafkaAvroSerializerTest {
   @Test
   public void testNull() {
     SchemaRegistryClient nullSchemaRegistryClient = null;
-    KafkaAvroSerializer nullAvroSerializer = new KafkaAvroSerializer(nullSchemaRegistryClient);
+    KafkaAvroSerializer nullAvroSerializer = new KafkaAvroSerializer(nullSchemaRegistryClient, ENABLE_AUTO_SCHEMA_REGISTRATION);
 
     // null doesn't require schema registration. So serialization should succeed with a null
     // schema registry client.
@@ -252,12 +275,11 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
-  public void testDisableAutoSchemaRegistrationWhenNoVersion() {
+  public void testDisableAutoSchemaRegistrationWhenScehmaVersionExists() {
     IndexedRecord avroRecord = createAvroRecord();
+    setupWithSchemaRegistryWithDisabledAutoSchemaRegistry();
 
-    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
-
-    assertNotNull(bytes);
+    byte [] bytes = avroSerializer.serialize(topic, avroRecord);
     Object obj = avroDecoder.fromBytes(bytes);
     assertEquals(avroRecord, obj);
   }
@@ -265,14 +287,10 @@ public class KafkaAvroSerializerTest {
   @Test (expected = SerializationException.class)
   public void testDisableAutoSchemaRegistrationWithNoVersion() {
       IndexedRecord avroRecord = createAvroRecord();
-      avroSerializer.setEnableAutoSchemaRegistration(false);
+      avroSerializer = new KafkaAvroSerializer(schemaRegistry, !ENABLE_AUTO_SCHEMA_REGISTRATION);
 
-      byte [] bytes = null;
-      try {
-          bytes = avroSerializer.serialize(topic, avroRecord);
-      } finally {
-          assertNull(bytes);
-      }
+      byte [] bytes = avroSerializer.serialize(topic, avroRecord);
+
   }
 
 }

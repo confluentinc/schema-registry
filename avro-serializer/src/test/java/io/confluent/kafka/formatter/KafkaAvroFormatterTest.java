@@ -35,7 +35,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class KafkaAvroFormatterTest {
-
+  private static final boolean ENABLE_AUTO_SCHEMA_REGISTRATION = true;
   private Schema recordSchema = null;
   private Schema intSchema = null;
   private SchemaRegistryClient schemaRegistry = null;
@@ -58,8 +58,8 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader);
-    avroReader.setEnableAutoSchemaRegistration(true);
+        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader, ENABLE_AUTO_SCHEMA_REGISTRATION);
+
     KeyedMessage keyedMessage = avroReader.readMessage();
 
     byte[] serializedValue = (byte[]) keyedMessage.message();
@@ -78,8 +78,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, intSchema, recordSchema, "topic1", true, reader);
-    avroReader.setEnableAutoSchemaRegistration(true);
+        new AvroMessageReader(schemaRegistry, intSchema, recordSchema, "topic1", true, reader, ENABLE_AUTO_SCHEMA_REGISTRATION);
     KeyedMessage keyedMessage = avroReader.readMessage();
 
     byte[] serializedKey = (byte[]) keyedMessage.key();
@@ -99,7 +98,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader);
+        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader, ENABLE_AUTO_SCHEMA_REGISTRATION);
     try {
       avroReader.readMessage();
     } catch (SerializationException e) {

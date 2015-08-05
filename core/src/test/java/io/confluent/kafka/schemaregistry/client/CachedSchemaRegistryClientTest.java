@@ -130,12 +130,12 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
   private Properties createProducerProps() {
     Properties props = new Properties();
+    props.put(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG, true);
     props.put("serializer.class",
               "io.confluent.kafka.serializers.KafkaAvroEncoder");
     props.put("key.serializer.class", "kafka.serializer.StringEncoder");
     props.put("metadata.broker.list", brokerList);
     props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
-    props.put(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG, true);
     return props;
   }
 

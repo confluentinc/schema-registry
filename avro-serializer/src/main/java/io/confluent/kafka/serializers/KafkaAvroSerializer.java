@@ -35,8 +35,9 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   }
 
-  public KafkaAvroSerializer(SchemaRegistryClient client) {
+  public KafkaAvroSerializer(SchemaRegistryClient client, boolean enableAutoSchemaRegistration) {
     schemaRegistry = client;
+    this.enableAutoSchemaRegistration = enableAutoSchemaRegistration;
   }
 
   @Override
@@ -72,10 +73,6 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
   @Override
   public void close() {
 
-  }
-
-  void setEnableAutoSchemaRegistration(boolean flag) {
-    this.enableAutoSchemaRegistration = flag;
   }
 
 }

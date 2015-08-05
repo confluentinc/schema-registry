@@ -35,18 +35,30 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private String defaultCompatibility = "BACKWARD";
-  private final Map<String, Map<Schema, Integer>> schemaCache;
-  private final Map<Integer, Schema> idCache;
-  private final Map<String, Map<Schema, Integer>> versionCache;
-  private final Map<String, String> compatibilityCache;
-  private final AtomicInteger ids;
+  private Map<String, Map<Schema, Integer>> schemaCache;
+  private Map<Integer, Schema> idCache;
+  private Map<String, Map<Schema, Integer>> versionCache;
+  private Map<String, String> compatibilityCache;
+  private AtomicInteger ids;
 
   public MockSchemaRegistryClient() {
+    this(false);
+  }
+
+  public MockSchemaRegistryClient(boolean schemaVersionExistsInCache) {
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
     idCache = new HashMap<Integer, Schema>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();
     compatibilityCache = new HashMap<String, String>();
     ids = new AtomicInteger(0);
+    if(schemaVersionExistsInCache) {
+      String key = "test-value";
+      Map<Schema, Integer> schemaVersionMap = new HashMap<Schema, Integer>();
+      String schema = "{\"type\":\"record\",\"name\":\"User\",\"namespace\":\"example.avro\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]}";
+      Schema avroSchema = new Schema.Parser().parse(schema);
+      schemaVersionMap.put(avroSchema, 1);
+      versionCache.put(key, schemaVersionMap);
+    }
   }
 
   private int getIdFromRegistry(String subject, Schema schema) throws IOException {

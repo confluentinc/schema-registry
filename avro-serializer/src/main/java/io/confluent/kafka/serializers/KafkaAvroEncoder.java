@@ -32,8 +32,9 @@ import kafka.utils.VerifiableProperties;
 public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Encoder<Object> {
   private boolean enableAutoSchemaRegistration;
 
-  public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry) {
+  public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry, boolean enableAutoSchemaRegistration) {
     this.schemaRegistry = schemaRegistry;
+    this.enableAutoSchemaRegistration = enableAutoSchemaRegistration;
   }
 
   /**
@@ -65,7 +66,4 @@ public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Enc
     }
   }
 
-  void setEnableAutoSchemaRegistration(boolean flag) {
-    this.enableAutoSchemaRegistration = flag;
-  }
 }

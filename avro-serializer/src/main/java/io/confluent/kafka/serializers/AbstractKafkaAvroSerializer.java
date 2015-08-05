@@ -49,7 +49,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
       if(!enableAutoSchemaRegistry) {
         try {
           schemaRegistry.getVersion(subject, schema);
-        } catch (RestClientException e) {
+        } catch (RestClientException|IOException e) {
           throw new SerializationException("A Schema must be pre-registered");
         }
       }

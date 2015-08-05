@@ -154,10 +154,4 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     Config response = restService.getConfig(subject);
     return response.getCompatibilityLevel();
   }
-
-  /* Junit test case */
-  public void setAutoSchemaRegistryEnabled(boolean flag){
-    //Mock class us used for unit test cases, hence no need to set here
-  }
-
 }
