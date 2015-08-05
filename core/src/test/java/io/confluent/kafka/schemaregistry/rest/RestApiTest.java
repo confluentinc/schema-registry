@@ -468,7 +468,7 @@ public class RestApiTest extends ClusterTestHarness {
   public void testGetConfigNonExistentSubject() throws Exception {
     try {
       restApp.restClient.getConfig("non-existent-subject");
-      fail("Getting the configuration of a missing subject should have failed with "
+      fail("Getting the configuration of a missing subject should fail with "
                 + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
                 + " error code (subject not found)");
     } catch (RestClientException rce) {
