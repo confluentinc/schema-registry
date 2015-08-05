@@ -24,7 +24,6 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionExcep
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.junit.Test;
 
-import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,7 +31,6 @@ import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORW
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -57,7 +55,9 @@ public class RestApiTest extends ClusterTestHarness {
     // test getAllVersions with no existing data
     try {
       restApp.restClient.getAllVersions(subject1);
-      fail("Getting all versions from non-existing subject1 should throw a 404");
+      fail("Getting all versions from non-existing subject1 should fail with "
+              + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
+              + " (subject not found)");
     } catch (RestClientException rce) {
       assertEquals("Should get a 404 status for non-existing subject",
                    Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
@@ -289,7 +289,9 @@ public class RestApiTest extends ClusterTestHarness {
   public void testGetSchemaNonExistingId() throws Exception {
     try {
       restApp.restClient.getId(100);
-      fail("Schema lookup by non-existing id should fail with a 404");
+      fail("Schema lookup by missing id should fail with "
+              + Errors.SCHEMA_NOT_FOUND_ERROR_CODE
+              + " (schema not found)");
     } catch (RestClientException rce) {
       // this is expected.
       assertEquals("Should get a 404 status for non-existing id",
@@ -302,6 +304,9 @@ public class RestApiTest extends ClusterTestHarness {
   public void testListVersionsNonExistingSubject() throws Exception {
     try {
       restApp.restClient.getAllVersions("Invalid");
+      fail("Getting all versions of missing subject should fail with "
+              + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
+              + " (subject not found)");
     } catch (RestClientException rce) {
       // this is expected.
       assertEquals("Should get a 404 status for non-existing subject",
@@ -315,6 +320,9 @@ public class RestApiTest extends ClusterTestHarness {
     // test getVersion on a non-existing subject
     try {
       restApp.restClient.getVersion("non-existing-subject", 1);
+      fail("Getting version of missing subject should fail with "
+              + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
+              + " (subject not found)");
     } catch (RestClientException e) {
       // this is expected.
       assertEquals("Unregistered subject shouldn't be found in getVersion()",
@@ -331,6 +339,9 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
     try {
       restApp.restClient.getVersion(subject, 200);
+      fail("Getting unregistered version should fail with "
+              + Errors.VERSION_NOT_FOUND_ERROR_CODE
+              + " (version not found)");
     } catch (RestClientException e) {
       // this is expected.
       assertEquals("Unregistered version shouldn't be found", 
@@ -346,6 +357,9 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
     try {
       restApp.restClient.getVersion(subject, 0);
+      fail("Getting invalid version should fail with "
+              + RestInvalidVersionException.ERROR_CODE
+              + " (invalid version)");
     } catch (RestClientException e) {
       // this is expected.
       assertEquals("Invalid version shouldn't be found",
@@ -378,6 +392,9 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {
       restApp.restClient.lookUpSubjectVersion(schema, "non-existent-subject");
+      fail("Looking up schema under missing subject should fail with "
+              + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
+              + " (subject not found)");
     } catch (RestClientException rce) {
       assertEquals("Subject not found", 
                    Errors.SUBJECT_NOT_FOUND_ERROR_CODE, 
@@ -394,6 +411,9 @@ public class RestApiTest extends ClusterTestHarness {
 
     try {
       restApp.restClient.lookUpSubjectVersion(schemas.get(1), subject);
+      fail("Looking up missing schema under subject should fail with "
+              + Errors.SCHEMA_NOT_FOUND_ERROR_CODE
+              + " (schema not found)");
     } catch (RestClientException rce) {
       assertEquals("Schema not found", Errors.SCHEMA_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
@@ -404,6 +424,9 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {
       restApp.restClient.testCompatibility(schema, "non-existent-subject", "latest");
+      fail("Testing compatibility for missing subject should fail with "
+              + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
+              + " (subject not found)");
     } catch (RestClientException rce) {
       assertEquals("Subject not found", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
@@ -416,6 +439,9 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
     try {
       restApp.restClient.testCompatibility(schema, subject, "100");
+      fail("Testing compatibility for missing version should fail with "
+              + Errors.VERSION_NOT_FOUND_ERROR_CODE
+              + " (version not found)");
     } catch (RestClientException rce) {
       assertEquals("Version not found", Errors.VERSION_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
@@ -428,6 +454,9 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
     try {
       restApp.restClient.testCompatibility(schema, subject, "earliest");
+      fail("Testing compatibility for invalid version should fail with "
+              + RestInvalidVersionException.ERROR_CODE
+              + " (version not found)");
     } catch (RestClientException rce) {
       assertEquals("Version not found",
                    RestInvalidVersionException.ERROR_CODE,
@@ -439,7 +468,7 @@ public class RestApiTest extends ClusterTestHarness {
   public void testGetConfigNonExistentSubject() throws Exception {
     try {
       restApp.restClient.getConfig("non-existent-subject");
-      fail("Should have failed with a "
+      fail("Getting the configuration of a missing subject should fail with "
                 + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
                 + " error code (subject not found)");
     } catch (RestClientException rce) {
