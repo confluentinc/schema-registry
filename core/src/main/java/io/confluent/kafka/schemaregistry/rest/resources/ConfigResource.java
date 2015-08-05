@@ -115,7 +115,7 @@ public class ConfigResource {
       if (compatibilityLevel == null) {
           throw Errors.subjectNotFoundException();
       }
-      config = new Config(compatibilityLevel == null ? null : compatibilityLevel.name);
+      config = new Config(compatibilityLevel.name);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get the configs for subject "
                                   + subject, e);

@@ -22,7 +22,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 
 public interface SchemaRegistry {
 
