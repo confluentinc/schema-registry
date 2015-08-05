@@ -32,8 +32,9 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
   private final EncoderFactory encoderFactory = EncoderFactory.get();
+  protected boolean enableAutoSchemaRegistry;
 
-  protected byte[] serializeImpl(String subject, Object object, boolean enableAutoSchemaRegistry) throws SerializationException {
+  protected byte[] serializeImpl(String subject, Object object) throws SerializationException {
     Schema schema = null;
     // null needs to treated specially since the client most likely just wants to send
     // an individual null value instead of making the subject a null type. Also, null in

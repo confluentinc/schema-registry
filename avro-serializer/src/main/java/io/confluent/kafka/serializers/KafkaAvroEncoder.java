@@ -30,11 +30,10 @@ import kafka.utils.VerifiableProperties;
  * default, the encoder will use record name as topic.
  */
 public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Encoder<Object> {
-  private boolean enableAutoSchemaRegistration;
 
   public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry, boolean enableAutoSchemaRegistration) {
     this.schemaRegistry = schemaRegistry;
-    this.enableAutoSchemaRegistration = enableAutoSchemaRegistration;
+    this.enableAutoSchemaRegistry = enableAutoSchemaRegistration;
   }
 
   /**
@@ -48,19 +47,18 @@ public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Enc
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-
+    enableAutoSchemaRegistry = props.getBoolean(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG);
     int maxSchemaObject = props.getInt(
             AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG,
             AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
     schemaRegistry = new CachedSchemaRegistryClient(url, maxSchemaObject);
-    enableAutoSchemaRegistration = props.getBoolean(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG);
   }
 
   @Override
   public byte[] toBytes(Object object) {
     if (object instanceof IndexedRecord) {
       String subject = ((IndexedRecord) object).getSchema().getName() + "-value";
-      return serializeImpl(subject, object, enableAutoSchemaRegistration);
+      return serializeImpl(subject, object);
     } else {
       throw new SerializationException("Primitive types are not supported yet");
     }

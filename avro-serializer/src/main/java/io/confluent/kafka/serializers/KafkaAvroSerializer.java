@@ -26,7 +26,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements Serializer<Object> {
 
   private boolean isKey;
-  private boolean enableAutoSchemaRegistration;
 
   /**
    * Constructor used by Kafka producer.
@@ -37,7 +36,7 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   public KafkaAvroSerializer(SchemaRegistryClient client, boolean enableAutoSchemaRegistration) {
     schemaRegistry = client;
-    this.enableAutoSchemaRegistration = enableAutoSchemaRegistration;
+    this.enableAutoSchemaRegistry = enableAutoSchemaRegistration;
   }
 
   @Override
@@ -56,7 +55,7 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
       schemaRegistry = new CachedSchemaRegistryClient(
           (String) url, (Integer) maxSchemaObject);
     }
-    enableAutoSchemaRegistration = (Boolean) configs.get(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG);
+    enableAutoSchemaRegistry = (Boolean) configs.get(KafkaAvroSerializerConfig.ENABLE_AUTO_SCHEMA_REGISTRATION_CONFIG);
   }
 
   @Override
@@ -67,7 +66,7 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
     } else {
       subject = topic + "-value";
     }
-    return serializeImpl(subject, record, enableAutoSchemaRegistration);
+    return serializeImpl(subject, record);
   }
 
   @Override
