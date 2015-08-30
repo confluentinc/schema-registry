@@ -15,14 +15,15 @@
  */
 package io.confluent.kafka.schemaregistry;
 
+import kafka.utils.CoreUtils;
 import org.I0Itec.zkclient.ZkClient;
 import org.junit.After;
 import org.junit.Before;
 
-import java.util.ArrayDeque;
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.util.List;
 import java.util.Properties;
-import java.util.Queue;
 import java.util.Vector;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
@@ -31,9 +32,9 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.SystemTime$;
 import kafka.utils.TestUtils;
-import kafka.utils.Utils;
 import kafka.utils.ZKStringSerializer$;
 import kafka.zk.EmbeddedZookeeper;
+import scala.Option;
 import scala.collection.JavaConversions;
 
 /**
@@ -46,13 +47,39 @@ public abstract class ClusterTestHarness {
   public static final int DEFAULT_NUM_BROKERS = 1;
   public static final String KAFKASTORE_TOPIC = SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC;
 
-  // Shared config
-  protected Queue<Integer> ports;
+  /**
+   * Choose a number of random available ports
+   */
+  public static int[] choosePorts(int count) {
+    try {
+      ServerSocket[] sockets = new ServerSocket[count];
+      int[] ports = new int[count];
+      for (int i = 0; i < count; i++) {
+        sockets[i] = new ServerSocket(0);
+        ports[i] = sockets[i].getLocalPort();
+      }
+      for (int i = 0; i < count; i++)
+        sockets[i].close();
+      return ports;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Choose an available port
+   */
+  public static int choosePort() {
+    return choosePorts(1)[0];
+  }
+
+  private int numBrokers;
+  private boolean setupRestApp;
+  private String compatibilityType;
 
   // ZK Config
-  protected int zkPort;
-  protected String zkConnect;
   protected EmbeddedZookeeper zookeeper;
+  protected String zkConnect;
   protected ZkClient zkClient;
   protected int zkConnectionTimeout = 6000;
   protected int zkSessionTimeout = 6000;
@@ -61,8 +88,6 @@ public abstract class ClusterTestHarness {
   protected List<KafkaConfig> configs = null;
   protected List<KafkaServer> servers = null;
   protected String brokerList = null;
-
-  protected String bootstrapServers = null;
 
   protected RestApp restApp = null;
 
@@ -79,59 +104,41 @@ public abstract class ClusterTestHarness {
   }
 
   public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType) {
-    // 1 port for ZK, 1 port per broker, and 1 port for the rest App if needed
-    int numPorts = 1 + numBrokers + (setupRestApp ? 1 : 0);
+    this.numBrokers = numBrokers;
+    this.setupRestApp = setupRestApp;
+    this.compatibilityType = compatibilityType;
+  }
 
-    ports = new ArrayDeque<Integer>();
-    for (Object portObj : JavaConversions.asJavaList(TestUtils.choosePorts(numPorts))) {
-      ports.add((Integer) portObj);
-    }
-    zkPort = ports.remove();
-    zkConnect = String.format("127.0.0.1:%d", zkPort);
+  @Before
+  public void setUp() throws Exception {
+    zookeeper = new EmbeddedZookeeper();
+    zkConnect = String.format("127.0.0.1:%d", zookeeper.port());
+    zkClient =
+        new ZkClient(zkConnect, zkSessionTimeout, zkConnectionTimeout,
+                     ZKStringSerializer$.MODULE$);
 
-    configs = new Vector<KafkaConfig>();
-    bootstrapServers = "";
+    configs = new Vector<>();
+    servers = new Vector<>();
     for (int i = 0; i < numBrokers; i++) {
-      int port = ports.remove();
-      Properties props = TestUtils.createBrokerConfig(i, port, false);
+      final Option<java.io.File> noFile = scala.Option.apply(null);
+      Properties props = TestUtils.createBrokerConfig(i, zkConnect, false, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), noFile);
       props.setProperty("auto.create.topics.enable", "true");
       props.setProperty("num.partitions", "1");
       // We *must* override this to use the port we allocated (Kafka currently allocates one port
       // that it always uses for ZK
       props.setProperty("zookeeper.connect", this.zkConnect);
-      configs.add(new KafkaConfig(props));
+      KafkaConfig config = new KafkaConfig(props);
+      configs.add(config);
 
-      if (bootstrapServers.length() > 0) {
-        bootstrapServers += ",";
-      }
-      bootstrapServers = bootstrapServers + "localhost:" + ((Integer) port).toString();
-    }
-
-    if (setupRestApp) {
-      int restPort = ports.remove();
-      restApp = new RestApp(restPort, zkConnect, KAFKASTORE_TOPIC, compatibilityType);
-    }
-  }
-
-  @Before
-  public void setUp() throws Exception {
-    zookeeper = new EmbeddedZookeeper(zkConnect);
-    zkClient =
-        new ZkClient(zookeeper.connectString(), zkSessionTimeout, zkConnectionTimeout,
-                     ZKStringSerializer$.MODULE$);
-
-    if (configs == null || configs.size() <= 0) {
-      throw new RuntimeException("Must supply at least one server config.");
-    }
-    brokerList =
-        TestUtils.getBrokerListStrFromConfigs(JavaConversions.asScalaIterable(configs).toSeq());
-    servers = new Vector<KafkaServer>(configs.size());
-    for (KafkaConfig config : configs) {
       KafkaServer server = TestUtils.createServer(config, SystemTime$.MODULE$);
       servers.add(server);
     }
 
-    if (restApp != null) {
+    brokerList =
+        TestUtils.getBrokerListStrFromServers(JavaConversions.asScalaIterable(servers).toSeq());
+
+    if (setupRestApp) {
+      restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType);
       restApp.start();
     }
   }
@@ -150,7 +157,7 @@ public abstract class ClusterTestHarness {
       // Remove any persistent data
       for (KafkaServer server : servers) {
         for (String logDir : JavaConversions.asJavaCollection(server.config().logDirs())) {
-          Utils.rm(logDir);
+          CoreUtils.rm(logDir);
         }
       }
     }

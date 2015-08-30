@@ -177,5 +177,11 @@ public class ZookeeperMasterElector {
         readCurrentMaster();
       }
     }
+
+    @Override
+    public void handleSessionEstablishmentError(Throwable t) throws Exception {
+      log.error("Failed to re-establish Zookeeper connection: ", t);
+      throw new SchemaRegistryStoreException("Couldn't establish Zookeeper connection", t);
+    }
   }
 }

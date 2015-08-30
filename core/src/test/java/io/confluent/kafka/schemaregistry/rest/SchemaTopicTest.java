@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.schemaregistry.rest;
 
+import kafka.server.ConfigType;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -55,7 +56,7 @@ public class SchemaTopicTest extends ClusterTestHarness {
                  replicas.size());
 
     // check the retention policy
-    Properties prop = AdminUtils.fetchTopicConfig(zkClient, KAFKASTORE_TOPIC);
+    Properties prop = AdminUtils.fetchEntityConfig(zkClient, ConfigType.Topic(), KAFKASTORE_TOPIC);
     assertEquals("The schema topic should have the compact retention policy",
                  "compact",
                  prop.getProperty(LogConfig.CleanupPolicyProp()));
