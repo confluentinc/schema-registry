@@ -22,12 +22,18 @@ DEFAULT_APPLY_PATCHES=yes
 DEFAULT_DESTDIR=$(CURDIR)/BUILD/
 DEFAULT_PREFIX=/usr
 DEFAULT_SYSCONFDIR=/etc/$(PACKAGE_TITLE)
+DEFAULT_SKIP_TESTS=no
 
 
 # Whether we should apply patches. This only makes sense for alternate packaging
 # systems that know how to apply patches themselves, e.g. Debian.
 ifndef APPLY_PATCHES
 APPLY_PATCHES=$(DEFAULT_APPLY_PATCHES)
+endif
+
+# Whether we should run tests during the build.
+ifndef SKIP_TESTS
+SKIP_TESTS=$(DEFAULT_SKIP_TESTS)
 endif
 
 # Install directories
@@ -55,6 +61,7 @@ export VERSION
 export DESTDIR
 export PREFIX
 export SYSCONFDIR
+export SKIP_TESTS
 
 all: install
 
@@ -70,8 +77,11 @@ ifeq ($(APPLY_PATCHES),yes)
 endif
 
 build: apply-patches
+ifeq ($(SKIP_TESTS),yes)
+	mvn -DskipTests=true install
+else
 	mvn install
-
+endif
 
 install: build
 	./create_archive.sh
