@@ -16,6 +16,7 @@
 package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
@@ -55,12 +56,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
       } else {
         BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
         DatumWriter<Object> writer;
-        if (object instanceof SpecificRecord) {
+        Object value = object instanceof NonRecordContainer ? ((NonRecordContainer) object).getValue() : object;
+        if (value instanceof SpecificRecord) {
           writer = new SpecificDatumWriter<Object>(schema);
         } else {
           writer = new GenericDatumWriter<Object>(schema);
         }
-        writer.write(object, encoder);
+        writer.write(value, encoder);
         encoder.flush();
       }
       byte[] bytes = out.toByteArray();

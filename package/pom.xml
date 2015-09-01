@@ -32,6 +32,16 @@
             <artifactId>kafka-schema-registry</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>copycat-avro-converter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-json-serializer</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- kafka -> zookeeper -> jline ends up including junit 3.8.1 here. Explicitly list the
              dependency and scope it to test to avoid pulling it in -->
         <dependency>

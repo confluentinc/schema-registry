@@ -54,11 +54,6 @@ public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Enc
 
   @Override
   public byte[] toBytes(Object object) {
-    if (object instanceof IndexedRecord) {
-      String subject = ((IndexedRecord) object).getSchema().getName() + "-value";
-      return serializeImpl(subject, object);
-    } else {
-      throw new SerializationException("Primitive types are not supported yet");
-    }
+    return serializeImpl(getOldSubjectName(object), object);
   }
 }
