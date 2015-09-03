@@ -15,12 +15,15 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import kafka.cluster.EndPoint;
+import kafka.server.ConfigType;
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +51,7 @@ import kafka.cluster.Broker;
 import kafka.common.TopicExistsException;
 import kafka.log.LogConfig;
 import kafka.utils.ZkUtils;
+import scala.Option;
 import scala.collection.JavaConversions;
 import scala.collection.Seq;
 
@@ -126,9 +130,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
     List<Broker> brokers = JavaConversions.seqAsJavaList(brokerSeq);
     String bootstrapBrokers = "";
     for (int i = 0; i < brokers.size(); i++) {
-      bootstrapBrokers += brokers.get(i).connectionString();
-      if (i != (brokers.size() - 1)) {
-        bootstrapBrokers += ",";
+      for(EndPoint ep : JavaConversions.asJavaCollection(brokers.get(i).endPoints().values())) {
+        if (bootstrapBrokers.length() > 0) {
+          bootstrapBrokers += ",";
+        }
+        bootstrapBrokers += ep.connectionString();
       }
     }
     // initialize a Kafka producer client
@@ -205,7 +211,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
 
     // check the retention policy
-    Properties prop = AdminUtils.fetchTopicConfig(zkClient, topic);
+    Properties prop = AdminUtils.fetchEntityConfig(zkClient, ConfigType.Topic(), topic);
     String retentionPolicy = prop.getProperty(LogConfig.CleanupPolicyProp());
     if (retentionPolicy == null || "compact".compareTo(retentionPolicy) != 0) {
       log.warn("The retention policy of the schema topic " + topic + " may be incorrect. " +

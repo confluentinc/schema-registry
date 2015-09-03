@@ -45,7 +45,7 @@
     <properties>
         <jersey.version>2.19</jersey.version>
         <confluent-common.version>2.0-SNAPSHOT</confluent-common.version>
-        <kafka.version>0.8.2.0-cp</kafka.version>
+        <kafka.version>0.8.3-SNAPSHOT</kafka.version>
         <kafka.scala.version>2.10</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
         <restutils.version>2.0-SNAPSHOT</restutils.version>
@@ -110,6 +110,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
+                <version>2.6</version>
                 <executions>
                     <execution>
                         <goals>
