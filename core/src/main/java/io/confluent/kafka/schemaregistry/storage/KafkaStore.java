@@ -131,10 +131,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
     String bootstrapBrokers = "";
     for (int i = 0; i < brokers.size(); i++) {
       for(EndPoint ep : JavaConversions.asJavaCollection(brokers.get(i).endPoints().values())) {
-        bootstrapBrokers += ep.connectionString();
-        if (i != (brokers.size() - 1)) {
+        if (bootstrapBrokers.length() > 0) {
           bootstrapBrokers += ",";
         }
+        bootstrapBrokers += ep.connectionString();
       }
     }
     // initialize a Kafka producer client
