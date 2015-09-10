@@ -172,6 +172,14 @@ generating
  dependencies as well.
 
 
+Changelog
+---------
+
+New Features in 1.0.1:
+
+- Upgrade to Kafka 0.8.2.2.
+
+
 Contribute
 ----------
 
