@@ -44,7 +44,7 @@
     <properties>
         <jersey.version>2.6</jersey.version>
         <confluent-common.version>1.0.1</confluent-common.version>
-        <kafka.version>0.8.2.0-cp</kafka.version>
+        <kafka.version>0.8.2.2</kafka.version>
         <kafka.scala.version>2.10</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
         <restutils.version>1.0.1</restutils.version>
