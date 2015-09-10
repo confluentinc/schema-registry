@@ -172,6 +172,12 @@ generating
  dependencies as well.
 
 
+Requirements
+------------
+
+- Kafka: Schema Registry works with Kafka 0.8.2.0-cp / 0.8.2.1 or higher.  We recommend 0.8.2.2.
+
+
 Changelog
 ---------
 
