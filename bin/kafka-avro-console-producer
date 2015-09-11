@@ -14,6 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+base_dir=$(dirname $0)/..
+
+CLASSPATH=$CLASSPATH:$base_dir/share/java/avro-serializer/*
+
 DEFAULT_LINE_READER="--line-reader io.confluent.kafka.formatter.AvroMessageReader"
 
 DEFAULT_SCHEMA_REGISTRY_URL="--property schema.registry.url=http://localhost:8081"

@@ -21,16 +21,23 @@ import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.data.Struct;
 import org.junit.Test;
+import org.powermock.reflect.Whitebox;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDe;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 // AvroConverter is a trivial combination of the serializers and the AvroData conversions, so
 // most testing is performed on AvroData since it is much easier to compare the results in Avro
@@ -39,12 +46,33 @@ import static org.junit.Assert.assertNull;
 public class AvroConverterTest {
   private static final String TOPIC = "topic";
 
+  private static final Map<String, ?> SR_CONFIG = Collections.singletonMap(
+      AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost");
+
   private final SchemaRegistryClient schemaRegistry;
   private final AvroConverter converter;
 
   public AvroConverterTest() {
     schemaRegistry = new MockSchemaRegistryClient();
     converter = new AvroConverter(schemaRegistry);
+  }
+
+  @Test
+  public void testConfigure() {
+    converter.configure(SR_CONFIG, true);
+    assertTrue(Whitebox.<Boolean>getInternalState(converter, "isKey"));
+    assertNotNull(Whitebox.getInternalState(
+        Whitebox.<AbstractKafkaAvroSerDe>getInternalState(converter, "serializer"),
+        "schemaRegistry"));
+  }
+
+  @Test
+  public void testConfigureAlt() {
+    converter.configure(SR_CONFIG, false);
+    assertFalse(Whitebox.<Boolean>getInternalState(converter, "isKey"));
+    assertNotNull(Whitebox.getInternalState(
+        Whitebox.<AbstractKafkaAvroSerDe>getInternalState(converter, "serializer"),
+        "schemaRegistry"));
   }
 
   @Test

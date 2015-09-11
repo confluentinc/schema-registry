@@ -43,59 +43,59 @@ public class AvroDataTest {
   @Test
   public void testFromCopycatBoolean() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().booleanType();
-    assertNonRecordConversion(avroSchema, true, Schema.BOOLEAN_SCHEMA, true);
+    checkNonRecordConversion(avroSchema, true, Schema.BOOLEAN_SCHEMA, true);
   }
 
   @Test
   public void testFromCopycatByte() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     avroSchema.addProp("copycat_type", "int8");
-    assertNonRecordConversion(avroSchema, 12, Schema.INT8_SCHEMA, (byte) 12);
+    checkNonRecordConversion(avroSchema, 12, Schema.INT8_SCHEMA, (byte) 12);
   }
 
   @Test
   public void testFromCopycatShort() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     avroSchema.addProp("copycat_type", "int16");
-    assertNonRecordConversion(avroSchema, 12, Schema.INT16_SCHEMA, (short) 12);
+    checkNonRecordConversion(avroSchema, 12, Schema.INT16_SCHEMA, (short) 12);
   }
 
   @Test
   public void testFromCopycatInteger() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
-    assertNonRecordConversion(avroSchema, 12, Schema.INT32_SCHEMA, 12);
+    checkNonRecordConversion(avroSchema, 12, Schema.INT32_SCHEMA, 12);
   }
 
   @Test
   public void testFromCopycatLong() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
-    assertNonRecordConversion(avroSchema, 12L, Schema.INT64_SCHEMA, 12L);
+    checkNonRecordConversion(avroSchema, 12L, Schema.INT64_SCHEMA, 12L);
   }
 
   @Test
   public void testFromCopycatFloat() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().floatType();
-    assertNonRecordConversion(avroSchema, 12.2f, Schema.FLOAT32_SCHEMA, 12.2f);
+    checkNonRecordConversion(avroSchema, 12.2f, Schema.FLOAT32_SCHEMA, 12.2f);
   }
 
   @Test
   public void testFromCopycatDouble() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().doubleType();
-    assertNonRecordConversion(avroSchema, 12.2, Schema.FLOAT64_SCHEMA, 12.2);
+    checkNonRecordConversion(avroSchema, 12.2, Schema.FLOAT64_SCHEMA, 12.2);
   }
 
   @Test
   public void testFromCopycatBytes() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
-    assertNonRecordConversion(avroSchema, ByteBuffer.wrap("foo".getBytes()),
-                              Schema.BYTES_SCHEMA, "foo".getBytes());
+    checkNonRecordConversion(avroSchema, ByteBuffer.wrap("foo".getBytes()),
+                             Schema.BYTES_SCHEMA, "foo".getBytes());
   }
 
   @Test
   public void testFromCopycatString() {
     org.apache.avro.Schema avroSchema =
         org.apache.avro.SchemaBuilder.builder().stringType();
-    assertNonRecordConversion(avroSchema, "string", Schema.STRING_SCHEMA, "string");
+    checkNonRecordConversion(avroSchema, "string", Schema.STRING_SCHEMA, "string");
   }
 
   @Test
@@ -210,8 +210,8 @@ public class AvroDataTest {
             .type(avroStringSchema).and()
             .nullType().endUnion();
 
-    NonRecordContainer converted = assertNonRecordConversion(avroSchema, "string",
-                                                             schema, "string");
+    NonRecordContainer converted = checkNonRecordConversion(avroSchema, "string",
+                                                            schema, "string");
     assertNotEquals(wrongAvroSchema, converted.getSchema());
   }
 
@@ -247,45 +247,45 @@ public class AvroDataTest {
   @Test
   public void testFromCopycatSchemaless() {
     GenericRecord avroNullRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA).build();
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroNullRecord, null, null);
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroNullRecord, null, null);
 
     GenericRecord avroIntRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("int", 12)
         .build();
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroIntRecord, null, (byte) 12);
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroIntRecord, null, (short) 12);
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroIntRecord, null, 12);
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroIntRecord, null, (byte) 12);
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroIntRecord, null, (short) 12);
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroIntRecord, null, 12);
 
     GenericRecord avroLongRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("long", 12L)
         .build();
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroLongRecord, null, 12L);
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroLongRecord, null, 12L);
 
     GenericRecord avroFloatRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("float", 12.2f)
         .build();
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroFloatRecord, null, 12.2f);
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroFloatRecord, null, 12.2f);
 
     GenericRecord avroDoubleRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("double", 12.2)
         .build();
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroDoubleRecord, null, 12.2);
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroDoubleRecord, null, 12.2);
 
     GenericRecord avroBooleanRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("boolean", true)
         .build();
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroBooleanRecord, null, true);
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroBooleanRecord, null, true);
 
     GenericRecord avroStringRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("string", "teststring")
         .build();
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroStringRecord, null, "teststring");
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroStringRecord, null, "teststring");
 
     GenericRecord avroArrayRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("array", Arrays.asList(avroIntRecord, avroStringRecord))
         .build();
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroArrayRecord,
-                              null, Arrays.asList(12, "teststring"));
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroArrayRecord,
+                             null, Arrays.asList(12, "teststring"));
 
     GenericRecord avroMapEntry = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA_MAP_ELEMENT)
         .set("key", avroIntRecord)
@@ -294,8 +294,8 @@ public class AvroDataTest {
     GenericRecord avroMapRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("map", Arrays.asList(avroMapEntry))
         .build();
-    assertNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroMapRecord,
-                              null, Collections.singletonMap(12, "teststring"));
+    checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroMapRecord,
+                             null, Collections.singletonMap(12, "teststring"));
   }
 
   // Avro -> Copycat. Validate a) all Avro types that convert directly to Avro, b) specialized
@@ -657,7 +657,7 @@ public class AvroDataTest {
 
   }
 
-  private static NonRecordContainer assertNonRecordConversion(
+  private static NonRecordContainer checkNonRecordConversion(
       org.apache.avro.Schema expectedSchema, Object expected,
       Schema schema, Object value)
   {

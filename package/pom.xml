@@ -50,6 +50,27 @@
             <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- Include Copycat runtime as a provided dependency. It should not be pulled in, but this
+             reference allows us to package it with the development-mode "packaging" so you don't
+             need to jump through classpath hoops -->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>copycat-runtime</artifactId>
+            <version>${kafka.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>copycat-json</artifactId>
+            <version>${kafka.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>copycat-file</artifactId>
+            <version>${kafka.version}</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>

@@ -16,12 +16,15 @@
 
 package io.confluent.copycat.avro;
 
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
@@ -34,24 +37,41 @@ import java.util.Map;
  * Implementation of Converter that uses Avro schemas and objects.
  */
 public class AvroConverter implements Converter {
+  private SchemaRegistryClient schemaRegistry;
   private Serializer serializer;
   private Deserializer deserializer;
 
   private boolean isKey;
 
   public AvroConverter() {
-    serializer = new Serializer();
-    deserializer = new Deserializer();
   }
 
+  // Public only for testing
   public AvroConverter(SchemaRegistryClient client) {
-    serializer = new Serializer(client);
-    deserializer = new Deserializer(client);
+    schemaRegistry = client;
+    serializer = new Serializer(schemaRegistry);
+    deserializer = new Deserializer(schemaRegistry);
   }
 
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
+
+    Object url = configs.get(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
+    if (url == null) {
+      throw new ConfigException("Missing Schema registry url!");
+    }
+    Object maxSchemaObject = configs.get(
+        AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
+    if (maxSchemaObject == null) {
+      schemaRegistry = new CachedSchemaRegistryClient(
+          (String) url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
+    } else {
+      schemaRegistry = new CachedSchemaRegistryClient((String) url, (Integer) maxSchemaObject);
+    }
+
+    serializer = new Serializer(schemaRegistry);
+    deserializer = new Deserializer(schemaRegistry);
   }
 
   @Override
@@ -80,9 +100,6 @@ public class AvroConverter implements Converter {
 
 
   private static class Serializer extends AbstractKafkaAvroSerializer {
-    public Serializer() {
-    }
-
     public Serializer(SchemaRegistryClient client) {
       schemaRegistry = client;
     }
@@ -93,9 +110,6 @@ public class AvroConverter implements Converter {
   }
 
   private static class Deserializer extends AbstractKafkaAvroDeserializer {
-    public Deserializer() {
-    }
-
     public Deserializer(SchemaRegistryClient client) {
       schemaRegistry = client;
     }

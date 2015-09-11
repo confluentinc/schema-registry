@@ -75,10 +75,10 @@ public class AvroData {
 
   public static final String AVRO_TYPE_ANYTHING = NAMESPACE + ".Anything";
 
-  private static final Map<String, Schema.Type> SPECIALIZED_TYPES_BY_TYPE_CODE = new HashMap<>();
+  private static final Map<String, Schema.Type> NON_AVRO_TYPES_BY_TYPE_CODE = new HashMap<>();
   static {
-    SPECIALIZED_TYPES_BY_TYPE_CODE.put(COPYCAT_TYPE_INT8, Schema.Type.INT8);
-    SPECIALIZED_TYPES_BY_TYPE_CODE.put(COPYCAT_TYPE_INT16, Schema.Type.INT16);
+    NON_AVRO_TYPES_BY_TYPE_CODE.put(COPYCAT_TYPE_INT8, Schema.Type.INT8);
+    NON_AVRO_TYPES_BY_TYPE_CODE.put(COPYCAT_TYPE_INT16, Schema.Type.INT16);
   }
 
   // Avro Java object types used by Copycat schema types
@@ -770,7 +770,7 @@ public class AvroData {
         if (type == null) {
           builder = SchemaBuilder.int32();
         } else {
-          Schema.Type copycatType = SPECIALIZED_TYPES_BY_TYPE_CODE.get(type);
+          Schema.Type copycatType = NON_AVRO_TYPES_BY_TYPE_CODE.get(type);
           if (copycatType == null) {
             throw new DataException("Invalid Copycat type annotation for Avro int field: " +
                                     copycatType);
