@@ -46,6 +46,9 @@
                 <exclude>io.confluent:rest-utils</exclude>
                 <exclude>io.confluent:common-config</exclude>
                 <exclude>io.confluent:common-utils</exclude>
+                <exclude>io.confluent:kafka-avro-serializer</exclude>
+                <exclude>io.confluent:copycat-avro-converter</exclude>
+                <exclude>io.confluent:kafka-json-serializer</exclude>
             </excludes>
         </dependencySet>
         <dependencySet>
@@ -56,6 +59,16 @@
             <includes>
                 <include>io.confluent:kafka-avro-serializer</include>
                 <include>io.confluent:kafka-schema-registry-client</include>
+                <include>io.confluent:copycat-avro-converter</include>
+            </includes>
+        </dependencySet>
+        <dependencySet>
+            <outputDirectory>share/java/json-serializer</outputDirectory>
+            <useProjectArtifact>true</useProjectArtifact>
+            <scope>runtime</scope>
+            <useTransitiveFiltering>true</useTransitiveFiltering>
+            <includes>
+                <include>io.confluent:kafka-json-serializer</include>
             </includes>
         </dependencySet>
     </dependencySets>

@@ -58,13 +58,7 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   @Override
   public byte[] serialize(String topic, Object record) {
-    String subject;
-    if (isKey) {
-      subject = topic + "-key";
-    } else {
-      subject = topic + "-value";
-    }
-    return serializeImpl(subject, record);
+    return serializeImpl(getSubjectName(topic, isKey), record);
   }
 
   @Override

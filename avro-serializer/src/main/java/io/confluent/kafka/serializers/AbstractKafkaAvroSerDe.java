@@ -16,7 +16,7 @@
 package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.generic.GenericContainer;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -24,6 +24,7 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import org.apache.kafka.common.errors.SerializationException;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -53,6 +54,28 @@ public abstract class AbstractKafkaAvroSerDe {
     return parser.parse(schemaString);
   }
 
+  /**
+   * Get the subject name for the given topic and value type.
+   */
+  protected static String getSubjectName(String topic, boolean isKey) {
+    if (isKey) {
+      return topic + "-key";
+    } else {
+      return topic + "-value";
+    }
+  }
+
+  /**
+   * Get the subject name used by the old Encoder interface, which relies only on the value type rather than the topic.
+   */
+  protected static String getOldSubjectName(Object value) {
+    if (value instanceof GenericContainer) {
+      return ((GenericContainer) value).getSchema().getName() + "-value";
+    } else {
+      throw new SerializationException("Primitive types are not supported yet");
+    }
+  }
+
   protected Schema getSchema(Object object) {
     if (object == null) {
       return primitiveSchemas.get("Null");
@@ -70,8 +93,8 @@ public abstract class AbstractKafkaAvroSerDe {
       return primitiveSchemas.get("String");
     } else if (object instanceof byte[]) {
       return primitiveSchemas.get("Bytes");
-    } else if (object instanceof IndexedRecord) {
-      return ((IndexedRecord) object).getSchema();
+    } else if (object instanceof GenericContainer) {
+      return ((GenericContainer) object).getSchema();
     } else {
       throw new IllegalArgumentException(
           "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, " +
