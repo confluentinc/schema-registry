@@ -18,6 +18,7 @@ package io.confluent.copycat.avro;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -60,12 +61,12 @@ public class AvroData {
   public static final String KEY_FIELD = "key";
   public static final String VALUE_FIELD = "value";
 
-  public static final String COPYCAT_NAME_PROP = "copycat_name";
-  public static final String COPYCAT_DOC_PROP = "copycat_doc";
-  public static final String COPYCAT_VERSION_PROP = "copycat_version";
-  public static final String COPYCAT_DEFAULT_VALUE_PROP = "copycat_default";
+  public static final String COPYCAT_NAME_PROP = "copycat.name";
+  public static final String COPYCAT_DOC_PROP = "copycat.doc";
+  public static final String COPYCAT_VERSION_PROP = "copycat.version";
+  public static final String COPYCAT_DEFAULT_VALUE_PROP = "copycat.default";
 
-  public static final String COPYCAT_TYPE_PROP = "copycat_type";
+  public static final String COPYCAT_TYPE_PROP = "copycat.type";
 
   public static final String COPYCAT_TYPE_INT8 = "int8";
   public static final String COPYCAT_TYPE_INT16 = "int16";
@@ -178,7 +179,11 @@ public class AvroData {
       return maybeAddContainer(avroSchema, maybeWrapSchemaless(null, null, null), requireContainer);
     }
 
-    String fieldType = null;
+    boolean schemaOptional = schema != null ? schema.isOptional() : true;
+    if (!schemaOptional && value == null) {
+      throw new DataException("Found null value for non-optional schema");
+    }
+
     try {
       switch (schemaType) {
         case INT8: {
@@ -195,20 +200,41 @@ public class AvroData {
         }
 
         case INT32:
-          if (fieldType == null) fieldType = ANYTHING_SCHEMA_INT_FIELD;
+          Integer intValue = (Integer) value; // Check for correct type
+          return maybeAddContainer(
+              avroSchema,
+              maybeWrapSchemaless(schema, value, ANYTHING_SCHEMA_INT_FIELD),
+              requireContainer);
         case INT64:
-          if (fieldType == null) fieldType = ANYTHING_SCHEMA_LONG_FIELD;
+          Long longValue = (Long) value; // Check for correct type
+          return maybeAddContainer(
+              avroSchema,
+              maybeWrapSchemaless(schema, value, ANYTHING_SCHEMA_LONG_FIELD),
+              requireContainer);
         case FLOAT32:
-          if (fieldType == null) fieldType = ANYTHING_SCHEMA_FLOAT_FIELD;
+          Float floatValue = (Float) value; // Check for correct type
+          return maybeAddContainer(
+              avroSchema,
+              maybeWrapSchemaless(schema, value, ANYTHING_SCHEMA_FLOAT_FIELD),
+              requireContainer);
         case FLOAT64:
-          if (fieldType == null) fieldType = ANYTHING_SCHEMA_DOUBLE_FIELD;
+          Double doubleValue = (Double) value; // Check for correct type
+          return maybeAddContainer(
+              avroSchema,
+              maybeWrapSchemaless(schema, value, ANYTHING_SCHEMA_DOUBLE_FIELD),
+              requireContainer);
         case BOOLEAN:
-          if (fieldType == null) fieldType = ANYTHING_SCHEMA_BOOLEAN_FIELD;
+          Boolean boolValue = (Boolean) value; // Check for correct type
+          return maybeAddContainer(
+              avroSchema,
+              maybeWrapSchemaless(schema, value, ANYTHING_SCHEMA_BOOLEAN_FIELD),
+              requireContainer);
         case STRING:
-          if (fieldType == null) fieldType = ANYTHING_SCHEMA_STRING_FIELD;
-          return maybeAddContainer(avroSchema,
-                                   maybeWrapSchemaless(schema, value, fieldType),
-                                   requireContainer);
+          String stringValue = (String) value; // Check for correct type
+          return maybeAddContainer(
+              avroSchema,
+              maybeWrapSchemaless(schema, value, ANYTHING_SCHEMA_STRING_FIELD),
+              requireContainer);
 
         case BYTES: {
           ByteBuffer bytesValue = value instanceof byte[] ? ByteBuffer.wrap((byte[]) value) :
@@ -242,13 +268,13 @@ public class AvroData {
           if (schema != null &&
               schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
             // TODO most types don't need a new converted object since types pass through
-            Map<Object, Object> converted = new HashMap<>();
+            Map<String, Object> converted = new HashMap<>();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               // Key is a String, no conversion needed
               Object convertedValue = fromCopycatData(schema.valueSchema(),
                                                       avroSchema.getValueType(),
                                                       entry.getValue(), false);
-              converted.put(entry.getKey(), convertedValue);
+              converted.put((String)entry.getKey(), convertedValue);
             }
             return maybeAddContainer(avroSchema, converted, requireContainer);
           } else {
@@ -277,6 +303,8 @@ public class AvroData {
 
         case STRUCT: {
           Struct struct = (Struct) value;
+          if (!struct.schema().equals(schema))
+            throw new DataException("Mismatching struct schema");
           GenericRecordBuilder convertedBuilder = new GenericRecordBuilder(avroSchema);
           for (Field field : schema.fields()) {
             org.apache.avro.Schema fieldAvroSchema = avroSchema.getField(field.name()).schema();
@@ -567,163 +595,195 @@ public class AvroData {
   }
 
   private static Object toCopycatData(Schema schema, Object value) {
-    // If we're decoding schemaless data, we need to unwrap it into just the single value
-    if (schema == null) {
-      if (!(value instanceof IndexedRecord)) {
-        throw new DataException("Invalid Avro data for schemaless Copycat data");
-      }
-      IndexedRecord recordValue = (IndexedRecord) value;
-
-      Object boolVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_BOOLEAN_FIELD).pos());
-      if (boolVal != null)
-        return toCopycatData(Schema.BOOLEAN_SCHEMA, boolVal);
-
-      Object bytesVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_BYTES_FIELD).pos());
-      if (bytesVal != null)
-        return toCopycatData(Schema.BYTES_SCHEMA, bytesVal);
-
-      Object dblVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_DOUBLE_FIELD).pos());
-      if (dblVal != null)
-        return toCopycatData(Schema.FLOAT64_SCHEMA, dblVal);
-
-      Object fltVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_FLOAT_FIELD).pos());
-      if (fltVal != null)
-        return toCopycatData(Schema.BOOLEAN_SCHEMA, fltVal);
-
-      Object intVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_INT_FIELD).pos());
-      if (intVal != null)
-        return toCopycatData(Schema.INT32_SCHEMA, intVal);
-
-      Object longVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_LONG_FIELD).pos());
-      if (longVal != null)
-        return toCopycatData(Schema.INT64_SCHEMA, longVal);
-
-      Object stringVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_STRING_FIELD).pos());
-      if (stringVal != null)
-        return toCopycatData(Schema.STRING_SCHEMA, stringVal);
-
-      Object arrayVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_ARRAY_FIELD).pos());
-      if (arrayVal != null)
-        return toCopycatData(SchemaBuilder.array(null).build(), arrayVal);
-
-      Object mapVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_MAP_FIELD).pos());
-      if (mapVal != null)
-        return toCopycatData(SchemaBuilder.map(null, null).build(), mapVal);
-
-      // If nothing was set, it's null
-      return null;
-    }
-
-
-    switch (schema.type()) {
-      // Pass through types
-      case INT32:
-      case INT64:
-      case FLOAT32:
-      case FLOAT64:
-      case BOOLEAN:
-        return value;
-
-      case INT8:
-        // Encoded as an Integer
-        return ((Integer) value).byteValue();
-      case INT16:
-        // Encoded as an Integer
-        return ((Integer) value).shortValue();
-
-      case STRING:
-        if (value instanceof String) {
-          return value;
-        } else if (value instanceof CharSequence ||
-                   value instanceof GenericEnumSymbol ||
-                   value instanceof Enum) {
-          return value.toString();
-        } else {
-          throw new DataException("Invalid class for string type, expecting String or "
-                                  + "CharSequence but found " + value.getClass());
+    try {
+      // If we're decoding schemaless data, we need to unwrap it into just the single value
+      if (schema == null) {
+        if (!(value instanceof IndexedRecord)) {
+          throw new DataException("Invalid Avro data for schemaless Copycat data");
         }
+        IndexedRecord recordValue = (IndexedRecord) value;
 
-      case BYTES:
-        if (value instanceof byte[]) {
-          return ByteBuffer.wrap((byte[]) value);
-        } else if (value instanceof ByteBuffer) {
-          return value;
-        } else {
-          throw new DataException("Invalid class for bytes type, expecting byte[] or ByteBuffer "
-                                  + "but found " + value.getClass());
-        }
+        Object
+            boolVal =
+            recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_BOOLEAN_FIELD).pos());
+        if (boolVal != null)
+          return toCopycatData(Schema.BOOLEAN_SCHEMA, boolVal);
 
+        Object
+            bytesVal =
+            recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_BYTES_FIELD).pos());
+        if (bytesVal != null)
+          return toCopycatData(Schema.BYTES_SCHEMA, bytesVal);
 
-      case ARRAY: {
-        Schema valueSchema = schema.valueSchema();
-        Collection<Object> original = (Collection<Object>) value;
-        List<Object> result = new ArrayList<>(original.size());
-        for(Object elem : original) {
-          result.add(toCopycatData(valueSchema, elem));
-        }
-        return result;
+        Object
+            dblVal =
+            recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_DOUBLE_FIELD).pos());
+        if (dblVal != null)
+          return toCopycatData(Schema.FLOAT64_SCHEMA, dblVal);
+
+        Object
+            fltVal =
+            recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_FLOAT_FIELD).pos());
+        if (fltVal != null)
+          return toCopycatData(Schema.FLOAT32_SCHEMA, fltVal);
+
+        Object intVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_INT_FIELD).pos());
+        if (intVal != null)
+          return toCopycatData(Schema.INT32_SCHEMA, intVal);
+
+        Object
+            longVal =
+            recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_LONG_FIELD).pos());
+        if (longVal != null)
+          return toCopycatData(Schema.INT64_SCHEMA, longVal);
+
+        Object
+            stringVal =
+            recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_STRING_FIELD).pos());
+        if (stringVal != null)
+          return toCopycatData(Schema.STRING_SCHEMA, stringVal);
+
+        Object
+            arrayVal =
+            recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_ARRAY_FIELD).pos());
+        if (arrayVal != null)
+          return toCopycatData(SchemaBuilder.array(null).build(), arrayVal);
+
+        Object mapVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_MAP_FIELD).pos());
+        if (mapVal != null)
+          return toCopycatData(SchemaBuilder.map(null, null).build(), mapVal);
+
+        // If nothing was set, it's null
+        return null;
       }
 
-      case MAP: {
-        Schema keySchema = schema.keySchema();
-        Schema valueSchema = schema.valueSchema();
-        if (keySchema != null && keySchema.type() == Schema.Type.STRING && !keySchema.isOptional()) {
-          // String keys
-          Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
-          Map<CharSequence, Object> result = new HashMap<>(original.size());
-          for (Map.Entry<CharSequence , Object> entry : original.entrySet()) {
-            result.put(entry.getKey().toString(),
-                       toCopycatData(valueSchema, entry.getValue()));
+      switch (schema.type()) {
+        // Pass through types
+        case INT32: {
+          Integer intValue = (Integer) value; // Validate type
+          return value;
+        }
+        case INT64: {
+          Long longValue = (Long) value; // Validate type
+          return value;
+        }
+        case FLOAT32: {
+          Float floatValue = (Float) value; // Validate type
+          return value;
+        }
+        case FLOAT64: {
+          Double doubleValue = (Double) value; // Validate type
+          return value;
+        }
+        case BOOLEAN: {
+          Boolean boolValue = (Boolean) value; // Validate type
+          return value;
+        }
+
+        case INT8:
+          // Encoded as an Integer
+          return ((Integer) value).byteValue();
+        case INT16:
+          // Encoded as an Integer
+          return ((Integer) value).shortValue();
+
+        case STRING:
+          if (value instanceof String) {
+            return value;
+          } else if (value instanceof CharSequence ||
+                     value instanceof GenericEnumSymbol ||
+                     value instanceof Enum) {
+            return value.toString();
+          } else {
+            throw new DataException("Invalid class for string type, expecting String or "
+                                    + "CharSequence but found " + value.getClass());
+          }
+
+        case BYTES:
+          if (value instanceof byte[]) {
+            return ByteBuffer.wrap((byte[]) value);
+          } else if (value instanceof ByteBuffer) {
+            return value;
+          } else {
+            throw new DataException("Invalid class for bytes type, expecting byte[] or ByteBuffer "
+                                    + "but found " + value.getClass());
+          }
+
+        case ARRAY: {
+          Schema valueSchema = schema.valueSchema();
+          Collection<Object> original = (Collection<Object>) value;
+          List<Object> result = new ArrayList<>(original.size());
+          for (Object elem : original) {
+            result.add(toCopycatData(valueSchema, elem));
           }
           return result;
-        } else {
-          // Arbitrary keys
-          List<IndexedRecord> original = (List<IndexedRecord>) value;
-          Map<Object, Object> result = new HashMap<>(original.size());
-          for (IndexedRecord entry : original) {
-            int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
-            int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
-            Object convertedKey = toCopycatData(keySchema, entry.get(avroKeyFieldIndex));
-            Object convertedValue = toCopycatData(valueSchema, entry.get(avroValueFieldIndex));
-            result.put(convertedKey, convertedValue);
-          }
-          return result;
         }
-      }
 
-      case STRUCT: {
-        // Special case support for union types
-        if (schema.name() != null && schema.name().equals(AVRO_TYPE_UNION)) {
-          Schema valueRecordSchema = null;
-          if (value instanceof IndexedRecord) {
-            IndexedRecord valueRecord = ((IndexedRecord) value);
-            valueRecordSchema = toCopycatSchema(valueRecord.getSchema(), true, null, null);
-          }
-          for(Field field : schema.fields()) {
-            Schema fieldSchema = field.schema();
-
-            if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value) ||
-                (valueRecordSchema != null && valueRecordSchema.equals(fieldSchema))) {
-              return new Struct(schema).put(unionMemberFieldName(fieldSchema),
-                                            toCopycatData(fieldSchema, value));
+        case MAP: {
+          Schema keySchema = schema.keySchema();
+          Schema valueSchema = schema.valueSchema();
+          if (keySchema != null && keySchema.type() == Schema.Type.STRING && !keySchema
+              .isOptional()) {
+            // String keys
+            Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
+            Map<CharSequence, Object> result = new HashMap<>(original.size());
+            for (Map.Entry<CharSequence, Object> entry : original.entrySet()) {
+              result.put(entry.getKey().toString(),
+                         toCopycatData(valueSchema, entry.getValue()));
             }
+            return result;
+          } else {
+            // Arbitrary keys
+            List<IndexedRecord> original = (List<IndexedRecord>) value;
+            Map<Object, Object> result = new HashMap<>(original.size());
+            for (IndexedRecord entry : original) {
+              int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
+              int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
+              Object convertedKey = toCopycatData(keySchema, entry.get(avroKeyFieldIndex));
+              Object convertedValue = toCopycatData(valueSchema, entry.get(avroValueFieldIndex));
+              result.put(convertedKey, convertedValue);
+            }
+            return result;
           }
-          throw new DataException("Did not find matching union field for data: " + value.toString());
-        } else {
-          IndexedRecord original = (IndexedRecord) value;
-          Struct result = new Struct(schema);
-          for (Field field : schema.fields()) {
-            int avroFieldIndex = original.getSchema().getField(field.name()).pos();
-            Object convertedFieldValue
-                = toCopycatData(field.schema(), original.get(avroFieldIndex));
-            result.put(field, convertedFieldValue);
-          }
-          return result;
         }
-      }
 
-      default:
-        throw new DataException("Unknown Copycat schema type: " + schema.type());
+        case STRUCT: {
+          // Special case support for union types
+          if (schema.name() != null && schema.name().equals(AVRO_TYPE_UNION)) {
+            Schema valueRecordSchema = null;
+            if (value instanceof IndexedRecord) {
+              IndexedRecord valueRecord = ((IndexedRecord) value);
+              valueRecordSchema = toCopycatSchema(valueRecord.getSchema(), true, null, null);
+            }
+            for (Field field : schema.fields()) {
+              Schema fieldSchema = field.schema();
+
+              if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value) ||
+                  (valueRecordSchema != null && valueRecordSchema.equals(fieldSchema))) {
+                return new Struct(schema).put(unionMemberFieldName(fieldSchema),
+                                              toCopycatData(fieldSchema, value));
+              }
+            }
+            throw new DataException(
+                "Did not find matching union field for data: " + value.toString());
+          } else {
+            IndexedRecord original = (IndexedRecord) value;
+            Struct result = new Struct(schema);
+            for (Field field : schema.fields()) {
+              int avroFieldIndex = original.getSchema().getField(field.name()).pos();
+              Object convertedFieldValue
+                  = toCopycatData(field.schema(), original.get(avroFieldIndex));
+              result.put(field, convertedFieldValue);
+            }
+            return result;
+          }
+        }
+
+        default:
+          throw new DataException("Unknown Copycat schema type: " + schema.type());
+      }
+    } catch (ClassCastException e) {
+      throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
     }
   }
 
