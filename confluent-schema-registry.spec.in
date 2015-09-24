@@ -50,6 +50,7 @@ exit 0
 /usr/bin/*
 /etc/schema-registry
 /usr/share/java/avro-serializer
+/usr/share/java/json-serializer
 /usr/share/java/schema-registry
 /usr/share/doc/schema-registry
 
