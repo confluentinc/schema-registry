@@ -46,7 +46,7 @@
     <properties>
         <jersey.version>2.19</jersey.version>
         <confluent-common.version>2.0-SNAPSHOT</confluent-common.version>
-        <kafka.version>0.8.3-SNAPSHOT</kafka.version>
+        <kafka.version>0.9.0.0-SNAPSHOT</kafka.version>
         <kafka.scala.version>2.10</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
         <restutils.version>2.0-SNAPSHOT</restutils.version>
@@ -58,14 +58,6 @@
         <powermock.api.easymock.version>1.6.2</powermock.api.easymock.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
-
-    <repositories>
-        <repository>
-            <id>confluent</id>
-            <name>Confluent</name>
-            <url>http://packages.confluent.io/maven/</url>
-        </repository>
-    </repositories>
 
     <dependencyManagement>
         <dependencies>
