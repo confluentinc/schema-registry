@@ -65,12 +65,12 @@ public class SchemaRegistryConfig extends RestConfig {
   // TODO: turn off offset commit by default for now since we only have an in-memory store
   private static final int KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT = OFFSET_COMMIT_OFF;
   /**
-   * <code>master.eligibility</code>* 
+   * <code>master.eligibility</code>*
    */
   public static final String MASTER_ELIGIBILITY = "master.eligibility";
   public static final boolean DEFAULT_MASTER_ELIGIBILITY = true;
   /**
-   * <code>schema.registry.zk.name</code>* 
+   * <code>schema.registry.zk.name</code>*
    */
   public static final String SCHEMAREGISTRY_ZK_NAMESPACE = "schema.registry.zk.namespace";
   public static final String DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE = "schema_registry";
@@ -116,9 +116,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + "backward (new schema can read data produced by latest registered schema), "
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema)";
-  protected static final String MASTER_ELIGIBILITY_DOC = 
-      "If true, this node can participate in master election. In a multi-colo setup, turn this off" 
-      + "for clusters in the slave data center.";                               
+  protected static final String MASTER_ELIGIBILITY_DOC =
+      "If true, this node can participate in master election. In a multi-colo setup, turn this off"
+      + "for clusters in the slave data center.";
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
   private static final ConfigDef config;
@@ -157,7 +157,7 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.LOW, HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
                 ConfigDef.Importance.HIGH, COMPATIBILITY_DOC)
-        .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY, 
+        .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY,
                 ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC)
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
                         METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
@@ -192,7 +192,11 @@ public class SchemaRegistryConfig extends RestConfig {
     try {
       return InetAddress.getLocalHost().getCanonicalHostName();
     } catch (UnknownHostException e) {
-      throw new ConfigException("Unknown local hostname", e);
+      String envHost = System.getenv("HOSTNAME");
+      if (envHost == null || "".equals(envHost)) {
+        throw new ConfigException("Unknown local hostname", e);
+      }
+      return envHost;
     }
   }
 
