@@ -18,17 +18,20 @@ package io.confluent.copycat.avro;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
 
-import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.kafka.copycat.data.Date;
+import org.apache.kafka.copycat.data.Decimal;
 import org.apache.kafka.copycat.data.Field;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.data.Struct;
+import org.apache.kafka.copycat.data.Time;
+import org.apache.kafka.copycat.data.Timestamp;
 import org.apache.kafka.copycat.errors.DataException;
 import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.node.ArrayNode;
@@ -36,6 +39,7 @@ import org.codehaus.jackson.node.JsonNodeFactory;
 import org.codehaus.jackson.node.ObjectNode;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,6 +69,7 @@ public class AvroData {
   public static final String COPYCAT_DOC_PROP = "copycat.doc";
   public static final String COPYCAT_VERSION_PROP = "copycat.version";
   public static final String COPYCAT_DEFAULT_VALUE_PROP = "copycat.default";
+  public static final String COPYCAT_PARAMETERS_PROP = "copycat.parameters";
 
   public static final String COPYCAT_TYPE_PROP = "copycat.type";
 
@@ -153,6 +158,94 @@ public class AvroData {
         .getElementType();
   }
 
+  // Convert values in Copycat form into their logical types. These logical converters are discovered by logical type
+  // names specified in the field
+  private static final HashMap<String, LogicalTypeConverter> TO_COPYCAT_LOGICAL_CONVERTERS = new HashMap<>();
+  static {
+    TO_COPYCAT_LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
+      @Override
+      public Object convert(Schema schema, Object value) {
+        if (value instanceof byte[]) {
+          return Decimal.toLogical(schema, (byte[]) value);
+        } else if (value instanceof ByteBuffer) {
+          return Decimal.toLogical(schema, ((ByteBuffer) value).array());
+        }
+        throw new DataException("Invalid type for Decimal, underlying representation should be bytes but was " + value.getClass());
+      }
+    });
+
+    TO_COPYCAT_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, new LogicalTypeConverter() {
+      @Override
+      public Object convert(Schema schema, Object value) {
+        if (!(value instanceof Integer))
+          throw new DataException("Invalid type for Date, underlying representation should be int32 but was " + value.getClass());
+        return Date.toLogical(schema, (int) value);
+      }
+    });
+
+    TO_COPYCAT_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, new LogicalTypeConverter() {
+      @Override
+      public Object convert(Schema schema, Object value) {
+        if (!(value instanceof Integer))
+          throw new DataException("Invalid type for Time, underlying representation should be int32 but was " + value.getClass());
+        return Time.toLogical(schema, (int) value);
+      }
+    });
+
+    TO_COPYCAT_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, new LogicalTypeConverter() {
+      @Override
+      public Object convert(Schema schema, Object value) {
+        if (!(value instanceof Long))
+          throw new DataException("Invalid type for Timestamp, underlying representation should be int64 but was " + value.getClass());
+        return Timestamp.toLogical(schema, (long) value);
+      }
+    });
+  }
+
+  private static final HashMap<String, LogicalTypeConverter> TO_AVRO_LOGICAL_CONVERTERS
+      = new HashMap<>();
+  static {
+    TO_AVRO_LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
+      @Override
+      public Object convert(Schema schema, Object value) {
+        if (!(value instanceof BigDecimal))
+          throw new DataException(
+              "Invalid type for Decimal, expected BigDecimal but was " + value.getClass());
+        return Decimal.fromLogical(schema, (BigDecimal) value);
+      }
+    });
+
+    TO_AVRO_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, new LogicalTypeConverter() {
+      @Override
+      public Object convert(Schema schema, Object value) {
+        if (!(value instanceof java.util.Date))
+          throw new DataException(
+              "Invalid type for Date, expected Date but was " + value.getClass());
+        return Date.fromLogical(schema, (java.util.Date) value);
+      }
+    });
+
+    TO_AVRO_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, new LogicalTypeConverter() {
+      @Override
+      public Object convert(Schema schema, Object value) {
+        if (!(value instanceof java.util.Date))
+          throw new DataException(
+              "Invalid type for Time, expected Date but was " + value.getClass());
+        return Time.fromLogical(schema, (java.util.Date) value);
+      }
+    });
+
+    TO_AVRO_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, new LogicalTypeConverter() {
+      @Override
+      public Object convert(Schema schema, Object value) {
+        if (!(value instanceof java.util.Date))
+          throw new DataException(
+              "Invalid type for Timestamp, expected Date but was " + value.getClass());
+        return Timestamp.fromLogical(schema, (java.util.Date) value);
+      }
+    });
+  }
+
   /**
    * Convert this object, in Copycat data format, into an Avro object.
    */
@@ -166,22 +259,30 @@ public class AvroData {
    * been converted and makes the use of NonRecordContainer optional
    * @param schema the Copycat schema
    * @param avroSchema the corresponding
-   * @param value the Copycat data to convert
+   * @param logicalValue the Copycat data to convert, which may be a value for a logical type
    * @param requireContainer if true, wrap primitives, maps, and arrays in a NonRecordContainer
    *                         before returning them
    * @return the converted data
    */
   private static Object fromCopycatData(Schema schema, org.apache.avro.Schema avroSchema,
-                                       Object value, boolean requireContainer) {
-    Schema.Type schemaType = schema != null ? schema.type() : schemaTypeForSchemalessJavaType(value);
+                                       Object logicalValue, boolean requireContainer) {
+    Schema.Type schemaType = schema != null ? schema.type() : schemaTypeForSchemalessJavaType(logicalValue);
     if (schemaType == null) {
       // Schemaless null data
       return maybeAddContainer(avroSchema, maybeWrapSchemaless(null, null, null), requireContainer);
     }
 
     boolean schemaOptional = schema != null ? schema.isOptional() : true;
-    if (!schemaOptional && value == null) {
+    if (!schemaOptional && logicalValue == null) {
       throw new DataException("Found null value for non-optional schema");
+    }
+
+    // If this is a logical type, decode and
+    Object value = logicalValue;
+    if (schema != null && schema.name() != null) {
+      LogicalTypeConverter logicalConverter = TO_AVRO_LOGICAL_CONVERTERS.get(schema.name());
+      if (logicalConverter != null)
+        value = logicalConverter.convert(schema, logicalValue);
     }
 
     try {
@@ -456,6 +557,9 @@ public class AvroData {
       baseSchema.addProp(COPYCAT_VERSION_PROP,
                          JsonNodeFactory.instance.numberNode(schema.version()));
     }
+    if (schema.parameters() != null) {
+      baseSchema.addProp(COPYCAT_PARAMETERS_PROP, parametersFromCopycat(schema.parameters()));
+    }
     if (schema.defaultValue() != null) {
       baseSchema.addProp(COPYCAT_DEFAULT_VALUE_PROP,
                          defaultValueFromCopycat(schema, schema.defaultValue()));
@@ -582,6 +686,14 @@ public class AvroData {
     }
   }
 
+  private static JsonNode parametersFromCopycat(Map<String, String> params) {
+    ObjectNode result = JsonNodeFactory.instance.objectNode();
+    for (Map.Entry<String, String> entry : params.entrySet()) {
+      result.put(entry.getKey(), entry.getValue());
+    }
+    return result;
+  }
+
   /**
    * Convert the given object, in Avro format, into an Copycat data object.
    */
@@ -657,57 +769,67 @@ public class AvroData {
         return null;
       }
 
+      Object converted = null;
       switch (schema.type()) {
         // Pass through types
         case INT32: {
           Integer intValue = (Integer) value; // Validate type
-          return value;
+          converted = value;
+          break;
         }
         case INT64: {
           Long longValue = (Long) value; // Validate type
-          return value;
+          converted = value;
+          break;
         }
         case FLOAT32: {
           Float floatValue = (Float) value; // Validate type
-          return value;
+          converted = value;
+          break;
         }
         case FLOAT64: {
           Double doubleValue = (Double) value; // Validate type
-          return value;
+          converted = value;
+          break;
         }
         case BOOLEAN: {
           Boolean boolValue = (Boolean) value; // Validate type
-          return value;
+          converted = value;
+          break;
         }
 
         case INT8:
           // Encoded as an Integer
-          return ((Integer) value).byteValue();
+          converted = ((Integer) value).byteValue();
+          break;
         case INT16:
           // Encoded as an Integer
-          return ((Integer) value).shortValue();
+          converted = ((Integer) value).shortValue();
+          break;
 
         case STRING:
           if (value instanceof String) {
-            return value;
+            converted = value;
           } else if (value instanceof CharSequence ||
                      value instanceof GenericEnumSymbol ||
                      value instanceof Enum) {
-            return value.toString();
+            converted = value.toString();
           } else {
             throw new DataException("Invalid class for string type, expecting String or "
                                     + "CharSequence but found " + value.getClass());
           }
+          break;
 
         case BYTES:
           if (value instanceof byte[]) {
-            return ByteBuffer.wrap((byte[]) value);
+            converted = ByteBuffer.wrap((byte[]) value);
           } else if (value instanceof ByteBuffer) {
-            return value;
+            converted = value;
           } else {
             throw new DataException("Invalid class for bytes type, expecting byte[] or ByteBuffer "
                                     + "but found " + value.getClass());
           }
+          break;
 
         case ARRAY: {
           Schema valueSchema = schema.valueSchema();
@@ -716,7 +838,8 @@ public class AvroData {
           for (Object elem : original) {
             result.add(toCopycatData(valueSchema, elem));
           }
-          return result;
+          converted = result;
+          break;
         }
 
         case MAP: {
@@ -731,7 +854,7 @@ public class AvroData {
               result.put(entry.getKey().toString(),
                          toCopycatData(valueSchema, entry.getValue()));
             }
-            return result;
+            converted = result;
           } else {
             // Arbitrary keys
             List<IndexedRecord> original = (List<IndexedRecord>) value;
@@ -743,8 +866,9 @@ public class AvroData {
               Object convertedValue = toCopycatData(valueSchema, entry.get(avroValueFieldIndex));
               result.put(convertedKey, convertedValue);
             }
-            return result;
+            converted = result;
           }
+          break;
         }
 
         case STRUCT: {
@@ -760,12 +884,15 @@ public class AvroData {
 
               if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value) ||
                   (valueRecordSchema != null && valueRecordSchema.equals(fieldSchema))) {
-                return new Struct(schema).put(unionMemberFieldName(fieldSchema),
-                                              toCopycatData(fieldSchema, value));
+                converted = new Struct(schema).put(unionMemberFieldName(fieldSchema),
+                                                   toCopycatData(fieldSchema, value));
+                break;
               }
             }
-            throw new DataException(
-                "Did not find matching union field for data: " + value.toString());
+            if (converted == null) {
+              throw new DataException(
+                  "Did not find matching union field for data: " + value.toString());
+            }
           } else {
             IndexedRecord original = (IndexedRecord) value;
             Struct result = new Struct(schema);
@@ -775,13 +902,21 @@ public class AvroData {
                   = toCopycatData(field.schema(), original.get(avroFieldIndex));
               result.put(field, convertedFieldValue);
             }
-            return result;
+            converted = result;
           }
+          break;
         }
 
         default:
           throw new DataException("Unknown Copycat schema type: " + schema.type());
       }
+
+      if (schema != null && schema.name() != null) {
+        LogicalTypeConverter logicalConverter = TO_COPYCAT_LOGICAL_CONVERTERS.get(schema.name());
+        if (logicalConverter != null)
+          converted = logicalConverter.convert(schema, converted);
+      }
+      return converted;
     } catch (ClassCastException e) {
       throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
     }
@@ -948,6 +1083,23 @@ public class AvroData {
         throw new DataException("Invalid Copycat version found: " + version.toString());
       }
       builder.version(version.asInt());
+    }
+
+    JsonNode parameters = schema.getJsonProp(COPYCAT_PARAMETERS_PROP);
+    if (parameters != null) {
+      if (!parameters.isObject()) {
+        throw new DataException("Expected map for schema parameters but found: " + parameters);
+      }
+      Iterator<Map.Entry<String, JsonNode>> paramIt = parameters.getFields();
+      while (paramIt.hasNext()) {
+        Map.Entry<String, JsonNode> field = paramIt.next();
+        JsonNode jsonValue = field.getValue();
+        if (!jsonValue.isTextual()) {
+          throw new DataException("Expected schema parameter values to be strings but found: " +
+                                  jsonValue);
+        }
+        builder.parameter(field.getKey(), jsonValue.getTextValue());
+      }
     }
 
     if (fieldDefaultVal == null) {
@@ -1129,5 +1281,9 @@ public class AvroData {
       result[1] = fullName;
     }
     return result;
+  }
+
+  private interface LogicalTypeConverter {
+    Object convert(Schema schema, Object value);
   }
 }
