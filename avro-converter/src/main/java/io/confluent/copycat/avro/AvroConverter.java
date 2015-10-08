@@ -37,11 +37,15 @@ import java.util.Map;
  * Implementation of Converter that uses Avro schemas and objects.
  */
 public class AvroConverter implements Converter {
+  public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.config";
+  private static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
+
   private SchemaRegistryClient schemaRegistry;
   private Serializer serializer;
   private Deserializer deserializer;
 
   private boolean isKey;
+  private AvroData avroData;
 
   public AvroConverter() {
   }
@@ -49,8 +53,6 @@ public class AvroConverter implements Converter {
   // Public only for testing
   public AvroConverter(SchemaRegistryClient client) {
     schemaRegistry = client;
-    serializer = new Serializer(schemaRegistry);
-    deserializer = new Deserializer(schemaRegistry);
   }
 
   @Override
@@ -63,21 +65,29 @@ public class AvroConverter implements Converter {
     }
     Object maxSchemaObject = configs.get(
         AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
-    if (maxSchemaObject == null) {
-      schemaRegistry = new CachedSchemaRegistryClient(
-          (String) url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
-    } else {
-      schemaRegistry = new CachedSchemaRegistryClient((String) url, (Integer) maxSchemaObject);
+    if (schemaRegistry == null) {
+      if (maxSchemaObject == null) {
+        schemaRegistry = new CachedSchemaRegistryClient(
+            (String) url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
+      } else {
+        schemaRegistry = new CachedSchemaRegistryClient((String) url, (Integer) maxSchemaObject);
+      }
     }
+
+    int schemaCacheSize = SCHEMAS_CACHE_SIZE_DEFAULT;
+    Object schemaCacheSizeObj = configs.containsKey(SCHEMAS_CACHE_SIZE_CONFIG);
+    if (schemaCacheSizeObj != null && schemaCacheSizeObj instanceof Integer)
+      schemaCacheSize = (Integer) schemaCacheSizeObj;
 
     serializer = new Serializer(schemaRegistry);
     deserializer = new Deserializer(schemaRegistry);
+    avroData = new AvroData(schemaCacheSize);
   }
 
   @Override
   public byte[] fromCopycatData(String topic, Schema schema, Object value) {
     try {
-      return serializer.serialize(topic, isKey, AvroData.fromCopycatData(schema, value));
+      return serializer.serialize(topic, isKey, avroData.fromCopycatData(schema, value));
     } catch (SerializationException e) {
       throw new DataException("Failed to serialize Avro data: ", e);
     }
@@ -88,9 +98,9 @@ public class AvroConverter implements Converter {
     try {
       GenericContainer deserialized = deserializer.deserialize(topic, isKey, value);
       if (deserialized instanceof IndexedRecord) {
-        return AvroData.toCopycatData(deserialized.getSchema(), deserialized);
+        return avroData.toCopycatData(deserialized.getSchema(), deserialized);
       } else if (deserialized instanceof NonRecordContainer) {
-        return AvroData.toCopycatData(deserialized.getSchema(), ((NonRecordContainer) deserialized).getValue());
+        return avroData.toCopycatData(deserialized.getSchema(), ((NonRecordContainer) deserialized).getValue());
       }
       throw new DataException("Unsupported type returned by deserialization");
     } catch (SerializationException e) {

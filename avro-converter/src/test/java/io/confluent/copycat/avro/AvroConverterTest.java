@@ -20,6 +20,7 @@ import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.data.Struct;
+import org.junit.Before;
 import org.junit.Test;
 import org.powermock.reflect.Whitebox;
 
@@ -55,6 +56,11 @@ public class AvroConverterTest {
   public AvroConverterTest() {
     schemaRegistry = new MockSchemaRegistryClient();
     converter = new AvroConverter(schemaRegistry);
+  }
+
+  @Before
+  public void setUp() {
+    converter.configure(Collections.singletonMap("schema.registry.url", "http://fake-url"), false);
   }
 
   @Test

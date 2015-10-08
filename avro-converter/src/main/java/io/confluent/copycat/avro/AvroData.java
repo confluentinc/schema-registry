@@ -18,12 +18,13 @@ package io.confluent.copycat.avro;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
 
-import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.kafka.common.cache.Cache;
+import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.copycat.data.Field;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
@@ -153,10 +154,19 @@ public class AvroData {
         .getElementType();
   }
 
+  private Cache<Schema, org.apache.avro.Schema> fromCopycatSchemaCache;
+  private Cache<org.apache.avro.Schema, Schema> toCopycatSchemaCache;
+
+
+  public AvroData(int cacheSize) {
+    fromCopycatSchemaCache = new LRUCache<>(cacheSize);
+    toCopycatSchemaCache = new LRUCache<>(cacheSize);
+  }
+
   /**
    * Convert this object, in Copycat data format, into an Avro object.
    */
-  public static Object fromCopycatData(Schema schema, Object value) {
+  public Object fromCopycatData(Schema schema, Object value) {
     org.apache.avro.Schema avroSchema = fromCopycatSchema(schema);
     return fromCopycatData(schema, avroSchema, value, true);
   }
@@ -368,9 +378,14 @@ public class AvroData {
     return builder.build();
   }
 
-  public static org.apache.avro.Schema fromCopycatSchema(Schema schema) {
+  public org.apache.avro.Schema fromCopycatSchema(Schema schema) {
     if (schema == null) {
       return ANYTHING_SCHEMA;
+    }
+
+    org.apache.avro.Schema cached = fromCopycatSchemaCache.get(schema);
+    if (cached != null) {
+      return cached;
     }
 
     String namespace = NAMESPACE;
@@ -479,23 +494,25 @@ public class AvroData {
     // Note that all metadata has already been processed and placed on the baseSchema because we
     // can't store any metadata on the actual top-level schema when it's a union because of Avro
     // constraints on the format of schemas.
+    org.apache.avro.Schema finalSchema = baseSchema;
     if (schema.isOptional()) {
       if (schema.defaultValue() != null)
-        return org.apache.avro.SchemaBuilder.builder().unionOf()
+        finalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
             .type(baseSchema).and()
             .nullType()
             .endUnion();
       else
-        return org.apache.avro.SchemaBuilder.builder().unionOf()
+        finalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
             .nullType().and()
             .type(baseSchema)
             .endUnion();
     }
-    return baseSchema;
+    fromCopycatSchemaCache.put(schema, finalSchema);
+    return finalSchema;
   }
 
 
-  private static void addAvroRecordField(
+  private void addAvroRecordField(
       org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler,
       String fieldName, Schema fieldSchema)
   {
@@ -585,7 +602,7 @@ public class AvroData {
   /**
    * Convert the given object, in Avro format, into an Copycat data object.
    */
-  public static SchemaAndValue toCopycatData(org.apache.avro.Schema avroSchema, Object value) {
+  public SchemaAndValue toCopycatData(org.apache.avro.Schema avroSchema, Object value) {
     if (value == null) {
       return null;
     }
@@ -594,7 +611,7 @@ public class AvroData {
     return new SchemaAndValue(schema, toCopycatData(schema, value));
   }
 
-  private static Object toCopycatData(Schema schema, Object value) {
+  private Object toCopycatData(Schema schema, Object value) {
     try {
       // If we're decoding schemaless data, we need to unwrap it into just the single value
       if (schema == null) {
@@ -787,8 +804,19 @@ public class AvroData {
     }
   }
 
-  public static Schema toCopycatSchema(org.apache.avro.Schema schema) {
-    return toCopycatSchema(schema, false, null, null);
+  public Schema toCopycatSchema(org.apache.avro.Schema schema) {
+    // We perform caching only at this top level. While it might be helpful to cache some more of
+    // the internal conversions, this is the safest place to add caching since some of the internal
+    // conversions take extra flags (like forceOptional) which means the resulting schema might not
+    // exactly match the Avro schema.
+    Schema cachedSchema = toCopycatSchemaCache.get(schema);
+    if (cachedSchema != null) {
+      return cachedSchema;
+    }
+
+    Schema resultSchema = toCopycatSchema(schema, false, null, null);
+    toCopycatSchemaCache.put(schema, resultSchema);
+    return resultSchema;
   }
 
   /**
@@ -806,8 +834,8 @@ public class AvroData {
    *                      schema
    * @return
    */
-  public static Schema toCopycatSchema(org.apache.avro.Schema schema, boolean forceOptional,
-                                       Object fieldDefaultVal, String docDefaultVal) {
+  private Schema toCopycatSchema(org.apache.avro.Schema schema, boolean forceOptional,
+                                Object fieldDefaultVal, String docDefaultVal) {
     final SchemaBuilder builder;
     switch (schema.getType()) {
       case BOOLEAN:
@@ -981,9 +1009,9 @@ public class AvroData {
   }
 
 
-  private static Object defaultValueFromAvro(Schema schema,
-                                             org.apache.avro.Schema avroSchema,
-                                             Object value) {
+  private Object defaultValueFromAvro(Schema schema,
+                                      org.apache.avro.Schema avroSchema,
+                                      Object value) {
     // The type will be JsonNode if this default was pulled from a Copycat default field, or an
     // Object if it's the actual Avro-specified default. If it's a regular Java object, we can
     // use our existing conversion tools.
