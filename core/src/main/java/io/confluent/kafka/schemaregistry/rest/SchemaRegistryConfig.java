@@ -189,14 +189,15 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   private static String getDefaultHost() {
+    String envHost = System.getenv("HOSTNAME");
+    if (envHost != null && !("".equals(envHost))) {
+      return envHost;
+    }
+
     try {
       return InetAddress.getLocalHost().getCanonicalHostName();
     } catch (UnknownHostException e) {
-      String envHost = System.getenv("HOSTNAME");
-      if (envHost == null || "".equals(envHost)) {
-        throw new ConfigException("Unknown local hostname", e);
-      }
-      return envHost;
+      throw new ConfigException("Unknown local hostname", e);
     }
   }
 
