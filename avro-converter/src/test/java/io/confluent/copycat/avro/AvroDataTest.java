@@ -568,7 +568,7 @@ public class AvroDataTest {
     avroParams.put("scale", "2");
     avroSchema.addProp("copycat.parameters", avroParams);
     assertEquals(new SchemaAndValue(Decimal.schema(2), TEST_DECIMAL),
-                 AvroData.toCopycatData(avroSchema, TEST_DECIMAL_BYTES));
+                 avroData.toCopycatData(avroSchema, TEST_DECIMAL_BYTES));
   }
 
   @Test
@@ -577,7 +577,7 @@ public class AvroDataTest {
     avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Date");
     avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
     assertEquals(new SchemaAndValue(Date.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime()),
-                 AvroData.toCopycatData(avroSchema, 10000));
+                 avroData.toCopycatData(avroSchema, 10000));
   }
 
   @Test
@@ -586,7 +586,7 @@ public class AvroDataTest {
     avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Time");
     avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
     assertEquals(new SchemaAndValue(Time.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime()),
-                 AvroData.toCopycatData(avroSchema, 10000));
+                 avroData.toCopycatData(avroSchema, 10000));
   }
 
   @Test
@@ -596,7 +596,7 @@ public class AvroDataTest {
     avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
     java.util.Date date = new java.util.Date();
     assertEquals(new SchemaAndValue(Timestamp.SCHEMA, date),
-                 AvroData.toCopycatData(avroSchema, date.getTime()));
+                 avroData.toCopycatData(avroSchema, date.getTime()));
   }
 
   // Avro -> Copycat: Copycat types with no corresponding Avro type
