@@ -277,7 +277,8 @@ public class AvroData {
       throw new DataException("Found null value for non-optional schema");
     }
 
-    // If this is a logical type, decode and
+    // If this is a logical type, convert it from the convenient Java type to the underlying
+    // serializeable format
     Object value = logicalValue;
     if (schema != null && schema.name() != null) {
       LogicalTypeConverter logicalConverter = TO_AVRO_LOGICAL_CONVERTERS.get(schema.name());
@@ -1088,7 +1089,8 @@ public class AvroData {
     JsonNode parameters = schema.getJsonProp(COPYCAT_PARAMETERS_PROP);
     if (parameters != null) {
       if (!parameters.isObject()) {
-        throw new DataException("Expected map for schema parameters but found: " + parameters);
+        throw new DataException("Expected JSON object for schema parameters but found: " +
+                                parameters);
       }
       Iterator<Map.Entry<String, JsonNode>> paramIt = parameters.getFields();
       while (paramIt.hasNext()) {
