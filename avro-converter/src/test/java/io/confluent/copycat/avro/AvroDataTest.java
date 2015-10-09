@@ -20,23 +20,52 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.util.Utf8;
+import org.apache.kafka.copycat.data.Date;
+import org.apache.kafka.copycat.data.Decimal;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.data.Struct;
+import org.apache.kafka.copycat.data.Time;
+import org.apache.kafka.copycat.data.Timestamp;
 import org.apache.kafka.copycat.errors.DataException;
 import org.codehaus.jackson.node.JsonNodeFactory;
+import org.codehaus.jackson.node.ObjectNode;
 import org.junit.Test;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.GregorianCalendar;
+import java.util.TimeZone;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static org.junit.Assert.*;
 
 public class AvroDataTest {
+  private static final int TEST_SCALE = 2;
+  private static final BigDecimal TEST_DECIMAL = new BigDecimal(new BigInteger("156"), TEST_SCALE);
+  private static final byte[] TEST_DECIMAL_BYTES = new byte[]{0, -100};
+
+  private static final GregorianCalendar EPOCH;
+  private static final GregorianCalendar EPOCH_PLUS_TEN_THOUSAND_DAYS;
+  private static final GregorianCalendar EPOCH_PLUS_TEN_THOUSAND_MILLIS;
+  static {
+    EPOCH = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
+    EPOCH.setTimeZone(TimeZone.getTimeZone("UTC"));
+
+    EPOCH_PLUS_TEN_THOUSAND_DAYS = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
+    EPOCH_PLUS_TEN_THOUSAND_DAYS.setTimeZone(TimeZone.getTimeZone("UTC"));
+    EPOCH_PLUS_TEN_THOUSAND_DAYS.add(Calendar.DATE, 10000);
+
+    EPOCH_PLUS_TEN_THOUSAND_MILLIS = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
+    EPOCH_PLUS_TEN_THOUSAND_MILLIS.setTimeZone(TimeZone.getTimeZone("UTC"));
+    EPOCH_PLUS_TEN_THOUSAND_MILLIS.add(Calendar.MILLISECOND, 10000);
+  }
 
   // Copycat -> Avro
 
@@ -190,6 +219,7 @@ public class AvroDataTest {
   public void testFromCopycatOptionalPrimitiveWithMetadata() {
     Schema schema = SchemaBuilder.string().
         doc("doc").defaultValue("foo").name("io.confluent.stringtype").version(2).optional()
+        .parameter("foo", "bar").parameter("baz", "baz")
         .build();
 
     // Missing some metadata, used to validate missing properties on the Avro schema will cause
@@ -206,6 +236,10 @@ public class AvroDataTest {
                              JsonNodeFactory.instance.numberNode(2));
     avroStringSchema.addProp("copycat.doc", "doc");
     avroStringSchema.addProp("copycat.default", "foo");
+    ObjectNode params = JsonNodeFactory.instance.objectNode();
+    params.put("foo", "bar");
+    params.put("baz", "baz");
+    avroStringSchema.addProp("copycat.parameters", params);
     org.apache.avro.Schema avroSchema =
         org.apache.avro.SchemaBuilder.builder().unionOf()
             .type(avroStringSchema).and()
@@ -242,6 +276,45 @@ public class AvroDataTest {
 
     assertEquals(avroSchema, ((org.apache.avro.generic.GenericRecord) convertedRecord).getSchema());
     assertEquals(avroRecord, convertedRecord);
+  }
+
+  @Test
+  public void testFromCopycatLogicalDecimal() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
+    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Decimal");
+    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    ObjectNode avroParams = JsonNodeFactory.instance.objectNode();
+    avroParams.put("scale", "2");
+    avroSchema.addProp("copycat.parameters", avroParams);
+    checkNonRecordConversion(avroSchema, ByteBuffer.wrap(TEST_DECIMAL_BYTES),
+                             Decimal.schema(2), TEST_DECIMAL);
+  }
+
+  @Test
+  public void testFromCopycatLogicalDate() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Date");
+    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    checkNonRecordConversion(avroSchema, 10000, Date.SCHEMA,
+                             EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime());
+  }
+
+  @Test
+  public void testFromCopycatLogicalTime() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Time");
+    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    checkNonRecordConversion(avroSchema, 10000, Time.SCHEMA,
+                             EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime());
+  }
+
+  @Test
+  public void testFromCopycatLogicalTimestamp() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Timestamp");
+    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    java.util.Date date = new java.util.Date();
+    checkNonRecordConversion(avroSchema, date.getTime(), Timestamp.SCHEMA, date);
   }
 
   @Test(expected = DataException.class)
@@ -460,6 +533,47 @@ public class AvroDataTest {
                  AvroData.toCopycatData(avroSchema, avroRecord));
   }
 
+  // Avro -> Copycat: Copycat logical types
+
+  @Test
+  public void testToCopycatDecimal() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
+    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Decimal");
+    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    ObjectNode avroParams = JsonNodeFactory.instance.objectNode();
+    avroParams.put("scale", "2");
+    avroSchema.addProp("copycat.parameters", avroParams);
+    assertEquals(new SchemaAndValue(Decimal.schema(2), TEST_DECIMAL),
+                 AvroData.toCopycatData(avroSchema, TEST_DECIMAL_BYTES));
+  }
+
+  @Test
+  public void testToCopycatDate() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Date");
+    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    assertEquals(new SchemaAndValue(Date.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime()),
+                 AvroData.toCopycatData(avroSchema, 10000));
+  }
+
+  @Test
+  public void testToCopycatTime() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Time");
+    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    assertEquals(new SchemaAndValue(Time.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime()),
+                 AvroData.toCopycatData(avroSchema, 10000));
+  }
+
+  @Test
+  public void testToCopycatTimestamp() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Timestamp");
+    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    java.util.Date date = new java.util.Date();
+    assertEquals(new SchemaAndValue(Timestamp.SCHEMA, date),
+                 AvroData.toCopycatData(avroSchema, date.getTime()));
+  }
 
   // Avro -> Copycat: Copycat types with no corresponding Avro type
 
@@ -600,6 +714,7 @@ public class AvroDataTest {
   public void testToCopycatOptionalPrimitiveWithCopycatMetadata() {
     Schema schema = SchemaBuilder.string().
         doc("doc").defaultValue("foo").name("io.confluent.stringtype").version(2).optional()
+        .parameter("foo", "bar").parameter("baz", "baz")
         .build();
 
     org.apache.avro.Schema avroStringSchema = org.apache.avro.SchemaBuilder.builder().stringType();
@@ -608,6 +723,10 @@ public class AvroDataTest {
                              JsonNodeFactory.instance.numberNode(2));
     avroStringSchema.addProp("copycat.doc", "doc");
     avroStringSchema.addProp("copycat.default", "foo");
+    ObjectNode params = JsonNodeFactory.instance.objectNode();
+    params.put("foo", "bar");
+    params.put("baz", "baz");
+    avroStringSchema.addProp("copycat.parameters", params);
     org.apache.avro.Schema avroSchema =
         org.apache.avro.SchemaBuilder.builder().unionOf()
             .type(avroStringSchema).and()
