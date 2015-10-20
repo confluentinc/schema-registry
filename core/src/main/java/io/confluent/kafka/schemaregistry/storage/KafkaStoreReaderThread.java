@@ -15,7 +15,6 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import org.I0Itec.zkclient.ZkClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +62,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   // messages with this key
   private final K noopKey;
 
-  public KafkaStoreReaderThread(ZkClient zkClient,
+  public KafkaStoreReaderThread(ZkUtils zkUtils,
                                 String kafkaClusterZkUrl,
                                 String topic,
                                 String groupId,
@@ -83,7 +82,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.commitInterval = commitInterval;
     this.noopKey = noopKey;
 
-    offsetInSchemasTopic = offsetOfLastConsumedMessage(zkClient, groupId, topic);
+    offsetInSchemasTopic = offsetOfLastConsumedMessage(zkUtils, groupId, topic);
     log.info("Initialized the consumer offset to " + offsetInSchemasTopic);
     Properties consumerProps = new Properties();
     consumerProps.put("group.id", this.groupId);
@@ -111,9 +110,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   /**
    * Fetch the offset of the last consumed message from ZK.
    */
-  private long offsetOfLastConsumedMessage(ZkClient zkClient, String group, String topic) {
-    Option<String> committedOffsetStringOpt = ZkUtils.readDataMaybeNull(
-        zkClient, String.format("/consumers/%s/offsets/%s/0", group, topic))._1();
+  private long offsetOfLastConsumedMessage(ZkUtils zkUtils, String group, String topic) {
+    Option<String> committedOffsetStringOpt = zkUtils.readDataMaybeNull(
+        String.format("/consumers/%s/offsets/%s/0", group, topic))._1();
     if (committedOffsetStringOpt.isEmpty()) {
       return -1L;
     } else {

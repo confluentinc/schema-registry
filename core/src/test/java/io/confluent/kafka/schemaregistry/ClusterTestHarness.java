@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry;
 
 import kafka.utils.CoreUtils;
 import org.I0Itec.zkclient.ZkClient;
+import org.apache.kafka.common.security.JaasUtils;
 import org.junit.After;
 import org.junit.Before;
 
@@ -33,6 +34,7 @@ import kafka.server.KafkaServer;
 import kafka.utils.SystemTime$;
 import kafka.utils.TestUtils;
 import kafka.utils.ZKStringSerializer$;
+import kafka.utils.ZkUtils;
 import kafka.zk.EmbeddedZookeeper;
 import scala.Option;
 import scala.collection.JavaConversions;
@@ -81,6 +83,7 @@ public abstract class ClusterTestHarness {
   protected EmbeddedZookeeper zookeeper;
   protected String zkConnect;
   protected ZkClient zkClient;
+  protected ZkUtils zkUtils;
   protected int zkConnectionTimeout = 6000;
   protected int zkSessionTimeout = 6000;
 
@@ -113,9 +116,10 @@ public abstract class ClusterTestHarness {
   public void setUp() throws Exception {
     zookeeper = new EmbeddedZookeeper();
     zkConnect = String.format("127.0.0.1:%d", zookeeper.port());
-    zkClient =
-        new ZkClient(zkConnect, zkSessionTimeout, zkConnectionTimeout,
-                     ZKStringSerializer$.MODULE$);
+    zkUtils = ZkUtils.apply(
+        zkConnect, zkSessionTimeout, zkConnectionTimeout,
+        JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)));
+    zkClient = zkUtils.zkClient();
 
     configs = new Vector<>();
     servers = new Vector<>();
@@ -162,8 +166,8 @@ public abstract class ClusterTestHarness {
       }
     }
 
-    if (zkClient != null) {
-      zkClient.close();
+    if (zkUtils != null) {
+      zkUtils.close();
     }
 
     if (zookeeper != null) {

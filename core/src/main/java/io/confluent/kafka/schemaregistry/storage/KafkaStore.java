@@ -17,13 +17,12 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import kafka.cluster.EndPoint;
 import kafka.server.ConfigType;
-import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.JaasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,13 +44,11 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
 import kafka.admin.AdminUtils;
 import kafka.cluster.Broker;
 import kafka.common.TopicExistsException;
 import kafka.log.LogConfig;
 import kafka.utils.ZkUtils;
-import scala.Option;
 import scala.collection.JavaConversions;
 import scala.collection.Seq;
 
@@ -74,7 +71,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final int initTimeout;
   private final int timeout;
   private final Seq<Broker> brokerSeq;
-  private final ZkClient zkClient;
+  private final ZkUtils zkUtils;
   private KafkaProducer<byte[],byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
   // Noop key is only used to help reliably determine last offset; reader thread ignores
@@ -106,13 +103,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
     int commitInterval = config.getInt(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG);
     int zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
-    this.zkClient = new ZkClient(kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-                                 new ZkStringSerializer());
+    this.zkUtils = ZkUtils.apply(
+        kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
+        JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)));
     this.kafkaTopicReader =
-        new KafkaStoreReaderThread<K, V>(zkClient, kafkaClusterZkUrl, topic, groupId,
+        new KafkaStoreReaderThread<>(zkUtils, kafkaClusterZkUrl, topic, groupId,
                                          Integer.MIN_VALUE, this.storeUpdateHandler,
                                          serializer, this.localStore, this.noopKey);
-    this.brokerSeq = ZkUtils.getAllBrokersInCluster(zkClient);
+    this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
   }
 
@@ -165,7 +163,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   private void createSchemaTopic() throws StoreInitializationException {
-    if (AdminUtils.topicExists(zkClient, topic)) {
+    if (AdminUtils.topicExists(zkUtils, topic)) {
       verifySchemaTopic();
       return;
     }
@@ -184,7 +182,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     schemaTopicProps.put(LogConfig.CleanupPolicyProp(), "compact");
 
     try {
-      AdminUtils.createTopic(zkClient, topic, 1, schemaTopicReplicationFactor, schemaTopicProps);
+      AdminUtils.createTopic(zkUtils, topic, 1, schemaTopicReplicationFactor, schemaTopicProps);
     } catch (TopicExistsException e) {
       // This is ok.
     }
@@ -195,8 +193,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     topics.add(topic);
 
     // check # partition and the replication factor
-    scala.collection.Map partitionAssignment = ZkUtils.getPartitionAssignmentForTopics(
-        zkClient, JavaConversions.asScalaSet(topics).toSeq())
+    scala.collection.Map partitionAssignment = zkUtils.getPartitionAssignmentForTopics(
+        JavaConversions.asScalaSet(topics).toSeq())
         .get(topic).get();
 
     if (partitionAssignment.size() != 1) {
@@ -211,7 +209,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
 
     // check the retention policy
-    Properties prop = AdminUtils.fetchEntityConfig(zkClient, ConfigType.Topic(), topic);
+    Properties prop = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic(), topic);
     String retentionPolicy = prop.getProperty(LogConfig.CleanupPolicyProp());
     if (retentionPolicy == null || "compact".compareTo(retentionPolicy) != 0) {
       log.warn("The retention policy of the schema topic " + topic + " may be incorrect. " +
@@ -318,7 +316,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     log.debug("Kafka store reader thread shut down");
     producer.close();
     log.debug("Kafka store producer shut down");
-    zkClient.close();
+    zkUtils.close();
     log.debug("Kafka store zookeeper client shut down");
     localStore.close();
     log.debug("Kafka store shut down complete");

@@ -38,17 +38,19 @@ public class ZookeeperMasterElector {
   private static final String MASTER_PATH = "/schema_registry_master";
 
   private final ZkClient zkClient;
+  private final ZkUtils zkUtils;
   private final SchemaRegistryIdentity myIdentity;
   private final String myIdentityString;
   private final KafkaSchemaRegistry schemaRegistry;
 
 
-  public ZookeeperMasterElector(ZkClient zkClient, 
+  public ZookeeperMasterElector(ZkUtils zkUtils,
                                 SchemaRegistryIdentity myIdentity,
                                 KafkaSchemaRegistry schemaRegistry, 
                                 boolean isEligibleForMasterElection)
       throws SchemaRegistryTimeoutException, SchemaRegistryStoreException {
-    this.zkClient = zkClient;
+    this.zkClient = zkUtils.zkClient();
+    this.zkUtils = zkUtils;
     this.myIdentity = myIdentity;
     try {
       this.myIdentityString = myIdentity.toJson();
@@ -76,7 +78,8 @@ public class ZookeeperMasterElector {
       SchemaRegistryStoreException, SchemaRegistryTimeoutException {
     SchemaRegistryIdentity masterIdentity = null;
     try {
-      ZkUtils.createEphemeralPathExpectConflict(zkClient, MASTER_PATH, myIdentityString);
+      zkUtils.createEphemeralPathExpectConflict(MASTER_PATH, myIdentityString,
+                                                zkUtils.DefaultAcls());
       log.info("Successfully elected the new master: " + myIdentityString);
       masterIdentity = myIdentity;
       schemaRegistry.setMaster(masterIdentity);
@@ -90,7 +93,7 @@ public class ZookeeperMasterElector {
     SchemaRegistryIdentity masterIdentity = null;
     // If someone else has written the path, read the new master back
     try {
-      String masterIdentityString = ZkUtils.readData(zkClient, MASTER_PATH)._1();
+      String masterIdentityString = zkUtils.readData(MASTER_PATH)._1();
       try {
         masterIdentity = SchemaRegistryIdentity.fromJson(masterIdentityString);
       } catch (IOException ioe) {
