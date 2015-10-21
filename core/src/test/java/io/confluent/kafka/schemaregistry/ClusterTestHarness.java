@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry;
 
 import kafka.utils.CoreUtils;
 import org.I0Itec.zkclient.ZkClient;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.JaasUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -33,10 +34,12 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.SystemTime$;
 import kafka.utils.TestUtils;
+import kafka.utils.TestUtils$;
 import kafka.utils.ZKStringSerializer$;
 import kafka.utils.ZkUtils;
 import kafka.zk.EmbeddedZookeeper;
 import scala.Option;
+import scala.Option$;
 import scala.collection.JavaConversions;
 
 /**
@@ -125,7 +128,11 @@ public abstract class ClusterTestHarness {
     servers = new Vector<>();
     for (int i = 0; i < numBrokers; i++) {
       final Option<java.io.File> noFile = scala.Option.apply(null);
-      Properties props = TestUtils.createBrokerConfig(i, zkConnect, false, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), noFile);
+      final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
+      Properties props = TestUtils.createBrokerConfig(
+          i, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
+          noFile, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
+          TestUtils.RandomPort());
       props.setProperty("auto.create.topics.enable", "true");
       props.setProperty("num.partitions", "1");
       // We *must* override this to use the port we allocated (Kafka currently allocates one port
@@ -139,7 +146,8 @@ public abstract class ClusterTestHarness {
     }
 
     brokerList =
-        TestUtils.getBrokerListStrFromServers(JavaConversions.asScalaIterable(servers).toSeq());
+        TestUtils.getBrokerListStrFromServers(JavaConversions.asScalaIterable(servers).toSeq(),
+                                              SecurityProtocol.PLAINTEXT);
 
     if (setupRestApp) {
       restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType);
