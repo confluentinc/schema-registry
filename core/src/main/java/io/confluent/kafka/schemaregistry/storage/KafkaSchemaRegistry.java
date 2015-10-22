@@ -23,8 +23,6 @@ import io.confluent.common.metrics.MetricsReporter;
 import io.confluent.common.metrics.Sensor;
 import io.confluent.common.metrics.stats.Gauge;
 import io.confluent.common.utils.SystemTime;
-import io.confluent.common.utils.zookeeper.ZkData;
-import io.confluent.common.utils.zookeeper.ZkUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
@@ -49,14 +47,17 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 import io.confluent.rest.exceptions.RestException;
-import org.I0Itec.zkclient.ZkClient;
+import kafka.utils.ZkUtils;
+import scala.Tuple2;
+
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.security.JaasUtils;
+import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,7 +96,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final int kafkaStoreTimeoutMs;
   private final boolean isEligibleForMasterElector;
   private String schemaRegistryZkUrl;
-  private ZkClient zkClient;
+  private ZkUtils zkUtils;
   private SchemaRegistryIdentity masterIdentity;
   private RestService masterRestService;
   private ZookeeperMasterElector masterElector = null;
@@ -168,7 +169,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     
     try {
       createZkNamespace();
-      masterElector = new ZookeeperMasterElector(zkClient, myIdentity, this, 
+      masterElector = new ZookeeperMasterElector(zkUtils, myIdentity, this,
                                                  isEligibleForMasterElector);
     } catch (SchemaRegistryStoreException e) {
       throw new SchemaRegistryInitializationException(
@@ -187,16 +188,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     String schemaRegistryNamespace = "/" + schemaRegistryZkNamespace;
     schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;
 
-    ZkClient zkClientForNamespaceCreation = new ZkClient(zkConnForNamespaceCreation,
-                                                         zkSessionTimeoutMs, zkSessionTimeoutMs,
-                                                         new ZkStringSerializer());
+    ZkUtils zkUtilsForNamespaceCreation = ZkUtils.apply(
+        zkConnForNamespaceCreation,
+        zkSessionTimeoutMs, zkSessionTimeoutMs,
+        JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)));
     // create the zookeeper namespace using cluster.name if it doesn't already exist
-    ZkUtils.makeSurePersistentPathExists(zkClientForNamespaceCreation, schemaRegistryNamespace);
+    zkUtilsForNamespaceCreation.makeSurePersistentPathExists(
+        schemaRegistryNamespace,
+        zkUtilsForNamespaceCreation.DefaultAcls());
     log.info("Created schema registry namespace " +
              zkConnForNamespaceCreation + schemaRegistryNamespace);
-    zkClientForNamespaceCreation.close();
-    this.zkClient = new ZkClient(schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-                                 new ZkStringSerializer());
+    zkUtilsForNamespaceCreation.close();
+    this.zkUtils = ZkUtils.apply(
+        schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
+        JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)));
   }
   
   public boolean isMaster() {
@@ -401,14 +406,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
     while (true) {
 
-      if (!zkClient.exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
+      if (!zkUtils.zkClient().exists(ZOOKEEPER_SCHEMA_ID_COUNTER)) {
         // create ZOOKEEPER_SCHEMA_ID_COUNTER if it already doesn't exist
 
         try {
           nextIdBatchLowerBound = getNextBatchLowerBoundFromKafkaStore();
           int nextIdBatchUpperBound = getInclusiveUpperBound(nextIdBatchLowerBound);
-          ZkUtils.createPersistentPath(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER,
-                                       String.valueOf(nextIdBatchUpperBound));
+          zkUtils.createPersistentPath(ZOOKEEPER_SCHEMA_ID_COUNTER,
+                                       String.valueOf(nextIdBatchUpperBound),
+                                       zkUtils.DefaultAcls());
           return nextIdBatchLowerBound;
         } catch (ZkNodeExistsException ignore) {
           // A zombie master may have created this zk node after the initial existence check
@@ -417,15 +423,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       } else { // ZOOKEEPER_SCHEMA_ID_COUNTER exists
 
         // read the latest counter value
-        final ZkData counterValue = ZkUtils.readData(zkClient, ZOOKEEPER_SCHEMA_ID_COUNTER);
-        if (counterValue.getData() == null) {
+        final Tuple2<String, Stat> counterValue = zkUtils.readData(ZOOKEEPER_SCHEMA_ID_COUNTER);
+        final String counterData = counterValue._1();
+        final Stat counterStat = counterValue._2();
+        if (counterData == null) {
           throw new SchemaRegistryStoreException(
               "Failed to read schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER +
               " from zookeeper");
         }
 
         // Compute the lower bound of next id batch based on zk data and kafkastore data
-        int zkIdCounterValue = Integer.valueOf(counterValue.getData());
+        int zkIdCounterValue = Integer.valueOf(counterData);
         int zkNextIdBatchLowerBound = zkIdCounterValue + 1;
         if (zkIdCounterValue % ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE != 0) {
           // ZooKeeper id counter should be an integer multiple of id batch size in normal
@@ -455,12 +463,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         // continue until one master is determined to be the zombie master.
         // NOTE: The handling of multiple masters is still a TODO
         int newSchemaIdCounterDataVersion =
-            ZkUtils.conditionalUpdatePersistentPath(
-              zkClient,
+            (Integer) zkUtils.conditionalUpdatePersistentPath(
               ZOOKEEPER_SCHEMA_ID_COUNTER,
               nextIdBatchUpperBound,
-              counterValue.getStat().getVersion(),
-              null);
+              counterStat.getVersion(),
+              null)._2();
         if (newSchemaIdCounterDataVersion >= 0) {
           break;
         }
@@ -627,8 +634,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     if (masterElector != null) {
       masterElector.close();
     }
-    if (zkClient != null) {
-      zkClient.close();
+    if (zkUtils != null) {
+      zkUtils.close();
     }
   }
 

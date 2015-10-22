@@ -44,8 +44,8 @@ public class SchemaTopicTest extends ClusterTestHarness {
     topics.add(KAFKASTORE_TOPIC);
 
     // check # partition and the replication factor
-    Map partitionAssignment = ZkUtils.getPartitionAssignmentForTopics(
-        zkClient, JavaConversions.asScalaSet(topics).toSeq())
+    Map partitionAssignment = zkUtils.getPartitionAssignmentForTopics(
+        JavaConversions.asScalaSet(topics).toSeq())
         .get(KAFKASTORE_TOPIC).get();
     assertEquals("There should be only 1 partition in the schema topic",
                  1,
@@ -56,7 +56,7 @@ public class SchemaTopicTest extends ClusterTestHarness {
                  replicas.size());
 
     // check the retention policy
-    Properties prop = AdminUtils.fetchEntityConfig(zkClient, ConfigType.Topic(), KAFKASTORE_TOPIC);
+    Properties prop = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic(), KAFKASTORE_TOPIC);
     assertEquals("The schema topic should have the compact retention policy",
                  "compact",
                  prop.getProperty(LogConfig.CleanupPolicyProp()));
