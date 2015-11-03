@@ -191,7 +191,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     ZkUtils zkUtilsForNamespaceCreation = ZkUtils.apply(
         zkConnForNamespaceCreation,
         zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)));
+        JaasUtils.isZkSecurityEnabled());
     // create the zookeeper namespace using cluster.name if it doesn't already exist
     zkUtilsForNamespaceCreation.makeSurePersistentPathExists(
         schemaRegistryNamespace,
@@ -201,7 +201,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     zkUtilsForNamespaceCreation.close();
     this.zkUtils = ZkUtils.apply(
         schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)));
+        JaasUtils.isZkSecurityEnabled());
   }
   
   public boolean isMaster() {

@@ -105,7 +105,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
     this.zkUtils = ZkUtils.apply(
         kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)));
+        JaasUtils.isZkSecurityEnabled());
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<>(zkUtils, kafkaClusterZkUrl, topic, groupId,
                                          Integer.MIN_VALUE, this.storeUpdateHandler,
