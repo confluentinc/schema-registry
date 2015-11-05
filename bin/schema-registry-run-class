@@ -22,7 +22,8 @@ for dir in $base_dir/package/target/kafka-schema-registry-package-*-development;
 done
 
 # Production jars, including kafka, rest-utils, and schema-registry
-for library in "confluent-common" "rest-utils" "schema-registry"; do
+
+for library in "confluent-common" "rest-utils" "schema-registry" "avro-serializer" "json-serializer"; do
   CLASSPATH=$CLASSPATH:$base_dir/share/java/$library/*
 done
 
