@@ -23,7 +23,7 @@
         </fileSet>
         <fileSet>
             <directory>${project.parent.basedir}</directory>
-            <outputDirectory>/</outputDirectory>
+            <outputDirectory></outputDirectory>
             <includes>
                 <include>bin/*</include>
             </includes>
