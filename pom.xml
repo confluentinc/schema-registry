@@ -57,7 +57,16 @@
         <powermock.version>1.6.2</powermock.version>
         <powermock.api.easymock.version>1.6.2</powermock.api.easymock.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven-assembly.version>2.6</maven-assembly.version>
     </properties>
+
+    <repositories>
+        <repository>
+            <id>confluent</id>
+            <name>Confluent</name>
+            <url>http://packages.confluent.io/maven/</url>
+        </repository>
+    </repositories>
 
     <dependencyManagement>
         <dependencies>
@@ -72,6 +81,15 @@
     </dependencyManagement>
 
     <build>
+        <pluginManagement>
+            <plugins>
+              <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-assembly-plugin</artifactId>
+                  <version>${maven-assembly.version}</version>
+              </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
