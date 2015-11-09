@@ -41,35 +41,17 @@
             <outputDirectory>share/java/schema-registry</outputDirectory>
             <useProjectArtifact>true</useProjectArtifact>
             <scope>runtime</scope>
+            <!-- Warning: Enabling useTransitiveFiltering is potentially unsafe,
+                 cf. https://github.com/miguno/maven-assembly-transitive-deps-woes
+                 and https://issues.apache.org/jira/browse/MASSEMBLY-504.  If
+                 dependencies happen to be missing in the assembly you may want to
+                 disable transitive filtering. -->
             <useTransitiveFiltering>true</useTransitiveFiltering>
             <excludes>
                 <exclude>io.confluent:rest-utils</exclude>
                 <exclude>io.confluent:common-config</exclude>
                 <exclude>io.confluent:common-utils</exclude>
-                <exclude>io.confluent:kafka-avro-serializer</exclude>
-                <exclude>io.confluent:copycat-avro-converter</exclude>
-                <exclude>io.confluent:kafka-json-serializer</exclude>
             </excludes>
-        </dependencySet>
-        <dependencySet>
-            <outputDirectory>share/java/avro-serializer</outputDirectory>
-            <useProjectArtifact>true</useProjectArtifact>
-            <scope>runtime</scope>
-            <useTransitiveFiltering>true</useTransitiveFiltering>
-            <includes>
-                <include>io.confluent:kafka-avro-serializer</include>
-                <include>io.confluent:kafka-schema-registry-client</include>
-                <include>io.confluent:copycat-avro-converter</include>
-            </includes>
-        </dependencySet>
-        <dependencySet>
-            <outputDirectory>share/java/json-serializer</outputDirectory>
-            <useProjectArtifact>true</useProjectArtifact>
-            <scope>runtime</scope>
-            <useTransitiveFiltering>true</useTransitiveFiltering>
-            <includes>
-                <include>io.confluent:kafka-json-serializer</include>
-            </includes>
         </dependencySet>
     </dependencySets>
 </assembly>
