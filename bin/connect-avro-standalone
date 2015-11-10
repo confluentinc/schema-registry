@@ -16,12 +16,12 @@
 
 base_dir=$(dirname $0)
 
-# Packaged version needs to add Avro serializers and Copycat runtime APIs
+# Packaged version needs to add Avro serializers and Kafka Connect runtime APIs
 CLASSPATH=$CLASSPATH:$base_dir/../share/java/avro-serializer/*
 CLASSPATH=$CLASSPATH:$base_dir/../share/java/kafka/*
 
 if [ "x$SCHEMA_REGISTRY_LOG4J_OPTS" = "x" ]; then
-    export SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/copycat-log4j.properties"
+    export SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/connect-log4j.properties"
 fi
 
-exec $(dirname $0)/schema-registry-run-class org.apache.kafka.copycat.cli.CopycatStandalone "$@"
+exec $(dirname $0)/schema-registry-run-class org.apache.kafka.connect.cli.ConnectStandalone "$@"

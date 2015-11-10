@@ -14,7 +14,7 @@
  * limitations under the License.
  **/
 
-package io.confluent.copycat.avro;
+package io.confluent.connect.avro;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -26,10 +26,10 @@ import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.copycat.data.Schema;
-import org.apache.kafka.copycat.data.SchemaAndValue;
-import org.apache.kafka.copycat.errors.DataException;
-import org.apache.kafka.copycat.storage.Converter;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.storage.Converter;
 
 import java.util.Map;
 
@@ -85,22 +85,22 @@ public class AvroConverter implements Converter {
   }
 
   @Override
-  public byte[] fromCopycatData(String topic, Schema schema, Object value) {
+  public byte[] fromConnectData(String topic, Schema schema, Object value) {
     try {
-      return serializer.serialize(topic, isKey, avroData.fromCopycatData(schema, value));
+      return serializer.serialize(topic, isKey, avroData.fromConnectData(schema, value));
     } catch (SerializationException e) {
       throw new DataException("Failed to serialize Avro data: ", e);
     }
   }
 
   @Override
-  public SchemaAndValue toCopycatData(String topic, byte[] value) {
+  public SchemaAndValue toConnectData(String topic, byte[] value) {
     try {
       GenericContainer deserialized = deserializer.deserialize(topic, isKey, value);
       if (deserialized instanceof IndexedRecord) {
-        return avroData.toCopycatData(deserialized.getSchema(), deserialized);
+        return avroData.toConnectData(deserialized.getSchema(), deserialized);
       } else if (deserialized instanceof NonRecordContainer) {
-        return avroData.toCopycatData(deserialized.getSchema(), ((NonRecordContainer) deserialized).getValue());
+        return avroData.toConnectData(deserialized.getSchema(), ((NonRecordContainer) deserialized).getValue());
       }
       throw new DataException("Unsupported type returned by deserialization");
     } catch (SerializationException e) {

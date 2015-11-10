@@ -34,7 +34,7 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
-            <artifactId>copycat-avro-converter</artifactId>
+            <artifactId>kafka-connect-avro-converter</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -50,24 +50,24 @@
             <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
-        <!-- Include Copycat runtime as a provided dependency. It should not be pulled in, but this
-             reference allows us to package it with the development-mode "packaging" so you don't
-             need to jump through classpath hoops -->
+        <!-- Include Kafka Connect runtime as a provided dependency. It should not be pulled in,
+             but this reference allows us to package it with the development-mode "packaging" so
+             you don't need to jump through classpath hoops -->
         <dependency>
             <groupId>org.apache.kafka</groupId>
-            <artifactId>copycat-runtime</artifactId>
+            <artifactId>connect-runtime</artifactId>
             <version>${kafka.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
-            <artifactId>copycat-json</artifactId>
+            <artifactId>connect-json</artifactId>
             <version>${kafka.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
-            <artifactId>copycat-file</artifactId>
+            <artifactId>connect-file</artifactId>
             <version>${kafka.version}</version>
             <scope>provided</scope>
         </dependency>

@@ -14,7 +14,7 @@
  * limitations under the License.
  **/
 
-package io.confluent.copycat.avro;
+package io.confluent.connect.avro;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
 
@@ -25,16 +25,16 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.copycat.data.Date;
-import org.apache.kafka.copycat.data.Decimal;
-import org.apache.kafka.copycat.data.Field;
-import org.apache.kafka.copycat.data.Schema;
-import org.apache.kafka.copycat.data.SchemaAndValue;
-import org.apache.kafka.copycat.data.SchemaBuilder;
-import org.apache.kafka.copycat.data.Struct;
-import org.apache.kafka.copycat.data.Time;
-import org.apache.kafka.copycat.data.Timestamp;
-import org.apache.kafka.copycat.errors.DataException;
+import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
+import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.errors.DataException;
 import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.node.ArrayNode;
 import org.codehaus.jackson.node.JsonNodeFactory;
@@ -57,26 +57,26 @@ import java.util.Set;
  * Utilities for converting between our runtime data format and Avro, and (de)serializing that data.
  */
 public class AvroData {
-  public static final String NAMESPACE = "io.confluent.copycat.avro";
+  public static final String NAMESPACE = "io.confluent.connect.avro";
   // Avro does not permit empty schema names, which might be the ideal default since we also are
   // not permitted to simply omit the name. Instead, make it very clear where the default is
   // coming from.
-  public static final String DEFAULT_SCHEMA_NAME = "CopycatDefault";
+  public static final String DEFAULT_SCHEMA_NAME = "ConnectDefault";
   public static final String DEFAULT_SCHEMA_FULL_NAME = NAMESPACE + "." + DEFAULT_SCHEMA_NAME;
   public static final String MAP_ENTRY_TYPE_NAME = "MapEntry";
   public static final String KEY_FIELD = "key";
   public static final String VALUE_FIELD = "value";
 
-  public static final String COPYCAT_NAME_PROP = "copycat.name";
-  public static final String COPYCAT_DOC_PROP = "copycat.doc";
-  public static final String COPYCAT_VERSION_PROP = "copycat.version";
-  public static final String COPYCAT_DEFAULT_VALUE_PROP = "copycat.default";
-  public static final String COPYCAT_PARAMETERS_PROP = "copycat.parameters";
+  public static final String CONNECT_NAME_PROP = "connect.name";
+  public static final String CONNECT_DOC_PROP = "connect.doc";
+  public static final String CONNECT_VERSION_PROP = "connect.version";
+  public static final String CONNECT_DEFAULT_VALUE_PROP = "connect.default";
+  public static final String CONNECT_PARAMETERS_PROP = "connect.parameters";
 
-  public static final String COPYCAT_TYPE_PROP = "copycat.type";
+  public static final String CONNECT_TYPE_PROP = "connect.type";
 
-  public static final String COPYCAT_TYPE_INT8 = "int8";
-  public static final String COPYCAT_TYPE_INT16 = "int16";
+  public static final String CONNECT_TYPE_INT8 = "int8";
+  public static final String CONNECT_TYPE_INT16 = "int16";
 
   public static final String AVRO_TYPE_UNION = NAMESPACE + ".Union";
   public static final String AVRO_TYPE_ENUM = NAMESPACE + ".Enum";
@@ -85,11 +85,11 @@ public class AvroData {
 
   private static final Map<String, Schema.Type> NON_AVRO_TYPES_BY_TYPE_CODE = new HashMap<>();
   static {
-    NON_AVRO_TYPES_BY_TYPE_CODE.put(COPYCAT_TYPE_INT8, Schema.Type.INT8);
-    NON_AVRO_TYPES_BY_TYPE_CODE.put(COPYCAT_TYPE_INT16, Schema.Type.INT16);
+    NON_AVRO_TYPES_BY_TYPE_CODE.put(CONNECT_TYPE_INT8, Schema.Type.INT8);
+    NON_AVRO_TYPES_BY_TYPE_CODE.put(CONNECT_TYPE_INT16, Schema.Type.INT16);
   }
 
-  // Avro Java object types used by Copycat schema types
+  // Avro Java object types used by Connect schema types
   private static final Map<Schema.Type, List<Class>> SIMPLE_AVRO_SCHEMA_TYPES = new HashMap<>();
   static {
     SIMPLE_AVRO_SCHEMA_TYPES.put(Schema.Type.INT32, Arrays.asList((Class) Integer.class));
@@ -105,18 +105,18 @@ public class AvroData {
     SIMPLE_AVRO_SCHEMA_TYPES.put(Schema.Type.MAP, Arrays.asList((Class) Map.class));
   }
 
-  private static final Map<Schema.Type, org.apache.avro.Schema.Type> COPYCAT_TYPES_TO_AVRO_TYPES
+  private static final Map<Schema.Type, org.apache.avro.Schema.Type> CONNECT_TYPES_TO_AVRO_TYPES
       = new HashMap<>();
   static {
-    COPYCAT_TYPES_TO_AVRO_TYPES.put(Schema.Type.INT32, org.apache.avro.Schema.Type.INT);
-    COPYCAT_TYPES_TO_AVRO_TYPES.put(Schema.Type.INT64, org.apache.avro.Schema.Type.LONG);
-    COPYCAT_TYPES_TO_AVRO_TYPES.put(Schema.Type.FLOAT32, org.apache.avro.Schema.Type.FLOAT);
-    COPYCAT_TYPES_TO_AVRO_TYPES.put(Schema.Type.FLOAT64, org.apache.avro.Schema.Type.DOUBLE);
-    COPYCAT_TYPES_TO_AVRO_TYPES.put(Schema.Type.BOOLEAN, org.apache.avro.Schema.Type.BOOLEAN);
-    COPYCAT_TYPES_TO_AVRO_TYPES.put(Schema.Type.STRING, org.apache.avro.Schema.Type.STRING);
-    COPYCAT_TYPES_TO_AVRO_TYPES.put(Schema.Type.BYTES, org.apache.avro.Schema.Type.BYTES);
-    COPYCAT_TYPES_TO_AVRO_TYPES.put(Schema.Type.ARRAY, org.apache.avro.Schema.Type.ARRAY);
-    COPYCAT_TYPES_TO_AVRO_TYPES.put(Schema.Type.MAP, org.apache.avro.Schema.Type.MAP);
+    CONNECT_TYPES_TO_AVRO_TYPES.put(Schema.Type.INT32, org.apache.avro.Schema.Type.INT);
+    CONNECT_TYPES_TO_AVRO_TYPES.put(Schema.Type.INT64, org.apache.avro.Schema.Type.LONG);
+    CONNECT_TYPES_TO_AVRO_TYPES.put(Schema.Type.FLOAT32, org.apache.avro.Schema.Type.FLOAT);
+    CONNECT_TYPES_TO_AVRO_TYPES.put(Schema.Type.FLOAT64, org.apache.avro.Schema.Type.DOUBLE);
+    CONNECT_TYPES_TO_AVRO_TYPES.put(Schema.Type.BOOLEAN, org.apache.avro.Schema.Type.BOOLEAN);
+    CONNECT_TYPES_TO_AVRO_TYPES.put(Schema.Type.STRING, org.apache.avro.Schema.Type.STRING);
+    CONNECT_TYPES_TO_AVRO_TYPES.put(Schema.Type.BYTES, org.apache.avro.Schema.Type.BYTES);
+    CONNECT_TYPES_TO_AVRO_TYPES.put(Schema.Type.ARRAY, org.apache.avro.Schema.Type.ARRAY);
+    CONNECT_TYPES_TO_AVRO_TYPES.put(Schema.Type.MAP, org.apache.avro.Schema.Type.MAP);
   }
 
 
@@ -161,11 +161,11 @@ public class AvroData {
   }
 
 
-  // Convert values in Copycat form into their logical types. These logical converters are discovered by logical type
+  // Convert values in Connect form into their logical types. These logical converters are discovered by logical type
   // names specified in the field
-  private static final HashMap<String, LogicalTypeConverter> TO_COPYCAT_LOGICAL_CONVERTERS = new HashMap<>();
+  private static final HashMap<String, LogicalTypeConverter> TO_CONNECT_LOGICAL_CONVERTERS = new HashMap<>();
   static {
-    TO_COPYCAT_LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
+    TO_CONNECT_LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
       @Override
       public Object convert(Schema schema, Object value) {
         if (value instanceof byte[]) {
@@ -177,7 +177,7 @@ public class AvroData {
       }
     });
 
-    TO_COPYCAT_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, new LogicalTypeConverter() {
+    TO_CONNECT_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, new LogicalTypeConverter() {
       @Override
       public Object convert(Schema schema, Object value) {
         if (!(value instanceof Integer))
@@ -186,7 +186,7 @@ public class AvroData {
       }
     });
 
-    TO_COPYCAT_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, new LogicalTypeConverter() {
+    TO_CONNECT_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, new LogicalTypeConverter() {
       @Override
       public Object convert(Schema schema, Object value) {
         if (!(value instanceof Integer))
@@ -195,7 +195,7 @@ public class AvroData {
       }
     });
 
-    TO_COPYCAT_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, new LogicalTypeConverter() {
+    TO_CONNECT_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, new LogicalTypeConverter() {
       @Override
       public Object convert(Schema schema, Object value) {
         if (!(value instanceof Long))
@@ -249,34 +249,34 @@ public class AvroData {
     });
   }
 
-  private Cache<Schema, org.apache.avro.Schema> fromCopycatSchemaCache;
-  private Cache<org.apache.avro.Schema, Schema> toCopycatSchemaCache;
+  private Cache<Schema, org.apache.avro.Schema> fromConnectSchemaCache;
+  private Cache<org.apache.avro.Schema, Schema> toConnectSchemaCache;
 
 
   public AvroData(int cacheSize) {
-    fromCopycatSchemaCache = new LRUCache<>(cacheSize);
-    toCopycatSchemaCache = new LRUCache<>(cacheSize);
+    fromConnectSchemaCache = new LRUCache<>(cacheSize);
+    toConnectSchemaCache = new LRUCache<>(cacheSize);
   }
 
   /**
-   * Convert this object, in Copycat data format, into an Avro object.
+   * Convert this object, in Connect data format, into an Avro object.
    */
-  public Object fromCopycatData(Schema schema, Object value) {
-    org.apache.avro.Schema avroSchema = fromCopycatSchema(schema);
-    return fromCopycatData(schema, avroSchema, value, true);
+  public Object fromConnectData(Schema schema, Object value) {
+    org.apache.avro.Schema avroSchema = fromConnectSchema(schema);
+    return fromConnectData(schema, avroSchema, value, true);
   }
 
   /**
-   * Convert from Copycat data format to Avro. This version assumes the Avro schema has already
+   * Convert from Connect data format to Avro. This version assumes the Avro schema has already
    * been converted and makes the use of NonRecordContainer optional
-   * @param schema the Copycat schema
+   * @param schema the Connect schema
    * @param avroSchema the corresponding
-   * @param logicalValue the Copycat data to convert, which may be a value for a logical type
+   * @param logicalValue the Connect data to convert, which may be a value for a logical type
    * @param requireContainer if true, wrap primitives, maps, and arrays in a NonRecordContainer
    *                         before returning them
    * @return the converted data
    */
-  private static Object fromCopycatData(Schema schema, org.apache.avro.Schema avroSchema,
+  private static Object fromConnectData(Schema schema, org.apache.avro.Schema avroSchema,
                                        Object logicalValue, boolean requireContainer) {
     Schema.Type schemaType = schema != null ? schema.type() : schemaTypeForSchemalessJavaType(logicalValue);
     if (schemaType == null) {
@@ -368,7 +368,7 @@ public class AvroData {
               schema != null ? avroSchema.getElementType() : ANYTHING_SCHEMA;
           for (Object val : list) {
             converted.add(
-                fromCopycatData(elementSchema, elementAvroSchema, val, false)
+                fromConnectData(elementSchema, elementAvroSchema, val, false)
             );
           }
           return maybeAddContainer(
@@ -385,7 +385,7 @@ public class AvroData {
             Map<String, Object> converted = new HashMap<>();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               // Key is a String, no conversion needed
-              Object convertedValue = fromCopycatData(schema.valueSchema(),
+              Object convertedValue = fromConnectData(schema.valueSchema(),
                                                       avroSchema.getValueType(),
                                                       entry.getValue(), false);
               converted.put((String)entry.getKey(), convertedValue);
@@ -398,9 +398,9 @@ public class AvroData {
             org.apache.avro.Schema avroKeySchema = elementSchema.getField(KEY_FIELD).schema();
             org.apache.avro.Schema avroValueSchema = elementSchema.getField(VALUE_FIELD).schema();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
-              Object keyConverted = fromCopycatData(schema != null ? schema.keySchema(): null,
+              Object keyConverted = fromConnectData(schema != null ? schema.keySchema(): null,
                                                     avroKeySchema, entry.getKey(), false);
-              Object valueConverted = fromCopycatData(schema != null ? schema.valueSchema() : null,
+              Object valueConverted = fromConnectData(schema != null ? schema.valueSchema() : null,
                                                       avroValueSchema, entry.getValue(), false);
               converted.add(
                       new GenericRecordBuilder(elementSchema)
@@ -424,7 +424,7 @@ public class AvroData {
             org.apache.avro.Schema fieldAvroSchema = avroSchema.getField(field.name()).schema();
             convertedBuilder.set(
                 field.name(),
-                fromCopycatData(field.schema(), fieldAvroSchema, struct.get(field), false));
+                fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false));
           }
           return convertedBuilder.build();
         }
@@ -482,12 +482,12 @@ public class AvroData {
     return builder.build();
   }
 
-  public org.apache.avro.Schema fromCopycatSchema(Schema schema) {
+  public org.apache.avro.Schema fromConnectSchema(Schema schema) {
     if (schema == null) {
       return ANYTHING_SCHEMA;
     }
 
-    org.apache.avro.Schema cached = fromCopycatSchemaCache.get(schema);
+    org.apache.avro.Schema cached = fromConnectSchemaCache.get(schema);
     if (cached != null) {
       return cached;
     }
@@ -501,16 +501,16 @@ public class AvroData {
     }
 
     // Extra type annotation information for otherwise lossy conversions
-    String copycatType = null;
+    String connectType = null;
 
     final org.apache.avro.Schema baseSchema;
     switch (schema.type()) {
       case INT8:
-        copycatType = COPYCAT_TYPE_INT8;
+        connectType = CONNECT_TYPE_INT8;
         baseSchema = org.apache.avro.SchemaBuilder.builder().intType();
         break;
       case INT16:
-        copycatType = COPYCAT_TYPE_INT16;
+        connectType = CONNECT_TYPE_INT16;
         baseSchema = org.apache.avro.SchemaBuilder.builder().intType();
         break;
       case INT32:
@@ -536,14 +536,14 @@ public class AvroData {
         break;
       case ARRAY:
         baseSchema = org.apache.avro.SchemaBuilder.builder().array()
-            .items(fromCopycatSchema(schema.valueSchema()));
+            .items(fromConnectSchema(schema.valueSchema()));
         break;
       case MAP:
         // Avro only supports string keys, so we match the representation when possible, but
         // otherwise fall back on a record representation
         if (schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
           baseSchema = org.apache.avro.SchemaBuilder.builder()
-                  .map().values(fromCopycatSchema(schema.valueSchema()));
+                  .map().values(fromConnectSchema(schema.valueSchema()));
         } else {
           // Special record name indicates format
           org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler
@@ -569,33 +569,33 @@ public class AvroData {
     }
 
     if (schema.doc() != null) {
-      baseSchema.addProp(COPYCAT_DOC_PROP, schema.doc());
+      baseSchema.addProp(CONNECT_DOC_PROP, schema.doc());
     }
     if (schema.version() != null) {
-      baseSchema.addProp(COPYCAT_VERSION_PROP,
+      baseSchema.addProp(CONNECT_VERSION_PROP,
                          JsonNodeFactory.instance.numberNode(schema.version()));
     }
     if (schema.parameters() != null) {
-      baseSchema.addProp(COPYCAT_PARAMETERS_PROP, parametersFromCopycat(schema.parameters()));
+      baseSchema.addProp(CONNECT_PARAMETERS_PROP, parametersFromConnect(schema.parameters()));
     }
     if (schema.defaultValue() != null) {
-      baseSchema.addProp(COPYCAT_DEFAULT_VALUE_PROP,
-                         defaultValueFromCopycat(schema, schema.defaultValue()));
+      baseSchema.addProp(CONNECT_DEFAULT_VALUE_PROP,
+                         defaultValueFromConnect(schema, schema.defaultValue()));
     }
 
-    // Only Avro named types (record, enum, fixed) may contain namespace + name. Only Copycat's
+    // Only Avro named types (record, enum, fixed) may contain namespace + name. Only Connect's
     // struct converts to one of those (record), so for everything else that has a name we store
     // the full name into a special property. For uniformity, we also duplicate this info into
     // the same field in records as well even though it will also be available in the namespace()
     // and name().
     if (schema.name() != null) {
-      baseSchema.addProp(COPYCAT_NAME_PROP, schema.name());
+      baseSchema.addProp(CONNECT_NAME_PROP, schema.name());
     }
 
-    // Some Copycat types need special annotations to preserve the types accurate due to
-    // limitations in Avro. These types get an extra annotation with their Copycat type
-    if (copycatType != null) {
-      baseSchema.addProp(COPYCAT_TYPE_PROP, copycatType);
+    // Some Connect types need special annotations to preserve the types accurate due to
+    // limitations in Avro. These types get an extra annotation with their Connect type
+    if (connectType != null) {
+      baseSchema.addProp(CONNECT_TYPE_PROP, connectType);
     }
 
     // Note that all metadata has already been processed and placed on the baseSchema because we
@@ -614,7 +614,7 @@ public class AvroData {
             .type(baseSchema)
             .endUnion();
     }
-    fromCopycatSchemaCache.put(schema, finalSchema);
+    fromConnectSchemaCache.put(schema, finalSchema);
     return finalSchema;
   }
 
@@ -624,20 +624,20 @@ public class AvroData {
       String fieldName, Schema fieldSchema)
   {
     org.apache.avro.SchemaBuilder.GenericDefault<org.apache.avro.Schema> fieldAvroSchema
-        = fieldAssembler.name(fieldName).type(fromCopycatSchema(fieldSchema));
+        = fieldAssembler.name(fieldName).type(fromConnectSchema(fieldSchema));
     if (fieldSchema.defaultValue() != null) {
-      fieldAvroSchema.withDefault(defaultValueFromCopycat(fieldSchema, fieldSchema.defaultValue()));
+      fieldAvroSchema.withDefault(defaultValueFromConnect(fieldSchema, fieldSchema.defaultValue()));
     } else {
       fieldAvroSchema.noDefault();
     }
   }
 
-  // Convert default values from Copycat data format to Avro's format, which is an
+  // Convert default values from Connect data format to Avro's format, which is an
   // org.codehaus.jackson.JsonNode. The default value is provided as an argument because even
   // though you can get a default value from the schema, default values for complex structures need
   // to perform the same translation but those defaults will be part of the original top-level
   // (complex type) default value, not part of the child schema.
-  private static JsonNode defaultValueFromCopycat(Schema schema, Object defaultVal) {
+  private static JsonNode defaultValueFromConnect(Schema schema, Object defaultVal) {
     try {
       switch (schema.type()) {
         case INT8:
@@ -664,7 +664,7 @@ public class AvroData {
         case ARRAY: {
           ArrayNode array = JsonNodeFactory.instance.arrayNode();
           for (Object elem : (List<Object>) defaultVal) {
-            array.add(defaultValueFromCopycat(schema.valueSchema(), elem));
+            array.add(defaultValueFromConnect(schema.valueSchema(), elem));
           }
           return array;
         }
@@ -672,15 +672,15 @@ public class AvroData {
           if (schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
             ObjectNode node = JsonNodeFactory.instance.objectNode();
             for(Map.Entry<String, Object> entry : ((Map<String, Object>) defaultVal).entrySet()) {
-              JsonNode entryDef = defaultValueFromCopycat(schema.valueSchema(), entry.getValue());
+              JsonNode entryDef = defaultValueFromConnect(schema.valueSchema(), entry.getValue());
               node.put(entry.getKey(), entryDef);
             }
             return node;
           } else {
             ArrayNode array = JsonNodeFactory.instance.arrayNode();
             for(Map.Entry<Object, Object> entry : ((Map<Object, Object>) defaultVal).entrySet()) {
-              JsonNode keyDefault = defaultValueFromCopycat(schema.keySchema(), entry.getKey());
-              JsonNode valDefault = defaultValueFromCopycat(schema.valueSchema(), entry.getValue());
+              JsonNode keyDefault = defaultValueFromConnect(schema.keySchema(), entry.getKey());
+              JsonNode valDefault = defaultValueFromConnect(schema.valueSchema(), entry.getValue());
               ArrayNode jsonEntry = JsonNodeFactory.instance.arrayNode();
               jsonEntry.add(keyDefault);
               jsonEntry.add(valDefault);
@@ -692,7 +692,7 @@ public class AvroData {
           ObjectNode node = JsonNodeFactory.instance.objectNode();
           Struct struct = ((Struct) defaultVal);
           for(Field field : (schema.fields())) {
-            JsonNode fieldDef = defaultValueFromCopycat(field.schema(), struct.get(field));
+            JsonNode fieldDef = defaultValueFromConnect(field.schema(), struct.get(field));
             node.put(field.name(), fieldDef);
           }
           return node;
@@ -706,7 +706,7 @@ public class AvroData {
     }
   }
 
-  private static JsonNode parametersFromCopycat(Map<String, String> params) {
+  private static JsonNode parametersFromConnect(Map<String, String> params) {
     ObjectNode result = JsonNodeFactory.instance.objectNode();
     for (Map.Entry<String, String> entry : params.entrySet()) {
       result.put(entry.getKey(), entry.getValue());
@@ -715,23 +715,23 @@ public class AvroData {
   }
 
   /**
-   * Convert the given object, in Avro format, into an Copycat data object.
+   * Convert the given object, in Avro format, into an Connect data object.
    */
-  public SchemaAndValue toCopycatData(org.apache.avro.Schema avroSchema, Object value) {
+  public SchemaAndValue toConnectData(org.apache.avro.Schema avroSchema, Object value) {
     if (value == null) {
       return null;
     }
 
-    Schema schema = (avroSchema.equals(ANYTHING_SCHEMA)) ? null : toCopycatSchema(avroSchema);
-    return new SchemaAndValue(schema, toCopycatData(schema, value));
+    Schema schema = (avroSchema.equals(ANYTHING_SCHEMA)) ? null : toConnectSchema(avroSchema);
+    return new SchemaAndValue(schema, toConnectData(schema, value));
   }
 
-  private Object toCopycatData(Schema schema, Object value) {
+  private Object toConnectData(Schema schema, Object value) {
     try {
       // If we're decoding schemaless data, we need to unwrap it into just the single value
       if (schema == null) {
         if (!(value instanceof IndexedRecord)) {
-          throw new DataException("Invalid Avro data for schemaless Copycat data");
+          throw new DataException("Invalid Avro data for schemaless Connect data");
         }
         IndexedRecord recordValue = (IndexedRecord) value;
 
@@ -739,51 +739,51 @@ public class AvroData {
             boolVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_BOOLEAN_FIELD).pos());
         if (boolVal != null)
-          return toCopycatData(Schema.BOOLEAN_SCHEMA, boolVal);
+          return toConnectData(Schema.BOOLEAN_SCHEMA, boolVal);
 
         Object
             bytesVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_BYTES_FIELD).pos());
         if (bytesVal != null)
-          return toCopycatData(Schema.BYTES_SCHEMA, bytesVal);
+          return toConnectData(Schema.BYTES_SCHEMA, bytesVal);
 
         Object
             dblVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_DOUBLE_FIELD).pos());
         if (dblVal != null)
-          return toCopycatData(Schema.FLOAT64_SCHEMA, dblVal);
+          return toConnectData(Schema.FLOAT64_SCHEMA, dblVal);
 
         Object
             fltVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_FLOAT_FIELD).pos());
         if (fltVal != null)
-          return toCopycatData(Schema.FLOAT32_SCHEMA, fltVal);
+          return toConnectData(Schema.FLOAT32_SCHEMA, fltVal);
 
         Object intVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_INT_FIELD).pos());
         if (intVal != null)
-          return toCopycatData(Schema.INT32_SCHEMA, intVal);
+          return toConnectData(Schema.INT32_SCHEMA, intVal);
 
         Object
             longVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_LONG_FIELD).pos());
         if (longVal != null)
-          return toCopycatData(Schema.INT64_SCHEMA, longVal);
+          return toConnectData(Schema.INT64_SCHEMA, longVal);
 
         Object
             stringVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_STRING_FIELD).pos());
         if (stringVal != null)
-          return toCopycatData(Schema.STRING_SCHEMA, stringVal);
+          return toConnectData(Schema.STRING_SCHEMA, stringVal);
 
         Object
             arrayVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_ARRAY_FIELD).pos());
         if (arrayVal != null)
-          return toCopycatData(SchemaBuilder.array(null).build(), arrayVal);
+          return toConnectData(SchemaBuilder.array(null).build(), arrayVal);
 
         Object mapVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_MAP_FIELD).pos());
         if (mapVal != null)
-          return toCopycatData(SchemaBuilder.map(null, null).build(), mapVal);
+          return toConnectData(SchemaBuilder.map(null, null).build(), mapVal);
 
         // If nothing was set, it's null
         return null;
@@ -856,7 +856,7 @@ public class AvroData {
           Collection<Object> original = (Collection<Object>) value;
           List<Object> result = new ArrayList<>(original.size());
           for (Object elem : original) {
-            result.add(toCopycatData(valueSchema, elem));
+            result.add(toConnectData(valueSchema, elem));
           }
           converted = result;
           break;
@@ -872,7 +872,7 @@ public class AvroData {
             Map<CharSequence, Object> result = new HashMap<>(original.size());
             for (Map.Entry<CharSequence, Object> entry : original.entrySet()) {
               result.put(entry.getKey().toString(),
-                         toCopycatData(valueSchema, entry.getValue()));
+                         toConnectData(valueSchema, entry.getValue()));
             }
             converted = result;
           } else {
@@ -882,8 +882,8 @@ public class AvroData {
             for (IndexedRecord entry : original) {
               int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
               int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
-              Object convertedKey = toCopycatData(keySchema, entry.get(avroKeyFieldIndex));
-              Object convertedValue = toCopycatData(valueSchema, entry.get(avroValueFieldIndex));
+              Object convertedKey = toConnectData(keySchema, entry.get(avroKeyFieldIndex));
+              Object convertedValue = toConnectData(valueSchema, entry.get(avroValueFieldIndex));
               result.put(convertedKey, convertedValue);
             }
             converted = result;
@@ -897,7 +897,7 @@ public class AvroData {
             Schema valueRecordSchema = null;
             if (value instanceof IndexedRecord) {
               IndexedRecord valueRecord = ((IndexedRecord) value);
-              valueRecordSchema = toCopycatSchema(valueRecord.getSchema(), true, null, null);
+              valueRecordSchema = toConnectSchema(valueRecord.getSchema(), true, null, null);
             }
             for (Field field : schema.fields()) {
               Schema fieldSchema = field.schema();
@@ -905,7 +905,7 @@ public class AvroData {
               if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value) ||
                   (valueRecordSchema != null && valueRecordSchema.equals(fieldSchema))) {
                 converted = new Struct(schema).put(unionMemberFieldName(fieldSchema),
-                                                   toCopycatData(fieldSchema, value));
+                                                   toConnectData(fieldSchema, value));
                 break;
               }
             }
@@ -919,7 +919,7 @@ public class AvroData {
             for (Field field : schema.fields()) {
               int avroFieldIndex = original.getSchema().getField(field.name()).pos();
               Object convertedFieldValue
-                  = toCopycatData(field.schema(), original.get(avroFieldIndex));
+                  = toConnectData(field.schema(), original.get(avroFieldIndex));
               result.put(field, convertedFieldValue);
             }
             converted = result;
@@ -928,11 +928,11 @@ public class AvroData {
         }
 
         default:
-          throw new DataException("Unknown Copycat schema type: " + schema.type());
+          throw new DataException("Unknown Connect schema type: " + schema.type());
       }
 
       if (schema != null && schema.name() != null) {
-        LogicalTypeConverter logicalConverter = TO_COPYCAT_LOGICAL_CONVERTERS.get(schema.name());
+        LogicalTypeConverter logicalConverter = TO_CONNECT_LOGICAL_CONVERTERS.get(schema.name());
         if (logicalConverter != null)
           converted = logicalConverter.convert(schema, converted);
       }
@@ -942,18 +942,18 @@ public class AvroData {
     }
   }
 
-  public Schema toCopycatSchema(org.apache.avro.Schema schema) {
+  public Schema toConnectSchema(org.apache.avro.Schema schema) {
     // We perform caching only at this top level. While it might be helpful to cache some more of
     // the internal conversions, this is the safest place to add caching since some of the internal
     // conversions take extra flags (like forceOptional) which means the resulting schema might not
     // exactly match the Avro schema.
-    Schema cachedSchema = toCopycatSchemaCache.get(schema);
+    Schema cachedSchema = toConnectSchemaCache.get(schema);
     if (cachedSchema != null) {
       return cachedSchema;
     }
 
-    Schema resultSchema = toCopycatSchema(schema, false, null, null);
-    toCopycatSchemaCache.put(schema, resultSchema);
+    Schema resultSchema = toConnectSchema(schema, false, null, null);
+    toConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
   }
 
@@ -962,17 +962,17 @@ public class AvroData {
    * @param schema schema to convert
    * @param forceOptional make the resulting schema optional, for converting Avro unions to a
    *                      record format and simple Avro unions of null + type to optional schemas
-   * @param fieldDefaultVal if non-null, override any copycat-annotated default values with this
+   * @param fieldDefaultVal if non-null, override any connect-annotated default values with this
    *                        one; used when converting Avro record fields since they define
-   *                        default values with the field spec, but Copycat specifies them with
+   *                        default values with the field spec, but Connect specifies them with
    *                        the field's schema
-   * @param docDefaultVal if non-null, override any copycat-annotated documentation with this
+   * @param docDefaultVal if non-null, override any connect-annotated documentation with this
    *                      one; used when converting Avro record fields since they define doc
-   *                      values with the field spec, but Copycat specifies them with the field's
+   *                      values with the field spec, but Connect specifies them with the field's
    *                      schema
    * @return
    */
-  private Schema toCopycatSchema(org.apache.avro.Schema schema, boolean forceOptional,
+  private Schema toConnectSchema(org.apache.avro.Schema schema, boolean forceOptional,
                                 Object fieldDefaultVal, String docDefaultVal) {
     final SchemaBuilder builder;
     switch (schema.getType()) {
@@ -991,17 +991,17 @@ public class AvroData {
         builder = SchemaBuilder.float32();
         break;
       case INT:
-        // INT is used for Copycat's INT8, INT16, and INT32
-        String type = schema.getProp(COPYCAT_TYPE_PROP);
+        // INT is used for Connect's INT8, INT16, and INT32
+        String type = schema.getProp(CONNECT_TYPE_PROP);
         if (type == null) {
           builder = SchemaBuilder.int32();
         } else {
-          Schema.Type copycatType = NON_AVRO_TYPES_BY_TYPE_CODE.get(type);
-          if (copycatType == null) {
-            throw new DataException("Invalid Copycat type annotation for Avro int field: " +
-                                    copycatType);
+          Schema.Type connectType = NON_AVRO_TYPES_BY_TYPE_CODE.get(type);
+          if (connectType == null) {
+            throw new DataException("Invalid Connect type annotation for Avro int field: " +
+                                    connectType);
           }
-          builder = SchemaBuilder.type(copycatType);
+          builder = SchemaBuilder.type(connectType);
         }
         break;
       case LONG:
@@ -1025,22 +1025,22 @@ public class AvroData {
                                     + "elements do not match the expected format.");
           }
           builder = SchemaBuilder.map(
-              toCopycatSchema(elemSchema.getField(KEY_FIELD).schema()),
-              toCopycatSchema(elemSchema.getField(VALUE_FIELD).schema())
+              toConnectSchema(elemSchema.getField(KEY_FIELD).schema()),
+              toConnectSchema(elemSchema.getField(VALUE_FIELD).schema())
           );
         } else {
-          builder = SchemaBuilder.array(toCopycatSchema(schema.getElementType()));
+          builder = SchemaBuilder.array(toConnectSchema(schema.getElementType()));
         }
         break;
 
       case MAP:
-        builder = SchemaBuilder.map(Schema.STRING_SCHEMA, toCopycatSchema(schema.getValueType()));
+        builder = SchemaBuilder.map(Schema.STRING_SCHEMA, toConnectSchema(schema.getValueType()));
         break;
 
       case RECORD: {
         builder = SchemaBuilder.struct();
         for(org.apache.avro.Schema.Field field : schema.getFields()) {
-          Schema fieldSchema = toCopycatSchema(field.schema(), false, field.defaultValue(), field.doc());
+          Schema fieldSchema = toConnectSchema(field.schema(), false, field.defaultValue(), field.doc());
           builder.field(field.name(), fieldSchema);
         }
         break;
@@ -1052,7 +1052,7 @@ public class AvroData {
         break;
 
       case UNION: {
-        // Copycat doesn't support unions. To handle this, we convert them to records with field
+        // Connect doesn't support unions. To handle this, we convert them to records with field
         // names associated with each of the input types
         //
         // However, we also need to first check for union types that are used to indicate optional
@@ -1074,24 +1074,24 @@ public class AvroData {
                                     + "optional fields and should have exactly two entries.");
           }
           // No builder needed here -- any metadata or defaults can be found on the member schema
-          return toCopycatSchema(optionalSchema, true, null, null);
+          return toConnectSchema(optionalSchema, true, null, null);
         } else {
           builder = SchemaBuilder.struct().name(AVRO_TYPE_UNION);
           Set<String> fieldNames = new HashSet<>();
           for (org.apache.avro.Schema memberSchema : schema.getTypes()) {
             String fieldName = unionMemberFieldName(memberSchema);
             if (fieldNames.contains(fieldName)) {
-              throw new DataException("Multiple union schemas map to the Copycat union field name");
+              throw new DataException("Multiple union schemas map to the Connect union field name");
             }
             fieldNames.add(fieldName);
-            builder.field(fieldName, toCopycatSchema(memberSchema, true, null, null));
+            builder.field(fieldName, toConnectSchema(memberSchema, true, null, null));
           }
         }
         break;
       }
 
       case NULL:
-        // There's no dedicated null type in Copycat. However, it also doesn't make sense to have a
+        // There's no dedicated null type in Connect. However, it also doesn't make sense to have a
         // standalone null type -- it wouldn't provide any useful information. Instead, it should
         // only be used in union types.
         throw new DataException("Standalone null schemas are not supported by this converter");
@@ -1103,20 +1103,20 @@ public class AvroData {
 
 
     String docVal = docDefaultVal != null ? docDefaultVal :
-                    (schema.getDoc() != null ? schema.getDoc() : schema.getProp(COPYCAT_DOC_PROP));
+                    (schema.getDoc() != null ? schema.getDoc() : schema.getProp(CONNECT_DOC_PROP));
     if (docVal != null) {
       builder.doc(docVal);
     }
 
-    JsonNode version = schema.getJsonProp(COPYCAT_VERSION_PROP);
+    JsonNode version = schema.getJsonProp(CONNECT_VERSION_PROP);
     if (version != null) {
       if (!version.isIntegralNumber()) {
-        throw new DataException("Invalid Copycat version found: " + version.toString());
+        throw new DataException("Invalid Connect version found: " + version.toString());
       }
       builder.version(version.asInt());
     }
 
-    JsonNode parameters = schema.getJsonProp(COPYCAT_PARAMETERS_PROP);
+    JsonNode parameters = schema.getJsonProp(CONNECT_PARAMETERS_PROP);
     if (parameters != null) {
       if (!parameters.isObject()) {
         throw new DataException("Expected JSON object for schema parameters but found: " +
@@ -1135,19 +1135,19 @@ public class AvroData {
     }
 
     if (fieldDefaultVal == null) {
-      fieldDefaultVal = schema.getJsonProp(COPYCAT_DEFAULT_VALUE_PROP);
+      fieldDefaultVal = schema.getJsonProp(CONNECT_DEFAULT_VALUE_PROP);
     }
     if (fieldDefaultVal != null) {
       builder.defaultValue(defaultValueFromAvro(builder, schema, fieldDefaultVal));
     }
 
-    JsonNode copycatNameJson = schema.getJsonProp(COPYCAT_NAME_PROP);
+    JsonNode connectNameJson = schema.getJsonProp(CONNECT_NAME_PROP);
     String name = null;
-    if (copycatNameJson != null) {
-      if (!copycatNameJson.isTextual()) {
-        throw new DataException("Invalid schema name: " + copycatNameJson.toString());
+    if (connectNameJson != null) {
+      if (!connectNameJson.isTextual()) {
+        throw new DataException("Invalid schema name: " + connectNameJson.toString());
       }
-      name = copycatNameJson.asText();
+      name = connectNameJson.asText();
 
     } else if (schema.getType() == org.apache.avro.Schema.Type.RECORD ||
                schema.getType() == org.apache.avro.Schema.Type.ENUM) {
@@ -1168,11 +1168,11 @@ public class AvroData {
   private Object defaultValueFromAvro(Schema schema,
                                       org.apache.avro.Schema avroSchema,
                                       Object value) {
-    // The type will be JsonNode if this default was pulled from a Copycat default field, or an
+    // The type will be JsonNode if this default was pulled from a Connect default field, or an
     // Object if it's the actual Avro-specified default. If it's a regular Java object, we can
     // use our existing conversion tools.
     if (!(value instanceof JsonNode)) {
-      return toCopycatData(schema, value);
+      return toConnectData(schema, value);
     }
 
     JsonNode jsonValue = (JsonNode) value;
@@ -1277,7 +1277,7 @@ public class AvroData {
     if (schema.type() == Schema.Type.STRUCT || isEnumSchema(schema)) {
       return splitName(schema.name())[1];
     }
-    return COPYCAT_TYPES_TO_AVRO_TYPES.get(schema.type()).getName();
+    return CONNECT_TYPES_TO_AVRO_TYPES.get(schema.type()).getName();
   }
 
   private static boolean isEnumSchema(Schema schema) {

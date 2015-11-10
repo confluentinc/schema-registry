@@ -14,8 +14,8 @@
             <outputDirectory>share/java/schema-registry/</outputDirectory>
             <scope>runtime</scope>
         </dependencySet>
-        <!-- Including provided dependencies here brings in the Copycat runtime, which allows running
-             the Avro Copycat convenience scripts in dev environments -->
+        <!-- Including provided dependencies here brings in the Connect runtime, which allows running
+             the Avro Connect convenience scripts in dev environments -->
         <dependencySet>
             <outputDirectory>share/java/schema-registry/</outputDirectory>
             <scope>provided</scope>
