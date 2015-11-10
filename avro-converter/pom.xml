@@ -11,14 +11,14 @@
     </parent>
 
     <groupId>io.confluent</groupId>
-    <artifactId>copycat-avro-converter</artifactId>
+    <artifactId>kafka-connect-avro-converter</artifactId>
     <packaging>jar</packaging>
-    <name>copycat-avro-converter</name>
+    <name>kafka-connect-avro-converter</name>
 
     <dependencies>
         <dependency>
             <groupId>org.apache.kafka</groupId>
-            <artifactId>copycat-api</artifactId>
+            <artifactId>connect-api</artifactId>
             <version>${kafka.version}</version>
             <scope>provided</scope>
         </dependency>

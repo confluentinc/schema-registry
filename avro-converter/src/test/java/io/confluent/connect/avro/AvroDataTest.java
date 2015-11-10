@@ -14,22 +14,22 @@
  * limitations under the License.
  **/
 
-package io.confluent.copycat.avro;
+package io.confluent.connect.avro;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.copycat.data.Date;
-import org.apache.kafka.copycat.data.Decimal;
-import org.apache.kafka.copycat.data.Schema;
-import org.apache.kafka.copycat.data.SchemaAndValue;
-import org.apache.kafka.copycat.data.SchemaBuilder;
-import org.apache.kafka.copycat.data.Struct;
-import org.apache.kafka.copycat.data.Time;
-import org.apache.kafka.copycat.data.Timestamp;
-import org.apache.kafka.copycat.errors.DataException;
+import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.errors.DataException;
 import org.codehaus.jackson.node.JsonNodeFactory;
 import org.codehaus.jackson.node.ObjectNode;
 import org.junit.Test;
@@ -71,68 +71,68 @@ public class AvroDataTest {
 
   private AvroData avroData = new AvroData(2);
 
-  // Copycat -> Avro
+  // Connect -> Avro
 
   @Test
-  public void testFromCopycatBoolean() {
+  public void testFromConnectBoolean() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().booleanType();
     checkNonRecordConversion(avroSchema, true, Schema.BOOLEAN_SCHEMA, true);
   }
 
   @Test
-  public void testFromCopycatByte() {
+  public void testFromConnectByte() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
-    avroSchema.addProp("copycat.type", "int8");
+    avroSchema.addProp("connect.type", "int8");
     checkNonRecordConversion(avroSchema, 12, Schema.INT8_SCHEMA, (byte) 12);
   }
 
   @Test
-  public void testFromCopycatShort() {
+  public void testFromConnectShort() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
-    avroSchema.addProp("copycat.type", "int16");
+    avroSchema.addProp("connect.type", "int16");
     checkNonRecordConversion(avroSchema, 12, Schema.INT16_SCHEMA, (short) 12);
   }
 
   @Test
-  public void testFromCopycatInteger() {
+  public void testFromConnectInteger() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     checkNonRecordConversion(avroSchema, 12, Schema.INT32_SCHEMA, 12);
   }
 
   @Test
-  public void testFromCopycatLong() {
+  public void testFromConnectLong() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
     checkNonRecordConversion(avroSchema, 12L, Schema.INT64_SCHEMA, 12L);
   }
 
   @Test
-  public void testFromCopycatFloat() {
+  public void testFromConnectFloat() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().floatType();
     checkNonRecordConversion(avroSchema, 12.2f, Schema.FLOAT32_SCHEMA, 12.2f);
   }
 
   @Test
-  public void testFromCopycatDouble() {
+  public void testFromConnectDouble() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().doubleType();
     checkNonRecordConversion(avroSchema, 12.2, Schema.FLOAT64_SCHEMA, 12.2);
   }
 
   @Test
-  public void testFromCopycatBytes() {
+  public void testFromConnectBytes() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
     checkNonRecordConversion(avroSchema, ByteBuffer.wrap("foo".getBytes()),
                              Schema.BYTES_SCHEMA, "foo".getBytes());
   }
 
   @Test
-  public void testFromCopycatString() {
+  public void testFromConnectString() {
     org.apache.avro.Schema avroSchema =
         org.apache.avro.SchemaBuilder.builder().stringType();
     checkNonRecordConversion(avroSchema, "string", Schema.STRING_SCHEMA, "string");
   }
 
   @Test
-  public void testFromCopycatComplex() {
+  public void testFromConnectComplex() {
     Schema schema = SchemaBuilder.struct()
         .field("int8", SchemaBuilder.int8().defaultValue((byte) 2).doc("int8 field").build())
         .field("int16", Schema.INT16_SCHEMA)
@@ -162,11 +162,11 @@ public class AvroDataTest {
         .put("map", Collections.singletonMap("field", 1))
         .put("mapNonStringKeys", Collections.singletonMap(1, 1));
 
-    Object convertedRecord = avroData.fromCopycatData(schema, struct);
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
 
     org.apache.avro.Schema complexMapElementSchema =
         org.apache.avro.SchemaBuilder
-            .record("MapEntry").namespace("io.confluent.copycat.avro").fields()
+            .record("MapEntry").namespace("io.confluent.connect.avro").fields()
             .requiredInt("key")
             .requiredInt("value")
             .endRecord();
@@ -174,11 +174,11 @@ public class AvroDataTest {
     // One field has some extra data set on it to ensure it gets passed through via the fields
     // config
     org.apache.avro.Schema int8Schema = org.apache.avro.SchemaBuilder.builder().intType();
-    int8Schema.addProp("copycat.doc", "int8 field");
-    int8Schema.addProp("copycat.default", JsonNodeFactory.instance.numberNode(2));
-    int8Schema.addProp("copycat.type", "int8");
+    int8Schema.addProp("connect.doc", "int8 field");
+    int8Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(2));
+    int8Schema.addProp("connect.type", "int8");
     org.apache.avro.Schema int16Schema = org.apache.avro.SchemaBuilder.builder().intType();
-    int16Schema.addProp("copycat.type", "int16");
+    int16Schema.addProp("connect.type", "int16");
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
         .record(AvroData.DEFAULT_SCHEMA_NAME).namespace(AvroData.NAMESPACE) // default values
         .fields()
@@ -220,7 +220,7 @@ public class AvroDataTest {
   }
 
   @Test
-  public void testFromCopycatOptionalPrimitiveWithMetadata() {
+  public void testFromConnectOptionalPrimitiveWithMetadata() {
     Schema schema = SchemaBuilder.string().
         doc("doc").defaultValue("foo").name("io.confluent.stringtype").version(2).optional()
         .parameter("foo", "bar").parameter("baz", "baz")
@@ -235,15 +235,15 @@ public class AvroDataTest {
 
     // The complete schema
     org.apache.avro.Schema avroStringSchema = org.apache.avro.SchemaBuilder.builder().stringType();
-    avroStringSchema.addProp("copycat.name", "io.confluent.stringtype");
-    avroStringSchema.addProp("copycat.version",
+    avroStringSchema.addProp("connect.name", "io.confluent.stringtype");
+    avroStringSchema.addProp("connect.version",
                              JsonNodeFactory.instance.numberNode(2));
-    avroStringSchema.addProp("copycat.doc", "doc");
-    avroStringSchema.addProp("copycat.default", "foo");
+    avroStringSchema.addProp("connect.doc", "doc");
+    avroStringSchema.addProp("connect.default", "foo");
     ObjectNode params = JsonNodeFactory.instance.objectNode();
     params.put("foo", "bar");
     params.put("baz", "baz");
-    avroStringSchema.addProp("copycat.parameters", params);
+    avroStringSchema.addProp("connect.parameters", params);
     org.apache.avro.Schema avroSchema =
         org.apache.avro.SchemaBuilder.builder().unionOf()
             .type(avroStringSchema).and()
@@ -255,7 +255,7 @@ public class AvroDataTest {
   }
 
   @Test
-  public void testFromCopycatRecordWithMetadata() {
+  public void testFromConnectRecordWithMetadata() {
     Schema schema = SchemaBuilder.struct()
         .name("io.confluent.test.TestSchema").version(12).doc("doc")
         .field("int32", Schema.INT32_SCHEMA)
@@ -263,16 +263,16 @@ public class AvroDataTest {
     Struct struct = new Struct(schema)
         .put("int32", 12);
 
-    Object convertedRecord = avroData.fromCopycatData(schema, struct);
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
 
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
         .record("TestSchema").namespace("io.confluent.test")
         .fields()
         .requiredInt("int32")
         .endRecord();
-    avroSchema.addProp("copycat.name", "io.confluent.test.TestSchema");
-    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(12));
-    avroSchema.addProp("copycat.doc", "doc");
+    avroSchema.addProp("connect.name", "io.confluent.test.TestSchema");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(12));
+    avroSchema.addProp("connect.doc", "doc");
     org.apache.avro.generic.GenericRecord avroRecord
         = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int32", 12)
@@ -283,85 +283,85 @@ public class AvroDataTest {
   }
 
   @Test
-  public void testFromCopycatLogicalDecimal() {
+  public void testFromConnectLogicalDecimal() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
-    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Decimal");
-    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Decimal");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     ObjectNode avroParams = JsonNodeFactory.instance.objectNode();
     avroParams.put("scale", "2");
-    avroSchema.addProp("copycat.parameters", avroParams);
+    avroSchema.addProp("connect.parameters", avroParams);
     checkNonRecordConversion(avroSchema, ByteBuffer.wrap(TEST_DECIMAL_BYTES),
                              Decimal.schema(2), TEST_DECIMAL);
   }
 
   @Test
-  public void testFromCopycatLogicalDate() {
+  public void testFromConnectLogicalDate() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
-    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Date");
-    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Date");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     checkNonRecordConversion(avroSchema, 10000, Date.SCHEMA,
                              EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime());
   }
 
   @Test
-  public void testFromCopycatLogicalTime() {
+  public void testFromConnectLogicalTime() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
-    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Time");
-    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Time");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     checkNonRecordConversion(avroSchema, 10000, Time.SCHEMA,
                              EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime());
   }
 
   @Test
-  public void testFromCopycatLogicalTimestamp() {
+  public void testFromConnectLogicalTimestamp() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
-    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Timestamp");
-    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Timestamp");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     java.util.Date date = new java.util.Date();
     checkNonRecordConversion(avroSchema, date.getTime(), Timestamp.SCHEMA, date);
   }
 
   @Test(expected = DataException.class)
-  public void testFromCopycatMismatchSchemaPrimitive() {
-    avroData.fromCopycatData(Schema.OPTIONAL_BOOLEAN_SCHEMA, 12);
+  public void testFromConnectMismatchSchemaPrimitive() {
+    avroData.fromConnectData(Schema.OPTIONAL_BOOLEAN_SCHEMA, 12);
   }
 
   @Test(expected = DataException.class)
-  public void testFromCopycatMismatchSchemaPrimitiveRequired() {
-    avroData.fromCopycatData(Schema.BOOLEAN_SCHEMA, null);
+  public void testFromConnectMismatchSchemaPrimitiveRequired() {
+    avroData.fromConnectData(Schema.BOOLEAN_SCHEMA, null);
   }
 
   @Test(expected = DataException.class)
-  public void testFromCopycatMismatchSchemaArray() {
-    avroData.fromCopycatData(SchemaBuilder.array(Schema.BOOLEAN_SCHEMA).build(), Arrays.asList(12));
+  public void testFromConnectMismatchSchemaArray() {
+    avroData.fromConnectData(SchemaBuilder.array(Schema.BOOLEAN_SCHEMA).build(), Arrays.asList(12));
   }
 
   @Test(expected = DataException.class)
-  public void testFromCopycatMismatchSchemaMapWithStringKeyMismatchKey() {
-    avroData.fromCopycatData(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build(),
+  public void testFromConnectMismatchSchemaMapWithStringKeyMismatchKey() {
+    avroData.fromConnectData(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build(),
                              Collections.singletonMap(true, 12));
   }
 
   @Test(expected = DataException.class)
-  public void testFromCopycatMismatchSchemaMapWithStringKeyMismatchValue() {
-    avroData.fromCopycatData(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build(),
+  public void testFromConnectMismatchSchemaMapWithStringKeyMismatchValue() {
+    avroData.fromConnectData(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build(),
                              Collections.singletonMap("foobar", 12L));
   }
 
   @Test(expected = DataException.class)
-  public void testFromCopycatMismatchSchemaMapWithNonStringKeyMismatchKey() {
-    avroData.fromCopycatData(SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build(),
+  public void testFromConnectMismatchSchemaMapWithNonStringKeyMismatchKey() {
+    avroData.fromConnectData(SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build(),
                              Collections.singletonMap(true, 12));
   }
 
   @Test(expected = DataException.class)
-  public void testFromCopycatMismatchSchemaMapWithNonStringKeyMismatchValue() {
-    avroData.fromCopycatData(SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build(),
+  public void testFromConnectMismatchSchemaMapWithNonStringKeyMismatchValue() {
+    avroData.fromConnectData(SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build(),
                              Collections.singletonMap(12, 12L));
   }
 
   @Test(expected = DataException.class)
-  public void testFromCopycatMismatchSchemaRecord() {
+  public void testFromConnectMismatchSchemaRecord() {
     Schema firstSchema = SchemaBuilder.struct()
         .field("foo", Schema.BOOLEAN_SCHEMA)
         .build();
@@ -369,11 +369,11 @@ public class AvroDataTest {
         .field("foo", Schema.OPTIONAL_BOOLEAN_SCHEMA)
         .build();
 
-    avroData.fromCopycatData(firstSchema, new Struct(secondSchema).put("foo", null));
+    avroData.fromConnectData(firstSchema, new Struct(secondSchema).put("foo", null));
   }
 
   @Test
-  public void testFromCopycatSchemaless() {
+  public void testFromConnectSchemaless() {
     GenericRecord avroNullRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA).build();
     checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroNullRecord, null, null);
 
@@ -427,120 +427,120 @@ public class AvroDataTest {
   }
 
   @Test
-  public void testCacheSchemaFromCopycatConversion() {
+  public void testCacheSchemaFromConnectConversion() {
     Cache<org.apache.avro.Schema, Schema> cache =
-        Whitebox.getInternalState(avroData, "fromCopycatSchemaCache");
+        Whitebox.getInternalState(avroData, "fromConnectSchemaCache");
     assertEquals(0, cache.size());
 
-    avroData.fromCopycatData(Schema.BOOLEAN_SCHEMA, true);
+    avroData.fromConnectData(Schema.BOOLEAN_SCHEMA, true);
     assertEquals(1, cache.size());
 
-    avroData.fromCopycatData(Schema.BOOLEAN_SCHEMA, true);
+    avroData.fromConnectData(Schema.BOOLEAN_SCHEMA, true);
     assertEquals(1, cache.size());
 
-    avroData.fromCopycatData(Schema.OPTIONAL_BOOLEAN_SCHEMA, true);
+    avroData.fromConnectData(Schema.OPTIONAL_BOOLEAN_SCHEMA, true);
     assertEquals(2, cache.size());
 
     // Should hit limit of cache
-    avroData.fromCopycatData(Schema.STRING_SCHEMA, "foo");
+    avroData.fromConnectData(Schema.STRING_SCHEMA, "foo");
     assertEquals(2, cache.size());
   }
 
-  // Avro -> Copycat. Validate a) all Avro types that convert directly to Avro, b) specialized
-  // Avro types where we can convert to a Copycat type that doesn't have a corresponding Avro
+  // Avro -> Connect. Validate a) all Avro types that convert directly to Avro, b) specialized
+  // Avro types where we can convert to a Connect type that doesn't have a corresponding Avro
   // type, and c) Avro types which need specialized transformation because there is no
-  // corresponding Copycat type.
+  // corresponding Connect type.
 
-  // Avro -> Copycat: directly corresponding types
+  // Avro -> Connect: directly corresponding types
 
   @Test
-  public void testToCopycatBoolean() {
+  public void testToConnectBoolean() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().booleanType();
     assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true),
-                 avroData.toCopycatData(avroSchema, true));
+                 avroData.toConnectData(avroSchema, true));
   }
 
   @Test
-  public void testToCopycatInt32() {
+  public void testToConnectInt32() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 12),
-                 avroData.toCopycatData(avroSchema, 12));
+                 avroData.toConnectData(avroSchema, 12));
   }
 
   @Test
-  public void testToCopycatInt64() {
+  public void testToConnectInt64() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
     assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, 12L),
-                 avroData.toCopycatData(avroSchema, 12L));
+                 avroData.toConnectData(avroSchema, 12L));
   }
 
   @Test
-  public void testToCopycatFloat32() {
+  public void testToConnectFloat32() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().floatType();
     assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 12.f),
-                 avroData.toCopycatData(avroSchema, 12.f));
+                 avroData.toConnectData(avroSchema, 12.f));
   }
 
   @Test
-  public void testToCopycatFloat64() {
+  public void testToConnectFloat64() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().doubleType();
     assertEquals(new SchemaAndValue(Schema.FLOAT64_SCHEMA, 12.0),
-                 avroData.toCopycatData(avroSchema, 12.0));
+                 avroData.toConnectData(avroSchema, 12.0));
   }
 
   @Test
-  public void testToCopycatString() {
+  public void testToConnectString() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().stringType();
     assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "teststring"),
-                 avroData.toCopycatData(avroSchema, "teststring"));
+                 avroData.toConnectData(avroSchema, "teststring"));
 
     // Avro deserializer allows CharSequence, not just String, and returns Utf8 objects
     assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "teststring"),
-                 avroData.toCopycatData(avroSchema, new Utf8("teststring")));
+                 avroData.toConnectData(avroSchema, new Utf8("teststring")));
   }
 
   @Test
-  public void testToCopycatBytes() {
+  public void testToConnectBytes() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
     assertEquals(new SchemaAndValue(Schema.BYTES_SCHEMA, ByteBuffer.wrap("foo".getBytes())),
-                 avroData.toCopycatData(avroSchema, "foo".getBytes()));
+                 avroData.toConnectData(avroSchema, "foo".getBytes()));
 
     assertEquals(new SchemaAndValue(Schema.BYTES_SCHEMA, ByteBuffer.wrap("foo".getBytes())),
-                 avroData.toCopycatData(avroSchema, ByteBuffer.wrap("foo".getBytes())));
+                 avroData.toConnectData(avroSchema, ByteBuffer.wrap("foo".getBytes())));
   }
 
   @Test
-  public void testToCopycatArray() {
+  public void testToConnectArray() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().array()
         .items().intType();
-    avroSchema.getElementType().addProp("copycat.type", "int8");
+    avroSchema.getElementType().addProp("connect.type", "int8");
     // Use a value type which ensures we test conversion of elements. int8 requires extra
     // conversion steps but keeps the test simple.
     Schema schema = SchemaBuilder.array(Schema.INT8_SCHEMA).build();
     assertEquals(new SchemaAndValue(schema, Arrays.asList((byte) 12, (byte) 13)),
-                 avroData.toCopycatData(avroSchema, Arrays.asList(12, 13)));
+                 avroData.toConnectData(avroSchema, Arrays.asList(12, 13)));
   }
 
   @Test
-  public void testToCopycatMapStringKeys() {
+  public void testToConnectMapStringKeys() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().map()
         .values().intType();
-    avroSchema.getValueType().addProp("copycat.type", "int8");
+    avroSchema.getValueType().addProp("connect.type", "int8");
     // Use a value type which ensures we test conversion of elements. int8 requires extra
     // conversion steps but keeps the test simple.
     Schema schema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT8_SCHEMA).build();
     assertEquals(new SchemaAndValue(schema, Collections.singletonMap("field", (byte) 12)),
-                 avroData.toCopycatData(avroSchema, Collections.singletonMap("field", 12)));
+                 avroData.toConnectData(avroSchema, Collections.singletonMap("field", 12)));
   }
 
   @Test
-  public void testToCopycatRecord() {
+  public void testToConnectRecord() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("Record").fields()
         .requiredInt("int8")
         .requiredString("string")
         .endRecord();
-    avroSchema.getField("int8").schema().addProp("copycat.type", "int8");
+    avroSchema.getField("int8").schema().addProp("connect.type", "int8");
     GenericRecord avroRecord = new GenericRecordBuilder(avroSchema)
         .set("int8", 12)
         .set("string", "sample string")
@@ -554,84 +554,84 @@ public class AvroDataTest {
         .build();
     Struct struct = new Struct(schema).put("int8", (byte) 12).put("string", "sample string");
     assertEquals(new SchemaAndValue(schema, struct),
-                 avroData.toCopycatData(avroSchema, avroRecord));
+                 avroData.toConnectData(avroSchema, avroRecord));
   }
 
-  // Avro -> Copycat: Copycat logical types
+  // Avro -> Connect: Connect logical types
 
   @Test
-  public void testToCopycatDecimal() {
+  public void testToConnectDecimal() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
-    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Decimal");
-    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Decimal");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     ObjectNode avroParams = JsonNodeFactory.instance.objectNode();
     avroParams.put("scale", "2");
-    avroSchema.addProp("copycat.parameters", avroParams);
+    avroSchema.addProp("connect.parameters", avroParams);
     assertEquals(new SchemaAndValue(Decimal.schema(2), TEST_DECIMAL),
-                 avroData.toCopycatData(avroSchema, TEST_DECIMAL_BYTES));
+                 avroData.toConnectData(avroSchema, TEST_DECIMAL_BYTES));
   }
 
   @Test
-  public void testToCopycatDate() {
+  public void testToConnectDate() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
-    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Date");
-    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Date");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     assertEquals(new SchemaAndValue(Date.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime()),
-                 avroData.toCopycatData(avroSchema, 10000));
+                 avroData.toConnectData(avroSchema, 10000));
   }
 
   @Test
-  public void testToCopycatTime() {
+  public void testToConnectTime() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
-    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Time");
-    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Time");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     assertEquals(new SchemaAndValue(Time.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime()),
-                 avroData.toCopycatData(avroSchema, 10000));
+                 avroData.toConnectData(avroSchema, 10000));
   }
 
   @Test
-  public void testToCopycatTimestamp() {
+  public void testToConnectTimestamp() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
-    avroSchema.addProp("copycat.name", "org.apache.kafka.copycat.data.Timestamp");
-    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Timestamp");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     java.util.Date date = new java.util.Date();
     assertEquals(new SchemaAndValue(Timestamp.SCHEMA, date),
-                 avroData.toCopycatData(avroSchema, date.getTime()));
+                 avroData.toConnectData(avroSchema, date.getTime()));
   }
 
-  // Avro -> Copycat: Copycat types with no corresponding Avro type
+  // Avro -> Connect: Connect types with no corresponding Avro type
 
   @Test
-  public void testToCopycatInt8() {
+  public void testToConnectInt8() {
     // int8 should have a special annotation and Avro will have decoded an Integer
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
-    avroSchema.addProp("copycat.type", "int8");
+    avroSchema.addProp("connect.type", "int8");
     assertEquals(new SchemaAndValue(Schema.INT8_SCHEMA, (byte) 12),
-                 avroData.toCopycatData(avroSchema, 12));
+                 avroData.toConnectData(avroSchema, 12));
   }
 
   @Test
-  public void testToCopycatInt16() {
+  public void testToConnectInt16() {
     // int16 should have a special annotation and Avro will have decoded an Integer
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
-    avroSchema.addProp("copycat.type", "int16");
+    avroSchema.addProp("connect.type", "int16");
     assertEquals(new SchemaAndValue(Schema.INT16_SCHEMA, (short) 12),
-                 avroData.toCopycatData(avroSchema, 12));
+                 avroData.toConnectData(avroSchema, 12));
   }
 
   @Test
-  public void testToCopycatMapNonStringKeys() {
+  public void testToConnectMapNonStringKeys() {
     // Encoded as array of 2-tuple records. Use key and value types that require conversion to
     // make sure conversion of each element actually occurs. The more verbose construction of the
     // Avro schema avoids reuse of schemas, which is needed since after constructing the schemas
     // we set additional properties on them.
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().array()
-        .items().record("MapEntry").namespace("io.confluent.copycat.avro").fields()
+        .items().record("MapEntry").namespace("io.confluent.connect.avro").fields()
         .name("key").type(org.apache.avro.SchemaBuilder.builder().intType()).noDefault()
         .name("value").type(org.apache.avro.SchemaBuilder.builder().intType()).noDefault()
         .endRecord();
-    avroSchema.getElementType().getField("key").schema().addProp("copycat.type", "int8");
-    avroSchema.getElementType().getField("value").schema().addProp("copycat.type", "int16");
+    avroSchema.getElementType().getField("key").schema().addProp("connect.type", "int8");
+    avroSchema.getElementType().getField("value").schema().addProp("connect.type", "int16");
     GenericRecord record = new GenericRecordBuilder(avroSchema.getElementType())
         .set("key", 12)
         .set("value", 16)
@@ -640,32 +640,32 @@ public class AvroDataTest {
     // conversion steps but keeps the test simple.
     Schema schema = SchemaBuilder.map(Schema.INT8_SCHEMA, Schema.INT16_SCHEMA).build();
     assertEquals(new SchemaAndValue(schema, Collections.singletonMap((byte) 12, (short) 16)),
-                 avroData.toCopycatData(avroSchema, Arrays.asList(record)));
+                 avroData.toConnectData(avroSchema, Arrays.asList(record)));
   }
 
-  // Avro -> Copycat: Avro types with no corresponding Copycat type
+  // Avro -> Connect: Avro types with no corresponding Connect type
 
   @Test(expected = DataException.class)
-  public void testToCopycatNull() {
+  public void testToConnectNull() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().nullType();
     // If we somehow did end up with a null schema and an actual value that let it get past the
-    avroData.toCopycatData(avroSchema, true);
+    avroData.toConnectData(avroSchema, true);
   }
 
   @Test
-  public void testToCopycatFixed() {
+  public void testToConnectFixed() {
     // Our conversion simply loses the fixed size information.
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .fixed("sample").size(4);
     assertEquals(new SchemaAndValue(Schema.BYTES_SCHEMA, ByteBuffer.wrap("foob".getBytes())),
-                 avroData.toCopycatData(avroSchema, "foob".getBytes()));
+                 avroData.toConnectData(avroSchema, "foob".getBytes()));
 
     assertEquals(new SchemaAndValue(Schema.BYTES_SCHEMA, ByteBuffer.wrap("foob".getBytes())),
-                 avroData.toCopycatData(avroSchema, ByteBuffer.wrap("foob".getBytes())));
+                 avroData.toConnectData(avroSchema, ByteBuffer.wrap("foob".getBytes())));
   }
 
   @Test
-  public void testToCopycatUnion() {
+  public void testToConnectUnion() {
     // Make sure we handle primitive types and named types properly by using a variety of types
     org.apache.avro.Schema avroRecordSchema1 = org.apache.avro.SchemaBuilder.builder()
         .record("Test1").fields().requiredInt("test").endRecord();
@@ -684,29 +684,29 @@ public class AvroDataTest {
     Schema recordSchema2 = SchemaBuilder.struct().name("io.confluent.Test2")
         .field("test", Schema.INT32_SCHEMA).optional().build();
     Schema schema = SchemaBuilder.struct()
-        .name("io.confluent.copycat.avro.Union")
+        .name("io.confluent.connect.avro.Union")
         .field("int", Schema.OPTIONAL_INT32_SCHEMA)
         .field("string", Schema.OPTIONAL_STRING_SCHEMA)
         .field("Test1", recordSchema1)
         .field("Test2", recordSchema2)
         .build();
     assertEquals(new SchemaAndValue(schema, new Struct(schema).put("int", 12)),
-                 avroData.toCopycatData(avroSchema, 12));
+                 avroData.toConnectData(avroSchema, 12));
     assertEquals(new SchemaAndValue(schema, new Struct(schema).put("string", "teststring")),
-                 avroData.toCopycatData(avroSchema, "teststring"));
+                 avroData.toConnectData(avroSchema, "teststring"));
 
     Struct schema1Test = new Struct(schema).put("Test1", new Struct(recordSchema1).put("test", 12));
     GenericRecord record1Test = new GenericRecordBuilder(avroRecordSchema1).set("test", 12).build();
     Struct schema2Test = new Struct(schema).put("Test2", new Struct(recordSchema2).put("test", 12));
     GenericRecord record2Test = new GenericRecordBuilder(avroRecordSchema2).set("test", 12).build();
     assertEquals(new SchemaAndValue(schema, schema1Test),
-                 avroData.toCopycatData(avroSchema, record1Test));
+                 avroData.toConnectData(avroSchema, record1Test));
     assertEquals(new SchemaAndValue(schema, schema2Test),
-                 avroData.toCopycatData(avroSchema, record2Test));
+                 avroData.toConnectData(avroSchema, record2Test));
   }
 
   @Test(expected = DataException.class)
-  public void testToCopycatUnionRecordConflict() {
+  public void testToConnectUnionRecordConflict() {
     // If the records have the same name but are in different namespaces, we don't support this
     // because Avro field naming is fairly restrictive
     org.apache.avro.Schema avroRecordSchema1 = org.apache.avro.SchemaBuilder.builder()
@@ -719,38 +719,38 @@ public class AvroDataTest {
         .endUnion();
 
     GenericRecord recordTest = new GenericRecordBuilder(avroRecordSchema1).set("test", 12).build();
-    avroData.toCopycatData(avroSchema, recordTest);
+    avroData.toConnectData(avroSchema, recordTest);
   }
 
   @Test
-  public void testToCopycatEnum() {
+  public void testToConnectEnum() {
     // Enums are just converted to strings, no trace of the original enum is preserved
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .enumeration("TestEnum").symbols("foo", "bar", "baz");
     assertEquals(new SchemaAndValue(SchemaBuilder.string().name("TestEnum").build(), "bar"),
-                 avroData.toCopycatData(avroSchema, "bar"));
+                 avroData.toConnectData(avroSchema, "bar"));
     assertEquals(new SchemaAndValue(SchemaBuilder.string().name("TestEnum").build(), "bar"),
-                 avroData.toCopycatData(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar")));
+                 avroData.toConnectData(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar")));
   }
 
 
   @Test
-  public void testToCopycatOptionalPrimitiveWithCopycatMetadata() {
+  public void testToConnectOptionalPrimitiveWithConnectMetadata() {
     Schema schema = SchemaBuilder.string().
         doc("doc").defaultValue("foo").name("io.confluent.stringtype").version(2).optional()
         .parameter("foo", "bar").parameter("baz", "baz")
         .build();
 
     org.apache.avro.Schema avroStringSchema = org.apache.avro.SchemaBuilder.builder().stringType();
-    avroStringSchema.addProp("copycat.name", "io.confluent.stringtype");
-    avroStringSchema.addProp("copycat.version",
+    avroStringSchema.addProp("connect.name", "io.confluent.stringtype");
+    avroStringSchema.addProp("connect.version",
                              JsonNodeFactory.instance.numberNode(2));
-    avroStringSchema.addProp("copycat.doc", "doc");
-    avroStringSchema.addProp("copycat.default", "foo");
+    avroStringSchema.addProp("connect.doc", "doc");
+    avroStringSchema.addProp("connect.default", "foo");
     ObjectNode params = JsonNodeFactory.instance.objectNode();
     params.put("foo", "bar");
     params.put("baz", "baz");
-    avroStringSchema.addProp("copycat.parameters", params);
+    avroStringSchema.addProp("connect.parameters", params);
     org.apache.avro.Schema avroSchema =
         org.apache.avro.SchemaBuilder.builder().unionOf()
             .type(avroStringSchema).and()
@@ -758,13 +758,13 @@ public class AvroDataTest {
 
 
     assertEquals(new SchemaAndValue(schema, "string"),
-                 avroData.toCopycatData(avroSchema, "string"));
+                 avroData.toConnectData(avroSchema, "string"));
   }
 
   @Test
-  public void testToCopycatRecordWithMetadata() {
-    // One important difference between record schemas in Avro and Copycat is that Avro has some
-    // per-field metadata (doc, default value) that Copycat holds in the schema itself. We set
+  public void testToConnectRecordWithMetadata() {
+    // One important difference between record schemas in Avro and Connect is that Avro has some
+    // per-field metadata (doc, default value) that Connect holds in the schema itself. We set
     // these properties on one of these fields to ensure they are properly converted
     Schema schema = SchemaBuilder.struct()
         .name("io.confluent.test.TestSchema").version(12).doc("doc")
@@ -778,66 +778,66 @@ public class AvroDataTest {
         .fields()
         .name("int32").doc("field doc").type().intType().intDefault(7)
         .endRecord();
-    avroSchema.addProp("copycat.name", "io.confluent.test.TestSchema");
-    avroSchema.addProp("copycat.version", JsonNodeFactory.instance.numberNode(12));
-    avroSchema.addProp("copycat.doc", "doc");
+    avroSchema.addProp("connect.name", "io.confluent.test.TestSchema");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(12));
+    avroSchema.addProp("connect.doc", "doc");
     org.apache.avro.generic.GenericRecord avroRecord
         = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int32", 12)
         .build();
 
     assertEquals(new SchemaAndValue(schema, struct),
-                 avroData.toCopycatData(avroSchema, avroRecord));
+                 avroData.toConnectData(avroSchema, avroRecord));
   }
 
   @Test
-  public void testToCopycatSchemaless() {
+  public void testToConnectSchemaless() {
     GenericRecord avroNullRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA).build();
     assertEquals(new SchemaAndValue(null, null),
-                 avroData.toCopycatData(AvroData.ANYTHING_SCHEMA, avroNullRecord));
+                 avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroNullRecord));
 
     GenericRecord avroIntRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("int", 12)
         .build();
     assertEquals(new SchemaAndValue(null, 12),
-                 avroData.toCopycatData(AvroData.ANYTHING_SCHEMA, avroIntRecord));
+                 avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroIntRecord));
 
     GenericRecord avroLongRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("long", 12L)
         .build();
     assertEquals(new SchemaAndValue(null, 12L),
-                 avroData.toCopycatData(AvroData.ANYTHING_SCHEMA, avroLongRecord));
+                 avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroLongRecord));
 
     GenericRecord avroFloatRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("float", 12.2f)
         .build();
     assertEquals(new SchemaAndValue(null, 12.2f),
-                 avroData.toCopycatData(AvroData.ANYTHING_SCHEMA, avroFloatRecord));
+                 avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroFloatRecord));
 
     GenericRecord avroDoubleRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("double", 12.2)
         .build();
     assertEquals(new SchemaAndValue(null, 12.2),
-                 avroData.toCopycatData(AvroData.ANYTHING_SCHEMA, avroDoubleRecord));
+                 avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroDoubleRecord));
 
     GenericRecord avroBooleanRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("boolean", true)
         .build();
     assertEquals(new SchemaAndValue(null, true),
-                 avroData.toCopycatData(AvroData.ANYTHING_SCHEMA, avroBooleanRecord));
+                 avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroBooleanRecord));
 
     GenericRecord avroStringRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("string", "teststring")
         .build();
     assertEquals(new SchemaAndValue(null, "teststring"),
-                 avroData.toCopycatData(AvroData.ANYTHING_SCHEMA, avroStringRecord));
+                 avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroStringRecord));
 
 
     GenericRecord avroArrayRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
         .set("array", Arrays.asList(avroIntRecord, avroStringRecord))
         .build();
     assertEquals(new SchemaAndValue(null, Arrays.asList(12, "teststring")),
-                 avroData.toCopycatData(AvroData.ANYTHING_SCHEMA, avroArrayRecord));
+                 avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroArrayRecord));
 
     GenericRecord avroMapEntry = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA_MAP_ELEMENT)
         .set("key", avroIntRecord)
@@ -847,39 +847,39 @@ public class AvroDataTest {
         .set("map", Arrays.asList(avroMapEntry))
         .build();
     assertEquals(new SchemaAndValue(null, Collections.singletonMap(12, "teststring")),
-                 avroData.toCopycatData(AvroData.ANYTHING_SCHEMA, avroMapRecord));
+                 avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroMapRecord));
 
   }
 
   @Test(expected = DataException.class)
-  public void testToCopycatSchemaMismatchPrimitive() {
+  public void testToConnectSchemaMismatchPrimitive() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
-    avroData.toCopycatData(avroSchema, 12L);
+    avroData.toConnectData(avroSchema, 12L);
   }
 
   @Test(expected = DataException.class)
-  public void testToCopycatSchemaMismatchArray() {
+  public void testToConnectSchemaMismatchArray() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .array().items().stringType();
-    avroData.toCopycatData(avroSchema, Arrays.asList(1, 2, 3));
+    avroData.toConnectData(avroSchema, Arrays.asList(1, 2, 3));
   }
 
   @Test(expected = DataException.class)
-  public void testToCopycatSchemaMismatchMapMismatchKey() {
+  public void testToConnectSchemaMismatchMapMismatchKey() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .map().values().intType();
-    avroData.toCopycatData(avroSchema, Collections.singletonMap(12, 12));
+    avroData.toConnectData(avroSchema, Collections.singletonMap(12, 12));
   }
 
   @Test(expected = DataException.class)
-  public void testToCopycatSchemaMismatchMapMismatchValue() {
+  public void testToConnectSchemaMismatchMapMismatchValue() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .map().values().intType();
-    avroData.toCopycatData(avroSchema, Collections.singletonMap("foo", 12L));
+    avroData.toConnectData(avroSchema, Collections.singletonMap("foo", 12L));
   }
 
   @Test(expected = DataException.class)
-  public void testToCopycatSchemaMismatchRecord() {
+  public void testToConnectSchemaMismatchRecord() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("Record").fields()
         .requiredString("string")
@@ -892,26 +892,26 @@ public class AvroDataTest {
         .set("string", 12)
         .build();
 
-    avroData.toCopycatData(avroSchema, avroRecordWrong);
+    avroData.toConnectData(avroSchema, avroRecordWrong);
   }
 
   @Test
-  public void testCacheSchemaToCopycatConversion() {
+  public void testCacheSchemaToConnectConversion() {
     Cache<Schema, org.apache.avro.Schema> cache =
-        Whitebox.getInternalState(avroData, "toCopycatSchemaCache");
+        Whitebox.getInternalState(avroData, "toConnectSchemaCache");
     assertEquals(0, cache.size());
 
-    avroData.toCopycatData(org.apache.avro.SchemaBuilder.builder().booleanType(), true);
+    avroData.toConnectData(org.apache.avro.SchemaBuilder.builder().booleanType(), true);
     assertEquals(1, cache.size());
 
-    avroData.toCopycatData(org.apache.avro.SchemaBuilder.builder().booleanType(), true);
+    avroData.toConnectData(org.apache.avro.SchemaBuilder.builder().booleanType(), true);
     assertEquals(1, cache.size());
 
-    avroData.toCopycatData(org.apache.avro.SchemaBuilder.builder().intType(), 32);
+    avroData.toConnectData(org.apache.avro.SchemaBuilder.builder().intType(), 32);
     assertEquals(2, cache.size());
 
     // Should hit limit of cache
-    avroData.toCopycatData(org.apache.avro.SchemaBuilder.builder().stringType(), "foo");
+    avroData.toConnectData(org.apache.avro.SchemaBuilder.builder().stringType(), "foo");
     assertEquals(2, cache.size());
   }
 
@@ -920,7 +920,7 @@ public class AvroDataTest {
       org.apache.avro.Schema expectedSchema, Object expected,
       Schema schema, Object value)
   {
-    Object converted = avroData.fromCopycatData(schema, value);
+    Object converted = avroData.fromConnectData(schema, value);
     assertTrue(converted instanceof NonRecordContainer);
     NonRecordContainer container = (NonRecordContainer) converted;
     assertEquals(expectedSchema, container.getSchema());

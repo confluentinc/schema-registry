@@ -14,12 +14,12 @@
  * limitations under the License.
  **/
 
-package io.confluent.copycat.avro;
+package io.confluent.connect.avro;
 
-import org.apache.kafka.copycat.data.Schema;
-import org.apache.kafka.copycat.data.SchemaAndValue;
-import org.apache.kafka.copycat.data.SchemaBuilder;
-import org.apache.kafka.copycat.data.Struct;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.junit.Before;
 import org.junit.Test;
 import org.powermock.reflect.Whitebox;
@@ -84,8 +84,8 @@ public class AvroConverterTest {
   @Test
   public void testPrimitive() {
     SchemaAndValue original = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true);
-    byte[] converted = converter.fromCopycatData(TOPIC, original.schema(), original.value());
-    SchemaAndValue schemaAndValue = converter.toCopycatData(TOPIC, converted);
+    byte[] converted = converter.fromConnectData(TOPIC, original.schema(), original.value());
+    SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
     assertEquals(original, schemaAndValue);
   }
 
@@ -119,8 +119,8 @@ public class AvroConverterTest {
         .put("map", Collections.singletonMap("field", 1))
         .put("mapNonStringKeys", Collections.singletonMap(1, 1));
 
-    byte[] converted = converter.fromCopycatData(TOPIC, original.schema(), original);
-    SchemaAndValue schemaAndValue = converter.toCopycatData(TOPIC, converted);
+    byte[] converted = converter.fromConnectData(TOPIC, original.schema(), original);
+    SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
     assertEquals(original, schemaAndValue.value());
   }
 
@@ -129,8 +129,8 @@ public class AvroConverterTest {
   public void testNull() {
     // Because of the way our serialization works, it's expected that we'll lose schema information
     // when the entire schema is optional.
-    byte[] converted = converter.fromCopycatData(TOPIC, Schema.OPTIONAL_BOOLEAN_SCHEMA, null);
-    SchemaAndValue schemaAndValue = converter.toCopycatData(TOPIC, converted);
+    byte[] converted = converter.fromConnectData(TOPIC, Schema.OPTIONAL_BOOLEAN_SCHEMA, null);
+    SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
     assertNull(schemaAndValue);
   }
 }
