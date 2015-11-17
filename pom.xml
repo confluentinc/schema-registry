@@ -40,7 +40,8 @@
         <module>avro-serializer</module>
         <module>json-serializer</module>
         <module>avro-converter</module>
-        <module>package</module>
+        <module>package-schema-registry</module>
+        <module>package-kafka-serde-tools</module>
     </modules>
 
     <properties>

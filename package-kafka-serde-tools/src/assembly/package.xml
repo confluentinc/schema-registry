@@ -2,8 +2,8 @@
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2
           http://maven.apache.org/xsd/assembly-1.1.2.xsd">
-    <!-- Assembles a package that can run schema-registry given dependency packages. This is used to
-         construct packages OS packages where underlying libraries, like rest-utils, can be shared
+    <!-- Assembles a package that can run the serde ools given dependency packages. This is used to
+         construct packages OS packages where underlying libraries, like rest-utils, can be shared.
          -->
     <id>package</id>
     <formats>
@@ -13,7 +13,7 @@
     <fileSets>
         <fileSet>
             <directory>${project.parent.basedir}</directory>
-            <outputDirectory>share/doc/schema-registry/</outputDirectory>
+            <outputDirectory>share/doc/kafka-serde-tools/</outputDirectory>
             <includes>
                 <include>README*</include>
                 <include>LICENSE*</include>
@@ -21,24 +21,10 @@
                 <include>licenses/</include>
             </includes>
         </fileSet>
-        <fileSet>
-            <directory>${project.parent.basedir}</directory>
-            <outputDirectory></outputDirectory>
-            <includes>
-                <include>bin/*</include>
-            </includes>
-        </fileSet>
-        <fileSet>
-            <directory>${project.parent.basedir}/config</directory>
-            <outputDirectory>etc/schema-registry</outputDirectory>
-            <includes>
-                <include>*</include>
-            </includes>
-        </fileSet>
     </fileSets>
     <dependencySets>
         <dependencySet>
-            <outputDirectory>share/java/schema-registry</outputDirectory>
+            <outputDirectory>share/java/kafka-serde-tools</outputDirectory>
             <useProjectArtifact>true</useProjectArtifact>
             <scope>runtime</scope>
             <!-- Warning: Enabling useTransitiveFiltering is potentially unsafe,
@@ -48,9 +34,7 @@
                  disable transitive filtering. -->
             <useTransitiveFiltering>true</useTransitiveFiltering>
             <excludes>
-                <exclude>io.confluent:rest-utils</exclude>
-                <exclude>io.confluent:common-config</exclude>
-                <exclude>io.confluent:common-utils</exclude>
+                <exclude>io.confluent:common-*</exclude>
             </excludes>
         </dependencySet>
     </dependencySets>

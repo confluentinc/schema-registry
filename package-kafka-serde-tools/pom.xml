@@ -11,25 +11,15 @@
     </parent>
 
     <groupId>io.confluent</groupId>
-    <artifactId>kafka-schema-registry-package</artifactId>
+    <artifactId>kafka-serde-tools-package</artifactId>
     <packaging>pom</packaging>
-    <name>kafka-schema-registry-package</name>
+    <name>kafka-serde-tools-package</name>
 
     <!-- Dependencies are required only to ensure this module is built last. -->
     <dependencies>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-avro-serializer</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-registry-client</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-registry</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -84,11 +74,6 @@
                         <descriptor>src/assembly/development.xml</descriptor>
                         <descriptor>src/assembly/package.xml</descriptor>
                     </descriptors>
-                    <archive>
-                        <manifest>
-                            <mainClass>io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain</mainClass>
-                        </manifest>
-                    </archive>
                     <attach>false</attach>
                 </configuration>
                 <executions>
