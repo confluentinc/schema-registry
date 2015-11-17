@@ -50,7 +50,9 @@ exit 0
 /usr/bin/*
 /etc/schema-registry
 /usr/share/java/schema-registry
+/usr/share/java/kafka-serde-tools
 /usr/share/doc/schema-registry
+/usr/share/doc/kafka-serde-tools
 
 %clean
 #used to cleanup things outside the build area and possibly inside.
