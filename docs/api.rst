@@ -385,10 +385,10 @@ The compatibility resource allows the user to test schemas for compatibility aga
 
       HTTP/1.1 200 OK
       Content-Type: application/vnd.schemaregistry.v1+json
-           
+
       {
-	    "is_compatible": "true"
-	  }
+        "is_compatible": true
+      }
 
 Config
 ------
