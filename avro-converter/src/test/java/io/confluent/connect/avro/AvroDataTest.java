@@ -77,6 +77,10 @@ public class AvroDataTest {
   public void testFromConnectBoolean() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().booleanType();
     checkNonRecordConversion(avroSchema, true, Schema.BOOLEAN_SCHEMA, true);
+
+    org.apache.avro.Schema avroOptionalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .nullType().and().booleanType().endUnion();
+    checkNonRecordConversion(avroOptionalSchema, null, Schema.OPTIONAL_BOOLEAN_SCHEMA, null);
   }
 
   @Test
@@ -84,6 +88,11 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     avroSchema.addProp("connect.type", "int8");
     checkNonRecordConversion(avroSchema, 12, Schema.INT8_SCHEMA, (byte) 12);
+
+    org.apache.avro.Schema avroOptionalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .nullType().and().intType().endUnion();
+    avroOptionalSchema.getTypes().get(1).addProp("connect.type", "int8");
+    checkNonRecordConversion(avroOptionalSchema, null, Schema.OPTIONAL_INT8_SCHEMA, null);
   }
 
   @Test
@@ -91,30 +100,51 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     avroSchema.addProp("connect.type", "int16");
     checkNonRecordConversion(avroSchema, 12, Schema.INT16_SCHEMA, (short) 12);
+
+    org.apache.avro.Schema avroOptionalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .nullType().and().intType().endUnion();
+    avroOptionalSchema.getTypes().get(1).addProp("connect.type", "int16");
+    checkNonRecordConversion(avroOptionalSchema, null, Schema.OPTIONAL_INT16_SCHEMA, null);
   }
 
   @Test
   public void testFromConnectInteger() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     checkNonRecordConversion(avroSchema, 12, Schema.INT32_SCHEMA, 12);
+
+    org.apache.avro.Schema avroOptionalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .nullType().and().intType().endUnion();
+    checkNonRecordConversion(avroOptionalSchema, null, Schema.OPTIONAL_INT32_SCHEMA, null);
   }
 
   @Test
   public void testFromConnectLong() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
     checkNonRecordConversion(avroSchema, 12L, Schema.INT64_SCHEMA, 12L);
+
+    org.apache.avro.Schema avroOptionalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .nullType().and().longType().endUnion();
+    checkNonRecordConversion(avroOptionalSchema, null, Schema.OPTIONAL_INT64_SCHEMA, null);
   }
 
   @Test
   public void testFromConnectFloat() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().floatType();
     checkNonRecordConversion(avroSchema, 12.2f, Schema.FLOAT32_SCHEMA, 12.2f);
+
+    org.apache.avro.Schema avroOptionalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .nullType().and().floatType().endUnion();
+    checkNonRecordConversion(avroOptionalSchema, null, Schema.OPTIONAL_FLOAT32_SCHEMA, null);
   }
 
   @Test
   public void testFromConnectDouble() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().doubleType();
     checkNonRecordConversion(avroSchema, 12.2, Schema.FLOAT64_SCHEMA, 12.2);
+
+    org.apache.avro.Schema avroOptionalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .nullType().and().doubleType().endUnion();
+    checkNonRecordConversion(avroOptionalSchema, null, Schema.OPTIONAL_FLOAT64_SCHEMA, null);
   }
 
   @Test
@@ -122,6 +152,10 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
     checkNonRecordConversion(avroSchema, ByteBuffer.wrap("foo".getBytes()),
                              Schema.BYTES_SCHEMA, "foo".getBytes());
+
+    org.apache.avro.Schema avroOptionalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .nullType().and().bytesType().endUnion();
+    checkNonRecordConversion(avroOptionalSchema, null, Schema.OPTIONAL_BYTES_SCHEMA, null);
   }
 
   @Test
@@ -129,6 +163,10 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema =
         org.apache.avro.SchemaBuilder.builder().stringType();
     checkNonRecordConversion(avroSchema, "string", Schema.STRING_SCHEMA, "string");
+
+    org.apache.avro.Schema avroOptionalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .nullType().and().stringType().endUnion();
+    checkNonRecordConversion(avroOptionalSchema, null, Schema.OPTIONAL_STRING_SCHEMA, null);
   }
 
   @Test
@@ -252,6 +290,9 @@ public class AvroDataTest {
     NonRecordContainer converted = checkNonRecordConversion(avroSchema, "string",
                                                             schema, "string");
     assertNotEquals(wrongAvroSchema, converted.getSchema());
+
+    // Validate null is correctly translated to null again
+    checkNonRecordConversion(avroSchema, null, schema, null);
   }
 
   @Test
@@ -282,16 +323,27 @@ public class AvroDataTest {
     assertEquals(avroRecord, convertedRecord);
   }
 
-  @Test
-  public void testFromConnectLogicalDecimal() {
-    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
-    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Decimal");
-    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
+  private static org.apache.avro.Schema createDecimalSchema(boolean required) {
+    org.apache.avro.Schema avroSchema
+        = required ? org.apache.avro.SchemaBuilder.builder().bytesType() :
+          org.apache.avro.SchemaBuilder.builder().unionOf().nullType().and().bytesType().endUnion();
+    org.apache.avro.Schema decimalSchema = required ? avroSchema : avroSchema.getTypes().get(1);
+    decimalSchema.addProp("connect.name", "org.apache.kafka.connect.data.Decimal");
+    decimalSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     ObjectNode avroParams = JsonNodeFactory.instance.objectNode();
     avroParams.put("scale", "2");
-    avroSchema.addProp("connect.parameters", avroParams);
+    decimalSchema.addProp("connect.parameters", avroParams);
+    return avroSchema;
+  }
+
+  @Test
+  public void testFromConnectLogicalDecimal() {
+    org.apache.avro.Schema avroSchema = createDecimalSchema(true);
     checkNonRecordConversion(avroSchema, ByteBuffer.wrap(TEST_DECIMAL_BYTES),
                              Decimal.schema(2), TEST_DECIMAL);
+
+    org.apache.avro.Schema avroOptionalSchema = createDecimalSchema(false);
+    checkNonRecordConversion(avroOptionalSchema, null, Decimal.builder(2).optional().build(), null);
   }
 
   @Test

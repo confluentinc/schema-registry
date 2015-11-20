@@ -294,22 +294,26 @@ public class AvroData {
     Object value = logicalValue;
     if (schema != null && schema.name() != null) {
       LogicalTypeConverter logicalConverter = TO_AVRO_LOGICAL_CONVERTERS.get(schema.name());
-      if (logicalConverter != null)
+      if (logicalConverter != null && logicalValue != null)
         value = logicalConverter.convert(schema, logicalValue);
     }
 
     try {
       switch (schemaType) {
         case INT8: {
+          Byte byteValue = (Byte) value; // Check for correct type
+          Integer convertedByteValue = byteValue == null ? null : byteValue.intValue();
           return maybeAddContainer(
               avroSchema,
-              maybeWrapSchemaless(schema, ((Byte) value).intValue(), ANYTHING_SCHEMA_INT_FIELD),
+              maybeWrapSchemaless(schema, convertedByteValue, ANYTHING_SCHEMA_INT_FIELD),
               requireContainer);
         }
         case INT16: {
+          Short shortValue = (Short) value; // Check for correct type
+          Integer convertedShortValue = shortValue == null ? null : shortValue.intValue();
           return maybeAddContainer(
               avroSchema,
-              maybeWrapSchemaless(schema, ((Short) value).intValue(), ANYTHING_SCHEMA_INT_FIELD),
+              maybeWrapSchemaless(schema, convertedShortValue, ANYTHING_SCHEMA_INT_FIELD),
               requireContainer);
         }
 
