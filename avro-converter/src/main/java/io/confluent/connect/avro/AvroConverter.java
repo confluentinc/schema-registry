@@ -97,7 +97,9 @@ public class AvroConverter implements Converter {
   public SchemaAndValue toConnectData(String topic, byte[] value) {
     try {
       GenericContainer deserialized = deserializer.deserialize(topic, isKey, value);
-      if (deserialized instanceof IndexedRecord) {
+      if (deserialized == null) {
+        return SchemaAndValue.NULL;
+      } else if (deserialized instanceof IndexedRecord) {
         return avroData.toConnectData(deserialized.getSchema(), deserialized);
       } else if (deserialized instanceof NonRecordContainer) {
         return avroData.toConnectData(deserialized.getSchema(), ((NonRecordContainer) deserialized).getValue());
