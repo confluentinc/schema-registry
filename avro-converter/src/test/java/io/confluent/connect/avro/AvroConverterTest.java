@@ -128,9 +128,11 @@ public class AvroConverterTest {
   @Test
   public void testNull() {
     // Because of the way our serialization works, it's expected that we'll lose schema information
-    // when the entire schema is optional.
+    // when the entire schema is optional. The null value should be written as a null and this
+    // should mean we also do *not* register a schema.
     byte[] converted = converter.fromConnectData(TOPIC, Schema.OPTIONAL_BOOLEAN_SCHEMA, null);
+    assertNull(converted);
     SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
-    assertNull(schemaAndValue);
+    assertEquals(SchemaAndValue.NULL, schemaAndValue);
   }
 }

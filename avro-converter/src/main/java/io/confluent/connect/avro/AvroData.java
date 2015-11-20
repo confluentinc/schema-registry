@@ -280,13 +280,19 @@ public class AvroData {
                                        Object logicalValue, boolean requireContainer) {
     Schema.Type schemaType = schema != null ? schema.type() : schemaTypeForSchemalessJavaType(logicalValue);
     if (schemaType == null) {
-      // Schemaless null data
-      return maybeAddContainer(avroSchema, maybeWrapSchemaless(null, null, null), requireContainer);
+      // Schemaless null data since schema is null and we got a null schema type from the value
+      return null;
     }
 
     boolean schemaOptional = schema != null ? schema.isOptional() : true;
     if (!schemaOptional && logicalValue == null) {
       throw new DataException("Found null value for non-optional schema");
+    }
+
+    // Now it is safe to handle null values since we have validated that it is a valid value for the
+    // schema
+    if (logicalValue == null) {
+      return null;
     }
 
     // If this is a logical type, convert it from the convenient Java type to the underlying
