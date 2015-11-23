@@ -263,7 +263,7 @@ public class AvroData {
    */
   public Object fromConnectData(Schema schema, Object value) {
     org.apache.avro.Schema avroSchema = fromConnectSchema(schema);
-    return fromConnectData(schema, avroSchema, value, true);
+    return fromConnectData(schema, avroSchema, value, true, false);
   }
 
   /**
@@ -274,14 +274,23 @@ public class AvroData {
    * @param logicalValue the Connect data to convert, which may be a value for a logical type
    * @param requireContainer if true, wrap primitives, maps, and arrays in a NonRecordContainer
    *                         before returning them
+   * @param requireSchemalessContainerNull if true, use a container representation of null because
+   *                                       this is part of struct/array/map and we cannot
+   *                                       represent nulls as true null because Anything cannot
+   *                                       be a union type; otherwise, this is a top-level value
+   *                                       and can return null
    * @return the converted data
    */
   private static Object fromConnectData(Schema schema, org.apache.avro.Schema avroSchema,
-                                       Object logicalValue, boolean requireContainer) {
+                                       Object logicalValue, boolean requireContainer, boolean
+                                            requireSchemalessContainerNull) {
     Schema.Type schemaType = schema != null ? schema.type() : schemaTypeForSchemalessJavaType(logicalValue);
     if (schemaType == null) {
       // Schemaless null data since schema is null and we got a null schema type from the value
-      return null;
+      if (requireSchemalessContainerNull)
+        return new GenericRecordBuilder(ANYTHING_SCHEMA).build();
+      else
+        return null;
     }
 
     boolean schemaOptional = schema != null ? schema.isOptional() : true;
@@ -292,7 +301,11 @@ public class AvroData {
     // Now it is safe to handle null values since we have validated that it is a valid value for the
     // schema
     if (logicalValue == null) {
-      return null;
+      // But if this is schemaless, we may not be able to return null directly
+      if (schema == null && requireSchemalessContainerNull)
+        return new GenericRecordBuilder(ANYTHING_SCHEMA).build();
+      else
+        return null;
     }
 
     // If this is a logical type, convert it from the convenient Java type to the underlying
@@ -378,7 +391,7 @@ public class AvroData {
               schema != null ? avroSchema.getElementType() : ANYTHING_SCHEMA;
           for (Object val : list) {
             converted.add(
-                fromConnectData(elementSchema, elementAvroSchema, val, false)
+                fromConnectData(elementSchema, elementAvroSchema, val, false, true)
             );
           }
           return maybeAddContainer(
@@ -397,7 +410,7 @@ public class AvroData {
               // Key is a String, no conversion needed
               Object convertedValue = fromConnectData(schema.valueSchema(),
                                                       avroSchema.getValueType(),
-                                                      entry.getValue(), false);
+                                                      entry.getValue(), false, true);
               converted.put((String)entry.getKey(), convertedValue);
             }
             return maybeAddContainer(avroSchema, converted, requireContainer);
@@ -409,9 +422,10 @@ public class AvroData {
             org.apache.avro.Schema avroValueSchema = elementSchema.getField(VALUE_FIELD).schema();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               Object keyConverted = fromConnectData(schema != null ? schema.keySchema(): null,
-                                                    avroKeySchema, entry.getKey(), false);
+                                                    avroKeySchema, entry.getKey(), false, true);
               Object valueConverted = fromConnectData(schema != null ? schema.valueSchema() : null,
-                                                      avroValueSchema, entry.getValue(), false);
+                                                      avroValueSchema, entry.getValue(), false,
+                                                      true);
               converted.add(
                       new GenericRecordBuilder(elementSchema)
                               .set(KEY_FIELD, keyConverted)
@@ -434,7 +448,7 @@ public class AvroData {
             org.apache.avro.Schema fieldAvroSchema = avroSchema.getField(field.name()).schema();
             convertedBuilder.set(
                 field.name(),
-                fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false));
+                fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false, true));
           }
           return convertedBuilder.build();
         }
