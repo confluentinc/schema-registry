@@ -16,6 +16,7 @@
 
 package io.confluent.connect.avro;
 
+import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -830,11 +831,11 @@ public class AvroData {
 
         case INT8:
           // Encoded as an Integer
-          converted = ((Integer) value).byteValue();
+          converted = value == null ? null : ((Integer) value).byteValue();
           break;
         case INT16:
           // Encoded as an Integer
-          converted = ((Integer) value).shortValue();
+          converted = value == null ? null : ((Integer) value).shortValue();
           break;
 
         case STRING:
@@ -1118,7 +1119,12 @@ public class AvroData {
       builder.doc(docVal);
     }
 
+    // Included Kafka Connect version takes priority, fall back to schema registry version
     JsonNode version = schema.getJsonProp(CONNECT_VERSION_PROP);
+    if (version == null) {
+      version = schema.getJsonProp(
+          AbstractKafkaAvroDeserializer.SCHEMA_REGISTRY_SCHEMA_VERSION_PROP);
+    }
     if (version != null) {
       if (!version.isIntegralNumber()) {
         throw new DataException("Invalid Connect version found: " + version.toString());

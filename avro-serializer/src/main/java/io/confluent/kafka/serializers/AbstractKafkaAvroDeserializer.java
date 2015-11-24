@@ -25,6 +25,7 @@ import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.codehaus.jackson.node.JsonNodeFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -37,6 +38,9 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import kafka.utils.VerifiableProperties;
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSerDe {
+  public static final String SCHEMA_REGISTRY_SCHEMA_VERSION_PROP =
+      "schema.registry.schema.version";
+
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<String, Schema>();
@@ -132,18 +136,29 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       }
 
       if (includeSchemaAndVersion) {
+        // Annotate the schema with the version. Note that we only do this if the schema +
+        // version are requested, i.e. in Kafka Connect converters. This is critical because that
+        // code *will not* rely on exact schema equality. Regular deserializers *must not* include
+        // this information because it would return schemas which are not equivalent.
+        //
+        // Note, however, that we also do not fill in the connect.version field. This allows the
+        // Converter to let a version provided by a Kafka Connect source take priority over the
+        // schema registry's ordering (which is implicit by auto-registration time rather than
+        // explicit from the Connector).
         Integer version = schemaRegistry.getVersion(getSubjectName(topic, isKey), schema);
         if (schema.getType() == Schema.Type.UNION) {
           // Can't set additional properties on a union schema since it's just a list, so set it
           // on the first non-null entry
           for (Schema memberSchema : schema.getTypes()) {
             if (memberSchema.getType() != Schema.Type.NULL) {
-              memberSchema.addProp("version", version.toString());
+              memberSchema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
+                                   JsonNodeFactory.instance.numberNode(version));
               break;
             }
           }
         } else {
-          schema.addProp("version", version.toString());
+          schema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
+                         JsonNodeFactory.instance.numberNode(version));
         }
         if (schema.getType().equals(Schema.Type.RECORD)) {
           return result;

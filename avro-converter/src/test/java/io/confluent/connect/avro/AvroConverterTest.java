@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDe;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -86,12 +87,14 @@ public class AvroConverterTest {
     SchemaAndValue original = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true);
     byte[] converted = converter.fromConnectData(TOPIC, original.schema(), original.value());
     SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
-    assertEquals(original, schemaAndValue);
+    // Because of registration in schema registry and lookup, we'll have added a version number
+    SchemaAndValue expected = new SchemaAndValue(SchemaBuilder.bool().version(1).build(), true);
+    assertEquals(expected, schemaAndValue);
   }
 
   @Test
   public void testComplex() {
-    Schema schema = SchemaBuilder.struct()
+    SchemaBuilder builder = SchemaBuilder.struct()
         .field("int8", SchemaBuilder.int8().defaultValue((byte) 2).doc("int8 field").build())
         .field("int16", Schema.INT16_SCHEMA)
         .field("int32", Schema.INT32_SCHEMA)
@@ -103,9 +106,25 @@ public class AvroConverterTest {
         .field("bytes", Schema.BYTES_SCHEMA)
         .field("array", SchemaBuilder.array(Schema.STRING_SCHEMA).build())
         .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build())
-        .field("mapNonStringKeys", SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build())
-        .build();
+        .field("mapNonStringKeys", SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA)
+            .build());
+    Schema schema = builder.build();
     Struct original = new Struct(schema)
+        .put("int8", (byte) 12)
+        .put("int16", (short) 12)
+        .put("int32", 12)
+        .put("int64", 12L)
+        .put("float32", 12.2f)
+        .put("float64", 12.2)
+        .put("boolean", true)
+        .put("string", "foo")
+        .put("bytes", ByteBuffer.wrap("foo".getBytes()))
+        .put("array", Arrays.asList("a", "b", "c"))
+        .put("map", Collections.singletonMap("field", 1))
+        .put("mapNonStringKeys", Collections.singletonMap(1, 1));
+    // Because of registration in schema registry and lookup, we'll have added a version number
+    Schema expectedSchema = builder.version(1).build();
+    Struct expected = new Struct(expectedSchema)
         .put("int8", (byte) 12)
         .put("int16", (short) 12)
         .put("int32", 12)
@@ -121,7 +140,7 @@ public class AvroConverterTest {
 
     byte[] converted = converter.fromConnectData(TOPIC, original.schema(), original);
     SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
-    assertEquals(original, schemaAndValue.value());
+    assertEquals(expected, schemaAndValue.value());
   }
 
 
@@ -134,5 +153,69 @@ public class AvroConverterTest {
     assertNull(converted);
     SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
     assertEquals(SchemaAndValue.NULL, schemaAndValue);
+  }
+
+  @Test
+  public void testVersionExtracted() throws Exception {
+    // Version info should be extracted even if the data was not created with Copycat. Manually
+    // register a few compatible schemas and validate that data serialized with our normal
+    // serializer can be read and gets version info inserted
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry);
+
+    // Pre-register to ensure ordering
+    org.apache.avro.Schema avroSchema1 = org.apache.avro.SchemaBuilder
+        .record("Foo").fields()
+        .requiredInt("key")
+        .endRecord();
+    schemaRegistry.register(TOPIC + "-value", avroSchema1);
+
+    org.apache.avro.Schema avroSchema2 = org.apache.avro.SchemaBuilder
+        .record("Foo").fields()
+        .requiredInt("key")
+        .requiredString("value")
+        .endRecord();
+    schemaRegistry.register(TOPIC + "-value", avroSchema2);
+
+
+    // Get serialized data
+    org.apache.avro.generic.GenericRecord avroRecord1
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema1).set("key", 15).build();
+    byte[] serializedRecord1 = serializer.serialize(TOPIC, avroRecord1);
+    org.apache.avro.generic.GenericRecord avroRecord2
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema2).set("key", 15).set
+        ("value", "bar").build();
+    byte[] serializedRecord2 = serializer.serialize(TOPIC, avroRecord2);
+
+
+    SchemaAndValue converted1 = converter.toConnectData(TOPIC, serializedRecord1);
+    assertEquals(1L, (long) converted1.schema().version());
+
+    SchemaAndValue converted2 = converter.toConnectData(TOPIC, serializedRecord2);
+    assertEquals(2L, (long) converted2.schema().version());
+  }
+
+
+  @Test
+  public void testVersionMaintained() {
+    // Version info provided from the Copycat schema should be maintained. This should be true
+    // regardless of any underlying schema registry versioning since the versions are explicitly
+    // specified by the connector.
+
+    // Use newer schema first
+    Schema newerSchema = SchemaBuilder.struct().version(2)
+        .field("orig", Schema.OPTIONAL_INT16_SCHEMA)
+        .field("new", Schema.OPTIONAL_INT16_SCHEMA)
+        .build();
+    SchemaAndValue newer = new SchemaAndValue(newerSchema, new Struct(newerSchema));
+    byte[] newerSerialized = converter.fromConnectData(TOPIC, newer.schema(), newer.value());
+
+    Schema olderSchema = SchemaBuilder.struct().version(1)
+        .field("orig", Schema.OPTIONAL_INT16_SCHEMA)
+        .build();
+    SchemaAndValue older = new SchemaAndValue(olderSchema, new Struct(olderSchema));
+    byte[] olderSerialized = converter.fromConnectData(TOPIC, older.schema(), older.value());
+
+    assertEquals(2L, (long) converter.toConnectData(TOPIC, newerSerialized).schema().version());
+    assertEquals(1L, (long) converter.toConnectData(TOPIC, olderSerialized).schema().version());
   }
 }
