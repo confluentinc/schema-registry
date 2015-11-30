@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
+import java.util.HashMap;
 import java.util.TimeZone;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
@@ -444,21 +445,29 @@ public class AvroDataTest {
         .build();
     checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroStringRecord, null, "teststring");
 
+    GenericRecord avroNullRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA).build();
     GenericRecord avroArrayRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
-        .set("array", Arrays.asList(avroIntRecord, avroStringRecord))
+        .set("array", Arrays.asList(avroIntRecord, avroStringRecord, avroNullRecord))
         .build();
     checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroArrayRecord,
-                             null, Arrays.asList(12, "teststring"));
+                             null, Arrays.asList(12, "teststring", null));
 
     GenericRecord avroMapEntry = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA_MAP_ELEMENT)
         .set("key", avroIntRecord)
         .set("value", avroStringRecord)
         .build();
-    GenericRecord avroMapRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
-        .set("map", Arrays.asList(avroMapEntry))
+    GenericRecord avroMapEntryNull = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA_MAP_ELEMENT)
+        .set("key", new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA).set("int", 13).build())
+        .set("value", avroNullRecord)
         .build();
+    GenericRecord avroMapRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
+        .set("map", Arrays.asList(avroMapEntry, avroMapEntryNull))
+        .build();
+    HashMap<Object, Object> convertedMap = new HashMap<>();
+    convertedMap.put(12, "teststring");
+    convertedMap.put(13, null);
     checkNonRecordConversion(AvroData.ANYTHING_SCHEMA, avroMapRecord,
-                             null, Collections.singletonMap(12, "teststring"));
+                             null, convertedMap);
   }
 
   @Test
@@ -869,19 +878,26 @@ public class AvroDataTest {
 
 
     GenericRecord avroArrayRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
-        .set("array", Arrays.asList(avroIntRecord, avroStringRecord))
+        .set("array", Arrays.asList(avroIntRecord, avroStringRecord, avroNullRecord))
         .build();
-    assertEquals(new SchemaAndValue(null, Arrays.asList(12, "teststring")),
+    assertEquals(new SchemaAndValue(null, Arrays.asList(12, "teststring", null)),
                  avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroArrayRecord));
 
     GenericRecord avroMapEntry = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA_MAP_ELEMENT)
         .set("key", avroIntRecord)
         .set("value", avroStringRecord)
         .build();
-    GenericRecord avroMapRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
-        .set("map", Arrays.asList(avroMapEntry))
+    GenericRecord avroMapEntryNull = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA_MAP_ELEMENT)
+        .set("key", new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA).set("int", 13).build())
+        .set("value", avroNullRecord)
         .build();
-    assertEquals(new SchemaAndValue(null, Collections.singletonMap(12, "teststring")),
+    GenericRecord avroMapRecord = new GenericRecordBuilder(AvroData.ANYTHING_SCHEMA)
+        .set("map", Arrays.asList(avroMapEntry, avroMapEntryNull))
+        .build();
+    HashMap<Object, Object> convertedMap = new HashMap<>();
+    convertedMap.put(12, "teststring");
+    convertedMap.put(13, null);
+    assertEquals(new SchemaAndValue(null, convertedMap),
                  avroData.toConnectData(AvroData.ANYTHING_SCHEMA, avroMapRecord));
 
   }
