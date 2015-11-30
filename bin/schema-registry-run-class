@@ -17,7 +17,7 @@
 base_dir=$(dirname $0)/..
 
 # Development jars. `mvn package` should collect all the required dependency jars here
-for dir in $base_dir/package/target/kafka-schema-registry-package-*-development; do
+for dir in $base_dir/package-schema-registry/target/kafka-schema-registry-package-*-development; do
   CLASSPATH=$CLASSPATH:$dir/share/java/schema-registry/*
 done
 
