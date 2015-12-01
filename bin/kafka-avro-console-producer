@@ -16,7 +16,14 @@
 
 base_dir=$(dirname $0)/..
 
-CLASSPATH=$CLASSPATH:$base_dir/share/java/avro-serializer/*
+# Production jars
+export CLASSPATH=$CLASSPATH:$base_dir/share/java/kafka-serde-tools/*
+
+# Development jars. `mvn package` should collect all the required dependency jars here
+for dir in $base_dir/package-kafka-serde-tools/target/kafka-serde-tools-package-*-development; do
+  export CLASSPATH=$CLASSPATH:$dir/share/java/kafka-serde-tools/*
+done
+
 
 DEFAULT_LINE_READER="--line-reader io.confluent.kafka.formatter.AvroMessageReader"
 
