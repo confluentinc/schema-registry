@@ -8,7 +8,18 @@ Schema Registry provides a serving layer for your metadata. It provides a RESTfu
 Quickstart
 ----------
 
-The following assumes you have Kafka and an instance of the Schema Registry running using the default settings.
+Start by running the Schema Registry and the services it depends on: ZooKeeper and Kafka:
+
+.. sourcecode:: bash
+
+   $ ./bin/zookeeper-server-start ./etc/kafka/zookeeper.properties &
+   $ ./bin/kafka-server-start ./etc/kafka/server.properties &
+   $ ./bin/schema-registry-start ./etc/schema-registry/schema-registry.properties &
+
+.. ifconfig:: platform_docs
+
+   See the :ref:`Confluent Platform quickstart<quickstart>` for a more detailed explanation of how
+   to get these services up and running.
 
 .. sourcecode:: bash
 
