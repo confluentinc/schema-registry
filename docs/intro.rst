@@ -165,6 +165,10 @@ generating
 ``package/target/kafka-schema-registry-package-$VERSION-standalone.jar``, which includes all the
  dependencies as well.
 
+Requirements
+------------
+
+- Kafka: 0.9.0.0
 
 Contribute
 ----------
