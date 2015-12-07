@@ -6,21 +6,21 @@ Configuration Options
   Zookeeper url for the Kafka cluster
 
   * Type: string
-  * Default:
+  * Default: ""
   * Importance: high
 
 ``avro.compatibility.level``
   The Avro compatibility type. Valid values are: none (new schema can be any valid Avro schema), backward (new schema can read data produced by latest registered schema), forward (latest registered schema can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema)
 
   * Type: string
-  * Default: backward
+  * Default: "backward"
   * Importance: high
 
 ``kafkastore.topic``
   The durable single partition topic that acts as the durable log for the data
 
   * Type: string
-  * Default: _schemas
+  * Default: "_schemas"
   * Importance: high
 
 ``kafkastore.topic.replication.factor``
@@ -34,7 +34,7 @@ Configuration Options
   The default response media type that should be used if no specify types are requested in an Accept header.
 
   * Type: string
-  * Default: application/vnd.schemaregistry.v1+json
+  * Default: "application/vnd.schemaregistry.v1+json"
   * Importance: high
 
 ``response.mediatype.preferred``
@@ -55,7 +55,7 @@ Configuration Options
   The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
 
   * Type: int
-  * Default: 5000
+  * Default: 60000
   * Importance: medium
 
 ``kafkastore.timeout.ms``
@@ -64,6 +64,20 @@ Configuration Options
   * Type: int
   * Default: 500
   * Importance: medium
+
+``master.eligibility``
+  If true, this node can participate in master election. In a multi-colo setup, turn this offfor clusters in the slave data center.
+
+  * Type: boolean
+  * Default: true
+  * Importance: medium
+
+``access.control.allow.origin``
+  Set value for Jetty Access-Control-Allow-Origin header
+
+  * Type: string
+  * Default: ""
+  * Importance: low
 
 ``debug``
   Boolean indicating whether extra debugging information is generated in some error response entities.
@@ -76,14 +90,14 @@ Configuration Options
   The host name advertised in Zookeeper
 
   * Type: string
-  * Default: thor
+  * Default: "localhost"
   * Importance: low
 
 ``kafkastore.zk.session.timeout.ms``
   Zookeeper session timeout
 
   * Type: int
-  * Default: 10000
+  * Default: 30000
   * Importance: low
 
 ``metric.reporters``
@@ -97,7 +111,7 @@ Configuration Options
   Prefix to apply to metric names for the default JMX reporter.
 
   * Type: string
-  * Default: kafka.schema.registry
+  * Default: "kafka.schema.registry"
   * Importance: low
 
 ``metrics.num.samples``
@@ -125,7 +139,14 @@ Configuration Options
   Name of the SLF4J logger to write the NCSA Common Log Format request log.
 
   * Type: string
-  * Default: io.confluent.rest-utils.requests
+  * Default: "io.confluent.rest-utils.requests"
+  * Importance: low
+
+``schema.registry.zk.namespace``
+  The string that is used as the zookeeper namespace for storing schema registry metadata. SchemaRegistry instances which are part of the same schema registry service should have the same ZooKeeper namespace.
+
+  * Type: string
+  * Default: "schema_registry"
   * Importance: low
 
 ``shutdown.graceful.ms``
