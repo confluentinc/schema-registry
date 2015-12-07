@@ -59,13 +59,14 @@
         <powermock.api.easymock.version>1.6.2</powermock.api.easymock.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven-assembly.version>2.6</maven-assembly.version>
+        <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
     </properties>
 
     <repositories>
         <repository>
             <id>confluent</id>
             <name>Confluent</name>
-            <url>http://packages.confluent.io/maven/</url>
+            <url>${confluent.maven.repo}</url>
         </repository>
     </repositories>
 
