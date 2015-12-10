@@ -62,6 +62,9 @@ public class KafkaJsonDeserializer<T> implements Deserializer<T> {
 
   @Override
   public T deserialize(String _, byte[] bytes) {
+    if (bytes == null || bytes.length == 0)
+      return null;
+
     try {
       return objectMapper.readValue(bytes, type);
     } catch (Exception e) {

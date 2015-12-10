@@ -23,8 +23,21 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class KafkaJsonDeserializerTest {
+
+  @Test
+  public void deserializeNullOrEmpty() {
+    KafkaJsonDeserializer<Object> deserializer = new KafkaJsonDeserializer<>();
+
+    Map<String, Object> props = new HashMap<>();
+    props.put(KafkaJsonDeserializerConfig.JSON_KEY_TYPE, Object.class.getName());
+    deserializer.configure(props, true);
+
+    assertNull(deserializer.deserialize("topic", null));
+    assertNull(deserializer.deserialize("topic", new byte[0]));
+  }
 
   @Test
   public void deserializePojoKey() {

@@ -16,6 +16,7 @@
 package io.confluent.kafka.serializers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -23,17 +24,27 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class KafkaJsonSerializerTest {
 
   private ObjectMapper objectMapper = new ObjectMapper();
+  private KafkaJsonSerializer<Object> serializer;
+
+  @Before
+  public void setup() {
+    serializer = new KafkaJsonSerializer<>();
+    serializer.configure(Collections.<String, Object>emptyMap(), false);
+  }
+
+  @Test
+  public void serializeNull() {
+    assertNull(serializer.serialize("foo", null));
+  }
 
   @Test
   public void serialize() throws Exception {
-    KafkaJsonSerializer<Object> serializer = new KafkaJsonSerializer<Object>();
-    serializer.configure(Collections.<String, Object>emptyMap(), false);
-
-    Map<String, Object> message = new HashMap<String, Object>();
+    Map<String, Object> message = new HashMap<>();
     message.put("foo", "bar");
     message.put("baz", 354.99);
 
