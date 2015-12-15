@@ -125,7 +125,7 @@ The timeout for an operation on the Kafka store. This is the maximum time that a
 Kafka & ZooKeeper
 ~~~~~~~~~~~~~~~~~
 
-Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and ZooKeeper.
+Please refer to :ref:`kafka_zookeeper_deployment` for recommendations on operationalizing Kafka and ZooKeeper.
 
 .. _schemaregistry_mirroring:
 
