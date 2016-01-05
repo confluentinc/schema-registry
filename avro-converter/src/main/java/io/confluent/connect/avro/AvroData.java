@@ -879,11 +879,15 @@ public class AvroData {
         case ARRAY: {
           Schema valueSchema = schema.valueSchema();
           Collection<Object> original = (Collection<Object>) value;
-          List<Object> result = new ArrayList<>(original.size());
-          for (Object elem : original) {
-            result.add(toConnectData(valueSchema, elem));
+          if (original == null) {
+            converted = null;
+          } else {
+            List<Object> result = new ArrayList<>(original.size());
+            for (Object elem : original) {
+              result.add(toConnectData(valueSchema, elem));
+            }
+            converted = result;
           }
-          converted = result;
           break;
         }
 
@@ -894,24 +898,32 @@ public class AvroData {
               .isOptional()) {
             // String keys
             Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
-            Map<CharSequence, Object> result = new HashMap<>(original.size());
-            for (Map.Entry<CharSequence, Object> entry : original.entrySet()) {
-              result.put(entry.getKey().toString(),
-                         toConnectData(valueSchema, entry.getValue()));
+            if (original == null) {
+              converted = null;
+            } else {
+              Map<CharSequence, Object> result = new HashMap<>(original.size());
+              for (Map.Entry<CharSequence, Object> entry : original.entrySet()) {
+                result.put(entry.getKey().toString(),
+                           toConnectData(valueSchema, entry.getValue()));
+              }
+              converted = result;
             }
-            converted = result;
           } else {
             // Arbitrary keys
             List<IndexedRecord> original = (List<IndexedRecord>) value;
-            Map<Object, Object> result = new HashMap<>(original.size());
-            for (IndexedRecord entry : original) {
-              int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
-              int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
-              Object convertedKey = toConnectData(keySchema, entry.get(avroKeyFieldIndex));
-              Object convertedValue = toConnectData(valueSchema, entry.get(avroValueFieldIndex));
-              result.put(convertedKey, convertedValue);
+            if (original == null) {
+              converted = null;
+            } else {
+              Map<Object, Object> result = new HashMap<>(original.size());
+              for (IndexedRecord entry : original) {
+                int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
+                int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
+                Object convertedKey = toConnectData(keySchema, entry.get(avroKeyFieldIndex));
+                Object convertedValue = toConnectData(valueSchema, entry.get(avroValueFieldIndex));
+                result.put(convertedKey, convertedValue);
+              }
+              converted = result;
             }
-            converted = result;
           }
           break;
         }
@@ -940,14 +952,18 @@ public class AvroData {
             }
           } else {
             IndexedRecord original = (IndexedRecord) value;
-            Struct result = new Struct(schema);
-            for (Field field : schema.fields()) {
-              int avroFieldIndex = original.getSchema().getField(field.name()).pos();
-              Object convertedFieldValue
-                  = toConnectData(field.schema(), original.get(avroFieldIndex));
-              result.put(field, convertedFieldValue);
+            if (original == null) {
+              converted = null;
+            } else {
+              Struct result = new Struct(schema);
+              for (Field field : schema.fields()) {
+                int avroFieldIndex = original.getSchema().getField(field.name()).pos();
+                Object convertedFieldValue
+                    = toConnectData(field.schema(), original.get(avroFieldIndex));
+                result.put(field, convertedFieldValue);
+              }
+              converted = result;
             }
-            converted = result;
           }
           break;
         }
