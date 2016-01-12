@@ -97,6 +97,17 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
    * This behavior is the norm for Decoders/Deserializers.
    *
    * @param payload serialized data
+   * @return the deserialized object
+   * @throws SerializationException
+   */
+  protected Object deserialize(byte[] payload) throws SerializationException {
+    return deserialize(false, null, null, payload, null);
+  }
+
+  /**
+   * Just like single-parameter version but accepts an Avro schema to use for reading
+   *
+   * @param payload serialized data
    * @param readerSchema schema to use for Avro read (optional, enables Avro projection)
    * @return the deserialized object
    * @throws SerializationException
@@ -184,13 +195,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
    * in the schema.
    *
    * @param payload the serialized data
-   * @param readerSchema schema to use for Avro read (optional, enables Avro projection)
    * @return a GenericContainer with the schema and data, either as a {@link NonRecordContainer},
    *         {@link org.apache.avro.generic.GenericRecord}, or {@link SpecificRecord}
    * @throws SerializationException
    */
-  protected GenericContainer deserializeWithSchemaAndVersion(String topic, boolean isKey, byte[] payload, Schema readerSchema) throws SerializationException {
-    return (GenericContainer) deserialize(true, topic, isKey, payload, readerSchema);
+  protected GenericContainer deserializeWithSchemaAndVersion(String topic, boolean isKey, byte[] payload) throws SerializationException {
+    return (GenericContainer) deserialize(true, topic, isKey, payload, null);
   }
 
   private DatumReader getDatumReader(Schema writerSchema, Schema readerSchema) {
