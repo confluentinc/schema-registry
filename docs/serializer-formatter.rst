@@ -107,7 +107,7 @@ not well formed.
       MessageAndMetadata messageAndMetadata = it.next();
       try {
         String key = (String) messageAndMetadata.key();
-        String value = (IndexedRecord) messageAndMetadata.message();
+        IndexedRecord value = (IndexedRecord) messageAndMetadata.message();
 
         ...
       } catch(SerializationException e) {
