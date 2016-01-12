@@ -210,7 +210,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       }
       return new SpecificDatumReader(writerSchema, readerSchema);
     } else {
-      return new GenericDatumReader(writerSchema);
+      if (readerSchema == null) {
+        return new GenericDatumReader(writerSchema);
+      }
+      return new GenericDatumReader(writerSchema, readerSchema);
     }
   }
 

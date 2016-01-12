@@ -32,10 +32,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import kafka.utils.VerifiableProperties;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 public class KafkaAvroSerializerTest {
 
@@ -147,6 +144,34 @@ public class KafkaAvroSerializerTest {
     bytes = avroSerializer.serialize(topic, "abc".getBytes());
     assertArrayEquals("abc".getBytes(), (byte[])avroDeserializer.deserialize(topic, bytes));
     assertArrayEquals("abc".getBytes(), (byte[])avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithProjection() {
+    byte[] bytes;
+    Object obj;
+    IndexedRecord avroRecord = createExtendedSpecificAvroRecord();
+    bytes = avroSerializer.serialize(topic, avroRecord);
+
+    obj = avroDecoder.fromBytes(bytes);
+    GenericData.Record extendedUser = (GenericData.Record) obj;
+    assertTrue("Returned object should be a GenericData Record", GenericData.Record.class.isInstance(obj));
+    //Age field is visible
+    assertNotNull(extendedUser.get("age"));
+
+    obj = avroDecoder.fromBytes(bytes, User.getClassSchema());
+    assertTrue("Returned object should be a GenericData Record", GenericData.Record.class.isInstance(obj));
+    GenericData.Record decoderProjection = (GenericData.Record) obj;
+    assertEquals("testUser", decoderProjection.get("name").toString());
+    //Age field was hidden by projection
+    assertNull(decoderProjection.get("age"));
+
+    obj = avroDeserializer.deserialize(topic, bytes, User.getClassSchema());
+    assertTrue("Returned object should be a GenericData Record", GenericData.Record.class.isInstance(obj));
+    GenericData.Record deserializeProjection = (GenericData.Record) obj;
+    assertEquals("testUser", deserializeProjection.get("name").toString());
+    //Age field was hidden by projection
+    assertNull(deserializeProjection.get("age"));
   }
 
   @Test
