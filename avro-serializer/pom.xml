@@ -35,7 +35,7 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>common-config</artifactId>
-            <version>${project.version}</version>
+            <version>${confluent-common.version}</version>
         </dependency>
 
         <dependency>
