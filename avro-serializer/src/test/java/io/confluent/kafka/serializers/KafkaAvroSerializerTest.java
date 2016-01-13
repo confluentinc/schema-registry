@@ -209,6 +209,14 @@ public class KafkaAvroSerializerTest {
     obj = specificAvroDecoder.fromBytes(bytes, User.getClassSchema());
     assertTrue("Projection object should be a io.confluent.kafka.example.User", User.class.isInstance(obj));
     assertEquals("testUser", ((User)obj).getName().toString());
+
+    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    assertTrue("Full object should be a io.confluent.kafka.example.ExtendedUser", ExtendedUser.class.isInstance(obj));
+    assertEquals(avroRecord, obj);
+
+    obj = specificAvroDeserializer.deserialize(topic, bytes, User.getClassSchema());
+    assertTrue("Projection object should be a io.confluent.kafka.example.User", User.class.isInstance(obj));
+    assertEquals("testUser", ((User)obj).getName().toString());
   }
 
   @Test
