@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.example.ExtendedUser;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -31,10 +32,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import kafka.utils.VerifiableProperties;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 public class KafkaAvroSerializerTest {
 
@@ -84,6 +82,13 @@ public class KafkaAvroSerializerTest {
 
   private IndexedRecord createSpecificAvroRecord() {
     return User.newBuilder().setName("testUser").build();
+  }
+
+  private IndexedRecord createExtendedSpecificAvroRecord() {
+    return ExtendedUser.newBuilder()
+        .setName("testUser")
+        .setAge(99)
+        .build();
   }
 
   private IndexedRecord createInvalidAvroRecord() {
@@ -142,6 +147,34 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerWithProjection() {
+    byte[] bytes;
+    Object obj;
+    IndexedRecord avroRecord = createExtendedSpecificAvroRecord();
+    bytes = avroSerializer.serialize(topic, avroRecord);
+
+    obj = avroDecoder.fromBytes(bytes);
+    GenericData.Record extendedUser = (GenericData.Record) obj;
+    assertTrue("Returned object should be a GenericData Record", GenericData.Record.class.isInstance(obj));
+    //Age field is visible
+    assertNotNull(extendedUser.get("age"));
+
+    obj = avroDecoder.fromBytes(bytes, User.getClassSchema());
+    assertTrue("Returned object should be a GenericData Record", GenericData.Record.class.isInstance(obj));
+    GenericData.Record decoderProjection = (GenericData.Record) obj;
+    assertEquals("testUser", decoderProjection.get("name").toString());
+    //Age field was hidden by projection
+    assertNull(decoderProjection.get("age"));
+
+    obj = avroDeserializer.deserialize(topic, bytes, User.getClassSchema());
+    assertTrue("Returned object should be a GenericData Record", GenericData.Record.class.isInstance(obj));
+    GenericData.Record deserializeProjection = (GenericData.Record) obj;
+    assertEquals("testUser", deserializeProjection.get("name").toString());
+    //Age field was hidden by projection
+    assertNull(deserializeProjection.get("age"));
+  }
+
+  @Test
   public void testKafkaAvroSerializerSpecificRecord() {
     byte[] bytes;
     Object obj;
@@ -159,6 +192,31 @@ public class KafkaAvroSerializerTest {
     obj = specificAvroDeserializer.deserialize(topic, bytes);
     assertTrue("Returned object should be a io.confluent.kafka.example.User", User.class.isInstance(obj));
     assertEquals(avroRecord, obj);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerSpecificRecordWithProjection() {
+    byte[] bytes;
+    Object obj;
+
+    IndexedRecord avroRecord = createExtendedSpecificAvroRecord();
+    bytes = avroSerializer.serialize(topic, avroRecord);
+
+    obj = specificAvroDecoder.fromBytes(bytes);
+    assertTrue("Full object should be a io.confluent.kafka.example.ExtendedUser", ExtendedUser.class.isInstance(obj));
+    assertEquals(avroRecord, obj);
+
+    obj = specificAvroDecoder.fromBytes(bytes, User.getClassSchema());
+    assertTrue("Projection object should be a io.confluent.kafka.example.User", User.class.isInstance(obj));
+    assertEquals("testUser", ((User)obj).getName().toString());
+
+    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    assertTrue("Full object should be a io.confluent.kafka.example.ExtendedUser", ExtendedUser.class.isInstance(obj));
+    assertEquals(avroRecord, obj);
+
+    obj = specificAvroDeserializer.deserialize(topic, bytes, User.getClassSchema());
+    assertTrue("Projection object should be a io.confluent.kafka.example.User", User.class.isInstance(obj));
+    assertEquals("testUser", ((User)obj).getName().toString());
   }
 
   @Test

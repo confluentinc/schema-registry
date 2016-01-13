@@ -15,6 +15,7 @@
  **/
 package io.confluent.kafka.serializers;
 
+import org.apache.avro.Schema;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
@@ -52,6 +53,11 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
   public Object deserialize(String s, byte[] bytes) {
     return deserialize(bytes);
   }
+
+  /**
+   * Pass a reader schema to get an Avro projection
+   */
+  public Object deserialize(String s, byte[] bytes, Schema readerSchema) { return deserialize(bytes, readerSchema); }
 
   @Override
   public void close() {
