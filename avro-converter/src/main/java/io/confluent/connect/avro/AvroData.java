@@ -752,6 +752,9 @@ public class AvroData {
   }
 
   private Object toConnectData(Schema schema, Object value) {
+    if (value == null) {
+      return null;
+    }  
     try {
       // If we're decoding schemaless data, we need to unwrap it into just the single value
       if (schema == null) {
