@@ -533,6 +533,23 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testToConnectNullableStringNullvalue() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.nullable().stringType();
+    assertEquals(null, avroData.toConnectData(avroSchema, null));
+  }  
+  
+  @Test
+  public void testToConnectNullableString() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.nullable().stringType();
+    assertEquals(new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, "teststring"), 
+            avroData.toConnectData(avroSchema, "teststring"));
+
+    // Avro deserializer allows CharSequence, not just String, and returns Utf8 objects
+    assertEquals(new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, "teststring"),
+                 avroData.toConnectData(avroSchema, new Utf8("teststring")));
+  }  
+  
+  @Test
   public void testToConnectString() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().stringType();
     assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "teststring"),
@@ -564,7 +581,7 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, Arrays.asList((byte) 12, (byte) 13)),
                  avroData.toConnectData(avroSchema, Arrays.asList(12, 13)));
   }
-
+  
   @Test
   public void testToConnectMapStringKeys() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().map()
@@ -600,7 +617,55 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, struct),
                  avroData.toConnectData(avroSchema, avroRecord));
   }
-
+  
+  @Test
+  public void testToConnectRecordWithOptional() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("Record").fields()
+        .requiredInt("int8")
+        .optionalString("string")
+        .endRecord();
+    avroSchema.getField("int8").schema().addProp("connect.type", "int8");
+    GenericRecord avroRecord = new GenericRecordBuilder(avroSchema)
+        .set("int8", 12)
+        .set("string", "sample string")
+        .build();
+    // Use a value type which ensures we test conversion of elements. int8 requires extra
+    // conversion steps but keeps the test simple.
+    Schema schema = SchemaBuilder.struct()
+        .name("Record")
+        .field("int8", Schema.INT8_SCHEMA)
+        .field("string", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Struct struct = new Struct(schema).put("int8", (byte) 12).put("string", "sample string");
+    assertEquals(new SchemaAndValue(schema, struct),
+                 avroData.toConnectData(avroSchema, avroRecord));
+  }  
+  
+  @Test
+  public void testToConnectRecordWithOptionalNullvalue() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("Record").fields()
+        .requiredInt("int8")
+        .optionalString("string")
+        .endRecord();
+    avroSchema.getField("int8").schema().addProp("connect.type", "int8");
+    GenericRecord avroRecord = new GenericRecordBuilder(avroSchema)
+        .set("int8", 12)
+        .set("string", null)
+        .build();
+    // Use a value type which ensures we test conversion of elements. int8 requires extra
+    // conversion steps but keeps the test simple.
+    Schema schema = SchemaBuilder.struct()
+        .name("Record")
+        .field("int8", Schema.INT8_SCHEMA)
+        .field("string", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Struct struct = new Struct(schema).put("int8", (byte) 12);
+    assertEquals(new SchemaAndValue(schema, struct),
+                 avroData.toConnectData(avroSchema, avroRecord));
+  }  
+  
   // Avro -> Connect: Connect logical types
 
   @Test
