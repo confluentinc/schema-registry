@@ -294,13 +294,8 @@ public class AvroData {
         return null;
     }
 
-    boolean schemaOptional = schema != null ? schema.isOptional() : true;
-    if (!schemaOptional && logicalValue == null) {
-      throw new DataException("Found null value for non-optional schema");
-    }
+    validateSchemaValue(schema, logicalValue);
 
-    // Now it is safe to handle null values since we have validated that it is a valid value for the
-    // schema
     if (logicalValue == null) {
       // But if this is schemaless, we may not be able to return null directly
       if (schema == null && requireSchemalessContainerNull)
@@ -739,6 +734,12 @@ public class AvroData {
     return result;
   }
 
+  private static void validateSchemaValue(Schema schema, Object value) throws DataException{
+      if (value == null && schema != null && !schema.isOptional()) {
+        throw new DataException("Found null value for non-optional schema");
+      }
+  }
+  
   /**
    * Convert the given object, in Avro format, into an Connect data object.
    */
@@ -752,6 +753,7 @@ public class AvroData {
   }
 
   private Object toConnectData(Schema schema, Object value) {
+    validateSchemaValue(schema, value);
     if (value == null) {
       return null;
     }  
