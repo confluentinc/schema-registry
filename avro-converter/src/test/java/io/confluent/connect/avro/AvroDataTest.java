@@ -692,6 +692,53 @@ public class AvroDataTest {
                  avroData.toConnectData(avroSchema, avroRecord));
   }
   
+  @Test
+  public void testToConnectNestedRecordWithOptionalRecordValue() {  
+    org.apache.avro.Schema avroSchema  = nestedRecordAvroSchema();
+    Schema schema = nestedRecordSchema();
+    GenericRecord avroRecord = new GenericRecordBuilder(avroSchema)
+        .set("nestedRecord", new GenericRecordBuilder(recordWithStringAvroSchema()).set("string", "xx").build())
+        .build();
+    Struct struct = new Struct(schema).put("nestedRecord", new Struct(recordWithStringSchema()).put("string", "xx"));
+    assertEquals(new SchemaAndValue(schema, struct),
+                  avroData.toConnectData(avroSchema, avroRecord));
+  }
+
+  @Test
+  public void testToConnectNestedRecordWithOptionalRecordNullValue() {     
+    org.apache.avro.Schema avroSchema  = nestedRecordAvroSchema();
+    Schema schema = nestedRecordSchema();;
+    GenericRecord avroRecord = new GenericRecordBuilder(avroSchema)
+        .set("nestedRecord", null)
+        .build();
+    Struct struct = new Struct(schema).put("nestedRecord", null);
+    assertEquals(new SchemaAndValue(schema, struct),
+                  avroData.toConnectData(avroSchema, avroRecord));
+  }
+
+  private  org.apache.avro.Schema  recordWithStringAvroSchema(){
+    return org.apache.avro.SchemaBuilder.builder().record("nestedRecord").fields().requiredString("string").endRecord();
+  }
+  private  org.apache.avro.Schema  nestedRecordAvroSchema(){
+    org.apache.avro.Schema optionalRecordAvroSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .type(recordWithStringAvroSchema()).and()
+        .nullType()
+        .endUnion();
+    return  org.apache.avro.SchemaBuilder.builder()
+        .record("Record").fields()
+        .name("nestedRecord").type(optionalRecordAvroSchema).noDefault()
+        .endRecord();
+  }
+  private Schema recordWithStringSchema(){
+    return  SchemaBuilder.struct().optional().name("nestedRecord").field("string", Schema.STRING_SCHEMA).build();
+  }
+  private Schema nestedRecordSchema(){
+    return SchemaBuilder.struct()
+        .name("Record")
+        .field("nestedRecord", recordWithStringSchema())
+        .build();
+  }
+  
   // Avro -> Connect: Connect logical types
 
   @Test
