@@ -316,8 +316,6 @@ public class AvroDataTest {
     checkNonRecordConversionNull(schema);
   }
 
-  
-  
   @Test
   public void testFromConnectRecordWithMetadata() {
     Schema schema = SchemaBuilder.struct()
