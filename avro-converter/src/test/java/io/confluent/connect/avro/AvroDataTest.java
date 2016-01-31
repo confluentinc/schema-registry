@@ -237,6 +237,46 @@ public class AvroDataTest {
     assertEquals(avroSchema, ((org.apache.avro.generic.GenericRecord) convertedRecord).getSchema());
     assertEquals(avroRecord, convertedRecord);
   }
+  
+  @Test
+  public void testFromConnectOptionalComplex() {
+    Schema optionalStructSchema = SchemaBuilder.struct().optional()
+        .name("optionalStruct")
+        .field("int32", Schema.INT32_SCHEMA)  
+        .build();
+   
+    Schema schema = SchemaBuilder.struct()
+        .field("int32", Schema.INT32_SCHEMA)
+        .field("optionalStruct", optionalStructSchema)
+        .field("optionalArray",  SchemaBuilder.array(Schema.INT32_SCHEMA).optional().build())
+        .field("optionalMap", SchemaBuilder.map(Schema.STRING_SCHEMA,Schema.INT32_SCHEMA).optional().build())
+        .build();
+    
+    Struct struct = new Struct(schema)
+        .put("int32", 12)
+        .put("optionalStruct", new Struct(optionalStructSchema).put("int32", 12))
+        .put("optionalArray", Arrays.asList( 12,  13))
+        .put("optionalMap", Collections.singletonMap("field", 12));
+    
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
+    
+    org.apache.avro.Schema structAvroSchema = org.apache.avro.SchemaBuilder.builder().record("optionalStruct").fields().requiredInt("int32").endRecord();
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+    
+    org.apache.avro.generic.GenericRecord  avroStruct = new GenericRecordBuilder(structAvroSchema)
+                                                          .set("int32", 12)
+                                                          .build();
+    
+    org.apache.avro.generic.GenericRecord avroRecord = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
+        .set("int32", 12)
+        .set("optionalStruct", avroStruct)
+        .set("optionalArray",  Arrays.asList( 12,  13))
+        .set("optionalMap", Collections.singletonMap("field", 12))
+        .build();
+
+    assertEquals(avroRecord, convertedRecord);
+  }
 
   @Test
   public void testFromConnectOptionalPrimitiveWithMetadata() {
@@ -276,6 +316,8 @@ public class AvroDataTest {
     checkNonRecordConversionNull(schema);
   }
 
+  
+  
   @Test
   public void testFromConnectRecordWithMetadata() {
     Schema schema = SchemaBuilder.struct()
