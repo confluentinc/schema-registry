@@ -38,15 +38,16 @@ import org.powermock.reflect.Whitebox;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.List;
 import java.util.TimeZone;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
-
 import static org.junit.Assert.*;
 
 public class AvroDataTest {
@@ -250,31 +251,70 @@ public class AvroDataTest {
         .field("optionalStruct", optionalStructSchema)
         .field("optionalArray",  SchemaBuilder.array(Schema.INT32_SCHEMA).optional().build())
         .field("optionalMap", SchemaBuilder.map(Schema.STRING_SCHEMA,Schema.INT32_SCHEMA).optional().build())
+        .field("optionalMapNonStringKeys", SchemaBuilder.map(Schema.INT32_SCHEMA,Schema.INT32_SCHEMA).optional().build())
+        
         .build();
     
     Struct struct = new Struct(schema)
         .put("int32", 12)
         .put("optionalStruct", new Struct(optionalStructSchema).put("int32", 12))
         .put("optionalArray", Arrays.asList( 12,  13))
-        .put("optionalMap", Collections.singletonMap("field", 12));
+        .put("optionalMap", Collections.singletonMap("field", 12))
+        .put("optionalMapNonStringKeys", Collections.singletonMap(123, 12)); 
     
     Object convertedRecord = avroData.fromConnectData(schema, struct);
     
     org.apache.avro.Schema structAvroSchema = org.apache.avro.SchemaBuilder.builder().record("optionalStruct").fields().requiredInt("int32").endRecord();
-
+    
+    // Maps with non-string keys get converted into an array of records with key & values fields 
+    org.apache.avro.Schema mapNonStringKeysAvroSchema = org.apache.avro.SchemaBuilder.builder()
+        .record(AvroData.MAP_ENTRY_TYPE_NAME).namespace(AvroData.NAMESPACE).fields()
+        .requiredInt((AvroData.KEY_FIELD))
+        .requiredInt((AvroData.VALUE_FIELD))
+        .endRecord();
+    
     org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+
     
     org.apache.avro.generic.GenericRecord  avroStruct = new GenericRecordBuilder(structAvroSchema)
                                                           .set("int32", 12)
                                                           .build();
+    org.apache.avro.generic.GenericRecord  mapNonStringKeysAvroStruct = new GenericRecordBuilder(mapNonStringKeysAvroSchema)
+        .set(AvroData.KEY_FIELD, 123)
+        .set(AvroData.VALUE_FIELD, 12)
+        .build();
+    
+    List<GenericRecord> mapNonStringKeys  = new ArrayList<GenericRecord>();
+    mapNonStringKeys.add(mapNonStringKeysAvroStruct);
     
     org.apache.avro.generic.GenericRecord avroRecord = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int32", 12)
         .set("optionalStruct", avroStruct)
         .set("optionalArray",  Arrays.asList( 12,  13))
         .set("optionalMap", Collections.singletonMap("field", 12))
+        .set("optionalMapNonStringKeys", mapNonStringKeys)
         .build();
 
+    assertEquals(avroRecord, convertedRecord);
+    
+    // Now check for null values
+    struct = new Struct(schema)
+        .put("int32", 12)
+        .put("optionalStruct", null)
+        .put("optionalArray", null)
+        .put("optionalMap",null)
+        .put("optionalMapNonStringKeys", null);
+    
+    convertedRecord = avroData.fromConnectData(schema, struct);
+    
+    avroRecord = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
+        .set("int32", 12)
+        .set("optionalStruct", null)
+        .set("optionalArray",  null)
+        .set("optionalMap", null)
+        .set("optionalMapNonStringKeys", null)
+        .build();
+    
     assertEquals(avroRecord, convertedRecord);
   }
 
