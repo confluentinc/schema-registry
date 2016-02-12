@@ -179,7 +179,7 @@ generating
 Requirements
 ------------
 
-- Kafka: 0.9.0.0-cp1
+- Kafka: 0.9.0.1 (0.9.0.1-cp1 recommended)
 
 Contribute
 ----------
