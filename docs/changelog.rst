@@ -3,6 +3,14 @@
 Changelog
 =========
 
+Version 2.0.1
+-------------
+
+Schema Registry
+~~~~~~~~~~~~~~~
+
+* `PR-286 <https://github.com/confluentinc/schema-registry/pull/286>`_ - Update Kafka version to 0.9.0.1-cp1.
+
 Version 2.0.0
 -------------
 
