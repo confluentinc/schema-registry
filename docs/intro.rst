@@ -93,7 +93,7 @@ running:
 
 .. sourcecode:: bash
 
-   $ cd confluent-1.0/
+   $ cd confluent-2.0/
 
    # The default settings in schema-registry.properties work automatically with
    # the default settings for local ZooKeeper and Kafka nodes.
