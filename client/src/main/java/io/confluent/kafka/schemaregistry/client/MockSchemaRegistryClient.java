@@ -39,6 +39,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
   private final Map<String, String> compatibilityCache;
+  private final Map<String, Map<Integer, Schema>> nameVersionCache;
   private final AtomicInteger ids;
 
   public MockSchemaRegistryClient() {
@@ -47,6 +48,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     versionCache = new HashMap<String, Map<Schema, Integer>>();
     compatibilityCache = new HashMap<String, String>();
     ids = new AtomicInteger(0);
+    nameVersionCache = new HashMap<>();
   }
 
   private int getIdFromRegistry(String subject, Schema schema) throws IOException {
@@ -65,16 +67,21 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private void generateVersion(String subject, Schema schema) {
     ArrayList<Integer> versions = getAllVersions(subject);
     Map<Schema, Integer> schemaVersionMap;
+    Map<Integer, Schema> versionSchemaMap;
     int currentVersion;
     if (versions.isEmpty()) {
       schemaVersionMap = new IdentityHashMap<Schema, Integer>();
+      versionSchemaMap = new HashMap<>();
       currentVersion = 1;
     } else {
       schemaVersionMap = versionCache.get(subject);
+      versionSchemaMap = nameVersionCache.get(subject);
       currentVersion = versions.get(versions.size() - 1) + 1;
     }
     schemaVersionMap.put(schema, currentVersion);
+    versionSchemaMap.put(currentVersion, schema);
     versionCache.put(subject, schemaVersionMap);
+    nameVersionCache.put(subject, versionSchemaMap);
   }
 
   private ArrayList<Integer> getAllVersions(String subject) {
@@ -201,5 +208,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       compatibility = defaultCompatibility;
     }
     return compatibility;
+  }
+
+  @Override
+  public Schema getBySubjectAndVersion(String subject, int version) throws IOException, RestClientException {
+    if (!nameVersionCache.containsKey(subject)) {
+      throw new IOException("Cannot get version from schema registry");
+    }
+
+    Map<Integer, Schema> byVersionCache = nameVersionCache.get(subject);
+    if (!byVersionCache.containsKey(version)) {
+      throw new IOException("Cannot get version from schema registry");
+    }
+
+    return byVersionCache.get(version);
   }
 }

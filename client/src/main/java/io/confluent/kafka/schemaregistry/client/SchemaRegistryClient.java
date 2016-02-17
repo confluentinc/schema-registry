@@ -36,4 +36,6 @@ public interface SchemaRegistryClient {
   public String updateCompatibility(String subject, String compatibility) throws IOException, RestClientException;
   
   public String getCompatibility(String subject) throws IOException, RestClientException;
+
+  public Schema getBySubjectAndVersion(String subject, int version) throws IOException, RestClientException;
 }

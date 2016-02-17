@@ -35,6 +35,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Integer, Schema> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
+  private final Map<String, Map<Integer, Schema>> nameVersionCache;
 
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
     this(new RestService(baseUrl), identityMapCapacity);
@@ -49,6 +50,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.schemaCache = new HashMap<String, Map<Schema, Integer>>();
     this.idCache = new HashMap<Integer, Schema>();
     this.versionCache = new HashMap<String, Map<Schema, Integer>>();
+    this.nameVersionCache = new HashMap<>();
     this.restService = restService;
   }
 
@@ -67,6 +69,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
         restService.lookUpSubjectVersion(schema.toString(), subject);
     return response.getVersion();
+  }
+
+  private Schema getSchemaByNameAndVersionFromRegistry(String subject, int version) throws IOException, RestClientException{
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema restSchema =
+            restService.getVersion(subject, version);
+
+    return new Schema.Parser().parse(restSchema.getSchema());
   }
 
   @Override
@@ -152,6 +161,28 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public String getCompatibility(String subject) throws IOException, RestClientException {
     Config response = restService.getConfig(subject);
     return response.getCompatibilityLevel();
+  }
+
+  @Override
+  public Schema getBySubjectAndVersion(String subject, int version) throws IOException, RestClientException {
+
+    final Map<Integer, Schema> versionSchemaMap;
+    if (this.nameVersionCache.containsKey(subject)) {
+      versionSchemaMap = this.nameVersionCache.get(subject);
+    } else {
+      versionSchemaMap = new HashMap<>();
+      this.nameVersionCache.put(subject, versionSchemaMap);
+    }
+
+    final Schema schema;
+    if (versionSchemaMap.containsKey(version)) {
+      schema = versionSchemaMap.get(version);
+    } else {
+      schema = getSchemaByNameAndVersionFromRegistry(subject, version);
+      versionSchemaMap.put(version, schema);
+    }
+
+    return schema;
   }
 
 
