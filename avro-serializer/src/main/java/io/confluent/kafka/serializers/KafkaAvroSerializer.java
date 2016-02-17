@@ -50,7 +50,19 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
     if (maxSchemaObject == null) {
       schemaRegistry = new CachedSchemaRegistryClient(
           (String) url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
-    } else {
+    } else if (maxSchemaObject instanceof String) {
+      try {
+        Integer i = Integer.parseInt((String)maxSchemaObject);
+        schemaRegistry = new CachedSchemaRegistryClient((String)url, i);
+      } catch (NumberFormatException ex) {
+        throw new ConfigException(
+            AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG,
+            maxSchemaObject,
+            "Could not parse to integer."
+        );
+      }
+    }
+    else {
       schemaRegistry = new CachedSchemaRegistryClient(
           (String) url, (Integer) maxSchemaObject);
     }
