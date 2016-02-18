@@ -45,23 +45,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   protected boolean useSpecificAvroReader = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<String, Schema>();
 
-  protected void configure(KafkaAvroDeserializerConfig config) {
-    try {
-      List<String> urls = config.getList(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG);
-      int  maxSchemaObject = config
-          .getInt(KafkaAvroDeserializerConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
-      schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject);
-      configureNonClientProperties(config);
-    } catch (io.confluent.common.config.ConfigException e) {
-      throw new ConfigException(e.getMessage());
-    }
-  }
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
    * Useful for testing, where a mock client is injected.
    */
-  protected void configureNonClientProperties(KafkaAvroDeserializerConfig config) {
+  protected void configure(KafkaAvroDeserializerConfig config) {
+    configureClientProperties(config);
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
   }

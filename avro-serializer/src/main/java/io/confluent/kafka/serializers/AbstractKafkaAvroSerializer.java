@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.serializers;
 
+import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -23,16 +24,38 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
   private final EncoderFactory encoderFactory = EncoderFactory.get();
+
+  protected void configure(KafkaAvroSerializerConfig config) {
+    configureClientProperties(config);
+  }
+
+  protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
+    try {
+      return new KafkaAvroSerializerConfig(props);
+    } catch (io.confluent.common.config.ConfigException e) {
+      throw new ConfigException(e.getMessage());
+    }
+  }
+
+  protected KafkaAvroSerializerConfig serializerConfig(VerifiableProperties props) {
+    try {
+      return new KafkaAvroSerializerConfig(props.props());
+    } catch (io.confluent.common.config.ConfigException e) {
+      throw new ConfigException(e.getMessage());
+    }
+  }
 
   protected byte[] serializeImpl(String subject, Object object) throws SerializationException {
     Schema schema = null;

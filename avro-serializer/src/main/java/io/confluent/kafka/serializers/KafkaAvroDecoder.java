@@ -28,7 +28,7 @@ public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements D
 
   public KafkaAvroDecoder(SchemaRegistryClient schemaRegistry, VerifiableProperties props) {
     this.schemaRegistry = schemaRegistry;
-    configureNonClientProperties(deserializerConfig(props));
+    configure(deserializerConfig(props));
   }
 
   /**
