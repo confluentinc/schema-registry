@@ -138,7 +138,7 @@ public abstract class ClusterTestHarness {
       // We *must* override this to use the port we allocated (Kafka currently allocates one port
       // that it always uses for ZK
       props.setProperty("zookeeper.connect", this.zkConnect);
-      KafkaConfig config = new KafkaConfig(props);
+      KafkaConfig config = KafkaConfig.fromProps(props);
       configs.add(config);
 
       KafkaServer server = TestUtils.createServer(config, SystemTime$.MODULE$);

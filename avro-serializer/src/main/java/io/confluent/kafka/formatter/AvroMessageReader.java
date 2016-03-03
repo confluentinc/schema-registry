@@ -21,6 +21,7 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.util.Utf8;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -33,7 +34,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import kafka.common.KafkaException;
 import kafka.producer.KeyedMessage;
-import kafka.tools.ConsoleProducer.MessageReader;
+import kafka.common.MessageReader;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 
 /**
@@ -146,7 +147,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
   }
 
   @Override
-  public kafka.producer.KeyedMessage readMessage() {
+  public ProducerRecord<byte[], byte[]> readMessage() {
     try {
       String line = reader.readLine();
       if (line == null) {
@@ -155,14 +156,14 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
       if (!parseKey) {
         Object value = jsonToAvro(line, valueSchema);
         byte[] serializedValue = serializeImpl(valueSubject, value);
-        return new KeyedMessage<byte[], byte[]>(topic, serializedValue);
+        return new ProducerRecord<>(topic, serializedValue);
       } else {
         int keyIndex = line.indexOf(keySeparator);
         if (keyIndex < 0) {
           if (ignoreError) {
             Object value = jsonToAvro(line, valueSchema);
             byte[] serializedValue = serializeImpl(valueSubject, value);
-            return new KeyedMessage<byte[], byte[]>(topic, serializedValue);
+            return new ProducerRecord<>(topic, serializedValue);
           } else {
             throw new KafkaException("No key found in line " + line);
           }
@@ -174,7 +175,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
           byte[] serializedKey = serializeImpl(keySubject, key);
           Object value = jsonToAvro(valueString, valueSchema);
           byte[] serializedValue = serializeImpl(valueSubject, value);
-          return new KeyedMessage<byte[], byte[]>(topic, serializedKey, serializedValue);
+          return new ProducerRecord<>(topic, serializedKey, serializedValue);
         }
       }
     } catch (IOException e) {
