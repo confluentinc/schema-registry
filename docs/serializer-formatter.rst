@@ -83,7 +83,11 @@ not well formed.
     import kafka.consumer.ConsumerIterator;
     import kafka.consumer.KafkaStream;
     import kafka.javaapi.consumer.ConsumerConnector;
-    import java.util.Properties;
+    import io.confluent.kafka.serializers.KafkaAvroDecoder;
+    import kafka.message.MessageAndMetadata;
+    import kafka.utils.VerifiableProperties;
+    import org.apache.kafka.common.errors.SerializationException;
+    import java.util.*;
 
     Properties props = new Properties();
     props.put("zookeeper.connect", "localhost:2181");
@@ -91,17 +95,17 @@ not well formed.
     props.put("schema.registry.url", "http://localhost:8081");
 
     Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
-    topicCountMap.put(topic, new Integer(1));
+    topicCountMap.put("topic1", new Integer(1));
 
     VerifiableProperties vProps = new VerifiableProperties(props);
     KafkaAvroDecoder keyDecoder = new KafkaAvroDecoder(vProps);
     KafkaAvroDecoder valueDecoder = new KafkaAvroDecoder(vProps);
 
-    kafka.consumer.Consumer.createJavaConsumerConnector(new ConsumerConfig(vProps));
+    ConsumerConnector consumer = kafka.consumer.Consumer.createJavaConsumerConnector(new ConsumerConfig(props));
 
-    Map<String, List<KafkaStream>> consumerMap = consumer.createMessageStreams(
+    Map<String, List<KafkaStream<Object, Object>>> consumerMap = consumer.createMessageStreams(
         topicCountMap, keyDecoder, valueDecoder);
-    KafkaStream stream = consumerMap.get(topic).get(0);
+    KafkaStream stream = consumerMap.get("topic1").get(0);
     ConsumerIterator it = stream.iterator();
     while (it.hasNext()) {
       MessageAndMetadata messageAndMetadata = it.next();
