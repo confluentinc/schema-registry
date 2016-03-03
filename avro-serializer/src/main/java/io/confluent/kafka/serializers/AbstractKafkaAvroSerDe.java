@@ -89,7 +89,7 @@ public abstract class AbstractKafkaAvroSerDe {
       return primitiveSchemas.get("Float");
     } else if (object instanceof Double) {
       return primitiveSchemas.get("Double");
-    } else if (object instanceof String) {
+    } else if (object instanceof CharSequence) {
       return primitiveSchemas.get("String");
     } else if (object instanceof byte[]) {
       return primitiveSchemas.get("Bytes");

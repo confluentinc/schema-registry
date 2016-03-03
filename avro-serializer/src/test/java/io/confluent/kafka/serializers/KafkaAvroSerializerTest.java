@@ -20,6 +20,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -144,6 +145,10 @@ public class KafkaAvroSerializerTest {
     bytes = avroSerializer.serialize(topic, "abc".getBytes());
     assertArrayEquals("abc".getBytes(), (byte[])avroDeserializer.deserialize(topic, bytes));
     assertArrayEquals("abc".getBytes(), (byte[])avroDecoder.fromBytes(bytes));
+
+    bytes = avroSerializer.serialize(topic, new Utf8("abc"));
+    assertEquals("abc", avroDeserializer.deserialize(topic, bytes));
+    assertEquals("abc", avroDecoder.fromBytes(bytes));
   }
 
   @Test
