@@ -17,7 +17,10 @@ package io.confluent.kafka.formatter;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.record.TimestampType;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -59,13 +62,16 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader);
-    KeyedMessage keyedMessage = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
-    byte[] serializedValue = (byte[]) keyedMessage.message();
+    byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     AvroMessageFormatter formatter = new AvroMessageFormatter(schemaRegistry, false);
-    formatter.writeTo(null, serializedValue, ps);
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
+        null, serializedValue);
+    formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
     assertEquals("Input value json should match output value json", inputJson, outputJson);
@@ -78,14 +84,17 @@ public class KafkaAvroFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
         new AvroMessageReader(schemaRegistry, intSchema, recordSchema, "topic1", true, reader);
-    KeyedMessage keyedMessage = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
-    byte[] serializedKey = (byte[]) keyedMessage.key();
-    byte[] serializedKeyValue = (byte[]) keyedMessage.message();
+    byte[] serializedKey = message.key();
+    byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     AvroMessageFormatter formatter = new AvroMessageFormatter(schemaRegistry, true);
-    formatter.writeTo(serializedKey, serializedKeyValue, ps);
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
+        serializedValue.length, serializedKey, serializedValue);
+    formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
     assertEquals("Input key/value json should match output key/value json", inputJson, outputJson);

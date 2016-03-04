@@ -21,6 +21,7 @@ import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -32,7 +33,7 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
-import kafka.tools.MessageFormatter;
+import kafka.common.MessageFormatter;
 
 /**
  * Example
@@ -98,17 +99,17 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
   }
 
   @Override
-  public void writeTo(byte[] key, byte[] value, PrintStream output) {
+  public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
     if (printKey) {
       try {
-        writeTo(key, output);
+        writeTo(consumerRecord.key(), output);
         output.write(keySeparator);
       } catch (IOException ioe) {
         throw new SerializationException("Error while formatting the key", ioe);
       }
     }
     try {
-      writeTo(value, output);
+      writeTo(consumerRecord.value(), output);
       output.write(lineSeparator);
     } catch (IOException ioe) {
       throw new SerializationException("Error while formatting the value", ioe);
