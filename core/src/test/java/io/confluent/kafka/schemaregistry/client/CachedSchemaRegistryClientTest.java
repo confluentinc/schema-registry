@@ -19,27 +19,21 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Properties;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.serializers.KafkaAvroDecoder;
-import kafka.consumer.ConsumerConfig;
-import kafka.consumer.ConsumerIterator;
-import kafka.consumer.KafkaStream;
-import kafka.javaapi.consumer.ConsumerConnector;
-import kafka.javaapi.producer.Producer;
-import kafka.producer.KeyedMessage;
-import kafka.serializer.StringDecoder;
-import kafka.utils.VerifiableProperties;
 
 import static org.junit.Assert.assertArrayEquals;
 
@@ -64,41 +58,37 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
   private Properties createConsumerProps() {
     Properties props = new Properties();
-    props.put("zookeeper.connect", zkConnect);
+    props.put("bootstrap.servers", brokerList);
     props.put("group.id", "avroGroup");
-    props.put("zookeeper.session.timeout.ms", "400");
-    props.put("zookeeper.sync.time.ms", "200");
+    props.put("session.timeout.ms", "6000"); // default value of group.min.session.timeout.ms.
+    props.put("heartbeat.interval.ms", "2000");
     props.put("auto.commit.interval.ms", "1000");
-    props.put("auto.offset.reset", "smallest");
+    props.put("auto.offset.reset", "earliest");
+    props.put("key.deserializer", org.apache.kafka.common.serialization.StringDeserializer.class);
+    props.put("value.deserializer", io.confluent.kafka.serializers.KafkaAvroDeserializer.class);
     props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
     return props;
   }
 
-  private ConsumerConnector createConsumer(Properties props) {
-    return kafka.consumer.Consumer.createJavaConsumerConnector(
-        new ConsumerConfig(props));
+  private Consumer<String, Object> createConsumer(Properties props) {
+    return new KafkaConsumer<>(props);
   }
 
-  private ArrayList<Object> consume(ConsumerConnector consumer, String topic, int numMessages) {
+  private ArrayList<Object> consume(Consumer<String, Object> consumer, String topic, int numMessages) {
     ArrayList<Object> recordList = new ArrayList<Object>();
-    Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
-    topicCountMap.put(topic, new Integer(1));
 
-    Properties props = createConsumerProps();
-    VerifiableProperties vProps = new VerifiableProperties(props);
-    KafkaAvroDecoder valueDecoder = new KafkaAvroDecoder(vProps);
-    StringDecoder keyDecoder = new StringDecoder(vProps);
+    consumer.subscribe(Arrays.asList(topic));
 
-    Map<String, List<KafkaStream<String, Object>>> consumerMap = consumer.createMessageStreams(
-        topicCountMap, keyDecoder, valueDecoder);
-    KafkaStream<String, Object> stream = consumerMap.get(topic).get(0);
-    ConsumerIterator<String, Object> it = stream.iterator();
     int i = 0;
     while (i < numMessages) {
-      i++;
-      recordList.add(it.next().message());
+      ConsumerRecords<String, Object> records = consumer.poll(1000);
+      for (ConsumerRecord<String, Object> record : records) {
+        recordList.add(record.value());
+        i++;
+      }
     }
-    consumer.shutdown();
+
+    consumer.close();
     return recordList;
   }
 
@@ -127,23 +117,21 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
 
   private Properties createProducerProps() {
     Properties props = new Properties();
-    props.put("serializer.class",
-              "io.confluent.kafka.serializers.KafkaAvroEncoder");
-    props.put("key.serializer.class", "kafka.serializer.StringEncoder");
-    props.put("metadata.broker.list", brokerList);
+    props.put("key.serializer", org.apache.kafka.common.serialization.StringSerializer.class);
+    props.put("value.serializer", io.confluent.kafka.serializers.KafkaAvroSerializer.class);
+    props.put("bootstrap.servers", brokerList);
     props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
     return props;
   }
 
   private Producer<String, Object> createProducer(Properties props) {
-    return new Producer<String, Object>(
-        new kafka.producer.ProducerConfig(props));
+    return new KafkaProducer<>(props);
   }
 
   private void produce(Producer<String, Object> producer, String topic, Object[] objects) {
-    KeyedMessage<String, Object> message;
+    ProducerRecord<String, Object> message;
     for (Object object : objects) {
-      message = new KeyedMessage<String, Object>(topic, object);
+      message = new ProducerRecord<>(topic, object);
       producer.send(message);
     }
   }
@@ -158,7 +146,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     produce(producer, topic, objects);
 
     Properties consumerProps = createConsumerProps();
-    ConsumerConnector consumer = createConsumer(consumerProps);
+    Consumer<String, Object> consumer = createConsumer(consumerProps);
     ArrayList<Object> recordList = consume(consumer, topic, objects.length);
     assertArrayEquals(objects, recordList.toArray());
   }
@@ -174,7 +162,7 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     newProduce(producer, topic, objects);
 
     Properties consumerProps = createConsumerProps();
-    ConsumerConnector consumer = createConsumer(consumerProps);
+    Consumer<String, Object> consumer = createConsumer(consumerProps);
     ArrayList<Object> recordList = consume(consumer, topic, objects.length);
     assertArrayEquals(objects, recordList.toArray());
   }

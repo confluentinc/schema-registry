@@ -34,12 +34,9 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.SystemTime$;
 import kafka.utils.TestUtils;
-import kafka.utils.TestUtils$;
-import kafka.utils.ZKStringSerializer$;
 import kafka.utils.ZkUtils;
 import kafka.zk.EmbeddedZookeeper;
 import scala.Option;
-import scala.Option$;
 import scala.collection.JavaConversions;
 
 /**
