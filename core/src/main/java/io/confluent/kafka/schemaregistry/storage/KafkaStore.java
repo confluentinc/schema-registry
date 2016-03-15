@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import kafka.admin.RackAwareMode;
 import kafka.cluster.EndPoint;
 import kafka.server.ConfigType;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -182,7 +183,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     schemaTopicProps.put(LogConfig.CleanupPolicyProp(), "compact");
 
     try {
-      AdminUtils.createTopic(zkUtils, topic, 1, schemaTopicReplicationFactor, schemaTopicProps);
+      AdminUtils.createTopic(zkUtils, topic, 1, schemaTopicReplicationFactor, schemaTopicProps,
+                             RackAwareMode.Enforced$.MODULE$);
     } catch (TopicExistsException e) {
       // This is ok.
     }
