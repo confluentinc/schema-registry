@@ -15,15 +15,18 @@
  */
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 /**
@@ -52,6 +55,19 @@ public abstract class AbstractKafkaAvroSerDe {
   private static Schema createPrimitiveSchema(Schema.Parser parser, String type) {
     String schemaString = String.format("{\"type\" : \"%s\"}", type);
     return parser.parse(schemaString);
+  }
+
+  protected void configureClientProperties(AbstractKafkaAvroSerDeConfig config) {
+    try {
+      List<String> urls = config.getSchemaRegistryUrls();
+      int  maxSchemaObject = config.getMaxSchemasPerSubject();
+
+      if(null==schemaRegistry){
+        schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject);
+      }
+    } catch (io.confluent.common.config.ConfigException e) {
+      throw new ConfigException(e.getMessage());
+    }
   }
 
   /**

@@ -295,4 +295,14 @@ public class KafkaAvroSerializerTest {
       // this is expected
     }
   }
+
+  @Test
+  public void test_schemas_per_subject(){
+    HashMap<String, String> props = new HashMap<String, String>();
+    props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    props.put(AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG, "5");
+    avroSerializer.configure(props, false);
+  }
+
 }

@@ -21,6 +21,7 @@ import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigDef.Type;
 import io.confluent.common.config.ConfigDef.Importance;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -49,4 +50,13 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
     super(config, props);
   }
+
+  public int getMaxSchemasPerSubject(){
+    return this.getInt(MAX_SCHEMAS_PER_SUBJECT_CONFIG);
+  }
+
+  public List<String> getSchemaRegistryUrls(){
+    return this.getList(SCHEMA_REGISTRY_URL_CONFIG);
+  }
+
 }
