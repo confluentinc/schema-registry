@@ -168,9 +168,7 @@ public abstract class ClusterTestHarness {
 
       // Remove any persistent data
       for (KafkaServer server : servers) {
-        for (String logDir : JavaConversions.asJavaCollection(server.config().logDirs())) {
-          CoreUtils.rm(logDir);
-        }
+        CoreUtils.delete(server.config().logDirs());
       }
     }
 
