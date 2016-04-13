@@ -44,6 +44,13 @@ Configuration Options
   * Default: [application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json]
   * Importance: high
 
+``host.name``
+  The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry with multiple nodes.
+
+  * Type: string
+  * Default: "localhost"
+  * Importance: high
+
 ``kafkastore.commit.interval.ms``
   The interval to commit offsets while consuming the Kafka topic
 
@@ -84,13 +91,6 @@ Configuration Options
 
   * Type: boolean
   * Default: false
-  * Importance: low
-
-``host.name``
-  The host name advertised in Zookeeper
-
-  * Type: string
-  * Default: "localhost"
   * Importance: low
 
 ``kafkastore.zk.session.timeout.ms``

@@ -109,7 +109,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for an operation on the Kafka store";
   protected static final String KAFKASTORE_COMMIT_INTERVAL_MS_DOC =
       "The interval to commit offsets while consuming the Kafka topic";
-  protected static final String HOST_DOC = "The host name advertised in Zookeeper";
+  protected static final String HOST_DOC =
+      "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
+      + "with multiple nodes.";
+
   protected static final String COMPATIBILITY_DOC =
       "The Avro compatibility type. Valid values are: "
       + "none (new schema can be any valid Avro schema), "
@@ -154,7 +157,7 @@ public class SchemaRegistryConfig extends RestConfig {
                 KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT, ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_COMMIT_INTERVAL_MS_DOC)
         .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
-                ConfigDef.Importance.LOW, HOST_DOC)
+                ConfigDef.Importance.HIGH, HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
                 ConfigDef.Importance.HIGH, COMPATIBILITY_DOC)
         .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY, 
