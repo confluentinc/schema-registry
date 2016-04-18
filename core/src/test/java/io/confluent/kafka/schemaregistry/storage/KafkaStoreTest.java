@@ -15,6 +15,11 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import kafka.cluster.Broker;
+import kafka.cluster.EndPoint;
+import kafka.utils.TestUtils;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -24,8 +29,16 @@ import org.slf4j.LoggerFactory;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
+import scala.collection.JavaConversions;
+import scala.collection.Seq;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
@@ -230,5 +243,45 @@ public class KafkaStoreTest extends ClusterTestHarness {
     }
     assertNull("Value should have been deleted", retrievedValue);
     kafkaStore.close();
+  }
+
+  @Test
+  public void testGetBrokerEndpointsSinglePlaintext() {
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
+            zkClient);
+    Seq<Broker> brokersSeq = zkUtils.getAllBrokersInCluster();
+    List<Broker> brokersList = JavaConversions.seqAsJavaList(brokersSeq);
+
+    Iterator<EndPoint> endpoints =
+            JavaConversions.asJavaCollection(brokersList.get(0).endPoints().values()).iterator();
+    String expectedEndpoint = endpoints.next().connectionString();
+
+    assertEquals("Expected one PLAINTEXT endpoint for localhost", expectedEndpoint,
+            KafkaStore.getBrokerEndpoints(brokersList));
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testGetBrokerEndpointsEmpty() {
+    KafkaStore.getBrokerEndpoints(new ArrayList<Broker>());
+  }
+
+  /**
+   * This test creates three brokers, two with PLAINTEXT endpoints and one with a SASL endpoint. This scenario
+   * where different brokers in the same cluster support different security endpoints wouldn't exist.
+   * However, this setup creates the needed test scenario for getBrokerEndpoints().
+   */
+  @Test
+  public void testGetBrokerEndpointsMixed() throws IOException {
+    List<Broker> brokersList = new ArrayList<Broker>(3);
+    brokersList.add(new Broker(0, "localhost", TestUtils.RandomPort(), SecurityProtocol.PLAINTEXT));
+    brokersList.add(new Broker(1, "localhost1", TestUtils.RandomPort(), SecurityProtocol.PLAINTEXT));
+    brokersList.add(new Broker(2, "localhost2", TestUtils.RandomPort(), SecurityProtocol.SASL_PLAINTEXT));
+
+    String endpointsString = KafkaStore.getBrokerEndpoints(brokersList);
+    String[] endpoints = endpointsString.split(",");
+    assertEquals("Expected a different number of endpoints.", brokersList.size() - 1, endpoints.length);
+    for (String endpoint : endpoints) {
+      assertTrue("Endpoint must be a PLAINTEXT endpoint.", endpoint.contains("PLAINTEXT://"));
+    }
   }
 }

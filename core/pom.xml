@@ -27,6 +27,11 @@
             <version>${kafka.version}</version>
         </dependency>
         <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>${kafka.version}</version>
+        </dependency>
+        <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>common-config</artifactId>
             <version>${confluent-common.version}</version>

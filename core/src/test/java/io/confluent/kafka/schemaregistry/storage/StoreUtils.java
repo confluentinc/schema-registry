@@ -48,9 +48,7 @@ public class StoreUtils {
     Properties props = new Properties();
     props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
-    //turn off offset commit
-    props.put(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG,
-              String.valueOf(SchemaRegistryConfig.OFFSET_COMMIT_OFF));
+
     SchemaRegistryConfig config = null;
     try {
       config = new SchemaRegistryConfig(props);

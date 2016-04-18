@@ -57,13 +57,7 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>kafkastore.init.timeout.ms</code>
    */
   public static final String KAFKASTORE_INIT_TIMEOUT_CONFIG = "kafkastore.init.timeout.ms";
-  /**
-   * <code>kafkastore.commit.interval.ms</code>
-   */
-  public static final String KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG = "kafkastore.commit.interval.ms";
-  public static final int OFFSET_COMMIT_OFF = -1;
-  // TODO: turn off offset commit by default for now since we only have an in-memory store
-  private static final int KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT = OFFSET_COMMIT_OFF;
+
   /**
    * <code>master.eligibility</code>* 
    */
@@ -107,12 +101,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + "that stores schema data.";
   protected static final String KAFKASTORE_TIMEOUT_DOC =
       "The timeout for an operation on the Kafka store";
-  protected static final String KAFKASTORE_COMMIT_INTERVAL_MS_DOC =
-      "The interval to commit offsets while consuming the Kafka topic";
   protected static final String HOST_DOC =
       "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
-
   protected static final String COMPATIBILITY_DOC =
       "The Avro compatibility type. Valid values are: "
       + "none (new schema can be any valid Avro schema), "
@@ -153,9 +144,6 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC)
         .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC)
-        .define(KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG, ConfigDef.Type.INT,
-                KAFKASTORE_COMMIT_INTERVAL_MS_DEFAULT, ConfigDef.Importance.MEDIUM,
-                KAFKASTORE_COMMIT_INTERVAL_MS_DOC)
         .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
                 ConfigDef.Importance.HIGH, HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,

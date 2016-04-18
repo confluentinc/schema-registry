@@ -51,13 +51,6 @@ Configuration Options
   * Default: "localhost"
   * Importance: high
 
-``kafkastore.commit.interval.ms``
-  The interval to commit offsets while consuming the Kafka topic
-
-  * Type: int
-  * Default: -1
-  * Importance: medium
-
 ``kafkastore.init.timeout.ms``
   The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
 
