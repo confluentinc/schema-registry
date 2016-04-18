@@ -15,7 +15,6 @@
  */
 package io.confluent.kafka.serializers;
 
-import io.confluent.kafka.example.ExtendedUser;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -24,16 +23,21 @@ import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
-
 import java.util.HashMap;
 import java.util.Properties;
 
+import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.User;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import kafka.utils.VerifiableProperties;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class KafkaAvroSerializerTest {
 
@@ -298,7 +302,7 @@ public class KafkaAvroSerializerTest {
 
   @Test
   public void test_schemas_per_subject(){
-    HashMap<String, String> props = new HashMap<String, String>();
+    HashMap<String, String> props = new HashMap<>();
     props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
     props.put(AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG, "5");

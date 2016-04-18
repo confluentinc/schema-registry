@@ -15,9 +15,7 @@
  */
 package io.confluent.kafka.serializers;
 
-import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
@@ -33,6 +31,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import kafka.utils.VerifiableProperties;
 
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
   private final EncoderFactory encoderFactory = EncoderFactory.get();
@@ -81,9 +80,9 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
         DatumWriter<Object> writer;
         Object value = object instanceof NonRecordContainer ? ((NonRecordContainer) object).getValue() : object;
         if (value instanceof SpecificRecord) {
-          writer = new SpecificDatumWriter<Object>(schema);
+          writer = new SpecificDatumWriter<>(schema);
         } else {
-          writer = new GenericDatumWriter<Object>(schema);
+          writer = new GenericDatumWriter<>(schema);
         }
         writer.write(value, encoder);
         encoder.flush();
@@ -91,14 +90,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
       byte[] bytes = out.toByteArray();
       out.close();
       return bytes;
-    } catch (IOException e) {
-      throw new SerializationException("Error serializing Avro message", e);
-    } catch (RestClientException e) {
-      throw new SerializationException("Error registering Avro schema: " + schema, e);
-    } catch (RuntimeException e) {
+    } catch (IOException | RuntimeException e) {
       // avro serialization can throw AvroRuntimeException, NullPointerException,
       // ClassCastException, etc
       throw new SerializationException("Error serializing Avro message", e);
+    } catch (RestClientException e) {
+      throw new SerializationException("Error registering Avro schema: " + schema, e);
     }
   }
 }

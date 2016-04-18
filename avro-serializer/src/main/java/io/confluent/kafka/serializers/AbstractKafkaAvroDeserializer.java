@@ -29,11 +29,9 @@ import org.codehaus.jackson.node.JsonNodeFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import kafka.utils.VerifiableProperties;
 
@@ -170,13 +168,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       } else {
         return result;
       }
-    } catch (IOException e) {
+    } catch (IOException | RuntimeException e) {
+      // avro deserialization may throw AvroRuntimeException, NullPointerException, etc
       throw new SerializationException("Error deserializing Avro message for id " + id, e);
     } catch (RestClientException e) {
       throw new SerializationException("Error retrieving Avro schema for id " + id, e);
-    } catch (RuntimeException e) {
-      // avro deserialization may throw AvroRuntimeException, NullPointerException, etc
-      throw new SerializationException("Error deserializing Avro message for id " + id, e);
     }
   }
 
@@ -207,6 +203,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     }
   }
 
+  @SuppressWarnings("unchecked")
   private Schema getReaderSchema(Schema writerSchema) {
     Schema readerSchema = readerSchemaCache.get(writerSchema.getFullName());
     if (readerSchema == null) {
