@@ -17,4 +17,5 @@ Contents:
    config
    design
    operations
+   security
    serializer-formatter

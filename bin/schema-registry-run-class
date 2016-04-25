@@ -63,7 +63,7 @@ fi
 
 # Memory options
 if [ -z "$SCHEMA_REGISTRY_HEAP_OPTS" ]; then
-  SCHEMA_REGISTRY_HEAP_OPTS="-Xmx256M"
+  SCHEMA_REGISTRY_HEAP_OPTS="-Xmx512M"
 fi
 
 # JVM performance options

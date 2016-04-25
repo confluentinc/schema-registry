@@ -18,12 +18,14 @@ package io.confluent.kafka.schemaregistry.storage;
 import kafka.admin.RackAwareMode;
 import kafka.cluster.EndPoint;
 import kafka.server.ConfigType;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.security.JaasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,6 +79,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   // messages with this key
   private final K noopKey;
   private volatile long lastWrittenOffset = -1L;
+  private final SchemaRegistryConfig config;
 
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
@@ -107,6 +110,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     this.bootstrapBrokers = KafkaStore.getBrokerEndpoints(
             JavaConversions.seqAsJavaList(this.brokerSeq));
+
+    this.config = config;
   }
 
   @Override
@@ -128,6 +133,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
+
+    addSslConfigsToClientProperties(this.config, props);
+
     producer = new KafkaProducer<byte[],byte[]>(props);
 
     // start the background thread that subscribes to the Kafka topic and applies updates.
@@ -135,7 +143,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.kafkaTopicReader =
             new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
                     this.storeUpdateHandler, serializer, this.localStore,
-                    this.noopKey);
+                    this.noopKey, this.config);
     this.kafkaTopicReader.start();
 
     try {
@@ -148,6 +156,51 @@ public class KafkaStore<K, V> implements Store<K, V> {
     if (!isInitialized) {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
+    }
+  }
+
+  public static void addSslConfigsToClientProperties(SchemaRegistryConfig config, Properties props) {
+    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
+    if (config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
+            SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL)) {
+      props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG));
+      props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG));
+      props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG));
+      props.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_CONFIG));
+      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG), props);
+      props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG));
+      props.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_CONFIG));
+      putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENABLED_PROTOCOLS_CONFIG), props);
+      props.put(SslConfigs.SSL_PROTOCOL_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROTOCOL_CONFIG));
+      putIfNotEmptyString(SslConfigs.SSL_PROVIDER_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROVIDER_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_CIPHER_SUITES_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_CIPHER_SUITES_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG), props);
+    }
+  }
+
+  // helper method to only add a property if its not the empty string. This is required
+  // because some Kafka client configs expect a null default value, yet ConfigDef doesn't
+  // support null default values.
+  private static void putIfNotEmptyString(String parameter, String value, Properties props) {
+    if (!value.trim().isEmpty()) {
+      props.put(parameter, value);
     }
   }
 
@@ -185,19 +238,20 @@ public class KafkaStore<K, V> implements Store<K, V> {
       for(EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
         String connectionString = ep.connectionString();
 
-        if (connectionString.startsWith("PLAINTEXT://")) {
+        if (connectionString.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL + "://")
+            || connectionString.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT + "://")) {
           if (sb.length() > 0) {
             sb.append(",");
           }
           sb.append(connectionString);
         } else {
-          log.warn("Ignoring non-plaintext Kafka endpoint: " + connectionString);
+          log.warn("Ignoring non-plaintext and non-SSL Kafka endpoint: " + connectionString);
         }
       }
     }
 
     if (sb.length() == 0) {
-      throw new ConfigException("Only plaintext Kafka endpoints are supported and " +
+      throw new ConfigException("Only plaintext and SSL Kafka endpoints are supported and " +
               "none are configured.");
     }
 
