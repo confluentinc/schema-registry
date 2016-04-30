@@ -128,8 +128,8 @@ public abstract class ClusterTestHarness {
       final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
       Properties props = TestUtils.createBrokerConfig(
           i, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
-          noFile, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
-          TestUtils.RandomPort(), Option.<String>empty());
+          noFile, Option.<Properties>empty(), true, false, TestUtils.RandomPort(), false,
+          TestUtils.RandomPort(), false, TestUtils.RandomPort(), Option.<String>empty());
       props.setProperty("auto.create.topics.enable", "true");
       props.setProperty("num.partitions", "1");
       // We *must* override this to use the port we allocated (Kafka currently allocates one port
