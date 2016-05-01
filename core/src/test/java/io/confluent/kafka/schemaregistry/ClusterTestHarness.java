@@ -37,6 +37,7 @@ import kafka.utils.TestUtils;
 import kafka.utils.ZkUtils;
 import kafka.zk.EmbeddedZookeeper;
 import scala.Option;
+import scala.Option$;
 import scala.collection.JavaConversions;
 
 /**
@@ -48,6 +49,7 @@ public abstract class ClusterTestHarness {
 
   public static final int DEFAULT_NUM_BROKERS = 1;
   public static final String KAFKASTORE_TOPIC = SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC;
+  private static final Option<Properties> SASL_PROPERTIES = Option$.MODULE$.<Properties>empty();
 
   /**
    * Choose a number of random available ports
@@ -128,7 +130,7 @@ public abstract class ClusterTestHarness {
       final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
       Properties props = TestUtils.createBrokerConfig(
           i, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
-          noFile, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
+          noFile, SASL_PROPERTIES, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
           TestUtils.RandomPort(), Option.<String>empty());
       props.setProperty("auto.create.topics.enable", "true");
       props.setProperty("num.partitions", "1");
