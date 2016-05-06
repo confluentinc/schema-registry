@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.client.rest;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -76,6 +77,7 @@ public class RestService {
           UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE =
           new TypeReference<ConfigUpdateRequest>() {
           };
+  private static final int JSON_PARSE_ERROR_CODE = 50005;
   private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
@@ -152,7 +154,12 @@ public class RestService {
         return null;
       } else {
         InputStream es = connection.getErrorStream();
-        ErrorMessage errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
+        ErrorMessage errorMessage;
+        try {
+          errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
+        } catch (JsonProcessingException e) {
+          errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, e.getMessage());
+        }
         es.close();
         throw new RestClientException(errorMessage.getMessage(), responseCode,
                 errorMessage.getErrorCode());
