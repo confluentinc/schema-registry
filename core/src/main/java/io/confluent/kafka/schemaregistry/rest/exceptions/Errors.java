@@ -44,6 +44,7 @@ public class Errors {
   public static final int OPERATION_TIMEOUT_ERROR_CODE = 50002;
   public static final int REQUEST_FORWARDING_FAILED_ERROR_CODE = 50003;
   public static final int UNKNOWN_MASTER_ERROR_CODE = 50004;
+  // 50005 is used by the RestService to indicate a JSON Parse Error
 
   public static RestException subjectNotFoundException() {
     return new RestNotFoundException(SUBJECT_NOT_FOUND_MESSAGE, SUBJECT_NOT_FOUND_ERROR_CODE);
