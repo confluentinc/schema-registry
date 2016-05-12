@@ -51,6 +51,48 @@ Configuration Options
   * Default: "localhost"
   * Importance: high
 
+``kafkastore.ssl.truststore.location``
+  The location of the SSL trust store file.
+
+  * Type: string
+  * Default: ""
+  * Importance: high
+
+``kafkastore.ssl.truststore.password``
+  The password to access the trust store.
+
+  * Type: password
+  * Default: ""
+  * Importance: high
+
+``kafkastore.ssl.keystore.location``
+  The location of the SSL keystore file.
+
+  * Type: string
+  * Default: ""
+  * Importance: high
+
+``kafkastore.ssl.keystore.password``
+  The password to access the keystore.
+
+  * Type: password
+  * Default: ""
+  * Importance: high
+
+``kafkastore.ssl.key.password``
+  The password of the key contained in the keystore.
+
+  * Type: password
+  * Default: ""
+  * Importance: high
+
+``kafkastore.security.protocol``
+  The security protocol to use when connecting with Kafka, the underlying persistent storage. Values can be `PLAINTEXT` or `SSL`.
+
+  * Type: string
+  * Default: "PLAINTEXT"
+  * Importance: medium
+
 ``kafkastore.init.timeout.ms``
   The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
 
@@ -70,6 +112,41 @@ Configuration Options
 
   * Type: boolean
   * Default: true
+  * Importance: medium
+
+``kafkastore.ssl.enabled.protocols``
+  The list of protocols enabled for SSL.
+
+  * Type: string
+  * Default: "TLSv1.2,TLSv1.1,TLSv1"
+  * Importance: medium
+
+``kafkastore.ssl.keystore.type``
+  The file format of the keystore file.
+
+  * Type: string
+  * Default: "JKS"
+  * Importance: medium
+
+``kafkastore.ssl.protocol``
+  The SSL protocol used to generate the SSLContext.
+
+  * Type: string
+  * Default: "TLS"
+  * Importance: medium
+
+``kafkastore.ssl.provider``
+  The name of the securitiy provider used for SSL.
+
+  * Type: string
+  * Default: ""
+  * Importance: medium
+
+``kafkastore.ssl.truststore.type``
+  The file format of the trust store file.
+
+  * Type: string
+  * Default: "JKS"
   * Importance: medium
 
 ``access.control.allow.origin``
@@ -147,4 +224,32 @@ Configuration Options
 
   * Type: int
   * Default: 1000
+  * Importance: low
+
+``kafkastore.ssl.cipher.suites``
+  A list of cipher suites used for SSL.
+
+  * Type: string
+  * Default: ""
+  * Importance: low
+
+``kafkastore.ssl.endpoint.identification.algorithm``
+  The endpoint identification algorithm to validate the server hostname using the server certificate.
+
+  * Type: string
+  * Default: ""
+  * Importance: low
+
+``kafkastore.ssl.keymanager.algorithm``
+  The algorithm used by key manager factory for SSL connections.
+
+  * Type: string
+  * Default: "SunX509"
+  * Importance: low
+
+``kafkastore.ssl.trustmanager.algorithm``
+  The algorithm used by the trust manager factory for SSL connections.
+
+  * Type: string
+  * Default: "PKIX"
   * Importance: low

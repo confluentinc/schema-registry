@@ -60,6 +60,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven-assembly.version>2.6</maven-assembly.version>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
+        <bouncycastle.bcpkix.version>1.54</bouncycastle.bcpkix.version>
     </properties>
 
     <repositories>

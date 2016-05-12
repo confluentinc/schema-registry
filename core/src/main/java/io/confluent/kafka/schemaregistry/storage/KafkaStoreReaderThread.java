@@ -15,6 +15,8 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -22,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
@@ -73,7 +76,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 StoreUpdateHandler<K, V> storeUpdateHandler,
                                 Serializer<K, V> serializer,
                                 Store<K, V> localStore,
-                                K noopKey) {
+                                K noopKey,
+                                SchemaRegistryConfig config) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     offsetUpdateLock = new ReentrantLock();
     offsetReachedThreshold = offsetUpdateLock.newCondition();
@@ -95,6 +99,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
             org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
+
+    KafkaStore.addSslConfigsToClientProperties(config, consumerProps);
+
     this.consumer = new KafkaConsumer<>(consumerProps);
 
     List<PartitionInfo> partitions = this.consumer.partitionsFor(this.topic);

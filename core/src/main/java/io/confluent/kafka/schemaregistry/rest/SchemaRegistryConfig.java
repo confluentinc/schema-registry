@@ -32,6 +32,9 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
 
+  public static final String KAFKASTORE_SECURITY_PROTOCOL_SSL = "SSL";
+  public static final String KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT = "PLAINTEXT";
+
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   /**
    * <code>kafkastore.zk.session.timeout.ms</code>
@@ -76,6 +79,36 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>avro.compatibility.level</code>
    */
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
+  public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
+      "kafkastore.security.protocol";
+  public static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG =
+      "kafkastore.ssl.truststore.location";
+  public static final String KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG =
+      "kafkastore.ssl.truststore.password";
+  public static final String KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG =
+      "kafkastore.ssl.keystore.location";
+  public static final String KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG =
+          "kafkastore.ssl.truststore.type";
+  public static final String KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_CONFIG =
+          "kafkastore.ssl.trustmanager.algorithm";
+  public static final String KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG =
+      "kafkastore.ssl.keystore.password";
+  public static final String KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG =
+          "kafkastore.ssl.keystore.type";
+  public static final String KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_CONFIG =
+          "kafkastore.ssl.keymanager.algorithm";
+  public static final String KAFKASTORE_SSL_KEY_PASSWORD_CONFIG =
+      "kafkastore.ssl.key.password";
+  public static final String KAFKASTORE_SSL_ENABLED_PROTOCOLS_CONFIG =
+      "kafkastore.ssl.enabled.protocols";
+  public static final String KAFKASTORE_SSL_PROTOCOL_CONFIG =
+      "kafkastore.ssl.protocol";
+  public static final String KAFKASTORE_SSL_PROVIDER_CONFIG =
+      "kafkastore.ssl.provider";
+  public static final String KAFKASTORE_SSL_CIPHER_SUITES_CONFIG =
+      "kafkastore.ssl.cipher.suites";
+  public static final String KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =
+      "kafkastore.ssl.endpoint.identification.algorithm";
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper url for the Kafka cluster";
   protected static final String SCHEMAREGISTRY_ZK_NAMESPACE_DOC =
@@ -111,10 +144,43 @@ public class SchemaRegistryConfig extends RestConfig {
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema)";
   protected static final String MASTER_ELIGIBILITY_DOC = 
-      "If true, this node can participate in master election. In a multi-colo setup, turn this off" 
-      + "for clusters in the slave data center.";                               
+      "If true, this node can participate in master election. In a multi-colo setup, turn this off "
+      + "for clusters in the slave data center.";
+  protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
+      "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
+      + "Values can be `PLAINTEXT` or `SSL`.";
+  protected static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_DOC =
+      "The location of the SSL trust store file.";
+  protected static final String KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_DOC =
+      "The password to access the trust store.";
+  protected static final String KAFAKSTORE_SSL_TRUSTSTORE_TYPE_DOC =
+      "The file format of the trust store.";
+  protected static final String KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_DOC =
+      "The algorithm used by the trust manager factory for SSL connections.";
+  protected static final String KAFKASTORE_SSL_KEYSTORE_LOCATION_DOC =
+      "The location of the SSL keystore file.";
+  protected static final String KAFKASTORE_SSL_KEYSTORE_PASSWORD_DOC =
+      "The password to access the keystore.";
+  protected static final String KAFAKSTORE_SSL_KEYSTORE_TYPE_DOC =
+      "The file format of the keystore.";
+  protected static final String KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_DOC =
+      "The algorithm used by key manager factory for SSL connections.";
+  protected static final String KAFKASTORE_SSL_KEY_PASSWORD_DOC =
+      "The password of the key contained in the keystore.";
+  protected static final String KAFAKSTORE_SSL_ENABLED_PROTOCOLS_DOC =
+      "Protocols enabled for SSL connections.";
+  protected static final String KAFAKSTORE_SSL_PROTOCOL_DOC =
+      "The SSL protocol used.";
+  protected static final String KAFAKSTORE_SSL_PROVIDER_DOC =
+      "The name of the security provider used for SSL.";
+  protected static final String KAFKASTORE_SSL_CIPHER_SUITES_DOC =
+      "A list of cipher suites used for SSL.";
+  protected static final String KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC =
+      "The endpoint identification algorithm to validate the server hostname using the server certificate.";
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
+
+  // TODO: move to Apache's ConfigDef
   private static final ConfigDef config;
   static {
     config = baseConfigDef()
@@ -152,7 +218,52 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC)
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
                         METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
-                        METRICS_JMX_PREFIX_DOC);
+                        METRICS_JMX_PREFIX_DOC)
+        .define(KAFKASTORE_SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
+                KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT, ConfigDef.Importance.MEDIUM,
+                KAFKASTORE_SECURITY_PROTOCOL_DOC)
+        .define(KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.HIGH,
+                KAFKASTORE_SSL_TRUSTSTORE_LOCATION_DOC)
+        .define(KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.HIGH,
+                KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_DOC)
+        .define(KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG, ConfigDef.Type.STRING,
+                "JKS", ConfigDef.Importance.MEDIUM,
+                KAFAKSTORE_SSL_TRUSTSTORE_TYPE_DOC)
+        .define(KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_CONFIG, ConfigDef.Type.STRING,
+                "PKIX", ConfigDef.Importance.LOW,
+                KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_DOC)
+        .define(KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.HIGH,
+                KAFKASTORE_SSL_KEYSTORE_LOCATION_DOC)
+        .define(KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.HIGH,
+                KAFKASTORE_SSL_KEYSTORE_PASSWORD_DOC)
+        .define(KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG, ConfigDef.Type.STRING,
+                "JKS", ConfigDef.Importance.MEDIUM,
+                KAFAKSTORE_SSL_KEYSTORE_TYPE_DOC)
+        .define(KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_CONFIG, ConfigDef.Type.STRING,
+                "SunX509", ConfigDef.Importance.LOW,
+                KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_DOC)
+        .define(KAFKASTORE_SSL_KEY_PASSWORD_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.HIGH,
+                KAFKASTORE_SSL_KEY_PASSWORD_DOC)
+        .define(KAFKASTORE_SSL_ENABLED_PROTOCOLS_CONFIG, ConfigDef.Type.STRING,
+                "TLSv1.2,TLSv1.1,TLSv1", ConfigDef.Importance.MEDIUM,
+                KAFAKSTORE_SSL_ENABLED_PROTOCOLS_DOC)
+        .define(KAFKASTORE_SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
+                "TLS", ConfigDef.Importance.MEDIUM,
+                KAFAKSTORE_SSL_PROTOCOL_DOC)
+        .define(KAFKASTORE_SSL_PROVIDER_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.MEDIUM,
+                KAFAKSTORE_SSL_PROVIDER_DOC)
+        .define(KAFKASTORE_SSL_CIPHER_SUITES_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.LOW,
+                KAFKASTORE_SSL_CIPHER_SUITES_DOC)
+        .define(KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.LOW,
+                KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC);
   }
   private final AvroCompatibilityLevel compatibilityType;
 
