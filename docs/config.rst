@@ -9,6 +9,13 @@ Configuration Options
   * Default: ""
   * Importance: high
 
+``listeners``
+  Comma-separated list of listeners that listen for API requests over either http or https. If a listener uses https, the appropriate SSL configuration parameters need to be set as well.
+
+  * Type: list
+  * Default: "http://0.0.0.0:8081"
+  * Importance: high
+
 ``avro.compatibility.level``
   The Avro compatibility type. Valid values are: none (new schema can be any valid Avro schema), backward (new schema can read data produced by latest registered schema), forward (latest registered schema can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema)
 
@@ -77,6 +84,41 @@ Configuration Options
 
   * Type: string
   * Default: "application/vnd.schemaregistry.v1+json"
+  * Importance: high
+
+``ssl.keystore.location``
+  Used for https. Location of the keystore file to use for SSL. IMPORTANT: Jetty requires that the key's CN, stored in the keystore, must match the FQDN.
+
+  * Type: string
+  * Default: ""
+  * Importance: high
+
+``ssl.keystore.password``
+  Used for https. The store password for the keystore file.
+
+  * Type: password
+  * Default: ""
+  * Importance: high
+
+``ssl.key.password``
+  Used for https. The password of the private key in the keystore file.
+
+  * Type: password
+  * Default: ""
+  * Importance: high
+
+``ssl.truststore.location``
+  Used for https. Location of the trust store. Required only to authenticate https clients.
+
+  * Type: string
+  * Default: ""
+  * Importance: high
+
+``ssl.truststore.password``
+  Used for https. The store password for the trust store file.
+
+  * Type: password
+  * Default: ""
   * Importance: high
 
 ``response.mediatype.preferred``
@@ -156,6 +198,48 @@ Configuration Options
   * Default: ""
   * Importance: low
 
+``ssl.keystore.type``
+  Used for https. The type of keystore file.
+
+  * Type: string
+  * Default: "JKS"
+  * Importance: medium
+
+``ssl.truststore.type``
+  Used for https. The type of trust store file.
+
+  * Type: string
+  * Default: "JKS"
+  * Importance: medium
+
+``ssl.protocol``
+  Used for https. The SSL protocol used to generate the SslContextFactory.
+
+  * Type: string
+  * Default: "TLS"
+  * Importance: medium
+
+``ssl.provider``
+  Used for https. The SSL security provider name. Leave blank to use Jetty's default.
+
+  * Type: string
+  * Default: "" (Jetty's default)
+  * Importance: medium
+
+``ssl.client.auth``
+  Used for https. Whether or not to require the https client to authenticate via the server's trust store.
+
+  * Type: boolean
+  * Default: false
+  * Importance: medium
+
+``ssl.enabled.protocols``
+  Used for https. The list of protocols enabled for SSL connections. Comma-separated list. Leave blank to use Jetty's defaults.
+
+  * Type: list
+  * Default: "" (Jetty's default)
+  * Importance: medium
+
 ``access.control.allow.origin``
   Set value for Jetty Access-Control-Allow-Origin header
 
@@ -234,7 +318,7 @@ Configuration Options
   * Importance: low
 
 ``port``
-  Port to listen on for new connections.
+  DEPRECATED: port to listen on for new connections. Use `listeners` instead.
 
   * Type: int
   * Default: 8081
@@ -259,4 +343,32 @@ Configuration Options
 
   * Type: int
   * Default: 1000
+  * Importance: low
+
+``ssl.keymanager.algorithm``
+  Used for https. The algorithm used by the key manager factory for SSL connections. Leave blank to use Jetty's default.
+
+  * Type: string
+  * Default: "" (Jetty's default)
+  * Importance: low
+
+``ssl.trustmanager.algorithm``
+  Used for https. The algorithm used by the trust manager factory for SSL connections. Leave blank to use Jetty's default.
+
+  * Type: string
+  * Default: "" (Jetty's default)
+  * Importance: low
+
+``ssl.cipher.suites``
+  Used for https. A list of SSL cipher suites. Comma-separated list. Leave blank to use Jetty's defaults.
+
+  * Type: list
+  * Default: "" (Jetty's default)
+  * Importance: low
+
+``ssl.endpoint.identification.algorithm``
+  Used for https. The endpoint identification algorithm to validate the server hostname using the server certificate. Leave blank to use Jetty's default.
+
+  * Type: string
+  * Default: "" (Jetty's default)
   * Importance: low

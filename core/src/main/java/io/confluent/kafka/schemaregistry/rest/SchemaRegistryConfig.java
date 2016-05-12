@@ -31,6 +31,8 @@ import static io.confluent.common.config.ConfigDef.Range.atLeast;
 public class SchemaRegistryConfig extends RestConfig {
 
   private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
+  // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
+  private static final String SCHEMAREGISTRY_LISTENERS_DEFAULT = "";
 
   public static final String KAFKASTORE_SECURITY_PROTOCOL_SSL = "SSL";
   public static final String KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT = "PLAINTEXT";
@@ -186,6 +188,8 @@ public class SchemaRegistryConfig extends RestConfig {
     config = baseConfigDef()
         .defineOverride(PORT_CONFIG, ConfigDef.Type.INT, SCHEMAREGISTRY_PORT_DEFAULT,
                         ConfigDef.Importance.LOW, PORT_CONFIG_DOC)
+        .defineOverride(LISTENERS_CONFIG, ConfigDef.Type.LIST, SCHEMAREGISTRY_LISTENERS_DEFAULT,
+                        ConfigDef.Importance.HIGH, LISTENERS_DOC)
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
                         io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES,
                         ConfigDef.Importance.HIGH,
