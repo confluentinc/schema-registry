@@ -9,6 +9,13 @@ Configuration Options
   * Default: ""
   * Importance: high
 
+``port``
+  Port to listen on for new connections.
+
+  * Type: int
+  * Default: 8081
+  * Importance: high
+
 ``avro.compatibility.level``
   The Avro compatibility type. Valid values are: none (new schema can be any valid Avro schema), backward (new schema can read data produced by latest registered schema), forward (latest registered schema can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema)
 
@@ -196,13 +203,6 @@ Configuration Options
 
   * Type: long
   * Default: 30000
-  * Importance: low
-
-``port``
-  Port to listen on for new connections.
-
-  * Type: int
-  * Default: 8081
   * Importance: low
 
 ``request.logger.name``
