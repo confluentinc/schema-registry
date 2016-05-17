@@ -179,7 +179,7 @@ generating
 Requirements
 ------------
 
-- Kafka: 0.10.0.0-SNAPSHOT (0.10.0.0-SNAPSHOT recommended)
+- Kafka: 0.10.0.0-cp1
 
 Contribute
 ----------
