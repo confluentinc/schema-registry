@@ -64,7 +64,7 @@ to Kafka. A ``SerializationException`` may occur during the send call, if the da
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("f1", "value1");
 
-    record = new ProducerRecord<Object, Object>("topic1", key, avroRecord);
+    ProducerRecord<Object, Object> record = new ProducerRecord<>("topic1", key, avroRecord);
     try {
       producer.send(record);
     } catch(SerializationException e) {
@@ -83,23 +83,28 @@ not well formed.
     import kafka.consumer.ConsumerIterator;
     import kafka.consumer.KafkaStream;
     import kafka.javaapi.consumer.ConsumerConnector;
-    import java.util.Properties;
+    import io.confluent.kafka.serializers.KafkaAvroDecoder;
+    import kafka.message.MessageAndMetadata;
+    import kafka.utils.VerifiableProperties;
+    import org.apache.kafka.common.errors.SerializationException;
+    import java.util.*;
 
     Properties props = new Properties();
     props.put("zookeeper.connect", "localhost:2181");
     props.put("group.id", "group1");
     props.put("schema.registry.url", "http://localhost:8081");
 
-    Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
+    String topic = "topic1";
+    Map<String, Integer> topicCountMap = new HashMap<>();
     topicCountMap.put(topic, new Integer(1));
 
     VerifiableProperties vProps = new VerifiableProperties(props);
     KafkaAvroDecoder keyDecoder = new KafkaAvroDecoder(vProps);
     KafkaAvroDecoder valueDecoder = new KafkaAvroDecoder(vProps);
 
-    kafka.consumer.Consumer.createJavaConsumerConnector(new ConsumerConfig(vProps));
+    ConsumerConnector consumer = kafka.consumer.Consumer.createJavaConsumerConnector(new ConsumerConfig(vProps));
 
-    Map<String, List<KafkaStream>> consumerMap = consumer.createMessageStreams(
+    Map<String, List<KafkaStream<Object, Object>>> consumerMap = consumer.createMessageStreams(
         topicCountMap, keyDecoder, valueDecoder);
     KafkaStream stream = consumerMap.get(topic).get(0);
     ConsumerIterator it = stream.iterator();
@@ -144,7 +149,7 @@ the key and therefore there is no schema registration for the key.
     props.put("metadata.broker.list", brokerList);
     props.put("schema.registry.url", "http://localhost:8081");
 
-    Producer producer = new Producer<String, Object>(new ProducerConfig(props));
+    Producer<String, Object> producer = new Producer<>(new ProducerConfig(props));
     String key = "key1";
     String userSchema = "{\"type\":\"record\"," +
                         "\"name\":\"myrecord\"," +
@@ -154,7 +159,7 @@ the key and therefore there is no schema registration for the key.
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("f1", "value1");
 
-    KeyedMessage<String, Object> message = new KeyedMessage<String, Object>(topic, key, avroRecord);
+    KeyedMessage<String, Object> message = new KeyedMessage<>(topic, key, avroRecord);
     producer.send(message);
 
 Formatter
