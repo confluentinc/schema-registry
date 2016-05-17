@@ -3,6 +3,42 @@
 Changelog
 =========
 
+Version 3.0.0
+-------------
+
+Schema Registry
+~~~~~~~~~~~~~~~
+
+* `PR-212 <https://github.com/confluentinc/schema-registry/pull/212>`_ - change the documentation on port to have a high
+  priority and list it higher up in the docs
+* `PR-298 <https://github.com/confluentinc/schema-registry/pull/298>`_ - Bump version to 3.0.0-SNAPSHOT and Kafka dependency
+  to 0.10.0.0-SNAPSHOT
+* `PR-300 <https://github.com/confluentinc/schema-registry/pull/300>`_ - Using the new 0.9 Kafka consumer.
+* `PR-302 <https://github.com/confluentinc/schema-registry/pull/302>`_ - Fix build to handle rack aware changes in Kafka.
+* `PR-305 <https://github.com/confluentinc/schema-registry/pull/305>`_ - Update to match changed methods in CoreUtils
+* `PR-317 <https://github.com/confluentinc/schema-registry/pull/317>`_ - Change the 'host.name' importance to high
+* `PR-319 <https://github.com/confluentinc/schema-registry/pull/319>`_ - KafkaStore SSL support.
+* `PR-320 <https://github.com/confluentinc/schema-registry/pull/320>`_ - API reference uses 'integer' Avro type which isn't
+  supported. 'int' is supported.
+
+Serializers, Formatters, and Converters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* `PR-264 <https://github.com/confluentinc/schema-registry/pull/264>`_ - Add null checks to json serializer/deserializer
+* `PR-274 <https://github.com/confluentinc/schema-registry/pull/274>`_ - Add support for Avro projections in decoders
+* `PR-275 <https://github.com/confluentinc/schema-registry/pull/275>`_ - Fixed references to confluent common version
+* `PR-276 <https://github.com/confluentinc/schema-registry/pull/276>`_ - Unit tests and bugfix for NPE when using nested
+  optional fields
+* `PR-278 <https://github.com/confluentinc/schema-registry/pull/278>`_ - Test cases for optional nested structs
+* `PR-280 <https://github.com/confluentinc/schema-registry/pull/280>`_ - Fix fromConnectData for optional complex types
+* `PR-290 <https://github.com/confluentinc/schema-registry/pull/290>`_ - Issue #284 Cannot set max.schemas.per.subject due to
+  cast exception
+* `PR-297 <https://github.com/confluentinc/schema-registry/pull/297>`_ - Allows any CharSequence implementation to be
+  considered a string
+* `PR-318 <https://github.com/confluentinc/schema-registry/pull/318>`_ - Minor cleanup
+* `PR-323 <https://github.com/confluentinc/schema-registry/pull/323>`_ - Fix #142 - handle parsing non-json responses in the
+  RestService
+
 Version 2.0.1
 -------------
 
