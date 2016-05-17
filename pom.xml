@@ -46,11 +46,11 @@
 
     <properties>
         <jersey.version>2.19</jersey.version>
-        <confluent-common.version>3.0.0-SNAPSHOT</confluent-common.version>
+        <confluent-common.version>3.1.0-SNAPSHOT</confluent-common.version>
         <kafka.version>0.10.1.0-SNAPSHOT</kafka.version>
         <kafka.scala.version>2.11</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
-        <restutils.version>3.0.0-SNAPSHOT</restutils.version>
+        <restutils.version>3.1.0-SNAPSHOT</restutils.version>
         <avro.version>1.7.7</avro.version>
         <jackson.version>2.5.4</jackson.version>
         <junit.version>4.12</junit.version>
