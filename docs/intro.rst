@@ -88,44 +88,34 @@ Installation
    source, follow the instructions in the `Development`_ section. Before
    starting the Schema Registry you must start Kafka.
 
+
+Deployment
+----------
+
 Starting the Schema Registry service is simple once its dependencies are
 running:
 
 .. sourcecode:: bash
 
-   $ cd confluent-2.0/
+   $ cd confluent-3.0.0/
 
    # The default settings in schema-registry.properties work automatically with
    # the default settings for local ZooKeeper and Kafka nodes.
    $ bin/schema-registry-start etc/schema-registry/schema-registry.properties
 
 If you installed Debian or RPM packages, you can simply run ``schema-registry-start``
-as it will be on your ``PATH``. If you started the service in the background,
-you can use the following command to stop it:
+as it will be on your ``PATH``. The ``schema-registry.properties`` file contains
+:ref:`configuration settings<schemaregistry_config>`. The default configuration
+included with the Schema Registry includes convenient defaults for a local testing setup and
+should be modified for a
+production deployment. By default the server starts bound to port 8081, expects Zookeeper
+to be available at ``localhost:2181``, and a Kafka broker at ``localhost:9092``.
+
+If you started the service in the background, you can use the following command to stop it:
 
 .. sourcecode:: bash
 
    $ bin/schema-registry-stop
-
-
-Deployment
-----------
-
-The REST interface to schema registry includes a built-in Jetty server. The
-wrapper scripts ``bin/schema-registry-start`` and ``bin/schema-registry-stop``
-are the recommended method of starting and stopping the service. However, you
-can also start the server directly yourself:
-
-.. sourcecode:: bash
-
-   $ bin/schema-registry-start [schema-registry.properties]
-
-where ``schema-registry.properties`` contains configuration settings as specified by the
-``SchemaRegistryConfig`` class. Although the properties file is not required,
-the default configuration is not intended for production. Production deployments
-*should* specify a properties file. By default the server starts bound to port
-8081, expects Zookeeper to be available at ``localhost:2181``, and a Kafka broker
-at ``localhost:9092``.
 
 
 Development

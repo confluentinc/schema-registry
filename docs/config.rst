@@ -9,13 +9,6 @@ Configuration Options
   * Default: ""
   * Importance: high
 
-``port``
-  Port to listen on for new connections.
-
-  * Type: int
-  * Default: 8081
-  * Importance: high
-
 ``avro.compatibility.level``
   The Avro compatibility type. Valid values are: none (new schema can be any valid Avro schema), backward (new schema can read data produced by latest registered schema), forward (latest registered schema can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema)
 
@@ -23,8 +16,50 @@ Configuration Options
   * Default: "backward"
   * Importance: high
 
+``host.name``
+  The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry with multiple nodes.
+
+  * Type: string
+  * Default: "192.168.50.1"
+  * Importance: high
+
+``kafkastore.ssl.key.password``
+  The password of the key contained in the keystore.
+
+  * Type: string
+  * Default: ""
+  * Importance: high
+
+``kafkastore.ssl.keystore.location``
+  The location of the SSL keystore file.
+
+  * Type: string
+  * Default: ""
+  * Importance: high
+
+``kafkastore.ssl.keystore.password``
+  The password to access the keystore.
+
+  * Type: string
+  * Default: ""
+  * Importance: high
+
+``kafkastore.ssl.truststore.location``
+  The location of the SSL trust store file.
+
+  * Type: string
+  * Default: ""
+  * Importance: high
+
+``kafkastore.ssl.truststore.password``
+  The password to access the trust store.
+
+  * Type: string
+  * Default: ""
+  * Importance: high
+
 ``kafkastore.topic``
-  The durable single partition topic that acts as the durable log for the data
+  The durable single partition topic that actsas the durable log for the data
 
   * Type: string
   * Default: "_schemas"
@@ -51,47 +86,12 @@ Configuration Options
   * Default: [application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json]
   * Importance: high
 
-``host.name``
-  The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry with multiple nodes.
+``kafkastore.init.timeout.ms``
+  The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
 
-  * Type: string
-  * Default: "localhost"
-  * Importance: high
-
-``kafkastore.ssl.truststore.location``
-  The location of the SSL trust store file.
-
-  * Type: string
-  * Default: ""
-  * Importance: high
-
-``kafkastore.ssl.truststore.password``
-  The password to access the trust store.
-
-  * Type: password
-  * Default: ""
-  * Importance: high
-
-``kafkastore.ssl.keystore.location``
-  The location of the SSL keystore file.
-
-  * Type: string
-  * Default: ""
-  * Importance: high
-
-``kafkastore.ssl.keystore.password``
-  The password to access the keystore.
-
-  * Type: password
-  * Default: ""
-  * Importance: high
-
-``kafkastore.ssl.key.password``
-  The password of the key contained in the keystore.
-
-  * Type: password
-  * Default: ""
-  * Importance: high
+  * Type: int
+  * Default: 60000
+  * Importance: medium
 
 ``kafkastore.security.protocol``
   The security protocol to use when connecting with Kafka, the underlying persistent storage. Values can be `PLAINTEXT` or `SSL`.
@@ -100,11 +100,39 @@ Configuration Options
   * Default: "PLAINTEXT"
   * Importance: medium
 
-``kafkastore.init.timeout.ms``
-  The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
+``kafkastore.ssl.enabled.protocols``
+  Protocols enabled for SSL connections.
 
-  * Type: int
-  * Default: 60000
+  * Type: string
+  * Default: "TLSv1.2,TLSv1.1,TLSv1"
+  * Importance: medium
+
+``kafkastore.ssl.keystore.type``
+  The file format of the keystore.
+
+  * Type: string
+  * Default: "JKS"
+  * Importance: medium
+
+``kafkastore.ssl.protocol``
+  The SSL protocol used.
+
+  * Type: string
+  * Default: "TLS"
+  * Importance: medium
+
+``kafkastore.ssl.provider``
+  The name of the security provider used for SSL.
+
+  * Type: string
+  * Default: ""
+  * Importance: medium
+
+``kafkastore.ssl.truststore.type``
+  The file format of the trust store.
+
+  * Type: string
+  * Default: "JKS"
   * Importance: medium
 
 ``kafkastore.timeout.ms``
@@ -115,46 +143,18 @@ Configuration Options
   * Importance: medium
 
 ``master.eligibility``
-  If true, this node can participate in master election. In a multi-colo setup, turn this offfor clusters in the slave data center.
+  If true, this node can participate in master election. In a multi-colo setup, turn this off for clusters in the slave data center.
 
   * Type: boolean
   * Default: true
   * Importance: medium
 
-``kafkastore.ssl.enabled.protocols``
-  The list of protocols enabled for SSL.
-
-  * Type: string
-  * Default: "TLSv1.2,TLSv1.1,TLSv1"
-  * Importance: medium
-
-``kafkastore.ssl.keystore.type``
-  The file format of the keystore file.
-
-  * Type: string
-  * Default: "JKS"
-  * Importance: medium
-
-``kafkastore.ssl.protocol``
-  The SSL protocol used to generate the SSLContext.
-
-  * Type: string
-  * Default: "TLS"
-  * Importance: medium
-
-``kafkastore.ssl.provider``
-  The name of the securitiy provider used for SSL.
+``access.control.allow.methods``
+  Set value to Jetty Access-Control-Allow-Origin header for specified methods
 
   * Type: string
   * Default: ""
-  * Importance: medium
-
-``kafkastore.ssl.truststore.type``
-  The file format of the trust store file.
-
-  * Type: string
-  * Default: "JKS"
-  * Importance: medium
+  * Importance: low
 
 ``access.control.allow.origin``
   Set value for Jetty Access-Control-Allow-Origin header
@@ -168,6 +168,34 @@ Configuration Options
 
   * Type: boolean
   * Default: false
+  * Importance: low
+
+``kafkastore.ssl.cipher.suites``
+  A list of cipher suites used for SSL.
+
+  * Type: string
+  * Default: ""
+  * Importance: low
+
+``kafkastore.ssl.endpoint.identification.algorithm``
+  The endpoint identification algorithm to validate the server hostname using the server certificate.
+
+  * Type: string
+  * Default: ""
+  * Importance: low
+
+``kafkastore.ssl.keymanager.algorithm``
+  The algorithm used by key manager factory for SSL connections.
+
+  * Type: string
+  * Default: "SunX509"
+  * Importance: low
+
+``kafkastore.ssl.trustmanager.algorithm``
+  The algorithm used by the trust manager factory for SSL connections.
+
+  * Type: string
+  * Default: "PKIX"
   * Importance: low
 
 ``kafkastore.zk.session.timeout.ms``
@@ -205,6 +233,13 @@ Configuration Options
   * Default: 30000
   * Importance: low
 
+``port``
+  Port to listen on for new connections.
+
+  * Type: int
+  * Default: 8081
+  * Importance: low
+
 ``request.logger.name``
   Name of the SLF4J logger to write the NCSA Common Log Format request log.
 
@@ -224,32 +259,4 @@ Configuration Options
 
   * Type: int
   * Default: 1000
-  * Importance: low
-
-``kafkastore.ssl.cipher.suites``
-  A list of cipher suites used for SSL.
-
-  * Type: string
-  * Default: ""
-  * Importance: low
-
-``kafkastore.ssl.endpoint.identification.algorithm``
-  The endpoint identification algorithm to validate the server hostname using the server certificate.
-
-  * Type: string
-  * Default: ""
-  * Importance: low
-
-``kafkastore.ssl.keymanager.algorithm``
-  The algorithm used by key manager factory for SSL connections.
-
-  * Type: string
-  * Default: "SunX509"
-  * Importance: low
-
-``kafkastore.ssl.trustmanager.algorithm``
-  The algorithm used by the trust manager factory for SSL connections.
-
-  * Type: string
-  * Default: "PKIX"
   * Importance: low
