@@ -106,7 +106,8 @@ running:
 If you installed Debian or RPM packages, you can simply run ``schema-registry-start``
 as it will be on your ``PATH``. The ``schema-registry.properties`` file contains
 :ref:`configuration settings<schemaregistry_config>`. The default configuration
-included with the Schema Registry and should be modified for a
+included with the Schema Registry includes convenient defaults for a local testing setup and
+should be modified for a
 production deployment. By default the server starts bound to port 8081, expects Zookeeper
 to be available at ``localhost:2181``, and a Kafka broker at ``localhost:9092``.
 
