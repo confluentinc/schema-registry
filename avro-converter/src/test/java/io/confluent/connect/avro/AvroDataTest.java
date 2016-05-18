@@ -705,7 +705,7 @@ public class AvroDataTest {
                  avroData.toConnectData(avroSchema, "foob".getBytes()));
 
     assertEquals(new SchemaAndValue(Schema.BYTES_SCHEMA, ByteBuffer.wrap("foob".getBytes())),
-                 avroData.toConnectData(avroSchema, ByteBuffer.wrap("foob".getBytes())));
+            avroData.toConnectData(avroSchema, ByteBuffer.wrap("foob".getBytes())));
   }
 
   @Test
@@ -774,9 +774,28 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(SchemaBuilder.string().name("TestEnum").build(), "bar"),
                  avroData.toConnectData(avroSchema, "bar"));
     assertEquals(new SchemaAndValue(SchemaBuilder.string().name("TestEnum").build(), "bar"),
-                 avroData.toConnectData(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar")));
+            avroData.toConnectData(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar")));
   }
 
+    @Test
+    public void testToConnectRecordOptionalString() {
+        org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
+                .record("Record").fields()
+                .optionalString("string")
+                .endRecord();
+        GenericRecord avroRecord = new GenericRecordBuilder(avroSchema)
+                .set("string", null)
+                .build();
+        // Use a value type which ensures we test conversion of elements. int8 requires extra
+        // conversion steps but keeps the test simple.
+        Schema schema = SchemaBuilder.struct()
+                .name("Record")
+                .field("string", Schema.OPTIONAL_STRING_SCHEMA)
+                .build();
+        Struct struct = new Struct(schema).put("string", null);
+        assertEquals(new SchemaAndValue(schema, struct),
+                avroData.toConnectData(avroSchema, avroRecord));
+    }
 
   @Test
   public void testToConnectOptionalPrimitiveWithConnectMetadata() {
