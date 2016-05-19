@@ -164,7 +164,8 @@ to the packaged binary versions. You can also produce a standalone fat jar using
 
 generating
 ``package/target/kafka-schema-registry-package-$VERSION-standalone.jar``, which includes all the
- dependencies as well.
+dependencies as well.
+
 
 Requirements
 ------------
