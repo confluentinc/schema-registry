@@ -20,6 +20,7 @@ Schema Registry
 * `PR-319 <https://github.com/confluentinc/schema-registry/pull/319>`_ - KafkaStore SSL support.
 * `PR-320 <https://github.com/confluentinc/schema-registry/pull/320>`_ - API reference uses 'integer' Avro type which isn't
   supported. 'int' is supported.
+* `PR-329 <https://github.com/confluentinc/schema-registry/pull/329>`_ - https support.
 
 Serializers, Formatters, and Converters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -38,6 +39,7 @@ Serializers, Formatters, and Converters
 * `PR-318 <https://github.com/confluentinc/schema-registry/pull/318>`_ - Minor cleanup
 * `PR-323 <https://github.com/confluentinc/schema-registry/pull/323>`_ - Fix #142 - handle parsing non-json responses in the
   RestService
+* `PR-332 <https://github.com/confluentinc/schema-registry/pull/332>`_ - Add status storage topic to Connect Avro sample config.
 
 Version 2.0.1
 -------------
