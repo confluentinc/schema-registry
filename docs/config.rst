@@ -10,7 +10,7 @@ Configuration Options
   * Importance: high
 
 ``listeners``
-  Comma-separated list of listeners that listen for API requests over either http or https. If a listener uses https, the appropriate SSL configuration parameters need to be set as well.
+  Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
   * Type: list
   * Default: "http://0.0.0.0:8081"
@@ -87,35 +87,35 @@ Configuration Options
   * Importance: high
 
 ``ssl.keystore.location``
-  Used for https. Location of the keystore file to use for SSL. IMPORTANT: Jetty requires that the key's CN, stored in the keystore, must match the FQDN.
+  Used for HTTPS. Location of the keystore file to use for SSL. IMPORTANT: Jetty requires that the key's CN, stored in the keystore, must match the FQDN.
 
   * Type: string
   * Default: ""
   * Importance: high
 
 ``ssl.keystore.password``
-  Used for https. The store password for the keystore file.
+  Used for HTTPS. The store password for the keystore file.
 
   * Type: password
   * Default: ""
   * Importance: high
 
 ``ssl.key.password``
-  Used for https. The password of the private key in the keystore file.
+  Used for HTTPS. The password of the private key in the keystore file.
 
   * Type: password
   * Default: ""
   * Importance: high
 
 ``ssl.truststore.location``
-  Used for https. Location of the trust store. Required only to authenticate https clients.
+  Used for HTTPS. Location of the trust store. Required only to authenticate HTTPS clients.
 
   * Type: string
   * Default: ""
   * Importance: high
 
 ``ssl.truststore.password``
-  Used for https. The store password for the trust store file.
+  Used for HTTPS. The store password for the trust store file.
 
   * Type: password
   * Default: ""
@@ -199,42 +199,42 @@ Configuration Options
   * Importance: low
 
 ``ssl.keystore.type``
-  Used for https. The type of keystore file.
+  Used for HTTPS. The type of keystore file.
 
   * Type: string
   * Default: "JKS"
   * Importance: medium
 
 ``ssl.truststore.type``
-  Used for https. The type of trust store file.
+  Used for HTTPS. The type of trust store file.
 
   * Type: string
   * Default: "JKS"
   * Importance: medium
 
 ``ssl.protocol``
-  Used for https. The SSL protocol used to generate the SslContextFactory.
+  Used for HTTPS. The SSL protocol used to generate the SslContextFactory.
 
   * Type: string
   * Default: "TLS"
   * Importance: medium
 
 ``ssl.provider``
-  Used for https. The SSL security provider name. Leave blank to use Jetty's default.
+  Used for HTTPS. The SSL security provider name. Leave blank to use Jetty's default.
 
   * Type: string
   * Default: "" (Jetty's default)
   * Importance: medium
 
 ``ssl.client.auth``
-  Used for https. Whether or not to require the https client to authenticate via the server's trust store.
+  Used for HTTPS. Whether or not to require the HTTPS client to authenticate via the server's trust store.
 
   * Type: boolean
   * Default: false
   * Importance: medium
 
 ``ssl.enabled.protocols``
-  Used for https. The list of protocols enabled for SSL connections. Comma-separated list. Leave blank to use Jetty's defaults.
+  Used for HTTPS. The list of protocols enabled for SSL connections. Comma-separated list. Leave blank to use Jetty's defaults.
 
   * Type: list
   * Default: "" (Jetty's default)
@@ -346,28 +346,28 @@ Configuration Options
   * Importance: low
 
 ``ssl.keymanager.algorithm``
-  Used for https. The algorithm used by the key manager factory for SSL connections. Leave blank to use Jetty's default.
+  Used for HTTPS. The algorithm used by the key manager factory for SSL connections. Leave blank to use Jetty's default.
 
   * Type: string
   * Default: "" (Jetty's default)
   * Importance: low
 
 ``ssl.trustmanager.algorithm``
-  Used for https. The algorithm used by the trust manager factory for SSL connections. Leave blank to use Jetty's default.
+  Used for HTTPS. The algorithm used by the trust manager factory for SSL connections. Leave blank to use Jetty's default.
 
   * Type: string
   * Default: "" (Jetty's default)
   * Importance: low
 
 ``ssl.cipher.suites``
-  Used for https. A list of SSL cipher suites. Comma-separated list. Leave blank to use Jetty's defaults.
+  Used for HTTPS. A list of SSL cipher suites. Comma-separated list. Leave blank to use Jetty's defaults.
 
   * Type: list
   * Default: "" (Jetty's default)
   * Importance: low
 
 ``ssl.endpoint.identification.algorithm``
-  Used for https. The endpoint identification algorithm to validate the server hostname using the server certificate. Leave blank to use Jetty's default.
+  Used for HTTPS. The endpoint identification algorithm to validate the server hostname using the server certificate. Leave blank to use Jetty's default.
 
   * Type: string
   * Default: "" (Jetty's default)
