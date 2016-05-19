@@ -23,6 +23,7 @@ import org.junit.After;
 import org.junit.Before;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.util.List;
 import java.util.Properties;
@@ -59,7 +60,7 @@ public abstract class ClusterTestHarness {
       ServerSocket[] sockets = new ServerSocket[count];
       int[] ports = new int[count];
       for (int i = 0; i < count; i++) {
-        sockets[i] = new ServerSocket(0);
+        sockets[i] = new ServerSocket(0, 0, InetAddress.getByName("0.0.0.0"));
         ports[i] = sockets[i].getLocalPort();
       }
       for (int i = 0; i < count; i++)
