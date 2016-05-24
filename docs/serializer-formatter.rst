@@ -3,7 +3,8 @@
 Serializer and Formatter
 ========================
 
-In this document, we describe how to use Avro in Kafka java client and Kafka console tools.
+In this document, we describe how to use Avro with the Kafka Java client and console tools.
+
 
 Assuming that you have the Schema Registry source code checked out at ``/tmp/schema-registry``, the
 following is how you can obtain all needed jars.
@@ -127,40 +128,6 @@ producer in ``kafka.javaapi.producer``. However, there will be some limitations.
 The Avro schema for the value will be registered under the subject *recordName-value*, where
 *recordName* is the name of the Avro record. Because of this, the same Avro record type shouldn't
 be used in more than one topic.
-
-In the following example, we send a message with key of type ``string`` and value of type Avro record
-to Kafka. Note that unlike the example in the new producer, we use a ``StringEncoder`` for serializing
-the key and therefore there is no schema registration for the key.
-
-.. sourcecode:: bash
-
-    import kafka.javaapi.producer.Producer;
-    import kafka.producer.KeyedMessage;
-    import kafka.producer.ProducerConfig;
-    import kafka.utils.VerifiableProperties;
-    import org.apache.avro.Schema;
-    import org.apache.avro.generic.GenericData;
-    import org.apache.avro.generic.GenericRecord;
-    import java.util.Properties;
-
-    Properties props = new Properties();
-    props.put("serializer.class", "io.confluent.kafka.serializers.KafkaAvroEncoder");
-    props.put("key.serializer.class", "kafka.serializer.StringEncoder");
-    props.put("metadata.broker.list", brokerList);
-    props.put("schema.registry.url", "http://localhost:8081");
-
-    Producer<String, Object> producer = new Producer<>(new ProducerConfig(props));
-    String key = "key1";
-    String userSchema = "{\"type\":\"record\"," +
-                        "\"name\":\"myrecord\"," +
-                        "\"fields\":[{\"name\":\"f1\",\"type\":\"string\"}]}";
-    Schema.Parser parser = new Schema.Parser();
-    Schema schema = parser.parse(userSchema);
-    GenericRecord avroRecord = new GenericData.Record(schema);
-    avroRecord.put("f1", "value1");
-
-    KeyedMessage<String, Object> message = new KeyedMessage<>(topic, key, avroRecord);
-    producer.send(message);
 
 Formatter
 ---------
