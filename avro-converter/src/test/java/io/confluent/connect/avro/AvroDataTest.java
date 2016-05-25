@@ -840,25 +840,23 @@ public class AvroDataTest {
 
   @Test
   public void testToConnectSchemaOptional(){
-	  org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
-			   .record("test_record").namespace("org.apache.avro.ipc")
-			   .fields()
-			     .name("field_name").type().nullable().stringType().noDefault()
-			   .endRecord();
-	 org.apache.avro.generic.GenericData.Record avroRecord =
-			 new org.apache.avro.generic.GenericData.Record(avroSchema);
-	 avroRecord.put("field_name", null);
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+               .record("test_record")
+               .fields()
+               .name("field_name").type().nullable().stringType().noDefault()
+               .endRecord();
+    org.apache.avro.generic.GenericData.Record avroRecord =
+       new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
+                .set("field_name", null)
+                 .build();
 
-	 Schema connectSchema = SchemaBuilder.struct()
-			 .name("test_record")
-			 .version(1)
-			 .field("field_name", SchemaBuilder.OPTIONAL_STRING_SCHEMA)
-			 .build();
-	 Struct connectRecord = new Struct(connectSchema).put("field_name", null);
-	 assertEquals(new SchemaAndValue(connectSchema, connectRecord), 
-			 avroData.toConnectData(avroSchema, avroRecord));
-
-
+    Schema connectSchema = SchemaBuilder.struct()
+             .name("test_record")
+             .field("field_name", SchemaBuilder.OPTIONAL_STRING_SCHEMA)
+             .build();
+    Struct connectRecord = new Struct(connectSchema).put("field_name", null);
+    assertEquals(new SchemaAndValue(connectSchema, connectRecord),
+        avroData.toConnectData(avroSchema, avroRecord));
   }
 
   @Test
