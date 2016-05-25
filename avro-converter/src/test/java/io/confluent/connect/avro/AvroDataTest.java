@@ -566,6 +566,19 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testToConnectOptionalArray() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().nullType().and()
+        .array().items().intType().endUnion();
+    avroSchema.getElementType().addProp("connect.type", "int8");
+    // Use a value type which ensures we test conversion of elements. int8 requires extra
+    // conversion steps but keeps the test simple.
+    Schema schema = SchemaBuilder.array(Schema.OPTIONAL_INT8_SCHEMA).build();
+    assertEquals(new SchemaAndValue(schema, Arrays.asList((byte) 12, (byte) 13)),
+                 avroData.toConnectData(avroSchema, Arrays.asList(12, 13)));
+  }
+
+  @Test
   public void testToConnectMapStringKeys() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().map()
         .values().intType();
