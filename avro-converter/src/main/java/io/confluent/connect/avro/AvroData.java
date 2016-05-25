@@ -859,6 +859,8 @@ public class AvroData {
                      value instanceof GenericEnumSymbol ||
                      value instanceof Enum) {
             converted = value.toString();
+          } else if (value == null && schema.isOptional()){
+            converted = null;
           } else {
             throw new DataException("Invalid class for string type, expecting String or "
                                     + "CharSequence but found " + value.getClass());
