@@ -689,11 +689,13 @@ public class AvroDataTest {
 
   // Avro -> Connect: Avro types with no corresponding Connect type
 
-  @Test(expected = DataException.class)
-  public void testToConnectNull() {
-    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().nullType();
-    // If we somehow did end up with a null schema and an actual value that let it get past the
-    avroData.toConnectData(avroSchema, true);
+  @Test
+  public void testToConnectNullable() {
+	    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().nullable().stringType();
+	    assertEquals(new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, null),
+	                 avroData.toConnectData(avroSchema, null));
+	    assertEquals(new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, "teststring"),
+	                 avroData.toConnectData(avroSchema, "teststring"));
   }
 
   @Test
@@ -708,6 +710,8 @@ public class AvroDataTest {
                  avroData.toConnectData(avroSchema, ByteBuffer.wrap("foob".getBytes())));
   }
 
+  
+  
   @Test
   public void testToConnectUnion() {
     // Make sure we handle primitive types and named types properly by using a variety of types
@@ -832,6 +836,29 @@ public class AvroDataTest {
 
     assertEquals(new SchemaAndValue(schema, struct),
                  avroData.toConnectData(avroSchema, avroRecord));
+  }
+
+  @Test
+  public void testToConnectSchemaOptional(){
+	  org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+			   .record("test_record").namespace("org.apache.avro.ipc")
+			   .fields()
+			     .name("field_name").type().nullable().stringType().noDefault()
+			   .endRecord();
+	 org.apache.avro.generic.GenericData.Record avroRecord =
+			 new org.apache.avro.generic.GenericData.Record(avroSchema);
+	 avroRecord.put("field_name", null);
+
+	 Schema connectSchema = SchemaBuilder.struct()
+			 .name("test_record")
+			 .version(1)
+			 .field("field_name", SchemaBuilder.OPTIONAL_STRING_SCHEMA)
+			 .build();
+	 Struct connectRecord = new Struct(connectSchema).put("field_name", null);
+	 assertEquals(new SchemaAndValue(connectSchema, connectRecord), 
+			 avroData.toConnectData(avroSchema, avroRecord));
+
+
   }
 
   @Test
@@ -971,6 +998,7 @@ public class AvroDataTest {
       org.apache.avro.Schema expectedSchema, Object expected,
       Schema schema, Object value)
   {
+
     Object converted = avroData.fromConnectData(schema, value);
     assertTrue(converted instanceof NonRecordContainer);
     NonRecordContainer container = (NonRecordContainer) converted;
