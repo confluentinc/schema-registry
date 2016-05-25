@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Copyright 2014 Confluent Inc.
 #
@@ -14,16 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-base_dir=$(dirname $0)/..
+base_dir="$(dirname "$0")"/..
 
 # Development jars. `mvn package` should collect all the required dependency jars here
-for dir in $base_dir/package-schema-registry/target/kafka-schema-registry-package-*-development; do
-  CLASSPATH=$CLASSPATH:$dir/share/java/schema-registry/*
+for dir in "$base_dir"/package-schema-registry/target/kafka-schema-registry-package-*-development; do
+  CLASSPATH="$CLASSPATH:$dir/share/java/schema-registry/*"
 done
 
 # Production jars, including kafka, rest-utils, and schema-registry
 for library in "confluent-common" "rest-utils" "schema-registry"; do
-  CLASSPATH=$CLASSPATH:$base_dir/share/java/$library/*      
+  CLASSPATH="$CLASSPATH:$base_dir/share/java/$library/*"
 done
 
 # logj4 settings
@@ -45,7 +45,7 @@ if [ -z "$SCHEMA_REGISTRY_JMX_OPTS" ]; then
 fi
 
 # JMX port to use
-if [  $JMX_PORT ]; then
+if [ ! -z "$JMX_PORT" ]; then
   SCHEMA_REGISTRY_JMX_OPTS="$SCHEMA_REGISTRY_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
 fi
 
@@ -71,10 +71,10 @@ if [ -z "$SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS" ]; then
   SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true"
 fi
 
-MAIN=$1
+MAIN="$1"
 shift
 
-while [ $# -gt 0 ]; do
+while [ "$#" -gt 0 ]; do
   COMMAND=$1
   case $COMMAND in
     -help)
@@ -91,14 +91,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ "x$$HELP" = "xtrue" ]; then
+if [ "x$HELP" = "xtrue" ]; then
   echo "USAGE: $0 [-daemon] [opts] [-help]"
   exit 0
 fi
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
-  nohup $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@" 2>&1 < /dev/null &
+  nohup "$JAVA" "${SCHEMA_REGISTRY_HEAP_OPTS[@]}" "${SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS[@]}" "${SCHEMA_REGISTRY_JMX_OPTS[@]}" "${SCHEMA_REGISTRY_LOG4J_OPTS[@]}" -cp "$CLASSPATH" "${SCHEMA_REGISTRY_OPTS[@]}" "$MAIN" "$@" 2>&1 < /dev/null &
 else
-  exec $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@"
+  exec "$JAVA" "${SCHEMA_REGISTRY_HEAP_OPTS[@]}" "${SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS[@]}" "${SCHEMA_REGISTRY_JMX_OPTS[@]}" "${SCHEMA_REGISTRY_LOG4J_OPTS[@]}" -cp "$CLASSPATH" "${SCHEMA_REGISTRY_OPTS[@]}" "$MAIN" "$@"
 fi

@@ -1,0 +1,4 @@
+#! /usr/bin/env bash
+base_dir="$(dirname "$0")"/..
+
+for f in "$base_dir"/bin/*; do shellcheck "$base_dir/bin/$f"; done

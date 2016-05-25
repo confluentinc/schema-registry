@@ -14,14 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-base_dir=$(dirname $0)/..
+bin_dir="$(dirname "$0")"
+base_dir="$bin_dir"/..
 
 # Production jars
-export CLASSPATH=$CLASSPATH:$base_dir/share/java/kafka-serde-tools/*
+export CLASSPATH="$CLASSPATH:$base_dir/share/java/kafka-serde-tools/*"
 
 # Development jars. `mvn package` should collect all the required dependency jars here
-for dir in $base_dir/package-kafka-serde-tools/target/kafka-serde-tools-package-*-development; do
-  export CLASSPATH=$CLASSPATH:$dir/share/java/kafka-serde-tools/*
+for dir in "$base_dir"/package-kafka-serde-tools/target/kafka-serde-tools-package-*-development; do
+  export CLASSPATH="$CLASSPATH:$dir/share/java/kafka-serde-tools/*"
 done
 
 DEFAULT_AVRO_FORMATTER="--formatter io.confluent.kafka.formatter.AvroMessageFormatter"
@@ -37,8 +38,8 @@ do
     --*)
       ;;
     *)
-      PROPERTY=$OPTION
-      case $PROPERTY in
+      PROPERTY="$OPTION"
+      case "$PROPERTY" in
         schema.registry.url*)
           DEFAULT_SCHEMA_REGISTRY_URL=""
         ;;
@@ -46,4 +47,4 @@ do
       ;;
     esac
 done
-exec $(dirname $0)/schema-registry-run-class kafka.tools.ConsoleConsumer $DEFAULT_AVRO_FORMATTER $DEFAULT_SCHEMA_REGISTRY_URL "$@"
+exec "$bin_dir"/schema-registry-run-class kafka.tools.ConsoleConsumer "$DEFAULT_AVRO_FORMATTER" "$DEFAULT_SCHEMA_REGISTRY_URL" "$@"

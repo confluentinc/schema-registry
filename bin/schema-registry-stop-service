@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,17 +13,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-TARGET=`ps ax | egrep -i "$1" | grep java | grep -v grep | awk '{print $1}'`
+TARGET="$(ps ax | egrep -i "$1" | grep java | grep -v grep | awk '{print $1}')"
 if [ "x$TARGET" = "x" ]; then
   >&2 echo "No running instance found."
   exit 1
 fi
 
-kill $TARGET
-for i in `seq 20`; do
+kill "$TARGET"
+for _ in $(seq 20); do
   sleep 0.25
   ps ax | egrep -i "$1" | grep "$TARGET" > /dev/null
-  if [ $? -eq 0 ]; then
+  if [ "$?" -eq 0 ]; then
     exit 0
   fi
 done
