@@ -128,6 +128,13 @@ Configuration Options
   * Default: [application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json]
   * Importance: high
 
+``zookeeper.set.acl``
+  Whether or not to set an ACL in ZooKeeper when znodes are written and ZooKeeper SASL authentication is configured. IMPORTANT: if set to `true`, the ZooKeeper SASL principal must be the same as the Kafka brokers.
+
+  * Type: boolean
+  * Default: false
+  * Importance: high
+
 ``kafkastore.init.timeout.ms``
   The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
 

@@ -81,6 +81,8 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>avro.compatibility.level</code>
    */
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
+
+  public static final String ZOOKEEPER_SET_ACL_CONFIG = "zookeeper.set.acl";
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
   public static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG =
@@ -139,6 +141,9 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String HOST_DOC =
       "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
+  protected static final String ZOOKEEPER_SET_ACL_DOC =
+      "Whether or not to set an ACL in ZooKeeper when znodes are written and ZooKeeper SASL authentication is "
+      + "configured. IMPORTANT: if set to `true`, the SASL principal must be the same as the Kafka brokers.";
   protected static final String COMPATIBILITY_DOC =
       "The Avro compatibility type. Valid values are: "
       + "none (new schema can be any valid Avro schema), "
@@ -179,6 +184,7 @@ public class SchemaRegistryConfig extends RestConfig {
       "A list of cipher suites used for SSL.";
   protected static final String KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC =
       "The endpoint identification algorithm to validate the server hostname using the server certificate.";
+  private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
@@ -218,6 +224,8 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.HIGH, HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
                 ConfigDef.Importance.HIGH, COMPATIBILITY_DOC)
+        .define(ZOOKEEPER_SET_ACL_CONFIG, ConfigDef.Type.BOOLEAN, ZOOKEEPER_SET_ACL_DEFAULT,
+                ConfigDef.Importance.HIGH, ZOOKEEPER_SET_ACL_DOC)
         .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY, 
                 ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC)
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,

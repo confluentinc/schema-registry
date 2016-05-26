@@ -62,8 +62,7 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
       throw new RuntimeException(e);
     }
 
-    props.setProperty("auto.create.topics.enable", "true");
-    props.setProperty("num.partitions", "1");
+    injectProperties(props);
     if (requireSSLClientAuth()) {
       props.setProperty("ssl.client.auth", "required");
     }
