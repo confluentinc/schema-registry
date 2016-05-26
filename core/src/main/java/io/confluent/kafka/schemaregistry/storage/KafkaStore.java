@@ -25,7 +25,9 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.JaasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,17 +103,17 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.localStore = localStore;
     this.noopKey = noopKey;
 
+    this.config = config;
+
     int zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
     this.zkUtils = ZkUtils.apply(
         kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled());
+        JaasUtils.isZkSecurityEnabled() && this.config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG));
     this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
     this.bootstrapBrokers = KafkaStore.getBrokerEndpoints(
             JavaConversions.seqAsJavaList(this.brokerSeq));
-
-    this.config = config;
   }
 
   @Override
@@ -134,7 +136,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
 
+    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+            this.config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
     addSslConfigsToClientProperties(this.config, props);
+    addSaslConfigsToClientProperties(this.config, props);
 
     producer = new KafkaProducer<byte[],byte[]>(props);
 
@@ -160,10 +165,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   public static void addSslConfigsToClientProperties(SchemaRegistryConfig config, Properties props) {
-    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
     if (config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
-            SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL)) {
+            SecurityProtocol.SSL.toString()) ||
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
+                    SecurityProtocol.SASL_SSL.toString())) {
       props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
               config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG));
       props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
@@ -192,6 +197,26 @@ public class KafkaStore<K, V> implements Store<K, V> {
               config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_CIPHER_SUITES_CONFIG), props);
       putIfNotEmptyString(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
               config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG), props);
+    }
+  }
+
+  public static void addSaslConfigsToClientProperties(SchemaRegistryConfig config, Properties props) {
+    if (config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
+            SecurityProtocol.SASL_PLAINTEXT.toString()) ||
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
+                    SecurityProtocol.SASL_SSL.toString())) {
+      putIfNotEmptyString(SaslConfigs.SASL_KERBEROS_SERVICE_NAME,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_CONFIG), props);
+      props.put(SaslConfigs.SASL_MECHANISM,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SASL_MECHANISM_CONFIG));
+      props.put(SaslConfigs.SASL_KERBEROS_KINIT_CMD,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_KINIT_CMD_CONFIG));
+      props.put(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN,
+              config.getLong(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG));
+      props.put(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER,
+              config.getDouble(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG));
+      props.put(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR,
+              config.getDouble(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG));
     }
   }
 
@@ -238,8 +263,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
       for(EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
         String connectionString = ep.connectionString();
 
-        if (connectionString.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL + "://")
-            || connectionString.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT + "://")) {
+        if (connectionString.startsWith(SecurityProtocol.PLAINTEXT.toString() + "://")
+            || connectionString.startsWith(SecurityProtocol.SSL.toString() + "://")
+            || connectionString.startsWith(SecurityProtocol.SASL_PLAINTEXT.toString() + "://")
+            || connectionString.startsWith(SecurityProtocol.SASL_SSL.toString() + "://")) {
           if (sb.length() > 0) {
             sb.append(",");
           }

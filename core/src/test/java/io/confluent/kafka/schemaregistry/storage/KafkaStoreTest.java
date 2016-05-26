@@ -285,19 +285,25 @@ public class KafkaStoreTest extends ClusterTestHarness {
   @Test
   public void testGetBrokerEndpointsMixed() throws IOException {
     List<Broker> brokersList = new ArrayList<Broker>(3);
-    brokersList.add(new Broker(0, "localhost", TestUtils.RandomPort(), SecurityProtocol.PLAINTEXT));
+    brokersList.add(new Broker(0, "localhost0", TestUtils.RandomPort(), SecurityProtocol.PLAINTEXT));
     brokersList.add(new Broker(1, "localhost1", TestUtils.RandomPort(), SecurityProtocol.PLAINTEXT));
     brokersList.add(new Broker(2, "localhost2", TestUtils.RandomPort(), SecurityProtocol.SASL_PLAINTEXT));
     brokersList.add(new Broker(3, "localhost3", TestUtils.RandomPort(), SecurityProtocol.SSL));
+    brokersList.add(new Broker(4, "localhost4", TestUtils.RandomPort(), SecurityProtocol.SASL_SSL));
+    brokersList.add(new Broker(5, "localhost5", TestUtils.RandomPort(), SecurityProtocol.TRACE));
 
     String endpointsString = KafkaStore.getBrokerEndpoints(brokersList);
     String[] endpoints = endpointsString.split(",");
     assertEquals("Expected a different number of endpoints.", brokersList.size() - 1, endpoints.length);
     for (String endpoint : endpoints) {
-      if (endpoint.contains("localhost3")) {
-        assertTrue("Endpoint must be a SSL endpoint.", endpoint.contains("SSL://"));
-      } else {
+      if (endpoint.contains("localhost0") || endpoint.contains("localhost1")) {
         assertTrue("Endpoint must be a PLAINTEXT endpoint.", endpoint.contains("PLAINTEXT://"));
+      } else if (endpoint.contains("localhost2")) {
+        assertTrue("Endpoint must be a SASL_PLAINTEXT endpoint.", endpoint.contains("SASL_PLAINTEXT://"));
+      } else if (endpoint.contains("localhost3")) {
+        assertTrue("Endpoint must be a SSL endpoint.", endpoint.contains("SSL://"));
+      } else if (endpoint.contains("localhost4")) {
+        assertTrue("Endpoint must be a SASL_SSL endpoint.", endpoint.contains("SASL_SSL://"));
       }
     }
   }
