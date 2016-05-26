@@ -53,6 +53,7 @@ import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import kafka.utils.ZkUtils;
+import org.apache.kafka.common.config.ConfigException;
 import scala.Tuple2;
 
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
@@ -106,6 +107,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private ZookeeperMasterElector masterElector = null;
   private Metrics metrics;
   private Sensor masterNodeSensor;
+  private boolean zkAclsEnabled;
 
   // Hand out this id during the next schema registration. Indexed from 1.
   private int nextAvailableSchemaId;
@@ -161,6 +163,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                            + " node where all register schema and config update requests are "
                            + "served.");
     this.masterNodeSensor.add(m, new Gauge());
+    this.zkAclsEnabled = checkZkAclConfig(config);
+  }
+
+  /**
+   * Checks if the user has configured ZooKeeper ACLs or not. Throws an exception if the ZooKeeper client is set
+   * to create znodes with an ACL, yet the JAAS config is not present. Otherwise, returns whether or not the user
+   * has enabled ZooKeeper ACLs.
+   */
+  public static boolean checkZkAclConfig(SchemaRegistryConfig config) {
+    if (config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils.isZkSecurityEnabled()) {
+      throw new ConfigException(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG + " is set to true but ZooKeeper's " +
+              "JAAS SASL configuration is not configured.");
+    }
+    return config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG);
   }
 
   /**
@@ -213,8 +229,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
     ZkUtils zkUtilsForNamespaceCreation = ZkUtils.apply(
         zkConnForNamespaceCreation,
-        zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled());
+        zkSessionTimeoutMs, zkSessionTimeoutMs, zkAclsEnabled);
     // create the zookeeper namespace using cluster.name if it doesn't already exist
     zkUtilsForNamespaceCreation.makeSurePersistentPathExists(
         schemaRegistryNamespace,
@@ -223,8 +238,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
              zkConnForNamespaceCreation + schemaRegistryNamespace);
     zkUtilsForNamespaceCreation.close();
     this.zkUtils = ZkUtils.apply(
-        schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled());
+        schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs, zkAclsEnabled);
   }
   
   public boolean isMaster() {

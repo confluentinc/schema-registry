@@ -24,9 +24,9 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.rest.RestConfigException;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 
 import static org.junit.Assert.fail;
 
@@ -53,17 +53,34 @@ public class StoreUtils {
   }
 
   /**
+   * Get a new instance of a Kafka and ZooKeeper SASL KafkaStore and initialize it.
+   *
+   * Because all SASL tests share the same KDC and JAAS file, when testing Kafka
+   * or ZooKeeper SASL individually, the other must have SASL enabled.
+   */
+  public static KafkaStore<String, String> createAndInitSASLStoreInstance(
+          String zkConnect, ZkClient zkClient) {
+    Properties props = new Properties();
+
+    props.put(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG,
+            SecurityProtocol.SASL_PLAINTEXT.toString());
+
+    props.put(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG, false);
+
+    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    return createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, props);
+  }
+
+  /**
    * Get a new instance of an SSL KafkaStore and initialize it.
    */
   public static KafkaStore<String, String> createAndInitSSLKafkaStoreInstance(
           String zkConnect, ZkClient zkClient, Map<String, Object> sslConfigs,
           boolean requireSSLClientAuth) {
     Properties props = new Properties();
-    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-            SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL);
 
     props.put(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG,
-            SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL);
+            SecurityProtocol.SSL.toString());
     props.put(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG,
             sslConfigs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
     props.put(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG,

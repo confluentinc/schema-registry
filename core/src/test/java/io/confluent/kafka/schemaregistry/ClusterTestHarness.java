@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry;
 import kafka.utils.CoreUtils;
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.security.JaasUtils;
 import org.junit.After;
 import org.junit.Before;
 
@@ -50,7 +49,7 @@ public abstract class ClusterTestHarness {
 
   public static final int DEFAULT_NUM_BROKERS = 1;
   public static final String KAFKASTORE_TOPIC = SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC;
-  protected static final Option<Properties> SASL_PROPERTIES = Option$.MODULE$.<Properties>empty();
+  protected static final Option<Properties> EMPTY_SASL_PROPERTIES = Option$.MODULE$.<Properties>empty();
 
   /**
    * Choose a number of random available ports
@@ -87,7 +86,8 @@ public abstract class ClusterTestHarness {
   protected String zkConnect;
   protected ZkClient zkClient;
   protected ZkUtils zkUtils;
-  protected int zkConnectionTimeout = 6000;
+  protected int zkConnectionTimeout = 30000; // a larger connection timeout is required for SASL tests
+                                             // because SASL connections tend to take longer.
   protected int zkSessionTimeout = 6000;
 
   // Kafka Config
@@ -115,13 +115,21 @@ public abstract class ClusterTestHarness {
     this.compatibilityType = compatibilityType;
   }
 
+  private boolean setZkAcls() {
+    return getSecurityProtocol() == SecurityProtocol.SASL_PLAINTEXT ||
+           getSecurityProtocol() == SecurityProtocol.SASL_SSL;
+  }
+
   @Before
   public void setUp() throws Exception {
     zookeeper = new EmbeddedZookeeper();
-    zkConnect = String.format("127.0.0.1:%d", zookeeper.port());
+    zkConnect = String.format("localhost:%d", zookeeper.port());
     zkUtils = ZkUtils.apply(
         zkConnect, zkSessionTimeout, zkConnectionTimeout,
-        JaasUtils.isZkSecurityEnabled());
+        setZkAcls()); // true or false doesn't matter because the schema registry Kafka principal is the same as the
+                // Kafka broker principal, so ACLs won't make any difference. The principals are the same because
+                // ZooKeeper, Kafka, and the Schema Registry are run in the same process during testing and hence share
+                // the same JAAS configuration file. Read comments in ASLClusterTestHarness.java for more details.
     zkClient = zkUtils.zkClient();
 
     configs = new Vector<>();
@@ -144,19 +152,19 @@ public abstract class ClusterTestHarness {
     }
   }
 
+  protected void injectProperties(Properties props) {
+    props.setProperty("auto.create.topics.enable", "true");
+    props.setProperty("num.partitions", "1");
+  }
+
   protected KafkaConfig getKafkaConfig(int brokerId) {
     final Option<java.io.File> noFile = scala.Option.apply(null);
     final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
     Properties props = TestUtils.createBrokerConfig(
             brokerId, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
-            noFile, SASL_PROPERTIES, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
+            noFile, EMPTY_SASL_PROPERTIES, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
             TestUtils.RandomPort(), Option.<String>empty());
-    props.setProperty("auto.create.topics.enable", "true");
-    props.setProperty("num.partitions", "1");
-
-    // We *must* override this to use the ZooKeeper port chosen in this test harness, instead of the
-    // port chosen by TestUtils.createBrokerConfig().
-    props.setProperty("zookeeper.connect", this.zkConnect);
+    injectProperties(props);
     return KafkaConfig.fromProps(props);
   }
 
