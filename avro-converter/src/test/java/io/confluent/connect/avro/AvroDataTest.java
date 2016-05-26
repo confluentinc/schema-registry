@@ -39,6 +39,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
@@ -149,6 +150,21 @@ public class AvroDataTest {
 
     checkNonRecordConversionNull(Schema.OPTIONAL_STRING_SCHEMA);
   }
+
+    @Test
+    public void testFromConnectOptionalArray() {
+        org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
+                .unionOf().nullType().and()
+                .array().items()
+                .record("Exception")
+                .namespace("com.namespace")
+                .fields()
+                .requiredString("name")
+                .requiredString("stack").endRecord().endUnion();
+        Schema schema = avroData.toConnectSchema(avroSchema);
+        Object converted = avroData.fromConnectData(schema, new ArrayList());
+        assertNull(converted);
+    }
 
   @Test
   public void testFromConnectComplex() {
@@ -564,6 +580,8 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, Arrays.asList((byte) 12, (byte) 13)),
                  avroData.toConnectData(avroSchema, Arrays.asList(12, 13)));
   }
+
+
 
   @Test
   public void testToConnectMapStringKeys() {
