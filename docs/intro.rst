@@ -92,8 +92,9 @@ Installation
 Deployment
 ----------
 
-Starting the Schema Registry service is simple once its dependencies are
-running:
+Starting the Schema Registry service is simple once its dependencies are running. 
+
+Note: The Schema Registry version must not exceed the CP/Kafka version. That's to say Schema Registry 3.0 will not be compatible with Kafka 0.9.x. See the Requirements section below for version compatibility.
 
 .. sourcecode:: bash
 
