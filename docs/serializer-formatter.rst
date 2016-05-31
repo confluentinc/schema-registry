@@ -103,7 +103,7 @@ not well formed.
     KafkaAvroDecoder keyDecoder = new KafkaAvroDecoder(vProps);
     KafkaAvroDecoder valueDecoder = new KafkaAvroDecoder(vProps);
 
-    ConsumerConnector consumer = kafka.consumer.Consumer.createJavaConsumerConnector(new ConsumerConfig(vProps));
+    ConsumerConnector consumer = kafka.consumer.Consumer.createJavaConsumerConnector(new ConsumerConfig(props));
 
     Map<String, List<KafkaStream<Object, Object>>> consumerMap = consumer.createMessageStreams(
         topicCountMap, keyDecoder, valueDecoder);
