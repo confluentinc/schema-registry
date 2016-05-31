@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry;
 
 import kafka.security.minikdc.MiniKdc;
-import kafka.server.KafkaConfig;
 import kafka.utils.JaasTestUtils;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -30,7 +29,6 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Properties;
-import java.util.Scanner;
 
 public class ZkSASLClusterTestHarness extends ClusterTestHarness {
   public static final String JAAS_CONF = "java.security.auth.login.config";
@@ -86,15 +84,6 @@ public class ZkSASLClusterTestHarness extends ClusterTestHarness {
   protected void injectProperties(Properties props) {
     props.setProperty("zookeeper.connection.timeout.ms", "30000");
     super.injectProperties(props);
-  }
-
-  @Override
-  protected KafkaConfig getKafkaConfig(int brokerId) {
-    KafkaConfig conf = super.getKafkaConfig(brokerId);
-    System.out.println("--------------------");
-    System.out.println(conf.zkEnableSecureAcls());
-    System.out.println("---------------");
-    return conf;
   }
 
   private static File createPrincipal(String pathPrefix, String principalNoRealm) throws Exception {
