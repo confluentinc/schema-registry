@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry;
 import kafka.utils.CoreUtils;
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.security.JaasUtils;
 import org.junit.After;
 import org.junit.Before;
 
@@ -87,7 +86,7 @@ public abstract class ClusterTestHarness {
   protected String zkConnect;
   protected ZkClient zkClient;
   protected ZkUtils zkUtils;
-  protected int zkConnectionTimeout = 6000;
+  protected int zkConnectionTimeout = 30000;
   protected int zkSessionTimeout = 6000;
 
   // Kafka Config
@@ -118,10 +117,12 @@ public abstract class ClusterTestHarness {
   @Before
   public void setUp() throws Exception {
     zookeeper = new EmbeddedZookeeper();
-    zkConnect = String.format("127.0.0.1:%d", zookeeper.port());
+    zkConnect = String.format("localhost:%d", zookeeper.port());
     zkUtils = ZkUtils.apply(
         zkConnect, zkSessionTimeout, zkConnectionTimeout,
-        JaasUtils.isZkSecurityEnabled());
+        false); // true of false doesn't matter because schema registry principal is the same as the
+                // kafka principal, so ACLs won't make any difference. Read comments in
+                // ZkSASLClusterTestHarness.java for more details.
     zkClient = zkUtils.zkClient();
 
     configs = new Vector<>();
@@ -144,6 +145,11 @@ public abstract class ClusterTestHarness {
     }
   }
 
+  protected void injectProperties(Properties props) {
+    props.setProperty("auto.create.topics.enable", "true");
+    props.setProperty("num.partitions", "1");
+  }
+
   protected KafkaConfig getKafkaConfig(int brokerId) {
     final Option<java.io.File> noFile = scala.Option.apply(null);
     final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
@@ -151,12 +157,7 @@ public abstract class ClusterTestHarness {
             brokerId, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
             noFile, SASL_PROPERTIES, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
             TestUtils.RandomPort(), Option.<String>empty());
-    props.setProperty("auto.create.topics.enable", "true");
-    props.setProperty("num.partitions", "1");
-
-    // We *must* override this to use the ZooKeeper port chosen in this test harness, instead of the
-    // port chosen by TestUtils.createBrokerConfig().
-    props.setProperty("zookeeper.connect", this.zkConnect);
+    injectProperties(props);
     return KafkaConfig.fromProps(props);
   }
 

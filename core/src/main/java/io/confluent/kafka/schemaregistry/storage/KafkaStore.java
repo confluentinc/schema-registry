@@ -101,17 +101,17 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.localStore = localStore;
     this.noopKey = noopKey;
 
+    this.config = config;
+
     int zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
     this.zkUtils = ZkUtils.apply(
         kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled());
+        JaasUtils.isZkSecurityEnabled() && this.config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG));
     this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
     this.bootstrapBrokers = KafkaStore.getBrokerEndpoints(
             JavaConversions.seqAsJavaList(this.brokerSeq));
-
-    this.config = config;
   }
 
   @Override

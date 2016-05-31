@@ -53,6 +53,18 @@ public class StoreUtils {
   }
 
   /**
+   * Get a new instance of a ZooKeeper SASL KafkaStore and initialize it.
+   */
+  public static KafkaStore<String, String> createAndInitZKSASLKafkaStoreInstance(
+          String zkConnect, ZkClient zkClient, boolean zkSetAcl) {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG, zkSetAcl);
+
+    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    return createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, props);
+  }
+
+  /**
    * Get a new instance of an SSL KafkaStore and initialize it.
    */
   public static KafkaStore<String, String> createAndInitSSLKafkaStoreInstance(
