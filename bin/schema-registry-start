@@ -14,4 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+if [ $# -lt 1 ];
+then
+	echo "USAGE: $0 [-daemon] schema-registry.properties"
+	exit 1
+fi
+
 exec $(dirname $0)/schema-registry-run-class io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain "$@"
