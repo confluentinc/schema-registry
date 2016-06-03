@@ -28,7 +28,7 @@ done
 
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
-    LOG_DIR="$base_dir/logs"
+    LOG_DIR="/tmp/schema-registry-logs"
 fi
   
 # create logs directory
@@ -49,7 +49,7 @@ if [ "x$SCHEMA_REGISTRY_LOG4J_OPTS" = "x" ]; then
   fi
 fi
 
-SCHEMA_REGISTRY_LOG4J_OPTS="-Dschema-registry.logs.dir=$LOG_DIR $SCHEMA_REGISTRY_LOG4J_OPTS"
+SCHEMA_REGISTRY_LOG4J_OPTS="-Dschema-registry.log.dir=$LOG_DIR $SCHEMA_REGISTRY_LOG4J_OPTS"
 
 # JMX settings
 if [ -z "$SCHEMA_REGISTRY_JMX_OPTS" ]; then
