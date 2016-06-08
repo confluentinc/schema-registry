@@ -166,6 +166,9 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     if (kdcHome != null && !kdcHome.delete()) {
       log.warn("Could not delete the KDC directory.");
     }
+    if (jaasFile != null && !jaasFile.delete()) {
+      log.warn("Could not delete the JAAS file.");
+    }
     destroySaslHelper();
   }
 

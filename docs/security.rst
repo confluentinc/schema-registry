@@ -14,13 +14,13 @@ The Schema Registry uses Kafka to persist schemas, and all Kafka security featur
 
 ZooKeeper
 ~~~~~~~~~
-ZooKeeper SASL authentication is supported.
+The Schema Registry supports both unauthenticated and SASL authentication to Zookeeper.
 
 Setting up ZooKeeper SASL authentication for the Schema Registry is similar to Kafka's setup. Namely,
 create a keytab for the Schema Registry, create a JAAS configuration file, and set the appropriate JAAS Java properties.
 
-In addition to the keytab and JAAS setup, be aware of the `zookeeper.set.acl` setting. This setting, when set to `true`
-, enables ZooKeeper ACLs, which limits access to znodes.
+In addition to the keytab and JAAS setup, be aware of the `zookeeper.set.acl` setting. This setting, when set to `true`,
+enables ZooKeeper ACLs, which limits access to znodes.
 
 Important: if `zookeeper.set.acl` is set to `true`, the Schema Registry's service name must be the same as Kafka's, which
 is most likely `kafka`. The Schema Registry's principal must have the correct service name, too. Otherwise, the Schema

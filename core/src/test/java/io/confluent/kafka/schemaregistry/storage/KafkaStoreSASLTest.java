@@ -32,37 +32,26 @@ public class KafkaStoreSASLTest extends SASLClusterTestHarness {
     kafkaStore.close();
   }
 
-  @Test
-  public void testDoubleInitialization() {
+  @Test(expected = StoreInitializationException.class)
+  public void testDoubleInitialization() throws StoreInitializationException {
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect,
             zkClient);
     try {
       kafkaStore.init();
-      fail("Kafka store repeated initialization should fail");
-    } catch (StoreInitializationException e) {
-      // this is expected
+    } finally {
+      kafkaStore.close();
     }
-    kafkaStore.close();
   }
 
   @Test
-  public void testSimplePut() throws InterruptedException {
+  public void testSimplePut() throws Exception {
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect,
             zkClient);
     String key = "Kafka";
     String value = "Rocks";
     try {
-      try {
-        kafkaStore.put(key, value);
-      } catch (StoreException e) {
-        throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
-      }
-      String retrievedValue = null;
-      try {
-        retrievedValue = kafkaStore.get(key);
-      } catch (StoreException e) {
-        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
-      }
+      kafkaStore.put(key, value);
+      String retrievedValue = kafkaStore.get(key);
       assertEquals("Retrieved value should match entered value", value, retrievedValue);
     } finally {
       kafkaStore.close();
