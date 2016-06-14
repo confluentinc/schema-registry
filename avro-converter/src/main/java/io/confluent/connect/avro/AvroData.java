@@ -743,10 +743,6 @@ public class AvroData {
    * Convert the given object, in Avro format, into an Connect data object.
    */
   public SchemaAndValue toConnectData(org.apache.avro.Schema avroSchema, Object value) {
-    if (value == null) {
-      return null;
-    }
-
     Schema schema = (avroSchema.equals(ANYTHING_SCHEMA)) ? null : toConnectSchema(avroSchema);
     return new SchemaAndValue(schema, toConnectData(schema, value));
   }
@@ -818,145 +814,151 @@ public class AvroData {
       }
 
       Object converted = null;
-      switch (schema.type()) {
-        // Pass through types
-        case INT32: {
-          Integer intValue = (Integer) value; // Validate type
-          converted = value;
-          break;
-        }
-        case INT64: {
-          Long longValue = (Long) value; // Validate type
-          converted = value;
-          break;
-        }
-        case FLOAT32: {
-          Float floatValue = (Float) value; // Validate type
-          converted = value;
-          break;
-        }
-        case FLOAT64: {
-          Double doubleValue = (Double) value; // Validate type
-          converted = value;
-          break;
-        }
-        case BOOLEAN: {
-          Boolean boolValue = (Boolean) value; // Validate type
-          converted = value;
-          break;
-        }
+      // @TODO: should this be handling when the schema isn't optional but value is null?
+      if (null == value && schema.isOptional()) {
+	  converted = null;
+      }
+      else {
+	  switch (schema.type()) {
+	      // Pass through types
+	  case INT32: {
+	      Integer intValue = (Integer) value; // Validate type
+	      converted = value;
+	      break;
+	  }
+	  case INT64: {
+	      Long longValue = (Long) value; // Validate type
+	      converted = value;
+	      break;
+	  }
+	  case FLOAT32: {
+	      Float floatValue = (Float) value; // Validate type
+	      converted = value;
+	      break;
+	  }
+	  case FLOAT64: {
+	      Double doubleValue = (Double) value; // Validate type
+	      converted = value;
+	      break;
+	  }
+	  case BOOLEAN: {
+	      Boolean boolValue = (Boolean) value; // Validate type
+	      converted = value;
+	      break;
+	  }
 
-        case INT8:
-          // Encoded as an Integer
-          converted = value == null ? null : ((Integer) value).byteValue();
-          break;
-        case INT16:
-          // Encoded as an Integer
-          converted = value == null ? null : ((Integer) value).shortValue();
-          break;
+	  case INT8:
+	      // Encoded as an Integer
+	      converted = ((Integer) value).byteValue();
+	      break;
+	  case INT16:
+	      // Encoded as an Integer
+	      converted = ((Integer) value).shortValue();
+	      break;
 
-        case STRING:
-          if (value instanceof String) {
-            converted = value;
-          } else if (value instanceof CharSequence ||
-                     value instanceof GenericEnumSymbol ||
-                     value instanceof Enum) {
-            converted = value.toString();
-          } else {
-            throw new DataException("Invalid class for string type, expecting String or "
-                                    + "CharSequence but found " + value.getClass());
-          }
-          break;
+	  case STRING:
+	      if (value instanceof String) {
+		  converted = value;
+	      } else if (value instanceof CharSequence ||
+			 value instanceof GenericEnumSymbol ||
+			 value instanceof Enum) {
+		  converted = value.toString();
+	      } else {
+		  throw new DataException("Invalid class for string type, expecting String or "
+					  + "CharSequence but found " + value.getClass());
+	      }
+	      break;
 
-        case BYTES:
-          if (value instanceof byte[]) {
-            converted = ByteBuffer.wrap((byte[]) value);
-          } else if (value instanceof ByteBuffer) {
-            converted = value;
-          } else {
-            throw new DataException("Invalid class for bytes type, expecting byte[] or ByteBuffer "
-                                    + "but found " + value.getClass());
-          }
-          break;
+	  case BYTES:
+	      if (value instanceof byte[]) {
+		  converted = ByteBuffer.wrap((byte[]) value);
+	      } else if (value instanceof ByteBuffer) {
+		  converted = value;
+	      } else {
+		  throw new DataException("Invalid class for bytes type, expecting byte[] or ByteBuffer "
+					  + "but found " + value.getClass());
+	      }
+	      break;
 
-        case ARRAY: {
-          Schema valueSchema = schema.valueSchema();
-          Collection<Object> original = (Collection<Object>) value;
-          List<Object> result = new ArrayList<>(original.size());
-          for (Object elem : original) {
-            result.add(toConnectData(valueSchema, elem));
-          }
-          converted = result;
-          break;
-        }
+	  case ARRAY: {
+	      Schema valueSchema = schema.valueSchema();
+	      Collection<Object> original = (Collection<Object>) value;
+	      List<Object> result = new ArrayList<>(original.size());
+	      for (Object elem : original) {
+		  result.add(toConnectData(valueSchema, elem));
+	      }
+	      converted = result;
+	      break;
+	  }
 
-        case MAP: {
-          Schema keySchema = schema.keySchema();
-          Schema valueSchema = schema.valueSchema();
-          if (keySchema != null && keySchema.type() == Schema.Type.STRING && !keySchema
-              .isOptional()) {
-            // String keys
-            Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
-            Map<CharSequence, Object> result = new HashMap<>(original.size());
-            for (Map.Entry<CharSequence, Object> entry : original.entrySet()) {
-              result.put(entry.getKey().toString(),
-                         toConnectData(valueSchema, entry.getValue()));
-            }
-            converted = result;
-          } else {
-            // Arbitrary keys
-            List<IndexedRecord> original = (List<IndexedRecord>) value;
-            Map<Object, Object> result = new HashMap<>(original.size());
-            for (IndexedRecord entry : original) {
-              int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
-              int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
-              Object convertedKey = toConnectData(keySchema, entry.get(avroKeyFieldIndex));
-              Object convertedValue = toConnectData(valueSchema, entry.get(avroValueFieldIndex));
-              result.put(convertedKey, convertedValue);
-            }
-            converted = result;
-          }
-          break;
-        }
+	  case MAP: {
+	      Schema keySchema = schema.keySchema();
+	      Schema valueSchema = schema.valueSchema();
+	      if (keySchema != null && keySchema.type() == Schema.Type.STRING && !keySchema
+		  .isOptional()) {
+		  // String keys
+		  Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
+		  Map<CharSequence, Object> result = new HashMap<>(original.size());
+		  for (Map.Entry<CharSequence, Object> entry : original.entrySet()) {
+		      result.put(entry.getKey().toString(),
+				 toConnectData(valueSchema, entry.getValue()));
+		  }
+		  converted = result;
+	      } else {
+		  // Arbitrary keys
+		  List<IndexedRecord> original = (List<IndexedRecord>) value;
+		  Map<Object, Object> result = new HashMap<>(original.size());
+		  for (IndexedRecord entry : original) {
+		      int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
+		      int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
+		      Object convertedKey = toConnectData(keySchema, entry.get(avroKeyFieldIndex));
+		      Object convertedValue = toConnectData(valueSchema, entry.get(avroValueFieldIndex));
+		      result.put(convertedKey, convertedValue);
+		  }
+		  converted = result;
+	      }
+	      break;
+	  }
 
-        case STRUCT: {
-          // Special case support for union types
-          if (schema.name() != null && schema.name().equals(AVRO_TYPE_UNION)) {
-            Schema valueRecordSchema = null;
-            if (value instanceof IndexedRecord) {
-              IndexedRecord valueRecord = ((IndexedRecord) value);
-              valueRecordSchema = toConnectSchema(valueRecord.getSchema(), true, null, null);
-            }
-            for (Field field : schema.fields()) {
-              Schema fieldSchema = field.schema();
+	  case STRUCT: {
+	      // Special case support for union types
+	      if (schema.name() != null && schema.name().equals(AVRO_TYPE_UNION)) {
+		  Schema valueRecordSchema = null;
+		  if (value instanceof IndexedRecord) {
+		      IndexedRecord valueRecord = ((IndexedRecord) value);
+		      valueRecordSchema = toConnectSchema(valueRecord.getSchema(), true, null, null);
+		  }
+		  for (Field field : schema.fields()) {
+		      Schema fieldSchema = field.schema();
 
-              if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value) ||
-                  (valueRecordSchema != null && valueRecordSchema.equals(fieldSchema))) {
-                converted = new Struct(schema).put(unionMemberFieldName(fieldSchema),
-                                                   toConnectData(fieldSchema, value));
-                break;
-              }
-            }
-            if (converted == null) {
-              throw new DataException(
-                  "Did not find matching union field for data: " + value.toString());
-            }
-          } else {
-            IndexedRecord original = (IndexedRecord) value;
-            Struct result = new Struct(schema);
-            for (Field field : schema.fields()) {
-              int avroFieldIndex = original.getSchema().getField(field.name()).pos();
-              Object convertedFieldValue
-                  = toConnectData(field.schema(), original.get(avroFieldIndex));
-              result.put(field, convertedFieldValue);
-            }
-            converted = result;
-          }
-          break;
-        }
+		      if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value) ||
+			  (valueRecordSchema != null && valueRecordSchema.equals(fieldSchema))) {
+			  converted = new Struct(schema).put(unionMemberFieldName(fieldSchema),
+							     toConnectData(fieldSchema, value));
+			  break;
+		      }
+		  }
+		  if (converted == null) {
+		      throw new DataException(
+					      "Did not find matching union field for data: " + value.toString());
+		  }
+	      } else {
+		  IndexedRecord original = (IndexedRecord) value;
+		  Struct result = new Struct(schema);
+		  for (Field field : schema.fields()) {
+		      int avroFieldIndex = original.getSchema().getField(field.name()).pos();
+		      Object convertedFieldValue
+			  = toConnectData(field.schema(), original.get(avroFieldIndex));
+		      result.put(field, convertedFieldValue);
+		  }
+		  converted = result;
+	      }
+	      break;
+	  }
 
-        default:
-          throw new DataException("Unknown Connect schema type: " + schema.type());
+	  default:
+	      throw new DataException("Unknown Connect schema type: " + schema.type());
+	  }
       }
 
       if (schema != null && schema.name() != null) {

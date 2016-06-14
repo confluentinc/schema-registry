@@ -985,6 +985,17 @@ public class AvroDataTest {
     assertEquals(2, cache.size());
   }
 
+  @Test
+  public void testOptionalUnionNullString() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
+	.record("Record").fields()
+	.name("optionalString").type()
+	.nullable().stringType().noDefault()
+	.endRecord();
+    avroData.toConnectData(avroSchema, new GenericRecordBuilder(avroSchema)
+			   .set("optionalString", null)
+			   .build());
+  }
 
   private NonRecordContainer checkNonRecordConversion(
       org.apache.avro.Schema expectedSchema, Object expected,
