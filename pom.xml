@@ -7,7 +7,7 @@
     <groupId>io.confluent</groupId>
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
-    <version>3.0.0</version>
+    <version>3.0.1-SNAPSHOT</version>
     <name>kafka-schema-registry-parent</name>
     <organization>
         <name>Confluent, Inc.</name>
@@ -46,11 +46,11 @@
 
     <properties>
         <jersey.version>2.19</jersey.version>
-        <confluent-common.version>3.0.0</confluent-common.version>
+        <confluent-common.version>3.0.1-SNAPSHOT</confluent-common.version>
         <kafka.version>0.10.0.0-cp1</kafka.version>
         <kafka.scala.version>2.11</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
-        <restutils.version>3.0.0</restutils.version>
+        <restutils.version>3.0.1-SNAPSHOT</restutils.version>
         <avro.version>1.7.7</avro.version>
         <jackson.version>2.5.4</jackson.version>
         <junit.version>4.12</junit.version>
