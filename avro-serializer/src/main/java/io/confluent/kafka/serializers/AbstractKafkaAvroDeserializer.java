@@ -29,11 +29,9 @@ import org.codehaus.jackson.node.JsonNodeFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import kafka.utils.VerifiableProperties;
 
@@ -45,23 +43,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   protected boolean useSpecificAvroReader = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<String, Schema>();
 
-  protected void configure(KafkaAvroDeserializerConfig config) {
-    try {
-      List<String> urls = config.getList(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG);
-      int  maxSchemaObject = config
-          .getInt(KafkaAvroDeserializerConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
-      schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject);
-      configureNonClientProperties(config);
-    } catch (io.confluent.common.config.ConfigException e) {
-      throw new ConfigException(e.getMessage());
-    }
-  }
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
    * Useful for testing, where a mock client is injected.
    */
-  protected void configureNonClientProperties(KafkaAvroDeserializerConfig config) {
+  protected void configure(KafkaAvroDeserializerConfig config) {
+    configureClientProperties(config);
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
   }
@@ -180,13 +168,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       } else {
         return result;
       }
-    } catch (IOException e) {
+    } catch (IOException | RuntimeException e) {
+      // avro deserialization may throw AvroRuntimeException, NullPointerException, etc
       throw new SerializationException("Error deserializing Avro message for id " + id, e);
     } catch (RestClientException e) {
       throw new SerializationException("Error retrieving Avro schema for id " + id, e);
-    } catch (RuntimeException e) {
-      // avro deserialization may throw AvroRuntimeException, NullPointerException, etc
-      throw new SerializationException("Error deserializing Avro message for id " + id, e);
     }
   }
 
@@ -217,6 +203,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     }
   }
 
+  @SuppressWarnings("unchecked")
   private Schema getReaderSchema(Schema writerSchema) {
     Schema readerSchema = readerSchemaCache.get(writerSchema.getFullName());
     if (readerSchema == null) {

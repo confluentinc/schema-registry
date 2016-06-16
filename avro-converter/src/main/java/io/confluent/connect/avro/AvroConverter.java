@@ -75,7 +75,7 @@ public class AvroConverter implements Converter {
     }
 
     int schemaCacheSize = SCHEMAS_CACHE_SIZE_DEFAULT;
-    Object schemaCacheSizeObj = configs.containsKey(SCHEMAS_CACHE_SIZE_CONFIG);
+    Object schemaCacheSizeObj = configs.get(SCHEMAS_CACHE_SIZE_CONFIG);
     if (schemaCacheSizeObj != null && schemaCacheSizeObj instanceof Integer)
       schemaCacheSize = (Integer) schemaCacheSizeObj;
 

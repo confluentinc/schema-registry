@@ -23,6 +23,7 @@ import org.junit.After;
 import org.junit.Before;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.util.List;
 import java.util.Properties;
@@ -34,8 +35,6 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.SystemTime$;
 import kafka.utils.TestUtils;
-import kafka.utils.TestUtils$;
-import kafka.utils.ZKStringSerializer$;
 import kafka.utils.ZkUtils;
 import kafka.zk.EmbeddedZookeeper;
 import scala.Option;
@@ -51,6 +50,7 @@ public abstract class ClusterTestHarness {
 
   public static final int DEFAULT_NUM_BROKERS = 1;
   public static final String KAFKASTORE_TOPIC = SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC;
+  protected static final Option<Properties> SASL_PROPERTIES = Option$.MODULE$.<Properties>empty();
 
   /**
    * Choose a number of random available ports
@@ -60,7 +60,7 @@ public abstract class ClusterTestHarness {
       ServerSocket[] sockets = new ServerSocket[count];
       int[] ports = new int[count];
       for (int i = 0; i < count; i++) {
-        sockets[i] = new ServerSocket(0);
+        sockets[i] = new ServerSocket(0, 0, InetAddress.getByName("0.0.0.0"));
         ports[i] = sockets[i].getLocalPort();
       }
       for (int i = 0; i < count; i++)
@@ -127,18 +127,7 @@ public abstract class ClusterTestHarness {
     configs = new Vector<>();
     servers = new Vector<>();
     for (int i = 0; i < numBrokers; i++) {
-      final Option<java.io.File> noFile = scala.Option.apply(null);
-      final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
-      Properties props = TestUtils.createBrokerConfig(
-          i, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
-          noFile, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
-          TestUtils.RandomPort(), Option.<String>empty());
-      props.setProperty("auto.create.topics.enable", "true");
-      props.setProperty("num.partitions", "1");
-      // We *must* override this to use the port we allocated (Kafka currently allocates one port
-      // that it always uses for ZK
-      props.setProperty("zookeeper.connect", this.zkConnect);
-      KafkaConfig config = KafkaConfig.fromProps(props);
+      KafkaConfig config = getKafkaConfig(i);
       configs.add(config);
 
       KafkaServer server = TestUtils.createServer(config, SystemTime$.MODULE$);
@@ -147,12 +136,32 @@ public abstract class ClusterTestHarness {
 
     brokerList =
         TestUtils.getBrokerListStrFromServers(JavaConversions.asScalaBuffer(servers),
-                                              SecurityProtocol.PLAINTEXT);
+                                              getSecurityProtocol());
 
     if (setupRestApp) {
       restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType);
       restApp.start();
     }
+  }
+
+  protected KafkaConfig getKafkaConfig(int brokerId) {
+    final Option<java.io.File> noFile = scala.Option.apply(null);
+    final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
+    Properties props = TestUtils.createBrokerConfig(
+            brokerId, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
+            noFile, SASL_PROPERTIES, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
+            TestUtils.RandomPort(), Option.<String>empty());
+    props.setProperty("auto.create.topics.enable", "true");
+    props.setProperty("num.partitions", "1");
+
+    // We *must* override this to use the ZooKeeper port chosen in this test harness, instead of the
+    // port chosen by TestUtils.createBrokerConfig().
+    props.setProperty("zookeeper.connect", this.zkConnect);
+    return KafkaConfig.fromProps(props);
+  }
+
+  protected SecurityProtocol getSecurityProtocol() {
+    return SecurityProtocol.PLAINTEXT;
   }
 
   @After
@@ -168,9 +177,7 @@ public abstract class ClusterTestHarness {
 
       // Remove any persistent data
       for (KafkaServer server : servers) {
-        for (String logDir : JavaConversions.asJavaCollection(server.config().logDirs())) {
-          CoreUtils.rm(logDir);
-        }
+        CoreUtils.delete(server.config().logDirs());
       }
     }
 

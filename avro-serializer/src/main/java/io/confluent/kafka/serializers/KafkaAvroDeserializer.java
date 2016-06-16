@@ -40,7 +40,7 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   public KafkaAvroDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
     schemaRegistry = client;
-    configureNonClientProperties(deserializerConfig(props));
+    configure(deserializerConfig(props));
   }
 
   @Override

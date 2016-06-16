@@ -18,11 +18,14 @@ package io.confluent.kafka.schemaregistry.storage;
 import kafka.admin.RackAwareMode;
 import kafka.cluster.EndPoint;
 import kafka.server.ConfigType;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.security.JaasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,10 +59,6 @@ import scala.collection.Seq;
 public class KafkaStore<K, V> implements Store<K, V> {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStore.class);
-  private static final String CLIENT_ID = "schema-registry";
-  private static final int SOCKET_BUFFER_SIZE = 4096;
-  private static final long LATEST_OFFSET = -1;
-  private static final int CONSUMER_ID = -1;
 
   private final String kafkaClusterZkUrl;
   private final String topic;
@@ -72,6 +71,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final int initTimeout;
   private final int timeout;
   private final Seq<Broker> brokerSeq;
+  private final String bootstrapBrokers;
   private final ZkUtils zkUtils;
   private KafkaProducer<byte[],byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
@@ -79,6 +79,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   // messages with this key
   private final K noopKey;
   private volatile long lastWrittenOffset = -1L;
+  private final SchemaRegistryConfig config;
 
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
@@ -99,20 +100,18 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.serializer = serializer;
     this.localStore = localStore;
     this.noopKey = noopKey;
-    
-    // TODO: Do not use the commit interval until the decision on the embedded store is done
-    int commitInterval = config.getInt(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG);
+
     int zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
     this.zkUtils = ZkUtils.apply(
         kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
         JaasUtils.isZkSecurityEnabled());
-    this.kafkaTopicReader =
-        new KafkaStoreReaderThread<>(zkUtils, kafkaClusterZkUrl, topic, groupId,
-                                         Integer.MIN_VALUE, this.storeUpdateHandler,
-                                         serializer, this.localStore, this.noopKey);
     this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
+    this.bootstrapBrokers = KafkaStore.getBrokerEndpoints(
+            JavaConversions.seqAsJavaList(this.brokerSeq));
+
+    this.config = config;
   }
 
   @Override
@@ -125,18 +124,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     // create the schema topic if needed
     createSchemaTopic();
 
-    // set the producer properties
-    List<Broker> brokers = JavaConversions.seqAsJavaList(brokerSeq);
-    String bootstrapBrokers = "";
-    for (int i = 0; i < brokers.size(); i++) {
-      for(EndPoint ep : JavaConversions.asJavaCollection(brokers.get(i).endPoints().values())) {
-        if (bootstrapBrokers.length() > 0) {
-          bootstrapBrokers += ",";
-        }
-        bootstrapBrokers += ep.connectionString();
-      }
-    }
-    // initialize a Kafka producer client
+    // set the producer properties and initialize a Kafka producer client
     Properties props = new Properties();
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
     props.put(ProducerConfig.ACKS_CONFIG, "-1");
@@ -145,10 +133,18 @@ public class KafkaStore<K, V> implements Store<K, V> {
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
+
+    addSslConfigsToClientProperties(this.config, props);
+
     producer = new KafkaProducer<byte[],byte[]>(props);
 
-    // start the background thread that subscribes to the Kafka topic and applies updates
-    kafkaTopicReader.start();
+    // start the background thread that subscribes to the Kafka topic and applies updates.
+    // the thread must be created after the schema topic has been created.
+    this.kafkaTopicReader =
+            new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
+                    this.storeUpdateHandler, serializer, this.localStore,
+                    this.noopKey, this.config);
+    this.kafkaTopicReader.start();
 
     try {
       waitUntilKafkaReaderReachesLastOffset(initTimeout);
@@ -160,6 +156,51 @@ public class KafkaStore<K, V> implements Store<K, V> {
     if (!isInitialized) {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
+    }
+  }
+
+  public static void addSslConfigsToClientProperties(SchemaRegistryConfig config, Properties props) {
+    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
+    if (config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
+            SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL)) {
+      props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG));
+      props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG));
+      props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG));
+      props.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_CONFIG));
+      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG), props);
+      props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG));
+      props.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_CONFIG));
+      putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENABLED_PROTOCOLS_CONFIG), props);
+      props.put(SslConfigs.SSL_PROTOCOL_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROTOCOL_CONFIG));
+      putIfNotEmptyString(SslConfigs.SSL_PROVIDER_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROVIDER_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_CIPHER_SUITES_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_CIPHER_SUITES_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG), props);
+    }
+  }
+
+  // helper method to only add a property if its not the empty string. This is required
+  // because some Kafka client configs expect a null default value, yet ConfigDef doesn't
+  // support null default values.
+  private static void putIfNotEmptyString(String parameter, String value, Properties props) {
+    if (!value.trim().isEmpty()) {
+      props.put(parameter, value);
     }
   }
 
@@ -188,6 +229,37 @@ public class KafkaStore<K, V> implements Store<K, V> {
     } catch (TopicExistsException e) {
       // This is ok.
     }
+  }
+
+  static String getBrokerEndpoints(List<Broker> brokerList) {
+     StringBuilder sb = new StringBuilder();
+
+    for (Broker broker : brokerList) {
+      for(EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
+        String connectionString = ep.connectionString();
+
+        if (connectionString.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL + "://")
+            || connectionString.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT + "://")) {
+          if (sb.length() > 0) {
+            sb.append(",");
+          }
+          sb.append(connectionString);
+        } else {
+          log.warn("Ignoring non-plaintext and non-SSL Kafka endpoint: " + connectionString);
+        }
+      }
+    }
+
+    if (sb.length() == 0) {
+      throw new ConfigException("Only plaintext and SSL Kafka endpoints are supported and " +
+              "none are configured.");
+    }
+
+    String brokerEndpoints = sb.toString();
+
+    log.info("Initializing KafkaStore with broker endpoints: " + brokerEndpoints);
+
+    return brokerEndpoints;
   }
 
   private void verifySchemaTopic() {
@@ -364,6 +436,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       Future<RecordMetadata> ack = producer.send(producerRecord);
       RecordMetadata metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
       this.lastWrittenOffset = metadata.offset();
+      log.trace("Noop record's offset is " + this.lastWrittenOffset);
       return this.lastWrittenOffset;
     } catch (Exception e) {
       throw new StoreException("Failed to write Noop record to kafka store.", e);

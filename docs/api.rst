@@ -241,7 +241,7 @@ The subjects resource provides a list of all registered subjects in your schema 
                    \"name\": \"field1\"
                  },
                  {
-                   \"type\": \"integer\",
+                   \"type\": \"int\",
                    \"name\": \"field2\"
                  }
                ]
@@ -293,7 +293,7 @@ The subjects resource provides a list of all registered subjects in your schema 
 		            \"name\": \"field1\"
 		          },
 		          {
-		            \"type\": \"integer\",
+		            \"type\": \"int\",
 		            \"name\": \"field2\"
 		          }
 		        ]
@@ -322,7 +322,7 @@ The subjects resource provides a list of all registered subjects in your schema 
 		            \"name\": \"field1\"
 		          },
 		          {
-		            \"type\": \"integer\",
+		            \"type\": \"int\",
 		            \"name\": \"field2\"
 		          }
 		        ]
@@ -372,7 +372,7 @@ The compatibility resource allows the user to test schemas for compatibility aga
                    \"name\": \"field1\"
                  },
                  {
-                   \"type\": \"integer\",
+                   \"type\": \"int\",
                    \"name\": \"field2\"
                  }
                ]

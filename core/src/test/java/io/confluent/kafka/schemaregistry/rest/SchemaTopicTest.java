@@ -25,7 +25,6 @@ import java.util.Set;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import kafka.admin.AdminUtils;
 import kafka.log.LogConfig;
-import kafka.utils.ZkUtils;
 import scala.collection.JavaConversions;
 import scala.collection.Map;
 import scala.collection.Seq;

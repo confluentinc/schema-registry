@@ -38,22 +38,15 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
     schemaRegistry = client;
   }
 
+  public KafkaAvroSerializer(SchemaRegistryClient client, Map<String, ?> props) {
+    schemaRegistry = client;
+    configure(serializerConfig(props));
+  }
+
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
-    Object url = configs.get(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
-    if (url == null) {
-      throw new ConfigException("Missing Schema registry url!");
-    }
-    Object maxSchemaObject = configs.get(
-        AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
-    if (maxSchemaObject == null) {
-      schemaRegistry = new CachedSchemaRegistryClient(
-          (String) url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
-    } else {
-      schemaRegistry = new CachedSchemaRegistryClient(
-          (String) url, (Integer) maxSchemaObject);
-    }
+    configure(new KafkaAvroSerializerConfig(configs));
   }
 
   @Override

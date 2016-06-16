@@ -50,14 +50,19 @@ Often, people might assume the pipe between multiple data centers is robust or l
 JVM
 ~~~
 
-We recommend running JDK 1.7 u51, and using the G1 collector. If you do this (and we highly recommend it), make
-sure you're on u51. We tried out u21 in testing, but we had a number of problems with the GC implementation in 
-that version. Our recommended GC tuning looks like this:
+We recommend running the latest version of JDK 1.8 with the G1 collector (older freely available versions have disclosed security vulnerabilities).
+
+If you are still on JDK 1.7 (which is also supported) and you are planning to use G1 (the current default), make
+sure you're on u51. We tried out u21 in testing, but we had a number of problems with the GC implementation in
+that version.
+
+Our recommended GC tuning looks like this:
 
 .. sourcecode:: bash
 
-   -Xms1g -Xmx1g -XX:PermSize=48m -XX:MaxPermSize=48m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 \
-          -XX:InitiatingHeapOccupancyPercent=35
+   -Xms1g -Xmx1g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 \
+          -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M \
+          -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80
 
 Important Configuration Options
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

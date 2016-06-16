@@ -26,6 +26,16 @@ for library in "confluent-common" "rest-utils" "schema-registry"; do
   CLASSPATH=$CLASSPATH:$base_dir/share/java/$library/*      
 done
 
+# Log directory to use
+if [ "x$LOG_DIR" = "x" ]; then
+    LOG_DIR="/tmp/schema-registry-logs"
+fi
+  
+# create logs directory
+if [ ! -d "$LOG_DIR" ]; then
+  mkdir -p "$LOG_DIR"
+fi
+
 # logj4 settings
 if [ "x$SCHEMA_REGISTRY_LOG4J_OPTS" = "x" ]; then
   # Test for files from dev -> packages so this will work as expected in dev if you have packages
@@ -38,6 +48,8 @@ if [ "x$SCHEMA_REGISTRY_LOG4J_OPTS" = "x" ]; then
     SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:/etc/schema-registry/log4j.properties"
   fi
 fi
+
+SCHEMA_REGISTRY_LOG4J_OPTS="-Dschema-registry.log.dir=$LOG_DIR $SCHEMA_REGISTRY_LOG4J_OPTS"
 
 # JMX settings
 if [ -z "$SCHEMA_REGISTRY_JMX_OPTS" ]; then
@@ -63,12 +75,12 @@ fi
 
 # Memory options
 if [ -z "$SCHEMA_REGISTRY_HEAP_OPTS" ]; then
-  SCHEMA_REGISTRY_HEAP_OPTS="-Xmx256M"
+  SCHEMA_REGISTRY_HEAP_OPTS="-Xmx512M"
 fi
 
 # JVM performance options
 if [ -z "$SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS" ]; then
-  SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS="-server -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true"
+  SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true"
 fi
 
 MAIN=$1
