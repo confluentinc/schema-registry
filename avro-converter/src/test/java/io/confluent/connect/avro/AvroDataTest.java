@@ -957,6 +957,10 @@ public class AvroDataTest {
 
     assertEquals(new SchemaAndValue(Schema.BYTES_SCHEMA, ByteBuffer.wrap("foob".getBytes())),
                  avroData.toConnectData(avroSchema, ByteBuffer.wrap("foob".getBytes())));
+
+    // test with actual fixed type
+    assertEquals(new SchemaAndValue(Schema.BYTES_SCHEMA, ByteBuffer.wrap("foob".getBytes())),
+            avroData.toConnectData(avroSchema, new GenericData.Fixed(avroSchema, "foob".getBytes())));
   }
 
   @Test
