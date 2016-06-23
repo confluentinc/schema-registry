@@ -15,6 +15,7 @@
             <directory>${project.parent.basedir}</directory>
             <outputDirectory>share/doc/kafka-serde-tools/</outputDirectory>
             <includes>
+                <include>version.txt</include>
                 <include>README*</include>
                 <include>LICENSE*</include>
                 <include>NOTICE*</include>
