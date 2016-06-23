@@ -1,0 +1,2 @@
+##This file must be updated at package time to have a valid package##
+invalid
