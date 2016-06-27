@@ -31,6 +31,7 @@ import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORW
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -120,7 +121,7 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     int id1 = restApp.restClient.registerSchema(schema, "subject1");
     int id2 = restApp.restClient.registerSchema(schema, "subject2");
-    assertEquals("Registering the same schema under different subjects should return the same id",
+    assertNotEquals("Registering the same schema under different subjects should not return the same id",
                  id1, id2);
   }
 
@@ -173,7 +174,7 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.updateCompatibility(
             AvroCompatibilityLevel.FULL.name, subject);
 
-    // test that compatibility check for incompatible schema returns false and the appropriate 
+    // test that compatibility check for incompatible schema returns false and the appropriate
     // error response from Avro
     restApp.restClient.registerSchema(schema1, subject);
     int versionOfRegisteredSchema =
@@ -230,11 +231,11 @@ public class RestApiTest extends ClusterTestHarness {
     int versionOfRegisteredSchema2Subject2 =
         restApp.restClient.lookUpSubjectVersion(schema2, subject2).getVersion();
     assertEquals(
-        "2nd schema under subject1 should still have version 1 as the first schema under subject2",
+        "2nd schema under subject1 should still have version 1 as the 1st schema under subject2",
         1,
         versionOfRegisteredSchema2Subject2);
-    assertEquals("Since schema is globally registered but not under subject2, id should not change",
-                 2,
+    assertNotEquals("Even though 2nd schema under subject1 and 1st schema under subject2 are identical, their ids should differ",
+                 idOfRegisteredSchema2Subject1,
                  idOfRegisteredSchema2Subject2);
   }
 
@@ -284,7 +285,7 @@ public class RestApiTest extends ClusterTestHarness {
                  restApp.restClient.getConfig(subject).getCompatibilityLevel());
 
   }
-  
+
   @Test
   public void testGetSchemaNonExistingId() throws Exception {
     try {
@@ -299,7 +300,7 @@ public class RestApiTest extends ClusterTestHarness {
                    rce.getErrorCode());
     }
   }
-  
+
   @Test
   public void testListVersionsNonExistingSubject() throws Exception {
     try {
@@ -344,7 +345,7 @@ public class RestApiTest extends ClusterTestHarness {
               + " (version not found)");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Unregistered version shouldn't be found", 
+      assertEquals("Unregistered version shouldn't be found",
                    Errors.VERSION_NOT_FOUND_ERROR_CODE, e.getErrorCode());
     }
   }
@@ -396,8 +397,8 @@ public class RestApiTest extends ClusterTestHarness {
               + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
               + " (subject not found)");
     } catch (RestClientException rce) {
-      assertEquals("Subject not found", 
-                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE, 
+      assertEquals("Subject not found",
+                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
                    rce.getErrorCode());
     }
   }
@@ -497,4 +498,3 @@ public class RestApiTest extends ClusterTestHarness {
                     .getId().intValue());
   }
 }
-
