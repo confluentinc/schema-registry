@@ -47,7 +47,7 @@ public class KafkaStoreMessageHandler
         schemaRegistry.setMaxIdInKafkaStore(schemaObj.getId());
       }
 
-      MD5 md5 = MD5.ofString(schemaObj.getSchema() + schemaKey.getSubject());
+      MD5 md5 = MD5.ofString(schemaObj.getSchema());
       SchemaIdAndSubjects schemaIdAndSubjects = schemaRegistry.schemaHashToGuid.get(md5);
       if (schemaIdAndSubjects == null) {
         schemaIdAndSubjects = new SchemaIdAndSubjects(schemaObj.getId());
