@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import org.apache.avro.Schema;
 import org.junit.Test;
 
+import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.eq;
@@ -144,6 +145,43 @@ public class CachedSchemaRegistryClientTest {
     verify(restService);
   }
 
+  @Test
+  public void testIdenticalSchemas() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
 
+    String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
+    Schema avroSchema = new Schema.Parser().parse(schema);
+    SchemaString schemaStringOne = new SchemaString(schema);
+    SchemaString schemaStringTwo = new SchemaString(schema);
+
+    String subjectOne = "subjectOne";
+    String subjectTwo = "subjectTwo";
+    int id = 25;
+
+    expect(restService.registerSchema(anyString(), eq(subjectOne)))
+            .andReturn(id);
+    expect(restService.registerSchema(anyString(), eq(subjectTwo)))
+            .andReturn(id);
+
+    expect(restService.getId(eq(id)))
+            .andReturn(schemaStringOne);
+    expect(restService.getId(eq(id)))
+            .andReturn(schemaStringTwo);
+
+    replay(restService);
+
+    // Make sure they still get the same ID
+    assertEquals(id, client.register(subjectOne, avroSchema));
+    assertEquals(id, client.register(subjectTwo, avroSchema));
+    // Neither of these two schemas should be cached yet
+    assertEquals(avroSchema, client.getBySubjectAndID(subjectOne, id));
+    assertEquals(avroSchema, client.getBySubjectAndID(subjectTwo, id));
+    // These two should be cached now
+    assertEquals(avroSchema, client.getBySubjectAndID(subjectOne, id));
+    assertEquals(avroSchema, client.getBySubjectAndID(subjectTwo, id));
+
+    verify(restService);
+  }
 
 }
