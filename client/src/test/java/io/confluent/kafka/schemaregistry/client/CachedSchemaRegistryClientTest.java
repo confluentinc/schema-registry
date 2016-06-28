@@ -110,8 +110,8 @@ public class CachedSchemaRegistryClientTest {
     replay(restService);
 
     assertEquals(id, client.register(subject, avroSchema));
-    assertEquals(avroSchema, client.getByID(id));
-    assertEquals(avroSchema, client.getByID(id)); // hit the cache
+    assertEquals(avroSchema, client.getBySubjectAndID(subject, id));
+    assertEquals(avroSchema, client.getBySubjectAndID(subject, id)); // hit the cache
 
     verify(restService);
   }

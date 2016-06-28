@@ -33,7 +33,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final RestService restService;
   private final int identityMapCapacity;
   private final Map<String, Map<Schema, Integer>> schemaCache;
-  private final Map<Integer, Schema> idCache;
+  private final Map<String, Map<Integer, Schema>> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
 
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
@@ -47,7 +47,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public CachedSchemaRegistryClient(RestService restService, int identityMapCapacity) {
     this.identityMapCapacity = identityMapCapacity;
     this.schemaCache = new HashMap<String, Map<Schema, Integer>>();
-    this.idCache = new HashMap<Integer, Schema>();
+    this.idCache = new HashMap<String, Map<Integer, Schema>>();
     this.versionCache = new HashMap<String, Map<Schema, Integer>>();
     this.restService = restService;
   }
@@ -93,14 +93,36 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized Schema getByID(int id) throws IOException, RestClientException {
-    if (idCache.containsKey(id)) {
-      return idCache.get(id);
+  public synchronized Schema getBySubjectAndID(String subject, int id)
+      throws IOException, RestClientException {
+    Map<Integer, Schema> idSchemaMap;
+    if (idCache.containsKey(subject)) {
+      idSchemaMap = idCache.get(subject);
     } else {
+      idSchemaMap = new IdentityHashMap<Integer, Schema>();
+      idCache.put(subject, idSchemaMap);
+    }
+
+    if (idSchemaMap.containsKey(id)) {
+      return idSchemaMap.get(id);
+    } else {
+      if (idSchemaMap.size() >= identityMapCapacity) {
+        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
+      }
       Schema schema = getSchemaByIdFromRegistry(id);
-      idCache.put(id, schema);
+      idSchemaMap.put(id, schema);
       return schema;
     }
+  }
+
+  @Override
+  public synchronized Schema getByID(int id) throws IOException, RestClientException {
+    for (Map<Integer, Schema> idSchemaMap : idCache.values()) {
+      if (idSchemaMap.containsKey(id)) {
+        return idSchemaMap.get(id);
+      }
+    }
+    return getSchemaByIdFromRegistry(id);
   }
 
   @Override
@@ -136,7 +158,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       return version;
     }
   }
-  
+
   @Override
   public boolean testCompatibility(String subject, Schema schema) throws IOException, RestClientException {
     return restService.testCompatibility(schema.toString(), subject, "latest");

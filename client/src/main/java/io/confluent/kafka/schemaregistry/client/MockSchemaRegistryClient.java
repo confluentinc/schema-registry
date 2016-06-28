@@ -36,28 +36,35 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private String defaultCompatibility = "BACKWARD";
   private final Map<String, Map<Schema, Integer>> schemaCache;
-  private final Map<Integer, Schema> idCache;
+  private final Map<String, Map<Integer, Schema>> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
   private final Map<String, String> compatibilityCache;
   private final AtomicInteger ids;
 
   public MockSchemaRegistryClient() {
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
-    idCache = new HashMap<Integer, Schema>();
+    idCache = new HashMap<String, Map<Integer, Schema>>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();
     compatibilityCache = new HashMap<String, String>();
     ids = new AtomicInteger(0);
   }
 
   private int getIdFromRegistry(String subject, Schema schema) throws IOException {
-    for (Map.Entry<Integer, Schema> entry: idCache.entrySet()) {
-      if (entry.getValue().toString().equals(schema.toString())) {
-        generateVersion(subject, schema);
-        return entry.getKey();
+    Map<Integer, Schema> idSchemaMap;
+    if (idCache.containsKey(subject)) {
+      idSchemaMap = idCache.get(subject);
+      for (Map.Entry<Integer, Schema> entry: idSchemaMap.entrySet()) {
+        if (entry.getValue().toString().equals(schema.toString())) {
+          generateVersion(subject, schema);
+          return entry.getKey();
+        }
       }
+    } else {
+      idSchemaMap = new IdentityHashMap<Integer, Schema>();
     }
     int id = ids.incrementAndGet();
-    idCache.put(id, schema);
+    idSchemaMap.put(id, schema);
+    idCache.put(subject, idSchemaMap);
     generateVersion(subject, schema);
     return id;
   }
@@ -86,12 +93,23 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return versions;
   }
 
-  private Schema getSchemaByIdFromRegistry(int id) throws IOException {
-    if (idCache.containsKey(id)) {
-      return idCache.get(id);
-    } else {
-      throw new IOException("Cannot get schema from schema registry!");
+  private Schema getSchemaBySubjectAndIdFromRegistry(String subject, int id) throws IOException {
+    if (idCache.containsKey(subject)) {
+      Map<Integer, Schema> idSchemaMap = idCache.get(subject);
+      if (idSchemaMap.containsKey(id)) {
+        return idSchemaMap.get(id);
+      }
     }
+    throw new IOException("Cannot get schema from schema registry!");
+  }
+
+  private Schema getSchemaByIdFromRegistry(int id) throws IOException {
+    for (Map<Integer, Schema> idSchemaMap : idCache.values()) {
+      if (idSchemaMap.containsKey(id)) {
+        return idSchemaMap.get(id);
+      }
+    }
+    throw new IOException("Cannot get schema from schema registry!");
   }
 
   @Override
@@ -115,14 +133,33 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized Schema getByID(int id) throws IOException, RestClientException {
-    if (idCache.containsKey(id)) {
-      return idCache.get(id);
+  public synchronized Schema getBySubjectAndID(String subject, int id)
+      throws IOException, RestClientException {
+    Map<Integer, Schema> idSchemaMap;
+    if (idCache.containsKey(subject)) {
+      idSchemaMap = idCache.get(subject);
     } else {
-      Schema schema = getSchemaByIdFromRegistry(id);
-      idCache.put(id, schema);
+      idSchemaMap = new IdentityHashMap<Integer, Schema>();
+      idCache.put(subject, idSchemaMap);
+    }
+
+    if (idSchemaMap.containsKey(id)) {
+      return idSchemaMap.get(id);
+    } else {
+      Schema schema = getSchemaBySubjectAndIdFromRegistry(subject, id);
+      idSchemaMap.put(id, schema);
       return schema;
     }
+  }
+
+  @Override
+  public synchronized Schema getByID(int id) throws IOException, RestClientException {
+    for (Map<Integer, Schema> idSchemaMap : idCache.values()) {
+      if (idSchemaMap.containsKey(id)) {
+        return idSchemaMap.get(id);
+      }
+    }
+    return getSchemaByIdFromRegistry(id);
   }
 
    private int getLatestVersion(String subject)
@@ -147,7 +184,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       }
     }
     int id = -1;
-    for (Map.Entry<Integer, Schema> entry: idCache.entrySet()) {
+    Map<Integer, Schema> idSchemaMap = idCache.get(subject);
+    for (Map.Entry<Integer, Schema> entry: idSchemaMap.entrySet()) {
       if (entry.getValue().toString().equals(schemaString)) {
          id = entry.getKey();
       }
@@ -164,22 +202,22 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       throw new IOException("Cannot get version from schema registry!");
     }
   }
-  
+
   @Override
   public boolean testCompatibility(String subject, Schema newSchema) throws IOException,
       RestClientException {
     SchemaMetadata latestSchemaMetadata = getLatestSchemaMetadata(subject);
-    Schema latestSchema = getSchemaByIdFromRegistry(latestSchemaMetadata.getId());
+    Schema latestSchema = getSchemaBySubjectAndIdFromRegistry(subject, latestSchemaMetadata.getId());
     String compatibility = compatibilityCache.get(subject);
     if (compatibility == null) {
       compatibility = defaultCompatibility;
     }
-    
+
     AvroCompatibilityLevel compatibilityLevel = AvroCompatibilityLevel.forName(compatibility);
     if (compatibilityLevel == null) {
       return false;
     }
-    
+
     return compatibilityLevel.compatibilityChecker.isCompatible(newSchema, latestSchema);
   }
 
