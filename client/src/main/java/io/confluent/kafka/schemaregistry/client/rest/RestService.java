@@ -139,15 +139,15 @@ public class RestService {
         connection.setDoOutput(true);
         OutputStream os = null;
         try {
-			os = connection.getOutputStream();
-			os.write(requestBodyData);
-			os.flush();
-		} catch (IOException e) {
-			log.error("failed to send HTTP request to endpoint: " + url, e);
-			throw e;
-		} finally {
-			if (os != null) os.close();			
-		}
+          os = connection.getOutputStream();
+          os.write(requestBodyData);
+          os.flush();
+        } catch (IOException e) {
+          log.error("Failed to send HTTP request to endpoint: " + url, e);
+          throw e;
+        } finally {
+          if (os != null) os.close();
+        }
       }
 
       int responseCode = connection.getResponseCode();
