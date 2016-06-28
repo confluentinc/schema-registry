@@ -15,7 +15,6 @@
             <directory>${project.parent.basedir}</directory>
             <outputDirectory>share/doc/schema-registry/</outputDirectory>
             <includes>
-                <include>version.txt</include>
                 <include>README*</include>
                 <include>LICENSE*</include>
                 <include>NOTICE*</include>
