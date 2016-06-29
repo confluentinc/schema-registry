@@ -26,7 +26,8 @@ Important: if `zookeeper.set.acl` is set to `true`, the Schema Registry's servic
 is most likely `kafka`. The Schema Registry's principal must have the correct service name, too. Otherwise, the Schema
 Registry will fail to create the `_schemas` topic, which will cause a leader not available error in the DEBUG log.
 The Schema Registry log will show `org.apache.kafka.common.errors.TimeoutException: Timeout expired while fetching topic metadata`
-when Kafka does not set ZooKeeper ACLs but the Schema Registry does.
+when Kafka does not set ZooKeeper ACLs but the Schema Registry does. The Schema Registry's service name can be set
+either with `kafkastore.sasl.kerberos.service.name` or in the JAAS file.
 
 If the Schema Registry has a different service name than Kafka, at this time `zookeeper.set.acl` must be set to `false`
 in both the Schema Registry and Kafka.

@@ -86,7 +86,8 @@ public abstract class ClusterTestHarness {
   protected String zkConnect;
   protected ZkClient zkClient;
   protected ZkUtils zkUtils;
-  protected int zkConnectionTimeout = 30000;
+  protected int zkConnectionTimeout = 30000; // a larger connection timeout is required for SASL tests
+                                             // because SASL connections tend to take longer.
   protected int zkSessionTimeout = 6000;
 
   // Kafka Config
@@ -120,9 +121,10 @@ public abstract class ClusterTestHarness {
     zkConnect = String.format("localhost:%d", zookeeper.port());
     zkUtils = ZkUtils.apply(
         zkConnect, zkSessionTimeout, zkConnectionTimeout,
-        false); // true of false doesn't matter because the schema registry Kafka principal is the same as the
-                // Kafka broker principal, so ACLs won't make any difference. Read comments in
-                // SASLClusterTestHarness.java for more details.
+        false); // true or false doesn't matter because the schema registry Kafka principal is the same as the
+                // Kafka broker principal, so ACLs won't make any difference. The principals are the same because
+                // ZooKeeper, Kafka, and the Schema Registry are run in the same process during testing and hence share
+                // the same JAAS configuration file. Read comments in ASLClusterTestHarness.java for more details.
     zkClient = zkUtils.zkClient();
 
     configs = new Vector<>();

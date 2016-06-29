@@ -102,7 +102,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private ZookeeperMasterElector masterElector = null;
   private Metrics metrics;
   private Sensor masterNodeSensor;
-  private boolean zKAclsEnabled;
+  private boolean zkAclsEnabled;
 
   // Hand out this id during the next schema registration. Indexed from 1.
   private int nextAvailableSchemaId;
@@ -157,7 +157,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                            + " node where all register schema and config update requests are "
                            + "served.");
     this.masterNodeSensor.add(m, new Gauge());
-    this.zKAclsEnabled = config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG);
+    this.zkAclsEnabled = config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG) &&
+            JaasUtils.isZkSecurityEnabled();
   }
 
   @Override
@@ -192,8 +193,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
     ZkUtils zkUtilsForNamespaceCreation = ZkUtils.apply(
         zkConnForNamespaceCreation,
-        zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled() && zKAclsEnabled);
+        zkSessionTimeoutMs, zkSessionTimeoutMs, zkAclsEnabled);
     // create the zookeeper namespace using cluster.name if it doesn't already exist
     zkUtilsForNamespaceCreation.makeSurePersistentPathExists(
         schemaRegistryNamespace,
@@ -202,8 +202,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
              zkConnForNamespaceCreation + schemaRegistryNamespace);
     zkUtilsForNamespaceCreation.close();
     this.zkUtils = ZkUtils.apply(
-        schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled() && zKAclsEnabled);
+        schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs, zkAclsEnabled);
   }
   
   public boolean isMaster() {
