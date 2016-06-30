@@ -117,15 +117,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     try {
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
-      Schema schema;
-      String subject;
-      if (includeSchemaAndVersion) {
-        subject = getSubjectName(topic, isKey);
-        schema = schemaRegistry.getBySubjectAndID(subject, id);
-      } else {
-        schema = schemaRegistry.getByID(id);
-        subject = null;
-      }
+      String subject = includeSchemaAndVersion ? getSubjectName(topic, isKey) : null;
+      Schema schema = schemaRegistry.getBySubjectAndID(subject, id);
       int length = buffer.limit() - 1 - idSize;
       final Object result;
       if (schema.getType().equals(Schema.Type.BYTES)) {

@@ -50,6 +50,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.idCache = new HashMap<String, Map<Integer, Schema>>();
     this.versionCache = new HashMap<String, Map<Schema, Integer>>();
     this.restService = restService;
+    this.idCache.put(null, new HashMap<Integer, Schema>());
   }
 
   private int registerAndGetId(String subject, Schema schema)
@@ -88,6 +89,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
       int id = registerAndGetId(subject, schema);
       schemaIdMap.put(schema, id);
+      idCache.get(null).put(id, schema);
       return id;
     }
   }
@@ -95,34 +97,22 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized Schema getBySubjectAndID(String subject, int id)
       throws IOException, RestClientException {
+
     Map<Integer, Schema> idSchemaMap;
     if (idCache.containsKey(subject)) {
       idSchemaMap = idCache.get(subject);
     } else {
-      idSchemaMap = new IdentityHashMap<Integer, Schema>();
+      idSchemaMap = new HashMap<Integer, Schema>();
       idCache.put(subject, idSchemaMap);
     }
 
     if (idSchemaMap.containsKey(id)) {
       return idSchemaMap.get(id);
     } else {
-      if (idSchemaMap.size() >= identityMapCapacity) {
-        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
-      }
       Schema schema = getSchemaByIdFromRegistry(id);
       idSchemaMap.put(id, schema);
       return schema;
     }
-  }
-
-  @Override
-  public synchronized Schema getByID(int id) throws IOException, RestClientException {
-    for (Map<Integer, Schema> idSchemaMap : idCache.values()) {
-      if (idSchemaMap.containsKey(id)) {
-        return idSchemaMap.get(id);
-      }
-    }
-    return getSchemaByIdFromRegistry(id);
   }
 
   @Override
