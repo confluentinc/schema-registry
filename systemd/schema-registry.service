@@ -1,0 +1,15 @@
+[Unit]
+Description=Schema Registry
+Documentation=http://docs.confluent.io/3.0.0/schema-registry/docs/index.html
+Requires=network.target
+Wants=kafka-server.service
+After=network.target kafka-server.service
+
+[Service]
+Type=forking
+ExecStart=/usr/bin/schema-registry-start /etc/schema-registry/schema-registry.properties
+ExecStop=/usr/bin/kafka-server-stop
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
