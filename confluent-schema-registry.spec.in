@@ -53,11 +53,12 @@ exit 0
 /usr/share/java/kafka-serde-tools
 /usr/share/doc/schema-registry
 /usr/share/doc/kafka-serde-tools
+/usr/lib/systemd/system/schema-registry.service
 
 %clean
 #used to cleanup things outside the build area and possibly inside.
 [ "%{buildroot}" != "/" ] && %{__rm} -rf %{buildroot}
 
 %changelog
-* Tue Feb 3 2015 Confluent Packaging <packages@confluent.io>
-- Initial import
+* Wed Jul 6 2016 Confluent Packaging <packages@confluent.io>
+- Added systemd scripts
