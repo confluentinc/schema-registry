@@ -1,0 +1,11 @@
+.DS_Store
+.project
+.settings/
+avro-converter/
+avro-serializer/
+client/
+core/
+json-serializer/
+package-kafka-serde-tools/
+package-schema-registry/
+target/
