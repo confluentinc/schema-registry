@@ -1,6 +1,6 @@
 [Unit]
 Description=Schema Registry
-Documentation=http://docs.confluent.io/3.0.0/schema-registry/docs/index.html
+Documentation=http://docs.confluent.io/current/schema-registry/docs/index.html
 Requires=network.target
 Wants=kafka-server.service
 After=network.target kafka-server.service
