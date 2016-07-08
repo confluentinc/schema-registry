@@ -126,6 +126,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public synchronized Schema getByID(int id) throws IOException, RestClientException {
+    return getBySubjectAndID(null, id);
+  }
+
+  @Override
   public synchronized Schema getBySubjectAndID(String subject, int id)
       throws IOException, RestClientException {
     Map<Integer, Schema> idSchemaMap;

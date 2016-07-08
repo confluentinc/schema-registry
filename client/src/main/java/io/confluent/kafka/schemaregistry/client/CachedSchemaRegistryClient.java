@@ -95,6 +95,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public synchronized Schema getByID(int id) throws IOException, RestClientException {
+    return getBySubjectAndID(null, id);
+  }
+
+  @Override
   public synchronized Schema getBySubjectAndID(String subject, int id)
       throws IOException, RestClientException {
 
