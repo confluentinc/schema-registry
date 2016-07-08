@@ -20,3 +20,6 @@ target/
 
 # Eclipse Setting
 .settings
+
+# Log file from schema registry daemon
+nohup.out
