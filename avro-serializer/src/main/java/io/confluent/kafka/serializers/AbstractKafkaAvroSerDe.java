@@ -122,6 +122,10 @@ public abstract class AbstractKafkaAvroSerDe {
     return schemaRegistry.register(subject, schema);
   }
 
+  public Schema getByID(int id) throws IOException, RestClientException {
+    return schemaRegistry.getByID(id);
+  }
+
   public Schema getBySubjectAndID(String subject, int id) throws IOException, RestClientException {
     return schemaRegistry.getBySubjectAndID(subject, id);
   }
