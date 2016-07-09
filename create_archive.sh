@@ -22,6 +22,7 @@ mkdir -p ${DESTDIR}${PREFIX}
 mkdir -p ${DESTDIR}${BINPATH}
 mkdir -p ${DESTDIR}${LIBPATH}
 mkdir -p ${DESTDIR}${SYSCONFDIR}
+mkdir -p ${DESTDIR}${SYSTEMDDIR}
 
 # schema registry
 PREPACKAGED_SCHEMA_REGISTRY="package-schema-registry/target/kafka-schema-registry-package-${VERSION}-package"
@@ -29,9 +30,11 @@ pushd ${PREPACKAGED_SCHEMA_REGISTRY}
 find bin/ -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL_X} -o root -g root XXX ${DESTDIR}${PREFIX}/XXX
 find share/ -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${PREFIX}/XXX
 pushd etc/schema-registry/
-find . -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${SYSCONFDIR}/XXX
+find . -type f | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${SYSCONFDIR}/XXX
 popd
 popd
+
+find systemd -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${SYSTEMDDIR}/XXX
 
 # kafka-serde-tools
 PREPACKAGED_KAFKA_SERDE_TOOLS="package-kafka-serde-tools/target/kafka-serde-tools-package-${VERSION}-package"
