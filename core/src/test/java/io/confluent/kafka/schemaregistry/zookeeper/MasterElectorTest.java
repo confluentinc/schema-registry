@@ -213,7 +213,7 @@ public class MasterElectorTest extends ClusterTestHarness {
         return restApp2.isMaster();
       }
     };
-    TestUtils.waitUntilTrue(condition, 5000,
+    TestUtils.waitUntilTrue(condition, 15000,
                             "Schema registry instance 2 should become the master");
 
     // the latest version should be immediately available on the new master using the id
@@ -483,7 +483,7 @@ public class MasterElectorTest extends ClusterTestHarness {
         return restApp2.isMaster();
       }
     };
-    TestUtils.waitUntilTrue(electionComplete, 5000,
+    TestUtils.waitUntilTrue(electionComplete, 15000,
                             "Schema registry instance 2 should become the master");
     // Reelection should have triggered zk id to update to the next batch
     assertEquals("Zk counter is not the expected value.",
@@ -654,7 +654,7 @@ public class MasterElectorTest extends ClusterTestHarness {
       }
     };
     TestUtils.waitUntilTrue(
-        newMasterElected, 5000, "A node should have been elected master by now.");
+        newMasterElected, 15000, "A node should have been elected master by now.");
   }
 
   private void waitUntilIdExists(final RestService restService, final int expectedId, String errorMsg) {
@@ -669,7 +669,7 @@ public class MasterElectorTest extends ClusterTestHarness {
         }
       }
     };
-    TestUtils.waitUntilTrue(canGetSchemaById, 5000, errorMsg);
+    TestUtils.waitUntilTrue(canGetSchemaById, 15000, errorMsg);
   }
 
   private void waitUntilCompatibilityLevelSet(final RestService restService, final String subject,
@@ -686,7 +686,7 @@ public class MasterElectorTest extends ClusterTestHarness {
         }
       }
     };
-    TestUtils.waitUntilTrue(canGetSchemaById, 5000, errorMsg);
+    TestUtils.waitUntilTrue(canGetSchemaById, 15000, errorMsg);
   }
 
   private void verifyIdAndSchema(final RestService restService, final int expectedId,
