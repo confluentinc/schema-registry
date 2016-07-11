@@ -19,6 +19,7 @@ package io.confluent.connect.avro;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
+import org.apache.avro.LogicalType;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -161,6 +162,13 @@ public class AvroData {
         .getElementType();
   }
 
+  private static final HashMap<String, String> AVRO_LOGICAL_TYPE_NAMES_TO_CONNECT_LOGICAL_TYPE_NAMES = new HashMap<>();
+  static {
+    AVRO_LOGICAL_TYPE_NAMES_TO_CONNECT_LOGICAL_TYPE_NAMES.put("decimal", Decimal.LOGICAL_NAME);
+    AVRO_LOGICAL_TYPE_NAMES_TO_CONNECT_LOGICAL_TYPE_NAMES.put("date", Date.LOGICAL_NAME);
+    AVRO_LOGICAL_TYPE_NAMES_TO_CONNECT_LOGICAL_TYPE_NAMES.put("time-millis", Time.LOGICAL_NAME);
+    AVRO_LOGICAL_TYPE_NAMES_TO_CONNECT_LOGICAL_TYPE_NAMES.put("timestamp-millis", Timestamp.LOGICAL_NAME);
+  }
 
   // Convert values in Connect form into their logical types. These logical converters are discovered by logical type
   // names specified in the field
@@ -177,6 +185,7 @@ public class AvroData {
         throw new DataException("Invalid type for Decimal, underlying representation should be bytes but was " + value.getClass());
       }
     });
+
 
     TO_CONNECT_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, new LogicalTypeConverter() {
       @Override
@@ -384,7 +393,7 @@ public class AvroData {
           List<Object> converted = new ArrayList<>(list.size());
           Schema elementSchema = schema != null ? schema.valueSchema() : null;
           org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
-          org.apache.avro.Schema elementAvroSchema = 
+          org.apache.avro.Schema elementAvroSchema =
               schema != null ? underlyingAvroSchema.getElementType() : ANYTHING_SCHEMA;
           for (Object val : list) {
             converted.add(
@@ -459,7 +468,7 @@ public class AvroData {
       throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
     }
   }
-  
+
   /**
    * Connect optional fields are represented as a unions (null & type) in Avro
    * Return the Avro schema of the actual type in the Union (instead of the union itself)
@@ -468,7 +477,7 @@ public class AvroData {
    * @return
    */
   private static org.apache.avro.Schema avroSchemaForUnderlyingTypeIfOptional(Schema schema, org.apache.avro.Schema avroSchema){
-    
+
     if (schema != null && schema.isOptional()) {
       if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
         for (org.apache.avro.Schema typeSchema : avroSchema
@@ -769,7 +778,7 @@ public class AvroData {
         throw new DataException("Found null value for non-optional schema");
       }
   }
-  
+
   /**
    * Convert the given object, in Avro format, into an Connect data object.
    */
@@ -786,7 +795,7 @@ public class AvroData {
     validateSchemaValue(schema, value);
     if (value == null) {
       return null;
-    }  
+    }
     try {
       // If we're decoding schemaless data, we need to unwrap it into just the single value
       if (schema == null) {
@@ -1215,7 +1224,12 @@ public class AvroData {
         throw new DataException("Invalid schema name: " + connectNameJson.toString());
       }
       name = connectNameJson.asText();
-
+    } else if (schema.getLogicalType() != null) {
+      String logicalTypeName = schema.getLogicalType().getName();
+      name = AVRO_LOGICAL_TYPE_NAMES_TO_CONNECT_LOGICAL_TYPE_NAMES.get(logicalTypeName);
+      if (name == Decimal.LOGICAL_NAME) {
+        builder.parameter(Decimal.SCALE_FIELD, schema.getProp("scale"));
+      }
     } else if (schema.getType() == org.apache.avro.Schema.Type.RECORD ||
                schema.getType() == org.apache.avro.Schema.Type.ENUM) {
       name = schema.getFullName();

@@ -50,8 +50,8 @@
         <kafka.version>0.10.0.0-cp1</kafka.version>
         <kafka.scala.version>2.11</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
-        <restutils.version>3.0.1-SNAPSHOT</restutils.version>
-        <avro.version>1.7.7</avro.version>
+        <restutils.version>3.1.0-SNAPSHOT</restutils.version>
+        <avro.version>1.8.1</avro.version>
         <jackson.version>2.5.4</jackson.version>
         <junit.version>4.12</junit.version>
         <easymock.version>3.3.1</easymock.version>
