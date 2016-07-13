@@ -34,7 +34,7 @@ find . -type f | grep -v README[.]rpm | xargs -I XXX ${INSTALL} -o root -g root 
 popd
 popd
 
-find . -type f | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${SYSCONFDIR}/XXX
+find systemd -type f | xargs -I XXX ${INSTALL} -o root -g root XXX ${DESTDIR}${SYSCONFDIR}/XXX
 
 # kafka-serde-tools
 PREPACKAGED_KAFKA_SERDE_TOOLS="package-kafka-serde-tools/target/kafka-serde-tools-package-${VERSION}-package"
