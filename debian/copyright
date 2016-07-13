@@ -3,11 +3,11 @@ Upstream-Name: schema-registry
 Source: https://github.com/confluentinc/schema-registry
 
 Files: *
-Copyright: 2015 Confluent, Inc.
+Copyright: 2016 Confluent, Inc.
 License: Apache-2
 
 Files: debian/*
-Copyright: 2015 Confluent, Inc.
+Copyright: 2016 Confluent, Inc.
 License: Apache-2
 
 License: Apache-2

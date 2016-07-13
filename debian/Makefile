@@ -23,7 +23,7 @@ DEFAULT_DESTDIR=$(CURDIR)/BUILD/
 DEFAULT_PREFIX=/usr
 DEFAULT_SYSCONFDIR=/etc/$(PACKAGE_TITLE)
 DEFAULT_SKIP_TESTS=no
-
+DEFAULT_SYSTEMDDIR=/usr/lib/systemd/system
 
 # Whether we should apply patches. This only makes sense for alternate packaging
 # systems that know how to apply patches themselves, e.g. Debian.
@@ -55,6 +55,8 @@ ifndef SYSCONFDIR
 SYSCONFDIR:=$(DEFAULT_SYSCONFDIR)
 endif
 SYSCONFDIR:=$(subst PREFIX,$(PREFIX),$(SYSCONFDIR))
+
+SYSTEMDDIR ?= $(DEFAULT_SYSTEMDDIR)
 
 export APPLY_PATCHES
 export VERSION
