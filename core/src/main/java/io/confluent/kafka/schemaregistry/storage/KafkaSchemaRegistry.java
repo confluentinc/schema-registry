@@ -49,8 +49,10 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutExceptio
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
+import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import kafka.utils.ZkUtils;
+import org.apache.kafka.common.config.ConfigException;
 import scala.Tuple2;
 
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
@@ -62,6 +64,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -119,7 +123,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
       throws SchemaRegistryException {
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
-    int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
+    int port = getPortForIdentity(config.getInt(SchemaRegistryConfig.PORT_CONFIG),
+            config.getList(RestConfig.LISTENERS_CONFIG));
     this.schemaRegistryZkNamespace = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
     this.isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
@@ -156,6 +161,32 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                            + " node where all register schema and config update requests are "
                            + "served.");
     this.masterNodeSensor.add(m, new Gauge());
+  }
+
+  /**
+   * A Schema Registry instance's identity is in part the port it listens on. Currently the
+   * port can either be configured via the deprecated port configuration, or via the listeners
+   * configuration.
+   *
+   * This method checks if listeners is configured, and if it is, uses the port from the first listener.
+   * If listeners isn't configured, the deprecated port configuration is used.
+   *
+   * In theory, any port from any listener would be sufficient. Choosing the first, instead of say the last,
+   * is arbitrary.
+   */
+  public static int getPortForIdentity(int port, List<String> listeners) {
+    // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
+    if (listeners.isEmpty()) {
+      return port;
+    } else {
+      URI uri;
+      try {
+        uri = new URI(listeners.get(0));
+      } catch (URISyntaxException use) {
+        throw new ConfigException("First listener could not be parsed into a URI: " + listeners.get(0));
+      }
+      return uri.getPort();
+    }
   }
 
   @Override

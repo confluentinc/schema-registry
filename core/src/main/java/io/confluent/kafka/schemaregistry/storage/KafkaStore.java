@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.rest.RestConfig;
 import kafka.admin.RackAwareMode;
 import kafka.cluster.EndPoint;
 import kafka.server.ConfigType;
@@ -91,9 +92,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
+    int port = KafkaSchemaRegistry.getPortForIdentity(config.getInt(SchemaRegistryConfig.PORT_CONFIG),
+            config.getList(RestConfig.LISTENERS_CONFIG));
     this.groupId = String.format("schema-registry-%s-%d",
                                  config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
-                                 config.getInt(SchemaRegistryConfig.PORT_CONFIG));
+                                 port);
     initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.storeUpdateHandler = storeUpdateHandler;
