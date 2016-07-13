@@ -189,7 +189,9 @@ public class SchemaRegistryConfig extends RestConfig {
         .defineOverride(PORT_CONFIG, ConfigDef.Type.INT, SCHEMAREGISTRY_PORT_DEFAULT,
                         ConfigDef.Importance.LOW, PORT_CONFIG_DOC)
         .defineOverride(LISTENERS_CONFIG, ConfigDef.Type.LIST, SCHEMAREGISTRY_LISTENERS_DEFAULT,
-                        ConfigDef.Importance.HIGH, LISTENERS_DOC)
+                        ConfigDef.Importance.HIGH, LISTENERS_DOC + "\n\n" +
+                        "Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. " +
+                        "If multiple listeners are configured, the first listener's port is used for its identity.")
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
                         io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES,
                         ConfigDef.Importance.HIGH,
