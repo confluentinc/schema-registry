@@ -20,8 +20,10 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -227,5 +229,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       compatibility = defaultCompatibility;
     }
     return compatibility;
+  }
+
+  @Override
+  public List<String> getAllSubjects() throws IOException, RestClientException {
+    List<String> results = new ArrayList<>();
+    results.addAll(this.schemaCache.keySet());
+    Collections.sort(results, String.CASE_INSENSITIVE_ORDER);
+    return results;
   }
 }

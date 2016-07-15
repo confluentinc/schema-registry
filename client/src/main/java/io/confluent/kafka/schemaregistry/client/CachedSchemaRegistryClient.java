@@ -171,5 +171,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return response.getCompatibilityLevel();
   }
 
+  @Override
+  public List<String> getAllSubjects() throws IOException, RestClientException {
+    return restService.getAllSubjects();
+  }
 
 }
