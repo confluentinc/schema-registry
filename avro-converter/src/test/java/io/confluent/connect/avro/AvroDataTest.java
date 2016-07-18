@@ -19,6 +19,7 @@ package io.confluent.connect.avro;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.reflect.Nullable;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.connect.data.Date;
@@ -1221,6 +1222,15 @@ public class AvroDataTest {
     assertEquals(2, cache.size());
   }
 
+  @Test
+  public void testArrayOfRecordWithNullNamespace() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.array().items()
+            .record("item").fields()
+            .name("value").type().intType().noDefault()
+            .endRecord();
+
+    avroData.toConnectSchema(avroSchema);
+  }
 
   private NonRecordContainer checkNonRecordConversion(
       org.apache.avro.Schema expectedSchema, Object expected,
