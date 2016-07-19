@@ -1078,8 +1078,8 @@ public class AvroData {
         org.apache.avro.Schema elemSchema = schema.getElementType();
         // Special case for custom encoding of non-string maps as list of key-value records
         if (elemSchema.getType().equals(org.apache.avro.Schema.Type.RECORD) &&
-            elemSchema.getNamespace().equals(NAMESPACE) &&
-            elemSchema.getName().equals(MAP_ENTRY_TYPE_NAME)) {
+            NAMESPACE.equals(elemSchema.getNamespace()) &&
+            MAP_ENTRY_TYPE_NAME.equals(elemSchema.getName())) {
           if (elemSchema.getFields().size() != 2 ||
               elemSchema.getField(KEY_FIELD) == null ||
               elemSchema.getField(VALUE_FIELD) == null) {
