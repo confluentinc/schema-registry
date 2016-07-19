@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -171,5 +172,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return response.getCompatibilityLevel();
   }
 
+  @Override
+  public Collection<String> getAllSubjects() throws IOException, RestClientException {
+    return restService.getAllSubjects();
+  }
 
 }
