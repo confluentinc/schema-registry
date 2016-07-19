@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.security.JaasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +51,6 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutExceptio
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import kafka.admin.AdminUtils;
 import kafka.cluster.Broker;
-import kafka.common.TopicExistsException;
 import kafka.log.LogConfig;
 import kafka.utils.ZkUtils;
 import scala.collection.JavaConversions;
