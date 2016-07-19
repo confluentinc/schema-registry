@@ -87,6 +87,109 @@ with Maven.
 This project uses the [Google java code style](https://google-styleguide.googlecode.com/svn/trunk/javaguide.html)
 to keep code clean and consistant.
 
+Maven Plugin
+-----------
+
+## schema-registry:download
+
+This plugin is used to download AVRO schemas for the requested subjects.
+
+|        Name        |                                                      Description                                                      |  Type  | Required | Default |
+|:------------------:|:---------------------------------------------------------------------------------------------------------------------:|:------:|:--------:|:-------:|
+| schemaRegistryUrls | Urls for the schema registry instance to connect to                                                                   |  List  |    yes   |         |
+| outputDirectory    | Output directory to write the schemas to.                                                                             | String |    yes   |         |
+| schemaExtension    | The file extension to use for the output file name. This must begin with a '.' character.                             | String |    no    |  .avsc  |
+| subjectPatterns    | The subject patterns to download. This is a list of regular expressions. Patterns must match the entire subject name. | List   |    no    |   ^.+$  |
+
+```
+<plugin>
+    <groupId>io.confluent</groupId>
+    <artifactId>kafka-schema-registry-maven-plugin</artifactId>
+    <version>3.1.0-SNAPSHOT</version>
+    <configuration>
+        <schemaRegistryUrls>
+            <param>http://192.168.99.100:8081</param>
+        </schemaRegistryUrls>
+        <outputDirectory>src/main/avro</outputDirectory>
+    </configuration>
+
+</plugin>
+```
+
+```
+<plugin>
+    <groupId>io.confluent</groupId>
+    <artifactId>kafka-schema-registry-maven-plugin</artifactId>
+    <version>3.1.0-SNAPSHOT</version>
+    <configuration>
+        <schemaRegistryUrls>
+            <param>http://192.168.99.100:8081</param>
+        </schemaRegistryUrls>
+        <outputDirectory>src/main/avro</outputDirectory>
+        <subjectPatterns>
+            <param>^TestSubject000-(Key|Value)$</param>
+        </subjectPatterns>
+    </configuration>
+</plugin>
+```
+
+## schema-registry:register
+
+This plugin is used to register AVRO schemas for subjects.
+
+|        Name        |                                                      Description                                                      |  Type  | Required | Default |
+|:------------------:|:---------------------------------------------------------------------------------------------------------------------:|:------:|:--------:|:-------:|
+| schemaRegistryUrls | Urls for the schema registry instance to connect to                                                                   |  List  |    yes   |         |
+| subjects           | Map containing subject to schema path of the subjects to be registered.                                               |   Map  |    yes   |         |
+
+```
+<plugin>
+    <groupId>io.confluent</groupId>
+    <artifactId>kafka-schema-registry-maven-plugin</artifactId>
+    <version>3.1.0-SNAPSHOT</version>
+    <configuration>
+        <schemaRegistryUrls>
+            <param>http://192.168.99.100:8081</param>
+        </schemaRegistryUrls>
+        <subjects>
+            <TestSubject000-Key>src/main/avro/TestSubject000-Key.avsc</TestSubject000-Key>
+            <TestSubject000-Value>src/main/avro/TestSubject000-Value.avsc</TestSubject000-Value>
+        <subjects>
+    </configuration>
+    <goals>
+        <goal>register</goal>
+    </goals>
+</plugin>
+```
+
+## schema-registry:test-compatibility
+
+|        Name        |                                                      Description                                                      |  Type  | Required | Default |
+|:------------------:|:---------------------------------------------------------------------------------------------------------------------:|:------:|:--------:|:-------:|
+| schemaRegistryUrls | Urls for the schema registry instance to connect to                                                                   |  List  |    yes   |         |
+| subjects           | Map containing subject to schema path of the subjects to be registered.                                               |   Map  |    yes   |         |
+
+```
+<plugin>
+    <groupId>io.confluent</groupId>
+    <artifactId>kafka-schema-registry-maven-plugin</artifactId>
+    <version>3.1.0-SNAPSHOT</version>
+    <configuration>
+        <schemaRegistryUrls>
+            <param>http://192.168.99.100:8081</param>
+        </schemaRegistryUrls>
+        <subjects>
+            <TestSubject000-Key>src/main/avro/TestSubject000-Key.avsc</TestSubject000-Key>
+            <TestSubject000-Value>src/main/avro/TestSubject000-Value.avsc</TestSubject000-Value>
+        <subjects>
+    </configuration>
+    <goals>
+        <goal>test-compatibility</goal>
+    </goals>
+</plugin>
+```
+
+
 Contribute
 ----------
 

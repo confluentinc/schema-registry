@@ -1,0 +1,75 @@
+package io.confluent.kafka.schemaregistry.maven;
+
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import org.apache.avro.Schema;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+@Mojo(name = "test-compatibility")
+public class TestCompatibilitySchemaRegistryMojo extends SchemaRegistryMojo {
+  @Parameter(required = true)
+  Map<String, File> subjects = new HashMap<>();
+
+  Map<String, Boolean> schemaCompatibility;
+
+  @Override
+  public void execute() throws MojoExecutionException, MojoFailureException {
+    Map<String, Schema> subjectToSchemaLookup = loadSchemas(this.subjects);
+    this.schemaCompatibility = new LinkedHashMap<>();
+
+    int errorCount = 0;
+
+    for (Map.Entry<String, Schema> kvp : subjectToSchemaLookup.entrySet()) {
+      try {
+        File schemaPath = this.subjects.get(kvp.getKey());
+
+
+        if (getLog().isDebugEnabled()) {
+          getLog().debug(
+              String.format("Calling register('%s', '%s')", kvp.getKey(), kvp.getValue().toString(true))
+          );
+        }
+
+        boolean compatible = this.client().testCompatibility(kvp.getKey(), kvp.getValue());
+
+        if (compatible) {
+          getLog().info(
+              String.format(
+                  "Schema %s is compatible with subject(%s)",
+                  schemaPath,
+                  kvp.getKey()
+              )
+          );
+        } else {
+          getLog().error(
+              String.format(
+                  "Schema %s is not compatible with subject(%s)",
+                  schemaPath,
+                  kvp.getKey()
+              )
+          );
+          errorCount++;
+        }
+
+        this.schemaCompatibility.put(kvp.getKey(), compatible);
+      } catch (IOException | RestClientException e) {
+        getLog().error(
+            String.format("Exception thrown while registering subject(%s)", kvp.getKey()),
+            e
+        );
+      }
+    }
+
+    if (errorCount > 0) {
+      throw new IllegalStateException("One or more schema was found to be incompatible with the current version.");
+    }
+  }
+}
