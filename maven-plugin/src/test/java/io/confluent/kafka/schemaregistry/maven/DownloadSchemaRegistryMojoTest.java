@@ -37,26 +37,6 @@ public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
   }
 
   @Test
-  public void download() throws IOException, RestClientException {
-    int version = 1;
-
-    List<File> files = new ArrayList<>();
-
-    for (int i = 0; i < 100; i++) {
-      String keySubject = String.format("TestSubject%03d-key", i);
-      String valueSubject = String.format("TestSubject%03d-value", i);
-      Schema keySchema = Schema.create(Schema.Type.STRING);
-      Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
-      this.mojo.client().register(keySubject, keySchema);
-      this.mojo.client().register(valueSubject, valueSchema);
-      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
-      files.add(keySchemaFile);
-      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
-      files.add(valueSchemaFile);
-    }
-  }
-
-  @Test
   public void specificSubjects() throws IOException, RestClientException {
     int version = 1;
 
