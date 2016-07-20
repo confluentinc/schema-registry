@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Confluent Inc.
+ * Copyright 2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,23 +32,13 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class RegisterSchemaRegistryMojoTest {
+public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest{
   RegisterSchemaRegistryMojo mojo;
-  File tempDirectory;
 
   @Before
-  public void before() throws IOException {
+  public void createMojo(){
     this.mojo = new RegisterSchemaRegistryMojo();
     this.mojo.client(new MockSchemaRegistryClient());
-    this.tempDirectory = File.createTempFile(this.getClass().getSimpleName(), "tmp");
-    this.tempDirectory.delete();
-    this.tempDirectory.mkdirs();
-  }
-
-  void writeSchema(File outputPath, Schema schema) throws IOException {
-    try (FileWriter writer = new FileWriter(outputPath)) {
-      writer.write(schema.toString(true));
-    }
   }
 
   @Test
@@ -58,8 +48,8 @@ public class RegisterSchemaRegistryMojoTest {
     Map<String, File> subjectToFile = new LinkedHashMap<>();
     int version = 1;
     for (int i = 0; i < 100; i++) {
-      String keySubject = String.format("TestSubject%03d-Key", i);
-      String valueSubject = String.format("TestSubject%03d-Value", i);
+      String keySubject = String.format("TestSubject%03d-key", i);
+      String valueSubject = String.format("TestSubject%03d-value", i);
       Schema keySchema = Schema.create(Schema.Type.STRING);
       Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
       File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
@@ -78,12 +68,6 @@ public class RegisterSchemaRegistryMojoTest {
     Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
   }
 
-  void writeMalformedFile(File file) throws IOException {
-    try (FileWriter writer = new FileWriter(file)) {
-      writer.write("[");
-    }
-  }
-
   @Test(expected = IllegalStateException.class)
   public void malformedSchema() throws IOException, MojoFailureException, MojoExecutionException {
     Map<String, Integer> expectedVersions = new LinkedHashMap<>();
@@ -91,8 +75,8 @@ public class RegisterSchemaRegistryMojoTest {
     Map<String, File> subjectToFile = new LinkedHashMap<>();
     int version = 1;
     for (int i = 0; i < 100; i++) {
-      String keySubject = String.format("TestSubject%03d-Key", i);
-      String valueSubject = String.format("TestSubject%03d-Value", i);
+      String keySubject = String.format("TestSubject%03d-key", i);
+      String valueSubject = String.format("TestSubject%03d-value", i);
       Schema keySchema = Schema.create(Schema.Type.STRING);
       Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
       File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
@@ -120,8 +104,8 @@ public class RegisterSchemaRegistryMojoTest {
     Map<String, File> subjectToFile = new LinkedHashMap<>();
     int version = 1;
     for (int i = 0; i < 100; i++) {
-      String keySubject = String.format("TestSubject%03d-Key", i);
-      String valueSubject = String.format("TestSubject%03d-Value", i);
+      String keySubject = String.format("TestSubject%03d-key", i);
+      String valueSubject = String.format("TestSubject%03d-value", i);
       Schema keySchema = Schema.create(Schema.Type.STRING);
       Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
       File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
@@ -141,13 +125,4 @@ public class RegisterSchemaRegistryMojoTest {
 
     Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
   }
-
-  @After
-  public void after() throws IOException {
-    for (File tempFile : this.tempDirectory.listFiles()) {
-      tempFile.delete();
-    }
-    this.tempDirectory.delete();
-  }
-
 }

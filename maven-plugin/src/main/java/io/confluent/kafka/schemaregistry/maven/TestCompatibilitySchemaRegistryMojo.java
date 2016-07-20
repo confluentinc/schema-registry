@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Confluent Inc.
+ * Copyright 2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  **/
 package io.confluent.kafka.schemaregistry.maven;
 
+import com.google.inject.internal.util.Preconditions;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -83,8 +84,6 @@ public class TestCompatibilitySchemaRegistryMojo extends SchemaRegistryMojo {
       }
     }
 
-    if (errorCount > 0) {
-      throw new IllegalStateException("One or more schema was found to be incompatible with the current version.");
-    }
+    Preconditions.checkState(errorCount == 0, "One or more schema was found to be incompatible with the current version.");
   }
 }

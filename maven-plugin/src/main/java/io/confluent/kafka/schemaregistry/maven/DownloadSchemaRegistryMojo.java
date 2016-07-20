@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Confluent Inc.
+` * Copyright 2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,21 +39,15 @@ import java.util.regex.Pattern;
 
 @Mojo(name = "download")
 public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
-
   @Parameter(required = false, defaultValue = ".avsc")
   String schemaExtension;
-  @Parameter(required = false)
-  List<String> subjectPatterns;
+  @Parameter(required = true)
+  List<String> subjectPatterns = new ArrayList<>();
   @Parameter(required = true)
   File outputDirectory;
 
   @Parameter(required = false, defaultValue = "true")
   boolean prettyPrintSchemas;
-
-  public DownloadSchemaRegistryMojo() {
-    this.subjectPatterns = new ArrayList<>();
-    this.subjectPatterns.add("^.+$");
-  }
 
   Map<String, Schema> downloadSchemas(Collection<String> subjects) throws MojoExecutionException {
     Map<String, Schema> results = new LinkedHashMap<>();
@@ -64,16 +58,13 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       try {
         getLog().info(String.format("Downloading latest metadata for %s.", subject));
         schemaMetadata = this.client().getLatestSchemaMetadata(subject);
+        Schema schema = parser.parse(schemaMetadata.getSchema());
+        results.put(subject, schema);
       } catch (RestClientException | IOException ex) {
         throw new MojoExecutionException(
             String.format("Exception thrown while downloading metadata for %s.", subject),
             ex
         );
-      }
-
-      try {
-        Schema schema = parser.parse(schemaMetadata.getSchema());
-        results.put(subject, schema);
       } catch (SchemaParseException ex) {
         throw new MojoExecutionException(
             String.format("Exception thrown while parsing avro schema for %s.", subject),
@@ -88,7 +79,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
   @Override
   public void execute() throws MojoExecutionException, MojoFailureException {
     try {
-      getLog().debug(String.format("Checking if '%s' and is not a directory.", this.outputDirectory));
+      getLog().debug(String.format("Checking if '%s' exists and is not a directory.", this.outputDirectory));
       if (outputDirectory.exists() && !outputDirectory.isDirectory()) {
         throw new IllegalStateException("outputDirectory must be a directory");
       }

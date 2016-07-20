@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Confluent Inc.
+ * Copyright 2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  **/
 package io.confluent.kafka.schemaregistry.maven;
 
+import com.google.inject.internal.util.Preconditions;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -30,12 +31,8 @@ import java.util.Map;
 
 @Mojo(name = "register")
 public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
-
-
   @Parameter(required = true)
   Map<String, File> subjects = new HashMap<>();
-
-
   Map<String, Integer> schemaVersions;
 
   @Override
@@ -43,6 +40,7 @@ public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
     Map<String, Schema> subjectToSchemaLookup = loadSchemas(this.subjects);
     this.schemaVersions = new LinkedHashMap<>();
 
+    int errors = 0;
     for (Map.Entry<String, Schema> kvp : subjectToSchemaLookup.entrySet()) {
       try {
         if (getLog().isDebugEnabled()) {
@@ -60,11 +58,14 @@ public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
             ));
         this.schemaVersions.put(kvp.getKey(), version);
       } catch (IOException | RestClientException e) {
+        errors++;
         getLog().error(
             String.format("Exception thrown while registering subject(%s)", kvp.getKey()),
             e
         );
       }
     }
+
+    Preconditions.checkState(errors == 0, "One or more exceptions were encountered while registering the schemas.");
   }
 }

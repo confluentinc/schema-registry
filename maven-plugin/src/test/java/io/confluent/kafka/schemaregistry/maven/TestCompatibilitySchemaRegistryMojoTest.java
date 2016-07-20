@@ -1,12 +1,12 @@
 /**
- * Copyright 2015 Confluent Inc.
- *
+ * Copyright 2016 Confluent Inc.
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,35 +21,23 @@ import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.hamcrest.core.IsEqual;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class TestCompatibilitySchemaRegistryMojoTest {
+public class TestCompatibilitySchemaRegistryMojoTest extends SchemaRegistryTest {
   TestCompatibilitySchemaRegistryMojo mojo;
-  File tempDirectory;
 
   @Before
-  public void before() throws IOException {
+  public void createMojo() {
     this.mojo = new TestCompatibilitySchemaRegistryMojo();
     this.mojo.client(new MockSchemaRegistryClient());
-    this.tempDirectory = File.createTempFile(this.getClass().getSimpleName(), "tmp");
-    this.tempDirectory.delete();
-    this.tempDirectory.mkdirs();
-  }
-
-  void writeSchema(File outputPath, Schema schema) throws IOException {
-    try (FileWriter writer = new FileWriter(outputPath)) {
-      writer.write(schema.toString(true));
-    }
   }
 
   @Test
@@ -78,12 +66,6 @@ public class TestCompatibilitySchemaRegistryMojoTest {
     this.mojo.execute();
 
     Assert.assertThat(this.mojo.schemaCompatibility, IsEqual.equalTo(expectedVersions));
-  }
-
-  void writeMalformedFile(File file) throws IOException {
-    try (FileWriter writer = new FileWriter(file)) {
-      writer.write("[");
-    }
   }
 
   @Test(expected = IllegalStateException.class)
@@ -178,13 +160,4 @@ public class TestCompatibilitySchemaRegistryMojoTest {
 
     Assert.assertThat(this.mojo.schemaCompatibility, IsEqual.equalTo(expectedVersions));
   }
-
-  @After
-  public void after() throws IOException {
-    for (File tempFile : this.tempDirectory.listFiles()) {
-      tempFile.delete();
-    }
-    this.tempDirectory.delete();
-  }
-
 }

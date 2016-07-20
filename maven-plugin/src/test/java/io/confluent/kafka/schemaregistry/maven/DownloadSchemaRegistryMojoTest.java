@@ -1,12 +1,12 @@
 /**
- * Copyright 2015 Confluent Inc.
- *
+ * Copyright 2016 Confluent Inc.
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.maven;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -28,15 +27,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class DownloadSchemaRegistryMojoTest {
-  File tempDirectory;
+public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
   DownloadSchemaRegistryMojo mojo;
 
   @Before
-  public void before() throws IOException {
-    this.tempDirectory = File.createTempFile(this.getClass().getSimpleName(), "tmp");
-    this.tempDirectory.delete();
-    this.tempDirectory.mkdirs();
+  public void createMojo() {
     this.mojo = new DownloadSchemaRegistryMojo();
     this.mojo.client(new MockSchemaRegistryClient());
   }
@@ -48,8 +43,8 @@ public class DownloadSchemaRegistryMojoTest {
     List<File> files = new ArrayList<>();
 
     for (int i = 0; i < 100; i++) {
-      String keySubject = String.format("TestSubject%03d-Key", i);
-      String valueSubject = String.format("TestSubject%03d-Value", i);
+      String keySubject = String.format("TestSubject%03d-key", i);
+      String valueSubject = String.format("TestSubject%03d-value", i);
       Schema keySchema = Schema.create(Schema.Type.STRING);
       Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
       this.mojo.client().register(keySubject, keySchema);
@@ -69,8 +64,8 @@ public class DownloadSchemaRegistryMojoTest {
     this.mojo.subjectPatterns.clear();
 
     for (int i = 0; i < 100; i++) {
-      String keySubject = String.format("TestSubject%03d-Key", i);
-      String valueSubject = String.format("TestSubject%03d-Value", i);
+      String keySubject = String.format("TestSubject%03d-key", i);
+      String valueSubject = String.format("TestSubject%03d-value", i);
       Schema keySchema = Schema.create(Schema.Type.STRING);
       Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
       this.mojo.client().register(keySubject, keySchema);
@@ -85,14 +80,6 @@ public class DownloadSchemaRegistryMojoTest {
         this.mojo.subjectPatterns.add(subjectPattern);
       }
     }
-  }
-
-  @After
-  public void after() throws IOException {
-    for (File tempFile : this.tempDirectory.listFiles()) {
-      tempFile.delete();
-    }
-    this.tempDirectory.delete();
   }
 
 }
