@@ -93,8 +93,6 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest{
 
     this.mojo.subjects = subjectToFile;
     this.mojo.execute();
-
-    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
   }
 
   @Test(expected = IllegalStateException.class)
@@ -122,7 +120,5 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest{
 
     this.mojo.subjects = subjectToFile;
     this.mojo.execute();
-
-    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
   }
 }
