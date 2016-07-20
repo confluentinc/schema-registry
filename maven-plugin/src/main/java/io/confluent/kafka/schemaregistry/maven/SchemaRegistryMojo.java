@@ -29,9 +29,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- *
- */
 public abstract class SchemaRegistryMojo extends AbstractMojo {
   @Parameter(required = true)
   List<String> schemaRegistryUrls;
