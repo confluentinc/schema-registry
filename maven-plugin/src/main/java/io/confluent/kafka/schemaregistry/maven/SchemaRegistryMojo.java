@@ -33,14 +33,13 @@ import java.util.Map;
  *
  */
 public abstract class SchemaRegistryMojo extends AbstractMojo {
+  @Parameter(required = true)
+  List<String> schemaRegistryUrls;
   private SchemaRegistryClient client;
 
   void client(SchemaRegistryClient client) {
     this.client = client;
   }
-
-  @Parameter(required = true)
-  List<String> schemaRegistryUrls;
 
   protected SchemaRegistryClient client() {
     if (null == this.client) {
