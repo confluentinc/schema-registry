@@ -170,7 +170,7 @@ dependencies as well.
 Requirements
 ------------
 
-- Kafka: 0.10.0.0-cp1
+- Kafka: 0.10.0.1-SNAPSHOT
 
 Contribute
 ----------
