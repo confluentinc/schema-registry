@@ -23,6 +23,7 @@ import kafka.utils.TestUtils;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.LoginManager;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -61,6 +62,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     return SecurityProtocol.SASL_PLAINTEXT;
   }
 
+  // TODO: change to before. Make a commit first with all my other changes.
   @BeforeClass
   public static void setUpKdc() throws Exception {
     destroySaslHelper();
@@ -71,7 +73,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     // build and write the JAAS file.
     JaasTestUtils.JaasSection serverSection = createJaasSection(zkServerKeytab,
             "zookeeper/localhost@EXAMPLE.COM", "Server", "zookeeper");
-    // NOTE: there is only one `Client` section in the Jaas configuraiton file. Both the internal embedded Kafka
+    // NOTE: there is only one `Client` section in the Jaas configuration file. Both the internal embedded Kafka
     // cluster and the schema registry share the same principal. This is required because within the same JVM (eg
     // these tests) one cannot have two sections, each with its own ZooKeeper client SASL credentials.
     JaasTestUtils.JaasSection clientSection = createJaasSection(kafkaKeytab,
@@ -163,9 +165,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     if (kdc != null) {
       kdc.stop();
     }
-    if (kdcHome != null && !kdcHome.delete()) {
-      log.warn("Could not delete the KDC directory.");
-    }
+    Utils.delete(kdcHome);
     if (jaasFile != null && !jaasFile.delete()) {
       log.warn("Could not delete the JAAS file.");
     }

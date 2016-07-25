@@ -102,8 +102,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
     consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
             config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
-    KafkaStore.addSslConfigsToClientProperties(config, consumerProps);
-    KafkaStore.addSaslConfigsToClientProperties(config, consumerProps);
+    KafkaStore.addSecurityConfigsToClientProperties(config, consumerProps);
 
     this.consumer = new KafkaConsumer<>(consumerProps);
 

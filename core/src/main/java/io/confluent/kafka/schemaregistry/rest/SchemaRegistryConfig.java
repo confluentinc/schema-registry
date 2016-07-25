@@ -162,7 +162,7 @@ public class SchemaRegistryConfig extends RestConfig {
       "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
   protected static final String ZOOKEEPER_SET_ACL_DOC =
-      "Whether or not to set an ACL in ZooKeeper when znodes are written and ZooKeeper SASL authentication is "
+      "Whether or not to set an ACL in ZooKeeper when znodes are created and ZooKeeper SASL authentication is "
       + "configured. IMPORTANT: if set to `true`, the SASL principal must be the same as the Kafka brokers.";
   protected static final String COMPATIBILITY_DOC =
       "The Avro compatibility type. Valid values are: "

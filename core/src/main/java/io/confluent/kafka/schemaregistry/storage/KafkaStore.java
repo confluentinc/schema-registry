@@ -110,7 +110,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
     this.zkUtils = ZkUtils.apply(
         kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled() && this.config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG));
+        KafkaSchemaRegistry.checkZkAclConfig(this.config));
     this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
     List<String> bootstrapServersConfig = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
@@ -146,8 +146,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
             this.config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
-    addSslConfigsToClientProperties(this.config, props);
-    addSaslConfigsToClientProperties(this.config, props);
+    addSecurityConfigsToClientProperties(this.config, props);
 
     producer = new KafkaProducer<byte[],byte[]>(props);
 
@@ -170,6 +169,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
     }
+  }
+
+  public static void addSecurityConfigsToClientProperties(SchemaRegistryConfig config, Properties props) {
+    addSslConfigsToClientProperties(config, props);
+    addSaslConfigsToClientProperties(config, props);
   }
 
   public static void addSslConfigsToClientProperties(SchemaRegistryConfig config, Properties props) {

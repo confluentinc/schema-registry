@@ -129,7 +129,7 @@ Configuration Options
   * Importance: high
 
 ``zookeeper.set.acl``
-  Whether or not to set an ACL in ZooKeeper when znodes are written and ZooKeeper SASL authentication is configured. IMPORTANT: if set to `true`, the ZooKeeper SASL principal must be the same as the Kafka brokers.
+  Whether or not to set an ACL in ZooKeeper when znodes are created and ZooKeeper SASL authentication is configured. IMPORTANT: if set to `true`, the ZooKeeper SASL principal must be the same as the Kafka brokers.
 
   * Type: boolean
   * Default: false

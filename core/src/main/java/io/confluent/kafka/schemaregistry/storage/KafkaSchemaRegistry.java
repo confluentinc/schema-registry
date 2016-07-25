@@ -51,6 +51,7 @@ import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
 import io.confluent.rest.exceptions.RestException;
 import kafka.utils.ZkUtils;
+import org.apache.kafka.common.config.ConfigException;
 import scala.Tuple2;
 
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
@@ -157,8 +158,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                            + " node where all register schema and config update requests are "
                            + "served.");
     this.masterNodeSensor.add(m, new Gauge());
-    this.zkAclsEnabled = config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG) &&
-            JaasUtils.isZkSecurityEnabled();
+    this.zkAclsEnabled = checkZkAclConfig(config);
+  }
+
+  /**
+   * Checks if the user has configured ZooKeeper ACLs or not. Throws an exception if the ZooKeeper client is set
+   * to create znodes with an ACL, yet the JAAS config is not present. Otherwise, returns whether or not the user
+   * has enabled ZooKeeper ACLs.
+   */
+  public static boolean checkZkAclConfig(SchemaRegistryConfig config) {
+    if (config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils.isZkSecurityEnabled()) {
+      throw new ConfigException(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG + " is set to true but ZooKeeper's " +
+              "JAAS SASL configuration is not configured.");
+    }
+    return config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG);
   }
 
   @Override

@@ -115,13 +115,18 @@ public abstract class ClusterTestHarness {
     this.compatibilityType = compatibilityType;
   }
 
+  private boolean setZkAcls() {
+    return getSecurityProtocol() == SecurityProtocol.SASL_PLAINTEXT ||
+           getSecurityProtocol() == SecurityProtocol.SASL_SSL;
+  }
+
   @Before
   public void setUp() throws Exception {
     zookeeper = new EmbeddedZookeeper();
     zkConnect = String.format("localhost:%d", zookeeper.port());
     zkUtils = ZkUtils.apply(
         zkConnect, zkSessionTimeout, zkConnectionTimeout,
-        false); // true or false doesn't matter because the schema registry Kafka principal is the same as the
+        setZkAcls()); // true or false doesn't matter because the schema registry Kafka principal is the same as the
                 // Kafka broker principal, so ACLs won't make any difference. The principals are the same because
                 // ZooKeeper, Kafka, and the Schema Registry are run in the same process during testing and hence share
                 // the same JAAS configuration file. Read comments in ASLClusterTestHarness.java for more details.
