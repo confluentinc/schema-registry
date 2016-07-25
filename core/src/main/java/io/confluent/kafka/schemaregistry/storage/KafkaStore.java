@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -108,8 +109,15 @@ public class KafkaStore<K, V> implements Store<K, V> {
         JaasUtils.isZkSecurityEnabled());
     this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
-    this.bootstrapBrokers = KafkaStore.getBrokerEndpoints(
-            JavaConversions.seqAsJavaList(this.brokerSeq));
+    List<String> bootstrapServersConfig = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
+    List<String> endpoints;
+    if (bootstrapServersConfig.isEmpty()) {
+      endpoints = brokersToEndpoints(JavaConversions.seqAsJavaList(this.brokerSeq));
+    } else {
+      endpoints = bootstrapServersConfig;
+    }
+    this.bootstrapBrokers = filterBrokerEndpoints(endpoints);
+    log.info("Initializing KafkaStore with broker endpoints: " + this.bootstrapBrokers);
 
     this.config = config;
   }
@@ -231,22 +239,28 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
   }
 
-  static String getBrokerEndpoints(List<Broker> brokerList) {
-     StringBuilder sb = new StringBuilder();
+  static List<String> brokersToEndpoints(List<Broker> brokers) {
+    List<String> endpoints = new LinkedList<String>();
+    for (Broker broker : brokers) {
+      for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
+        endpoints.add(ep.connectionString());
+      }
+    }
+    return endpoints;
+  }
 
-    for (Broker broker : brokerList) {
-      for(EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
-        String connectionString = ep.connectionString();
+  static String filterBrokerEndpoints(List<String> endpoints) {
+    StringBuilder sb = new StringBuilder();
 
-        if (connectionString.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL + "://")
-            || connectionString.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT + "://")) {
-          if (sb.length() > 0) {
-            sb.append(",");
-          }
-          sb.append(connectionString);
-        } else {
-          log.warn("Ignoring non-plaintext and non-SSL Kafka endpoint: " + connectionString);
+    for (String endpoint : endpoints) {
+      if (endpoint.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL + "://")
+          || endpoint.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT + "://")) {
+        if (sb.length() > 0) {
+          sb.append(",");
         }
+        sb.append(endpoint);
+      } else {
+        log.warn("Ignoring non-plaintext and non-SSL Kafka endpoint: " + endpoint);
       }
     }
 
@@ -255,11 +269,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
               "none are configured.");
     }
 
-    String brokerEndpoints = sb.toString();
-
-    log.info("Initializing KafkaStore with broker endpoints: " + brokerEndpoints);
-
-    return brokerEndpoints;
+    return sb.toString();
   }
 
   private void verifySchemaTopic() {
