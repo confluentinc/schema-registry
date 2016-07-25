@@ -23,33 +23,28 @@ import kafka.utils.TestUtils;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.LoginManager;
-import org.apache.kafka.common.utils.Utils;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
+import scala.collection.JavaConversions;
 import scala.collection.Seq;
+import scala.collection.immutable.List;
 
 import javax.security.auth.login.Configuration;
 import java.io.File;
-import java.io.PrintWriter;
-import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Properties;
 
-// sets up SASL for ZooKeeper and Kafka.
+// sets up SASL for ZooKeeper and Kafka. Much of this was borrowed from kafka.api.SaslSetup in Kafka.
 public class SASLClusterTestHarness extends ClusterTestHarness {
   public static final String JAAS_CONF = "java.security.auth.login.config";
-  public static final String KRB5_CONF = "java.security.krb5.conf";
   public static final String ZK_AUTH_PROVIDER = "zookeeper.authProvider.1";
 
-  private static MiniKdc kdc;
-  private static File kdcHome;
-  private static String krb5ConfPath;
-  private static File jaasFile;
+  private MiniKdc kdc = null;
+  private File kdcHome = TestUtils.tempDir();
+  private Properties kdcProps = MiniKdc.createConfig();
 
   private static final Logger log = LoggerFactory.getLogger(SASLClusterTestHarness.class);
 
@@ -62,76 +57,41 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     return SecurityProtocol.SASL_PLAINTEXT;
   }
 
-  // TODO: change to before. Make a commit first with all my other changes.
-  @BeforeClass
-  public static void setUpKdc() throws Exception {
-    destroySaslHelper();
-    File zkServerKeytab = File.createTempFile("zookeeper-", ".keytab");
-    File kafkaKeytab = File.createTempFile("kafka-", ".keytab");
-    File schemaRegistryKeytab = File.createTempFile("schema-registry-", ".keytab");
+  @Before
+  @Override
+  public void setUp() throws Exception {
+    // Important if tests leak consumers, producers or brokers.
+    LoginManager.closeAll();
 
-    // build and write the JAAS file.
-    JaasTestUtils.JaasSection serverSection = createJaasSection(zkServerKeytab,
-            "zookeeper/localhost@EXAMPLE.COM", "Server", "zookeeper");
-    // NOTE: there is only one `Client` section in the Jaas configuration file. Both the internal embedded Kafka
-    // cluster and the schema registry share the same principal. This is required because within the same JVM (eg
-    // these tests) one cannot have two sections, each with its own ZooKeeper client SASL credentials.
-    JaasTestUtils.JaasSection clientSection = createJaasSection(kafkaKeytab,
-            "kafka/localhost@EXAMPLE.COM", "Client", "zookeeper");
-    JaasTestUtils.JaasSection kafkaServerSection = createJaasSection(kafkaKeytab,
-            "kafka/localhost@EXAMPLE.COM", "KafkaServer", "kafka");
-    JaasTestUtils.JaasSection kafkaClientSection = createJaasSection(schemaRegistryKeytab,
-            "schema-registry/localhost@EXAMPLE.COM", "KafkaClient", "kafka");
-    jaasFile = File.createTempFile("schema_registry_tests", "_jaas.conf");
-    PrintWriter out = new PrintWriter(jaasFile);
-    out.println(serverSection.toString());
-    out.println(clientSection.toString());
-    out.println(kafkaServerSection.toString());
-    out.println(kafkaClientSection.toString());
-    out.close();
+    File serverKeytab = File.createTempFile("server-", ".keytab");
+    File clientKeytab = File.createTempFile("client-", ".keytab");
 
-    Properties kdcProps = MiniKdc.createConfig();
-    kdcHome = Files.createTempDirectory("mini-kdc").toFile();
+    // create a JAAS file.
+    Option<File> serverKeytabOption = Option.apply(serverKeytab);
+    Option<File> clientKeytabOption = Option.apply(clientKeytab);
+    List<String> gssApi = JavaConversions.asScalaBuffer(Arrays.asList("GSSAPI")).toList();
+    String jaasFilePath = JaasTestUtils.writeZkAndKafkaFiles(gssApi, gssApi, serverKeytabOption, clientKeytabOption);
+
     log.info("Using KDC home: " + kdcHome.getAbsolutePath());
     kdc = new MiniKdc(kdcProps, kdcHome);
     kdc.start();
 
-    krb5ConfPath = System.getProperty("java.security.krb5.conf");
+    createPrincipal(serverKeytab, "kafka/localhost");
+    createPrincipal(clientKeytab, "client");
 
-    createPrincipal(zkServerKeytab, "zookeeper/localhost");
-    createPrincipal(kafkaKeytab, "kafka/localhost");
-    createPrincipal(schemaRegistryKeytab, "schema-registry/localhost");
+    // This will cause a reload of the Configuration singleton when `getConfiguration` is called.
+    Configuration.setConfiguration(null);
 
-    // destroy SASL settings so all tests don't have SASL enabled. SASL is re-enabled in a @Before method below.
-    destroySaslHelper();
-  }
-
-  @Before
-  @Override
-  public void setUp() throws Exception {
-    destroySaslHelper();
-    System.setProperty(JAAS_CONF, jaasFile.getAbsolutePath());
-    System.setProperty(KRB5_CONF, krb5ConfPath);
+    System.setProperty(JAAS_CONF, jaasFilePath);
     System.setProperty(ZK_AUTH_PROVIDER, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider");
     super.setUp();
   }
 
-  private static void createPrincipal(File keytab, String principalNoRealm) throws Exception {
+  private void createPrincipal(File keytab, String principalNoRealm) throws Exception {
     Seq<String> principals = scala.collection.JavaConversions.asScalaBuffer(
             Arrays.asList(principalNoRealm)
     ).seq();
     kdc.createPrincipal(keytab, principals);
-  }
-
-  private static JaasTestUtils.JaasSection createJaasSection(File keytab, String principalWithRealm,
-                                                      String jaasContextName, String serviceName) {
-    final scala.Option<String> serviceNameOption = scala.Option.apply(serviceName);
-    JaasTestUtils.Krb5LoginModule krbModule = new JaasTestUtils.Krb5LoginModule(true, true,
-            keytab.getAbsolutePath(), principalWithRealm, true, serviceNameOption);
-    Seq<JaasTestUtils.JaasModule> jaasModules = scala.collection.JavaConversions.asScalaBuffer(
-            Arrays.asList(krbModule.toJaasModule())
-    ).seq();
-    return new JaasTestUtils.JaasSection(jaasContextName, jaasModules);
   }
 
   @Override
@@ -156,27 +116,13 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   @After
   @Override
   public void tearDown() throws Exception {
-    destroySaslHelper();
-    super.tearDown();
-  }
-
-  @AfterClass
-  public static void tearDownKdc() throws Exception {
     if (kdc != null) {
       kdc.stop();
     }
-    Utils.delete(kdcHome);
-    if (jaasFile != null && !jaasFile.delete()) {
-      log.warn("Could not delete the JAAS file.");
-    }
-    destroySaslHelper();
-  }
-
-  private static void destroySaslHelper() {
     LoginManager.closeAll();
     System.clearProperty(JAAS_CONF);
     System.clearProperty(ZK_AUTH_PROVIDER);
-    System.clearProperty(KRB5_CONF);
     Configuration.setConfiguration(null);
+    super.tearDown();
   }
 }
