@@ -42,6 +42,7 @@
         <module>avro-converter</module>
         <module>package-schema-registry</module>
         <module>package-kafka-serde-tools</module>
+        <module>maven-plugin</module>
     </modules>
 
     <properties>

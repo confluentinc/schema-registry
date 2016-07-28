@@ -19,3 +19,4 @@ Contents:
    operations
    security
    serializer-formatter
+   maven-plugin
