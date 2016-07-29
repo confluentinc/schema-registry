@@ -26,7 +26,7 @@ public class KafkaSchemaRegistryTest {
   @Test
   public void testGetPortForIdentityPrecedence() {
     List<String> listeners = new LinkedList<String>();
-    listeners.add("PLAINTEXT://localhost:456");
+    listeners.add("http://localhost:456");
 
     int port = KafkaSchemaRegistry.getPortForIdentity(123, listeners);
     assertEquals("Expected listeners to take precedence over port.", 456, port);
@@ -42,8 +42,8 @@ public class KafkaSchemaRegistryTest {
   @Test
   public void testGetPortForIdentityMultipleListeners() {
     List<String> listeners = new LinkedList<String>();
-    listeners.add("PLAINTEXT://localhost:123");
-    listeners.add("PLAINTEXT://localhost:456");
+    listeners.add("http://localhost:123");
+    listeners.add("https://localhost:456");
 
     int port = KafkaSchemaRegistry.getPortForIdentity(-1, listeners);
     assertEquals("Expected first listener's port to be returned", 123, port);

@@ -177,9 +177,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
   static int getPortForIdentity(int port, List<String> configuredListeners) {
     List<URI> listeners = Application.parseListeners(configuredListeners, port,
-            Arrays.asList(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL,
-                    SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT),
-            SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT);
+            Arrays.asList("http", "https"), "http");
     return listeners.get(0).getPort();
   }
 
