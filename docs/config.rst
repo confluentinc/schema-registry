@@ -12,6 +12,8 @@ Configuration Options
 ``listeners``
   Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
+  Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
+
   * Type: list
   * Default: "http://0.0.0.0:8081"
   * Importance: high
@@ -239,6 +241,20 @@ Configuration Options
   * Type: list
   * Default: "" (Jetty's default)
   * Importance: medium
+
+``kafkastore.bootstrap.servers``
+  A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
+
+  If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list
+  from ZooKeeper (configured with `kafkastore.connection.url`). Note that if `kafkastore.bootstrap.servers` is configured,
+  `kafkastore.connection.url` still needs to be configured, too.
+
+  This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that
+  all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.
+
+ * Type: list
+ * Default: "" (when left blank, bootstrap servers are fetched from ZooKeeper)
+ * Importance: medium
 
 ``access.control.allow.origin``
   Set value for Jetty Access-Control-Allow-Origin header

@@ -38,6 +38,7 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT = "PLAINTEXT";
 
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
+  public static final String KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG = "kafkastore.bootstrap.servers";
   /**
    * <code>kafkastore.zk.session.timeout.ms</code>
    */
@@ -113,6 +114,15 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.ssl.endpoint.identification.algorithm";
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper url for the Kafka cluster";
+  protected static final String KAFKASTORE_BOOTSTRAP_SERVERS_DOC =
+      "A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`\n"
+      + "\n"
+      + "If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list\n"
+      + "from ZooKeeper (configured with `kafkastore.connection.url`). Note that if `kafkastore.bootstrap.servers` is configured,\n"
+      + "`kafkastore.connection.url` still needs to be configured, too.\n"
+      + "\n"
+      + "This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that\n"
+      + "all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.";
   protected static final String SCHEMAREGISTRY_ZK_NAMESPACE_DOC =
       "The string that is used as the zookeeper namespace for storing schema registry "
       + "metadata. SchemaRegistry instances which are part of the same schema registry service "
@@ -189,7 +199,9 @@ public class SchemaRegistryConfig extends RestConfig {
         .defineOverride(PORT_CONFIG, ConfigDef.Type.INT, SCHEMAREGISTRY_PORT_DEFAULT,
                         ConfigDef.Importance.LOW, PORT_CONFIG_DOC)
         .defineOverride(LISTENERS_CONFIG, ConfigDef.Type.LIST, SCHEMAREGISTRY_LISTENERS_DEFAULT,
-                        ConfigDef.Importance.HIGH, LISTENERS_DOC)
+                        ConfigDef.Importance.HIGH, LISTENERS_DOC + "\n\n" +
+                        "Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. " +
+                        "If multiple listeners are configured, the first listener's port is used for its identity.")
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
                         io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES,
                         ConfigDef.Importance.HIGH,
@@ -199,6 +211,8 @@ public class SchemaRegistryConfig extends RestConfig {
                         ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
         .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
+                KAFKASTORE_CONNECTION_URL_DOC)
+        .define(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, "", ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_CONNECTION_URL_DOC)
         .define(SCHEMAREGISTRY_ZK_NAMESPACE, ConfigDef.Type.STRING,
                 DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
