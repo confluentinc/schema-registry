@@ -1279,8 +1279,6 @@ public class AvroDataTest {
           GenericData.get().validate(unionSchema, kvp.getValue())
       );
 
-      System.out.println(unionSchema.toString(true));
-
       SchemaAndValue schemaAndValue;
       Struct convertedValue;
 
