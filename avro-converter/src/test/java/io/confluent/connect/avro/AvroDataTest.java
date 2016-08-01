@@ -44,7 +44,9 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
@@ -1248,4 +1250,54 @@ public class AvroDataTest {
     Object converted = avroData.fromConnectData(schema, null);
     assertNull(converted);
   }
+
+  @Test
+  public void testToConnectDataStringEnumUnion() {
+    org.apache.avro.Schema enumSchema = org.apache.avro.SchemaBuilder.enumeration("TestEnum").symbols("A", "B", "C", "D");
+
+    Map<org.apache.avro.Schema, Object> avroSchemaToValueTests = new LinkedHashMap<>();
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), "AnotherValue");
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.INT), 1000);
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.LONG), 1000L);
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.BOOLEAN), false);
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.DOUBLE), Double.MAX_VALUE);
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.FLOAT), Float.MAX_VALUE);
+
+    for(Map.Entry<org.apache.avro.Schema, Object> kvp:avroSchemaToValueTests.entrySet()){
+      org.apache.avro.Schema unionSchema = org.apache.avro.SchemaBuilder.unionOf()
+          .type(kvp.getKey())
+          .and()
+          .type(enumSchema)
+          .endUnion();
+      GenericData.EnumSymbol enumValue = (GenericData.EnumSymbol) GenericData.get().createEnum("A", enumSchema);
+      assertTrue(
+          String.format("enumValue(%s) is not valid for union schema (%s)", enumValue, unionSchema),
+          GenericData.get().validate(unionSchema, enumValue)
+      );
+      assertTrue(
+          String.format("value (%s) is not valid for union schema (%s)", enumValue, unionSchema),
+          GenericData.get().validate(unionSchema, kvp.getValue())
+      );
+
+      System.out.println(unionSchema.toString(true));
+
+      SchemaAndValue schemaAndValue;
+      Struct convertedValue;
+
+      //Now test with the other type.
+      schemaAndValue=avroData.toConnectData(unionSchema, kvp.getValue());
+      assertNotNull(schemaAndValue);
+      assertTrue(schemaAndValue.value() instanceof Struct);
+      convertedValue = (Struct)schemaAndValue.value();
+      assertEquals(kvp.getValue(), convertedValue.get(kvp.getKey().getName()));
+
+      //At this point we know that this is valid avro.
+      schemaAndValue=avroData.toConnectData(unionSchema, enumValue);
+      assertNotNull(schemaAndValue);
+      assertTrue(schemaAndValue.value() instanceof Struct);
+      convertedValue = (Struct)schemaAndValue.value();
+      assertEquals(enumValue.toString(), convertedValue.get(enumSchema.getName()));
+    }
+  }
+
 }

@@ -19,6 +19,7 @@ package io.confluent.connect.avro;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -957,6 +958,16 @@ public class AvroData {
           // Special case support for union types
           if (schema.name() != null && schema.name().equals(AVRO_TYPE_UNION)) {
             Schema valueRecordSchema = null;
+
+            if(isInstanceOfAvroEnum(value)) {
+              GenericData.EnumSymbol enumSymbol = (GenericData.EnumSymbol) value;
+              Field field = schema.field(enumSymbol.getSchema().getName());
+              Schema fieldSchema = field.schema();
+              converted = new Struct(schema).put(enumSymbol.getSchema().getName(),
+                  toConnectData(fieldSchema, enumSymbol.toString()));
+              break;
+            }
+
             if (value instanceof IndexedRecord) {
               IndexedRecord valueRecord = ((IndexedRecord) value);
               valueRecordSchema = toConnectSchema(valueRecord.getSchema(), true, null, null);
@@ -1350,6 +1361,10 @@ public class AvroData {
   private static boolean isEnumSchema(Schema schema) {
     return schema.type() == Schema.Type.STRING &&
            schema.name() != null && schema.name().equals(AVRO_TYPE_ENUM);
+  }
+
+  private static boolean isInstanceOfAvroEnum(Object value) {
+    return value instanceof GenericData.EnumSymbol;
   }
 
   private static boolean isInstanceOfAvroSchemaTypeForSimpleSchema(Schema fieldSchema,
