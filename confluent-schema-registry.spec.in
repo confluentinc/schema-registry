@@ -45,6 +45,10 @@ exit 0
 # The spec file gets included, get rid of it
 %{__rm} %{buildroot}/confluent-schema-registry.spec
 
+useradd -r schema-registry
+%{__mkdir_p} /var/log/schema-registry
+%{__chown} schema-registry:schema-registry /var/log/schema-registry
+
 %files
 %defattr(-,root,root)
 /usr/bin/*
