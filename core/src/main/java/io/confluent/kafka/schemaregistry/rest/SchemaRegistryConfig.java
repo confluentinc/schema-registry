@@ -35,6 +35,11 @@ public class SchemaRegistryConfig extends RestConfig {
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
   private static final String SCHEMAREGISTRY_LISTENERS_DEFAULT = "";
 
+  @Deprecated
+  public static final String KAFKASTORE_SECURITY_PROTOCOL_SSL = "SSL";
+  @Deprecated
+  public static final String KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT = "PLAINTEXT";
+
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   public static final String KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG = "kafkastore.bootstrap.servers";
   /**
