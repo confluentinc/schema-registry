@@ -16,6 +16,8 @@
 
 base_dir=$(dirname $0)/..
 
+
+
 # Development jars. `mvn package` should collect all the required dependency jars here
 for dir in $base_dir/package-schema-registry/target/kafka-schema-registry-package-*-development; do
   CLASSPATH=$CLASSPATH:$dir/share/java/schema-registry/*
@@ -110,7 +112,7 @@ fi
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
-  nohup $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@" 2>&1 < /dev/null &
+  nohup $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@" > "$LOG_DIR/schemaRegistry.out" 2>&1 < /dev/null &
 else
   exec $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@"
 fi
