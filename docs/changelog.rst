@@ -3,6 +3,24 @@
 Changelog
 =========
 
+Version 3.0.1
+-------------
+
+Schema Registry
+~~~~~~~~~~~~~~~
+
+* `PR-369 <https://github.com/confluentinc/schema-registry/pull/369>`_ - Introducing a new config: kafkastore.bootstrap.servers
+* `PR-371 <https://github.com/confluentinc/schema-registry/pull/371>`_ - Fixing a bug where the listener port wasn't used in ZooKeeper
+* `PR-390 <https://github.com/confluentinc/schema-registry/pull/390>`_ - Include cURL output in quickstart
+* `PR-392 <https://github.com/confluentinc/schema-registry/pull/392>`_ - Fix schemes used for listeners
+
+Serializers, Formatters, and Converters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* `PR-363 <https://github.com/confluentinc/schema-registry/pull/363>`_ - 3.0.x duplicate schema support
+* `PR-365 <https://github.com/confluentinc/schema-registry/pull/365>`_ - Fix API compatibility regression from #363
+* `PR-378 <https://github.com/confluentinc/schema-registry/pull/378>`_ - Support null namespace for Array of Records
+
 Version 3.0.0
 -------------
 
