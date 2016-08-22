@@ -12,6 +12,8 @@ Configuration Options
 ``listeners``
   Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
+  Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
+
   * Type: list
   * Default: "http://0.0.0.0:8081"
   * Importance: high
@@ -128,6 +130,13 @@ Configuration Options
   * Default: [application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json]
   * Importance: high
 
+``zookeeper.set.acl``
+  Whether or not to set an ACL in ZooKeeper when znodes are created and ZooKeeper SASL authentication is configured. IMPORTANT: if set to `true`, the ZooKeeper SASL principal must be the same as the Kafka brokers.
+
+  * Type: boolean
+  * Default: false
+  * Importance: high
+
 ``kafkastore.init.timeout.ms``
   The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
 
@@ -191,6 +200,20 @@ Configuration Options
   * Default: true
   * Importance: medium
 
+``kafkastore.sasl.kerberos.service.name``
+  The Kerberos principal name that the Kafka client runs as. This can be defined either in the JAAS config file or here.
+
+  * Type: string
+  * Default: ""
+  * Importance: medium
+
+``kafkastore.sasl.mechanism``
+  The SASL mechanism used for Kafka connections. GSSAPI is the default.
+
+  * Type: string
+  * Default: "GSSAPI"
+  * Importance: medium
+
 ``access.control.allow.methods``
   Set value to Jetty Access-Control-Allow-Origin header for specified methods
 
@@ -239,6 +262,20 @@ Configuration Options
   * Type: list
   * Default: "" (Jetty's default)
   * Importance: medium
+
+``kafkastore.bootstrap.servers``
+  A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
+
+  If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list
+  from ZooKeeper (configured with `kafkastore.connection.url`). Note that if `kafkastore.bootstrap.servers` is configured,
+  `kafkastore.connection.url` still needs to be configured, too.
+
+  This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that
+  all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.
+
+ * Type: list
+ * Default: "" (when left blank, bootstrap servers are fetched from ZooKeeper)
+ * Importance: medium
 
 ``access.control.allow.origin``
   Set value for Jetty Access-Control-Allow-Origin header
@@ -371,4 +408,32 @@ Configuration Options
 
   * Type: string
   * Default: "" (Jetty's default)
+  * Importance: low
+
+``kafkastore.sasl.kerberos.kinit.cmd``
+  The Kerberos kinit command path.
+
+  * Type: string
+  * Default: "/usr/bin/kinit"
+  * Importance: low
+
+``kafkastore.sasl.kerberos.min.time.before.relogin``
+  The login time between refresh attempts.
+
+  * Type: long
+  * Default: 60000
+  * Importance: low
+
+``kafkastore.sasl.kerberos.ticket.renew.jitter``
+  The percentage of random jitter added to the renewal time.
+
+  * Type: double
+  * Default: 0.05
+  * Importance: low
+
+``kafkastore.sasl.kerberos.ticket.renew.window.factor``
+  Login thread will sleep until the specified window factor of time from last refresh to ticket's expiry has been reached, at which time it will try to renew the ticket.
+
+  * Type: double
+  * Default: 0.8
   * Importance: low

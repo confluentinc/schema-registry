@@ -1221,6 +1221,15 @@ public class AvroDataTest {
     assertEquals(2, cache.size());
   }
 
+  @Test
+  public void testArrayOfRecordWithNullNamespace() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.array().items()
+            .record("item").fields()
+            .name("value").type().intType().noDefault()
+            .endRecord();
+
+    avroData.toConnectSchema(avroSchema);
+  }
 
   private NonRecordContainer checkNonRecordConversion(
       org.apache.avro.Schema expectedSchema, Object expected,

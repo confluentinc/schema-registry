@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.client;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+import java.util.Collection;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
@@ -38,4 +39,6 @@ public interface SchemaRegistryClient {
   public String updateCompatibility(String subject, String compatibility) throws IOException, RestClientException;
 
   public String getCompatibility(String subject) throws IOException, RestClientException;
+
+  public Collection<String> getAllSubjects() throws IOException, RestClientException;
 }

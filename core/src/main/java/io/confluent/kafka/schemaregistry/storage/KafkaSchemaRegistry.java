@@ -49,8 +49,11 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutExceptio
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
+import io.confluent.rest.Application;
+import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import kafka.utils.ZkUtils;
+import org.apache.kafka.common.config.ConfigException;
 import scala.Tuple2;
 
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
@@ -62,6 +65,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URI;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -102,6 +107,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private ZookeeperMasterElector masterElector = null;
   private Metrics metrics;
   private Sensor masterNodeSensor;
+  private boolean zkAclsEnabled;
 
   // Hand out this id during the next schema registration. Indexed from 1.
   private int nextAvailableSchemaId;
@@ -119,7 +125,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
       throws SchemaRegistryException {
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
-    int port = config.getInt(SchemaRegistryConfig.PORT_CONFIG);
+    int port = getPortForIdentity(config.getInt(SchemaRegistryConfig.PORT_CONFIG),
+            config.getList(RestConfig.LISTENERS_CONFIG));
     this.schemaRegistryZkNamespace = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
     this.isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
@@ -156,6 +163,38 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                            + " node where all register schema and config update requests are "
                            + "served.");
     this.masterNodeSensor.add(m, new Gauge());
+    this.zkAclsEnabled = checkZkAclConfig(config);
+  }
+
+  /**
+   * Checks if the user has configured ZooKeeper ACLs or not. Throws an exception if the ZooKeeper client is set
+   * to create znodes with an ACL, yet the JAAS config is not present. Otherwise, returns whether or not the user
+   * has enabled ZooKeeper ACLs.
+   */
+  public static boolean checkZkAclConfig(SchemaRegistryConfig config) {
+    if (config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils.isZkSecurityEnabled()) {
+      throw new ConfigException(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG + " is set to true but ZooKeeper's " +
+              "JAAS SASL configuration is not configured.");
+    }
+    return config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG);
+  }
+
+  /**
+   * A Schema Registry instance's identity is in part the port it listens on. Currently the
+   * port can either be configured via the deprecated `port` configuration, or via the `listeners`
+   * configuration.
+   *
+   * This method uses `Application.parseListeners()` from `rest-utils` to get a list of listeners, and
+   * returns the port of the first listener to be used for the instance's identity.
+   *
+   * In theory, any port from any listener would be sufficient. Choosing the first, instead of say the last,
+   * is arbitrary.
+   */
+  // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
+  static int getPortForIdentity(int port, List<String> configuredListeners) {
+    List<URI> listeners = Application.parseListeners(configuredListeners, port,
+            Arrays.asList("http", "https"), "http");
+    return listeners.get(0).getPort();
   }
 
   @Override
@@ -190,8 +229,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
     ZkUtils zkUtilsForNamespaceCreation = ZkUtils.apply(
         zkConnForNamespaceCreation,
-        zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled());
+        zkSessionTimeoutMs, zkSessionTimeoutMs, zkAclsEnabled);
     // create the zookeeper namespace using cluster.name if it doesn't already exist
     zkUtilsForNamespaceCreation.makeSurePersistentPathExists(
         schemaRegistryNamespace,
@@ -200,8 +238,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
              zkConnForNamespaceCreation + schemaRegistryNamespace);
     zkUtilsForNamespaceCreation.close();
     this.zkUtils = ZkUtils.apply(
-        schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-        JaasUtils.isZkSecurityEnabled());
+        schemaRegistryZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs, zkAclsEnabled);
   }
   
   public boolean isMaster() {
