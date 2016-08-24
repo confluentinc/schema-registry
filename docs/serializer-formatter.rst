@@ -191,3 +191,55 @@ In the following example, we read both the key and the value of the messages in 
 
    You should see following in the console.
       "key1" \t {"f1": "value1"}
+
+
+Wire Format
+-----------
+
+Most users can use the serializers and formatter directly and never worry about the details of how Avro messages are mapped
+to bytes. However, if you're working with a language that Confluent has not developed serializers for, or simply want a deeper
+understanding of how the Confluent Platform works, you may need more detail on how data is mapped to low-level bytes.
+
+The wire format currently has one with only a couple of components:
+
+=====  ========== ===========
+Bytes  Area       Description
+=====  ========== ===========
+0      Magic Byte Confluent serialization format version number; currently always ``0``.
+1-4    Schema ID  4-byte schema ID as returned by the Schema Registry
+5-...  Data       Avro serialized data in `Avro's binary encoding
+                  <https://avro.apache.org/docs/1.8.1/spec.html#binary_encoding>`_. The only exception is raw bytes, which
+                  will be written directly without any special Avro encoding.
+=====  ========== ===========
+
+Note that all components are encoded with big-endian ordering, i.e. standard network byte order.
+
+Compatibility Guarantees
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The serialization format used by Confluent Platform serializers is guaranteed to be stable over major releases without any
+changes to the default format without advanced warning. This is critical because the serialization format affects how keys
+are mapped across partitions. Because many applications depend on keys with the same *logical* format being routed to the
+same physical partition, it is usually important that the physical *byte* format of serialized data does not change
+unexpectedly for an application. Even the simplest modification can result in records with the same *logical key* being
+routed to different partitions because messages are routed to partitions based on the hash of the key.
+
+In order to ensure there is no variation even as the serializers are updated with new formats, the serializers are very
+conservative when updating output formats. To ensure stability for clients, Confluent Platform and its serializers ensure the
+following:
+
+* The format (including magic byte) will not change without significant warning over multiple Confluent Platform **major
+  releases**. Although the default may eventually be changed infrequently to allow adoption of new features by default, this
+  will be done *very* conservatively and with at least one major release between changes, during which the relevant changes
+  will result in user-facing warnings so no users will be caught off guard by the need for transition. Very significant,
+  compatibility-affecting changes will guarantee at least 1 major release of warning and 2 major releases before an
+  incompatible change will be made.
+* Within the version specified by the magic byte, the format will never change in any backwards-incompatible way. Any changes
+  made will be fully backward compatible with documentation in release notes and at last one version of warning will be
+  provided if it introduces a new serialization feature which requires additional downstream support.
+* Deserialization will be supported over multiple major releases. This does not guarantee indefinite support, but support for
+  deserializing any earlier formats will be supported indefinitely as long as there is no notified reason for
+  incompatibility.
+
+If you have any doubts about compatibility or support, reach out to the `community mailing list
+<https://groups.google.com/forum/#!forum/confluent-platform>`_. for details and  explanations.
