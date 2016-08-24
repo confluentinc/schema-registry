@@ -200,7 +200,7 @@ Most users can use the serializers and formatter directly and never worry about 
 to bytes. However, if you're working with a language that Confluent has not developed serializers for, or simply want a deeper
 understanding of how the Confluent Platform works, you may need more detail on how data is mapped to low-level bytes.
 
-The wire format currently has one with only a couple of components:
+The wire format currently has only a couple of components:
 
 =====  ========== ===========
 Bytes  Area       Description
@@ -218,11 +218,11 @@ Compatibility Guarantees
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 The serialization format used by Confluent Platform serializers is guaranteed to be stable over major releases without any
-changes to the default format without advanced warning. This is critical because the serialization format affects how keys
-are mapped across partitions. Because many applications depend on keys with the same *logical* format being routed to the
-same physical partition, it is usually important that the physical *byte* format of serialized data does not change
-unexpectedly for an application. Even the simplest modification can result in records with the same *logical key* being
-routed to different partitions because messages are routed to partitions based on the hash of the key.
+changes without advanced warning. This is critical because the serialization format affects how keys are mapped across
+partitions. Because many applications depend on keys with the same *logical* format being routed to the same physical
+partition, it is usually important that the physical *byte* format of serialized data does not change unexpectedly for an
+application. Even the smallest modification can result in records with the same *logical key* being routed to different
+partitions because messages are routed to partitions based on the hash of the key.
 
 In order to ensure there is no variation even as the serializers are updated with new formats, the serializers are very
 conservative when updating output formats. To ensure stability for clients, Confluent Platform and its serializers ensure the
