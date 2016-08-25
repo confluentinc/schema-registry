@@ -235,7 +235,7 @@ following:
   compatibility-affecting changes will guarantee at least 1 major release of warning and 2 major releases before an
   incompatible change will be made.
 * Within the version specified by the magic byte, the format will never change in any backwards-incompatible way. Any changes
-  made will be fully backward compatible with documentation in release notes and at last one version of warning will be
+  made will be fully backward compatible with documentation in release notes and at least one version of warning will be
   provided if it introduces a new serialization feature which requires additional downstream support.
 * Deserialization will be supported over multiple major releases. This does not guarantee indefinite support, but support for
   deserializing any earlier formats will be supported indefinitely as long as there is no notified reason for
