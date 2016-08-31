@@ -24,10 +24,15 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 public class SchemaRegistryPerformance extends AbstractPerformanceTest {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroUtils.class);
 
   long targetRegisteredSchemas;
   long targetSchemasPerSec;
@@ -79,7 +84,11 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
                           + "\"fields\":"
                           + "[{\"type\":\"string\",\"name\":"
                           + "\"f" + num + "\"}]}";
-    return AvroUtils.parseSchema(schemaString).canonicalString;
+    try {
+      return AvroUtils.parseSchema(schemaString).canonicalString;
+    } catch (InvalidSchemaException e) {
+      return null;
+    }
   }
 
   @Override

@@ -24,7 +24,7 @@ import static org.junit.Assert.assertTrue;
 public class AvroCompatibilityTest {
 
   @Test
-  public void testBasicCompatibility() {
+  public void testBasicCompatibility() throws Exception {
     String schemaString1 = "{\"type\":\"record\","
                            + "\"name\":\"myrecord\","
                            + "\"fields\":"

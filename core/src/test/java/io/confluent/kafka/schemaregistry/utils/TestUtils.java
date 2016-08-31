@@ -15,9 +15,11 @@
  */
 package io.confluent.kafka.schemaregistry.utils;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 
 import java.io.File;
 import java.io.IOException;
@@ -130,7 +132,12 @@ public class TestUtils {
                             + "\"fields\":"
                             + "[{\"type\":\"string\",\"name\":"
                             + "\"f" + random.nextInt(Integer.MAX_VALUE) + "\"}]}";
-      avroStrings.add(AvroUtils.parseSchema(schemaString).canonicalString);
+      try {
+        AvroSchema avroSchema = AvroUtils.parseSchema(schemaString);
+        avroStrings.add(AvroUtils.parseSchema(schemaString).canonicalString);
+      } catch (InvalidSchemaException e) {
+      }
+
     }
     return avroStrings;
   }

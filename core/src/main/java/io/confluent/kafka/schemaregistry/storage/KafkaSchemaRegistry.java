@@ -565,9 +565,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   private AvroSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
     AvroSchema avroSchema = AvroUtils.parseSchema(schema.getSchema());
-    if (avroSchema == null) {
-      throw new InvalidSchemaException("Invalid schema " + schema.toString());
-    }
     schema.setSchema(avroSchema.canonicalString);
     return avroSchema;
   }
@@ -734,10 +731,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       throws SchemaRegistryException {
     AvroSchema newAvroSchema = AvroUtils.parseSchema(newSchemaObj);
     AvroSchema latestAvroSchema = AvroUtils.parseSchema(latestSchema);
-    if (latestSchema == null) {
-      throw new InvalidSchemaException(
-          "Existing schema " + latestSchema + " is not a valid Avro schema");
-    }
     AvroCompatibilityLevel compatibility = getCompatibilityLevel(subject);
     if (compatibility == null) {
       compatibility = getCompatibilityLevel(null);

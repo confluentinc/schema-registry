@@ -15,10 +15,15 @@
  */
 package io.confluent.kafka.schemaregistry.avro;
 
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AvroUtils {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroUtils.class);
 
   /**
    * Convert a schema string into a schema object and a canonical schema string.
@@ -26,14 +31,15 @@ public class AvroUtils {
    * @return A schema object and a canonical representation of the schema string. Return null if
    * there is any parsing error.
    */
-  public static AvroSchema parseSchema(String schemaString) {
+  public static AvroSchema parseSchema(String schemaString) throws InvalidSchemaException {
     try {
       Schema.Parser parser1 = new Schema.Parser();
       Schema schema = parser1.parse(schemaString);
       //TODO: schema.toString() is not canonical (issue-28)
       return new AvroSchema(schema, schema.toString());
     } catch (SchemaParseException e) {
-      return null;
+      log.error("Error parsing schema - " + schemaString, e);
+      throw new InvalidSchemaException(e);
     }
   }
 }
