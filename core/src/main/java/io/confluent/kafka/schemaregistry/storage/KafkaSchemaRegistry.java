@@ -67,6 +67,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -336,16 +337,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
       // determine the latest version of the schema in the subject
       Iterator<Schema> allVersions = getAllVersions(subject);
+      List<String> allSchemas = new ArrayList<>(); 
       Schema latestSchema = null;
       int newVersion = MIN_VERSION;
       while (allVersions.hasNext()) {
         latestSchema = allVersions.next();
+        allSchemas.add(latestSchema.getSchema());
         newVersion = latestSchema.getVersion() + 1;
       }
 
       // assign a guid and put the schema in the kafka store
       if (latestSchema == null || isCompatible(subject, avroSchema.canonicalString,
-                                               latestSchema.getSchema())) {
+                                               allSchemas)) {
         SchemaKey keyForNewVersion = new SchemaKey(subject, newVersion);
         schema.setVersion(newVersion);
 
@@ -730,20 +733,46 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   @Override
   public boolean isCompatible(String subject,
                               String newSchemaObj,
-                              String latestSchema)
+                              String latestSchema) 
       throws SchemaRegistryException {
-    AvroSchema newAvroSchema = AvroUtils.parseSchema(newSchemaObj);
-    AvroSchema latestAvroSchema = AvroUtils.parseSchema(latestSchema);
     if (latestSchema == null) {
       throw new InvalidSchemaException(
-          "Existing schema " + latestSchema + " is not a valid Avro schema");
+        "Latest schema not provided");
     }
+    return isCompatible(subject, newSchemaObj, Collections.singletonList(latestSchema));
+  }
+
+  /**
+   * @param previousSchemas Full schema history in chronological order
+   */
+  @Override
+  public boolean isCompatible(String subject,
+                              String newSchemaObj,
+                              List<String> previousSchemas)
+      throws SchemaRegistryException {
+    AvroSchema newAvroSchema = AvroUtils.parseSchema(newSchemaObj);
+    
+    if (previousSchemas == null || previousSchemas.isEmpty()) {
+      throw new InvalidSchemaException(
+          "Previous schema not provided");
+    }
+    
+    List<org.apache.avro.Schema> previousAvroSchemas = new ArrayList<>(previousSchemas.size());
+    for (String previousSchema : previousSchemas) {
+      if (previousSchema == null) {
+        throw new InvalidSchemaException(
+          "Existing schema " + previousSchema + " is not a valid Avro schema");
+      }
+      AvroSchema previousAvroSchema = AvroUtils.parseSchema(previousSchema);
+      previousAvroSchemas.add(previousAvroSchema.schemaObj);
+    }
+    
     AvroCompatibilityLevel compatibility = getCompatibilityLevel(subject);
     if (compatibility == null) {
       compatibility = getCompatibilityLevel(null);
     }
     return compatibility.compatibilityChecker
-        .isCompatible(newAvroSchema.schemaObj, latestAvroSchema.schemaObj);
+        .isCompatible(newAvroSchema.schemaObj, previousAvroSchemas);
   }
   
   /** For testing. */

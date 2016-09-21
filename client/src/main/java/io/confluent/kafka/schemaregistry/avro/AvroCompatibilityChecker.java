@@ -21,25 +21,47 @@ import org.apache.avro.SchemaValidator;
 import org.apache.avro.SchemaValidatorBuilder;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class AvroCompatibilityChecker {
 
-  // Check if the new schema can be used to read data produced by the latest schema
+  // Check if the new schema can be used to read data produced by the previous schema
   private static SchemaValidator BACKWARD_VALIDATOR =
       new SchemaValidatorBuilder().canReadStrategy().validateLatest();
   public static AvroCompatibilityChecker BACKWARD_CHECKER = new AvroCompatibilityChecker(
       BACKWARD_VALIDATOR);
-  // Check if data produced by the new schema can be read by the latest schema
+  
+  // Check if data produced by the new schema can be read by the previous schema
   private static SchemaValidator FORWARD_VALIDATOR =
       new SchemaValidatorBuilder().canBeReadStrategy().validateLatest();
   public static AvroCompatibilityChecker FORWARD_CHECKER = new AvroCompatibilityChecker(
       FORWARD_VALIDATOR);
-  // Check if the new schema is both forward and backward compatible with the latest schema
+  
+  // Check if the new schema is both forward and backward compatible with the previous schema
   private static SchemaValidator FULL_VALIDATOR =
       new SchemaValidatorBuilder().mutualReadStrategy().validateLatest();
   public static AvroCompatibilityChecker FULL_CHECKER = new AvroCompatibilityChecker(
       FULL_VALIDATOR);
+  
+  // Check if the new schema can be used to read data produced by all earlier schemas
+  private static SchemaValidator BACKWARD_TRANSITIVE_VALIDATOR =
+      new SchemaValidatorBuilder().canReadStrategy().validateAll();
+  public static AvroCompatibilityChecker BACKWARD_TRANSITIVE_CHECKER = new AvroCompatibilityChecker(
+      BACKWARD_TRANSITIVE_VALIDATOR);
+  
+  // Check if data produced by the new schema can be read by all earlier schemas
+  private static SchemaValidator FORWARD_TRANSITIVE_VALIDATOR =
+      new SchemaValidatorBuilder().canBeReadStrategy().validateAll();
+  public static AvroCompatibilityChecker FORWARD_TRANSITIVE_CHECKER = new AvroCompatibilityChecker(
+      FORWARD_TRANSITIVE_VALIDATOR);
+  
+  // Check if the new schema is both forward and backward compatible with all earlier schemas
+  private static SchemaValidator FULL_TRANSITIVE_VALIDATOR =
+      new SchemaValidatorBuilder().mutualReadStrategy().validateAll();
+  public static AvroCompatibilityChecker FULL_TRANSITIVE_CHECKER = new AvroCompatibilityChecker(
+      FULL_TRANSITIVE_VALIDATOR);
+  
   private static SchemaValidator NO_OP_VALIDATOR = new SchemaValidator() {
     @Override
     public void validate(Schema schema, Iterable<Schema> schemas) throws SchemaValidationException {
@@ -48,6 +70,7 @@ public class AvroCompatibilityChecker {
   };
   public static AvroCompatibilityChecker NO_OP_CHECKER = new AvroCompatibilityChecker(
       NO_OP_VALIDATOR);
+  
   private final SchemaValidator validator;
 
   private AvroCompatibilityChecker(SchemaValidator validator) {
@@ -58,11 +81,19 @@ public class AvroCompatibilityChecker {
    * Check the compatibility between the new schema and the latest schema
    */
   public boolean isCompatible(Schema newSchema, Schema latestSchema) {
-    List<Schema> schemas = new ArrayList<Schema>();
-    schemas.add(latestSchema);
-
+    return isCompatible(newSchema, Collections.singletonList(latestSchema));
+  }
+  
+  /**
+   * Check the compatibility between the new schema and the specified schemas
+   * @param previousSchemas Full schema history in chronological order
+   */
+  public boolean isCompatible(Schema newSchema, List<Schema> previousSchemas) {
+      List<Schema> previousSchemasCopy = new ArrayList<>(previousSchemas);
     try {
-      validator.validate(newSchema, schemas);
+      // Validator checks in list order, but checks should occur in reverse chronological order
+      Collections.reverse(previousSchemasCopy);
+      validator.validate(newSchema, previousSchemasCopy);
     } catch (SchemaValidationException e) {
       return false;
     }
