@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.xml.bind.DatatypeConverter;
 
 /**
  * Rest access layer for sending requests to the schema registry.
@@ -122,9 +123,13 @@ public class RestService {
     HttpURLConnection connection = null;
     try {
       URL url = new URL(baseUrl);
+      String userInfo = url.getUserInfo();
       connection = (HttpURLConnection) url.openConnection();
       connection.setRequestMethod(method);
-
+      if(userInfo != null) {
+        String authHeader = DatatypeConverter.printBase64Binary(userInfo.getBytes());
+        connection.setRequestProperty("Authorization", "Basic " + authHeader);
+      }
       // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
       // On the other hand, leaving this out breaks nothing.
       connection.setDoInput(true);
