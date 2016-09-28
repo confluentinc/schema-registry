@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 Confluent Inc.
+ * Copyright 2014-2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,22 +130,26 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     this.schemaRegistryZkNamespace = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
     this.isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
-    this.kafkaClusterZkUrl =
-        config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
-    this.zkSessionTimeoutMs =
-        config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
-    this.kafkaStoreTimeoutMs = 
-        config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
     this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();
+    this.zkAclsEnabled = checkZkAclConfig(config);
+
+    KafkaStoreConfig kafkaStoreConfig = new KafkaStoreConfig(config.originalsWithPrefix(KafkaStoreConfig.KAFKASTORE_CONFIG_PREFIX));
+
+    this.kafkaClusterZkUrl =
+        kafkaStoreConfig.getString(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
+    this.zkSessionTimeoutMs =
+        kafkaStoreConfig.getInt(KafkaStoreConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
+    this.kafkaStoreTimeoutMs = 
+        kafkaStoreConfig.getInt(KafkaStoreConfig.KAFKASTORE_TIMEOUT_CONFIG);
     kafkaStore =
         new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
-            config,
+            kafkaStoreConfig,
             new KafkaStoreMessageHandler(this),
             this.serializer,
-            new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>(), new NoopKey());
+            new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>(), new NoopKey(), zkAclsEnabled);
     MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
             .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
@@ -163,7 +167,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                            + " node where all register schema and config update requests are "
                            + "served.");
     this.masterNodeSensor.add(m, new Gauge());
-    this.zkAclsEnabled = checkZkAclConfig(config);
   }
 
   /**

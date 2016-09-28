@@ -43,6 +43,7 @@
         <module>package-schema-registry</module>
         <module>package-kafka-serde-tools</module>
         <module>maven-plugin</module>
+        <module>kafka-store</module>
     </modules>
 
     <properties>

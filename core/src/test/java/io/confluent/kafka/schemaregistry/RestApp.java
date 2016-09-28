@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 Confluent Inc.
+ * Copyright 2014-2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.storage.KafkaStoreConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 
@@ -48,8 +49,9 @@ public class RestApp {
                  String compatibilityType, boolean masterEligibility) {
     prop = new Properties();
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
-    prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    prop.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
+    prop.setProperty(KafkaStoreConfig.KAFKASTORE_CONFIG_PREFIX + KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    prop.put(KafkaStoreConfig.KAFKASTORE_CONFIG_PREFIX + KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
+    prop.setProperty(KafkaStoreConfig.KAFKASTORE_CONFIG_PREFIX + KafkaStoreConfig.KAFKASTORE_KAFKA_GROUPID, "test-group");
     prop.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, compatibilityType);
     prop.put(SchemaRegistryConfig.MASTER_ELIGIBILITY, masterEligibility);
   }

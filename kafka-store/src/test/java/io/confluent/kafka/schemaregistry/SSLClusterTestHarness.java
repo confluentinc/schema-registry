@@ -56,7 +56,6 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
 
     // setup client SSL. Needs to happen before the broker is initialized, because the client's cert
     // needs to be added to the broker's trust store.
-    Map<String, Object> sslConfigs;
     try {
       this.clientSslConfigs = TestSslUtils.createSslConfig(true, true, Mode.CLIENT,
               trustStoreFile, "client", "localhost");

@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 Confluent Inc.
+ * Copyright 2014-2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
-import io.confluent.rest.RestConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.protocol.SecurityProtocol;
@@ -62,10 +60,8 @@ public class StoreUtils {
           String zkConnect, ZkClient zkClient) {
     Properties props = new Properties();
 
-    props.put(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG,
+    props.put(KafkaStoreConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG,
             SecurityProtocol.SASL_PLAINTEXT.toString());
-
-    props.put(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG, false);
 
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
     return createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, props);
@@ -79,19 +75,18 @@ public class StoreUtils {
           boolean requireSSLClientAuth) {
     Properties props = new Properties();
 
-    props.put(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG,
-            SecurityProtocol.SSL.toString());
-    props.put(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG,
-            sslConfigs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-    props.put(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG,
-            ((Password)sslConfigs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
+    props.put(KafkaStoreConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.toString());
+    props.put(KafkaStoreConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG,
+        sslConfigs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+    props.put(KafkaStoreConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG,
+        ((Password) sslConfigs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
     if (requireSSLClientAuth) {
-      props.put(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG,
-              sslConfigs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
-      props.put(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG,
-              ((Password) sslConfigs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG)).value());
-      props.put(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG,
-              ((Password) sslConfigs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)).value());
+      props.put(KafkaStoreConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG,
+          sslConfigs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
+      props.put(KafkaStoreConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG,
+          ((Password) sslConfigs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG)).value());
+      props.put(KafkaStoreConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG,
+          ((Password) sslConfigs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)).value());
     }
 
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
@@ -104,20 +99,18 @@ public class StoreUtils {
   public static KafkaStore<String, String> createAndInitKafkaStoreInstance(
           String zkConnect, ZkClient zkClient, Store<String, String> inMemoryStore,
           Properties props) {
-    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+    props.put(KafkaStoreConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(KafkaStoreConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+    props.put(KafkaStoreConfig.KAFKASTORE_KAFKA_GROUPID, "test-group");
 
-    SchemaRegistryConfig config = null;
-    try {
-      config = new SchemaRegistryConfig(props);
-    } catch (RestConfigException e) {
-      fail("Can't initialize configs");
-    }
+    KafkaStoreConfig config = new KafkaStoreConfig(props);
+
+    boolean isZkSecurityEnabled = false;
 
     KafkaStore<String, String> kafkaStore =
-            new KafkaStore<String, String>(config, new StringMessageHandler(),
+            new KafkaStore<>(config, new StringMessageHandler(),
                     StringSerializer.INSTANCE,
-                    inMemoryStore, new NoopKey().toString());
+                    inMemoryStore, "NoopKey", isZkSecurityEnabled);
     try {
       kafkaStore.init();
     } catch (StoreInitializationException e) {

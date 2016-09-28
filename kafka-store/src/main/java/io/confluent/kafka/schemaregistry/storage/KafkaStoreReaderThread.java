@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 Confluent Inc.
+ * Copyright 2014-2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -77,7 +76,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 Serializer<K, V> serializer,
                                 Store<K, V> localStore,
                                 K noopKey,
-                                SchemaRegistryConfig config) {
+                                KafkaStoreConfig config) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     offsetUpdateLock = new ReentrantLock();
     offsetReachedThreshold = offsetUpdateLock.newCondition();
@@ -101,7 +100,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
 
     consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
+            config.getString(KafkaStoreConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
     KafkaStore.addSecurityConfigsToClientProperties(config, consumerProps);
 
     this.consumer = new KafkaConsumer<>(consumerProps);

@@ -15,27 +15,51 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.SASLClusterTestHarness;
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.SSLClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.apache.kafka.common.errors.TimeoutException;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
-// tests SASL with ZooKeeper and Kafka.
-public class KafkaStoreSASLTest extends SASLClusterTestHarness {
+public class KafkaStoreSSLAuthTest extends SSLClusterTestHarness {
+  private static final Logger log = LoggerFactory.getLogger(KafkaStoreSSLAuthTest.class);
+
+  @Before
+  public void setup() {
+    log.debug("Zk conn url = " + zkConnect);
+  }
+
+  @After
+  public void teardown() {
+    log.debug("Shutting down");
+  }
+
   @Test
   public void testInitialization() {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect,
-            zkClient);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
+            zkClient, clientSslConfigs, requireSSLClientAuth());
     kafkaStore.close();
+  }
+
+  @Test(expected = TimeoutException.class)
+  public void testInitializationWithoutClientAuth() {
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
+            zkClient, clientSslConfigs, false);
+    kafkaStore.close();
+
+    // TODO: make the timeout shorter so the test fails quicker.
   }
 
   @Test(expected = StoreInitializationException.class)
   public void testDoubleInitialization() throws StoreInitializationException {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect,
-            zkClient);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
+            zkClient, clientSslConfigs, requireSSLClientAuth());
     try {
       kafkaStore.init();
     } finally {
@@ -45,8 +69,8 @@ public class KafkaStoreSASLTest extends SASLClusterTestHarness {
 
   @Test
   public void testSimplePut() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect,
-            zkClient);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
+            zkClient, clientSslConfigs, requireSSLClientAuth());
     String key = "Kafka";
     String value = "Rocks";
     try {
