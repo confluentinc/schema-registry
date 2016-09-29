@@ -282,9 +282,9 @@ public class AvroData {
    *                                       and can return null
    * @return the converted data
    */
-  private static Object fromConnectData(Schema schema, org.apache.avro.Schema avroSchema,
-                                       Object logicalValue, boolean requireContainer, boolean
-                                            requireSchemalessContainerNull) {
+  public static Object fromConnectData(Schema schema, org.apache.avro.Schema avroSchema,
+                                       Object logicalValue, boolean requireContainer,
+                                       boolean requireSchemalessContainerNull) {
     Schema.Type schemaType = schema != null ? schema.type() : schemaTypeForSchemalessJavaType(logicalValue);
     if (schemaType == null) {
       // Schemaless null data since schema is null and we got a null schema type from the value
