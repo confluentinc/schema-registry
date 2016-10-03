@@ -737,7 +737,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       throws SchemaRegistryException {
     if (latestSchema == null) {
       throw new InvalidSchemaException(
-        "Latest schema not provided");
+          "Latest schema not provided");
     }
     return isCompatible(subject, newSchemaObj, Collections.singletonList(latestSchema));
   }

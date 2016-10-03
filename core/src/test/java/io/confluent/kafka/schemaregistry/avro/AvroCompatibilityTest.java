@@ -184,7 +184,7 @@ public class AvroCompatibilityTest {
    * and transitively forward compatible with the entire schema history.
    */
   @Test
-  public void testBasicFullTransitvityCompatibility() {
+  public void testBasicFullTransitiveCompatibility() {
     AvroCompatibilityChecker checker = AvroCompatibilityChecker.FULL_TRANSITIVE_CHECKER;
     
     // Simple check

@@ -124,17 +124,17 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public SchemaMetadata getSchemaMetadata(String subject, int version) throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
-    = restService.getVersion(subject, version);
-   int id = response.getId();
-   String schema = response.getSchema();
-   return new SchemaMetadata(id, version, schema);
+      = restService.getVersion(subject, version);
+    int id = response.getId();
+    String schema = response.getSchema();
+    return new SchemaMetadata(id, version, schema);
   }
 
   @Override
   public synchronized SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
-     = restService.getLatestVersion(subject);
+      = restService.getLatestVersion(subject);
     int id = response.getId();
     int version = response.getVersion();
     String schema = response.getSchema();

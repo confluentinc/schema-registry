@@ -89,7 +89,7 @@ public class AvroCompatibilityChecker {
    * @param previousSchemas Full schema history in chronological order
    */
   public boolean isCompatible(Schema newSchema, List<Schema> previousSchemas) {
-      List<Schema> previousSchemasCopy = new ArrayList<>(previousSchemas);
+    List<Schema> previousSchemasCopy = new ArrayList<>(previousSchemas);
     try {
       // Validator checks in list order, but checks should occur in reverse chronological order
       Collections.reverse(previousSchemasCopy);
