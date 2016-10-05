@@ -51,7 +51,7 @@
         <kafka.version>0.10.2.0-SNAPSHOT</kafka.version>
         <kafka.scala.version>2.11</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
-        <restutils.version>3.1.0-SNAPSHOT</restutils.version>
+        <restutils.version>3.2.0-SNAPSHOT</restutils.version>
         <avro.version>1.7.7</avro.version>
         <jackson.version>2.5.4</jackson.version>
         <junit.version>4.12</junit.version>
