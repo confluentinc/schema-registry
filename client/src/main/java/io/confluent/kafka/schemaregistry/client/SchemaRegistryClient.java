@@ -32,6 +32,8 @@ public interface SchemaRegistryClient {
 
   public SchemaMetadata getLatestSchemaMetadata(String subject) throws IOException, RestClientException;
 
+  public SchemaMetadata getSchemaMetadata(String subject, int version) throws IOException, RestClientException;
+
   public int getVersion(String subject, Schema schema) throws IOException, RestClientException;
 
   public boolean testCompatibility(String subject, Schema schema) throws IOException, RestClientException;

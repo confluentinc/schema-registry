@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -41,9 +42,14 @@ public interface SchemaRegistry {
 
   Schema lookUpSchemaUnderSubject(String subject, Schema schema) throws SchemaRegistryException;
 
-  public boolean isCompatible(String subject,
-                              String inputSchema,
-                              String targetSchema) throws SchemaRegistryException;
+  boolean isCompatible(String subject,
+                       String inputSchema,
+                       String targetSchema) throws SchemaRegistryException;
+
+  boolean isCompatible(String subject,
+                       String newSchema,
+                       List<String> previousSchemas) throws SchemaRegistryException;
 
   void close();
+
 }
