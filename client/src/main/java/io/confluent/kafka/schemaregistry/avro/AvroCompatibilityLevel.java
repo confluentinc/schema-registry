@@ -18,8 +18,11 @@ package io.confluent.kafka.schemaregistry.avro;
 public enum AvroCompatibilityLevel {
   NONE("NONE", AvroCompatibilityChecker.NO_OP_CHECKER),
   BACKWARD("BACKWARD", AvroCompatibilityChecker.BACKWARD_CHECKER),
+  BACKWARD_TRANSITIVE("BACKWARD_TRANSITIVE", AvroCompatibilityChecker.BACKWARD_TRANSITIVE_CHECKER),
   FORWARD("FORWARD", AvroCompatibilityChecker.FORWARD_CHECKER),
-  FULL("FULL", AvroCompatibilityChecker.FULL_CHECKER);
+  FORWARD_TRANSITIVE("FORWARD_TRANSITIVE", AvroCompatibilityChecker.FORWARD_TRANSITIVE_CHECKER),
+  FULL("FULL", AvroCompatibilityChecker.FULL_CHECKER),
+  FULL_TRANSITIVE("FULL_TRANSITIVE", AvroCompatibilityChecker.FULL_TRANSITIVE_CHECKER);
 
   public final String name;
   public final AvroCompatibilityChecker compatibilityChecker;
@@ -43,8 +46,15 @@ public enum AvroCompatibilityLevel {
       return FORWARD;
     } else if (FULL.name.equals(name)) {
       return FULL;
+    } else if (BACKWARD_TRANSITIVE.name.equals(name)) {
+      return BACKWARD_TRANSITIVE;
+    } else if (FORWARD_TRANSITIVE.name.equals(name)) {
+      return FORWARD_TRANSITIVE;
+    } else if (FULL_TRANSITIVE.name.equals(name)) {
+      return FULL_TRANSITIVE;
     } else {
       return null;
     }
   }
+  
 }

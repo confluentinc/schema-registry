@@ -163,9 +163,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized SchemaMetadata getLatestSchemaMetadata(String subject)
-      throws IOException, RestClientException {
-    int version = getLatestVersion(subject);
+  public synchronized SchemaMetadata getSchemaMetadata(String subject, int version) {
     String schemaString = null;
     Map<Schema, Integer> schemaVersionMap = versionCache.get(subject);
     for (Map.Entry<Schema, Integer> entry: schemaVersionMap.entrySet()) {
@@ -184,6 +182,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public synchronized SchemaMetadata getLatestSchemaMetadata(String subject)
+      throws IOException, RestClientException {
+    int version = getLatestVersion(subject);
+    return getSchemaMetadata(subject, version);
+  }
+
+  @Override
   public synchronized int getVersion(String subject, Schema schema)
       throws IOException, RestClientException{
     if (versionCache.containsKey(subject)) {
@@ -196,8 +201,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public boolean testCompatibility(String subject, Schema newSchema) throws IOException,
       RestClientException {
-    SchemaMetadata latestSchemaMetadata = getLatestSchemaMetadata(subject);
-    Schema latestSchema = getSchemaBySubjectAndIdFromRegistry(subject, latestSchemaMetadata.getId());
     String compatibility = compatibilityCache.get(subject);
     if (compatibility == null) {
       compatibility = defaultCompatibility;
@@ -207,8 +210,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (compatibilityLevel == null) {
       return false;
     }
+    
+    List<Schema> schemaHistory = new ArrayList<>();
+    for (int version : getAllVersions(subject)) {
+      SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
+      schemaHistory.add(getSchemaBySubjectAndIdFromRegistry(subject, schemaMetadata.getId()));
+    }
 
-    return compatibilityLevel.compatibilityChecker.isCompatible(newSchema, latestSchema);
+    return compatibilityLevel.compatibilityChecker.isCompatible(newSchema, schemaHistory);
   }
 
   @Override
