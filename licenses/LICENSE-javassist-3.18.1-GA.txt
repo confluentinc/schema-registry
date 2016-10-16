@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Home page of The Apache Software Foundation">
+  
+  <link rel="apple-touch-icon" sizes="57x57" href="/favicons/apple-touch-icon-57x57.png">
+  <link rel="apple-touch-icon" sizes="60x60" href="/favicons/apple-touch-icon-60x60.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="/favicons/apple-touch-icon-72x72.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="/favicons/apple-touch-icon-76x76.png">
+  <link rel="apple-touch-icon" sizes="114x114" href="/favicons/apple-touch-icon-114x114.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="/favicons/apple-touch-icon-120x120.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="/favicons/apple-touch-icon-144x144.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/favicons/apple-touch-icon-152x152.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon-180x180.png">
+  <link rel="icon" type="image/png" href="/favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/favicons/favicon-194x194.png" sizes="194x194">
+  <link rel="icon" type="image/png" href="/favicons/favicon-96x96.png" sizes="96x96">
+  <link rel="icon" type="image/png" href="/favicons/android-chrome-192x192.png" sizes="192x192">
+  <link rel="icon" type="image/png" href="/favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="manifest" href="/favicons/manifest.json">
+  <link rel="shortcut icon" href="/favicons/favicon.ico">
+  <meta name="msapplication-TileColor" content="#603cba">
+  <meta name="msapplication-TileImage" content="/favicons/mstile-144x144.png">
+  <meta name="msapplication-config" content="/favicons/browserconfig.xml">
+  <meta name="theme-color" content="#303284">
+
+  <title>Licenses</title>
+  <link href='https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700%7cDroid+Serif:400,700' rel='stylesheet' type='text/css'>
+  <link href="/css/min.bootstrap.css" rel="stylesheet">
+  <link href="/css/styles.css" rel="stylesheet">  
+    
+
+    <!-- Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements.  See the NOTICE file distributed with this work for additional information regarding copyright ownership.  The ASF licenses this file to you under the Apache License, Version 2.0 (the &quot;License&quot;); you may not use this file except in compliance with the License.  You may obtain a copy of the License at . http://www.apache.org/licenses/LICENSE-2.0 . Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the License for the specific language governing permissions and limitations under the License. -->
+
+</head>
+
+<body>
+<!-- Navigation -->  
+<header>
+  <nav class="navbar navbar-default navbar-fixed-top">
+    <div class="container">
+      <div class="navbar-header">
+        <button class="navbar-toggle" type="button" data-toggle="collapse" data-target="#mainnav-collapse">
+          <span class="sr-only">Toggle navigation</span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+        </button>
+        <a href="#" class="navbar-brand"><span class="glyphicon glyphicon-home"></span></a>
+      </div>
+      <div class="collapse navbar-collapse" id="mainnav-collapse">
+        <div style="line-height:20px; padding-top:5px; float:left"><a href="/">Home</a>&nbsp;&raquo&nbsp;<a href="/licenses/">Licenses</a></div>
+        <ul class="nav navbar-nav navbar-right">
+          <li class="dropdown">
+          	<a href="#" class="dropdown-toggle" data-toggle="dropdown">About <span class="caret"></span></a>
+          	<ul class="dropdown-menu" role="menu">
+      				<li><a href="/foundation">Overview</a></li>
+      				<li><a href="/foundation/members.html">Members</a></li>
+      				<li><a href="/foundation/how-it-works.html">Process</a></li>
+      				<li><a href="/foundation/sponsorship.html">Sponsorship</a></li>
+      				<li><a href="/foundation/glossary.html">Glossary</a></li>
+      				<li><a href="/foundation/preFAQ.html">FAQ</a></li>
+      				<li><a href="/foundation/contact.html ">Contact</a></li>      				
+          	</ul>
+          </li>
+			<li><a href="/index.html#projects-list">Projects</a></li>
+  				<li class="dropdown">
+	        	<a href="#" class="dropdown-toggle" data-toggle="dropdown">People <span class="caret"></span></a>
+	        	<ul class="dropdown-menu" role="menu">
+  						<li><a href="http://people.apache.org/">Overview</a></li>
+  						<li><a href="http://people.apache.org/committer-index.html">Committers</a></li>
+  						<li><a href="/foundation/how-it-works.html#meritocracy">Meritocracy</a></li>
+  						<li><a href="/foundation/how-it-works.html#roles">Roles</a></li>
+  						<li><a href="http://planet.apache.org/">Planet Apache</a></li>
+	        	</ul>
+	        </li>
+          <li class="dropdown">
+            <a href="#" class="dropdown-toggle" data-toggle="dropdown">Get Involved <span class="caret"></span></a>
+            <ul class="dropdown-menu" role="menu">
+              <li><a href="/foundation/getinvolved.html">Overview</a></li>
+      				<li><a href="http://community.apache.org/">Community Development</a></li>
+                    <li><a href="http://helpwanted.apache.org/">Help Wanted</a></li>
+      				<li><a href="http://www.apachecon.com/">ApacheCon</a></li>
+            </ul>
+  				</li>
+          <li><a href="/dyn/closer.cgi">Download</a></li>
+          <li class="dropdown">
+          	<a href="#" class="dropdown-toggle" data-toggle="dropdown">Support Apache <span class="caret"></span></a>
+          	<ul class="dropdown-menu" role="menu">
+      				<li><a href="/foundation/sponsorship.html">Sponsorship</a></li>
+      				<li><a href="/foundation/contributing.html">Donations</a></li>
+      				<li><a href="/foundation/buy_stuff.html">Buy Stuff</a></li>
+      				<li><a href="/foundation/thanks.html">Thanks</a></li>
+          	</ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+</header>
+<!-- / Navigation -->
+<div class="container">
+  <div class="row">
+    <div class="col-md-9 col-sm-8 col-xs-12">
+      <img src="/img/asf_logo.png" alt="Apache Logo" style="max-width: 100%;">
+    </div>
+    <div class="col-md-3 col-sm-4 col-xs-12">
+      <div class="input-group" style="margin-bottom: 5px;">
+				<script>
+  (function() {
+    var cx = '005703438322411770421:5mgshgrgx2u';
+    var gcse = document.createElement('script');
+    gcse.type = 'text/javascript';
+    gcse.async = true;
+    gcse.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') +
+        '//cse.google.com/cse.js?cx=' + cx;
+    var s = document.getElementsByTagName('script')[0];
+    s.parentNode.insertBefore(gcse, s);
+  })();
+</script>
+		  <gcse:searchbox-only></gcse:searchbox-only>
+			</div>
+			<a role="button" class="btn btn-block btn-default btn-xs" href="/foundation/governance/">The Apache Way</a>
+			<a role="button" class="btn btn-block btn-default btn-xs" href="https://community.apache.org/contributors/">Contribute</a>
+			<a role="button" class="btn btn-block btn-default btn-xs" href="/foundation/thanks.html">ASF Sponsors</a>
+    </div>
+  </div>
+</div>
+<div class="container"><style type="text/css">
+/* The following code is added by mdx_elementid.py
+   It was originally lifted from http://subversion.apache.org/style/site.css */
+/*
+ * Hide class="elementid-permalink", except when an enclosing heading
+ * has the :hover property.
+ */
+.headerlink, .elementid-permalink {
+  visibility: hidden;
+}
+h2:hover > .headerlink, h3:hover > .headerlink, h1:hover > .headerlink, h6:hover > .headerlink, h4:hover > .headerlink, h5:hover > .headerlink, dt:hover > .elementid-permalink { visibility: visible }</style>
+<p>The Apache Software Foundation uses various licenses to <a href="#distributions">distribute
+software and documentation</a>, to accept regular
+<a href="#clas">contributions from individuals and corporations</a>, and to accept
+larger <a href="#grants">grants of existing software products</a>.</p>
+<p>These licenses help us achieve our goal of providing reliable and
+long-lived software products through collaborative open source software
+development. In all cases, contributors retain full rights to use their
+original contributions for any other purpose outside of Apache while
+providing the ASF and its projects the right to distribute and build upon
+their work within Apache.</p>
+<h1 id="distributions">Licensing of Distributions<a class="headerlink" href="#distributions" title="Permanent link">&para;</a></h1>
+<p>All software produced by The Apache Software Foundation or any of its
+projects or subjects is licensed according to the terms of the documents
+listed below.</p>
+<h3 id="2.0">Apache License, Version 2.0 (current)<a class="headerlink" href="#2.0" title="Permanent link">&para;</a></h3>
+<p><a href="LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a> (
+<a href="LICENSE-2.0.txt">TXT</a> or <a href="LICENSE-2.0.html">HTML</a> )</p>
+<p>The 2.0 version of the Apache License was approved by the ASF in 2004. The
+goals of this license revision have been to reduce the number of frequently
+asked questions, to allow the license to be reusable without modification
+by any project (including non-ASF projects), to allow the license to be
+included by reference instead of listed in every file, to clarify the
+license on submission of contributions, to require a patent license on
+contributions that necessarily infringe the contributor's own patents, and
+to move comments regarding Apache and other inherited attribution notices
+to a location outside the license terms (the <a href="example-NOTICE.txt">NOTICE
+file</a> ).</p>
+<p>The result is a license that is supposed to be compatible with other open
+source licenses, while remaining true to the original goals of the Apache
+Group and supportive of collaborative development across both nonprofit and
+commercial organizations. The Apache Software Foundation is still trying to
+determine if this version of the Apache License is <a href="GPL-compatibility.html">compatible with the
+GPL</a>.</p>
+<p>All packages produced by the ASF are implicitly licensed under the Apache
+License, Version 2.0, unless otherwise explicitly stated. More developer
+documentation on how to apply the Apache License to your work can be found
+in * <a href="../dev/apply-license.html">Applying the Apache License, Version 2.0</a>
+*.</p>
+<h3 id="1.1">Apache License, Version 1.1 (historic)<a class="headerlink" href="#1.1" title="Permanent link">&para;</a></h3>
+<p><a href="LICENSE-1.1">http://www.apache.org/licenses/LICENSE-1.1</a> </p>
+<p>The 1.1 version of the Apache License was approved by the ASF in 2000. The
+primary change from the 1.0 license is in the 'advertising clause' (section
+3 of the 1.0 license); derived products are no longer required to include
+attribution in their advertising materials, only in their documentation.</p>
+<p>Individual packages licensed under the 1.1 version may have used different
+wording due to varying requirements for attribution or mark identification,
+but the binding terms were all the same.</p>
+<h3 id="1.0">Apache License, Version 1.0 (historic)<a class="headerlink" href="#1.0" title="Permanent link">&para;</a></h3>
+<p><a href="LICENSE-1.0">http://www.apache.org/licenses/LICENSE-1.0</a> </p>
+<p>This is the original Apache License which applies only to older versions of
+Apache packages (such as version 1.2 of the Web server).</p>
+<h1 id="clas">Contributor License Agreements<a class="headerlink" href="#clas" title="Permanent link">&para;</a></h1>
+<p>The ASF desires that all contributors of ideas, code, or documentation to
+any Apache projects complete, sign, and submit (via fax or
+email) an <a href="icla.pdf">Individual Contributor License Agreement</a> (ICLA). 
+The purpose of this agreement is to clearly define the
+terms under which intellectual property has been contributed to the ASF and
+thereby allow us to defend the project should there be a legal dispute
+regarding the software at some future time. A signed ICLA is required to be
+on file before an individual is given commit rights to an ASF project.</p>
+<p>For a corporation that has assigned employees to work on an Apache project,
+a <a href="cla-corporate.txt">Corporate CLA</a> (CCLA) is available for contributing
+intellectual property via the corporation, that may have been assigned as
+part of an employment agreement. Note that a Corporate CLA does not remove
+the need for every developer to sign their own ICLA as an individual, to
+cover any of their contributions which are not owned by the corporation
+signing the CCLA.</p>
+<p>The ICLA is not tied to any employer you may have, so it is recommended to
+use one's personal email address in the contact details, rather than an @work
+address.</p>
+<p>Your Full name will be published unless you provide an alternative Public name.
+For example if your full name is Andrew Bernard Charles Dickens, but you wish
+to be known as Andrew Dickens, please enter the latter as your Public name.</p>
+<p>The email address and other contact details are not published.</p>
+<h1 id="grants">Software Grants<a class="headerlink" href="#grants" title="Permanent link">&para;</a></h1>
+<p>When an individual or corporation decides to donate a body of existing
+software or documentation to one of the Apache projects, they need to
+execute a formal <a href="software-grant-template.pdf">Software Grant Agreement</a> (SGA) with
+the ASF. Typically, this is done after negotiating approval with the ASF
+<a href="http://incubator.apache.org/">Incubator</a> or one of the PMCs, since the ASF
+will not accept software unless there is a viable community available to
+support a collaborative project.</p>
+<h1 id="submitting">Submitting License Agreements and Grants<a class="headerlink" href="#submitting" title="Permanent link">&para;</a></h1>
+<p>Documents may be submitted by fax or email.</p>
+<p>If submitting by fax, please print, sign, and fax all pages of the document 
+to +1-919-573-9199. Please send documents right-side-up, first page first;
+and send only one document per fax.</p>
+<p>If submitting by email, please fill the form with a pdf viewer,
+print, sign, scan all pages into a single pdf file, 
+and email the pdf file as an attachment to secretary@apache.org. If possible,
+send the attachment from the email address in the document.
+Please send only one document per email.</p>
+<p>If you prefer to sign electronically, please fill the form, save it locally (e.g. icla.pdf), and sign the
+file by preparing a detached PGP signature. For example,</p>
+<blockquote>
+<p>gpg --armor --detach-sign icla.pdf</p>
+</blockquote>
+<p>The above will create a file icla.pdf.asc. Send both the file and signature
+as attachments in the same email to secretary@apache.org. Please send only one 
+document (file plus signature) per email. Please do not submit your public key to Apache.
+Instead, please upload your public key to pgpkeys.mit.edu. </p>
+<p>The files typically are named
+icla.pdf and icla.pdf.asc for individual agreements;
+ccla.pdf and ccla.pdf.asc  for corporate agreements;
+software-grant.pdf and software-grant.pdf.asc for grants. </p>
+<h1 id="crypto">Export restrictions<a class="headerlink" href="#crypto" title="Permanent link">&para;</a></h1>
+<p>For export restriction information, please consult our <a href="/licenses/exports/">ASF Export
+Classifications</a> page.</p>
+<h1 id="trademarks">Trademark and Logo Usage<a class="headerlink" href="#trademarks" title="Permanent link">&para;</a></h1>
+<p>For ASF trademark and logo usage information, please consult our <a href="/foundation/marks/">ASF
+Trademark Use Policy</a> page.</p>
+<h1 id="questions">Questions?<a class="headerlink" href="#questions" title="Permanent link">&para;</a></h1>
+<p>For answers to frequently asked licensing questions, please consult our 
+<a href="/foundation/license-faq.html">Licensing Frequently Asked Questions</a> page.</p></div>
+
+<!-- Footer -->
+
+<footer class="bg-primary">
+  <div class="container">
+			<div class="row">
+				<br />
+				<div class="col-sm-1">
+					
+				</div>
+				<div class="col-sm-2">
+		        	<h5 class="white">Community</h5>
+		        	<ul class="list-unstyled white" role="menu">
+						<li><a href="http://community.apache.org/">Overview</a></li>
+						<li><a href="/foundation/conferences.html">Conferences</a></li>
+						<li><a href="http://community.apache.org/gsoc.html">Summer of Code</a></li>
+						<li><a href="http://community.apache.org/newcomers/">Getting Started</a></li>
+						<li><a href="/foundation/how-it-works.html">The Apache Way</a></li>
+						<li><a href="/travel/">Travel Assistance</a></li>
+						<li><a href="/foundation/getinvolved.html">Get Involved</a></li>
+						<li><a href="http://community.apache.org/newbiefaq.html">Community FAQ</a></li>
+		        	</ul>
+				</div>
+				
+				<div class="col-sm-2">
+					<h5 class="white">Innovation</h5>
+		        	<ul class="list-unstyled white" role="menu">
+						<li><a href="http://incubator.apache.org/">Incubator</a></li>
+						<li><a href="http://labs.apache.org/">Labs</a></li>
+						<li><a href="/licenses/">Licensing</a></li>
+						<li><a href="/foundation/license-faq.html">Licensing FAQ</a></li>
+						<li><a href="/foundation/marks/">Trademark Policy</a></li>
+						<li><a href="/foundation/contact.html">Contacts</a></li>
+		        	</ul>
+				</div>
+
+				<div class="col-sm-2">
+					<h5 class="white">Tech Operations</h5>
+		        <ul class="list-unstyled white" role="menu">
+  						<li><a href="/dev/">Developer Information</a></li>
+  						<li><a href="/dev/infrastructure.html">Infrastructure</a></li>
+  						<li><a href="/security/">Security</a></li>
+  						<li><a href="http://status.apache.org">Status</a></li>
+  						<li><a href="/foundation/contact.html">Contacts</a></li>
+		        </ul>
+				</div>
+
+				<div class="col-sm-2">
+					<h5 class="white">Press</h5>
+        	<ul class="list-unstyled white" role="menu">
+						<li><a href="/press/">Overview</a></li>
+						<li><a href="https://blogs.apache.org/">ASF News</a></li>
+						<li><a href="https://blogs.apache.org/foundation/">Announcements</a></li>
+						<li><a href="https://twitter.com/TheASF">Twitter Feed</a></li>
+						<li><a href="/press/#contact">Contacts</a></li>
+        	</ul>
+				</div>
+				
+				<div class="col-sm-2">
+					<h5 class="white">Legal</h5>
+        	<ul class="list-unstyled white" role="menu">
+						<li><a href="/legal/">Legal Affairs</a></li>
+						<li><a href="/licenses/">Licenses</a></li>
+						<li><a href="/foundation/marks/">Trademark Policy</a></li>
+						<li><a href="/foundation/records/">Public Records</a></li>
+            <li><a href="/foundation/policies/privacy.html">Privacy Policy</a></li>
+						<li><a href="/licenses/exports/">Export Information</a></li>
+						<li><a href="/foundation/license-faq.html">License/Distribution FAQ</a></li>
+						<li><a href="/foundation/contact.html">Contacts</a></li>
+        	</ul>
+				</div>
+
+				<div class="col-sm-1">
+				</div>
+
+			</div>
+			<hr class="col-lg-12 hr-white" />
+			<div class="row">
+				<div class="col-lg-12">
+					<p class="text-center">Copyright &#169; 2016 The Apache Software Foundation, Licensed under the <a class="white" href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.</p>
+					<p class="text-center">Apache and the Apache feather logo are trademarks of The Apache Software Foundation.</p>
+				</div>
+			</div>
+		</div>
+
+</footer>
+
+<!-- / Footer -->
+
+<script src="/js/jquery-2.1.1.min.js"></script>
+<script src="/js/bootstrap.js"></script>
+</body>
+</html>
