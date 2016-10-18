@@ -16,6 +16,7 @@
 
 package io.confluent.connect.avro;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
@@ -44,7 +45,9 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
@@ -238,44 +241,44 @@ public class AvroDataTest {
     assertEquals(avroSchema, ((org.apache.avro.generic.GenericRecord) convertedRecord).getSchema());
     assertEquals(avroRecord, convertedRecord);
   }
-  
+
   @Test
   public void testFromConnectOptionalComplex() {
     Schema optionalStructSchema = SchemaBuilder.struct().optional()
         .name("optionalStruct")
-        .field("int32", Schema.INT32_SCHEMA)  
+        .field("int32", Schema.INT32_SCHEMA)
         .build();
-   
+
     Schema schema = SchemaBuilder.struct()
         .field("int32", Schema.INT32_SCHEMA)
         .field("optionalStruct", optionalStructSchema)
         .field("optionalArray",  SchemaBuilder.array(Schema.INT32_SCHEMA).optional().build())
         .field("optionalMap", SchemaBuilder.map(Schema.STRING_SCHEMA,Schema.INT32_SCHEMA).optional().build())
         .field("optionalMapNonStringKeys", SchemaBuilder.map(Schema.INT32_SCHEMA,Schema.INT32_SCHEMA).optional().build())
-        
+
         .build();
-    
+
     Struct struct = new Struct(schema)
         .put("int32", 12)
         .put("optionalStruct", new Struct(optionalStructSchema).put("int32", 12))
         .put("optionalArray", Arrays.asList( 12,  13))
         .put("optionalMap", Collections.singletonMap("field", 12))
-        .put("optionalMapNonStringKeys", Collections.singletonMap(123, 12)); 
-    
+        .put("optionalMapNonStringKeys", Collections.singletonMap(123, 12));
+
     Object convertedRecord = avroData.fromConnectData(schema, struct);
-    
+
     org.apache.avro.Schema structAvroSchema = org.apache.avro.SchemaBuilder.builder().record("optionalStruct").fields().requiredInt("int32").endRecord();
-    
+
     // Maps with non-string keys get converted into an array of records with key & values fields 
     org.apache.avro.Schema mapNonStringKeysAvroSchema = org.apache.avro.SchemaBuilder.builder()
         .record(AvroData.MAP_ENTRY_TYPE_NAME).namespace(AvroData.NAMESPACE).fields()
         .requiredInt((AvroData.KEY_FIELD))
         .requiredInt((AvroData.VALUE_FIELD))
         .endRecord();
-    
+
     org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
 
-    
+
     org.apache.avro.generic.GenericRecord  avroStruct = new GenericRecordBuilder(structAvroSchema)
                                                           .set("int32", 12)
                                                           .build();
@@ -283,10 +286,10 @@ public class AvroDataTest {
         .set(AvroData.KEY_FIELD, 123)
         .set(AvroData.VALUE_FIELD, 12)
         .build();
-    
+
     List<GenericRecord> mapNonStringKeys  = new ArrayList<GenericRecord>();
     mapNonStringKeys.add(mapNonStringKeysAvroStruct);
-    
+
     org.apache.avro.generic.GenericRecord avroRecord = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int32", 12)
         .set("optionalStruct", avroStruct)
@@ -296,7 +299,7 @@ public class AvroDataTest {
         .build();
 
     assertEquals(avroRecord, convertedRecord);
-    
+
     // Now check for null values
     struct = new Struct(schema)
         .put("int32", 12)
@@ -304,9 +307,9 @@ public class AvroDataTest {
         .put("optionalArray", null)
         .put("optionalMap",null)
         .put("optionalMapNonStringKeys", null);
-    
+
     convertedRecord = avroData.fromConnectData(schema, struct);
-    
+
     avroRecord = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int32", 12)
         .set("optionalStruct", null)
@@ -314,7 +317,7 @@ public class AvroDataTest {
         .set("optionalMap", null)
         .set("optionalMapNonStringKeys", null)
         .build();
-    
+
     assertEquals(avroRecord, convertedRecord);
   }
 
@@ -483,7 +486,7 @@ public class AvroDataTest {
 
     avroData.fromConnectData(firstSchema, new Struct(secondSchema).put("foo", null));
   }
-  
+
   @Test(expected = DataException.class)
   public void testToConnectRecordWithIllegalNullValue() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
@@ -491,7 +494,7 @@ public class AvroDataTest {
         .requiredString("string")
         .endRecord();
     GenericRecord avroRecord = new GenericRecordBuilder(avroSchema).set("string", "some value").build();
-    avroRecord.put("string", null);    
+    avroRecord.put("string", null);
     avroData.toConnectData(avroSchema, avroRecord);
   }
 
@@ -627,19 +630,19 @@ public class AvroDataTest {
   public void testToConnectNullableStringNullvalue() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.nullable().stringType();
     assertEquals(null, avroData.toConnectData(avroSchema, null));
-  }  
-  
+  }
+
   @Test
   public void testToConnectNullableString() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.nullable().stringType();
-    assertEquals(new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, "teststring"), 
+    assertEquals(new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, "teststring"),
             avroData.toConnectData(avroSchema, "teststring"));
 
     // Avro deserializer allows CharSequence, not just String, and returns Utf8 objects
     assertEquals(new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, "teststring"),
                  avroData.toConnectData(avroSchema, new Utf8("teststring")));
-  }  
-  
+  }
+
   @Test
   public void testToConnectString() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().stringType();
@@ -672,7 +675,7 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, Arrays.asList((byte) 12, (byte) 13)),
                  avroData.toConnectData(avroSchema, Arrays.asList(12, 13)));
   }
-  
+
   @Test
   public void testToConnectMapStringKeys() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().map()
@@ -708,7 +711,7 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, struct),
                  avroData.toConnectData(avroSchema, avroRecord));
   }
-  
+
   @Test
   public void testToConnectRecordWithOptionalValue() {
       testToConnectRecordWithOptional("sample string");
@@ -718,7 +721,7 @@ public class AvroDataTest {
   public void testToConnectRecordWithOptionalNullValue() {
       testToConnectRecordWithOptional(null);
   }
-  
+
   private void testToConnectRecordWithOptional(String value) {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("Record").fields()
@@ -740,19 +743,19 @@ public class AvroDataTest {
     Struct struct = new Struct(schema).put("int8", (byte) 12).put("string", value);
     assertEquals(new SchemaAndValue(schema, struct),
                  avroData.toConnectData(avroSchema, avroRecord));
-  }  
+  }
 
   @Test
-  public void testToConnectRecordWithOptionalArrayValue() {    
+  public void testToConnectRecordWithOptionalArrayValue() {
       testToConnectRecordWithOptionalArray(Arrays.asList("test"));
   }
 
   @Test
-  public void testToConnectRecordWithOptionalArrayNullValue() {    
+  public void testToConnectRecordWithOptionalArrayNullValue() {
       testToConnectRecordWithOptionalArray(null);
   }
-  
-  private void testToConnectRecordWithOptionalArray(java.util.List<String> value) {    
+
+  private void testToConnectRecordWithOptionalArray(java.util.List<String> value) {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("Record").fields()
         .optionalString("string")
@@ -771,9 +774,9 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, struct),
                  avroData.toConnectData(avroSchema, avroRecord));
   }
-  
+
   @Test
-  public void testToConnectNestedRecordWithOptionalRecordValue() {  
+  public void testToConnectNestedRecordWithOptionalRecordValue() {
     org.apache.avro.Schema avroSchema  = nestedRecordAvroSchema();
     Schema schema = nestedRecordSchema();
     GenericRecord avroRecord = new GenericRecordBuilder(avroSchema)
@@ -785,7 +788,7 @@ public class AvroDataTest {
   }
 
   @Test
-  public void testToConnectNestedRecordWithOptionalRecordNullValue() {     
+  public void testToConnectNestedRecordWithOptionalRecordNullValue() {
     org.apache.avro.Schema avroSchema  = nestedRecordAvroSchema();
     Schema schema = nestedRecordSchema();;
     GenericRecord avroRecord = new GenericRecordBuilder(avroSchema)
@@ -818,7 +821,7 @@ public class AvroDataTest {
         .field("nestedRecord", recordWithStringSchema())
         .build();
   }
-  
+
   // Avro -> Connect: Connect logical types
 
   @Test
@@ -907,14 +910,14 @@ public class AvroDataTest {
 
   @Test
   public void testToConnectMapOptionalValue() {
-      testToConnectMapOptional("some value");      
+      testToConnectMapOptional("some value");
   }
 
   @Test
   public void testToConnectMapOptionalNullValue() {
-      testToConnectMapOptional(null);      
+      testToConnectMapOptional(null);
   }
-      
+
   private void testToConnectMapOptional(String value) {
      // Encoded as array of 2-tuple records. Use key and value types that require conversion to
     // make sure conversion of each element actually occurs. The more verbose construction of the
@@ -935,9 +938,9 @@ public class AvroDataTest {
     Schema schema = SchemaBuilder.map(Schema.INT8_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA).build();
     assertEquals(new SchemaAndValue(schema, Collections.singletonMap((byte) 12, value)),
                  avroData.toConnectData(avroSchema, Arrays.asList(record)));
-  }  
-  
-  
+  }
+
+
   // Avro -> Connect: Avro types with no corresponding Connect type
 
   @Test(expected = DataException.class)
@@ -1248,4 +1251,111 @@ public class AvroDataTest {
     Object converted = avroData.fromConnectData(schema, null);
     assertNull(converted);
   }
+
+  @Test
+  public void testToConnectDataStringEnumUnion() {
+    org.apache.avro.Schema enumSchema = org.apache.avro.SchemaBuilder.enumeration("TestEnum").symbols("A", "B", "C", "D");
+
+    Map<org.apache.avro.Schema, Object> avroSchemaToValueTests = new LinkedHashMap<>();
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING), "AnotherValue");
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.INT), 1000);
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.LONG), 1000L);
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.BOOLEAN), false);
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.DOUBLE), Double.MAX_VALUE);
+    avroSchemaToValueTests.put(org.apache.avro.Schema.create(org.apache.avro.Schema.Type.FLOAT), Float.MAX_VALUE);
+
+    for(Map.Entry<org.apache.avro.Schema, Object> kvp:avroSchemaToValueTests.entrySet()){
+      org.apache.avro.Schema unionSchema = org.apache.avro.Schema.createUnion(
+          Arrays.asList(
+              kvp.getKey(),
+              org.apache.avro.Schema.create(org.apache.avro.Schema.Type.NULL),
+              enumSchema
+          )
+      );
+
+      GenericData.EnumSymbol enumValue = (GenericData.EnumSymbol) GenericData.get().createEnum("A", enumSchema);
+      assertTrue(
+          String.format("enumValue(%s) is not valid for union schema (%s)", enumValue, unionSchema),
+          GenericData.get().validate(unionSchema, enumValue)
+      );
+      assertTrue(
+          String.format("value (%s) is not valid for union schema (%s)", enumValue, unionSchema),
+          GenericData.get().validate(unionSchema, kvp.getValue())
+      );
+
+      SchemaAndValue schemaAndValue;
+      Struct convertedValue;
+
+      //Now test with the other type.
+      schemaAndValue=avroData.toConnectData(unionSchema, kvp.getValue());
+      assertNotNull(schemaAndValue);
+      assertTrue(schemaAndValue.value() instanceof Struct);
+      convertedValue = (Struct)schemaAndValue.value();
+      assertEquals(kvp.getValue(), convertedValue.get(kvp.getKey().getName()));
+
+      //At this point we know that this is valid avro.
+      schemaAndValue=avroData.toConnectData(unionSchema, enumValue);
+      assertNotNull(schemaAndValue);
+      assertTrue(schemaAndValue.value() instanceof Struct);
+      convertedValue = (Struct)schemaAndValue.value();
+      assertEquals(enumValue.toString(), convertedValue.get(enumSchema.getName()));
+
+      //Round Trip testing.
+      org.apache.avro.Schema actualSchema = avroData.fromConnectSchema(schemaAndValue.schema());
+      assertNotNull(actualSchema);
+      assertEquals("Round trip schema should be a union", org.apache.avro.Schema.Type.UNION, actualSchema.getType());
+
+      assertSchemaCompatible(unionSchema, actualSchema);
+    }
+  }
+
+  void assertSchemaCompatible(org.apache.avro.Schema expectedSchema, org.apache.avro.Schema actualSchema) {
+    assertTrue(
+        String.format("Schema is not compatible. Expected:\n%s\n\nActual:\n%s", expectedSchema.toString(true), actualSchema.toString(true)),
+        AvroCompatibilityChecker.FULL_CHECKER.isCompatible(expectedSchema, actualSchema)
+    );
+  }
+
+  @Test
+  public void testEnum() {
+    final org.apache.avro.Schema expectedAvroSchema = org.apache.avro.Schema.createEnum(
+        "TestEnum",
+        "Testing enum",
+        this.getClass().getPackage().getName(),
+        Arrays.asList("A", "B", "C", "D")
+        );
+
+    Schema connectSchema = avroData.toConnectSchema(expectedAvroSchema);
+    assertNotNull("connectSchema should not be null", connectSchema);
+    final org.apache.avro.Schema actualAvroSchema = avroData.fromConnectSchema(connectSchema);
+    assertNotNull("actualAvroSchema should not be null", actualAvroSchema);
+
+    assertSchemaCompatible(expectedAvroSchema, actualAvroSchema);
+  }
+
+
+  @Test
+  public void testComplexUnion() {
+    final org.apache.avro.Schema expectedAvroSchema = org.apache.avro.Schema.createUnion(
+        Arrays.asList(
+//            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.NULL),
+            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING),
+            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.LONG),
+            org.apache.avro.Schema.create(org.apache.avro.Schema.Type.BOOLEAN),
+            org.apache.avro.Schema.createEnum(
+                "TestEnum",
+                "Testing enum",
+                this.getClass().getPackage().getName(),
+                Arrays.asList("A", "B", "C", "D")
+            )
+        )
+    );
+    Schema connectSchema = avroData.toConnectSchema(expectedAvroSchema);
+    assertEquals(expectedAvroSchema.getTypes().size(), connectSchema.fields().size());
+    org.apache.avro.Schema actualAvroSchema = avroData.fromConnectSchema(connectSchema);
+    assertEquals("Schema.Type should be UNION.",org.apache.avro.Schema.Type.UNION, actualAvroSchema.getType());
+
+    assertSchemaCompatible(expectedAvroSchema, actualAvroSchema);
+  }
+
 }

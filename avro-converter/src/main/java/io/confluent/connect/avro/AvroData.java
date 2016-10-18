@@ -19,6 +19,7 @@ package io.confluent.connect.avro;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -50,6 +51,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -83,6 +85,10 @@ public class AvroData {
   public static final String AVRO_TYPE_ENUM = NAMESPACE + ".Enum";
 
   public static final String AVRO_TYPE_ANYTHING = NAMESPACE + ".Anything";
+
+  public final String ENUM_PROP_AVRO_NAME="avro.name";
+  public final String ENUM_PROP_AVRO_NAMESPACE="avro.namespace";
+  public final String ENUM_PROP_AVRO_SYMBOLS="avro.symbols";
 
   private static final Map<String, Schema.Type> NON_AVRO_TYPES_BY_TYPE_CODE = new HashMap<>();
   static {
@@ -579,7 +585,17 @@ public class AvroData {
         baseSchema = org.apache.avro.SchemaBuilder.builder().booleanType();
         break;
       case STRING:
-        baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
+        if(AVRO_TYPE_ENUM.equals(schema.name())) {
+          String avroName = schema.parameters().get(ENUM_PROP_AVRO_NAME);
+          String avroNamespace = schema.parameters().get(ENUM_PROP_AVRO_NAMESPACE);
+          String avroEnumValues = schema.parameters().get(ENUM_PROP_AVRO_SYMBOLS);
+
+          //TODO: Make sure this is backwards compatible.
+          List<String> symbols = Arrays.asList(avroEnumValues.split(","));
+          baseSchema = org.apache.avro.Schema.createEnum(avroName, schema.doc(), avroNamespace, symbols);
+        } else {
+          baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
+        }
         break;
       case BYTES:
         baseSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
@@ -606,13 +622,27 @@ public class AvroData {
         }
         break;
       case STRUCT:
-        org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler
-            = org.apache.avro.SchemaBuilder
-            .record(name != null ? name : DEFAULT_SCHEMA_NAME).namespace(namespace).fields();
-        for (Field field : schema.fields()) {
-          addAvroRecordField(fieldAssembler, field.name(), field.schema());
+        if(AVRO_TYPE_UNION.equals(schema.name())) {
+          Set<org.apache.avro.Schema> schemas = new LinkedHashSet<>();
+          for(Field field:schema.fields()) {
+            org.apache.avro.Schema unionSchema = fromConnectSchema(field.schema());
+
+            if(org.apache.avro.Schema.Type.UNION == unionSchema.getType()) {
+              schemas.addAll(unionSchema.getTypes());
+            } else {
+              schemas.add(unionSchema);
+            }
+          }
+          baseSchema = org.apache.avro.Schema.createUnion(new ArrayList<>(schemas));
+        } else {
+          org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler
+              = org.apache.avro.SchemaBuilder
+              .record(name != null ? name : DEFAULT_SCHEMA_NAME).namespace(namespace).fields();
+          for (Field field : schema.fields()) {
+            addAvroRecordField(fieldAssembler, field.name(), field.schema());
+          }
+          baseSchema = fieldAssembler.endRecord();
         }
-        baseSchema = fieldAssembler.endRecord();
         break;
       default:
         throw new DataException("Unknown schema type: " + schema.type());
@@ -638,7 +668,7 @@ public class AvroData {
     // the full name into a special property. For uniformity, we also duplicate this info into
     // the same field in records as well even though it will also be available in the namespace()
     // and name().
-    if (schema.name() != null) {
+    if (schema.name() != null && org.apache.avro.Schema.Type.UNION != baseSchema.getType()) {
       baseSchema.addProp(CONNECT_NAME_PROP, schema.name());
     }
 
@@ -957,6 +987,16 @@ public class AvroData {
           // Special case support for union types
           if (schema.name() != null && schema.name().equals(AVRO_TYPE_UNION)) {
             Schema valueRecordSchema = null;
+
+            if(isInstanceOfAvroEnum(value)) {
+              GenericData.EnumSymbol enumSymbol = (GenericData.EnumSymbol) value;
+              Field field = schema.field(enumSymbol.getSchema().getName());
+              Schema fieldSchema = field.schema();
+              converted = new Struct(schema).put(enumSymbol.getSchema().getName(),
+                  toConnectData(fieldSchema, enumSymbol.toString()));
+              break;
+            }
+
             if (value instanceof IndexedRecord) {
               IndexedRecord valueRecord = ((IndexedRecord) value);
               valueRecordSchema = toConnectSchema(valueRecord.getSchema(), true, null, null);
@@ -1111,6 +1151,16 @@ public class AvroData {
       case ENUM:
         // enums are unwrapped to strings and the original enum is not preserved
         builder = SchemaBuilder.string();
+        StringBuilder sb = new StringBuilder();
+        for(String a:schema.getEnumSymbols()){
+          if(sb.length()>0){
+            sb.append(",");
+          }
+          sb.append(a);
+        }
+        builder.parameter(ENUM_PROP_AVRO_NAME, schema.getName());
+        builder.parameter(ENUM_PROP_AVRO_NAMESPACE, schema.getNamespace());
+        builder.parameter(ENUM_PROP_AVRO_SYMBOLS, sb.toString());
         break;
 
       case UNION: {
@@ -1216,8 +1266,10 @@ public class AvroData {
       }
       name = connectNameJson.asText();
 
-    } else if (schema.getType() == org.apache.avro.Schema.Type.RECORD ||
-               schema.getType() == org.apache.avro.Schema.Type.ENUM) {
+    } else if(schema.getType() == org.apache.avro.Schema.Type.ENUM) {
+      name = AVRO_TYPE_ENUM;
+    }
+    else if (schema.getType() == org.apache.avro.Schema.Type.RECORD) {
       name = schema.getFullName();
     }
     if (name != null && !name.equals(DEFAULT_SCHEMA_FULL_NAME)) {
@@ -1350,6 +1402,10 @@ public class AvroData {
   private static boolean isEnumSchema(Schema schema) {
     return schema.type() == Schema.Type.STRING &&
            schema.name() != null && schema.name().equals(AVRO_TYPE_ENUM);
+  }
+
+  private static boolean isInstanceOfAvroEnum(Object value) {
+    return value instanceof GenericData.EnumSymbol;
   }
 
   private static boolean isInstanceOfAvroSchemaTypeForSimpleSchema(Schema fieldSchema,
