@@ -1,0 +1,6 @@
+Java ClassMate library was originally written by Tatu Saloranta (tatu.saloranta@iki.fi)
+
+Other developers who have contributed code are:
+
+* Brian Langel
+
