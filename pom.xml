@@ -43,6 +43,7 @@
         <module>package-schema-registry</module>
         <module>package-kafka-serde-tools</module>
         <module>maven-plugin</module>
+        <module>avro-serde</module>
     </modules>
 
     <properties>
