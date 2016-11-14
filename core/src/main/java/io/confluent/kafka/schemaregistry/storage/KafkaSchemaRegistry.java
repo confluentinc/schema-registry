@@ -366,14 +366,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         kafkaStore.put(keyForNewVersion, schemaValue);
         return schema.getId();
       } else {
-        AvroCompatibilityLevel compatibility = getCompatibilityLevel(subject);
-        if (compatibility.isTransitive()) {
-          throw new IncompatibleSchemaException(
-              "New schema is incompatible with an earlier schema.");
-        } else {
-          throw new IncompatibleSchemaException(
-              "New schema is incompatible with the latest schema " + latestSchema);
-        }
+        throw new IncompatibleSchemaException(
+            "New schema is incompatible with an earlier schema.");
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);

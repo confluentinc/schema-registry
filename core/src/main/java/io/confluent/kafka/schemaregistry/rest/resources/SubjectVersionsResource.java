@@ -163,8 +163,8 @@ public class SubjectVersionsResource {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
                                                     + " to the master", e);
     } catch (IncompatibleSchemaException e) {
-      throw Errors.incompatibleSchemaException("Schema being registered is incompatible with the"
-                                               + " latest schema", e);
+      throw Errors.incompatibleSchemaException("Schema being registered is incompatible with an"
+                                               + " earlier schema", e);
     } catch (UnknownMasterException e) {
       throw Errors.unknownMasterException("Master not known.", e);
     } catch (SchemaRegistryException e) {
