@@ -16,26 +16,20 @@
 package io.confluent.kafka.schemaregistry.avro;
 
 public enum AvroCompatibilityLevel {
-  NONE("NONE", AvroCompatibilityChecker.NO_OP_CHECKER, false),
-  BACKWARD("BACKWARD", AvroCompatibilityChecker.BACKWARD_CHECKER, false),
-  BACKWARD_TRANSITIVE("BACKWARD_TRANSITIVE", AvroCompatibilityChecker.BACKWARD_TRANSITIVE_CHECKER, true),
-  FORWARD("FORWARD", AvroCompatibilityChecker.FORWARD_CHECKER, false),
-  FORWARD_TRANSITIVE("FORWARD_TRANSITIVE", AvroCompatibilityChecker.FORWARD_TRANSITIVE_CHECKER, true),
-  FULL("FULL", AvroCompatibilityChecker.FULL_CHECKER, false),
-  FULL_TRANSITIVE("FULL_TRANSITIVE", AvroCompatibilityChecker.FULL_TRANSITIVE_CHECKER, true);
+  NONE("NONE", AvroCompatibilityChecker.NO_OP_CHECKER),
+  BACKWARD("BACKWARD", AvroCompatibilityChecker.BACKWARD_CHECKER),
+  BACKWARD_TRANSITIVE("BACKWARD_TRANSITIVE", AvroCompatibilityChecker.BACKWARD_TRANSITIVE_CHECKER),
+  FORWARD("FORWARD", AvroCompatibilityChecker.FORWARD_CHECKER),
+  FORWARD_TRANSITIVE("FORWARD_TRANSITIVE", AvroCompatibilityChecker.FORWARD_TRANSITIVE_CHECKER),
+  FULL("FULL", AvroCompatibilityChecker.FULL_CHECKER),
+  FULL_TRANSITIVE("FULL_TRANSITIVE", AvroCompatibilityChecker.FULL_TRANSITIVE_CHECKER);
 
   public final String name;
-  public final boolean transitive;
   public final AvroCompatibilityChecker compatibilityChecker;
 
-  private AvroCompatibilityLevel(String name, AvroCompatibilityChecker compatibilityChecker, boolean transitive) {
+  private AvroCompatibilityLevel(String name, AvroCompatibilityChecker compatibilityChecker) {
     this.name = name;
     this.compatibilityChecker = compatibilityChecker;
-    this.transitive = transitive;
-  }
-  
-  public boolean isTransitive() {
-    return transitive;
   }
 
   public static AvroCompatibilityLevel forName(String name) {
