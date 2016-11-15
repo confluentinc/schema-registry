@@ -30,8 +30,10 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
+import org.codehaus.jackson.node.IntNode;
 import org.codehaus.jackson.node.JsonNodeFactory;
 import org.codehaus.jackson.node.ObjectNode;
+import org.hamcrest.core.IsEqual;
 import org.junit.Test;
 import org.powermock.reflect.Whitebox;
 
@@ -384,25 +386,29 @@ public class AvroDataTest {
     assertEquals(avroRecord, convertedRecord);
   }
 
-  private static org.apache.avro.Schema createDecimalSchema(boolean required) {
+  private static org.apache.avro.Schema createDecimalSchema(boolean required, int precision) {
     org.apache.avro.Schema avroSchema
         = required ? org.apache.avro.SchemaBuilder.builder().bytesType() :
           org.apache.avro.SchemaBuilder.builder().unionOf().nullType().and().bytesType().endUnion();
     org.apache.avro.Schema decimalSchema = required ? avroSchema : avroSchema.getTypes().get(1);
-    decimalSchema.addProp("connect.name", "org.apache.kafka.connect.data.Decimal");
+    decimalSchema.addProp("scale", new IntNode(2));
+    decimalSchema.addProp("precision", new IntNode(precision));
     decimalSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     ObjectNode avroParams = JsonNodeFactory.instance.objectNode();
     avroParams.put("scale", "2");
+    avroParams.put(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, new Integer(precision).toString());
     decimalSchema.addProp("connect.parameters", avroParams);
+    decimalSchema.addProp("connect.name", "org.apache.kafka.connect.data.Decimal");
+    decimalSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
+
     return avroSchema;
   }
 
   @Test
   public void testFromConnectLogicalDecimal() {
-    org.apache.avro.Schema avroSchema = createDecimalSchema(true);
-    checkNonRecordConversion(avroSchema, ByteBuffer.wrap(TEST_DECIMAL_BYTES),
-                             Decimal.schema(2), TEST_DECIMAL);
-
+    org.apache.avro.Schema avroSchema = createDecimalSchema(true, 64);
+    NonRecordContainer container = checkNonRecordConversion(avroSchema, ByteBuffer.wrap(TEST_DECIMAL_BYTES),
+                             Decimal.builder(2).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64").build(), TEST_DECIMAL);
     checkNonRecordConversionNull(Decimal.builder(2).optional().build());
   }
 
@@ -411,6 +417,7 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Date");
     avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DATE);
     checkNonRecordConversion(avroSchema, 10000, Date.SCHEMA,
                              EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime());
   }
@@ -420,6 +427,7 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Time");
     avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MILLIS);
     checkNonRecordConversion(avroSchema, 10000, Time.SCHEMA,
                              EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime());
   }
@@ -429,6 +437,7 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
     avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Timestamp");
     avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MILLIS);
     java.util.Date date = new java.util.Date();
     checkNonRecordConversion(avroSchema, date.getTime(), Timestamp.SCHEMA, date);
   }
@@ -834,12 +843,41 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testToConnectDecimalAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
+    avroSchema.addProp("precision", new IntNode(50));
+    avroSchema.addProp("scale", new IntNode(2));
+
+    final SchemaAndValue expected = new SchemaAndValue(
+        Decimal.builder(2).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "50").build(),
+        TEST_DECIMAL
+    );
+
+    final SchemaAndValue actual = avroData.toConnectData(avroSchema, TEST_DECIMAL_BYTES);
+    assertThat("schema.parameters() does not match.",
+        actual.schema().parameters(),
+        IsEqual.equalTo(expected.schema().parameters())
+    );
+    assertEquals("schema does not match.", expected.schema(), actual.schema());
+    assertEquals("value does not match.", expected.value(), actual.value());
+  }
+
+  @Test
   public void testToConnectDate() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Date");
     avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     assertEquals(new SchemaAndValue(Date.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime()),
                  avroData.toConnectData(avroSchema, 10000));
+  }
+
+  @Test
+  public void testToConnectDateAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DATE);
+    assertEquals(new SchemaAndValue(Date.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime()),
+        avroData.toConnectData(avroSchema, 10000));
   }
 
   @Test
@@ -852,6 +890,14 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testToConnectTimeAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MILLIS);
+    assertEquals(new SchemaAndValue(Time.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime()),
+        avroData.toConnectData(avroSchema, 10000));
+  }
+
+  @Test
   public void testToConnectTimestamp() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
     avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Timestamp");
@@ -859,6 +905,15 @@ public class AvroDataTest {
     java.util.Date date = new java.util.Date();
     assertEquals(new SchemaAndValue(Timestamp.SCHEMA, date),
                  avroData.toConnectData(avroSchema, date.getTime()));
+  }
+
+  @Test
+  public void testToConnectTimestampAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MILLIS);
+    java.util.Date date = new java.util.Date();
+    assertEquals(new SchemaAndValue(Timestamp.SCHEMA, date),
+        avroData.toConnectData(avroSchema, date.getTime()));
   }
 
   // Avro -> Connect: Connect types with no corresponding Avro type
@@ -1031,7 +1086,6 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(SchemaBuilder.string().name("TestEnum").build(), "bar"),
                  avroData.toConnectData(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar")));
   }
-
 
   @Test
   public void testToConnectOptionalPrimitiveWithConnectMetadata() {
