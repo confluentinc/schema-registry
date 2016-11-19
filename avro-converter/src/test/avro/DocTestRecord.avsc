@@ -1,0 +1,20 @@
+{
+  "type" : "record",
+  "name" : "DocTestRecord",
+  "namespace" : "io.test.avro.doc",
+  "doc" : "Some record document.",
+  "fields" : [ {
+    "name" : "obj",
+    "type" : {
+      "type" : "record",
+      "name" : "DocTestRecord1",
+      "doc" : "Some nested record document.",
+      "fields" : [ {
+        "name" : "data",
+        "type" : "string",
+        "doc" : "Some nested record field document."
+      } ]
+    },
+    "doc" : "Some field document."
+  } ]
+}
