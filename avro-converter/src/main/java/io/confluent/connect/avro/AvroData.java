@@ -987,7 +987,7 @@ public class AvroData {
 
         case STRUCT: {
           // Special case support for union types
-          if (schema.name() != null && schema.name().equals(AVRO_TYPE_UNION)) {
+          if (schema.name() != null && schema.name().startsWith(AVRO_TYPE_UNION)) {
             Schema valueRecordSchema = null;
             if (value instanceof IndexedRecord) {
               IndexedRecord valueRecord = ((IndexedRecord) value);
@@ -1205,7 +1205,7 @@ public class AvroData {
           // No builder needed here -- any metadata or defaults can be found on the member schema
           return toConnectSchema(optionalSchema, true, null, null);
         } else {
-          builder = SchemaBuilder.struct().name(AVRO_TYPE_UNION);
+          builder = SchemaBuilder.struct().name(AVRO_TYPE_UNION + Integer.toHexString(schema.hashCode()));
           Set<String> fieldNames = new HashSet<>();
           for (org.apache.avro.Schema memberSchema : schema.getTypes()) {
             String fieldName = unionMemberFieldName(memberSchema);

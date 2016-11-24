@@ -1038,7 +1038,7 @@ public class AvroDataTest {
     Schema recordSchema2 = SchemaBuilder.struct().name("io.confluent.Test2")
         .field("test", Schema.INT32_SCHEMA).optional().build();
     Schema schema = SchemaBuilder.struct()
-        .name("io.confluent.connect.avro.Union")
+        .name("io.confluent.connect.avro.Union" + Integer.toHexString(avroSchema.hashCode()))
         .field("int", Schema.OPTIONAL_INT32_SCHEMA)
         .field("string", Schema.OPTIONAL_STRING_SCHEMA)
         .field("Test1", recordSchema1)
@@ -1057,6 +1057,81 @@ public class AvroDataTest {
                  avroData.toConnectData(avroSchema, record1Test));
     assertEquals(new SchemaAndValue(schema, schema2Test),
                  avroData.toConnectData(avroSchema, record2Test));
+  }
+  @Test
+  public void testToConnectMultiUnion() {
+    // Make sure we handle multiple unions in a single schema
+    org.apache.avro.Schema avroRecordSchema1 = org.apache.avro.SchemaBuilder.builder()
+        .record("Test1").fields().requiredInt("test").endRecord();
+    org.apache.avro.Schema avroRecordSchema2 = org.apache.avro.SchemaBuilder.builder()
+        .record("Test2").namespace("io.confluent").fields().requiredInt("test").endRecord();
+    org.apache.avro.Schema avroRecordSchema3 = org.apache.avro.SchemaBuilder.builder()
+        .record("Test3").fields().requiredInt("test").endRecord();
+    org.apache.avro.Schema avroRecordSchema4 = org.apache.avro.SchemaBuilder.builder()
+        .record("Test4").namespace("io.confluent").fields().requiredInt("test").endRecord();
+    org.apache.avro.Schema avroUnionSchema1 = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .intType().and()
+        .stringType().and()
+        .type(avroRecordSchema1).and()
+        .type(avroRecordSchema2)
+        .endUnion();
+    org.apache.avro.Schema avroUnionSchema2 = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .intType().and()
+        .stringType().and()
+        .type(avroRecordSchema3).and()
+        .type(avroRecordSchema4)
+        .endUnion();
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+        .builder()
+        .record("root")
+        .namespace("io.confluent")
+        .fields()
+        .name("unionField1")
+        .type(avroUnionSchema1)
+        .noDefault()
+        .name("unionField2")
+        .type(avroUnionSchema2)
+        .noDefault()
+        .endRecord();
+    
+    
+    Schema recordSchema1 = SchemaBuilder.struct().name("Test1")
+        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema recordSchema2 = SchemaBuilder.struct().name("io.confluent.Test2")
+        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema recordSchema3 = SchemaBuilder.struct().name("Test3")
+        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema recordSchema4 = SchemaBuilder.struct().name("io.confluent.Test4")
+        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema unionSchema1 = SchemaBuilder.struct()
+        .name("io.confluent.connect.avro.Union" + Integer.toHexString(avroUnionSchema1.hashCode()))
+        .field("int", Schema.OPTIONAL_INT32_SCHEMA)
+        .field("string", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("Test1", recordSchema1)
+        .field("Test2", recordSchema2)
+        .build();
+    Schema unionSchema2 = SchemaBuilder.struct()
+        .name("io.confluent.connect.avro.Union" + Integer.toHexString(avroUnionSchema2.hashCode()))
+        .field("int", Schema.OPTIONAL_INT32_SCHEMA)
+        .field("string", Schema.OPTIONAL_STRING_SCHEMA)
+        .field("Test3", recordSchema3)
+        .field("Test4", recordSchema4)
+        .build();
+    Schema schema = SchemaBuilder.struct()
+        .name("io.confluent.root")
+        .field("unionField1", unionSchema1)
+        .field("unionField2", unionSchema2)
+        .build();
+    
+    assertNotEquals(unionSchema1.name(), unionSchema2.name());
+    
+    Struct schema1Test = new Struct(schema).put("unionField1", new Struct(unionSchema1).put("int", 12)).put(
+        "unionField2", new Struct(unionSchema2).put("string", "hello"));
+    GenericRecord record1Test = new GenericRecordBuilder(avroSchema)
+        .set("unionField1", 12)
+        .set("unionField2", "hello")
+        .build();
+    assertEquals(new SchemaAndValue(schema, schema1Test), avroData.toConnectData(avroSchema, record1Test));
   }
 
   @Test(expected = DataException.class)
