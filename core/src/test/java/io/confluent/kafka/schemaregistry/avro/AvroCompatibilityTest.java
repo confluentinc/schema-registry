@@ -73,7 +73,79 @@ public class AvroCompatibilityTest {
       + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]},"
       + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"bar\"}]}";
   private final Schema schema8 = AvroUtils.parseSchema(schemaString8).schemaObj;
-  
+
+  private final String schemaStringWithUnion =
+          "{\"type\":\"record\"," +
+          "  \"name\":\"myrecord\","+
+          "  \"fields\":"+
+          "  [{" +
+          "     \"name\":\"someUnion\"," +
+          "     \"type\":[" +
+          "        {" +
+          "           \"type\":\"record\",\n" +
+          "           \"name\":\"UnionType1\",\n" +
+          "           \"fields\":[" +
+          "              {" +
+          "                 \"name\":\"f1\"," +
+          "                 \"type\":\"string\"" +
+          "              }" +
+          "           ]" +
+          "        }," +
+          "        {" +
+          "           \"type\":\"record\"," +
+          "           \"name\":\"UnionType2\"," +
+          "           \"fields\":[                  " +
+          "              {" +
+          "                 \"name\":\"f1\"," +
+          "                 \"type\":\"string\"" +
+          "              }" +
+          "           ]" +
+          "        }" +
+          "     ]" +
+          "  }]" +
+          "}";
+
+  private final Schema schemaWithUnion = AvroUtils.parseSchema(schemaStringWithUnion).schemaObj;
+
+  private final String schemaStringWithUnionAndAlias =
+                  "{\"type\":\"record\"," +
+                  "  \"name\":\"myrecord\","+
+                  "  \"fields\":"+
+                  "  [{" +
+                  "     \"name\":\"someUnion\"," +
+                  "     \"type\":[" +
+                  "        {" +
+                  "           \"type\":\"record\",\n" +
+                  "           \"name\":\"UnionType1\",\n" +
+                  "           \"fields\":[" +
+                  "              {" +
+                  "                 \"name\":\"f1\"," +
+                  "                 \"type\":\"string\"" +
+                  "              }" +
+                  "           ]" +
+                  "        }," +
+                  "        {" +
+                  "           \"type\":\"record\"," +
+                  "           \"name\":\"NewUnionType2\"," +
+                  "           \"aliases\": [\"UnionType2\"],"+
+                  "           \"fields\":[" +
+                  "              {" +
+                  "                 \"name\":\"f1\"," +
+                  "                 \"type\":\"string\"" +
+                  "              }," +
+                  "              {" +
+                  "                 \"name\":\"f2\"," +
+                  "                 \"type\":\"string\"," +
+                  "                 \"default\": \"foo\"" +
+                  "              }" +
+                  "           ]" +
+                  "        }" +
+                  "     ]" +
+                  "  }]" +
+                  "}";
+
+  private final Schema schemaWithUnionAndAlias = AvroUtils.parseSchema(schemaStringWithUnionAndAlias).schemaObj;
+
   /*
    * Backward compatibility: A new schema is backward compatible if it can be used to read the data
    * written in the previous schema.
@@ -85,7 +157,7 @@ public class AvroCompatibilityTest {
                checker.isCompatible(schema2, Collections.singletonList(schema1)));
     assertFalse("adding a field w/o default is not a backward compatible change",
                 checker.isCompatible(schema3, Collections.singletonList(schema1)));
-    assertFalse("changing field name is not a backward compatible change",
+    assertTrue("changing field name with a proper alias is a backward compatible change",
                 checker.isCompatible(schema4, Collections.singletonList(schema1)));
     assertTrue("evolving a field type to a union is a backward compatible change",
                checker.isCompatible(schema6, Collections.singletonList(schema1)));
@@ -95,7 +167,8 @@ public class AvroCompatibilityTest {
                checker.isCompatible(schema7, Collections.singletonList(schema6)));
     assertFalse("removing a type from a union is not a backward compatible change",
                 checker.isCompatible(schema6, Collections.singletonList(schema7)));
-    
+    assertTrue("aliases should be used when validating unions compatibility",
+            checker.isCompatible(schemaWithUnionAndAlias, Collections.singletonList(schemaWithUnion)));
     // Only schema 2 is checked
     assertTrue("removing a default is not a transitively compatible change",
         checker.isCompatible(schema3, Arrays.asList(schema1, schema2)));
@@ -136,7 +209,8 @@ public class AvroCompatibilityTest {
         checker.isCompatible(schema3, Collections.singletonList(schema2)));
     assertTrue("adding a field is a forward compatible change",
         checker.isCompatible(schema2, Collections.singletonList(schema3)));
-    
+    assertTrue("aliases should be used when validating unions compatibility",
+            checker.isCompatible(schemaWithUnionAndAlias, Collections.singletonList(schemaWithUnion)));
     // Only schema 2 is checked
     assertTrue("removing a default is not a transitively compatible change",
         checker.isCompatible(schema1, Arrays.asList(schema3, schema2)));
@@ -177,6 +251,8 @@ public class AvroCompatibilityTest {
     // Only schema 2 is checked!
     assertTrue("transitively removing a field without a default is not a compatible change",
         checker.isCompatible(schema1, Arrays.asList(schema3, schema2)));
+    assertTrue("aliases should be used when validating unions compatibility",
+            checker.isCompatible(schemaWithUnionAndAlias, Collections.singletonList(schemaWithUnion)));
   }
   
   /*
@@ -208,5 +284,4 @@ public class AvroCompatibilityTest {
     assertFalse("transitively removing a field without a default is not a compatible change",
         checker.isCompatible(schema1, Arrays.asList(schema2, schema3)));
   }
-  
 }
