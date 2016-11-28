@@ -367,7 +367,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         return schema.getId();
       } else {
         throw new IncompatibleSchemaException(
-            "New schema is incompatible with the latest schema " + latestSchema);
+            "New schema is incompatible with an earlier schema.");
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
