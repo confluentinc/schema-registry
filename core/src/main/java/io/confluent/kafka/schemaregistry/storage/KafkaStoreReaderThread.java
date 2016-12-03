@@ -106,7 +106,23 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
     this.consumer = new KafkaConsumer<>(consumerProps);
 
-    List<PartitionInfo> partitions = this.consumer.partitionsFor(this.topic);
+    // Include a few retries since topic creation may take some time to propagate and schema registry is often started
+    // immediately after creating the schemas topic.
+    int retries = 0;
+    List<PartitionInfo> partitions = null;
+    while (retries < 3) {
+      partitions = this.consumer.partitionsFor(this.topic);
+      if (partitions != null && partitions.size() >= 1)
+        break;
+
+      try {
+        Thread.sleep(1000);
+      } catch (InterruptedException e) {
+        // ignore
+      }
+      retries++;
+    }
+
     if (partitions == null || partitions.size() < 1) {
       throw new IllegalArgumentException("Unable to subscribe to the Kafka topic " + topic +
                                          " backing this data store. Topic may not exist.");
