@@ -110,7 +110,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     // immediately after creating the schemas topic.
     int retries = 0;
     List<PartitionInfo> partitions = null;
-    while (retries < 3) {
+    while (retries++ < 10) {
       partitions = this.consumer.partitionsFor(this.topic);
       if (partitions != null && partitions.size() >= 1)
         break;
@@ -120,7 +120,6 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       } catch (InterruptedException e) {
         // ignore
       }
-      retries++;
     }
 
     if (partitions == null || partitions.size() < 1) {
