@@ -103,7 +103,7 @@ public class RestService {
 
 
   /**
-   * @param baseUrl           HTTP connection will be established with this url.
+   * @param requestUrl        HTTP connection will be established with this url.
    * @param method            HTTP method ("GET", "POST", "PUT", etc.)
    * @param requestBodyData   Bytes to be sent in the request body.
    * @param requestProperties HTTP header properties.
@@ -111,17 +111,17 @@ public class RestService {
    * @param <T>               The type of the deserialized response to the HTTP request.
    * @return The deserialized response to the HTTP request, or null if no data is expected.
    */
-  private <T> T sendHttpRequest(String baseUrl, String method, byte[] requestBodyData,
+  private <T> T sendHttpRequest(String requestUrl, String method, byte[] requestBodyData,
                             Map<String, String> requestProperties,
                             TypeReference<T> responseFormat)
           throws IOException, RestClientException {
     log.debug(String.format("Sending %s with input %s to %s",
             method, requestBodyData == null ? "null" : new String(requestBodyData),
-            baseUrl));
+            requestUrl));
 
     HttpURLConnection connection = null;
     try {
-      URL url = new URL(baseUrl);
+      URL url = new URL(requestUrl);
       connection = (HttpURLConnection) url.openConnection();
       connection.setRequestMethod(method);
 
@@ -183,14 +183,21 @@ public class RestService {
                             TypeReference<T> responseFormat) throws IOException, RestClientException {
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
       String baseUrl = baseUrls.current();
+      String requestUrl = buildRequestUrl(baseUrl, path);
       try {
-        return sendHttpRequest(baseUrl + path, method, requestBodyData, requestProperties, responseFormat);
+        return sendHttpRequest(requestUrl, method, requestBodyData, requestProperties, responseFormat);
       } catch (IOException e) {
         baseUrls.fail(baseUrl);
         if (i == n-1) throw e; // Raise the exception since we have no more urls to try
       }
     }
     throw new IOException("Internal HTTP retry error"); // Can't get here
+  }
+
+  // Visible for testing
+  static String buildRequestUrl(String baseUrl, String path) {
+      // Join base URL and path, collapsing any duplicate forward slash delimiters
+      return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
 
   public Schema lookUpSubjectVersion(String schemaString, String subject)
