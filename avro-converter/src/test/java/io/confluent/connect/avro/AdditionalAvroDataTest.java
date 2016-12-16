@@ -14,20 +14,29 @@ import org.apache.avro.reflect.Union;
 import org.apache.avro.specific.SpecificData;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import uk.co.jemos.podam.api.PodamFactory;
 import uk.co.jemos.podam.api.PodamFactoryImpl;
 
 public class AdditionalAvroDataTest
 {
+    private AvroData avroData;
+    @Before
+    public void before(){
+        AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+                                                   .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 1)
+                                                   .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+                                                   .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+                                                   .build();
 
+        avroData = new AvroData(avroDataConfig);
+    }
 
 
     @Test
     public void testDocumentationPreservedSchema() throws IOException
     {
-        AvroData avroData = new AvroData(1, false);
-
         Schema avroSchema = new Parser().parse(new File("src/test/avro/DocTestRecord.avsc"));
 
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
@@ -35,14 +44,11 @@ public class AdditionalAvroDataTest
         Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
 
         Assert.assertEquals(avroSchema, outputAvroSchema);
-
     }
 
     @Test
     public void testDocumentationPreservedData() throws IOException
     {
-        AvroData avroData = new AvroData(1, false);
-
         PodamFactory factory = new PodamFactoryImpl();
 
         DocTestRecord testRecord = factory.manufacturePojo(DocTestRecord.class);
@@ -56,8 +62,6 @@ public class AdditionalAvroDataTest
     @Test
     public void testComplexUnionSchema() throws IOException
     {
-        AvroData avroData = new AvroData(1, false);
-
         // Here is a schema complex union schema
         Schema avroSchema = new Parser().parse(new File("src/test/avro/AvroMessage.avsc"));
 
@@ -66,14 +70,11 @@ public class AdditionalAvroDataTest
         Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
 
         Assert.assertEquals(avroSchema, outputAvroSchema);
-
     }
 
     @Test
     public void testComplexUnionData() throws IOException
     {
-        AvroData avroData = new AvroData(1, false);
-        
         PodamFactory factory = new PodamFactoryImpl();
 
         AvroMessage avroMessage = factory.manufacturePojo(AvroMessage.class);
@@ -126,8 +127,6 @@ public class AdditionalAvroDataTest
         GenericData.Record nestedRecord = new GenericRecordBuilder(myImpl1Schema).set("data", "mydata").build();
         GenericData.Record obj = new GenericRecordBuilder(myAvroObjectSchema).set("obj", nestedRecord).build();
 
-        AvroData avroData = new AvroData(1, false
-        );
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(myAvroObjectSchema);
         SchemaAndValue schemaAndValue = avroData.toConnectData(myAvroObjectSchema, obj);
         Object o = avroData.fromConnectData(schemaAndValue.schema(), schemaAndValue.value());
