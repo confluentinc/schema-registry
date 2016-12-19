@@ -150,7 +150,7 @@ Recommended Deployment
 In the image above, there are two datacenters - DC A, and DC B. Each of the two datacenters has its own ZooKeeper
 cluster, Kafka cluster, and Schema Registry cluster. Both Schema Registry clusters link to Kafka and ZooKeeper in DC A. Note that the Schema Registry instances in DC B have ``master.eligibility`` set to false, meaning that none can ever be elected master.
 
-To protect against complete loss of DC A, Kafka cluster A (the source) is mirrored to Kafka cluster B (the target). Mirroring is achieved by running Kafka's MirrorMaker tool local to the target cluster.
+To protect against complete loss of DC A, Kafka cluster A (the source) is replicated to Kafka cluster B (the target). This is achieved by running the :ref:`Replicator` <connect_replicator>` local to the target cluster.
 
 Important Settings
 ^^^^^^^^^^^^^^^^^^
@@ -173,7 +173,7 @@ Assuming you have Schema Registry running, here are the recommended steps to add
 
 - In Kafka in DC B, create the ``_schemas`` topic. It should have 1 partition, ``kafkastore.topic.replication.factor`` of 3, and ``min.insync.replicas`` at least 2.
 
-- In DC B, run MirrorMaker with Kafka in the "master" datacenter as the source and Kafka in DC B as the target.
+- In DC B, run Replicator with Kafka in the "master" datacenter (DC A) as the source and Kafka in DC B as the target.
 
 - In the Schema Registry config files in DC B, set ``kafkastore.connection.url`` and ``schema.registry.zk.namespace`` to match the instances already running, and set ``master.eligibility`` to false.
 
