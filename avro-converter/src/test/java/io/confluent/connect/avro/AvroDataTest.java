@@ -50,6 +50,9 @@ import java.util.List;
 import java.util.TimeZone;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
+
+import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
+import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
 import static org.junit.Assert.*;
 
 public class AvroDataTest {
@@ -1059,6 +1062,51 @@ public class AvroDataTest {
                  avroData.toConnectData(avroSchema, record2Test));
   }
 
+  @Test
+  public void testToConnectUnionWithEnhanced() {
+    avroData = new AvroData(new AvroDataConfig.Builder()
+                               .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 2)
+                               .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+                               .build());
+    // Make sure we handle primitive types and named types properly by using a variety of types
+    org.apache.avro.Schema avroRecordSchema1 = org.apache.avro.SchemaBuilder.builder()
+                                                                            .record("Test1").fields().requiredInt("test").endRecord();
+    org.apache.avro.Schema avroRecordSchema2 = org.apache.avro.SchemaBuilder.builder()
+                                                                            .record("Test2").namespace("io.confluent").fields().requiredInt("test").endRecord();
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+                                                                     .intType().and()
+                                                                     .stringType().and()
+                                                                     .type(avroRecordSchema1).and()
+                                                                     .type(avroRecordSchema2)
+                                                                     .endUnion();
+
+
+    Schema recordSchema1 = SchemaBuilder.struct().name("Test1")
+                                        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema recordSchema2 = SchemaBuilder.struct().name("io.confluent.Test2")
+                                        .field("test", Schema.INT32_SCHEMA).optional().build();
+    Schema schema = SchemaBuilder.struct()
+                                 .name("io.confluent.connect.avro.Union")
+                                 .field("int", Schema.OPTIONAL_INT32_SCHEMA)
+                                 .field("string", Schema.OPTIONAL_STRING_SCHEMA)
+                                 .field("Test1", recordSchema1)
+                                 .field("io.confluent.Test2", recordSchema2)
+                                 .build();
+    assertEquals(new SchemaAndValue(schema, new Struct(schema).put("int", 12)),
+                 avroData.toConnectData(avroSchema, 12));
+    assertEquals(new SchemaAndValue(schema, new Struct(schema).put("string", "teststring")),
+                 avroData.toConnectData(avroSchema, "teststring"));
+
+    Struct schema1Test = new Struct(schema).put("Test1", new Struct(recordSchema1).put("test", 12));
+    GenericRecord record1Test = new GenericRecordBuilder(avroRecordSchema1).set("test", 12).build();
+    Struct schema2Test = new Struct(schema).put("io.confluent.Test2", new Struct(recordSchema2).put("test", 12));
+    GenericRecord record2Test = new GenericRecordBuilder(avroRecordSchema2).set("test", 12).build();
+    assertEquals(new SchemaAndValue(schema, schema1Test),
+                 avroData.toConnectData(avroSchema, record1Test));
+    assertEquals(new SchemaAndValue(schema, schema2Test),
+                 avroData.toConnectData(avroSchema, record2Test));
+  }
+
   @Test(expected = DataException.class)
   public void testToConnectUnionRecordConflict() {
     // If the records have the same name but are in different namespaces, we don't support this
@@ -1075,15 +1123,43 @@ public class AvroDataTest {
     GenericRecord recordTest = new GenericRecordBuilder(avroRecordSchema1).set("test", 12).build();
     avroData.toConnectData(avroSchema, recordTest);
   }
+  
+  @Test
+  public void testToConnectUnionRecordConflictWithEnhanced() {
+    // If the records have the same name but are in different namespaces, 
+    // ensure these are handled without throwing exception
+    avroData = new AvroData(new AvroDataConfig.Builder()
+                                        .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 2)
+                                        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+                                        .build());
+    org.apache.avro.Schema avroRecordSchema1 = org.apache.avro.SchemaBuilder.builder()
+        .record("Test1").fields().requiredInt("test").endRecord();
+    org.apache.avro.Schema avroRecordSchema2 = org.apache.avro.SchemaBuilder.builder()
+        .record("Test1").namespace("io.confluent").fields().requiredInt("test").endRecord();
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+        .type(avroRecordSchema1).and()
+        .type(avroRecordSchema2)
+        .endUnion();
+
+    GenericRecord recordTest = new GenericRecordBuilder(avroRecordSchema1).set("test", 12).build();
+    avroData.toConnectData(avroSchema, recordTest);
+  }
 
   @Test
   public void testToConnectEnum() {
-    // Enums are just converted to strings, no trace of the original enum is preserved
+    // Enums are just converted to strings, original enum is preserved in parameters
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .enumeration("TestEnum").symbols("foo", "bar", "baz");
-    assertEquals(new SchemaAndValue(SchemaBuilder.string().name("TestEnum").build(), "bar"),
+    SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
+    builder.parameter(CONNECT_ENUM_DOC_PROP, null);
+    builder.parameter(AVRO_TYPE_ENUM, "TestEnum");
+    for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
+      builder.parameter(AVRO_TYPE_ENUM+"."+enumSymbol, enumSymbol);
+    }
+
+    assertEquals(new SchemaAndValue(builder.build(), "bar"),
                  avroData.toConnectData(avroSchema, "bar"));
-    assertEquals(new SchemaAndValue(SchemaBuilder.string().name("TestEnum").build(), "bar"),
+    assertEquals(new SchemaAndValue(builder.build(), "bar"),
                  avroData.toConnectData(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar")));
   }
 

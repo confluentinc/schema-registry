@@ -19,7 +19,6 @@ package io.confluent.connect.avro;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
-import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.generic.GenericContainer;
@@ -37,8 +36,6 @@ import java.util.Map;
  * Implementation of Converter that uses Avro schemas and objects.
  */
 public class AvroConverter implements Converter {
-  public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.config";
-  private static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
 
   private SchemaRegistryClient schemaRegistry;
   private Serializer serializer;
@@ -58,30 +55,16 @@ public class AvroConverter implements Converter {
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
-
-    Object url = configs.get(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
-    if (url == null) {
-      throw new ConfigException("Missing Schema registry url!");
-    }
-    Object maxSchemaObject = configs.get(
-        AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG);
+    
+    AvroConverterConfig avroConverterConfig = new AvroConverterConfig(configs); 
+    
     if (schemaRegistry == null) {
-      if (maxSchemaObject == null) {
-        schemaRegistry = new CachedSchemaRegistryClient(
-            (String) url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
-      } else {
-        schemaRegistry = new CachedSchemaRegistryClient((String) url, (Integer) maxSchemaObject);
-      }
+        schemaRegistry = new CachedSchemaRegistryClient(avroConverterConfig.getSchemaRegistryUrls(), avroConverterConfig.getMaxSchemasPerSubject());
     }
-
-    int schemaCacheSize = SCHEMAS_CACHE_SIZE_DEFAULT;
-    Object schemaCacheSizeObj = configs.get(SCHEMAS_CACHE_SIZE_CONFIG);
-    if (schemaCacheSizeObj != null && schemaCacheSizeObj instanceof Integer)
-      schemaCacheSize = (Integer) schemaCacheSizeObj;
-
+    
     serializer = new Serializer(schemaRegistry);
     deserializer = new Deserializer(schemaRegistry);
-    avroData = new AvroData(schemaCacheSize);
+    avroData = new AvroData(new AvroDataConfig(configs));
   }
 
   @Override

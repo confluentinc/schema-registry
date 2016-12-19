@@ -25,6 +25,7 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
@@ -71,6 +72,8 @@ public class AvroData {
 
   public static final String CONNECT_NAME_PROP = "connect.name";
   public static final String CONNECT_DOC_PROP = "connect.doc";
+  public static final String CONNECT_RECORD_DOC_PROP = "connect.record.doc";
+  public static final String CONNECT_ENUM_DOC_PROP = "connect.enum.doc";
   public static final String CONNECT_VERSION_PROP = "connect.version";
   public static final String CONNECT_DEFAULT_VALUE_PROP = "connect.default";
   public static final String CONNECT_PARAMETERS_PROP = "connect.parameters";
@@ -134,6 +137,9 @@ public class AvroData {
 
   public static final org.apache.avro.Schema ANYTHING_SCHEMA_MAP_ELEMENT;
   public static final org.apache.avro.Schema ANYTHING_SCHEMA;
+
+  private static final org.apache.avro.Schema NULL_AVRO_SCHEMA = org.apache.avro.Schema.create(org.apache.avro.Schema.Type.NULL);
+
   static {
     // Intuitively this should be a union schema. However, unions can't be named in Avro and this
     // is a self-referencing type, so we need to use a format in which we can name the entire schema
@@ -207,6 +213,7 @@ public class AvroData {
     });
   }
 
+  static final String AVRO_PROP = "avro";
   static final String AVRO_LOGICAL_TYPE_PROP = "logicalType";
   static final String AVRO_LOGICAL_TIMESTAMP_MILLIS = "timestamp-millis";
   static final String AVRO_LOGICAL_TIME_MILLIS = "time-millis";
@@ -214,7 +221,7 @@ public class AvroData {
   static final String AVRO_LOGICAL_DECIMAL = "decimal";
   static final String AVRO_LOGICAL_DECIMAL_SCALE_PROP = "scale";
   static final String AVRO_LOGICAL_DECIMAL_PRECISION_PROP = "precision";
-  static final String CONNECT_AVRO_DECIMAL_PRECISION_PROP = "avro.precision";
+  static final String CONNECT_AVRO_DECIMAL_PRECISION_PROP = "connect.decimal.precision";
   static final Integer CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT = 64;
 
   private static final HashMap<String, LogicalTypeConverter> TO_AVRO_LOGICAL_CONVERTERS
@@ -263,11 +270,20 @@ public class AvroData {
 
   private Cache<Schema, org.apache.avro.Schema> fromConnectSchemaCache;
   private Cache<org.apache.avro.Schema, Schema> toConnectSchemaCache;
-
+  private boolean connectMetaData;
+  private boolean enhancedSchemaSupport;
 
   public AvroData(int cacheSize) {
-    fromConnectSchemaCache = new LRUCache<>(cacheSize);
-    toConnectSchemaCache = new LRUCache<>(cacheSize);
+    this(new AvroDataConfig.Builder()
+            .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, cacheSize)
+            .build());
+  }
+  
+  public AvroData(AvroDataConfig avroDataConfig) {
+    fromConnectSchemaCache = new LRUCache<>(avroDataConfig.getSchemasCacheSize());
+    toConnectSchemaCache = new LRUCache<>(avroDataConfig.getSchemasCacheSize());
+    this.connectMetaData = avroDataConfig.isConnectMetaData();
+    this.enhancedSchemaSupport = avroDataConfig.isEnhancedAvroSchemaSupport();
   }
 
   /**
@@ -452,15 +468,27 @@ public class AvroData {
           Struct struct = (Struct) value;
           if (!struct.schema().equals(schema))
             throw new DataException("Mismatching struct schema");
-          org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
-          GenericRecordBuilder convertedBuilder = new GenericRecordBuilder(underlyingAvroSchema);
-          for (Field field : schema.fields()) {
-            org.apache.avro.Schema fieldAvroSchema = underlyingAvroSchema.getField(field.name()).schema();
-            convertedBuilder.set(
-                field.name(),
-                fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false, true));
+          //This handles the inverting of a union which is held as a struct, where each field is one of the union types.
+          if (AVRO_TYPE_UNION.equals(schema.name())) {
+            for (Field field : schema.fields()) {
+              Object object = struct.get(field);
+              if (object != null){
+                return fromConnectData(field.schema(), avroSchema, object, false, true);
+              }
+            }
+            return fromConnectData(schema, avroSchema, null, false, true);
+          } else {
+            org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
+            GenericRecordBuilder convertedBuilder = new GenericRecordBuilder(underlyingAvroSchema);
+            for (Field field : schema.fields()) {
+              org.apache.avro.Schema.Field aField = underlyingAvroSchema.getField(field.name());
+              org.apache.avro.Schema fieldAvroSchema = aField.schema();
+              convertedBuilder.set(
+                 field.name(),
+                 fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false, true));
+            }
+            return convertedBuilder.build();
           }
-          return convertedBuilder.build();
         }
 
         default:
@@ -544,11 +572,39 @@ public class AvroData {
   }
 
   public org.apache.avro.Schema fromConnectSchema(Schema schema) {
+    return fromConnectSchema(schema, new HashMap<String, org.apache.avro.Schema>());
+  }
+  
+  public org.apache.avro.Schema fromConnectSchema(Schema schema, Map<String, org.apache.avro.Schema> schemaMap) {
+    return fromConnectSchema(schema, schemaMap, false);
+  }
+
+  /**
+   * SchemaMap is a map of already resolved internal schemas,
+   * this avoids type re-declaration if a type is reused,
+   * this actually blows up if you don't do this and have a type used in multiple places.
+   * 
+   * Also it only holds reference the non-optional schemas as technically an optional is actually a union of null and the non-opitonal,
+   * which if used in multiple places some optional some non-optional will cause error as you redefine type.
+   * 
+   * This is different to the global schema cache 
+   * which is used to hold/cache fully resolved schemas used to avoid re-resolving when presented with the same source schema.
+   * 
+   * @param schema
+   * @param schemaMap
+   * @param ignoreOptional
+   * @return
+   */
+  public org.apache.avro.Schema fromConnectSchema(Schema schema, Map<String, org.apache.avro.Schema> schemaMap, boolean ignoreOptional) {
     if (schema == null) {
       return ANYTHING_SCHEMA;
     }
 
     org.apache.avro.Schema cached = fromConnectSchemaCache.get(schema);
+
+    if (cached == null && !AVRO_TYPE_UNION.equals(schema.name()) && !schema.isOptional()) {
+      cached = schemaMap.get(schema.name());
+    }
     if (cached != null) {
       return cached;
     }
@@ -590,7 +646,23 @@ public class AvroData {
         baseSchema = org.apache.avro.SchemaBuilder.builder().booleanType();
         break;
       case STRING:
-        baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
+        if (enhancedSchemaSupport && schema.parameters() != null && schema.parameters().containsKey(AVRO_TYPE_ENUM)){
+          String enumSchemaName = schema.parameters().get(AVRO_TYPE_ENUM);
+          org.apache.avro.Schema cachedEnum = schemaMap.get(enumSchemaName);
+          if (cachedEnum == null) {
+            List<String> symbols = new ArrayList<>();
+            for(Map.Entry<String, String> entry: schema.parameters().entrySet()) {
+              if (entry.getKey().startsWith(AVRO_TYPE_ENUM + ".")) symbols.add(entry.getValue());
+            }
+            baseSchema = org.apache.avro.SchemaBuilder.builder().enumeration(schema.parameters().get(AVRO_TYPE_ENUM)).doc(schema.parameters().get(CONNECT_ENUM_DOC_PROP))
+                                                      .symbols(symbols.toArray(new String[symbols.size()]));
+            schemaMap.put(enumSchemaName, baseSchema);
+          } else {
+            baseSchema = cachedEnum;
+          }
+        } else {
+          baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
+        }
         break;
       case BYTES:
         baseSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
@@ -619,82 +691,116 @@ public class AvroData {
         } else {
           // Special record name indicates format
           org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler
-              = org.apache.avro.SchemaBuilder.builder()
+             = org.apache.avro.SchemaBuilder.builder()
               .array().items()
               .record(MAP_ENTRY_TYPE_NAME).namespace(NAMESPACE).fields();
-          addAvroRecordField(fieldAssembler, KEY_FIELD, schema.keySchema());
-          addAvroRecordField(fieldAssembler, VALUE_FIELD, schema.valueSchema());
+          addAvroRecordField(fieldAssembler, KEY_FIELD, schema.keySchema(), schemaMap);
+          addAvroRecordField(fieldAssembler, VALUE_FIELD, schema.valueSchema(), schemaMap);
           baseSchema = fieldAssembler.endRecord();
         }
         break;
       case STRUCT:
-        org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler
-            = org.apache.avro.SchemaBuilder
-            .record(name != null ? name : DEFAULT_SCHEMA_NAME).namespace(namespace).fields();
-        for (Field field : schema.fields()) {
-          addAvroRecordField(fieldAssembler, field.name(), field.schema());
+        if (AVRO_TYPE_UNION.equals(schema.name())) {
+          List<org.apache.avro.Schema> unionSchemas = new ArrayList<>();
+          if (schema.isOptional()){
+            unionSchemas.add(org.apache.avro.SchemaBuilder.builder().nullType());
+          }
+          for (Field field : schema.fields()) {
+            unionSchemas.add(fromConnectSchema(nonOptional(field.schema()), schemaMap, true));
+          }
+          baseSchema = org.apache.avro.Schema.createUnion(unionSchemas);
+        } else if (schema.isOptional()) {
+          List<org.apache.avro.Schema> unionSchemas = new ArrayList<>();
+          unionSchemas.add(org.apache.avro.SchemaBuilder.builder().nullType());
+          unionSchemas.add(fromConnectSchema(nonOptional(schema), schemaMap, false));
+          baseSchema = org.apache.avro.Schema.createUnion(unionSchemas);
+        } else {
+          String doc = schema.parameters() != null ? schema.parameters().get(CONNECT_RECORD_DOC_PROP) : null;
+          org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler = org.apache.avro.SchemaBuilder.record(name != null ? name : DEFAULT_SCHEMA_NAME).namespace(namespace).doc(doc).fields();
+          for (Field field : schema.fields()) {
+            addAvroRecordField(fieldAssembler, field.name(), field.schema(), schemaMap);
+          }
+          baseSchema = fieldAssembler.endRecord();
         }
-        baseSchema = fieldAssembler.endRecord();
         break;
       default:
         throw new DataException("Unknown schema type: " + schema.type());
     }
+    
+    org.apache.avro.Schema finalSchema = baseSchema;
+    if (!baseSchema.getType().equals(org.apache.avro.Schema.Type.UNION)) {
+      if (connectMetaData) {
+        if (schema.doc() != null) {
+          baseSchema.addProp(CONNECT_DOC_PROP, schema.doc());
+        }
+        if (schema.version() != null) {
+          baseSchema.addProp(CONNECT_VERSION_PROP,
+              JsonNodeFactory.instance.numberNode(schema.version()));
+        }
+        if (schema.parameters() != null) {
+          baseSchema.addProp(CONNECT_PARAMETERS_PROP, parametersFromConnect(schema.parameters()));
+        }
+        if (schema.defaultValue() != null) {
+          baseSchema.addProp(CONNECT_DEFAULT_VALUE_PROP,
+              defaultValueFromConnect(schema, schema.defaultValue()));
+        }
+        if (schema.name() != null) {
+          baseSchema.addProp(CONNECT_NAME_PROP, schema.name());
+        }
+        // Some Connect types need special annotations to preserve the types accurate due to
+        // limitations in Avro. These types get an extra annotation with their Connect type
+        if (connectType != null) {
+          baseSchema.addProp(CONNECT_TYPE_PROP, connectType);
+        }
+      }
+      
+      // Only Avro named types (record, enum, fixed) may contain namespace + name. Only Connect's
+      // struct converts to one of those (record), so for everything else that has a name we store
+      // the full name into a special property. For uniformity, we also duplicate this info into
+      // the same field in records as well even though it will also be available in the namespace()
+      // and name().
+      if (schema.name() != null) {
+        if(Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())){
+          baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DECIMAL);
+        } else if(Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIME_MILLIS);
+        } else if(Timestamp.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIMESTAMP_MILLIS);
+        } else if(Date.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DATE);
+        }
+      }
 
-    if (schema.doc() != null) {
-      baseSchema.addProp(CONNECT_DOC_PROP, schema.doc());
-    }
-    if (schema.version() != null) {
-      baseSchema.addProp(CONNECT_VERSION_PROP,
-          JsonNodeFactory.instance.numberNode(schema.version()));
-    }
-    if (schema.parameters() != null) {
-      baseSchema.addProp(CONNECT_PARAMETERS_PROP, parametersFromConnect(schema.parameters()));
-    }
-    if (schema.defaultValue() != null) {
-      baseSchema.addProp(CONNECT_DEFAULT_VALUE_PROP,
-          defaultValueFromConnect(schema, schema.defaultValue()));
-    }
+      if (schema.parameters() != null){
+        for(Map.Entry<String, String> entry : schema.parameters().entrySet()) {
+          if (entry.getKey().startsWith(AVRO_PROP)) {
+            baseSchema.addProp(entry.getKey(), entry.getValue());
+          }
+        }
+      }
 
-    // Only Avro named types (record, enum, fixed) may contain namespace + name. Only Connect's
-    // struct converts to one of those (record), so for everything else that has a name we store
-    // the full name into a special property. For uniformity, we also duplicate this info into
-    // the same field in records as well even though it will also be available in the namespace()
-    // and name().
-    if (schema.name() != null) {
-      baseSchema.addProp(CONNECT_NAME_PROP, schema.name());
 
-      if(Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())){
-        baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DECIMAL);
-      } else if(Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
-        baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIME_MILLIS);
-      } else if(Timestamp.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
-        baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIMESTAMP_MILLIS);
-      } else if(Date.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
-        baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DATE);
+      // Note that all metadata has already been processed and placed on the baseSchema because we
+      // can't store any metadata on the actual top-level schema when it's a union because of Avro
+      // constraints on the format of schemas.
+      if (!ignoreOptional) {
+        if (schema.isOptional()) {
+          if (schema.defaultValue() != null)
+            finalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+                                                       .type(baseSchema).and()
+                                                       .nullType()
+                                                       .endUnion();
+          else
+            finalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+                                                       .nullType().and()
+                                                       .type(baseSchema)
+                                                       .endUnion();
+        }
       }
     }
-
-    // Some Connect types need special annotations to preserve the types accurate due to
-    // limitations in Avro. These types get an extra annotation with their Connect type
-    if (connectType != null) {
-      baseSchema.addProp(CONNECT_TYPE_PROP, connectType);
-    }
-
-    // Note that all metadata has already been processed and placed on the baseSchema because we
-    // can't store any metadata on the actual top-level schema when it's a union because of Avro
-    // constraints on the format of schemas.
-    org.apache.avro.Schema finalSchema = baseSchema;
-    if (schema.isOptional()) {
-      if (schema.defaultValue() != null)
-        finalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
-            .type(baseSchema).and()
-            .nullType()
-            .endUnion();
-      else
-        finalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
-            .nullType().and()
-            .type(baseSchema)
-            .endUnion();
+    
+    if (schema.name() != null && !schema.isOptional()) {
+      schemaMap.put(schema.name(), finalSchema);
     }
     fromConnectSchemaCache.put(schema, finalSchema);
     return finalSchema;
@@ -703,14 +809,17 @@ public class AvroData {
 
   private void addAvroRecordField(
       org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler,
-      String fieldName, Schema fieldSchema)
-  {
+      String fieldName, Schema fieldSchema, Map<String, org.apache.avro.Schema> schemaMap) {
     org.apache.avro.SchemaBuilder.GenericDefault<org.apache.avro.Schema> fieldAvroSchema
-        = fieldAssembler.name(fieldName).type(fromConnectSchema(fieldSchema));
+       = fieldAssembler.name(fieldName).doc(fieldSchema.doc()).type(fromConnectSchema(fieldSchema, schemaMap));
     if (fieldSchema.defaultValue() != null) {
       fieldAvroSchema.withDefault(defaultValueFromConnect(fieldSchema, fieldSchema.defaultValue()));
     } else {
-      fieldAvroSchema.noDefault();
+      if (fieldSchema.isOptional()){
+        fieldAvroSchema.withDefault(null);
+      } else {
+        fieldAvroSchema.noDefault();
+      }
     }
   }
 
@@ -923,12 +1032,12 @@ public class AvroData {
           if (value instanceof String) {
             converted = value;
           } else if (value instanceof CharSequence ||
-              value instanceof GenericEnumSymbol ||
-              value instanceof Enum) {
+                     value instanceof GenericEnumSymbol ||
+                     value instanceof Enum) {
             converted = value.toString();
           } else {
             throw new DataException("Invalid class for string type, expecting String or "
-                + "CharSequence but found " + value.getClass());
+                                    + "CharSequence but found " + value.getClass());
           }
           break;
 
@@ -941,7 +1050,7 @@ public class AvroData {
             converted = ByteBuffer.wrap(((GenericFixed) value).bytes());
           } else {
             throw new DataException("Invalid class for bytes type, expecting byte[] or ByteBuffer "
-                + "but found " + value.getClass());
+                                    + "but found " + value.getClass());
           }
           break;
 
@@ -1178,36 +1287,29 @@ public class AvroData {
       case ENUM:
         // enums are unwrapped to strings and the original enum is not preserved
         builder = SchemaBuilder.string();
+        builder.parameter(CONNECT_ENUM_DOC_PROP, schema.getDoc());
+        builder.parameter(AVRO_TYPE_ENUM, schema.getFullName());
+        for(String enumSymbol : schema.getEnumSymbols()) {
+          builder.parameter(AVRO_TYPE_ENUM+"."+enumSymbol, enumSymbol);
+        }
         break;
 
       case UNION: {
-        // Connect doesn't support unions. To handle this, we convert them to records with field
-        // names associated with each of the input types
-        //
-        // However, we also need to first check for union types that are used to indicate optional
-        // fields. Since we don't support the null type, we'll consider any union containing a
-        // null type as an indication that it should be handled as an optional field
-        boolean hasNullSchema = false;
-        org.apache.avro.Schema optionalSchema = null;
-        for (org.apache.avro.Schema memberSchema : schema.getTypes()) {
-          if (memberSchema.getType() == org.apache.avro.Schema.Type.NULL) {
-            hasNullSchema = true;
-          } else {
-            optionalSchema = memberSchema;
+        if (schema.getTypes().size() == 2){
+          if (schema.getTypes().contains(NULL_AVRO_SCHEMA)){
+            for(org.apache.avro.Schema memberSchema : schema.getTypes()){
+              if (!memberSchema.equals(NULL_AVRO_SCHEMA)) {
+                return toConnectSchema(memberSchema, true, null, docDefaultVal);
+              }
+            }
           }
         }
-        if (hasNullSchema) {
-          // Optional fields may only have one other type
-          if (schema.getTypes().size() != 2) {
-            throw new DataException("Avro union types containing null are only supported as "
-                + "optional fields and should have exactly two entries.");
-          }
-          // No builder needed here -- any metadata or defaults can be found on the member schema
-          return toConnectSchema(optionalSchema, true, null, null);
-        } else {
-          builder = SchemaBuilder.struct().name(AVRO_TYPE_UNION);
-          Set<String> fieldNames = new HashSet<>();
-          for (org.apache.avro.Schema memberSchema : schema.getTypes()) {
+        builder = SchemaBuilder.struct().name(AVRO_TYPE_UNION);
+        Set<String> fieldNames = new HashSet<>();
+        for (org.apache.avro.Schema memberSchema : schema.getTypes()) {
+          if (memberSchema.getType() == org.apache.avro.Schema.Type.NULL) {
+            builder.optional();
+          } else {
             String fieldName = unionMemberFieldName(memberSchema);
             if (fieldNames.contains(fieldName)) {
               throw new DataException("Multiple union schemas map to the Connect union field name");
@@ -1235,6 +1337,9 @@ public class AvroData {
         (schema.getDoc() != null ? schema.getDoc() : schema.getProp(CONNECT_DOC_PROP));
     if (docVal != null) {
       builder.doc(docVal);
+    }
+    if (schema.getDoc() != null) {
+      builder.parameter(CONNECT_RECORD_DOC_PROP, schema.getDoc());
     }
 
     // Included Kafka Connect version takes priority, fall back to schema registry version
@@ -1265,6 +1370,12 @@ public class AvroData {
               jsonValue);
         }
         builder.parameter(field.getKey(), jsonValue.getTextValue());
+      }
+    }
+
+    for(Map.Entry<String, String> entry : schema.getProps().entrySet()) {
+      if (entry.getKey().startsWith(AVRO_PROP)) {
+        builder.parameter(entry.getKey(), entry.getValue());
       }
     }
 
@@ -1371,8 +1482,7 @@ public class AvroData {
         return result;
       }
 
-      case RECORD:
-      {
+      case RECORD: {
         if (!jsonValue.isObject()) {
           throw new DataException("Invalid JSON for record default value: " + jsonValue.toString());
         }
@@ -1390,8 +1500,12 @@ public class AvroData {
       case UNION: {
         // Defaults must match first type
         org.apache.avro.Schema memberAvroSchema = avroSchema.getTypes().get(0);
-        return defaultValueFromAvro(schema.field(unionMemberFieldName(memberAvroSchema)).schema(),
+        if (memberAvroSchema.getType() == org.apache.avro.Schema.Type.NULL) {
+          return null;
+        } else {
+          return defaultValueFromAvro(schema.field(unionMemberFieldName(memberAvroSchema)).schema(),
             memberAvroSchema, value);
+        }
       }
     }
 
@@ -1399,17 +1513,25 @@ public class AvroData {
   }
 
 
-  private static String unionMemberFieldName(org.apache.avro.Schema schema) {
+  private String unionMemberFieldName(org.apache.avro.Schema schema) {
     if (schema.getType() == org.apache.avro.Schema.Type.RECORD ||
         schema.getType() == org.apache.avro.Schema.Type.ENUM) {
-      return splitName(schema.getName())[1];
+      if (enhancedSchemaSupport) {
+        return schema.getFullName();
+      } else {
+        return splitName(schema.getName())[1];
+      }
     }
     return schema.getType().getName();
   }
 
-  private static String unionMemberFieldName(Schema schema) {
+  private String unionMemberFieldName(Schema schema) {
     if (schema.type() == Schema.Type.STRUCT || isEnumSchema(schema)) {
-      return splitName(schema.name())[1];
+      if (enhancedSchemaSupport) {
+        return schema.name();
+      } else {
+        return splitName(schema.name())[1];
+      }
     }
     return CONNECT_TYPES_TO_AVRO_TYPES.get(schema.type()).getName();
   }
@@ -1452,4 +1574,38 @@ public class AvroData {
   private interface LogicalTypeConverter {
     Object convert(Schema schema, Object value);
   }
+  
+  public static Schema nonOptional(Schema schema){
+    return new ConnectSchema(schema.type(), false, schema.defaultValue(), schema.name(), schema.version(), schema.doc(), schema.parameters(),
+                             fields(schema),
+                             keySchema(schema),
+                             valueSchema(schema));
+  }
+
+  public static List<Field> fields(Schema schema){
+    Schema.Type type = schema.type();
+    if(Schema.Type.STRUCT.equals(type)){
+      return schema.fields();
+    } else {
+      return null;
+    }
+  }
+
+  public static Schema keySchema(Schema schema){
+    Schema.Type type = schema.type();
+    if(Schema.Type.MAP.equals(type)){
+      return schema.keySchema();
+    } else {
+      return null;
+    }
+  }
+
+  public static Schema valueSchema(Schema schema){
+    Schema.Type type = schema.type();
+    if(Schema.Type.MAP.equals(type) || Schema.Type.ARRAY.equals(type)){
+      return schema.valueSchema();
+    } else {
+      return null;
+    }  }
+
 }

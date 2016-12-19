@@ -58,6 +58,7 @@
         <easymock.version>3.3.1</easymock.version>
         <powermock.version>1.6.2</powermock.version>
         <powermock.api.easymock.version>1.6.2</powermock.api.easymock.version>
+        <podam.version>6.0.2.RELEASE</podam.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven-assembly.version>2.6</maven-assembly.version>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>

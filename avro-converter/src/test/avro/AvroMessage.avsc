@@ -1,0 +1,944 @@
+{
+  "type" : "record",
+  "name" : "AvroMessage",
+  "namespace" : "io.test.avro.core",
+  "fields" : [ {
+    "name" : "payload",
+    "type" : [ "null", {
+      "type" : "record",
+      "name" : "Event",
+      "namespace" : "io.test.trade.v1.order",
+      "fields" : [ {
+        "name" : "state",
+        "type" : {
+          "type" : "record",
+          "name" : "State",
+          "fields" : [ {
+            "name" : "orderId",
+            "type" : {
+              "type" : "record",
+              "name" : "Id",
+              "namespace" : "io.test.trade.v1",
+              "doc" : "Id of an order or position.",
+              "fields" : [ {
+                "name" : "source",
+                "type" : {
+                  "type" : "enum",
+                  "name" : "Source",
+                  "symbols" : [ "ORDER_SERVER", "CLIENT", "UNIVERSE", "L2", "L2_CHAIN", "EXCHANGE", "UNIVERSE_ATTR", "UNDEFINED" ]
+                }
+              }, {
+                "name" : "value",
+                "type" : {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                }
+              } ]
+            },
+            "doc" : "The ID to reference this order."
+          }, {
+            "name" : "accountId",
+            "type" : {
+              "type" : "record",
+              "name" : "Id",
+              "namespace" : "io.test.trade.v1.common.account",
+              "fields" : [ {
+                "name" : "value",
+                "type" : {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                }
+              } ]
+            },
+            "doc" : "The account that the order is associated to."
+          }, {
+            "name" : "allocation",
+            "type" : {
+              "type" : "record",
+              "name" : "Allocation",
+              "namespace" : "io.test.trade.v1.common",
+              "fields" : [ {
+                "name" : "direction",
+                "type" : {
+                  "type" : "enum",
+                  "name" : "Direction",
+                  "symbols" : [ "BUY", "SELL" ]
+                }
+              }, {
+                "name" : "size",
+                "type" : {
+                  "type" : "record",
+                  "name" : "Size",
+                  "fields" : [ {
+                    "name" : "value",
+                    "type" : "double"
+                  } ]
+                }
+              }, {
+                "name" : "displaySize",
+                "type" : "Size",
+                "doc" : "Size used for presentation and external reporting purposes. Note: Margining, Profit/Loss calculation, exposure, etc., should multiply this size with lotSize for calculations."
+              }, {
+                "name" : "displaySizeUnit",
+                "type" : {
+                  "type" : "enum",
+                  "name" : "DisplaySizeUnit",
+                  "symbols" : [ "SHARES", "CONTRACTS", "AMOUNT_PER_POINTS" ]
+                },
+                "doc" : "Define how the displaySize is expressed."
+              }, {
+                "name" : "lotSize",
+                "type" : "double",
+                "doc" : "Defined on the instrument. Clients on spread-bet accounts use lot size of 1, while CFD and StockBroking clients use lot size configured on the instrument. Dealers can book orders on any client account with a lot size of 1. Hedge accounts have different rules - they are generally booked in lots with lotSize 1, except equities (and equity options)"
+              }, {
+                "name" : "currency",
+                "type" : {
+                  "type" : "record",
+                  "name" : "ISOCurrency",
+                  "fields" : [ {
+                    "name" : "value",
+                    "type" : {
+                      "type" : "string",
+                      "avro.java.string" : "String"
+                    }
+                  } ]
+                },
+                "doc" : "Currency of the order/position"
+              } ]
+            },
+            "doc" : "Details of the allocation of this order, size/amount, currency and direction."
+          }, {
+            "name" : "instrument",
+            "type" : {
+              "type" : "record",
+              "name" : "Instrument",
+              "namespace" : "io.test.trade.v1.common",
+              "fields" : [ {
+                "name" : "bookingCodeType",
+                "type" : {
+                  "type" : "enum",
+                  "name" : "BookingCodeType",
+                  "symbols" : [ "EPIC", "ISIN_AND_CURRENCY" ]
+                },
+                "doc" : "Indicates if the booking was made using an ISIN or EPIC. If EPIC, unique instrument identifier is the EPIC. If ISIN_AND_CURRENCY, the unique identifier is ISIN and CURRENCY. In this last case EPIC is also set for internal usage."
+              }, {
+                "name" : "epic",
+                "type" : {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                },
+                "doc" : "This field is populated for all booking operations and it represents the id of the instrument on which the booking was made. Note: This field will probably be made optional when contract-ids are introduced"
+              }, {
+                "name" : "isin",
+                "type" : [ "null", {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                } ],
+                "doc" : "ISIN is populated for stock-broking deals",
+                "default" : null
+              }, {
+                "name" : "level",
+                "type" : {
+                  "type" : "record",
+                  "name" : "Level",
+                  "fields" : [ {
+                    "name" : "value",
+                    "type" : "double"
+                  } ]
+                },
+                "doc" : "The level at which the position is booked. This level is used for pnl, margining, auto-hedge, exposure calculation, and other such purposes. This level should always be displayLevel multiplied by scaling factor, however, there are a few UV based flows where that constraint doesn't hold."
+              }, {
+                "name" : "displayLevel",
+                "type" : "Level",
+                "doc" : "The level displayed in the front-end. Note: PnL calculation, auto-hedge and other such operations should multiply by scaling factor."
+              }, {
+                "name" : "scalingFactor",
+                "type" : "double",
+                "doc" : "The scaling factor used for booking this position."
+              }, {
+                "name" : "instrumentType",
+                "type" : [ "null", {
+                  "type" : "enum",
+                  "name" : "InstrumentType",
+                  "symbols" : [ "SHARES", "CURRENCIES", "INDICES", "BINARY", "FAST_BINARY", "COMMODITIES", "RATES", "OPTIONS_SHARES", "OPTIONS_CURRENCIES", "OPTIONS_INDICES", "OPTIONS_COMMODITIES", "OPTIONS_RATES", "BUNGEE_SHARES", "BUNGEE_CURRENCIES", "BUNGEE_INDICES", "BUNGEE_COMMODITIES", "BUNGEE_RATES", "CAPPED_BUNGEE", "TEST_MARKETS", "SPORTS", "SECTORS" ]
+                } ],
+                "doc" : "Type of the instrument on which the booking is made. This field is made optional to accommodate positions missing instrument type for some reason (very old positions, UV based legacy flows, etc)",
+                "default" : null
+              }, {
+                "name" : "marketName",
+                "type" : [ "null", {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                } ],
+                "default" : null
+              }, {
+                "name" : "scalingFactorOnInstrumentIfDifferent",
+                "type" : [ "null", "double" ],
+                "doc" : "If the scaling factor on the instrument is different from the scaling factor used to book this position then this field carries this new scaling factor. This field is used by a trade anomaly report (maintained by XCON)",
+                "default" : null
+              } ]
+            },
+            "doc" : "Details on booked level and instrument information"
+          }, {
+            "name" : "timestamps",
+            "type" : {
+              "type" : "record",
+              "name" : "Timestamps",
+              "namespace" : "io.test.trade.v1.common",
+              "doc" : "See http://test.io/wiki/Position+History+Tactical+Fixes",
+              "fields" : [ {
+                "name" : "created",
+                "type" : {
+                  "type" : "record",
+                  "name" : "UTCTimestamp",
+                  "fields" : [ {
+                    "name" : "value",
+                    "type" : "long"
+                  } ]
+                },
+                "doc" : "Timestamp of the trade's creation time"
+              }, {
+                "name" : "lastModified",
+                "type" : [ "null", "UTCTimestamp" ],
+                "doc" : "Timestamp of the trade's modification time. For RESTATE, this field indicates the timestamp of the restate",
+                "default" : null
+              }, {
+                "name" : "lastEdited",
+                "type" : [ "null", "UTCTimestamp" ],
+                "doc" : "Applicable only for RESTATES and specifies the timestamp at which this trade was last edited",
+                "default" : null
+              }, {
+                "name" : "margin",
+                "type" : [ "null", "UTCTimestamp" ],
+                "doc" : "Timestamp of the trade's margin time.",
+                "default" : null
+              } ]
+            },
+            "doc" : "Timestamps of when the order was created, modified or last edited."
+          }, {
+            "name" : "isForceOpen",
+            "type" : "boolean",
+            "doc" : "Upon full fill, should this order close positions existing in opposite direction?",
+            "default" : false
+          }, {
+            "name" : "attachedStop",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "Stop",
+              "namespace" : "io.test.trade.v1.common.contingent",
+              "fields" : [ {
+                "name" : "value",
+                "type" : "double",
+                "doc" : "Stop value can be expressed either as a Level or Distance. Use this field in conjunction with valueType"
+              }, {
+                "name" : "valueType",
+                "type" : {
+                  "type" : "enum",
+                  "name" : "StopValueType",
+                  "symbols" : [ "DISTANCE", "LEVEL" ]
+                },
+                "doc" : "Represents the unit in which the stop value is expressed"
+              }, {
+                "name" : "isGuaranteed",
+                "type" : "boolean",
+                "default" : false
+              }, {
+                "name" : "lrPremium",
+                "type" : [ "null", "double" ],
+                "doc" : "This field represents a multiplier to be applied to the trade's size to derive a limited risk fee (LR Fee). The LR fee is a monetary amount and is expressed in the currency of the order.",
+                "default" : null
+              }, {
+                "name" : "trailingStop",
+                "type" : [ "null", {
+                  "type" : "record",
+                  "name" : "TrailingStop",
+                  "fields" : [ {
+                    "name" : "distance",
+                    "type" : "double",
+                    "default" : 0.0
+                  }, {
+                    "name" : "increment",
+                    "type" : "double",
+                    "default" : 0.0
+                  } ]
+                } ],
+                "default" : null
+              }, {
+                "name" : "orderIds",
+                "type" : [ "null", {
+                  "type" : "array",
+                  "items" : "io.test.trade.v1.Id"
+                } ],
+                "doc" : "Ids identifying this stop.",
+                "default" : null
+              } ]
+            } ],
+            "doc" : "An attached Stop is a 'stop-loss' order; an instruction to close a position when a certain level is breached, to minimize loss.",
+            "default" : null
+          }, {
+            "name" : "attachedLimit",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "Limit",
+              "namespace" : "io.test.trade.v1.common.contingent",
+              "fields" : [ {
+                "name" : "value",
+                "type" : "double",
+                "doc" : "Limit value can be expressed either as a Level or Distance. Use this field in conjunction with valueType"
+              }, {
+                "name" : "valueType",
+                "type" : {
+                  "type" : "enum",
+                  "name" : "LimitValueType",
+                  "symbols" : [ "DISTANCE", "LEVEL" ]
+                },
+                "doc" : "Represents the unit in which the limit value is expressed"
+              }, {
+                "name" : "orderIds",
+                "type" : [ "null", {
+                  "type" : "array",
+                  "items" : "io.test.trade.v1.Id"
+                } ],
+                "doc" : "Ids identifying this limit.",
+                "default" : null
+              } ]
+            } ],
+            "doc" : "An attached limit is a 'profit-limit' order; an instruction to close a position when a certain level is breached, to guarantee profit.",
+            "default" : null
+          }, {
+            "name" : "legacyInfo",
+            "type" : {
+              "type" : "record",
+              "name" : "LegacyInfo",
+              "namespace" : "io.test.trade.v1.common",
+              "doc" : "Legacy information for retro compatibility purpose. Should not be used in any new service.",
+              "fields" : [ {
+                "name" : "uvCurrency",
+                "type" : {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                },
+                "doc" : "deprecated field",
+                "default" : ""
+              }, {
+                "name" : "marketCommodity",
+                "type" : {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                },
+                "doc" : "deprecated field",
+                "default" : ""
+              }, {
+                "name" : "prompt",
+                "type" : [ "null", {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                } ],
+                "doc" : "Deprecated field. Represents the period at which the instrument expires. This field is also referred to as 'period' in some legacy messages",
+                "default" : null
+              }, {
+                "name" : "submitOrderType",
+                "type" : [ "null", {
+                  "type" : "enum",
+                  "name" : "SubmitOrderType",
+                  "symbols" : [ "UNCONTROLLED_OPEN", "UNCONTROLLED_CLOSE", "CONTROLLED_OPEN", "CONTROLLED_CLOSE", "UNCONTROLLED_OPEN_WITH_STOP", "UNCONTROLLED_CLOSE_WITH_STOP", "MANUAL_POSITION_DELETE", "OPEN_WITH_EXPIRY_STOP" ]
+                } ],
+                "doc" : "deprecated field",
+                "default" : null
+              }, {
+                "name" : "requestType",
+                "type" : [ "null", {
+                  "type" : "enum",
+                  "name" : "RequestType",
+                  "symbols" : [ "AMEND_ORDER", "FINANCE_ORDER", "CFD_ORDER", "PHYSICAL", "UNATTACHED_LIMIT_ORDER", "UNATTACHED_STOP_ORDER", "UNATTACHED_ORDER_DELETE", "UNATTACHED_ORDER_FILL", "UNATTACHED_BUFFER_LIMITS", "UNATTACHED_BUFFER_LIMITS_DELETE", "MARKET_ORDER" ]
+                } ],
+                "doc" : "deprecated field",
+                "default" : null
+              }, {
+                "name" : "exchangeRateEpic",
+                "type" : [ "null", {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                } ],
+                "doc" : "Deprecated field. This field represents the fx rate epic mapped to the trade's currency.",
+                "default" : null
+              } ]
+            },
+            "doc" : "Legacy attributes, a hang over from UV, eg market commod."
+          }, {
+            "name" : "channel",
+            "type" : {
+              "type" : "record",
+              "name" : "Channel",
+              "namespace" : "io.test.trade.v1.common",
+              "fields" : [ {
+                "name" : "value",
+                "type" : {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                }
+              } ]
+            },
+            "doc" : "The channel though which the order was placed , eg. WEB, L2. This will not change if the order is amended. For this, see channel in change info."
+          }, {
+            "name" : "expiry",
+            "type" : {
+              "type" : "record",
+              "name" : "Expiry",
+              "namespace" : "io.test.trade.v1.order.common",
+              "fields" : [ {
+                "name" : "timeInForce",
+                "type" : {
+                  "type" : "enum",
+                  "name" : "TimeInForce",
+                  "namespace" : "io.test.trade.v1.common",
+                  "symbols" : [ "DAY", "GOOD_TILL_CANCEL", "AT_THE_OPENING", "IMMEDIATE_OR_CANCEL", "FILL_OR_KILL", "GOOD_TILL_CROSSING", "GOOD_TILL_DATE", "AT_THE_CLOSE", "DAY_ALL_SESSIONS" ]
+                }
+              }, {
+                "name" : "goodTillDateTimestamp",
+                "type" : [ "null", "io.test.trade.v1.common.UTCTimestamp" ],
+                "default" : null
+              } ]
+            },
+            "doc" : "The date/time of when this order expires."
+          }, {
+            "name" : "accountAttributes",
+            "type" : {
+              "type" : "record",
+              "name" : "Attributes",
+              "namespace" : "io.test.trade.v1.common.account",
+              "fields" : [ {
+                "name" : "accountProduct",
+                "type" : [ "null", {
+                  "type" : "enum",
+                  "name" : "Product",
+                  "symbols" : [ "SPREAD_BET", "CFD", "PHYSICAL" ]
+                } ],
+                "default" : null
+              }, {
+                "name" : "locale",
+                "type" : {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                },
+                "doc" : "Represents the locale of the account, such as en_gb. It is highly likely that this field will be removed in the future."
+              }, {
+                "name" : "powerOfAttorneyName",
+                "type" : [ "null", {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                } ],
+                "doc" : "The POA name specified on the order that booked this position.",
+                "default" : null
+              }, {
+                "name" : "convertOnCloseCurrency",
+                "type" : [ "null", "io.test.trade.v1.common.ISOCurrency" ],
+                "doc" : "Retrieved from the convert on close information stored on this position. Note: Only populated if convert-on-close is applicable for this position.",
+                "default" : null
+              }, {
+                "name" : "currency",
+                "type" : [ "null", "io.test.trade.v1.common.ISOCurrency" ],
+                "doc" : "Account's currency in ISO format",
+                "default" : null
+              } ]
+            },
+            "doc" : "Account attributes such as convert on close details and Power Of Attorney name."
+          }, {
+            "name" : "dmaOrder",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "Order",
+              "namespace" : "io.test.trade.v1.common.dma",
+              "fields" : [ {
+                "name" : "pseudoPositionId",
+                "type" : [ "null", "io.test.trade.v1.Id" ],
+                "doc" : "Represents ID of position created by a partially filled DMA order.",
+                "default" : null
+              }, {
+                "name" : "orderType",
+                "type" : {
+                  "type" : "enum",
+                  "name" : "OrderType",
+                  "symbols" : [ "MARKET", "LIMIT", "STOP", "STOP_LIMIT", "MARKET_ON_CLOSE", "WITH_OR_WITHOUT", "LIMIT_OR_BETTER", "LIMIT_WITH_OR_WITHOUT", "ON_BASIS", "ON_CLOSE", "LIMIT_ON_CLOSE", "FOREX_MARKET", "PREVIOUSLY_QUOTED", "PREVIOUSLY_INDICATED", "FOREX_LIMIT", "PEGGED", "TRADE_REPORT", "FAST_BINARY", "UNKNOWN" ]
+                }
+              }, {
+                "name" : "timeInForce",
+                "type" : "io.test.trade.v1.common.TimeInForce"
+              }, {
+                "name" : "originalSize",
+                "type" : "io.test.trade.v1.common.Size",
+                "doc" : "The original size on a DMA working order. This is in display terms and does not include lotSize"
+              }, {
+                "name" : "fills",
+                "type" : [ "null", {
+                  "type" : "record",
+                  "name" : "Fills",
+                  "fields" : [ {
+                    "name" : "aggregatedFill",
+                    "type" : [ "null", {
+                      "type" : "array",
+                      "items" : {
+                        "type" : "record",
+                        "name" : "AggregatedFill",
+                        "doc" : "Aggregated information of fills received per hedge account",
+                        "fields" : [ {
+                          "name" : "hedgeAccountId",
+                          "type" : "io.test.trade.v1.common.account.Id"
+                        }, {
+                          "name" : "averageLevel",
+                          "type" : "io.test.trade.v1.common.Level",
+                          "doc" : "A volume-weighted-average level of all fills originating from this hedge account"
+                        }, {
+                          "name" : "totalSize",
+                          "type" : "io.test.trade.v1.common.Size",
+                          "doc" : "Total size of all fills received from this hedge account"
+                        }, {
+                          "name" : "averageExchangeFee",
+                          "type" : "double",
+                          "doc" : "The fee is expressed in account's currency."
+                        } ]
+                      }
+                    } ],
+                    "doc" : "A collection of DMA fills aggregated per hedge account",
+                    "default" : null
+                  }, {
+                    "name" : "updateType",
+                    "type" : {
+                      "type" : "enum",
+                      "name" : "FillsUpdateType",
+                      "symbols" : [ "ADD", "COPY", "DELETE_ALL" ]
+                    },
+                    "default" : "COPY"
+                  }, {
+                    "name" : "nextWorkingOrderId",
+                    "type" : [ "null", "io.test.trade.v1.Id" ],
+                    "default" : null
+                  } ]
+                } ],
+                "default" : null
+              }, {
+                "name" : "isDMAInteractable",
+                "type" : "boolean",
+                "default" : true
+              }, {
+                "name" : "executionPricePreference",
+                "type" : [ "null", {
+                  "type" : "enum",
+                  "name" : "ExecType",
+                  "symbols" : [ "ASK", "BID" ]
+                } ],
+                "doc" : "Called executionInstruction in current schema. This field represents DMA FX Stop Order execution price preference, could be either empty, ASK(0) or BID(9) and indicates whether one's order gets executed closer to the Bid or Ask side compared to the specified order direction.",
+                "default" : null
+              }, {
+                "name" : "uvOrderId",
+                "type" : [ "null", "io.test.trade.v1.Id" ],
+                "default" : null
+              }, {
+                "name" : "isPseudoPosition",
+                "type" : "boolean",
+                "doc" : "Is this position a partial fill for a DMA order?",
+                "default" : false
+              }, {
+                "name" : "nextPseudoPositionId",
+                "type" : [ "null", "io.test.trade.v1.Id" ],
+                "doc" : "In a DMA amend scenario, the id of a pseudo-position changes and this field indicates the new pseudo position id.",
+                "default" : null
+              } ]
+            } ],
+            "doc" : "DMA order attributes such as order type",
+            "default" : null
+          }, {
+            "name" : "additionalIds",
+            "type" : [ "null", {
+              "type" : "array",
+              "items" : "io.test.trade.v1.Id"
+            } ],
+            "doc" : "Additional ids used to reference this order.",
+            "default" : null
+          }, {
+            "name" : "stockBrokingAttributes",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "Attributes",
+              "namespace" : "io.test.trade.v1.order.stockbroking",
+              "fields" : [ {
+                "name" : "settlementDate",
+                "type" : [ "null", "io.test.trade.v1.common.UTCTimestamp" ],
+                "default" : null
+              }, {
+                "name" : "tradeDate",
+                "type" : [ "null", "io.test.trade.v1.common.UTCTimestamp" ],
+                "default" : null
+              }, {
+                "name" : "charges",
+                "type" : [ "null", {
+                  "type" : "record",
+                  "name" : "Charges",
+                  "fields" : [ {
+                    "name" : "commission",
+                    "type" : {
+                      "type" : "record",
+                      "name" : "Money",
+                      "namespace" : "io.test.trade.v1.common",
+                      "fields" : [ {
+                        "name" : "currency",
+                        "type" : "ISOCurrency"
+                      }, {
+                        "name" : "amount",
+                        "type" : "double"
+                      } ]
+                    }
+                  }, {
+                    "name" : "physicalCharges",
+                    "type" : [ "null", {
+                      "type" : "array",
+                      "items" : {
+                        "type" : "record",
+                        "name" : "Charge",
+                        "fields" : [ {
+                          "name" : "code",
+                          "type" : {
+                            "type" : "string",
+                            "avro.java.string" : "String"
+                          },
+                          "default" : ""
+                        }, {
+                          "name" : "name",
+                          "type" : {
+                            "type" : "string",
+                            "avro.java.string" : "String"
+                          },
+                          "default" : ""
+                        }, {
+                          "name" : "amount",
+                          "type" : "io.test.trade.v1.common.Money"
+                        }, {
+                          "name" : "rate",
+                          "type" : "double"
+                        }, {
+                          "name" : "threshold",
+                          "type" : "double"
+                        } ]
+                      }
+                    } ],
+                    "default" : null
+                  } ]
+                } ],
+                "default" : null
+              }, {
+                "name" : "reservedCash",
+                "type" : [ "null", "io.test.trade.v1.common.Money" ],
+                "default" : null
+              } ]
+            } ],
+            "doc" : "Stock Broking specific attributes such as settlement date and trade date.",
+            "default" : null
+          }, {
+            "name" : "commissionInstructions",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "Instructions",
+              "namespace" : "io.test.trade.v1.common.commission",
+              "fields" : [ {
+                "name" : "bypasses",
+                "type" : [ "null", {
+                  "type" : "record",
+                  "name" : "Bypasses",
+                  "fields" : [ {
+                    "name" : "legacyCRPremium",
+                    "type" : "boolean",
+                    "doc" : "For guaranteed stops, should bypass reserving LR Premium fee",
+                    "default" : false
+                  }, {
+                    "name" : "commission",
+                    "type" : "boolean",
+                    "doc" : "Should commission be bypassed",
+                    "default" : false
+                  }, {
+                    "name" : "charges",
+                    "type" : "boolean",
+                    "doc" : "Should charges be bypassed",
+                    "default" : false
+                  }, {
+                    "name" : "consideration",
+                    "type" : "boolean",
+                    "doc" : "Should consideration based fee be bypassed",
+                    "default" : false
+                  } ]
+                } ],
+                "default" : null
+              }, {
+                "name" : "overrideType",
+                "type" : [ "null", {
+                  "type" : "enum",
+                  "name" : "OverrideType",
+                  "doc" : "AMOUNT: This type used when dealer wants to fixed Commission charge in Client's base currency. When the Amount value is Zero, no commission will be charged.\n. WEB_RATES: This type is used when dealer wants the client's web rates to be used. Otherwise an input from IG Dealer will cause the phone rates to be used.\nPERCENT: This type is used when dealer wants to supply the percentage rate to be used for commission calculation",
+                  "symbols" : [ "AMOUNT", "PERCENT", "WEB_RATES" ]
+                } ],
+                "default" : null
+              }, {
+                "name" : "rate",
+                "type" : [ "null", "double" ],
+                "default" : null
+              }, {
+                "name" : "comment",
+                "type" : [ "null", {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                } ],
+                "default" : null
+              } ]
+            } ],
+            "doc" : "instructions of which changes to bypass or override.",
+            "default" : null
+          }, {
+            "name" : "additionalLeg",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "AdditionalLeg",
+              "namespace" : "io.test.trade.v1.order.common",
+              "fields" : [ {
+                "name" : "instrument",
+                "type" : "io.test.trade.v1.common.Instrument"
+              }, {
+                "name" : "marketCommodity",
+                "type" : [ "null", {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                } ],
+                "default" : null
+              }, {
+                "name" : "direction",
+                "type" : "io.test.trade.v1.common.Direction"
+              }, {
+                "name" : "averagePrice",
+                "type" : [ "null", "io.test.trade.v1.common.Level" ],
+                "default" : null
+              } ]
+            } ],
+            "doc" : "DMA orders on hedge accounts can optionally have an additional leg (instrument) to book the same order.",
+            "default" : null
+          }, {
+            "name" : "profileData",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "ProfileData",
+              "fields" : [ {
+                "name" : "parentAccountId",
+                "type" : "io.test.trade.v1.common.account.Id",
+                "doc" : "For Profile orders this is the reference to the parent account."
+              }, {
+                "name" : "parentOrderId",
+                "type" : "io.test.trade.v1.Id",
+                "doc" : "For profile orders this will be the parent order id."
+              } ]
+            } ],
+            "doc" : "Profile orders where the order is processed on the parent account and booked against the child accounts.",
+            "default" : null
+          }, {
+            "name" : "lockState",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "State",
+              "namespace" : "io.test.trade.v1.common.lock",
+              "fields" : [ {
+                "name" : "idOfLockingDMAOrder",
+                "type" : "io.test.trade.v1.Id",
+                "doc" : "Contains id of a DMA order that has locked this position, presumably for explicitly closing this position"
+              }, {
+                "name" : "holder",
+                "type" : [ "null", {
+                  "type" : "string",
+                  "avro.java.string" : "String"
+                } ],
+                "default" : null
+              }, {
+                "name" : "source",
+                "type" : [ "null", {
+                  "type" : "enum",
+                  "name" : "Source",
+                  "symbols" : [ "COM", "DMA", "STOP_MONITOR" ]
+                } ],
+                "default" : null
+              }, {
+                "name" : "stopMonitorState",
+                "type" : [ "null", {
+                  "type" : "enum",
+                  "name" : "StopMonitorState",
+                  "symbols" : [ "COM", "DMA", "STOP_MONITOR" ]
+                } ],
+                "default" : null
+              } ]
+            } ],
+            "doc" : "Indicates if the order is locked and they type of lock.",
+            "default" : null
+          }, {
+            "name" : "narrative",
+            "type" : [ "null", {
+              "type" : "string",
+              "avro.java.string" : "String"
+            } ],
+            "doc" : "Free text for reference. Not used in processing.",
+            "default" : null
+          } ]
+        }
+      }, {
+        "name" : "changeInfo",
+        "type" : {
+          "type" : "record",
+          "name" : "Info",
+          "namespace" : "io.test.trade.v1.order.change",
+          "fields" : [ {
+            "name" : "action",
+            "type" : {
+              "type" : "enum",
+              "name" : "Action",
+              "namespace" : "io.test.trade.v1.common.change",
+              "symbols" : [ "UPDATE", "DELETE", "NEW", "RESTATE" ]
+            }
+          }, {
+            "name" : "channel",
+            "type" : [ "null", "io.test.trade.v1.common.Channel" ],
+            "default" : null
+          }, {
+            "name" : "attachedStop",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "Stop",
+              "namespace" : "io.test.trade.v1.common.change.attached",
+              "fields" : [ {
+                "name" : "action",
+                "type" : {
+                  "type" : "enum",
+                  "name" : "Action",
+                  "symbols" : [ "NEW", "DELETED", "UPDATED" ]
+                }
+              }, {
+                "name" : "distance",
+                "type" : "double"
+              }, {
+                "name" : "trailingStop",
+                "type" : [ "null", {
+                  "type" : "record",
+                  "name" : "TrailingStop",
+                  "fields" : [ {
+                    "name" : "action",
+                    "type" : "Action"
+                  }, {
+                    "name" : "distance",
+                    "type" : "double"
+                  }, {
+                    "name" : "increment",
+                    "type" : "double"
+                  } ]
+                } ],
+                "default" : null
+              } ]
+            } ],
+            "default" : null
+          }, {
+            "name" : "attachedLimit",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "Limit",
+              "namespace" : "io.test.trade.v1.common.change.attached",
+              "fields" : [ {
+                "name" : "action",
+                "type" : "Action"
+              }, {
+                "name" : "distance",
+                "type" : "double"
+              } ]
+            } ],
+            "default" : null
+          }, {
+            "name" : "transactOrderReference",
+            "type" : [ "null", "io.test.trade.v1.Id" ],
+            "default" : null
+          }, {
+            "name" : "transactTimestamp",
+            "type" : [ "null", "io.test.trade.v1.common.UTCTimestamp" ],
+            "default" : null
+          } ]
+        }
+      }, {
+        "name" : "transaction",
+        "type" : [ "null", {
+          "type" : "record",
+          "name" : "Info",
+          "namespace" : "io.test.trade.v1.common.transaction",
+          "fields" : [ {
+            "name" : "id",
+            "type" : [ "null", {
+              "type" : "string",
+              "avro.java.string" : "String"
+            } ],
+            "default" : null
+          }, {
+            "name" : "group",
+            "type" : [ "null", {
+              "type" : "record",
+              "name" : "Group",
+              "fields" : [ {
+                "name" : "size",
+                "type" : "int"
+              }, {
+                "name" : "messageIndex",
+                "type" : "int"
+              } ]
+            } ],
+            "default" : null
+          } ]
+        } ],
+        "default" : null
+      } ]
+    } ],
+    "default" : null
+  }, {
+    "name" : "properties",
+    "type" : [ "null", {
+      "type" : "map",
+      "values" : {
+        "type" : "string",
+        "avro.java.string" : "String"
+      },
+      "avro.java.string" : "String"
+    } ],
+    "default" : null
+  }, {
+    "name" : "uuid",
+    "type" : [ "null", {
+      "type" : "string",
+      "avro.java.string" : "String"
+    } ],
+    "default" : null
+  }, {
+    "name" : "clientId",
+    "type" : [ "null", {
+      "type" : "string",
+      "avro.java.string" : "String"
+    } ],
+    "default" : null
+  }, {
+    "name" : "partitionKey",
+    "type" : [ "null", {
+      "type" : "string",
+      "avro.java.string" : "String"
+    } ],
+    "default" : null
+  }, {
+    "name" : "correlationId",
+    "type" : [ "null", {
+      "type" : "string",
+      "avro.java.string" : "String"
+    } ],
+    "default" : null
+  }, {
+    "name" : "clusterId",
+    "type" : [ "null", {
+      "type" : "string",
+      "avro.java.string" : "String"
+    } ],
+    "default" : null
+  } ]
+}

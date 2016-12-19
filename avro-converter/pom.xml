@@ -55,5 +55,41 @@
             <version>${powermock.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>uk.co.jemos.podam</groupId>
+            <artifactId>podam</artifactId>
+            <version>${podam.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <version>${avro.version}</version>
+                <executions>
+                    <execution>
+                        <phase>generate-test-sources</phase>
+                        <id>test-sources</id>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <id>sources</id>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <detail>true</detail>
+                    <stringType>String</stringType>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
