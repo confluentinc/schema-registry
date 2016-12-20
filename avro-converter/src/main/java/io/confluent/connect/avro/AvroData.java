@@ -25,6 +25,7 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -280,8 +281,8 @@ public class AvroData {
   }
   
   public AvroData(AvroDataConfig avroDataConfig) {
-    fromConnectSchemaCache = new LRUCache<>(avroDataConfig.getSchemasCacheSize());
-    toConnectSchemaCache = new LRUCache<>(avroDataConfig.getSchemasCacheSize());
+    fromConnectSchemaCache = new SynchronizedCache<>(new LRUCache<Schema, org.apache.avro.Schema>(avroDataConfig.getSchemasCacheSize()));
+    toConnectSchemaCache = new SynchronizedCache<>(new LRUCache<org.apache.avro.Schema, Schema>(avroDataConfig.getSchemasCacheSize()));
     this.connectMetaData = avroDataConfig.isConnectMetaData();
     this.enhancedSchemaSupport = avroDataConfig.isEnhancedAvroSchemaSupport();
   }
