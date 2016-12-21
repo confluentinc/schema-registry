@@ -145,7 +145,7 @@ Configuration Options
   * Importance: medium
 
 ``kafkastore.security.protocol``
-  The security protocol to use when connecting with Kafka, the underlying persistent storage. Values can be `PLAINTEXT` or `SSL`.
+  The security protocol to use when connecting with Kafka, the underlying persistent storage. Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`."
 
   * Type: string
   * Default: "PLAINTEXT"
