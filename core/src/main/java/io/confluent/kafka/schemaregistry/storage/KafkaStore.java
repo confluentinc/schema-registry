@@ -274,7 +274,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   static List<String> brokersToEndpoints(List<Broker> brokers) {
     List<String> endpoints = new LinkedList<String>();
     for (Broker broker : brokers) {
-      for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
+      for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints())) {
         endpoints.add(ep.connectionString());
       }
     }

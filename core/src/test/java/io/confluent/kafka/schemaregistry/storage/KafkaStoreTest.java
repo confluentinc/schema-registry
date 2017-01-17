@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import kafka.cluster.Broker;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.junit.After;
 import org.junit.Before;
@@ -283,15 +284,17 @@ public class KafkaStoreTest extends ClusterTestHarness {
   @Test
   public void testBrokersToEndpoints() {
     List<Broker> brokersList = new ArrayList<Broker>(4);
-    brokersList.add(new Broker(0, "localhost", 1, SecurityProtocol.PLAINTEXT));
-    brokersList.add(new Broker(1, "localhost1", 12, SecurityProtocol.PLAINTEXT));
-    brokersList.add(new Broker(2, "localhost2", 123, SecurityProtocol.SASL_PLAINTEXT));
-    brokersList.add(new Broker(3, "localhost3", 1234, SecurityProtocol.SSL));
+    brokersList.add(new Broker(0, "localhost", 1, new ListenerName("CLIENT"), SecurityProtocol.PLAINTEXT));
+    brokersList.add(new Broker(1, "localhost1", 12, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT));
+    brokersList.add(new Broker(2, "localhost2", 123, new ListenerName("SECURE_REPLICATION"), SecurityProtocol.SASL_PLAINTEXT));
+    brokersList.add(new Broker(2, "localhost2", 123, ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT), SecurityProtocol.SASL_PLAINTEXT));
+    brokersList.add(new Broker(3, "localhost3", 1234, ListenerName.forSecurityProtocol(SecurityProtocol.SSL), SecurityProtocol.SSL));
     List<String> endpointsList = KafkaStore.brokersToEndpoints((brokersList));
 
     List<String> expected = new ArrayList<String>(4);
-    expected.add("PLAINTEXT://localhost:1");
+    expected.add("CLIENT://localhost:1");
     expected.add("PLAINTEXT://localhost1:12");
+    expected.add("SECURE_REPLICATION://localhost2:123");
     expected.add("SASL_PLAINTEXT://localhost2:123");
     expected.add("SSL://localhost3:1234");
 
