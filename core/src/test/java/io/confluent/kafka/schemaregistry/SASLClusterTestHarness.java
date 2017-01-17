@@ -78,6 +78,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
 
     createPrincipal(serverKeytab, "kafka/localhost");
     createPrincipal(clientKeytab, "client");
+    createPrincipal(clientKeytab, "client2");
 
     // This will cause a reload of the Configuration singleton when `getConfiguration` is called.
     Configuration.setConfiguration(null);
