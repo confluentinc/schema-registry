@@ -135,7 +135,9 @@ public class SchemaRegistryConfig extends RestConfig {
       "A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`\n"
       + "\n"
       + "If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list\n"
-      + "from ZooKeeper (configured with `kafkastore.connection.url`). Note that if `kafkastore.bootstrap.servers` is configured,\n"
+      + "from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners will be used, so the schema\n"
+      + "registry must be able to use any listener (e.g. you cannot isolate internal replication traffic to a specific listener unless\n"
+      + "bootstrap servers are defined using this configuration option). Note that if `kafkastore.bootstrap.servers` is configured,\n"
       + "`kafkastore.connection.url` still needs to be configured, too.\n"
       + "\n"
       + "This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that\n"
@@ -248,7 +250,7 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
                 KAFKASTORE_CONNECTION_URL_DOC)
         .define(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, "", ConfigDef.Importance.MEDIUM,
-                KAFKASTORE_CONNECTION_URL_DOC)
+                KAFKASTORE_BOOTSTRAP_SERVERS_DOC)
         .define(SCHEMAREGISTRY_ZK_NAMESPACE, ConfigDef.Type.STRING,
                 DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
                 ConfigDef.Importance.LOW, SCHEMAREGISTRY_ZK_NAMESPACE_DOC)

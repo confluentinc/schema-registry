@@ -292,9 +292,9 @@ public class KafkaStoreTest extends ClusterTestHarness {
     List<String> endpointsList = KafkaStore.brokersToEndpoints((brokersList));
 
     List<String> expected = new ArrayList<String>(4);
-    expected.add("CLIENT://localhost:1");
+    expected.add("PLAINTEXT://localhost:1");
     expected.add("PLAINTEXT://localhost1:12");
-    expected.add("SECURE_REPLICATION://localhost2:123");
+    expected.add("SASL_PLAINTEXT://localhost2:123");
     expected.add("SASL_PLAINTEXT://localhost2:123");
     expected.add("SSL://localhost3:1234");
 

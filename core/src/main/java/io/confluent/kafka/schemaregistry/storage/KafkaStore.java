@@ -30,7 +30,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -272,10 +272,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   static List<String> brokersToEndpoints(List<Broker> brokers) {
-    List<String> endpoints = new LinkedList<String>();
+    List<String> endpoints = new LinkedList<>();
     for (Broker broker : brokers) {
       for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints())) {
-        endpoints.add(ep.connectionString());
+        String hostport = ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
+        endpoints.add(ep.securityProtocol() + "://" + hostport);
       }
     }
     return endpoints;
@@ -299,7 +300,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
 
     if (sb.length() == 0) {
-      throw new ConfigException("Only plaintext and SSL Kafka endpoints are supported and " +
+      throw new ConfigException("Only PLAINTEXT, SSL, SASL_PLAINTEXT, and SASL_SSL Kafka endpoints are supported and " +
               "none are configured.");
     }
 
