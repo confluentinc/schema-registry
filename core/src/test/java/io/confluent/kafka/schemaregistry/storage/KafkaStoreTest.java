@@ -31,6 +31,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -245,14 +246,24 @@ public class KafkaStoreTest extends ClusterTestHarness {
   public void testFilterBrokerEndpointsSinglePlaintext() {
     String endpoint = "PLAINTEXT://hostname:1234";
     List<String> endpointsList = new ArrayList<String>();
-    endpointsList.add("PLAINTEXT://hostname:1234");
+    endpointsList.add(endpoint);
     assertEquals("Expected one PLAINTEXT endpoint for localhost", endpoint,
-            KafkaStore.filterBrokerEndpoints(endpointsList));
+            KafkaStore.endpointsToBootstrapServers(endpointsList, SecurityProtocol.PLAINTEXT.toString()));
   }
 
   @Test(expected = ConfigException.class)
   public void testGetBrokerEndpointsEmpty() {
-    KafkaStore.filterBrokerEndpoints(new ArrayList<String>());
+    KafkaStore.endpointsToBootstrapServers(new ArrayList<String>(), SecurityProtocol.PLAINTEXT.toString());
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testGetBrokerEndpointsNoSecurityProtocolMatches() {
+    KafkaStore.endpointsToBootstrapServers(Collections.singletonList("SSL://localhost:1234"), SecurityProtocol.PLAINTEXT.toString());
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testGetBrokerEndpointsUnsupportedSecurityProtocol() {
+    KafkaStore.endpointsToBootstrapServers(Collections.singletonList("TRACE://localhost:1234"), "TRACE");
   }
 
   @Test
@@ -265,20 +276,17 @@ public class KafkaStoreTest extends ClusterTestHarness {
     endpointsList.add("SASL_SSL://localhost2:1234");
     endpointsList.add("TRACE://localhost3:1234");
 
-    String endpointsString = KafkaStore.filterBrokerEndpoints(endpointsList);
-    String[] endpoints = endpointsString.split(",");
-    assertEquals("Expected a different number of endpoints.", endpointsList.size() - 1, endpoints.length);
-    for (String endpoint : endpoints) {
-      if (endpoint.contains("localhost0") || endpoint.contains("localhost1:1234")) {
-        assertTrue("Endpoint must be a PLAINTEXT endpoint.", endpoint.contains("PLAINTEXT://"));
-      } else if (endpoint.contains("localhost1:1235")) {
-        assertTrue("Endpoint must be a SASL_PLAINTEXT endpoint.", endpoint.contains("SASL_PLAINTEXT://"));
-      } else if (endpoint.contains("localhost1:1236")) {
-        assertTrue("Endpoint must be a SSL endpoint.", endpoint.contains("SSL://"));
-      } else if (endpoint.contains("localhost2")) {
-        assertTrue("Endpoint must be a SASL_SSL endpoint.", endpoint.contains("SASL_SSL://"));
-      }
-    }
+    assertEquals("PLAINTEXT://localhost0:1234,PLAINTEXT://localhost1:1234",
+            KafkaStore.endpointsToBootstrapServers(endpointsList, SecurityProtocol.PLAINTEXT.toString()));
+
+    assertEquals("SASL_PLAINTEXT://localhost1:1235",
+            KafkaStore.endpointsToBootstrapServers(endpointsList, SecurityProtocol.SASL_PLAINTEXT.toString()));
+
+    assertEquals("SSL://localhost1:1236",
+            KafkaStore.endpointsToBootstrapServers(endpointsList, SecurityProtocol.SSL.toString()));
+
+    assertEquals("SASL_SSL://localhost2:1234",
+            KafkaStore.endpointsToBootstrapServers(endpointsList, SecurityProtocol.SASL_SSL.toString()));
   }
 
   @Test
