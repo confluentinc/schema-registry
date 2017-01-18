@@ -30,10 +30,11 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -63,6 +64,9 @@ import scala.collection.Seq;
 public class KafkaStore<K, V> implements Store<K, V> {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStore.class);
+  private final static Set<SecurityProtocol> SUPPORTED_SECURITY_PROTOCOLS = new HashSet<>(
+          Arrays.asList(SecurityProtocol.PLAINTEXT, SecurityProtocol.SSL, SecurityProtocol.SASL_PLAINTEXT, SecurityProtocol.SASL_SSL)
+  );
 
   private final String kafkaClusterZkUrl;
   private final String topic;
@@ -123,7 +127,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     } else {
       endpoints = bootstrapServersConfig;
     }
-    this.bootstrapBrokers = filterBrokerEndpoints(endpoints);
+    this.bootstrapBrokers = endpointsToBootstrapServers(endpoints, config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
     log.info("Initializing KafkaStore with broker endpoints: " + this.bootstrapBrokers);
   }
 
@@ -272,35 +276,44 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   static List<String> brokersToEndpoints(List<Broker> brokers) {
-    List<String> endpoints = new LinkedList<String>();
+    final List<String> endpoints = new LinkedList<>();
     for (Broker broker : brokers) {
       for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints())) {
-        endpoints.add(ep.connectionString());
+        String hostport = ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
+        String endpoint = ep.securityProtocol() + "://" + hostport;
+
+        endpoints.add(endpoint);
       }
     }
+
     return endpoints;
   }
 
-  static String filterBrokerEndpoints(List<String> endpoints) {
-    StringBuilder sb = new StringBuilder();
+  static String endpointsToBootstrapServers(List<String> endpoints, String securityProtocol) {
+    if (!SUPPORTED_SECURITY_PROTOCOLS.contains(SecurityProtocol.forName(securityProtocol))) {
+      throw new ConfigException("Only PLAINTEXT, SSL, SASL_PLAINTEXT, and SASL_SSL Kafka endpoints are supported.");
+    }
 
+    final String securityProtocolUrlPrefix = securityProtocol + "://";
+    final StringBuilder sb = new StringBuilder();
     for (String endpoint : endpoints) {
-      if (endpoint.startsWith(SecurityProtocol.PLAINTEXT.toString() + "://")
-              || endpoint.startsWith(SecurityProtocol.SSL.toString() + "://")
-              || endpoint.startsWith(SecurityProtocol.SASL_PLAINTEXT.toString() + "://")
-              || endpoint.startsWith(SecurityProtocol.SASL_SSL.toString() + "://")) {
-        if (sb.length() > 0) {
-          sb.append(",");
-        }
-        sb.append(endpoint);
-      } else {
-        log.warn("Ignoring unsupported Kafka endpoint: " + endpoint);
+      if (!endpoint.startsWith(securityProtocolUrlPrefix)) {
+        log.warn("Ignoring Kafka broker endpoint " + endpoint + " that does not match the setting for "
+                + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + "=" + securityProtocol);
+        continue;
       }
+
+      if (sb.length() > 0) {
+        sb.append(",");
+      }
+      sb.append(endpoint);
     }
 
     if (sb.length() == 0) {
-      throw new ConfigException("Only plaintext and SSL Kafka endpoints are supported and " +
-              "none are configured.");
+      throw new ConfigException("No supported Kafka endpoints are configured. Either "
+              + SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG + " must have at least one endpoint matching "
+              + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + " or broker endpoints loaded from ZooKeeper "
+              + "must have at least one endpoint matching " + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + ".");
     }
 
     return sb.toString();

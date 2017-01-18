@@ -69,8 +69,9 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     // create a JAAS file.
     Option<File> serverKeytabOption = Option.apply(serverKeytab);
     Option<File> clientKeytabOption = Option.apply(clientKeytab);
-    List<String> gssApi = JavaConversions.asScalaBuffer(Arrays.asList("GSSAPI")).toList();
-    String jaasFilePath = JaasTestUtils.writeZkAndKafkaFiles(gssApi, gssApi, serverKeytabOption, clientKeytabOption);
+    List<String> serverSaslMechanisms = JavaConversions.asScalaBuffer(Arrays.asList("GSSAPI")).toList();
+    Option<String> clientSaslMechanism = Option.apply("GSSAPI");
+    String jaasFilePath = JaasTestUtils.writeZkAndKafkaFiles(serverSaslMechanisms, clientSaslMechanism, serverKeytabOption, clientKeytabOption);
 
     log.info("Using KDC home: " + kdcHome.getAbsolutePath());
     kdc = new MiniKdc(kdcProps, kdcHome);
