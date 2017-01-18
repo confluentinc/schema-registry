@@ -285,16 +285,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
     StringBuilder sb = new StringBuilder();
 
     for (String endpoint : endpoints) {
-      if (endpoint.startsWith(SecurityProtocol.PLAINTEXT.toString() + "://")
-              || endpoint.startsWith(SecurityProtocol.SSL.toString() + "://")
-              || endpoint.startsWith(SecurityProtocol.SASL_PLAINTEXT.toString() + "://")
-              || endpoint.startsWith(SecurityProtocol.SASL_SSL.toString() + "://")) {
+      if (endpoint.startsWith(config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG) + "://")) {
         if (sb.length() > 0) {
           sb.append(",");
         }
         sb.append(endpoint);
       } else {
-        log.warn("Ignoring unsupported Kafka endpoint: " + endpoint);
+        log.warn("Ignoring unused Kafka endpoint: " + endpoint);
       }
     }
 
