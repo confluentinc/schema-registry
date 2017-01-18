@@ -119,7 +119,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     List<String> bootstrapServersConfig = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
     List<String> endpoints;
     if (bootstrapServersConfig.isEmpty()) {
-      endpoints = brokersToEndpoints(JavaConversions.seqAsJavaList(this.brokerSeq));
+      endpoints = brokersToEndpoints(JavaConversions.seqAsJavaList(this.brokerSeq), config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
     } else {
       endpoints = bootstrapServersConfig;
     }
@@ -271,12 +271,18 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
   }
 
-  static List<String> brokersToEndpoints(List<Broker> brokers) {
+  static List<String> brokersToEndpoints(List<Broker> brokers, String securityProtocol) {
     List<String> endpoints = new LinkedList<>();
     for (Broker broker : brokers) {
       for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints())) {
         String hostport = ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
-        endpoints.add(ep.securityProtocol() + "://" + hostport);
+        String endpoint = ep.securityProtocol() + "://" + hostport;
+        if (!ep.securityProtocol().equals(securityProtocol)) {
+          log.warn("Ignoring Kafka broker endpoint " + endpoint + " that does not match the setting for "
+                  + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + "=" + securityProtocol);
+          continue;
+        }
+        endpoints.add(endpoint);
       }
     }
     return endpoints;
