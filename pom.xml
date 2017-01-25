@@ -7,7 +7,7 @@
     <groupId>io.confluent</groupId>
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
-    <version>3.2.0-SNAPSHOT</version>
+    <version>3.3.0-SNAPSHOT</version>
     <name>kafka-schema-registry-parent</name>
     <organization>
         <name>Confluent, Inc.</name>
