@@ -39,13 +39,13 @@ Start by running the Schema Registry and the services it depends on: ZooKeeper a
     $ curl -X GET http://localhost:8081/subjects
       ["Kafka-value","Kafka-key"]
 
-    # List all schema versions registered under the subject "Kafka-value"
-    $ curl -X GET http://localhost:8081/subjects/Kafka-value/versions
-      [1]
-
     # Fetch a schema by globally unique id 1
     $ curl -X GET http://localhost:8081/schemas/ids/1
       {"schema":"\"string\""}
+
+    # List all schema versions registered under the subject "Kafka-value"
+    $ curl -X GET http://localhost:8081/subjects/Kafka-value/versions
+      [1]
 
     # Fetch version 1 of the schema registered under subject "Kafka-value"
     $ curl -X GET http://localhost:8081/subjects/Kafka-value/versions/1
