@@ -309,4 +309,24 @@ public class KafkaAvroSerializerTest {
     avroSerializer.configure(props, false);
   }
 
+  @Test
+  public void testKafkaAvroSerializerSpecificRecordWithPrimitives() {
+    byte[] bytes;
+    Object obj;
+
+    String message = "testKafkaAvroSerializerSpecificRecordWithPrimitives";
+    bytes = avroSerializer.serialize(topic, message);
+
+    obj = avroDecoder.fromBytes(bytes);
+    assertTrue("Returned object should be a String", String.class.isInstance(obj));
+
+    obj = specificAvroDecoder.fromBytes(bytes);
+    assertTrue("Returned object should be a String", String.class.isInstance(obj));
+    assertEquals(message, obj);
+
+    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    assertTrue("Returned object should be a String", String.class.isInstance(obj));
+    assertEquals(message, obj);
+  }
+
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +56,10 @@ public abstract class AbstractKafkaAvroSerDe {
   private static Schema createPrimitiveSchema(Schema.Parser parser, String type) {
     String schemaString = String.format("{\"type\" : \"%s\"}", type);
     return parser.parse(schemaString);
+  }
+
+  protected static Map<String, Schema> getPrimitiveSchemas() {
+    return Collections.unmodifiableMap(primitiveSchemas);
   }
 
   protected void configureClientProperties(AbstractKafkaAvroSerDeConfig config) {
