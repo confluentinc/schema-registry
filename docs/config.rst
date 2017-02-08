@@ -19,7 +19,7 @@ Configuration Options
   * Importance: high
 
 ``avro.compatibility.level``
-  The Avro compatibility type. Valid values are: none (new schema can be any valid Avro schema), backward (new schema can read data produced by latest registered schema), backward_transitive (new schema can read data produced by all previously registered schemas), forward (latest registered schema can read data produced by the new schema), forward_transitive (all previously registered schemas can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema), transitive_full (new schema is backward and forward compatible with all previously registered schemas)
+  The Avro compatibility type. Valid values are: none (new schema can be any valid Avro schema), backward (new schema can read data produced by latest registered schema), backward_transitive (new schema can read data produced by all previously registered schemas), forward (latest registered schema can read data produced by the new schema), forward_transitive (all previously registered schemas can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema), full_transitive (new schema is backward and forward compatible with all previously registered schemas)
 
   * Type: string
   * Default: "backward"
