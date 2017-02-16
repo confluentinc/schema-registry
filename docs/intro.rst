@@ -183,7 +183,7 @@ dependencies as well.
 Requirements
 ------------
 
-- Kafka: 0.10.2.0-SNAPSHOT
+- Kafka: 0.10.2.0-cp1
 
 Contribute
 ----------
