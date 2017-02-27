@@ -1353,7 +1353,15 @@ public class AvroData {
       if (!version.isIntegralNumber()) {
         throw new DataException("Invalid Connect version found: " + version.toString());
       }
-      builder.version(version.asInt());
+      final int versionInt = version.asInt();
+      if (builder.version() != null) {
+        if (versionInt != builder.version()) {
+          throw new DataException("Mismatched versions: version already added to SchemaBuilder (" + builder.version() +
+                  ") differs from version in source schema (" + version.toString() + ")");
+        }
+      } else {
+        builder.version(versionInt);
+      }
     }
 
     JsonNode parameters = schema.getJsonProp(CONNECT_PARAMETERS_PROP);
@@ -1400,7 +1408,14 @@ public class AvroData {
       name = schema.getFullName();
     }
     if (name != null && !name.equals(DEFAULT_SCHEMA_FULL_NAME)) {
-      builder.name(name);
+      if (builder.name() != null) {
+        if (!name.equals(builder.name())) {
+          throw new DataException("Mismatched names: name already added to SchemaBuilder (" + builder.name() +
+                  ") differs from name in source schema (" + name + ")");
+        }
+      } else {
+        builder.name(name);
+      }
     }
 
     if (forceOptional) {

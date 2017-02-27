@@ -1361,6 +1361,30 @@ public class AvroDataTest {
     avroData.toConnectSchema(avroSchema);
   }
 
+  @Test
+  public void testLogicalTypeWithMatchingNameAndVersion() {
+    // When we use a logical type, the builder we get sets a version. If a version is also included in the schema we're
+    // converting, the conversion should still work as long as the versions match.
+    org.apache.avro.Schema schema = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Message\",\"namespace\":\"org.cmatta.kafka.connect.irc\",\"fields\":[{\"name\":\"createdat\",\"type\":{\"type\":\"long\",\"connect.doc\":\"When this message was received.\",\"connect.version\":1,\"connect.name\":\"org.apache.kafka.connect.data.Timestamp\",\"logicalType\":\"timestamp-millis\"}}]}");
+    avroData.toConnectSchema(schema);
+  }
+
+  @Test(expected = DataException.class)
+  public void testLogicalTypeWithMismatchingName() {
+    // When we use a logical type, the builder we get sets a version. If a version is also included in the schema we're
+    // converting, a mismatch between the versions should cause an exception.
+    org.apache.avro.Schema schema = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Message\",\"namespace\":\"org.cmatta.kafka.connect.irc\",\"fields\":[{\"name\":\"createdat\",\"type\":{\"type\":\"long\",\"connect.doc\":\"When this message was received.\",\"connect.version\":1,\"connect.name\":\"com.custom.Timestamp\",\"logicalType\":\"timestamp-millis\"}}]}");
+    avroData.toConnectSchema(schema);
+  }
+
+  @Test(expected = DataException.class)
+  public void testLogicalTypeWithMismatchingVersion() {
+    // When we use a logical type, the builder we get sets a version. If a version is also included in the schema we're
+    // converting, a mismatch between the versions should cause an exception.
+    org.apache.avro.Schema schema = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Message\",\"namespace\":\"org.cmatta.kafka.connect.irc\",\"fields\":[{\"name\":\"createdat\",\"type\":{\"type\":\"long\",\"connect.doc\":\"When this message was received.\",\"connect.version\":2,\"connect.name\":\"org.apache.kafka.connect.data.Timestamp\",\"logicalType\":\"timestamp-millis\"}}]}");
+    avroData.toConnectSchema(schema);
+  }
+
   private NonRecordContainer checkNonRecordConversion(
       org.apache.avro.Schema expectedSchema, Object expected,
       Schema schema, Object value)
