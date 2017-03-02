@@ -67,5 +67,4 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
       fail("5 seconds should be more than enough time to reach offset 0 in the log.");
     }
   }
-
 }

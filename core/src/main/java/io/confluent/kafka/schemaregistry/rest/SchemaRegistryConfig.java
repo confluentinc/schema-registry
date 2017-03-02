@@ -143,7 +143,8 @@ public class SchemaRegistryConfig extends RestConfig {
       + "all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.";
   protected static final String KAFKASTORE_GROUP_ID_DOC =
       "Use this setting to override the group.id for the KafkaStore consumer.\n"
-      + "This setting can become important when security is enabled, to ensure stability over the schema registry consumer's group.id\n" ;
+      + "This setting can become important when security is enabled, to ensure stability over the schema registry consumer's group.id\n"
+          + "Without this configuration, group.id will be \"schema-registry-<host>-<port>\"";
   protected static final String SCHEMAREGISTRY_ZK_NAMESPACE_DOC =
       "The string that is used as the zookeeper namespace for storing schema registry "
       + "metadata. SchemaRegistry instances which are part of the same schema registry service "
