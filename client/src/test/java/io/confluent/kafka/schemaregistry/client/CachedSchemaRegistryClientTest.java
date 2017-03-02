@@ -20,7 +20,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import org.apache.avro.Schema;
 import org.junit.Test;
 
-import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.eq;
@@ -111,8 +110,8 @@ public class CachedSchemaRegistryClientTest {
     replay(restService);
 
     assertEquals(id, client.register(subject, avroSchema));
-    assertEquals(avroSchema, client.getBySubjectAndID(subject, id));
-    assertEquals(avroSchema, client.getBySubjectAndID(subject, id)); // hit the cache
+    assertEquals(avroSchema, client.getBySubjectAndId(subject, id));
+    assertEquals(avroSchema, client.getBySubjectAndId(subject, id)); // hit the cache
 
     verify(restService);
   }
@@ -175,11 +174,11 @@ public class CachedSchemaRegistryClientTest {
     assertEquals(id, client.register(subjectOne, avroSchema));
     assertEquals(id, client.register(subjectTwo, avroSchema));
     // Neither of these two schemas should be cached yet
-    assertEquals(avroSchema, client.getBySubjectAndID(subjectOne, id));
-    assertEquals(avroSchema, client.getBySubjectAndID(subjectTwo, id));
+    assertEquals(avroSchema, client.getBySubjectAndId(subjectOne, id));
+    assertEquals(avroSchema, client.getBySubjectAndId(subjectTwo, id));
     // These two should be cached now
-    assertEquals(avroSchema, client.getBySubjectAndID(subjectOne, id));
-    assertEquals(avroSchema, client.getBySubjectAndID(subjectTwo, id));
+    assertEquals(avroSchema, client.getBySubjectAndId(subjectOne, id));
+    assertEquals(avroSchema, client.getBySubjectAndId(subjectTwo, id));
 
     verify(restService);
   }

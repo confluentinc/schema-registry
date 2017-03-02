@@ -13,16 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest;
 
 import java.io.IOException;
 
 /**
- * @deprecated
- * This is replaced by {@link io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain}
- * Keep this class in place for compatibility.
  *
- * See https://github.com/confluentinc/schema-registry/issues/194
+ * @deprecated This is replaced by {@link io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain}
+ *     Keep this class in place for compatibility.
+ *     See https://github.com/confluentinc/schema-registry/issues/194
  */
 @Deprecated
 public class Main {

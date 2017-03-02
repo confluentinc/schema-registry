@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
+
 package io.confluent.kafka.serializers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -49,8 +51,9 @@ public class KafkaJsonSerializer<T> implements Serializer<T> {
 
   @Override
   public byte[] serialize(String topic, T data) {
-    if (data == null)
+    if (data == null) {
       return null;
+    }
 
     try {
       return objectMapper.writeValueAsBytes(data);

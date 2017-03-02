@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 
 public class CompatibilityCheckResponse {
+
   private boolean isCompatible;
 
   public static CompatibilityCheckResponse fromJson(String json) throws IOException {

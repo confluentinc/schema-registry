@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
+
 package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
 import org.apache.maven.plugin.AbstractMojo;
@@ -30,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 
 public abstract class SchemaRegistryMojo extends AbstractMojo {
+
   @Parameter(required = true)
   List<String> schemaRegistryUrls;
   private SchemaRegistryClient client;

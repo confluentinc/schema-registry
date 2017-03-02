@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client;
 
 import org.apache.avro.Schema;
@@ -56,7 +57,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     Map<Integer, Schema> idSchemaMap;
     if (idCache.containsKey(subject)) {
       idSchemaMap = idCache.get(subject);
-      for (Map.Entry<Integer, Schema> entry: idSchemaMap.entrySet()) {
+      for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
         if (entry.getValue().toString().equals(schema.toString())) {
           generateVersion(subject, schema);
           return entry.getKey();
@@ -128,12 +129,23 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized Schema getByID(int id) throws IOException, RestClientException {
-    return getBySubjectAndID(null, id);
+  public Schema getByID(final int id) throws IOException, RestClientException {
+    return getById(id);
   }
 
   @Override
-  public synchronized Schema getBySubjectAndID(String subject, int id)
+  public synchronized Schema getById(int id) throws IOException, RestClientException {
+    return getBySubjectAndId(null, id);
+  }
+
+  @Override
+  public Schema getBySubjectAndID(final String subject, final int id)
+      throws IOException, RestClientException {
+    return getBySubjectAndId(subject, id);
+  }
+
+  @Override
+  public synchronized Schema getBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
     Map<Integer, Schema> idSchemaMap;
     if (idCache.containsKey(subject)) {
@@ -152,7 +164,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
-   private int getLatestVersion(String subject)
+  private int getLatestVersion(String subject)
       throws IOException, RestClientException {
     ArrayList<Integer> versions = getAllVersions(subject);
     if (versions.isEmpty()) {
@@ -166,16 +178,16 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   public synchronized SchemaMetadata getSchemaMetadata(String subject, int version) {
     String schemaString = null;
     Map<Schema, Integer> schemaVersionMap = versionCache.get(subject);
-    for (Map.Entry<Schema, Integer> entry: schemaVersionMap.entrySet()) {
+    for (Map.Entry<Schema, Integer> entry : schemaVersionMap.entrySet()) {
       if (entry.getValue() == version) {
         schemaString = entry.getKey().toString();
       }
     }
     int id = -1;
     Map<Integer, Schema> idSchemaMap = idCache.get(subject);
-    for (Map.Entry<Integer, Schema> entry: idSchemaMap.entrySet()) {
+    for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
       if (entry.getValue().toString().equals(schemaString)) {
-         id = entry.getKey();
+        id = entry.getKey();
       }
     }
     return new SchemaMetadata(id, version, schemaString);
@@ -190,7 +202,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public synchronized int getVersion(String subject, Schema schema)
-      throws IOException, RestClientException{
+      throws IOException, RestClientException {
     if (versionCache.containsKey(subject)) {
       return versionCache.get(subject).get(schema);
     } else {
@@ -200,7 +212,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public boolean testCompatibility(String subject, Schema newSchema) throws IOException,
-      RestClientException {
+                                                                            RestClientException {
     String compatibility = compatibilityCache.get(subject);
     if (compatibility == null) {
       compatibility = defaultCompatibility;
@@ -210,7 +222,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (compatibilityLevel == null) {
       return false;
     }
-    
+
     List<Schema> schemaHistory = new ArrayList<>();
     for (int version : getAllVersions(subject)) {
       SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
@@ -221,8 +233,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public String updateCompatibility(String subject, String compatibility) throws IOException,
-      RestClientException {
+  public String updateCompatibility(String subject, String compatibility)
+      throws IOException,
+             RestClientException {
     if (subject == null) {
       defaultCompatibility = compatibility;
       return compatibility;

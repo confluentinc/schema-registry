@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest;
 
 import java.net.InetAddress;
@@ -25,9 +26,13 @@ import io.confluent.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
+
 import org.apache.kafka.common.protocol.SecurityProtocol;
 
 import static io.confluent.common.config.ConfigDef.Range.atLeast;
+import static io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES;
+import static io.confluent.kafka.schemaregistry.client.rest.Versions
+    .SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT;
 
 public class SchemaRegistryConfig extends RestConfig {
 
@@ -69,12 +74,12 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String KAFKASTORE_INIT_TIMEOUT_CONFIG = "kafkastore.init.timeout.ms";
 
   /**
-   * <code>master.eligibility</code>* 
+   * <code>master.eligibility</code>*
    */
   public static final String MASTER_ELIGIBILITY = "master.eligibility";
   public static final boolean DEFAULT_MASTER_ELIGIBILITY = true;
   /**
-   * <code>schema.registry.zk.name</code>* 
+   * <code>schema.registry.zk.name</code>*
    */
   public static final String SCHEMAREGISTRY_ZK_NAMESPACE = "schema.registry.zk.namespace";
   public static final String DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE = "schema_registry";
@@ -97,15 +102,15 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG =
       "kafkastore.ssl.keystore.location";
   public static final String KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG =
-          "kafkastore.ssl.truststore.type";
+      "kafkastore.ssl.truststore.type";
   public static final String KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_CONFIG =
-          "kafkastore.ssl.trustmanager.algorithm";
+      "kafkastore.ssl.trustmanager.algorithm";
   public static final String KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG =
       "kafkastore.ssl.keystore.password";
   public static final String KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG =
-          "kafkastore.ssl.keystore.type";
+      "kafkastore.ssl.keystore.type";
   public static final String KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_CONFIG =
-          "kafkastore.ssl.keymanager.algorithm";
+      "kafkastore.ssl.keymanager.algorithm";
   public static final String KAFKASTORE_SSL_KEY_PASSWORD_CONFIG =
       "kafkastore.ssl.key.password";
   public static final String KAFKASTORE_SSL_ENABLED_PROTOCOLS_CONFIG =
@@ -133,19 +138,24 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper url for the Kafka cluster";
   protected static final String KAFKASTORE_BOOTSTRAP_SERVERS_DOC =
-      "A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`\n"
+      "A list of Kafka brokers to connect to. For example, "
+      + "`PLAINTEXT://hostname:9092,SSL://hostname2:9092`\n"
       + "\n"
-      + "If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list\n"
-      + "from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the\n"
-      + "`kafkastore.security.protocol` setting will be used. Note that if `kafkastore.bootstrap.servers` is configured,\n"
-      + "`kafkastore.connection.url` still needs to be configured, too.\n"
+      + "If this configuration is not specified, the Schema Registry's internal Kafka clients will "
+      + "get their Kafka bootstrap server list\nfrom ZooKeeper "
+      + "(configured with `kafkastore.connection.url`). In that case, all available listeners "
+      + "matching the\n`kafkastore.security.protocol` setting will be used. Note that if "
+      + "`kafkastore.bootstrap.servers` is configured,\n`kafkastore.connection.url` still needs to "
+      + "be configured, too.\n"
       + "\n"
-      + "This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that\n"
-      + "all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.";
+      + "This configuration is particularly important when Kafka security is enabled, because Kafka"
+      + " may expose multiple endpoints that\nall will be stored in ZooKeeper, but the "
+      + "Schema Registry may need to be configured with just one of those endpoints.";
   protected static final String KAFKASTORE_GROUP_ID_DOC =
       "Use this setting to override the group.id for the KafkaStore consumer.\n"
-      + "This setting can become important when security is enabled, to ensure stability over the schema registry consumer's group.id\n"
-          + "Without this configuration, group.id will be \"schema-registry-<host>-<port>\"";
+      + "This setting can become important when security is enabled, to ensure stability over "
+      + "the schema registry consumer's group.id\n"
+      + "Without this configuration, group.id will be \"schema-registry-<host>-<port>\"";
   protected static final String SCHEMAREGISTRY_ZK_NAMESPACE_DOC =
       "The string that is used as the zookeeper namespace for storing schema registry "
       + "metadata. SchemaRegistry instances which are part of the same schema registry service "
@@ -153,11 +163,11 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC =
       "Zookeeper session timeout";
   protected static final String KAFKASTORE_TOPIC_DOC =
-      "The durable single partition topic that acts" +
-      "as the durable log for the data";
+      "The durable single partition topic that acts"
+      + "as the durable log for the data";
   protected static final String KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC =
-      "The desired replication factor of the schema topic. The actual replication factor " +
-      "will be the smaller of this value and the number of live Kafka brokers.";
+      "The desired replication factor of the schema topic. The actual replication factor "
+      + "will be the smaller of this value and the number of live Kafka brokers.";
   protected static final String KAFKASTORE_WRITE_RETRIES_DOC =
       "Retry a failed register schema request to the underlying Kafka store up to this many times, "
       + " for example in case of a Kafka broker failure";
@@ -172,16 +182,19 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String HOST_DOC =
       "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
-  protected static final String ZOOKEEPER_SET_ACL_DOC =
-      "Whether or not to set an ACL in ZooKeeper when znodes are created and ZooKeeper SASL authentication is "
-      + "configured. IMPORTANT: if set to `true`, the SASL principal must be the same as the Kafka brokers.";
+  protected static final String
+      ZOOKEEPER_SET_ACL_DOC =
+      "Whether or not to set an ACL in ZooKeeper when znodes are created and ZooKeeper SASL "
+      + "authentication is "
+      + "configured. IMPORTANT: if set to `true`, the SASL principal must be the same as the Kafka"
+      + " brokers.";
   protected static final String COMPATIBILITY_DOC =
       "The Avro compatibility type. Valid values are: "
       + "none (new schema can be any valid Avro schema), "
       + "backward (new schema can read data produced by latest registered schema), "
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema)";
-  protected static final String MASTER_ELIGIBILITY_DOC = 
+  protected static final String MASTER_ELIGIBILITY_DOC =
       "If true, this node can participate in master election. In a multi-colo setup, turn this off "
       + "for clusters in the slave data center.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
@@ -213,10 +226,14 @@ public class SchemaRegistryConfig extends RestConfig {
       "The name of the security provider used for SSL.";
   protected static final String KAFKASTORE_SSL_CIPHER_SUITES_DOC =
       "A list of cipher suites used for SSL.";
-  protected static final String KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC =
-      "The endpoint identification algorithm to validate the server hostname using the server certificate.";
-  public static final String KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_DOC =
-      "The Kerberos principal name that the Kafka client runs as. This can be defined either in the JAAS "
+  protected static final String
+      KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC =
+      "The endpoint identification algorithm to validate the server hostname using the server "
+      + "certificate.";
+  public static final String
+      KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_DOC =
+      "The Kerberos principal name that the Kafka client runs as. This can be defined either in "
+      + "the JAAS "
       + "config file or here.";
   public static final String KAFKASTORE_SASL_MECHANISM_DOC =
       "The SASL mechanism used for Kafka connections. GSSAPI is the default.";
@@ -226,8 +243,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "The login time between refresh attempts.";
   public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_DOC =
       "The percentage of random jitter added to the renewal time.";
-  public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC =
-      "Login thread will sleep until the specified window factor of time from last refresh to ticket's expiry has "
+  public static final String
+      KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC =
+      "Login thread will sleep until the specified window factor of time from last refresh to "
+      + "ticket's expiry has "
       + "been reached, at which time it will try to renew the ticket.";
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
@@ -235,25 +254,31 @@ public class SchemaRegistryConfig extends RestConfig {
 
   // TODO: move to Apache's ConfigDef
   private static final ConfigDef config;
+
   static {
     config = baseConfigDef()
         .defineOverride(PORT_CONFIG, ConfigDef.Type.INT, SCHEMAREGISTRY_PORT_DEFAULT,
                         ConfigDef.Importance.LOW, PORT_CONFIG_DOC)
         .defineOverride(LISTENERS_CONFIG, ConfigDef.Type.LIST, SCHEMAREGISTRY_LISTENERS_DEFAULT,
-                        ConfigDef.Importance.HIGH, LISTENERS_DOC + "\n\n" +
-                        "Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. " +
-                        "If multiple listeners are configured, the first listener's port is used for its identity.")
+                        ConfigDef.Importance.HIGH, LISTENERS_DOC + "\n\n"
+                                                   + "Schema Registry identities are stored in "
+                                                   + "ZooKeeper and are made up of a hostname and "
+                                                   + "port. "
+                                                   + "If multiple listeners are configured, the "
+                                                   + "first listener's port is used for its "
+                                                   + "identity.")
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
-                        io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES,
+                        PREFERRED_RESPONSE_TYPES,
                         ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_PREFERRED_CONFIG_DOC)
         .defineOverride(RESPONSE_MEDIATYPE_DEFAULT_CONFIG, ConfigDef.Type.STRING,
-                        io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT,
+                        SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT,
                         ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
         .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
                 KAFKASTORE_CONNECTION_URL_DOC)
-        .define(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, "", ConfigDef.Importance.MEDIUM,
+        .define(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, "",
+                ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_BOOTSTRAP_SERVERS_DOC)
         .define(SCHEMAREGISTRY_ZK_NAMESPACE, ConfigDef.Type.STRING,
                 DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
@@ -275,7 +300,7 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.HIGH, COMPATIBILITY_DOC)
         .define(ZOOKEEPER_SET_ACL_CONFIG, ConfigDef.Type.BOOLEAN, ZOOKEEPER_SET_ACL_DEFAULT,
                 ConfigDef.Importance.HIGH, ZOOKEEPER_SET_ACL_DOC)
-        .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY, 
+        .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY,
                 ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC)
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
                         METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
@@ -347,6 +372,7 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.LOW, KAFKASTORE_GROUP_ID_DOC);
 
   }
+
   private final AvroCompatibilityLevel compatibilityType;
 
   public SchemaRegistryConfig(Map<? extends Object, ? extends Object> props)

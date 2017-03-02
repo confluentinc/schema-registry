@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client.rest.utils;
 
 import java.util.ArrayList;
@@ -26,9 +27,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * maintains a pointer to a known good url which can be accessed through {@link #current()}.
  * When a request against the current url fails, the {@link #fail(String)} method is invoked,
  * and we'll move on to the next url (returning back to the start if we have to).
- *
  */
 public class UrlList {
+
   private final AtomicInteger index;
   private final List<String> urls;
 
@@ -47,6 +48,7 @@ public class UrlList {
 
   /**
    * Get the current url
+   *
    * @return the url
    */
   public String current() {
@@ -57,17 +59,19 @@ public class UrlList {
    * Declare the given url as failed. This will cause the urls to
    * rotate, so that the next request will be done against a new url
    * (if one exists).
+   *
    * @param url the url that has failed
    */
   public void fail(String url) {
     int currentIndex = index.get();
     if (urls.get(currentIndex).equals(url)) {
-      index.compareAndSet(currentIndex, (currentIndex+1)%urls.size());
+      index.compareAndSet(currentIndex, (currentIndex + 1) % urls.size());
     }
   }
 
   /**
    * The number of unique urls contained in this collection.
+   *
    * @return the count of urls
    */
   public int size() {

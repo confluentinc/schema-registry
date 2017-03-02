@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import org.slf4j.Logger;
@@ -41,7 +42,6 @@ import io.confluent.rest.annotations.PerformanceMetric;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SchemasResource {
 
-  public final static String MESSAGE_SCHEMA_NOT_FOUND = "Schema not found.";
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.zookeeper;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -77,10 +78,14 @@ public class SchemaRegistryIdentity {
   }
 
   @JsonProperty("master_eligibility")
-  public boolean getMasterEligibility() { return this.masterEligibility; }
+  public boolean getMasterEligibility() {
+    return this.masterEligibility;
+  }
 
   @JsonProperty("master_eligibility")
-  public void setMasterEligibility(Boolean eligibility) { this.masterEligibility = eligibility; }
+  public void setMasterEligibility(Boolean eligibility) {
+    this.masterEligibility = eligibility;
+  }
 
   @Override
   public boolean equals(Object o) {

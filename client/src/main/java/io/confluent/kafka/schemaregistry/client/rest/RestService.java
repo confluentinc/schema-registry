@@ -13,11 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client.rest;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -28,6 +30,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,36 +50,36 @@ import java.util.Map;
 public class RestService {
 
   private static final Logger log = LoggerFactory.getLogger(RestService.class);
-  private final static TypeReference<RegisterSchemaResponse> REGISTER_RESPONSE_TYPE =
-          new TypeReference<RegisterSchemaResponse>() {
-          };
-  private final static TypeReference<Config> GET_CONFIG_RESPONSE_TYPE =
-          new TypeReference<Config>() {
-          };
-  private final static TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
-          new TypeReference<SchemaString>() {
-          };
-  private final static TypeReference<Schema> GET_SCHEMA_BY_VERSION_RESPONSE_TYPE =
-          new TypeReference<Schema>() {
-          };
-  private final static TypeReference<List<Integer>> ALL_VERSIONS_RESPONSE_TYPE =
-          new TypeReference<List<Integer>>() {
-          };
-  private final static TypeReference<List<String>> ALL_TOPICS_RESPONSE_TYPE =
-          new TypeReference<List<String>>() {
-          };
-  private final static TypeReference<CompatibilityCheckResponse>
-          COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE =
-          new TypeReference<CompatibilityCheckResponse>() {
-          };
-  private final static TypeReference<Schema>
-          SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE =
-          new TypeReference<Schema>() {
-          };
-  private final static TypeReference<ConfigUpdateRequest>
-          UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE =
-          new TypeReference<ConfigUpdateRequest>() {
-          };
+  private static final TypeReference<RegisterSchemaResponse> REGISTER_RESPONSE_TYPE =
+      new TypeReference<RegisterSchemaResponse>() {
+      };
+  private static final TypeReference<Config> GET_CONFIG_RESPONSE_TYPE =
+      new TypeReference<Config>() {
+      };
+  private static final TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
+      new TypeReference<SchemaString>() {
+      };
+  private static final TypeReference<Schema> GET_SCHEMA_BY_VERSION_RESPONSE_TYPE =
+      new TypeReference<Schema>() {
+      };
+  private static final TypeReference<List<Integer>> ALL_VERSIONS_RESPONSE_TYPE =
+      new TypeReference<List<Integer>>() {
+      };
+  private static final TypeReference<List<String>> ALL_TOPICS_RESPONSE_TYPE =
+      new TypeReference<List<String>>() {
+      };
+  private static final TypeReference<CompatibilityCheckResponse>
+      COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE =
+      new TypeReference<CompatibilityCheckResponse>() {
+      };
+  private static final TypeReference<Schema>
+      SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE =
+      new TypeReference<Schema>() {
+      };
+  private static final TypeReference<ConfigUpdateRequest>
+      UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE =
+      new TypeReference<ConfigUpdateRequest>() {
+      };
   private static final int JSON_PARSE_ERROR_CODE = 50005;
   private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
@@ -112,12 +115,12 @@ public class RestService {
    * @return The deserialized response to the HTTP request, or null if no data is expected.
    */
   private <T> T sendHttpRequest(String requestUrl, String method, byte[] requestBodyData,
-                            Map<String, String> requestProperties,
-                            TypeReference<T> responseFormat)
-          throws IOException, RestClientException {
+                                Map<String, String> requestProperties,
+                                TypeReference<T> responseFormat)
+      throws IOException, RestClientException {
     log.debug(String.format("Sending %s with input %s to %s",
-            method, requestBodyData == null ? "null" : new String(requestBodyData),
-            requestUrl));
+                            method, requestBodyData == null ? "null" : new String(requestBodyData),
+                            requestUrl));
 
     HttpURLConnection connection = null;
     try {
@@ -146,7 +149,9 @@ public class RestService {
           log.error("Failed to send HTTP request to endpoint: " + url, e);
           throw e;
         } finally {
-          if (os != null) os.close();
+          if (os != null) {
+            os.close();
+          }
         }
       }
 
@@ -168,7 +173,7 @@ public class RestService {
         }
         es.close();
         throw new RestClientException(errorMessage.getMessage(), responseCode,
-                errorMessage.getErrorCode());
+                                      errorMessage.getErrorCode());
       }
 
     } finally {
@@ -178,17 +183,26 @@ public class RestService {
     }
   }
 
-  private <T> T httpRequest(String path, String method,
-                            byte[] requestBodyData, Map<String, String> requestProperties,
-                            TypeReference<T> responseFormat) throws IOException, RestClientException {
+  private <T> T httpRequest(String path,
+                            String method,
+                            byte[] requestBodyData,
+                            Map<String, String> requestProperties,
+                            TypeReference<T> responseFormat)
+      throws IOException, RestClientException {
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
       String baseUrl = baseUrls.current();
       String requestUrl = buildRequestUrl(baseUrl, path);
       try {
-        return sendHttpRequest(requestUrl, method, requestBodyData, requestProperties, responseFormat);
+        return sendHttpRequest(requestUrl,
+                               method,
+                               requestBodyData,
+                               requestProperties,
+                               responseFormat);
       } catch (IOException e) {
         baseUrls.fail(baseUrl);
-        if (i == n-1) throw e; // Raise the exception since we have no more urls to try
+        if (i == n - 1) {
+          throw e; // Raise the exception since we have no more urls to try
+        }
       }
     }
     throw new IOException("Internal HTTP retry error"); // Can't get here
@@ -196,12 +210,12 @@ public class RestService {
 
   // Visible for testing
   static String buildRequestUrl(String baseUrl, String path) {
-      // Join base URL and path, collapsing any duplicate forward slash delimiters
-      return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
+    // Join base URL and path, collapsing any duplicate forward slash delimiters
+    return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
 
   public Schema lookUpSubjectVersion(String schemaString, String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     return lookUpSubjectVersion(request, subject);
@@ -209,47 +223,49 @@ public class RestService {
 
   public Schema lookUpSubjectVersion(RegisterSchemaRequest registerSchemaRequest,
                                      String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return lookUpSubjectVersion(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject);
   }
 
   public Schema lookUpSubjectVersion(Map<String, String> requestProperties,
                                      RegisterSchemaRequest registerSchemaRequest,
                                      String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     String path = String.format("/subjects/%s", subject);
 
     Schema schema = httpRequest(path, "POST", registerSchemaRequest.toJson().getBytes(),
-            requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
+                                requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
 
     return schema;
   }
 
   public int registerSchema(String schemaString, String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     return registerSchema(request, subject);
   }
 
   public int registerSchema(RegisterSchemaRequest registerSchemaRequest, String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return registerSchema(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject);
   }
 
   public int registerSchema(Map<String, String> requestProperties,
                             RegisterSchemaRequest registerSchemaRequest, String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     String path = String.format("/subjects/%s/versions", subject);
 
     RegisterSchemaResponse response = httpRequest(path, "POST",
-            registerSchemaRequest.toJson().getBytes(), requestProperties, REGISTER_RESPONSE_TYPE);
+                                                  registerSchemaRequest.toJson().getBytes(),
+                                                  requestProperties,
+                                                  REGISTER_RESPONSE_TYPE);
 
     return response.getId();
   }
 
   public boolean testCompatibility(String schemaString, String subject, String version)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     return testCompatibility(request, subject, version);
@@ -258,26 +274,26 @@ public class RestService {
   public boolean testCompatibility(RegisterSchemaRequest registerSchemaRequest,
                                    String subject,
                                    String version)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return testCompatibility(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest,
-            subject, version);
+                             subject, version);
   }
 
   public boolean testCompatibility(Map<String, String> requestProperties,
                                    RegisterSchemaRequest registerSchemaRequest,
                                    String subject,
                                    String version)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     String path = String.format("/compatibility/subjects/%s/versions/%s", subject, version);
 
     CompatibilityCheckResponse response =
-            httpRequest(path, "POST", registerSchemaRequest.toJson().getBytes(),
+        httpRequest(path, "POST", registerSchemaRequest.toJson().getBytes(),
                     requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
     return response.getIsCompatible();
   }
 
   public ConfigUpdateRequest updateCompatibility(String compatibility, String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     ConfigUpdateRequest request = new ConfigUpdateRequest();
     request.setCompatibilityLevel(compatibility);
     return updateConfig(request, subject);
@@ -285,37 +301,37 @@ public class RestService {
 
   public ConfigUpdateRequest updateConfig(ConfigUpdateRequest configUpdateRequest,
                                           String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return updateConfig(DEFAULT_REQUEST_PROPERTIES, configUpdateRequest, subject);
   }
 
   /**
-   *  On success, this api simply echoes the request in the response.
+   * On success, this api simply echoes the request in the response.
    */
   public ConfigUpdateRequest updateConfig(Map<String, String> requestProperties,
                                           ConfigUpdateRequest configUpdateRequest,
                                           String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     String path = subject != null ? String.format("/config/%s", subject) : "/config";
 
     ConfigUpdateRequest response =
-            httpRequest(path, "PUT", configUpdateRequest.toJson().getBytes(),
+        httpRequest(path, "PUT", configUpdateRequest.toJson().getBytes(),
                     requestProperties, UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE);
     return response;
   }
 
   public Config getConfig(String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return getConfig(DEFAULT_REQUEST_PROPERTIES, subject);
   }
 
   public Config getConfig(Map<String, String> requestProperties,
                           String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     String path = subject != null ? String.format("/config/%s", subject) : "/config";
 
     Config config =
-            httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
+        httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
     return config;
   }
 
@@ -328,63 +344,63 @@ public class RestService {
     String path = String.format("/schemas/ids/%d", id);
 
     SchemaString response = httpRequest(path, "GET", null, requestProperties,
-            GET_SCHEMA_BY_ID_RESPONSE_TYPE);
+                                        GET_SCHEMA_BY_ID_RESPONSE_TYPE);
     return response;
   }
 
-  public Schema getVersion(String subject, int version) throws IOException, RestClientException{
+  public Schema getVersion(String subject, int version) throws IOException, RestClientException {
     return getVersion(DEFAULT_REQUEST_PROPERTIES, subject, version);
   }
 
   public Schema getVersion(Map<String, String> requestProperties,
                            String subject, int version)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     String path = String.format("/subjects/%s/versions/%d", subject, version);
 
     Schema response = httpRequest(path, "GET", null, requestProperties,
-            GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
+                                  GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
     return response;
   }
 
   public Schema getLatestVersion(String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return getLatestVersion(DEFAULT_REQUEST_PROPERTIES, subject);
   }
 
   public Schema getLatestVersion(Map<String, String> requestProperties,
                                  String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     String path = String.format("/subjects/%s/versions/latest", subject);
 
     Schema response = httpRequest(path, "GET", null, requestProperties,
-            GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
+                                  GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
     return response;
   }
 
   public List<Integer> getAllVersions(String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return getAllVersions(DEFAULT_REQUEST_PROPERTIES, subject);
   }
 
   public List<Integer> getAllVersions(Map<String, String> requestProperties,
                                       String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     String path = String.format("/subjects/%s/versions", subject);
 
     List<Integer> response = httpRequest(path, "GET", null, requestProperties,
-            ALL_VERSIONS_RESPONSE_TYPE);
+                                         ALL_VERSIONS_RESPONSE_TYPE);
     return response;
   }
 
   public List<String> getAllSubjects()
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return getAllSubjects(DEFAULT_REQUEST_PROPERTIES);
   }
 
   public List<String> getAllSubjects(Map<String, String> requestProperties)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     List<String> response = httpRequest("/subjects", "GET", null, requestProperties,
-            ALL_TOPICS_RESPONSE_TYPE);
+                                        ALL_TOPICS_RESPONSE_TYPE);
     return response;
   }
 

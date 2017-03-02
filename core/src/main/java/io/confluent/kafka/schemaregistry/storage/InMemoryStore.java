@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.Iterator;
@@ -51,8 +52,9 @@ public class InMemoryStore<K, V> implements Store<K, V> {
 
   @Override
   public Iterator<V> getAll(K key1, K key2) {
-    ConcurrentNavigableMap<K, V> subMap = (key1 == null && key2 == null) ?
-                                          store : store.subMap(key1, key2);
+    ConcurrentNavigableMap<K, V> subMap = (key1 == null && key2 == null)
+                                          ? store
+                                          : store.subMap(key1, key2);
     return subMap.values().iterator();
   }
 

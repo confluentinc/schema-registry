@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
@@ -34,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import kafka.utils.VerifiableProperties;
 
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
+
   private final EncoderFactory encoderFactory = EncoderFactory.get();
 
   protected void configure(KafkaAvroSerializerConfig config) {
@@ -78,7 +80,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
       } else {
         BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
         DatumWriter<Object> writer;
-        Object value = object instanceof NonRecordContainer ? ((NonRecordContainer) object).getValue() : object;
+        Object
+            value =
+            object instanceof NonRecordContainer ? ((NonRecordContainer) object).getValue()
+                                                 : object;
         if (value instanceof SpecificRecord) {
           writer = new SpecificDatumWriter<>(schema);
         } else {

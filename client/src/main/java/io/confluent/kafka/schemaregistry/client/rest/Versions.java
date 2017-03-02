@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client.rest;
 
 import java.util.Arrays;
@@ -28,8 +29,8 @@ public class Versions {
   public static final String SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT = SCHEMA_REGISTRY_V1_JSON;
   public static final String SCHEMA_REGISTRY_DEFAULT_JSON = "application/vnd.schemaregistry+json";
   public static final String SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED =
-      SCHEMA_REGISTRY_DEFAULT_JSON +
-      "; qs=0.9";
+      SCHEMA_REGISTRY_DEFAULT_JSON
+      + "; qs=0.9";
   public static final String JSON = "application/json";
   public static final String JSON_WEIGHTED = JSON + "; qs=0.5";
 

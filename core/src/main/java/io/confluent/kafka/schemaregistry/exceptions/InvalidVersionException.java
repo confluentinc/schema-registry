@@ -21,6 +21,7 @@ package io.confluent.kafka.schemaregistry.exceptions;
  * 2^31-1] and the string "latest"
  */
 public class InvalidVersionException extends SchemaRegistryException {
+
   public InvalidVersionException(String message, Throwable cause) {
     super(message, cause);
   }

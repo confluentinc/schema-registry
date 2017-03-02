@@ -13,12 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.rest.RestConfig;
 import kafka.admin.RackAwareMode;
 import kafka.cluster.EndPoint;
 import kafka.server.ConfigType;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -64,8 +66,10 @@ import scala.collection.Seq;
 public class KafkaStore<K, V> implements Store<K, V> {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStore.class);
-  private final static Set<SecurityProtocol> SUPPORTED_SECURITY_PROTOCOLS = new HashSet<>(
-          Arrays.asList(SecurityProtocol.PLAINTEXT, SecurityProtocol.SSL, SecurityProtocol.SASL_PLAINTEXT, SecurityProtocol.SASL_SSL)
+  private static final Set<SecurityProtocol> SUPPORTED_SECURITY_PROTOCOLS = new HashSet<>(
+      Arrays
+          .asList(SecurityProtocol.PLAINTEXT, SecurityProtocol.SSL, SecurityProtocol.SASL_PLAINTEXT,
+                  SecurityProtocol.SASL_SSL)
   );
 
   private final String kafkaClusterZkUrl;
@@ -81,7 +85,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final Seq<Broker> brokerSeq;
   private final String bootstrapBrokers;
   private final ZkUtils zkUtils;
-  private KafkaProducer<byte[],byte[]> producer;
+  private KafkaProducer<byte[], byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
   // Noop key is only used to help reliably determine last offset; reader thread ignores
   // messages with this key
@@ -99,12 +103,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
-    int port = KafkaSchemaRegistry.getPortForIdentity(config.getInt(SchemaRegistryConfig.PORT_CONFIG),
+    int port = KafkaSchemaRegistry.getPortForIdentity(
+        config.getInt(SchemaRegistryConfig.PORT_CONFIG),
             config.getList(RestConfig.LISTENERS_CONFIG));
-    this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG).isEmpty() ?
-            String.format("schema-registry-%s-%d",
+    this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG).isEmpty()
+                   ? String.format("schema-registry-%s-%d",
                                  config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
-                                 port) : config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG);
+                                 port)
+                   : config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG);
     initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.storeUpdateHandler = storeUpdateHandler;
@@ -120,14 +126,18 @@ public class KafkaStore<K, V> implements Store<K, V> {
         KafkaSchemaRegistry.checkZkAclConfig(this.config));
     this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
-    List<String> bootstrapServersConfig = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
+    List<String>
+        bootstrapServersConfig =
+        config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
     List<String> endpoints;
     if (bootstrapServersConfig.isEmpty()) {
       endpoints = brokersToEndpoints(JavaConversions.seqAsJavaList(this.brokerSeq));
     } else {
       endpoints = bootstrapServersConfig;
     }
-    this.bootstrapBrokers = endpointsToBootstrapServers(endpoints, config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
+    this.bootstrapBrokers =
+        endpointsToBootstrapServers(endpoints, config
+            .getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
     log.info("Initializing KafkaStore with broker endpoints: " + this.bootstrapBrokers);
   }
 
@@ -152,17 +162,17 @@ public class KafkaStore<K, V> implements Store<K, V> {
     props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
 
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-            this.config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
+              this.config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
     addSecurityConfigsToClientProperties(this.config, props);
 
-    producer = new KafkaProducer<byte[],byte[]>(props);
+    producer = new KafkaProducer<byte[], byte[]>(props);
 
     // start the background thread that subscribes to the Kafka topic and applies updates.
     // the thread must be created after the schema topic has been created.
     this.kafkaTopicReader =
-            new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
-                    this.storeUpdateHandler, serializer, this.localStore,
-                    this.noopKey, this.config);
+        new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
+                                     this.storeUpdateHandler, serializer, this.localStore,
+                                     this.noopKey, this.config);
     this.kafkaTopicReader.start();
 
     try {
@@ -178,64 +188,84 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
   }
 
-  public static void addSecurityConfigsToClientProperties(SchemaRegistryConfig config, Properties props) {
+  public static void addSecurityConfigsToClientProperties(SchemaRegistryConfig config,
+                                                          Properties props) {
     addSslConfigsToClientProperties(config, props);
     addSaslConfigsToClientProperties(config, props);
   }
 
-  public static void addSslConfigsToClientProperties(SchemaRegistryConfig config, Properties props) {
+  public static void addSslConfigsToClientProperties(SchemaRegistryConfig config,
+                                                     Properties props) {
     if (config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
-            SecurityProtocol.SSL.toString()) ||
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
-                    SecurityProtocol.SASL_SSL.toString())) {
+        SecurityProtocol.SSL.toString())
+        || config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
+            SecurityProtocol.SASL_SSL.toString())) {
       props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG));
+                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG));
       props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG));
+                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG));
       props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG));
+                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG));
       props.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_CONFIG));
+                config
+                    .getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_CONFIG));
       putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG), props);
+                          config.getString(
+                              SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG), props);
       putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG), props);
+                          config.getString(
+                              SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG), props);
       props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG));
+                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG));
       props.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_CONFIG));
+                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_CONFIG));
       putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG), props);
+                          config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG),
+                          props);
       putIfNotEmptyString(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENABLED_PROTOCOLS_CONFIG), props);
+                          config.getString(
+                              SchemaRegistryConfig.KAFKASTORE_SSL_ENABLED_PROTOCOLS_CONFIG), props);
       props.put(SslConfigs.SSL_PROTOCOL_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROTOCOL_CONFIG));
+                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROTOCOL_CONFIG));
       putIfNotEmptyString(SslConfigs.SSL_PROVIDER_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROVIDER_CONFIG), props);
+                          config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROVIDER_CONFIG),
+                          props);
       putIfNotEmptyString(SslConfigs.SSL_CIPHER_SUITES_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_CIPHER_SUITES_CONFIG), props);
+                          config
+                              .getString(SchemaRegistryConfig.KAFKASTORE_SSL_CIPHER_SUITES_CONFIG),
+                          props);
       putIfNotEmptyString(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG), props);
+                          config.getString(
+                              SchemaRegistryConfig
+                                  .KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG),
+                          props);
     }
   }
 
-  public static void addSaslConfigsToClientProperties(SchemaRegistryConfig config, Properties props) {
+  public static void addSaslConfigsToClientProperties(SchemaRegistryConfig config,
+                                                      Properties props) {
     if (config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
-            SecurityProtocol.SASL_PLAINTEXT.toString()) ||
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
-                    SecurityProtocol.SASL_SSL.toString())) {
+        SecurityProtocol.SASL_PLAINTEXT.toString())
+        || config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
+            SecurityProtocol.SASL_SSL.toString())) {
       putIfNotEmptyString(SaslConfigs.SASL_KERBEROS_SERVICE_NAME,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_CONFIG), props);
+                          config.getString(
+                              SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_CONFIG),
+                          props);
       props.put(SaslConfigs.SASL_MECHANISM,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SASL_MECHANISM_CONFIG));
+                config.getString(SchemaRegistryConfig.KAFKASTORE_SASL_MECHANISM_CONFIG));
       props.put(SaslConfigs.SASL_KERBEROS_KINIT_CMD,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_KINIT_CMD_CONFIG));
+                config.getString(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_KINIT_CMD_CONFIG));
       props.put(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN,
-              config.getLong(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG));
+                config.getLong(
+                    SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG));
       props.put(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER,
-              config.getDouble(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG));
+                config.getDouble(
+                    SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG));
       props.put(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR,
-              config.getDouble(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG));
+                config.getDouble(
+                    SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG)
+      );
     }
   }
 
@@ -259,10 +289,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
     int schemaTopicReplicationFactor = Math.min(numLiveBrokers, desiredReplicationFactor);
     if (schemaTopicReplicationFactor < desiredReplicationFactor) {
-      log.warn("Creating the schema topic " + topic + " using a replication factor of " +
-               schemaTopicReplicationFactor + ", which is less than the desired one of "
-               + desiredReplicationFactor + ". If this is a production environment, it's " +
-               "crucial to add more brokers and increase the replication factor of the topic.");
+      log.warn("Creating the schema topic "
+               + topic
+               + " using a replication factor of "
+               + schemaTopicReplicationFactor
+               + ", which is less than the desired one of "
+               + desiredReplicationFactor + ". If this is a production environment, it's "
+               + "crucial to add more brokers and increase the replication factor of the topic.");
     }
     Properties schemaTopicProps = new Properties();
     schemaTopicProps.put(LogConfig.CleanupPolicyProp(), "compact");
@@ -279,7 +312,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
     final List<String> endpoints = new LinkedList<>();
     for (Broker broker : brokers) {
       for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints())) {
-        String hostport = ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
+        String
+            hostport =
+            ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
         String endpoint = ep.securityProtocol() + "://" + hostport;
 
         endpoints.add(endpoint);
@@ -291,15 +326,17 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   static String endpointsToBootstrapServers(List<String> endpoints, String securityProtocol) {
     if (!SUPPORTED_SECURITY_PROTOCOLS.contains(SecurityProtocol.forName(securityProtocol))) {
-      throw new ConfigException("Only PLAINTEXT, SSL, SASL_PLAINTEXT, and SASL_SSL Kafka endpoints are supported.");
+      throw new ConfigException(
+          "Only PLAINTEXT, SSL, SASL_PLAINTEXT, and SASL_SSL Kafka endpoints are supported.");
     }
 
     final String securityProtocolUrlPrefix = securityProtocol + "://";
     final StringBuilder sb = new StringBuilder();
     for (String endpoint : endpoints) {
       if (!endpoint.startsWith(securityProtocolUrlPrefix)) {
-        log.warn("Ignoring Kafka broker endpoint " + endpoint + " that does not match the setting for "
-                + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + "=" + securityProtocol);
+        log.warn(
+            "Ignoring Kafka broker endpoint " + endpoint + " that does not match the setting for "
+            + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + "=" + securityProtocol);
         continue;
       }
 
@@ -311,9 +348,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     if (sb.length() == 0) {
       throw new ConfigException("No supported Kafka endpoints are configured. Either "
-              + SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG + " must have at least one endpoint matching "
-              + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + " or broker endpoints loaded from ZooKeeper "
-              + "must have at least one endpoint matching " + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + ".");
+                                + SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
+                                + " must have at least one endpoint matching "
+                                + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG
+                                + " or broker endpoints loaded from ZooKeeper "
+                                + "must have at least one endpoint matching "
+                                + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + ".");
     }
 
     return sb.toString();
@@ -333,22 +373,27 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
 
     if (((Seq) partitionAssignment.get(0).get()).size() < desiredReplicationFactor) {
-      log.warn("The replication factor of the schema topic " + topic + " is less than the " +
-               "desired one of " + desiredReplicationFactor + ". If this is a production " +
-               "environment, it's crucial to add more brokers and increase the replication " +
-               "factor of the topic.");
+      log.warn("The replication factor of the schema topic "
+               + topic
+               + " is less than the desired one of "
+               + desiredReplicationFactor
+               + ". If this is a production environment, it's crucial to add more brokers and "
+               + "increase the replication factor of the topic.");
     }
 
     // check the retention policy
     Properties prop = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic(), topic);
     String retentionPolicy = prop.getProperty(LogConfig.CleanupPolicyProp());
     if (retentionPolicy == null || "compact".compareTo(retentionPolicy) != 0) {
-      log.error("The retention policy of the schema topic " + topic + " is incorrect. " +
-               "You must configure the topic to 'compact' cleanup policy to avoid Kafka deleting your schemas after a week. " +
-               "Refer to Kafka documentation for more details on cleanup policies");
+      log.error("The retention policy of the schema topic " + topic + " is incorrect. "
+                + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
+                + "deleting your schemas after a week. "
+                + "Refer to Kafka documentation for more details on cleanup policies");
 
-      throw new IllegalStateException("The retention policy of the schema topic " + topic +
-              " is incorrect. Expected cleanup.policy to be 'compact' but it is " + retentionPolicy);
+      throw new IllegalStateException("The retention policy of the schema topic " + topic
+                                      + " is incorrect. Expected cleanup.policy to be 'compact' "
+                                      + "but it is " + retentionPolicy);
+
     }
   }
 
@@ -396,7 +441,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       log.trace("Sending record to KafkaStore topic: " + producerRecord);
       Future<RecordMetadata> ack = producer.send(producerRecord);
       RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
-      
+
       log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
       this.lastWrittenOffset = recordMetadata.offset();
       kafkaTopicReader.waitUntilOffset(this.lastWrittenOffset, timeout, TimeUnit.MILLISECONDS);
@@ -410,8 +455,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
           "Put operation timed out while waiting for an ack from Kafka", e);
     } catch (KafkaException ke) {
       throw new StoreException("Put operation to Kafka failed", ke);
-    }
-    finally {
+    } finally {
       if (!knownSuccessfulWrite) {
         this.lastWrittenOffset = -1L;
       }
@@ -456,8 +500,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
     localStore.close();
     log.debug("Kafka store shut down complete");
   }
-  
-  /** For testing. */
+
+  /**
+   * For testing.
+   */
   KafkaStoreReaderThread<K, V> getKafkaStoreReaderThread() {
     return this.kafkaTopicReader;
   }
@@ -469,29 +515,29 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   /**
-   * Return the latest offset of the store topic. 
-   * 
-   * The most reliable way to do so in face of potential Kafka broker failure is to produce
+   * Return the latest offset of the store topic.
+   *
+   * <p>The most reliable way to do so in face of potential Kafka broker failure is to produce
    * successfully to the Kafka topic and get the offset of the returned metadata.
-   * 
-   * If the most recent write to Kafka was successful (signaled by lastWrittenOffset >= 0), 
+   *
+   * <p>If the most recent write to Kafka was successful (signaled by lastWrittenOffset >= 0),
    * immediately return that offset. Otherwise write a "Noop key" to Kafka in order to find the
    * latest offset.
    */
   private long getLatestOffset(int timeoutMs) throws StoreException {
     ProducerRecord<byte[], byte[]> producerRecord = null;
-    
+
     if (this.lastWrittenOffset >= 0) {
       return this.lastWrittenOffset;
     }
-    
+
     try {
       producerRecord =
           new ProducerRecord<byte[], byte[]>(topic, 0, this.serializer.serializeKey(noopKey), null);
     } catch (SerializationException e) {
       throw new StoreException("Failed to serialize noop key.", e);
     }
-    
+
     try {
       log.trace("Sending Noop record to KafkaStore to find last offset.");
       Future<RecordMetadata> ack = producer.send(producerRecord);

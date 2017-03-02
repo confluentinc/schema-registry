@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
+
 package io.confluent.kafka.serializers;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -46,8 +48,11 @@ public class KafkaJsonDeserializer<T> implements Deserializer<T> {
     this.objectMapper = new ObjectMapper();
     this.type = type;
 
-    boolean failUnknownProperties = config.getBoolean(KafkaJsonDeserializerConfig.FAIL_UNKNOWN_PROPERTIES);
-    this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, failUnknownProperties);
+    boolean
+        failUnknownProperties =
+        config.getBoolean(KafkaJsonDeserializerConfig.FAIL_UNKNOWN_PROPERTIES);
+    this.objectMapper
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, failUnknownProperties);
   }
 
   @SuppressWarnings("unchecked")
@@ -61,9 +66,10 @@ public class KafkaJsonDeserializer<T> implements Deserializer<T> {
   }
 
   @Override
-  public T deserialize(String _, byte[] bytes) {
-    if (bytes == null || bytes.length == 0)
+  public T deserialize(String ignored, byte[] bytes) {
+    if (bytes == null || bytes.length == 0) {
       return null;
+    }
 
     try {
       return objectMapper.readValue(bytes, type);
