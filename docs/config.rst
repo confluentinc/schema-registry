@@ -437,3 +437,12 @@ Configuration Options
   * Type: double
   * Default: 0.8
   * Importance: low
+
+``kafkastore.group.id``
+  Use this setting to override the group.id for the KafkaStore consumer.
+  This setting can become important when security is enabled, to ensure stability over the schema registry consumer's group.id
+  Without this configuration, group.id will be "schema-registry-<host>-<port>"
+
+  * Type: string
+  * Default: ""
+  * Importance: low
