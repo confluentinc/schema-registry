@@ -41,17 +41,26 @@ public class RestApp {
   }
 
   public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType) {
-    this(port, zkConnect, kafkaTopic, compatibilityType, true);
+    this(port, zkConnect, kafkaTopic, compatibilityType, "", true);
+  }
+
+  public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType, boolean masterEligibility) {
+    this(port, zkConnect, kafkaTopic, compatibilityType, "", masterEligibility);
+  }
+
+  public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType, String groupId) {
+    this(port, zkConnect, kafkaTopic, compatibilityType, groupId, true);
   }
 
   public RestApp(int port, String zkConnect, String kafkaTopic,
-                 String compatibilityType, boolean masterEligibility) {
+                 String compatibilityType, String groupId, boolean masterEligibility) {
     prop = new Properties();
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
     prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
     prop.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
     prop.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, compatibilityType);
     prop.put(SchemaRegistryConfig.MASTER_ELIGIBILITY, masterEligibility);
+    prop.put(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG, groupId);
   }
 
   public void start() throws Exception {

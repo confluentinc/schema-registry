@@ -234,4 +234,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           + ", timeout(ms): " + TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
     }
   }
+
+  public String getGroupId() {
+    return this.groupId;
+  }
 }

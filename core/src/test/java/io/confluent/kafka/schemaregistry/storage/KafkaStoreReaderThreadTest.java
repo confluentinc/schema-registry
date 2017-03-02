@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
@@ -66,5 +67,15 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
     } catch (StoreTimeoutException e) {
       fail("5 seconds should be more than enough time to reach offset 0 in the log.");
     }
+  }
+
+
+  @Test
+  public void testGroupIdDefault() throws Exception {
+
+    KafkaSchemaRegistry sr = (KafkaSchemaRegistry) restApp.schemaRegistry();
+    KafkaStoreReaderThread readerThread = sr.getKafkaStore().getKafkaStoreReaderThread();
+    assertTrue(readerThread.getGroupId().startsWith("schema-registry-"));
+
   }
 }
