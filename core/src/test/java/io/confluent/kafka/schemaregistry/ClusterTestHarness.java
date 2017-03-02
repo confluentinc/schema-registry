@@ -97,8 +97,6 @@ public abstract class ClusterTestHarness {
 
   protected RestApp restApp = null;
 
-  protected String groupId = "";
-
   public ClusterTestHarness() {
     this(DEFAULT_NUM_BROKERS);
   }
@@ -149,7 +147,7 @@ public abstract class ClusterTestHarness {
                                               getSecurityProtocol());
 
     if (setupRestApp) {
-      restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType, groupId);
+      restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType);
       restApp.start();
     }
   }

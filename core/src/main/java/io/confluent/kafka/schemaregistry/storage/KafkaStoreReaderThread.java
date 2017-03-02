@@ -70,6 +70,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   // messages with this key
   private final K noopKey;
 
+  private Properties consumerProps = new Properties();
+
   public KafkaStoreReaderThread(String bootstrapBrokers,
                                 String topic,
                                 String groupId,
@@ -88,7 +90,6 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.localStore = localStore;
     this.noopKey = noopKey;
 
-    Properties consumerProps = new Properties();
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
     consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "KafkaStore-reader-" + this.topic);
 
@@ -235,7 +236,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     }
   }
 
-  public String getGroupId() {
-    return this.groupId;
+  /* for testing purposes */
+  public String getConsumerProperty(String key) {
+    return this.consumerProps.getProperty(key);
   }
 }
