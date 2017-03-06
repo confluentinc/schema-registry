@@ -68,7 +68,7 @@ Configuration Options
   * Importance: high
 
 ``kafkastore.topic``
-  The durable single partition topic that actsas the durable log for the data
+  The durable single partition topic that acts as the durable log for the data. This topic must be compacted to avoid losing data due to retention policy.
 
   * Type: string
   * Default: "_schemas"

@@ -104,10 +104,15 @@ Don't Touch These Settings!
 Storage settings
 ^^^^^^^^^^^^^^^^
 
-Schema Registry stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for the Schema Registry database and is the source of truth, writes to this store need to be durable. Schema Registry ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Whenever in doubt, leave these settings alone.
+Schema Registry stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for the Schema Registry database and is the source of truth, writes to this store need to be durable. Schema Registry ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Finally, ``kafkastore.topic`` must be a compacted topic to avoid data loss. Whenever in doubt, leave these settings alone. If you must create the topic manually, this is an example of proper configuration:
+
+.. sourcecode:: bash
+
+  # kafkastore.topic=_schemas
+  $ bin/kafka-topics --create --zookeeper localhost:2181 --topic connect-configs --replication-factor 3 --partitions 1 --config cleanup.policy=compact
 
 ``kafkastore.topic``
-The single partition topic that acts as the durable log for the data
+The single partition topic that acts as the durable log for the data. This must be a compacted topic to avoid data loss due to retention policy.
 
 * Type: string
 * Default: "_schemas"
