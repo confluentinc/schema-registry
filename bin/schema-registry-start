@@ -18,22 +18,28 @@ print_synopsis() {
 	echo "USAGE: $0 [-daemon] schema-registry.properties"
 }
 
+EXTRA_ARGS=${EXTRA_ARGS-'-name schemaRegistry'}
+# EXTRA_ARGS=${EXTRA_ARGS-'-name schemaRegistry -loggc'}
+
+ARG=$1
+case $ARG in
+  -daemon)
+    EXTRA_ARGS="-daemon "$EXTRA_ARGS
+    shift
+    ;;
+  *)
+    ;;
+esac
+
 if [[ $# -lt 1 ]]; then
 	print_synopsis
 	exit 1
 fi
 
-file=""
-if [[ $1 != '-daemon' ]]; then
-	file=$1
-elif [[ $# -eq 2 ]]; then
-	file=$2
-fi
-
-if [[ ! -e "$file" ]]; then
-	echo "Property file $file does not exist"
+if [[ ! -e "$1" ]]; then
+	echo "Property file $1 does not exist"
 	print_synopsis
 	exit 1
 fi
 
-exec $(dirname $0)/schema-registry-run-class io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain "$@"
+exec $(dirname $0)/schema-registry-run-class ${EXTRA_ARGS} io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain "$@"
