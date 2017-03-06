@@ -14,6 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+if [ $# -lt 1 ];
+then
+  echo "USAGE: $0 [-daemon] [-name servicename] [-loggc] classname [opts]"
+  exit 1
+fi
+
 base_dir=$(dirname $0)/..
 
 # Development jars. `mvn package` should collect all the required dependency jars here
@@ -28,7 +34,7 @@ done
 
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
-    LOG_DIR="/tmp/schema-registry-logs"
+  LOG_DIR="$base_dir/logs"
 fi
   
 # create logs directory
@@ -83,14 +89,22 @@ if [ -z "$SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS" ]; then
   SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true"
 fi
 
-MAIN=$1
-shift
-
 while [ $# -gt 0 ]; do
   COMMAND=$1
   case $COMMAND in
     -help)
       HELP="true"
+      break
+      ;;
+    -name)
+      DAEMON_NAME=$2
+      CONSOLE_OUTPUT_FILE=$LOG_DIR/$DAEMON_NAME.out
+      shift 2
+      ;;
+    -loggc)
+      if [ -z "$KAFKA_GC_LOG_OPTS" ]; then
+        GC_LOG_ENABLED="true"
+      fi
       shift
       ;;
     -daemon)
@@ -104,13 +118,25 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "x$$HELP" = "xtrue" ]; then
-  echo "USAGE: $0 [-daemon] [opts] [-help]"
+  echo "USAGE: $0 [-daemon] [-name servicename] [-loggc] classname [opts]"
   exit 0
+fi
+
+MAIN=$1
+shift
+
+# GC options
+GC_FILE_SUFFIX='-gc.log'
+GC_LOG_FILE_NAME=''
+if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
+  GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
+  SCHEMA_REGISTRY_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
 fi
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
-  nohup $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@" 2>&1 < /dev/null &
+  CONSOLE_OUTPUT_FILE=${CONSOLE_OUTPUT_FILE:-${LOG_DIR}/schema-registry-console.out}
+  nohup $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_GC_LOG_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@" > "${CONSOLE_OUTPUT_FILE}" 2>&1 < /dev/null &
 else
   exec $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@"
 fi
