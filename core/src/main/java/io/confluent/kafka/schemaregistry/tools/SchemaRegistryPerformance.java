@@ -35,6 +35,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
   RestService restService;
   String subject;
   long registeredSchemas = 0;
+  long successfullyRegisteredSchemas = 0;
 
   public static void main(String[] args) throws Exception {
 
@@ -88,18 +89,24 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
 
     try {
       restService.registerSchema(schema, this.subject);
-      registeredSchemas++;
+      successfullyRegisteredSchemas++;
     } catch (IOException e) {
       System.out.println("Problem registering schema: " + e.getMessage());
     } catch (RestClientException e) {
       System.out.println("Problem registering schema: " + e.getMessage());
     }
 
+    registeredSchemas++;
     cb.onCompletion(1, 0);
   }
 
   protected void close() {
-    // nothing to do
+    // We can see some failures due to things like timeouts, but we want it to be obvious if there are too many
+    // failures (indicating a real underlying problem). 1% is an arbitrarily chosen limit.
+    if (successfullyRegisteredSchemas / (double)targetRegisteredSchemas < 0.99) {
+      throw new RuntimeException("Too many schema registration errors: " + successfullyRegisteredSchemas
+              + " registered successfully out of " + targetRegisteredSchemas + " attempted");
+    }
   }
 
   @Override
