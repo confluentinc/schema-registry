@@ -42,6 +42,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   public static final String KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG = "kafkastore.bootstrap.servers";
+  public static final String KAFKASTORE_GROUP_ID_CONFIG = "kafkastore.group.id";
   /**
    * <code>kafkastore.zk.session.timeout.ms</code>
    */
@@ -141,6 +142,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "\n"
       + "This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that\n"
       + "all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.";
+  protected static final String KAFKASTORE_GROUP_ID_DOC =
+      "Use this setting to override the group.id for the KafkaStore consumer.\n"
+      + "This setting can become important when security is enabled, to ensure stability over the schema registry consumer's group.id\n"
+          + "Without this configuration, group.id will be \"schema-registry-<host>-<port>\"";
   protected static final String SCHEMAREGISTRY_ZK_NAMESPACE_DOC =
       "The string that is used as the zookeeper namespace for storing schema registry "
       + "metadata. SchemaRegistry instances which are part of the same schema registry service "
@@ -337,7 +342,10 @@ public class SchemaRegistryConfig extends RestConfig {
                 KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_DOC)
         .define(KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG, ConfigDef.Type.DOUBLE,
                 0.8, ConfigDef.Importance.LOW,
-                KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC);
+                KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC)
+        .define(KAFKASTORE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, "",
+                ConfigDef.Importance.LOW, KAFKASTORE_GROUP_ID_DOC);
+
   }
   private final AvroCompatibilityLevel compatibilityType;
 
