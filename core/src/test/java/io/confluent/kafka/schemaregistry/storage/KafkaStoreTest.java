@@ -15,7 +15,11 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import kafka.admin.AdminUtils;
+import kafka.admin.RackAwareMode;
 import kafka.cluster.Broker;
+import kafka.log.LogConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.junit.After;
@@ -31,6 +35,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -300,5 +305,18 @@ public class KafkaStoreTest extends ClusterTestHarness {
     for (int i = 0; i < endpointsList.size(); i++) {
       assertEquals("Expected a different endpoint", expected.get(i), endpointsList.get(i));
     }
+  }
+
+  @Test(expected=IllegalStateException.class)
+  public void testMandatoryCompationPolicy() {
+    Properties kafkaProps = new Properties();
+    Properties topicProps = new Properties();
+    topicProps.put(LogConfig.CleanupPolicyProp(), "delete");
+
+    AdminUtils.createTopic(zkUtils, SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 1, 1, topicProps, RackAwareMode.Enforced$.MODULE$);
+
+    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+
+    KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, kafkaProps);
   }
 }
