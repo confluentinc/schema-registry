@@ -343,8 +343,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
     Properties prop = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic(), topic);
     String retentionPolicy = prop.getProperty(LogConfig.CleanupPolicyProp());
     if (retentionPolicy == null || "compact".compareTo(retentionPolicy) != 0) {
-      log.warn("The retention policy of the schema topic " + topic + " may be incorrect. " +
-               "Please configure it with compact.");
+      log.error("The retention policy of the schema topic " + topic + " is incorrect. " +
+               "You must configure the topic to 'compact' cleanup policy to avoid Kafka deleting your schemas after a week. " +
+               "Refer to Kafka documentation for more details on cleanup policies");
+
+      throw new IllegalStateException("The retention policy of the schema topic " + topic +
+              " is incorrect. Expected cleanup.policy to be 'compact' but it is " + retentionPolicy);
     }
   }
 
