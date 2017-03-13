@@ -61,6 +61,8 @@
         <maven-assembly.version>2.6</maven-assembly.version>
         <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
         <bouncycastle.bcpkix.version>1.54</bouncycastle.bcpkix.version>
+        <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
+        <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
     </properties>
 
     <repositories>

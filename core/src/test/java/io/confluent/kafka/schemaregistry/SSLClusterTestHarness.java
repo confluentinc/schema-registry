@@ -34,10 +34,12 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
     super(DEFAULT_NUM_BROKERS);
   }
 
+  @Override
   protected SecurityProtocol getSecurityProtocol() {
     return SecurityProtocol.SSL;
   }
 
+  @Override
   protected KafkaConfig getKafkaConfig(int brokerId) {
     File trustStoreFile;
     try {
@@ -49,8 +51,8 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
     final Option<SecurityProtocol> sslInterBrokerSecurityProtocol = scala.Option.apply(SecurityProtocol.SSL);
     Properties props = TestUtils.createBrokerConfig(
             brokerId, zkConnect, false, false, TestUtils.RandomPort(), sslInterBrokerSecurityProtocol,
-            trustStoreFileOption, SASL_PROPERTIES, false, false, TestUtils.RandomPort(), true, TestUtils.RandomPort(),
-            false, TestUtils.RandomPort(), Option.<String>empty());
+            trustStoreFileOption, EMPTY_SASL_PROPERTIES, false, false, TestUtils.RandomPort(),
+            true, TestUtils.RandomPort(), false, TestUtils.RandomPort(), Option.<String>empty());
 
     // setup client SSL. Needs to happen before the broker is initialized, because the client's cert
     // needs to be added to the broker's trust store.
@@ -62,14 +64,10 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
       throw new RuntimeException(e);
     }
 
-    props.setProperty("auto.create.topics.enable", "true");
-    props.setProperty("num.partitions", "1");
+    injectProperties(props);
     if (requireSSLClientAuth()) {
       props.setProperty("ssl.client.auth", "required");
     }
-    // We *must* override this to use the port we allocated (Kafka currently allocates one port
-    // that it always uses for ZK
-    props.setProperty("zookeeper.connect", this.zkConnect);
 
     return KafkaConfig.fromProps(props);
   }

@@ -25,6 +25,7 @@ import io.confluent.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 
 import static io.confluent.common.config.ConfigDef.Range.atLeast;
 
@@ -34,7 +35,9 @@ public class SchemaRegistryConfig extends RestConfig {
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
   private static final String SCHEMAREGISTRY_LISTENERS_DEFAULT = "";
 
+  @Deprecated
   public static final String KAFKASTORE_SECURITY_PROTOCOL_SSL = "SSL";
+  @Deprecated
   public static final String KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT = "PLAINTEXT";
 
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
@@ -82,6 +85,8 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>avro.compatibility.level</code>
    */
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
+
+  public static final String ZOOKEEPER_SET_ACL_CONFIG = "zookeeper.set.acl";
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
   public static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG =
@@ -112,6 +117,18 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.ssl.cipher.suites";
   public static final String KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =
       "kafkastore.ssl.endpoint.identification.algorithm";
+  public static final String KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_CONFIG =
+      "kafkastore.sasl.kerberos.service.name";
+  public static final String KAFKASTORE_SASL_MECHANISM_CONFIG =
+      "kafkastore.sasl.mechanism";
+  public static final String KAFKASTORE_SASL_KERBEROS_KINIT_CMD_CONFIG =
+      "kafkastore.sasl.kerberos.kinit.cmd";
+  public static final String KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG =
+      "kafkastore.sasl.kerberos.min.time.before.relogin";
+  public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG =
+      "kafkastore.sasl.kerberos.ticket.renew.jitter";
+  public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =
+      "kafkastore.sasl.kerberos.ticket.renew.window.factor";
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper url for the Kafka cluster";
   protected static final String KAFKASTORE_BOOTSTRAP_SERVERS_DOC =
@@ -149,6 +166,9 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String HOST_DOC =
       "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
+  protected static final String ZOOKEEPER_SET_ACL_DOC =
+      "Whether or not to set an ACL in ZooKeeper when znodes are created and ZooKeeper SASL authentication is "
+      + "configured. IMPORTANT: if set to `true`, the SASL principal must be the same as the Kafka brokers.";
   protected static final String COMPATIBILITY_DOC =
       "The Avro compatibility type. Valid values are: "
       + "none (new schema can be any valid Avro schema), "
@@ -160,7 +180,7 @@ public class SchemaRegistryConfig extends RestConfig {
       + "for clusters in the slave data center.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
-      + "Values can be `PLAINTEXT` or `SSL`.";
+      + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
   protected static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_DOC =
       "The location of the SSL trust store file.";
   protected static final String KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_DOC =
@@ -189,6 +209,21 @@ public class SchemaRegistryConfig extends RestConfig {
       "A list of cipher suites used for SSL.";
   protected static final String KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC =
       "The endpoint identification algorithm to validate the server hostname using the server certificate.";
+  public static final String KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_DOC =
+      "The Kerberos principal name that the Kafka client runs as. This can be defined either in the JAAS "
+      + "config file or here.";
+  public static final String KAFKASTORE_SASL_MECHANISM_DOC =
+      "The SASL mechanism used for Kafka connections. GSSAPI is the default.";
+  public static final String KAFKASTORE_SASL_KERBEROS_KINIT_CMD_DOC =
+      "The Kerberos kinit command path.";
+  public static final String KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC =
+      "The login time between refresh attempts.";
+  public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_DOC =
+      "The percentage of random jitter added to the renewal time.";
+  public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC =
+      "Login thread will sleep until the specified window factor of time from last refresh to ticket's expiry has "
+      + "been reached, at which time it will try to renew the ticket.";
+  private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
@@ -232,13 +267,15 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.HIGH, HOST_DOC)
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
                 ConfigDef.Importance.HIGH, COMPATIBILITY_DOC)
+        .define(ZOOKEEPER_SET_ACL_CONFIG, ConfigDef.Type.BOOLEAN, ZOOKEEPER_SET_ACL_DEFAULT,
+                ConfigDef.Importance.HIGH, ZOOKEEPER_SET_ACL_DOC)
         .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY, 
                 ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC)
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
                         METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
                         METRICS_JMX_PREFIX_DOC)
         .define(KAFKASTORE_SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
-                KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT, ConfigDef.Importance.MEDIUM,
+                SecurityProtocol.PLAINTEXT.toString(), ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_SECURITY_PROTOCOL_DOC)
         .define(KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG, ConfigDef.Type.STRING,
                 "", ConfigDef.Importance.HIGH,
@@ -281,7 +318,25 @@ public class SchemaRegistryConfig extends RestConfig {
                 KAFKASTORE_SSL_CIPHER_SUITES_DOC)
         .define(KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ConfigDef.Type.STRING,
                 "", ConfigDef.Importance.LOW,
-                KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC);
+                KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
+        .define(KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.MEDIUM,
+                KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_DOC)
+        .define(KAFKASTORE_SASL_MECHANISM_CONFIG, ConfigDef.Type.STRING,
+                "GSSAPI", ConfigDef.Importance.MEDIUM,
+                KAFKASTORE_SASL_MECHANISM_DOC)
+        .define(KAFKASTORE_SASL_KERBEROS_KINIT_CMD_CONFIG, ConfigDef.Type.STRING,
+                "/usr/bin/kinit", ConfigDef.Importance.LOW,
+                KAFKASTORE_SASL_KERBEROS_KINIT_CMD_DOC)
+        .define(KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG, ConfigDef.Type.LONG,
+                60000, ConfigDef.Importance.LOW,
+                KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC)
+        .define(KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG, ConfigDef.Type.DOUBLE,
+                0.05, ConfigDef.Importance.LOW,
+                KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_DOC)
+        .define(KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG, ConfigDef.Type.DOUBLE,
+                0.8, ConfigDef.Importance.LOW,
+                KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC);
   }
   private final AvroCompatibilityLevel compatibilityType;
 
