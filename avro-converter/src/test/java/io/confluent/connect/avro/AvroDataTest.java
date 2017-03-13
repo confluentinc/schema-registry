@@ -16,6 +16,7 @@
 
 package io.confluent.connect.avro;
 
+import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
@@ -321,6 +322,42 @@ public class AvroDataTest {
         .build();
     
     assertEquals(avroRecord, convertedRecord);
+  }
+
+  @Test
+  public void testFromConnectDataOptionalArrayMultiTypes() {
+    org.apache.avro.Schema schemaRecA = org.apache.avro.SchemaBuilder.builder()
+            .record("nestedRecordA").fields().requiredString("a").endRecord();
+    org.apache.avro.Schema schemaRecB = org.apache.avro.SchemaBuilder.builder()
+            .record("nestedRecordB").fields().requiredString("b").endRecord();
+
+    org.apache.avro.Schema multiTypeSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
+            .type(schemaRecA).and()
+            .type(schemaRecB)
+            .endUnion();
+
+    org.apache.avro.Schema schema = org.apache.avro.SchemaBuilder.builder()
+              .record("RecordsHolder").fields()
+              .name("nestedRecords")
+              .type(org.apache.avro.SchemaBuilder
+                    .builder().nullable().array().items()
+                    .type(multiTypeSchema))
+              .noDefault()
+              .endRecord();
+
+
+    GenericRecord recA = new GenericRecordBuilder(schemaRecA)
+            .set("a","aValue").build();
+    GenericRecord recB = new GenericRecordBuilder(schemaRecB)
+            .set("b","bValue").build();
+
+    GenericRecord avroRecord = new GenericRecordBuilder(schema)
+            .set("nestedRecords", Arrays.asList(recA, recB))
+            .build();
+    SchemaAndValue res = avroData.toConnectData(schema, avroRecord);
+
+    Object convertedRecord = avroData.fromConnectData(res.schema(),res.value()); // should not throw an exception
+    assertNotNull(convertedRecord);
   }
 
   @Test
