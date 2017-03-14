@@ -3,6 +3,26 @@
 Changelog
 =========
 
+Version 3.2.0
+-------------
+
+* `PR-428 <https://github.com/confluentinc/schema-registry/pull/428>`_ - Maven Checkstyle
+* `PR-425 <https://github.com/confluentinc/schema-registry/pull/425>`_ - Logical Type support
+* `PR-440 <https://github.com/confluentinc/schema-registry/pull/440>`_ - Documentation changes to reflect pull request 415
+* `PR-451 <https://github.com/confluentinc/schema-registry/pull/451>`_ - Generalize schema incompatibility message.
+* `PR-457 <https://github.com/confluentinc/schema-registry/pull/457>`_ - Update ClusterTestHarness to use o.a.k.common.utils.Time.
+* `PR-458 <https://github.com/confluentinc/schema-registry/pull/458>`_ - CLIENTS-104: Add a few retries during startup to allow for slow metadata propagation after creating the _schemas topic.
+* `PR-464 <https://github.com/confluentinc/schema-registry/pull/464>`_ - Improve request URL building in client
+* `PR-465 <https://github.com/confluentinc/schema-registry/pull/465>`_ - Add topic to error string to make debugging easier.
+* `PR-448 <https://github.com/confluentinc/schema-registry/pull/448>`_ - Fixes the following avro issues (complex union, document preservation, output schema != input schema)
+* `PR-468 <https://github.com/confluentinc/schema-registry/pull/468>`_ - CC-443: AvroData's caches should be synchronized for thread-safety
+* `PR-473 <https://github.com/confluentinc/schema-registry/pull/473>`_ - Fix build to work post KIP-103.
+* `PR-474 <https://github.com/confluentinc/schema-registry/pull/474>`_ - Fix broker endpoint extraction to correctly translate to the non-ListenerName version that clients use to initiate broker connections.
+* `PR-472 <https://github.com/confluentinc/schema-registry/pull/472>`_ - Handle primitive types when specific.avro.reader is true
+* `PR-477 <https://github.com/confluentinc/schema-registry/pull/477>`_ - Docchangefor3.2
+* `PR-488 <https://github.com/confluentinc/schema-registry/pull/488>`_ - Don't re-invoke SchemaBuilder.version() and SchemaBuilder.name() if the value has already been set.
+* `PR-494 <https://github.com/confluentinc/schema-registry/pull/494>`_ - MINOR: Add compact schemas topic doc
+
 Version 3.1.1
 -------------
 No changes
