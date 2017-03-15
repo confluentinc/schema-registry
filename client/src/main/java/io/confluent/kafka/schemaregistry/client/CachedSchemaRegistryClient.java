@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client;
 
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
@@ -20,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -65,7 +67,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   private int getVersionFromRegistry(String subject, Schema schema)
-      throws IOException, RestClientException{
+      throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
         restService.lookUpSubjectVersion(schema.toString(), subject);
     return response.getVersion();
@@ -96,12 +98,23 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized Schema getByID(int id) throws IOException, RestClientException {
-    return getBySubjectAndID(null, id);
+  public Schema getByID(final int id) throws IOException, RestClientException {
+    return getById(id);
   }
 
   @Override
-  public synchronized Schema getBySubjectAndID(String subject, int id)
+  public synchronized Schema getById(int id) throws IOException, RestClientException {
+    return getBySubjectAndId(null, id);
+  }
+
+  @Override
+  public Schema getBySubjectAndID(final String subject, final int id)
+      throws IOException, RestClientException {
+    return getBySubjectAndId(subject, id);
+  }
+
+  @Override
+  public synchronized Schema getBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
 
     Map<Integer, Schema> idSchemaMap;
@@ -122,9 +135,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public SchemaMetadata getSchemaMetadata(String subject, int version) throws IOException, RestClientException {
+  public SchemaMetadata getSchemaMetadata(String subject, int version)
+      throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
-      = restService.getVersion(subject, version);
+        = restService.getVersion(subject, version);
     int id = response.getId();
     String schema = response.getSchema();
     return new SchemaMetadata(id, version, schema);
@@ -134,7 +148,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public synchronized SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
-      = restService.getLatestVersion(subject);
+        = restService.getLatestVersion(subject);
     int id = response.getId();
     int version = response.getVersion();
     String schema = response.getSchema();
@@ -143,7 +157,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public synchronized int getVersion(String subject, Schema schema)
-      throws IOException, RestClientException{
+      throws IOException, RestClientException {
     Map<Schema, Integer> schemaVersionMap;
     if (versionCache.containsKey(subject)) {
       schemaVersionMap = versionCache.get(subject);
@@ -154,7 +168,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
     if (schemaVersionMap.containsKey(schema)) {
       return schemaVersionMap.get(schema);
-    }  else {
+    } else {
       if (schemaVersionMap.size() >= identityMapCapacity) {
         throw new IllegalStateException("Too many schema objects created for " + subject + "!");
       }
@@ -165,12 +179,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public boolean testCompatibility(String subject, Schema schema) throws IOException, RestClientException {
+  public boolean testCompatibility(String subject, Schema schema)
+      throws IOException, RestClientException {
     return restService.testCompatibility(schema.toString(), subject, "latest");
   }
 
   @Override
-  public String updateCompatibility(String subject, String compatibility) throws IOException, RestClientException {
+  public String updateCompatibility(String subject, String compatibility)
+      throws IOException, RestClientException {
     ConfigUpdateRequest response = restService.updateCompatibility(compatibility, subject);
     return response.getCompatibilityLevel();
   }

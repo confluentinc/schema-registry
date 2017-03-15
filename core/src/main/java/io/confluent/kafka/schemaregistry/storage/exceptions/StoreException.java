@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.storage.exceptions;
 
 /**
- * Error while performing an operation on a 
+ * Error while performing an operation on a
  * * <code>io.confluent.kafka.schemaregistry.storage.Store</code>
  */
 public class StoreException extends Exception {

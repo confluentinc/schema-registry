@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
@@ -36,6 +37,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import kafka.utils.VerifiableProperties;
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSerDe {
+
   public static final String SCHEMA_REGISTRY_SCHEMA_VERSION_PROP =
       "schema.registry.schema.version";
 
@@ -79,14 +81,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   }
 
   /**
-   * Deserializes the payload without including schema information for primitive types, maps, and arrays. Just the resulting
-   * deserialized object is returned.
+   * Deserializes the payload without including schema information for primitive types, maps, and
+   * arrays. Just the resulting deserialized object is returned.
    *
-   * This behavior is the norm for Decoders/Deserializers.
+   * <p>This behavior is the norm for Decoders/Deserializers.
    *
    * @param payload serialized data
    * @return the deserialized object
-   * @throws SerializationException
    */
   protected Object deserialize(byte[] payload) throws SerializationException {
     return deserialize(false, null, null, payload, null);
@@ -95,20 +96,20 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   /**
    * Just like single-parameter version but accepts an Avro schema to use for reading
    *
-   * @param payload serialized data
+   * @param payload      serialized data
    * @param readerSchema schema to use for Avro read (optional, enables Avro projection)
    * @return the deserialized object
-   * @throws SerializationException
    */
   protected Object deserialize(byte[] payload, Schema readerSchema) throws SerializationException {
     return deserialize(false, null, null, payload, readerSchema);
   }
 
-  // The Object return type is a bit messy, but this is the simplest way to have flexible decoding and not duplicate
-  // deserialization code multiple times for different variants.
-  protected Object deserialize(boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload, Schema readerSchema) throws SerializationException {
-    // Even if the caller requests schema & version, if the payload is null we cannot include it. The caller must handle
-    // this case.
+  // The Object return type is a bit messy, but this is the simplest way to have
+  // flexible decoding and not duplicate deserialization code multiple times for different variants.
+  protected Object deserialize(boolean includeSchemaAndVersion, String topic, Boolean isKey,
+                               byte[] payload, Schema readerSchema) throws SerializationException {
+    // Even if the caller requests schema & version, if the payload is null we cannot include it.
+    // The caller must handle this case.
     if (payload == null) {
       return null;
     }
@@ -118,7 +119,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
       String subject = includeSchemaAndVersion ? getSubjectName(topic, isKey) : null;
-      Schema schema = schemaRegistry.getBySubjectAndID(subject, id);
+      Schema schema = schemaRegistry.getBySubjectAndId(subject, id);
       int length = buffer.limit() - 1 - idSize;
       final Object result;
       if (schema.getType().equals(Schema.Type.BYTES)) {
@@ -128,7 +129,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       } else {
         int start = buffer.position() + buffer.arrayOffset();
         DatumReader reader = getDatumReader(schema, readerSchema);
-        Object object = reader.read(null, decoderFactory.binaryDecoder(buffer.array(), start, length, null));
+        Object
+            object =
+            reader.read(null, decoderFactory.binaryDecoder(buffer.array(), start, length, null));
 
         if (schema.getType().equals(Schema.Type.STRING)) {
           object = object.toString(); // Utf8 -> String
@@ -178,15 +181,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   }
 
   /**
-   * Deserializes the payload and includes schema information, with version information from the schema registry embedded
-   * in the schema.
+   * Deserializes the payload and includes schema information, with version information from the
+   * schema registry embedded in the schema.
    *
    * @param payload the serialized data
    * @return a GenericContainer with the schema and data, either as a {@link NonRecordContainer},
-   *         {@link org.apache.avro.generic.GenericRecord}, or {@link SpecificRecord}
-   * @throws SerializationException
+   * {@link org.apache.avro.generic.GenericRecord}, or {@link SpecificRecord}
    */
-  protected GenericContainer deserializeWithSchemaAndVersion(String topic, boolean isKey, byte[] payload) throws SerializationException {
+  protected GenericContainer deserializeWithSchemaAndVersion(String topic, boolean isKey,
+                                                             byte[] payload)
+      throws SerializationException {
     return (GenericContainer) deserialize(true, topic, isKey, payload, null);
   }
 
@@ -215,16 +219,22 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         try {
           readerSchema = readerClass.newInstance().getSchema();
         } catch (InstantiationException e) {
-          throw new SerializationException(writerSchema.getFullName() + " specified by the " +
-            "writers schema could not be instantiated to find the readers schema.");
+          throw new SerializationException(writerSchema.getFullName()
+                                           + " specified by the "
+                                           + "writers schema could not be instantiated to "
+                                           + "find the readers schema.");
         } catch (IllegalAccessException e) {
-          throw new SerializationException(writerSchema.getFullName() + " specified by the " +
-            "writers schema is not allowed to be instantiated to find the readers schema.");
+          throw new SerializationException(writerSchema.getFullName()
+                                           + " specified by the "
+                                           + "writers schema is not allowed to be instantiated "
+                                           + "to find the readers schema.");
         }
         readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
       } else {
-        throw new SerializationException("Could not find class " +  writerSchema.getFullName() +
-          " specified in writer's schema whilst finding reader's schema for a SpecificRecord.");
+        throw new SerializationException("Could not find class "
+                                         + writerSchema.getFullName()
+                                         + " specified in writer's schema whilst finding reader's "
+                                         + "schema for a SpecificRecord.");
       }
     }
     return readerSchema;

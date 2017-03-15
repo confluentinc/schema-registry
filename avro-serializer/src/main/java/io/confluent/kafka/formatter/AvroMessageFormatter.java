@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.formatter;
 
 import org.apache.avro.AvroRuntimeException;
@@ -41,12 +42,12 @@ import kafka.common.MessageFormatter;
  * all started. Second, make sure the jar for AvroMessageFormatter and its dependencies are included
  * in the classpath of kafka-console-consumer.sh. Then run the following command.
  *
- * 1. To read only the value of the messages in JSON
+ * <p>1. To read only the value of the messages in JSON
  * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
  *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
  *   --property schema.registry.url=http://localhost:8081
  *
- * 2. To read both the key and the value of the messages in JSON
+ * <p>2. To read both the key and the value of the messages in JSON
  * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
  *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
  *   --property schema.registry.url=http://localhost:8081 \

@@ -13,11 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
 import io.confluent.rest.exceptions.RestException;
 
 public class InvalidCompatibilityException extends RestException {
+
   private static final int UNPROCESSABLE_ENTITY_STATUS_CODE = 422;
 
   public InvalidCompatibilityException() {

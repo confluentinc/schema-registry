@@ -13,11 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class Schema implements Comparable<Schema> {
+
   private String subject;
   private Integer version;
   private Integer id;

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -21,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 
 public class RegisterSchemaResponse {
+
   private int id;
 
   public static RegisterSchemaResponse fromJson(String json) throws IOException {
