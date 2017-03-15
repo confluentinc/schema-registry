@@ -874,7 +874,7 @@ public class AvroData {
       fieldAvroSchema.withDefault(defaultValueFromConnect(fieldSchema, fieldSchema.defaultValue()));
     } else {
       if (fieldSchema.isOptional()) {
-        fieldAvroSchema.withDefault(null);
+        fieldAvroSchema.withDefault(JsonNodeFactory.instance.nullNode());
       } else {
         fieldAvroSchema.noDefault();
       }

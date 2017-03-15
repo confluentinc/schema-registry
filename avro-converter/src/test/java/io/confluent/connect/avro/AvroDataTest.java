@@ -245,6 +245,30 @@ public class AvroDataTest {
   }
   
   @Test
+  public void testFromConnectOptionalWithDefaultNull() {
+    Schema schema = SchemaBuilder.struct()
+        .field("optionalBool", SchemaBuilder.bool().optional().defaultValue(null).build())
+        .build();
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+    org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
+        .name("optionalBool").type(org.apache.avro.SchemaBuilder.builder()
+            .unionOf().nullType().and().booleanType().endUnion()).withDefault(null)
+        .endRecord();
+
+    assertEquals(expectedAvroSchema, avroSchema);
+
+    Struct struct = new Struct(schema)
+        .put("optionalBool", true);
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
+    org.apache.avro.generic.GenericRecord avroRecord = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
+        .set("optionalBool", true)
+        .build();
+
+    assertEquals(avroRecord, convertedRecord);
+  }
+
+  @Test
   public void testFromConnectOptionalComplex() {
     Schema optionalStructSchema = SchemaBuilder.struct().optional()
         .name("optionalStruct")
