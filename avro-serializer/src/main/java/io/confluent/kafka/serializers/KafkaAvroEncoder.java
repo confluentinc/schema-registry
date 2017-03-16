@@ -13,13 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.serializers;
 
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.SerializationException;
-
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import kafka.serializer.Encoder;
 import kafka.utils.VerifiableProperties;

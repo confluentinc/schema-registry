@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
@@ -34,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
  * Common fields and helper methods for both the serializer and the deserializer.
  */
 public abstract class AbstractKafkaAvroSerDe {
+
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
 
@@ -65,9 +67,9 @@ public abstract class AbstractKafkaAvroSerDe {
   protected void configureClientProperties(AbstractKafkaAvroSerDeConfig config) {
     try {
       List<String> urls = config.getSchemaRegistryUrls();
-      int  maxSchemaObject = config.getMaxSchemasPerSubject();
+      int maxSchemaObject = config.getMaxSchemasPerSubject();
 
-      if(null==schemaRegistry){
+      if (null == schemaRegistry) {
         schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject);
       }
     } catch (io.confluent.common.config.ConfigException e) {
@@ -87,7 +89,8 @@ public abstract class AbstractKafkaAvroSerDe {
   }
 
   /**
-   * Get the subject name used by the old Encoder interface, which relies only on the value type rather than the topic.
+   * Get the subject name used by the old Encoder interface, which relies only on the value type
+   * rather than the topic.
    */
   protected static String getOldSubjectName(Object value) {
     if (value instanceof GenericContainer) {
@@ -118,8 +121,8 @@ public abstract class AbstractKafkaAvroSerDe {
       return ((GenericContainer) object).getSchema();
     } else {
       throw new IllegalArgumentException(
-          "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, " +
-          "Float, Double, String, byte[] and IndexedRecord");
+          "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, "
+          + "Float, Double, String, byte[] and IndexedRecord");
     }
   }
 
@@ -127,11 +130,11 @@ public abstract class AbstractKafkaAvroSerDe {
     return schemaRegistry.register(subject, schema);
   }
 
-  public Schema getByID(int id) throws IOException, RestClientException {
-    return schemaRegistry.getByID(id);
+  public Schema getById(int id) throws IOException, RestClientException {
+    return schemaRegistry.getById(id);
   }
 
-  public Schema getBySubjectAndID(String subject, int id) throws IOException, RestClientException {
-    return schemaRegistry.getBySubjectAndID(subject, id);
+  public Schema getBySubjectAndId(String subject, int id) throws IOException, RestClientException {
+    return schemaRegistry.getBySubjectAndId(subject, id);
   }
 }

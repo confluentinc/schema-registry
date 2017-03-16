@@ -31,8 +31,10 @@ import java.util.Map;
 public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
   public static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
-  public static final String SCHEMA_REGISTRY_URL_DOC =
-      "Comma-separated list of URLs for schema registry instances that can be used to register or look up schemas.";
+  public static final String
+      SCHEMA_REGISTRY_URL_DOC =
+      "Comma-separated list of URLs for schema registry instances that can be used to register "
+      + "or look up schemas.";
 
   public static final String MAX_SCHEMAS_PER_SUBJECT_CONFIG = "max.schemas.per.subject";
   public static final int MAX_SCHEMAS_PER_SUBJECT_DEFAULT = 1000;
@@ -51,11 +53,11 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
     super(config, props);
   }
 
-  public int getMaxSchemasPerSubject(){
+  public int getMaxSchemasPerSubject() {
     return this.getInt(MAX_SCHEMAS_PER_SUBJECT_CONFIG);
   }
 
-  public List<String> getSchemaRegistryUrls(){
+  public List<String> getSchemaRegistryUrls() {
     return this.getList(SCHEMA_REGISTRY_URL_CONFIG);
   }
 

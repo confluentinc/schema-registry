@@ -13,10 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
+
 package io.confluent.kafka.schemaregistry.maven;
 
 import com.google.inject.internal.util.Preconditions;
+
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+
 import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -31,6 +34,7 @@ import java.util.Map;
 
 @Mojo(name = "register")
 public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
+
   @Parameter(required = true)
   Map<String, File> subjects = new HashMap<>();
   Map<String, Integer> schemaVersions;
@@ -45,7 +49,8 @@ public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
       try {
         if (getLog().isDebugEnabled()) {
           getLog().debug(
-              String.format("Calling register('%s', '%s')", kvp.getKey(), kvp.getValue().toString(true))
+              String.format("Calling register('%s', '%s')", kvp.getKey(),
+                            kvp.getValue().toString(true))
           );
         }
 
@@ -66,6 +71,8 @@ public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
       }
     }
 
-    Preconditions.checkState(errors == 0, "One or more exceptions were encountered while registering the schemas.");
+    Preconditions.checkState(errors == 0,
+                             "One or more exceptions were encountered while registering the "
+                             + "schemas.");
   }
 }

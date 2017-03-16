@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
+
 package io.confluent.kafka.serializers;
 
 import io.confluent.common.config.AbstractConfig;
@@ -25,7 +26,7 @@ public class KafkaJsonDecoderConfig extends AbstractConfig {
   public static final String FAIL_UNKNOWN_PROPERTIES = "json.fail.unknown.properties";
   public static final boolean FAIL_UNKNOWN_PROPERTIES_DEFAULT = true;
   public static final String FAIL_UNKNOWN_PROPERTIES_DOC =
-          "Whether to fail deserialization if unknown JSON properties are encountered";
+      "Whether to fail deserialization if unknown JSON properties are encountered";
 
   public KafkaJsonDecoderConfig(Map<?, ?> props) {
     super(baseConfig(), props);
@@ -37,8 +38,8 @@ public class KafkaJsonDecoderConfig extends AbstractConfig {
 
   protected static ConfigDef baseConfig() {
     return new ConfigDef()
-            .define(FAIL_UNKNOWN_PROPERTIES, ConfigDef.Type.BOOLEAN, FAIL_UNKNOWN_PROPERTIES_DEFAULT,
-                    ConfigDef.Importance.LOW, FAIL_UNKNOWN_PROPERTIES_DOC);
+        .define(FAIL_UNKNOWN_PROPERTIES, ConfigDef.Type.BOOLEAN, FAIL_UNKNOWN_PROPERTIES_DEFAULT,
+                ConfigDef.Importance.LOW, FAIL_UNKNOWN_PROPERTIES_DOC);
   }
 
 }

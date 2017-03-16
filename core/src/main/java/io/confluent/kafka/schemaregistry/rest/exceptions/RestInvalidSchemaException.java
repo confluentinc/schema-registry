@@ -20,8 +20,9 @@ import io.confluent.rest.exceptions.RestConstraintViolationException;
 
 /**
  * Indicates an invalid schema that does not conform to the expected format of the schema
-*/
+ */
 public class RestInvalidSchemaException extends RestConstraintViolationException {
+
   public static final int ERROR_CODE = Errors.INVALID_SCHEMA_ERROR_CODE;
 
   public RestInvalidSchemaException() {

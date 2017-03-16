@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import org.slf4j.Logger;
@@ -93,8 +94,11 @@ public class SubjectVersionsResource {
       }
     } catch (SchemaRegistryStoreException e) {
       errorMessage =
-          "Error while retrieving schema for subject " + subject + " with version " +
-          version + " from the schema registry";
+          "Error while retrieving schema for subject "
+          + subject
+          + " with version "
+          + version
+          + " from the schema registry";
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
     } catch (InvalidVersionException e) {
@@ -111,8 +115,9 @@ public class SubjectVersionsResource {
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
-    String errorMessage = "Error while validating that subject " +
-                          subject + " exists in the registry";
+    String errorMessage = "Error while validating that subject "
+                          + subject
+                          + " exists in the registry";
     try {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
@@ -122,7 +127,8 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    errorMessage = "Error while listing all versions for subject " + subject;
+    errorMessage = "Error while listing all versions for subject "
+                   + subject;
     try {
       allSchemasForThisTopic = schemaRegistry.getAllVersions(subject);
     } catch (SchemaRegistryStoreException e) {

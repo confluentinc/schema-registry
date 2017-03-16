@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.avro;
 
 public enum AvroCompatibilityLevel {
@@ -56,5 +57,5 @@ public enum AvroCompatibilityLevel {
       return null;
     }
   }
-  
+
 }

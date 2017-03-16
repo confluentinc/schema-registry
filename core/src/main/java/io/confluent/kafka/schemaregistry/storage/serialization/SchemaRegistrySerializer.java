@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.storage.serialization;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -76,8 +77,7 @@ public class SchemaRegistrySerializer
       try {
         Map<Object, Object> keyObj = null;
         keyObj = new ObjectMapper().readValue(key,
-                                              new TypeReference<Map<Object, Object>>() {
-                                              });
+                                              new TypeReference<Map<Object, Object>>() {});
         keyType = SchemaRegistryKeyType.forName((String) keyObj.get("keytype"));
         if (keyType == SchemaRegistryKeyType.CONFIG) {
           schemaKey = new ObjectMapper().readValue(key, ConfigKey.class);
@@ -95,8 +95,8 @@ public class SchemaRegistrySerializer
           type = SchemaRegistryKeyType.SCHEMA.name();
         } else if (keyType == SchemaRegistryKeyType.NOOP) {
           type = SchemaRegistryKeyType.NOOP.name();
-        } 
-        
+        }
+
         throw new SerializationException("Failed to deserialize " + type + " key", e);
       }
     } catch (IOException e) {
@@ -108,8 +108,9 @@ public class SchemaRegistrySerializer
   /**
    * @param key   Typed key corresponding to this value
    * @param value Bytes of the serialized value
-   * @return Typed deserialized value. Must be one of {@link io.confluent.kafka.schemaregistry.storage.ConfigValue}
-   * or {@link io.confluent.kafka.schemaregistry.storage.SchemaValue}
+   * @return Typed deserialized value. Must be one of
+   *     {@link io.confluent.kafka.schemaregistry.storage.ConfigValue}
+   *     or {@link io.confluent.kafka.schemaregistry.storage.SchemaValue}
    */
   @Override
   public SchemaRegistryValue deserializeValue(SchemaRegistryKey key, byte[] value)

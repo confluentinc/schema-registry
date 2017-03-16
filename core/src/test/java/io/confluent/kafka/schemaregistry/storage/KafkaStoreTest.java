@@ -16,7 +16,10 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import kafka.admin.AdminUtils;
+import kafka.admin.RackAwareMode;
 import kafka.cluster.Broker;
+import kafka.log.LogConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.SecurityProtocol;
@@ -334,5 +337,18 @@ public class KafkaStoreTest extends ClusterTestHarness {
     KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, props);
 
     assertTrue(kafkaStore.getKafkaStoreReaderThread().getConsumerProperty(org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG).startsWith("schema-registry-"));
+  }
+
+  @Test(expected=IllegalStateException.class)
+  public void testMandatoryCompationPolicy() {
+    Properties kafkaProps = new Properties();
+    Properties topicProps = new Properties();
+    topicProps.put(LogConfig.CleanupPolicyProp(), "delete");
+
+    AdminUtils.createTopic(zkUtils, SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 1, 1, topicProps, RackAwareMode.Enforced$.MODULE$);
+
+    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+
+    KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, kafkaProps);
   }
 }
