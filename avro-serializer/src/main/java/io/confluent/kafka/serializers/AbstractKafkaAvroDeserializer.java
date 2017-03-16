@@ -43,6 +43,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
 
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
+  protected boolean forceNewSpecificDataInstance = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<String, Schema>();
 
 
@@ -54,6 +55,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     configureClientProperties(config);
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
+    forceNewSpecificDataInstance = config
+            .getBoolean(KafkaAvroDeserializerConfig.AVRO_FORCE_NEW_SPECIFIC_DATA_CONFIG);
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -201,7 +204,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       if (readerSchema == null) {
         readerSchema = getReaderSchema(writerSchema);
       }
-      return new SpecificDatumReader(writerSchema, readerSchema);
+      if (useSpecificAvroReader && forceNewSpecificDataInstance) {
+          return new SpecificDatumReader(writerSchema, readerSchema, new SpecificData());
+      } else {
+          return new SpecificDatumReader(writerSchema, readerSchema);
+      }
     } else {
       if (readerSchema == null) {
         return new GenericDatumReader(writerSchema);

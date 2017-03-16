@@ -28,13 +28,19 @@ public class KafkaAvroDeserializerConfig extends AbstractKafkaAvroSerDeConfig {
   public static final boolean SPECIFIC_AVRO_READER_DEFAULT = false;
   public static final String SPECIFIC_AVRO_READER_DOC =
       "If true, tries to look up the SpecificRecord class ";
+  
+  public static final String AVRO_FORCE_NEW_SPECIFIC_DATA_CONFIG = "force.new.specific.avro.instance";
+  public static final boolean AVRO_FORCE_NEW_SPECIFIC_DATA_DEFAULT = false;
+  public static final String AVRO_FORCE_NEW_SPECIFIC_DATA_DOC = "If true, it passes a new instace of SpecificData to SpecificDatumReader ";
 
   private static ConfigDef config;
 
   static {
     config = baseConfigDef()
         .define(SPECIFIC_AVRO_READER_CONFIG, Type.BOOLEAN, SPECIFIC_AVRO_READER_DEFAULT,
-                Importance.LOW, SPECIFIC_AVRO_READER_DOC);
+                Importance.LOW, SPECIFIC_AVRO_READER_DOC)
+        .define(AVRO_FORCE_NEW_SPECIFIC_DATA_CONFIG, Type.BOOLEAN, AVRO_FORCE_NEW_SPECIFIC_DATA_DEFAULT,
+                Importance.LOW, AVRO_FORCE_NEW_SPECIFIC_DATA_DOC);
   }
 
   public KafkaAvroDeserializerConfig(Map<?, ?> props) {
