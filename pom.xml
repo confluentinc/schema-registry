@@ -173,7 +173,8 @@
                         </configuration>
                     </execution>
                     <execution>
-                        <id>slow-tests</id>
+                        <id>integration-test</id>
+                        <phase>integration-test</phase>
                         <goals>
                             <goal>test</goal>
                         </goals>
