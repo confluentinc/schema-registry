@@ -91,8 +91,8 @@ Development
 -----------
 
 To build a development version, you may need a development versions of
-[common](https://github.com/confluentinc/common>) and
-[rest-utils](https://github.com/confluentinc/rest-utils>).  After
+[common](https://github.com/confluentinc/common) and
+[rest-utils](https://github.com/confluentinc/rest-utils).  After
 installing these, you can build the Schema Registry
 with Maven.
 
