@@ -15,12 +15,14 @@
  */
 package io.confluent.kafka.schemaregistry;
 
+import io.confluent.common.utils.IntegrationTest;
 import kafka.utils.CoreUtils;
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -45,6 +47,7 @@ import scala.collection.JavaConversions;
  * Kafka's ZookeeperTestHarness and KafkaServerTestHarness traits combined and ported to Java with
  * the addition of the REST proxy. Defaults to a 1-ZK, 3-broker, 1 REST proxy cluster.
  */
+@Category(IntegrationTest.class)
 public abstract class ClusterTestHarness {
 
   public static final int DEFAULT_NUM_BROKERS = 1;
