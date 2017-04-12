@@ -3,6 +3,16 @@
 Changelog
 =========
 
+Version 3.2.1
+-------------
+
+* `PR-503 <https://github.com/confluentinc/schema-registry/pull/503>`_ - CLIENTS-244: Update 3.2.0 changelog
+* `PR-499 <https://github.com/confluentinc/schema-registry/pull/499>`_ - making sure schema registry doesn't start with uncompacted topic
+* `PR-497 <https://github.com/confluentinc/schema-registry/pull/497>`_ - CLIENTS-103: Fix ArrayIndexOutOfBoundsException in SchemaRegistryPerformance by counting the registration attempt even if it failed.
+* `PR-493 <https://github.com/confluentinc/schema-registry/pull/493>`_ - Fixes for CLIENTS-257
+* `PR-494 <https://github.com/confluentinc/schema-registry/pull/494>`_ - MINOR: Add compact schemas topic doc
+* `PR-458 <https://github.com/confluentinc/schema-registry/pull/458>`_ - CLIENTS-104: Add a few retries during startup to allow for slow metadata propagation after creating the _schemas topic.
+
 Version 3.2.0
 -------------
 
