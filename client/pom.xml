@@ -44,5 +44,11 @@
             <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>common-utils</artifactId>
+            <version>${confluent-common.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
