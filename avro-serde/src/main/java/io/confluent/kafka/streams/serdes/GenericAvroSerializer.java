@@ -1,5 +1,5 @@
-/**
- * Copyright 2016 Confluent Inc.
+/*
+ * Copyright 2017 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,37 +13,45 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.streams.serde;
 
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
+package io.confluent.kafka.streams.serdes;
+
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+
 public class GenericAvroSerializer implements Serializer<GenericRecord> {
 
-  KafkaAvroSerializer inner;
+  private final KafkaAvroSerializer inner;
 
   /**
-   * Constructor used by Kafka Streams.
+   * Implementation detail: This constructor is used by Kafka's Streams API.
    */
   public GenericAvroSerializer() {
     inner = new KafkaAvroSerializer();
   }
 
-  public GenericAvroSerializer(SchemaRegistryClient client) {
+  public GenericAvroSerializer(final SchemaRegistryClient client) {
     inner = new KafkaAvroSerializer(client);
   }
 
-  @Override
-  public void configure(Map<String, ?> configs, boolean isKey) {
-    inner.configure(configs, isKey);
+  public GenericAvroSerializer(final SchemaRegistryClient client,
+                               final Map<String, ?> serializerConfig) {
+    inner = new KafkaAvroSerializer(client, serializerConfig);
   }
 
   @Override
-  public byte[] serialize(String topic, GenericRecord record) {
+  public void configure(final Map<String, ?> serializerConfig,
+                        final boolean isSerializerForRecordKeys) {
+    inner.configure(serializerConfig, isSerializerForRecordKeys);
+  }
+
+  @Override
+  public byte[] serialize(final String topic, final GenericRecord record) {
     return inner.serialize(topic, record);
   }
 
@@ -51,4 +59,5 @@ public class GenericAvroSerializer implements Serializer<GenericRecord> {
   public void close() {
     inner.close();
   }
+
 }

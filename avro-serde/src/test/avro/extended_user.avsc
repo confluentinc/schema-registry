@@ -1,0 +1,16 @@
+{
+  "namespace": "io.confluent.kafka.example",
+  "doc": "Extending the User type to test projection",
+  "type": "record",
+  "name": "ExtendedUser",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "name": "age",
+      "type": "int"
+    }
+  ]
+}
