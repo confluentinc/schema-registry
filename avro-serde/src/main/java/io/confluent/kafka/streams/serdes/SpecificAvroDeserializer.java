@@ -28,9 +28,6 @@ public class SpecificAvroDeserializer<T extends org.apache.avro.specific.Specifi
 
   private final KafkaAvroDeserializer inner;
 
-  /**
-   * Implementation detail: This constructor is used by Kafka's Streams API.
-   */
   public SpecificAvroDeserializer() {
     inner = new KafkaAvroDeserializer();
   }

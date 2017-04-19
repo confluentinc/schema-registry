@@ -28,9 +28,6 @@ public class SpecificAvroSerializer<T extends org.apache.avro.specific.SpecificR
 
   private final KafkaAvroSerializer inner;
 
-  /**
-   * Implementation detail: This constructor is used by Kafka's Streams API.
-   */
   public SpecificAvroSerializer() {
     inner = new KafkaAvroSerializer();
   }

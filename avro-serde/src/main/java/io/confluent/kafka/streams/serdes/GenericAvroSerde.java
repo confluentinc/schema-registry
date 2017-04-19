@@ -61,9 +61,6 @@ public class GenericAvroSerde implements Serde<GenericRecord> {
 
   private final Serde<GenericRecord> inner;
 
-  /**
-   * Implementation detail: This constructor is used by Kafka's Streams API.
-   */
   public GenericAvroSerde() {
     inner = Serdes.serdeFrom(new GenericAvroSerializer(), new GenericAvroDeserializer());
   }

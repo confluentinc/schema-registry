@@ -61,9 +61,6 @@ public class SpecificAvroSerde<T extends org.apache.avro.specific.SpecificRecord
 
   private final Serde<T> inner;
 
-  /**
-   * Implementation detail: This constructor is used by Kafka's Streams API.
-   */
   public SpecificAvroSerde() {
     inner = Serdes.serdeFrom(new SpecificAvroSerializer<T>(), new SpecificAvroDeserializer<T>());
   }

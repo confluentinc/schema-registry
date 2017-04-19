@@ -28,9 +28,6 @@ public class GenericAvroDeserializer implements Deserializer<GenericRecord> {
 
   private final KafkaAvroDeserializer inner;
 
-  /**
-   * Implementation detail: This constructor is used by Kafka's Streams API.
-   */
   public GenericAvroDeserializer() {
     inner = new KafkaAvroDeserializer();
   }
