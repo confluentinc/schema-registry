@@ -18,7 +18,6 @@ package io.confluent.kafka.streams.serdes;
 
 import org.apache.kafka.common.serialization.Serializer;
 
-import java.util.Collections;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -36,15 +35,11 @@ public class SpecificAvroSerializer<T extends org.apache.avro.specific.SpecificR
     inner = new KafkaAvroSerializer();
   }
 
-  public SpecificAvroSerializer(final SchemaRegistryClient client) {
-    this(client, Collections.<String, Object>emptyMap());
-  }
-
-  public SpecificAvroSerializer(final SchemaRegistryClient client,
-                                final Map<String, ?> serializerConfig) {
-    inner = new KafkaAvroSerializer(
-        client,
-        ConfigurationUtils.withSpecificAvroEnabled(serializerConfig));
+  /**
+   * For testing purposes only.
+   */
+  SpecificAvroSerializer(final SchemaRegistryClient client) {
+    inner = new KafkaAvroSerializer(client);
   }
 
   @Override

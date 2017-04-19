@@ -34,23 +34,24 @@ public class GenericAvroSerdeTest {
 
   private static final String ANY_TOPIC = "any-topic";
 
-  private static GenericAvroSerde createConfiguredSerde() {
+  private static GenericAvroSerde createConfiguredSerdeForRecordValues() {
     SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
+    GenericAvroSerde serde = new GenericAvroSerde(schemaRegistryClient);
     Map<String, Object> serdeConfig = new HashMap<>();
     serdeConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
-    return new GenericAvroSerde(schemaRegistryClient, serdeConfig, serdeConfig);
+    serde.configure(serdeConfig, false);
+    return serde;
   }
 
   @Test
   public void shouldRoundTripRecords() {
     // Given
-    GenericAvroSerde serde = createConfiguredSerde();
+    GenericAvroSerde serde = createConfiguredSerdeForRecordValues();
     GenericRecord record = AvroUtils.createGenericRecord();
 
     // When
     GenericRecord roundtrippedRecord = serde.deserializer().deserialize(
-        ANY_TOPIC,
-        serde.serializer().serialize(ANY_TOPIC, record));
+        ANY_TOPIC, serde.serializer().serialize(ANY_TOPIC, record));
 
     // Then
     assertThat(roundtrippedRecord, equalTo(record));
@@ -62,12 +63,11 @@ public class GenericAvroSerdeTest {
   @Test
   public void shouldRoundTripNullRecordsToNull() {
     // Given
-    GenericAvroSerde serde = createConfiguredSerde();
+    GenericAvroSerde serde = createConfiguredSerdeForRecordValues();
 
     // When
     GenericRecord roundtrippedRecord = serde.deserializer().deserialize(
-        ANY_TOPIC,
-        serde.serializer().serialize(ANY_TOPIC, null));
+        ANY_TOPIC, serde.serializer().serialize(ANY_TOPIC, null));
     // Then
     assertThat(roundtrippedRecord, nullValue());
 

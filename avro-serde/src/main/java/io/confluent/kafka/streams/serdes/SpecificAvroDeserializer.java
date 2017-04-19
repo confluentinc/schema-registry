@@ -18,7 +18,6 @@ package io.confluent.kafka.streams.serdes;
 
 import org.apache.kafka.common.serialization.Deserializer;
 
-import java.util.Collections;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -36,15 +35,11 @@ public class SpecificAvroDeserializer<T extends org.apache.avro.specific.Specifi
     inner = new KafkaAvroDeserializer();
   }
 
-  public SpecificAvroDeserializer(final SchemaRegistryClient client) {
-    this(client, Collections.<String, Object>emptyMap());
-  }
-
-  public SpecificAvroDeserializer(final SchemaRegistryClient client,
-                                  final Map<String, ?> deserializerConfig) {
-    inner = new KafkaAvroDeserializer(
-        client,
-        ConfigurationUtils.withSpecificAvroEnabled(deserializerConfig));
+  /**
+   * For testing purposes only.
+   */
+  SpecificAvroDeserializer(final SchemaRegistryClient client) {
+    inner = new KafkaAvroDeserializer(client);
   }
 
   @Override

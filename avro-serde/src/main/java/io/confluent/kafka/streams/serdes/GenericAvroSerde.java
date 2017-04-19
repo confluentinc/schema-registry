@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 
-import java.util.Collections;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -69,19 +68,15 @@ public class GenericAvroSerde implements Serde<GenericRecord> {
     inner = Serdes.serdeFrom(new GenericAvroSerializer(), new GenericAvroDeserializer());
   }
 
-  public GenericAvroSerde(final SchemaRegistryClient client) {
-    this(client, Collections.<String, Object>emptyMap(), Collections.<String, Object>emptyMap());
-  }
-
-  public GenericAvroSerde(final SchemaRegistryClient client,
-                          final Map<String, ?> serializerConfig,
-                          final Map<String, ?> deserializerConfig) {
+  /**
+   * For testing purposes only.
+   */
+  GenericAvroSerde(final SchemaRegistryClient client) {
     if (client == null) {
       throw new IllegalArgumentException("schema registry client must not be null");
     }
-    inner = Serdes.serdeFrom(
-        new GenericAvroSerializer(client, serializerConfig),
-        new GenericAvroDeserializer(client, deserializerConfig));
+    inner = Serdes.serdeFrom(new GenericAvroSerializer(client),
+        new GenericAvroDeserializer(client));
   }
 
   @Override

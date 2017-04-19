@@ -36,17 +36,19 @@ public class SpecificAvroSerdeTest {
   private static final String ANY_TOPIC = "any-topic";
 
   private static <T extends org.apache.avro.specific.SpecificRecord> SpecificAvroSerde<T>
-  createConfiguredSerde() {
+  createConfiguredSerdeForRecordValues() {
     SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
+    SpecificAvroSerde<T> serde = new SpecificAvroSerde<>(schemaRegistryClient);
     Map<String, Object> serdeConfig = new HashMap<>();
     serdeConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
-    return new SpecificAvroSerde<>(schemaRegistryClient, serdeConfig, serdeConfig);
+    serde.configure(serdeConfig, false);
+    return serde;
   }
 
   @Test
   public void shouldRoundTripRecords() {
     // Given
-    SpecificAvroSerde<User> serde = createConfiguredSerde();
+    SpecificAvroSerde<User> serde = createConfiguredSerdeForRecordValues();
     User record = User.newBuilder().setName("alice").build();
 
     // When
@@ -64,7 +66,7 @@ public class SpecificAvroSerdeTest {
   @Test
   public void shouldRoundTripNullRecordsToNull() {
     // Given
-    SpecificAvroSerde<User> serde = createConfiguredSerde();
+    SpecificAvroSerde<User> serde = createConfiguredSerdeForRecordValues();
 
     // When
     User roundtrippedRecord = serde.deserializer().deserialize(
@@ -91,7 +93,7 @@ public class SpecificAvroSerdeTest {
   @Test
   public void shouldRoundTripRecordsEvenWhenConfiguredToDisableSpecificAvro() {
     // Given
-    SpecificAvroSerde<User> serde = createConfiguredSerde();
+    SpecificAvroSerde<User> serde = createConfiguredSerdeForRecordValues();
     User record = User.newBuilder().setName("alice").build();
     Map<String, Object> serdeConfig = new HashMap<>();
     serdeConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,

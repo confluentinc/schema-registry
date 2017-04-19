@@ -35,13 +35,11 @@ public class GenericAvroSerializer implements Serializer<GenericRecord> {
     inner = new KafkaAvroSerializer();
   }
 
-  public GenericAvroSerializer(final SchemaRegistryClient client) {
+  /**
+   * For testing purposes only.
+   */
+  GenericAvroSerializer(final SchemaRegistryClient client) {
     inner = new KafkaAvroSerializer(client);
-  }
-
-  public GenericAvroSerializer(final SchemaRegistryClient client,
-                               final Map<String, ?> serializerConfig) {
-    inner = new KafkaAvroSerializer(client, serializerConfig);
   }
 
   @Override

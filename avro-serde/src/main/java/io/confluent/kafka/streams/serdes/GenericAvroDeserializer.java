@@ -35,13 +35,11 @@ public class GenericAvroDeserializer implements Deserializer<GenericRecord> {
     inner = new KafkaAvroDeserializer();
   }
 
-  public GenericAvroDeserializer(final SchemaRegistryClient client) {
+  /**
+   * For testing purposes only.
+   */
+  GenericAvroDeserializer(final SchemaRegistryClient client) {
     inner = new KafkaAvroDeserializer(client);
-  }
-
-  public GenericAvroDeserializer(final SchemaRegistryClient client,
-                                 final Map<String, ?> deserializerConfig) {
-    inner = new KafkaAvroDeserializer(client, deserializerConfig);
   }
 
   @Override
