@@ -23,6 +23,10 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 
 class ConfigurationUtils {
 
+  private ConfigurationUtils() {
+    throw new AssertionError("you must not instantiate this class");
+  }
+
   /**
    * Enables the use of Specific Avro.
    *
