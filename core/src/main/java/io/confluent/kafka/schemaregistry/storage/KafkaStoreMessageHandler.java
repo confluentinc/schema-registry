@@ -53,6 +53,11 @@ public class KafkaStoreMessageHandler
         schemaIdAndSubjects = new SchemaIdAndSubjects(schemaObj.getId());
       }
       schemaIdAndSubjects.addSubjectAndVersion(schemaKey.getSubject(), schemaKey.getVersion());
+      if (schemaObj.isDeleted()) {
+        schemaIdAndSubjects.markSubjectVersionDelete(schemaKey.getSubject());
+      } else {
+        schemaIdAndSubjects.unmarkSubjectVersionDelete(schemaKey.getSubject());
+      }
       schemaRegistry.schemaHashToGuid.put(md5, schemaIdAndSubjects);
     }
   }

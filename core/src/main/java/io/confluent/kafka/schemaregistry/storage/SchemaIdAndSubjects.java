@@ -17,7 +17,9 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Kafka schema registry maintains a few in memory indices to facilitate schema lookups. One such
@@ -31,9 +33,11 @@ public class SchemaIdAndSubjects {
 
   private int id;
   private Map<String, Integer> subjectsAndVersions;
+  private Set<String> deletedSubjects;
 
   public SchemaIdAndSubjects(int id) {
     this.subjectsAndVersions = new HashMap<String, Integer>();
+    this.deletedSubjects = new HashSet<>();
     this.id = id;
   }
 
@@ -51,6 +55,18 @@ public class SchemaIdAndSubjects {
 
   public int getSchemaId() {
     return this.id;
+  }
+
+  public boolean isSubjectVersionDeleted(String subject) {
+    return deletedSubjects.contains(subject);
+  }
+
+  public void markSubjectVersionDelete(String subject) {
+    deletedSubjects.add(subject);
+  }
+
+  public void unmarkSubjectVersionDelete(String subject) {
+    deletedSubjects.remove(subject);
   }
 
   @Override

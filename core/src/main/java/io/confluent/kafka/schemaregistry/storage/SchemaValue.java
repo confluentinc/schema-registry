@@ -34,6 +34,8 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   private Integer id;
   @NotEmpty
   private String schema;
+  @NotEmpty
+  private boolean deleted;
 
   public SchemaValue(@JsonProperty("subject") String subject,
                      @JsonProperty("version") Integer version,
@@ -43,6 +45,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     this.version = version;
     this.id = id;
     this.schema = schema;
+    this.deleted = false;
   }
 
   public SchemaValue(Schema schemaEntity) {
@@ -50,6 +53,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     this.version = schemaEntity.getVersion();
     this.id = schemaEntity.getId();
     this.schema = schemaEntity.getSchema();
+    this.deleted = false;
   }
 
   @JsonProperty("subject")
@@ -90,6 +94,16 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   @JsonProperty("schema")
   public void setSchema(String schema) {
     this.schema = schema;
+  }
+
+  @JsonProperty("deleted")
+  public boolean isDeleted() {
+    return deleted;
+  }
+
+  @JsonProperty("deleted")
+  public void setDeleted(boolean deleted) {
+    this.deleted = deleted;
   }
 
   @Override

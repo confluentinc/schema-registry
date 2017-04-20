@@ -80,6 +80,10 @@ public class RestService {
       UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE =
       new TypeReference<ConfigUpdateRequest>() {
       };
+  private static final TypeReference<Integer> DELETE_SUBJECT_VERSION_RESPONSE_TYPE =
+      new TypeReference<Integer>() {
+      };
+
   private static final int JSON_PARSE_ERROR_CODE = 50005;
   private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
@@ -232,6 +236,37 @@ public class RestService {
                                      String subject)
       throws IOException, RestClientException {
     String path = String.format("/subjects/%s", subject);
+
+    Schema schema = httpRequest(path, "POST", registerSchemaRequest.toJson().getBytes(),
+                                requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
+
+    return schema;
+  }
+
+
+  public Schema lookUpSubjectVersion(String schemaString, String subject,
+                                     boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    return lookUpSubjectVersion(request, subject, lookupDeletedSchema);
+  }
+
+  public Schema lookUpSubjectVersion(RegisterSchemaRequest registerSchemaRequest,
+                                     String subject,
+                                     boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    return lookUpSubjectVersion(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject,
+                                lookupDeletedSchema);
+  }
+
+  public Schema lookUpSubjectVersion(Map<String, String> requestProperties,
+                                     RegisterSchemaRequest registerSchemaRequest,
+                                     String subject,
+                                     boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    String path = String.format("/subjects/%s?lookupDeletedSchema=%s", subject,
+                                lookupDeletedSchema);
 
     Schema schema = httpRequest(path, "POST", registerSchemaRequest.toJson().getBytes(),
                                 requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
@@ -401,6 +436,15 @@ public class RestService {
       throws IOException, RestClientException {
     List<String> response = httpRequest("/subjects", "GET", null, requestProperties,
                                         ALL_TOPICS_RESPONSE_TYPE);
+    return response;
+  }
+
+  public Integer deleteSchemaVersion(String subject, String version) throws IOException,
+                                                                            RestClientException {
+    String path = String.format("/subjects/%s/versions/%s", subject, version);
+
+    Integer response = httpRequest(path, "DELETE", null, DEFAULT_REQUEST_PROPERTIES,
+                                   DELETE_SUBJECT_VERSION_RESPONSE_TYPE);
     return response;
   }
 

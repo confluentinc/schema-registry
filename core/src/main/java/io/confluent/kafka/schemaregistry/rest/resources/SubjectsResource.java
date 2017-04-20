@@ -32,6 +32,7 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 
@@ -67,6 +68,8 @@ public class SubjectsResource {
                                        final @HeaderParam("Content-Type") String contentType,
                                        final @HeaderParam("Accept") String accept,
                                        @PathParam("subject") String subject,
+                                       @QueryParam("lookupDeletedSchema") boolean
+                                             lookupDeletedSchema,
                                        @NotNull RegisterSchemaRequest request) {
     // returns version if the schema exists. Otherwise returns 404
     Map<String, String> headerProperties = new HashMap<String, String>();
@@ -78,7 +81,7 @@ public class SubjectsResource {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
-      matchingSchema = schemaRegistry.lookUpSchemaUnderSubject(subject, schema);
+      matchingSchema = schemaRegistry.lookUpSchemaUnderSubject(subject, schema,lookupDeletedSchema);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);
