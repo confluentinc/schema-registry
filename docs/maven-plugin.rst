@@ -90,7 +90,7 @@ project are compatible with the schemas in another environment.
             <subjects>
                 <TestSubject000-key>src/main/avro/TestSubject000-Key.avsc</TestSubject000-key>
                 <TestSubject000-value>src/main/avro/TestSubject000-Value.avsc</TestSubject000-value>
-            <subjects>
+            </subjects>
         </configuration>
         <goals>
             <goal>test-compatibility</goal>
@@ -128,7 +128,7 @@ This goal can be used in a continuous deployment pipeline to push schemas to a n
             <subjects>
                 <TestSubject000-key>src/main/avro/TestSubject000-Key.avsc</TestSubject000-key>
                 <TestSubject000-value>src/main/avro/TestSubject000-Value.avsc</TestSubject000-value>
-            <subjects>
+            </subjects>
         </configuration>
         <goals>
             <goal>register</goal>

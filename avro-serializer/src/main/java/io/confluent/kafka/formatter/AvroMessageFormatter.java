@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.ByteBuffer;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
@@ -124,7 +125,11 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     try {
       JsonEncoder encoder = encoderFactory.jsonEncoder(schema, output);
       DatumWriter<Object> writer = new GenericDatumWriter<Object>(schema);
-      writer.write(object, encoder);
+      if (object instanceof byte[]) {
+        writer.write(ByteBuffer.wrap((byte[])object), encoder);
+      } else {
+        writer.write(object, encoder);
+      }
       encoder.flush();
     } catch (AvroRuntimeException e) {
       throw new SerializationException(
