@@ -28,13 +28,23 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 /**
- * A serde (serializer/deserializer) for Apache Kafka's Streams API that can be used for for reading
- * and/or writing data in "generic Avro" format.
+ * A schema-registry aware serde (serializer/deserializer) for Apache Kafka's Streams API that can
+ * be used for reading and writing data in "generic Avro" format.  This serde's "specific Avro"
+ * counterpart is {@link SpecificAvroSerde}.
  *
- * <p>Usage example for configuring this serde as a Kafka Streams application's default serde for
- * both record keys and record values:
+ * <p>This serde reads and writes data according to the wire format defined at
+ * http://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#wire-format.
+ * It requires access to a Confluent Schema Registry endpoint, which you must
+ * {@link GenericAvroDeserializer#configure(Map, boolean)} via the parameter
+ * "schema.registry.url".</p>
  *
- * <p><pre>{@code
+ * <p><strong>Usage</strong></p>
+ *
+ * <p>Example for configuring this serde as a Kafka Streams application's default serde for both
+ * record keys and record values:</p>
+ *
+ * <p>
+ * <pre>{@code
  * Properties streamsConfiguration = new Properties();
  * streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, GenericAvroSerde.class);
  * streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, GenericAvroSerde.class);
@@ -42,11 +52,13 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  *     AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *     "http://confluent-schema-registry-server:8081/");
  * }</pre>
+ * </p>
  *
- * <p>Usage example for explicitly overriding the application's default serdes (whatever they were
- * configured to) so that only specific operations such as {@code KStream#to()} use this serde:
+ * <p>Example for explicitly overriding the application's default serdes (whatever they were
+ * configured to) so that only specific operations such as {@code KStream#to()} use this serde:</p>
  *
- * <p><pre>{@code
+ * <p>
+ * <pre>{@code
  * Serde<GenericRecord> genericAvroSerde = new GenericAvroSerde();
  * boolean isKeySerde = false;
  * genericAvroSerde.configure(
@@ -57,6 +69,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  * KStream<String, GenericRecord> stream = ...;
  * stream.to(Serdes.String(), genericAvroSerde, "my-output-topic");
  * }</pre>
+ * </p>
  */
 @InterfaceStability.Unstable
 public class GenericAvroSerde implements Serde<GenericRecord> {

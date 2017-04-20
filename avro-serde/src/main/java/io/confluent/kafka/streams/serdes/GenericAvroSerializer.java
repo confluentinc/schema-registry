@@ -25,6 +25,17 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 
+/**
+ * A schema-registry aware serializer for writing data in "generic Avro" format.
+ *
+ * <p>This serializer writes data in the wire format defined at
+ * http://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#wire-format.
+ * It requires access to a Confluent Schema Registry endpoint, which you must
+ * {@link GenericAvroSerializer#configure(Map, boolean)} via the parameter
+ * "schema.registry.url".</p>
+ *
+ * <p>See {@link GenericAvroDeserializer} for its deserializer counterpart.</p>
+ */
 @InterfaceStability.Unstable
 public class GenericAvroSerializer implements Serializer<GenericRecord> {
 

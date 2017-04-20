@@ -25,6 +25,17 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 
+/**
+ * A schema-registry aware deserializer for reading data in "generic Avro" format.
+ *
+ * <p>This deserializer assumes that the serialized data was written in the wire format defined at
+ * http://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#wire-format.
+ * It requires access to a Confluent Schema Registry endpoint, which you must
+ * {@link GenericAvroDeserializer#configure(Map, boolean)} via the parameter
+ * "schema.registry.url".</p>
+ *
+ * <p>See {@link GenericAvroSerializer} for its serializer counterpart.</p>
+ */
 @InterfaceStability.Unstable
 public class GenericAvroDeserializer implements Deserializer<GenericRecord> {
 
