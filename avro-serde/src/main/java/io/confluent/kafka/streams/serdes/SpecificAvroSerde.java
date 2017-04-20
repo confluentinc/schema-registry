@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.streams.serdes;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -56,6 +57,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  * stream.to(Serdes.String(), specificAvroSerde, "my-output-topic");
  * }</pre>
  */
+@InterfaceStability.Unstable
 public class SpecificAvroSerde<T extends org.apache.avro.specific.SpecificRecord>
     implements Serde<T> {
 
