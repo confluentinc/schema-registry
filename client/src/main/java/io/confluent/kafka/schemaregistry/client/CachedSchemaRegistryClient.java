@@ -69,7 +69,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private int getVersionFromRegistry(String subject, Schema schema)
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
-        restService.lookUpSubjectVersion(schema.toString(), subject,true);
+        restService.lookUpSubjectVersion(schema.toString(), subject, true);
     return response.getVersion();
   }
 

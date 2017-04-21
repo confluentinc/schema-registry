@@ -43,6 +43,8 @@ public interface SchemaRegistry {
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
 
+  List<Integer> deleteSubject(String subject) throws SchemaRegistryException;
+
   Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException;
 

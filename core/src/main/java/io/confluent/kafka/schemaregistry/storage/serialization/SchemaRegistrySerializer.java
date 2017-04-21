@@ -24,6 +24,8 @@ import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.storage.ConfigValue;
+import io.confluent.kafka.schemaregistry.storage.DeleteSubjectKey;
+import io.confluent.kafka.schemaregistry.storage.DeleteSubjectValue;
 import io.confluent.kafka.schemaregistry.storage.NoopKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.confluent.kafka.schemaregistry.storage.ConfigKey;
@@ -83,18 +85,16 @@ public class SchemaRegistrySerializer
           schemaKey = new ObjectMapper().readValue(key, ConfigKey.class);
         } else if (keyType == SchemaRegistryKeyType.NOOP) {
           schemaKey = new ObjectMapper().readValue(key, NoopKey.class);
-        } else {
+        } else if (keyType == SchemaRegistryKeyType.DELETE_SUBJECT) {
+          schemaKey = new ObjectMapper().readValue(key, DeleteSubjectKey.class);
+        } else if (keyType == SchemaRegistryKeyType.SCHEMA) {
           schemaKey = new ObjectMapper().readValue(key, SchemaKey.class);
         }
       } catch (JsonProcessingException e) {
 
         String type = "unknown";
-        if (keyType == SchemaRegistryKeyType.CONFIG) {
-          type = SchemaRegistryKeyType.CONFIG.name();
-        } else if (keyType == SchemaRegistryKeyType.SCHEMA) {
-          type = SchemaRegistryKeyType.SCHEMA.name();
-        } else if (keyType == SchemaRegistryKeyType.NOOP) {
-          type = SchemaRegistryKeyType.NOOP.name();
+        if (keyType != null) {
+          type = keyType.name();
         }
 
         throw new SerializationException("Failed to deserialize " + type + " key", e);
@@ -111,6 +111,7 @@ public class SchemaRegistrySerializer
    * @return Typed deserialized value. Must be one of
    *     {@link io.confluent.kafka.schemaregistry.storage.ConfigValue}
    *     or {@link io.confluent.kafka.schemaregistry.storage.SchemaValue}
+   *     or {@link io.confluent.kafka.schemaregistry.storage.DeleteSubjectValue}
    */
   @Override
   public SchemaRegistryValue deserializeValue(SchemaRegistryKey key, byte[] value)
@@ -127,6 +128,12 @@ public class SchemaRegistrySerializer
         schemaRegistryValue = new ObjectMapper().readValue(value, SchemaValue.class);
       } catch (IOException e) {
         throw new SerializationException("Error while deserializing schema", e);
+      }
+    } else if (key.getKeyType().equals(SchemaRegistryKeyType.DELETE_SUBJECT)) {
+      try {
+        schemaRegistryValue = new ObjectMapper().readValue(value, DeleteSubjectValue.class);
+      } catch (IOException e) {
+        throw new SerializationException("Error while deserializing Delete Subject message", e);
       }
     } else {
       throw new SerializationException("Unrecognized key type. Must be one of schema or config");

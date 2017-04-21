@@ -33,11 +33,9 @@ public class SchemaIdAndSubjects {
 
   private int id;
   private Map<String, Integer> subjectsAndVersions;
-  private Set<String> deletedSubjects;
 
   public SchemaIdAndSubjects(int id) {
     this.subjectsAndVersions = new HashMap<String, Integer>();
-    this.deletedSubjects = new HashSet<>();
     this.id = id;
   }
 
@@ -55,18 +53,6 @@ public class SchemaIdAndSubjects {
 
   public int getSchemaId() {
     return this.id;
-  }
-
-  public boolean isSubjectVersionDeleted(String subject) {
-    return deletedSubjects.contains(subject);
-  }
-
-  public void markSubjectVersionDelete(String subject) {
-    deletedSubjects.add(subject);
-  }
-
-  public void unmarkSubjectVersionDelete(String subject) {
-    deletedSubjects.remove(subject);
   }
 
   @Override

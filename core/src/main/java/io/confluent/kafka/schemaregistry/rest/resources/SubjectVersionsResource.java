@@ -125,7 +125,7 @@ public class SubjectVersionsResource {
                    + subject;
     try {
       //return only non-deleted versions for the subject
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject, true);
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject, false);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -192,22 +192,6 @@ public class SubjectVersionsResource {
     String errorMessage = null;
     try {
       schema = schemaRegistry.validateAndGetSchema(subject, versionId, false);
-      try {
-        schemaRegistry.deleteOrForwardSchemaVersion(subject, schema);
-      } catch (SchemaRegistryTimeoutException e) {
-        throw Errors.operationTimeoutException("Register operation timed out", e);
-      } catch (SchemaRegistryStoreException e) {
-        throw Errors.storeException("Register schema operation failed while writing"
-                                    + " to the Kafka store", e);
-      } catch (SchemaRegistryRequestForwardingException e) {
-        throw Errors
-            .requestForwardingFailedException("Error while forwarding register schema request"
-                                              + " to the master", e);
-      } catch (UnknownMasterException e) {
-        throw Errors.unknownMasterException("Master not known.", e);
-      } catch (SchemaRegistryException e) {
-        throw Errors.schemaRegistryException("Error while registering schema", e);
-      }
     } catch (SchemaRegistryStoreException e) {
       errorMessage =
           "Error while retrieving schema for subject "
@@ -222,6 +206,23 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
+    try {
+      schemaRegistry.deleteSchemaVersionOrForward(subject, schema);
+    } catch (SchemaRegistryTimeoutException e) {
+      throw Errors.operationTimeoutException("Delete Schema Version operation timed out", e);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Delete Schema Version operation failed while writing"
+                                  + " to the Kafka store", e);
+    } catch (SchemaRegistryRequestForwardingException e) {
+      throw Errors
+          .requestForwardingFailedException("Error while forwarding delete schema version request"
+                                            + " to the master", e);
+    } catch (UnknownMasterException e) {
+      throw Errors.unknownMasterException("Master not known.", e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
+    }
+
     asyncResponse.resume(schema.getVersion());
   }
 }

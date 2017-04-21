@@ -20,12 +20,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
@@ -68,8 +70,8 @@ public class SubjectsResource {
                                        final @HeaderParam("Content-Type") String contentType,
                                        final @HeaderParam("Accept") String accept,
                                        @PathParam("subject") String subject,
-                                       @QueryParam("lookupDeletedSchema") boolean
-                                             lookupDeletedSchema,
+                                       @QueryParam("deleted") boolean
+                                           lookupDeletedSchema,
                                        @NotNull RegisterSchemaRequest request) {
     // returns version if the schema exists. Otherwise returns 404
     Map<String, String> headerProperties = new HashMap<String, String>();
@@ -81,7 +83,8 @@ public class SubjectsResource {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
-      matchingSchema = schemaRegistry.lookUpSchemaUnderSubject(subject, schema,lookupDeletedSchema);
+      matchingSchema =
+          schemaRegistry.lookUpSchemaUnderSubject(subject, schema, lookupDeletedSchema);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);
@@ -103,5 +106,23 @@ public class SubjectsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while listing subjects", e);
     }
+  }
+
+  @DELETE
+  @Path("/{subject}")
+  @PerformanceMetric("subjects.delete-subject")
+  public void deleteSubject(final @Suspended AsyncResponse asyncResponse,
+                            @PathParam("subject") String subject) {
+    List<Integer> deletedVersions ;
+    try {
+      if (!schemaRegistry.listSubjects().contains(subject)) {
+        throw Errors.subjectNotFoundException();
+      }
+      deletedVersions = schemaRegistry.deleteSubjectOrForward(subject);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
+                                           e);
+    }
+    asyncResponse.resume(deletedVersions);
   }
 }
