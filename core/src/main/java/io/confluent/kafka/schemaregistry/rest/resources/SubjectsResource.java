@@ -120,7 +120,7 @@ public class SubjectsResource {
       }
       deletedVersions = schemaRegistry.deleteSubjectOrForward(subject);
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
+      throw Errors.schemaRegistryException("Error while deleting the subject " + subject,
                                            e);
     }
     asyncResponse.resume(deletedVersions);
