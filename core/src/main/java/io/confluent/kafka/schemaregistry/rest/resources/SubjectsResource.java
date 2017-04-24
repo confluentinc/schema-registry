@@ -113,7 +113,7 @@ public class SubjectsResource {
   @PerformanceMetric("subjects.delete-subject")
   public void deleteSubject(final @Suspended AsyncResponse asyncResponse,
                             @PathParam("subject") String subject) {
-    List<Integer> deletedVersions ;
+    List<Integer> deletedVersions;
     try {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();

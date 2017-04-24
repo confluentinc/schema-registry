@@ -348,7 +348,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       Iterator<Schema> allVersions = getAllVersions(subject, true);
       Iterator<Schema> undeletedVersions = getAllVersions(subject, false);
 
-      List<String> allSchemas = new ArrayList<>();
+      List<String> undeletedSchemasList = new ArrayList<>();
       Schema latestSchema = null;
       int newVersion = MIN_VERSION;
       while (allVersions.hasNext()) {
@@ -356,13 +356,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       }
       while (undeletedVersions.hasNext()) {
         latestSchema = undeletedVersions.next();
-        allSchemas.add(latestSchema.getSchema());
+        undeletedSchemasList.add(latestSchema.getSchema());
       }
 
       AvroSchema avroSchema = canonicalizeSchema(schema);
       // assign a guid and put the schema in the kafka store
       if (latestSchema == null || isCompatible(subject, avroSchema.canonicalString,
-                                               allSchemas)) {
+                                               undeletedSchemasList)) {
         schema.setVersion(newVersion);
 
         if (schemaId >= 0) {
@@ -803,13 +803,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   @Override
-  public Iterator<Schema> getAllVersions(String subject, boolean returndeletedschemas)
+  public Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
       throws SchemaRegistryException {
     try {
       SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
       SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
       Iterator<SchemaRegistryValue> allVersions = kafkaStore.getAll(key1, key2);
-      return sortSchemasByVersion(allVersions, returndeletedschemas).iterator();
+      return sortSchemasByVersion(allVersions, returnDeletedSchemas).iterator();
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);

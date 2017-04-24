@@ -132,7 +132,7 @@ public class CachedSchemaRegistryClientTest {
             .andReturn(id);
 
     // Expect only one call to lookup the subject (the rest should hit the cache)
-    expect(restService.lookUpSubjectVersion(anyString(), eq(subject),eq(true)))
+    expect(restService.lookUpSubjectVersion(anyString(), eq(subject), eq(true)))
             .andReturn(new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(subject, version, id, schema));
 
     replay(restService);
