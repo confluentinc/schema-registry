@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 public class SchemaValuesTest {
 
@@ -121,6 +122,7 @@ public class SchemaValuesTest {
 
     try {
       serializer.deserializeValue(key, schemaValueJson.getBytes());
+      fail("Deserialization shouldn't be supported");
     } catch (SerializationException e) {
       assertEquals("Can't deserialize schema for the magic byte 2", e.getMessage());
     }
