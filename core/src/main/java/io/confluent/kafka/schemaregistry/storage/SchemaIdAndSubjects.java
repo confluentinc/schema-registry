@@ -17,7 +17,9 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Kafka schema registry maintains a few in memory indices to facilitate schema lookups. One such

@@ -34,7 +34,30 @@ import static org.junit.Assert.fail;
 public class SchemaRegistryKeysTest {
 
   @Test
-  public void testSchemaKeySerde() {
+  public void testSchemaKeySerdeForMagicByte0() {
+    String subject = "foo";
+    int version = 1;
+    SchemaKey key = new SchemaKey(subject, version);
+    key.setMagicByte(0);
+    Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer = new SchemaRegistrySerializer();
+    byte[] serializedKey = null;
+    try {
+      serializedKey = serializer.serializeKey(key);
+    } catch (SerializationException e) {
+      fail();
+    }
+    assertNotNull(serializedKey);
+    try {
+      SchemaRegistryKey deserializedKey = serializer.deserializeKey(serializedKey);
+      assertEquals("Deserialized key should be equal to original key", key, deserializedKey);
+    } catch (SerializationException e) {
+      e.printStackTrace();
+      fail();
+    }
+  }
+
+  @Test
+  public void testSchemaKeySerdeForMagicByte1() {
     String subject = "foo";
     int version = 1;
     SchemaKey key = new SchemaKey(subject, version);
@@ -52,6 +75,28 @@ public class SchemaRegistryKeysTest {
     } catch (SerializationException e) {
       e.printStackTrace();
       fail();
+    }
+  }
+
+  @Test
+  public void testSchemaKeySerdeForUnSupportedMagicByte() {
+    String subject = "foo";
+    int version = 1;
+    SchemaKey key = new SchemaKey(subject, version);
+    key.setMagicByte(2);
+    Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer = new SchemaRegistrySerializer();
+    byte[] serializedKey = null;
+    try {
+      serializedKey = serializer.serializeKey(key);
+    } catch (SerializationException e) {
+      fail();
+    }
+    assertNotNull(serializedKey);
+    try {
+      serializer.deserializeKey(serializedKey);
+      fail("Deserialization shouldn't be supported");
+    } catch (SerializationException e) {
+      assertEquals("Can't deserialize schema for the magic byte 2", e.getMessage());
     }
   }
 

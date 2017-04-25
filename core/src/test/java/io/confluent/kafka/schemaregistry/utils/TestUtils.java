@@ -55,7 +55,7 @@ public class TestUtils {
   }
 
   /**
-   * Recursively delete the given file/directory and any subfiles (if any exist)
+   * Recursively deleteSchemaVersion the given file/directory and any subfiles (if any exist)
    *
    * @param file The root file at which to begin deleting
    */

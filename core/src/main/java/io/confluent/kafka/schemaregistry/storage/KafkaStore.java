@@ -480,7 +480,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   @Override
   public void delete(K key) throws StoreException {
     assertInitialized();
-    // delete from the Kafka topic by writing a null value for the key
+    // deleteSchemaVersion from the Kafka topic by writing a null value for the key
     put(key, null);
   }
 

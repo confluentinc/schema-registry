@@ -27,6 +27,7 @@ import java.util.Map;
 
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
@@ -84,14 +85,7 @@ public class SubjectVersionsResource {
     Schema schema = null;
     String errorMessage = null;
     try {
-      schema = schemaRegistry.get(subject, versionId.getVersionId());
-      if (schema == null) {
-        if (!schemaRegistry.listSubjects().contains(subject)) {
-          throw Errors.subjectNotFoundException();
-        } else {
-          throw Errors.versionNotFoundException();
-        }
-      }
+      schema = schemaRegistry.validateAndGetSchema(subject, versionId, false);
     } catch (SchemaRegistryStoreException e) {
       errorMessage =
           "Error while retrieving schema for subject "
@@ -130,7 +124,8 @@ public class SubjectVersionsResource {
     errorMessage = "Error while listing all versions for subject "
                    + subject;
     try {
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject);
+      //return only non-deleted versions for the subject
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject, false);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -179,5 +174,55 @@ public class SubjectVersionsResource {
     RegisterSchemaResponse registerSchemaResponse = new RegisterSchemaResponse();
     registerSchemaResponse.setId(id);
     asyncResponse.resume(registerSchemaResponse);
+  }
+
+  @DELETE
+  @Path("/{version}")
+  @PerformanceMetric("subjects.versions.deleteSchemaVersion-schema")
+  public void deleteSchemaVersion(final @Suspended AsyncResponse asyncResponse,
+                                  @PathParam("subject") String subject,
+                                  @PathParam("version") String version) {
+    VersionId versionId = null;
+    try {
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException();
+    }
+    Schema schema = null;
+    String errorMessage = null;
+    try {
+      schema = schemaRegistry.validateAndGetSchema(subject, versionId, false);
+    } catch (SchemaRegistryStoreException e) {
+      errorMessage =
+          "Error while retrieving schema for subject "
+          + subject
+          + " with version "
+          + version
+          + " from the schema registry";
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException();
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    try {
+      schemaRegistry.deleteSchemaVersionOrForward(subject, schema);
+    } catch (SchemaRegistryTimeoutException e) {
+      throw Errors.operationTimeoutException("Delete Schema Version operation timed out", e);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Delete Schema Version operation failed while writing"
+                                  + " to the Kafka store", e);
+    } catch (SchemaRegistryRequestForwardingException e) {
+      throw Errors
+          .requestForwardingFailedException("Error while forwarding delete schema version request"
+                                            + " to the master", e);
+    } catch (UnknownMasterException e) {
+      throw Errors.unknownMasterException("Master not known.", e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
+    }
+
+    asyncResponse.resume(schema.getVersion());
   }
 }

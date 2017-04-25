@@ -34,15 +34,19 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   private Integer id;
   @NotEmpty
   private String schema;
+  @NotEmpty
+  private boolean deleted;
 
   public SchemaValue(@JsonProperty("subject") String subject,
                      @JsonProperty("version") Integer version,
                      @JsonProperty("id") Integer id,
-                     @JsonProperty("schema") String schema) {
+                     @JsonProperty("schema") String schema,
+                     @JsonProperty("deleted") boolean deleted) {
     this.subject = subject;
     this.version = version;
     this.id = id;
     this.schema = schema;
+    this.deleted = deleted;
   }
 
   public SchemaValue(Schema schemaEntity) {
@@ -50,6 +54,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     this.version = schemaEntity.getVersion();
     this.id = schemaEntity.getId();
     this.schema = schemaEntity.getSchema();
+    this.deleted = false;
   }
 
   @JsonProperty("subject")
@@ -92,6 +97,16 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     this.schema = schema;
   }
 
+  @JsonProperty("deleted")
+  public boolean isDeleted() {
+    return deleted;
+  }
+
+  @JsonProperty("deleted")
+  public void setDeleted(boolean deleted) {
+    this.deleted = deleted;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -115,6 +130,9 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     if (!this.schema.equals(that.schema)) {
       return false;
     }
+    if (deleted != that.deleted) {
+      return false;
+    }
 
     return true;
   }
@@ -125,6 +143,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     result = 31 * result + version;
     result = 31 * result + id.intValue();
     result = 31 * result + schema.hashCode();
+    result = 31 * result + (deleted ? 1 : 0);
     return result;
   }
 
@@ -134,7 +153,8 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     sb.append("{subject=" + this.subject + ",");
     sb.append("version=" + this.version + ",");
     sb.append("id=" + this.id + ",");
-    sb.append("schema=" + this.schema + "}");
+    sb.append("schema=" + this.schema + ",");
+    sb.append("deleted=" + this.deleted + "}");
     return sb.toString();
   }
 

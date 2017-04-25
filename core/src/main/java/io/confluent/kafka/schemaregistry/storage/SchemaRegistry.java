@@ -31,17 +31,22 @@ public interface SchemaRegistry {
 
   int register(String subject, Schema schema) throws SchemaRegistryException;
 
-  Schema get(String subject, int version) throws SchemaRegistryException;
+  Schema get(String subject, int version, boolean returnDeletedSchema)
+      throws SchemaRegistryException;
 
   SchemaString get(int id) throws SchemaRegistryException;
 
   Set<String> listSubjects() throws SchemaRegistryException;
 
-  Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException;
+  Iterator<Schema> getAllVersions(String subject, boolean filterDeletes)
+      throws SchemaRegistryException;
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
 
-  Schema lookUpSchemaUnderSubject(String subject, Schema schema) throws SchemaRegistryException;
+  List<Integer> deleteSubject(String subject) throws SchemaRegistryException;
+
+  Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
+      throws SchemaRegistryException;
 
   boolean isCompatible(String subject,
                        String inputSchema,
@@ -53,4 +58,5 @@ public interface SchemaRegistry {
 
   void close();
 
+  void deleteSchemaVersion(String subject, Schema schema) throws SchemaRegistryException;
 }
