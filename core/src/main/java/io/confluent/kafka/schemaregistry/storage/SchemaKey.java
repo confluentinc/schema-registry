@@ -26,7 +26,7 @@ import javax.validation.constraints.Min;
 @JsonPropertyOrder(value = {"keytype", "subject", "version", "magic"})
 public class SchemaKey extends SchemaRegistryKey {
 
-  private static final int MAGIC_BYTE = 0;
+  private static final int MAGIC_BYTE = 1;
   @NotEmpty
   private String subject;
   @Min(1)

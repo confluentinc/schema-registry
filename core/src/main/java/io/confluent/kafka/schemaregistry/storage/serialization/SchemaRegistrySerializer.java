@@ -89,6 +89,7 @@ public class SchemaRegistrySerializer
           schemaKey = new ObjectMapper().readValue(key, DeleteSubjectKey.class);
         } else if (keyType == SchemaRegistryKeyType.SCHEMA) {
           schemaKey = new ObjectMapper().readValue(key, SchemaKey.class);
+          validateMagicByte((SchemaKey) schemaKey);
         }
       } catch (JsonProcessingException e) {
 
@@ -104,6 +105,7 @@ public class SchemaRegistrySerializer
     }
     return schemaKey;
   }
+
 
   /**
    * @param key   Typed key corresponding to this value
@@ -125,6 +127,7 @@ public class SchemaRegistrySerializer
       }
     } else if (key.getKeyType().equals(SchemaRegistryKeyType.SCHEMA)) {
       try {
+        validateMagicByte((SchemaKey) key);
         schemaRegistryValue = new ObjectMapper().readValue(value, SchemaValue.class);
       } catch (IOException e) {
         throw new SerializationException("Error while deserializing schema", e);
@@ -149,5 +152,12 @@ public class SchemaRegistrySerializer
   @Override
   public void configure(Map<String, ?> stringMap) {
 
+  }
+
+  private void validateMagicByte(SchemaKey schemaKey) throws SerializationException {
+    if (schemaKey.getMagicByte() != 0 && schemaKey.getMagicByte() != 1) {
+      throw new SerializationException("Can't deserialize schema for the magic byte "
+                                       + schemaKey.getMagicByte());
+    }
   }
 }
