@@ -351,6 +351,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       while (allVersions.hasNext()) {
         latestSchema = allVersions.next();
         allSchemas.add(latestSchema.getSchema());
+      }
+      if (latestSchema != null) {
         newVersion = latestSchema.getVersion() + 1;
       }
 
