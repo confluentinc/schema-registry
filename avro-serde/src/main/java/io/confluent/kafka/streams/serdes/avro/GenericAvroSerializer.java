@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.streams.serdes;
+package io.confluent.kafka.streams.serdes.avro;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -25,43 +26,40 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 
 /**
- * A schema-registry aware serializer for writing data in "specific Avro" format.
+ * A schema-registry aware serializer for writing data in "generic Avro" format.
  *
  * <p>This serializer writes data in the wire format defined at
  * http://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#wire-format.
  * It requires access to a Confluent Schema Registry endpoint, which you must
- * {@link SpecificAvroSerializer#configure(Map, boolean)} via the parameter
+ * {@link GenericAvroSerializer#configure(Map, boolean)} via the parameter
  * "schema.registry.url".</p>
  *
- * <p>See {@link SpecificAvroDeserializer} for its deserializer counterpart.</p>
+ * <p>See {@link GenericAvroDeserializer} for its deserializer counterpart.</p>
  */
 @InterfaceStability.Unstable
-public class SpecificAvroSerializer<T extends org.apache.avro.specific.SpecificRecord>
-    implements Serializer<T> {
+public class GenericAvroSerializer implements Serializer<GenericRecord> {
 
   private final KafkaAvroSerializer inner;
 
-  public SpecificAvroSerializer() {
+  public GenericAvroSerializer() {
     inner = new KafkaAvroSerializer();
   }
 
   /**
    * For testing purposes only.
    */
-  SpecificAvroSerializer(final SchemaRegistryClient client) {
+  GenericAvroSerializer(final SchemaRegistryClient client) {
     inner = new KafkaAvroSerializer(client);
   }
 
   @Override
   public void configure(final Map<String, ?> serializerConfig,
                         final boolean isSerializerForRecordKeys) {
-    inner.configure(
-        ConfigurationUtils.withSpecificAvroEnabled(serializerConfig),
-        isSerializerForRecordKeys);
+    inner.configure(serializerConfig, isSerializerForRecordKeys);
   }
 
   @Override
-  public byte[] serialize(final String topic, final T record) {
+  public byte[] serialize(final String topic, final GenericRecord record) {
     return inner.serialize(topic, record);
   }
 

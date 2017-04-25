@@ -14,53 +14,53 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.streams.serdes;
+package io.confluent.kafka.streams.serdes.avro;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 
 /**
- * A schema-registry aware serializer for writing data in "generic Avro" format.
+ * A schema-registry aware deserializer for reading data in "generic Avro" format.
  *
- * <p>This serializer writes data in the wire format defined at
+ * <p>This deserializer assumes that the serialized data was written in the wire format defined at
  * http://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#wire-format.
  * It requires access to a Confluent Schema Registry endpoint, which you must
- * {@link GenericAvroSerializer#configure(Map, boolean)} via the parameter
+ * {@link GenericAvroDeserializer#configure(Map, boolean)} via the parameter
  * "schema.registry.url".</p>
  *
- * <p>See {@link GenericAvroDeserializer} for its deserializer counterpart.</p>
+ * <p>See {@link GenericAvroSerializer} for its serializer counterpart.</p>
  */
 @InterfaceStability.Unstable
-public class GenericAvroSerializer implements Serializer<GenericRecord> {
+public class GenericAvroDeserializer implements Deserializer<GenericRecord> {
 
-  private final KafkaAvroSerializer inner;
+  private final KafkaAvroDeserializer inner;
 
-  public GenericAvroSerializer() {
-    inner = new KafkaAvroSerializer();
+  public GenericAvroDeserializer() {
+    inner = new KafkaAvroDeserializer();
   }
 
   /**
    * For testing purposes only.
    */
-  GenericAvroSerializer(final SchemaRegistryClient client) {
-    inner = new KafkaAvroSerializer(client);
+  GenericAvroDeserializer(final SchemaRegistryClient client) {
+    inner = new KafkaAvroDeserializer(client);
   }
 
   @Override
-  public void configure(final Map<String, ?> serializerConfig,
-                        final boolean isSerializerForRecordKeys) {
-    inner.configure(serializerConfig, isSerializerForRecordKeys);
+  public void configure(final Map<String, ?> deserializerConfig,
+                        final boolean isDeserializerForRecordKeys) {
+    inner.configure(deserializerConfig, isDeserializerForRecordKeys);
   }
 
   @Override
-  public byte[] serialize(final String topic, final GenericRecord record) {
-    return inner.serialize(topic, record);
+  public GenericRecord deserialize(final String topic, final byte[] bytes) {
+    return (GenericRecord) inner.deserialize(topic, bytes);
   }
 
   @Override
