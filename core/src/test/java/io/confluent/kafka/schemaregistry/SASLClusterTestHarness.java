@@ -31,9 +31,11 @@ import scala.Option;
 import scala.collection.JavaConversions;
 import scala.collection.Seq;
 import scala.collection.immutable.List;
+import scala.collection.mutable.Buffer;
 
 import javax.security.auth.login.Configuration;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Properties;
 
@@ -71,8 +73,12 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     Option<File> clientKeytabOption = Option.apply(clientKeytab);
     List<String> serverSaslMechanisms = JavaConversions.asScalaBuffer(Arrays.asList("GSSAPI")).toList();
     Option<String> clientSaslMechanism = Option.apply("GSSAPI");
-    String jaasFilePath = JaasTestUtils.writeZkAndKafkaFiles(JaasTestUtils.KafkaServerContextName(), serverSaslMechanisms,
-            clientSaslMechanism, serverKeytabOption, clientKeytabOption);
+
+    java.util.List<JaasTestUtils.JaasSection> jaasSections = new ArrayList<>();
+    jaasSections.add(JaasTestUtils.kafkaServerSection(JaasTestUtils.KafkaServerContextName(), serverSaslMechanisms, serverKeytabOption));
+    jaasSections.add(JaasTestUtils.kafkaClientSection(clientSaslMechanism, clientKeytabOption));
+    jaasSections.addAll(JavaConversions.asJavaCollection(JaasTestUtils.zkSections()));
+    String jaasFilePath = JaasTestUtils.writeJaasContextsToFile(JavaConversions.asScalaBuffer(jaasSections).toSeq());
 
     log.info("Using KDC home: " + kdcHome.getAbsolutePath());
     kdc = new MiniKdc(kdcProps, kdcHome);
