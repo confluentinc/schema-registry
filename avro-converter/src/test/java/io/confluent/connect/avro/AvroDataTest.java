@@ -62,6 +62,7 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.CONNECT_RECORD_DOC_PROP;
 import static org.junit.Assert.*;
 
 public class AvroDataTest {
@@ -1275,10 +1276,14 @@ public class AvroDataTest {
   public void testToConnectEnum() {
     // Enums are just converted to strings, original enum is preserved in parameters
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
-        .enumeration("TestEnum").symbols("foo", "bar", "baz");
+        .enumeration("TestEnum")
+        .doc("some documentation")
+        .symbols("foo", "bar", "baz");
     SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
-    builder.parameter(CONNECT_ENUM_DOC_PROP, null);
+    builder.parameter(CONNECT_ENUM_DOC_PROP, "some documentation");
+    builder.parameter(CONNECT_RECORD_DOC_PROP, "some documentation");
     builder.parameter(AVRO_TYPE_ENUM, "TestEnum");
+    builder.doc("some documentation");
     for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
       builder.parameter(AVRO_TYPE_ENUM+"."+enumSymbol, enumSymbol);
     }
