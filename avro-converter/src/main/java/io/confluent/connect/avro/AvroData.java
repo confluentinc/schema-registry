@@ -90,7 +90,7 @@ public class AvroData {
   public static final String AVRO_TYPE_ENUM = NAMESPACE + ".Enum";
 
   public static final String AVRO_TYPE_ANYTHING = NAMESPACE + ".Anything";
-  public static final String DOC_PROP = "doc";
+  public static final String DOC_PROP = ".doc";
 
   private static final Map<String, Schema.Type> NON_AVRO_TYPES_BY_TYPE_CODE = new HashMap<>();
 
