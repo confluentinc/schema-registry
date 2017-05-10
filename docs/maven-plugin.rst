@@ -3,6 +3,53 @@ Maven Plugin
 
 A Maven plugin is available to help throughout the development process.
 
+maven configuration
+========================
+This maven plugin hasn't been published on maven central repository yet so you must add confluent repository as pluginRepository inside your pom.xml or eventually inside your settings.xml (local maven repository settings file)\:
+
+::
+
+  <pluginRepositories>
+    ...
+    <pluginRepository>
+      <id>confluent</id>
+      <name>confluent plugin</name>
+      <url>http://packages.confluent.io/maven/</url>
+      <layout>default</layout>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+      <releases>
+        <updatePolicy>never</updatePolicy>
+      </releases>
+    </pluginRepository>
+    ...
+  </pluginRepositories>
+      
+Note\: use the same version of Confluent Open Source Platform (the latest one ?) for the kafka-schema-registry-maven-plugin\:
+
+::
+
+  <properties>
+    ...
+    <confluent.version>3.2.1</confluent.version>
+    ...
+  </properties>
+  ...
+  <build>
+    ...
+    <plugins>
+      ...
+      <plugin>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-schema-registry-maven-plugin</artifactId>
+        <version>${confluent.version}</version>
+        ...
+      </plugin>
+      ...
+    </plugins>
+  </build>
+
 schema-registry:download
 ========================
 
