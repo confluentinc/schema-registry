@@ -78,7 +78,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     jaasSections.add(JaasTestUtils.kafkaServerSection(JaasTestUtils.KafkaServerContextName(), serverSaslMechanisms, serverKeytabOption));
     jaasSections.add(JaasTestUtils.kafkaClientSection(clientSaslMechanism, clientKeytabOption));
     jaasSections.addAll(JavaConversions.asJavaCollection(JaasTestUtils.zkSections()));
-    String jaasFilePath = JaasTestUtils.writeJaasContextsToFile(JavaConversions.asScalaBuffer(jaasSections).toSeq());
+    String jaasFilePath = JaasTestUtils.writeJaasContextsToFile(JavaConversions.asScalaBuffer(jaasSections).toSeq()).getAbsolutePath();
 
     log.info("Using KDC home: " + kdcHome.getAbsolutePath());
     kdc = new MiniKdc(kdcProps, kdcHome);
