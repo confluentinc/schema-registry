@@ -131,6 +131,15 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRegisterSameSchemaOnDifferentSubject() throws Exception {
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    int id1 = TestUtils.registerSchema(restApp.restConnect, schema, "subject1");
+    int id2 = TestUtils.registerSchema(restApp.restConnect, schema, "subject2");
+    assertEquals("Registering the same schema under different subjects should return the same id",
+                 id1, id2);
+  }
+
+  @Test
   public void testCompatibleSchemaLookupBySubject() throws Exception {
     String subject = "testSubject";
     int numRegisteredSchemas = 0;
