@@ -596,8 +596,21 @@ public class MasterElectorTest extends ClusterTestHarness {
   private static void checkMasterIdentity(Collection<RestApp> cluster,
                                           SchemaRegistryIdentity expectedMasterIdentity) {
     for (RestApp restApp: cluster) {
-      assertEquals("Each master identity should be " + expectedMasterIdentity,
-                   expectedMasterIdentity, restApp.masterIdentity());
+      for (int i = 0; i < 3; i++) {
+        SchemaRegistryIdentity masterIdentity = restApp.masterIdentity();
+        // There can be some latency in all the nodes picking up the new master from ZK so we need
+        // to allow for some retries here.
+        if (masterIdentity == null) {
+          try {
+            Thread.sleep(1000);
+          } catch (InterruptedException e) {
+            // ignore
+          }
+          continue;
+        }
+        assertEquals("Each master identity should be " + expectedMasterIdentity,
+                     expectedMasterIdentity, masterIdentity);
+      }
     }
   }
 
