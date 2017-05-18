@@ -242,7 +242,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     // create the zookeeper namespace using cluster.name if it doesn't already exist
     zkUtilsForNamespaceCreation.makeSurePersistentPathExists(
         schemaRegistryNamespace,
-        zkUtilsForNamespaceCreation.DefaultAcls());
+        zkUtilsForNamespaceCreation.defaultAcls(schemaRegistryNamespace));
     log.info("Created schema registry namespace "
              + zkConnForNamespaceCreation
              + schemaRegistryNamespace);
@@ -556,7 +556,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
           int nextIdBatchUpperBound = getInclusiveUpperBound(nextIdBatchLowerBound);
           zkUtils.createPersistentPath(ZOOKEEPER_SCHEMA_ID_COUNTER,
                                        String.valueOf(nextIdBatchUpperBound),
-                                       zkUtils.DefaultAcls());
+                                       zkUtils.defaultAcls(ZOOKEEPER_SCHEMA_ID_COUNTER));
           return nextIdBatchLowerBound;
         } catch (ZkNodeExistsException ignore) {
           // A zombie master may have created this zk node after the initial existence check

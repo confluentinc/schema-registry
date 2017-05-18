@@ -80,7 +80,7 @@ public class ZookeeperMasterElector {
     SchemaRegistryIdentity masterIdentity = null;
     try {
       zkUtils.createEphemeralPathExpectConflict(MASTER_PATH, myIdentityString,
-                                                zkUtils.DefaultAcls());
+                                                zkUtils.defaultAcls(MASTER_PATH));
       log.info("Successfully elected the new master: " + myIdentityString);
       masterIdentity = myIdentity;
       schemaRegistry.setMaster(masterIdentity);
