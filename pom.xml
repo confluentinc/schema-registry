@@ -38,6 +38,11 @@
         <tag>HEAD</tag>
     </scm>
 
+    <!--
+         Note: When adding new submodules you should ensure that you update the bin/ scripts accordingly.
+         For example, depending on how the new submodule is packaged, you must add it to the CLASSPATH
+         setup in `bin/schema-registry-run-class`.
+    -->
     <modules>
         <module>core</module>
         <module>client</module>
