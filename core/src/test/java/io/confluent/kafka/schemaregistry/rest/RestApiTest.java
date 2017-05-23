@@ -19,14 +19,17 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.MasterResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
+import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -850,6 +853,16 @@ public class RestApiTest extends ClusterTestHarness {
     }
     assertEquals("Top Compatibility Level Exists", AvroCompatibilityLevel.FULL.name, restApp
         .restClient.getConfig(null).getCompatibilityLevel());
+
+  }
+
+  @Test
+  public void testGetMaster() throws IOException, RestClientException {
+    SchemaRegistryIdentity master = restApp.masterIdentity();
+    MasterResponse response = restApp.restClient.getMaster();
+
+    assertEquals(response.getMasterHost(), master.getHost());
+    assertEquals(response.getMasterPort(), (int) master.getPort());
 
   }
 }

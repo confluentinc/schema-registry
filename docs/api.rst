@@ -526,3 +526,35 @@ The config resource allows you to inspect the cluster-level configuration values
 	  {
 	     "compatibility": "FULL"
 	  }
+
+Master
+------
+
+The master resource allows you to inspect the current master's identity information.
+
+.. http:get:: /master
+
+   Get master identity.
+
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend data store
+
+   **Example request**:
+
+	.. sourcecode:: http
+
+	   GET /master HTTP/1.1
+	   Host: schemaregistry.example.com
+	   Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+
+   **Example response**:
+
+   .. sourcecode:: http
+
+	  HTTP/1.1 200 OK
+	  Content-Type: application/vnd.schemaregistry.v1+json
+
+	  {
+	     "master_host": "master.host.com",
+	     "master_port": 8081
+	  }
