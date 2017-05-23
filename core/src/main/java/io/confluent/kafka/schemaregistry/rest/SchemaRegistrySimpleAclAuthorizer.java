@@ -46,10 +46,9 @@ public class SchemaRegistrySimpleAclAuthorizer implements RestAuthorizer, RestCo
   @Override
   public boolean authorize(String principalName, HttpServletRequest request) {
     String topicName = getTopicName(request);
-    log.info("Authorizing {} for topic {}", principalName, topicName);
     boolean authorized;
-    if (topicName != null) {
-      log.info("Authorizing {} for topic {}", principalName, topicName);
+    if ("POST".equals(request.getMethod()) && topicName != null) {
+      log.debug("Authorizing {} for topic {}", principalName, topicName);
       RequestChannel.Session kafkaSession = getKafkaSession(principalName, request);
       authorized = authorizer
               .authorize(kafkaSession, Write$.MODULE$, Resource.fromString("Topic:" + topicName));
@@ -74,8 +73,8 @@ public class SchemaRegistrySimpleAclAuthorizer implements RestAuthorizer, RestCo
 
   private String getTopicName(HttpServletRequest req) {
     String subject = null;
-    if ("POST".equals(req.getMethod())) {
-      String reqUri = req.getRequestURI().toString();
+    String reqUri = req.getRequestURI();
+    if (reqUri.startsWith("/subjects")) {
       subject = reqUri.substring("/subjects/".length(), reqUri.indexOf("/versions"));
       subject = removeSuffix(subject, "-value");
       subject = removeSuffix(subject, "-key");
