@@ -113,6 +113,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private Metrics metrics;
   private Sensor masterNodeSensor;
   private boolean zkAclsEnabled;
+  private Map<String,Object> config;
 
   // Hand out this id during the next schema registration. Indexed from 1.
   private int nextAvailableSchemaId;
@@ -170,6 +171,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                            + "served.");
     this.masterNodeSensor.add(m, new Gauge());
     this.zkAclsEnabled = checkZkAclConfig(config);
+    this.config = config.originalsWithPrefix("");
   }
 
   /**
@@ -287,7 +289,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
       } else {
         masterRestService = new RestService(String.format("http://%s:%d",
                                                           masterIdentity.getHost(),
-                                                          masterIdentity.getPort()));
+                                                          masterIdentity.getPort()),
+                                                          config
+                );
       }
 
       if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {

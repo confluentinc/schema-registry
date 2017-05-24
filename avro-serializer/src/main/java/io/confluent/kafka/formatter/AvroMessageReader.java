@@ -16,6 +16,12 @@
 
 package io.confluent.kafka.formatter;
 
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
+import kafka.common.KafkaException;
+import kafka.common.MessageReader;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
@@ -29,14 +35,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
-import kafka.common.KafkaException;
-import kafka.producer.KeyedMessage;
-import kafka.common.MessageReader;
-import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
+import java.util.Map;
 
 /**
  * Example
@@ -128,7 +127,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
       throw new ConfigException("Missing schema registry url!");
     }
     schemaRegistry = new CachedSchemaRegistryClient(
-        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
+        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, (Map) props);
     if (!props.containsKey("value.schema")) {
       throw new ConfigException("Must provide the Avro schema string in value.schema");
     }
