@@ -186,9 +186,14 @@ public abstract class ClusterTestHarness {
         server.shutdown();
       }
 
-      // Remove any persistent data
-      for (KafkaServer server : servers) {
-        CoreUtils.delete(server.config().logDirs());
+
+      try {
+        // Remove any persistent data
+        for (KafkaServer server : servers) {
+          CoreUtils.delete(server.config().logDirs());
+        }
+      } catch (Exception e) {
+        // ignore
       }
     }
 
@@ -196,8 +201,12 @@ public abstract class ClusterTestHarness {
       zkUtils.close();
     }
 
-    if (zookeeper != null) {
-      zookeeper.shutdown();
+    try {
+      if (zookeeper != null) {
+        zookeeper.shutdown();
+      }
+    } catch (Exception ex) {
+      // ignore
     }
   }
 }
