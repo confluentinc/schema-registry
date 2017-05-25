@@ -21,16 +21,15 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 import io.confluent.kafka.serializers.NonRecordContainer;
-
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -62,7 +61,8 @@ public class AvroConverter implements Converter {
     if (schemaRegistry == null) {
       schemaRegistry =
           new CachedSchemaRegistryClient(avroConverterConfig.getSchemaRegistryUrls(),
-                                         avroConverterConfig.getMaxSchemasPerSubject());
+                                         avroConverterConfig.getMaxSchemasPerSubject(),
+                                         new HashMap<>(configs));
     }
 
     serializer = new Serializer(schemaRegistry);

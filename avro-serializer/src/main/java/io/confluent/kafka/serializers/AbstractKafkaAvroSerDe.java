@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.common.config.ConfigException;
@@ -26,10 +29,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -70,7 +69,8 @@ public abstract class AbstractKafkaAvroSerDe {
       int maxSchemaObject = config.getMaxSchemasPerSubject();
 
       if (null == schemaRegistry) {
-        schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject);
+        schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject,
+                config.originalsWithPrefix(""));
       }
     } catch (io.confluent.common.config.ConfigException e) {
       throw new ConfigException(e.getMessage());

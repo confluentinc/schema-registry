@@ -16,10 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.client.rest;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -30,10 +29,15 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
-
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.security.ssl.SslFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -89,6 +93,8 @@ public class RestService {
 
   private static final int JSON_PARSE_ERROR_CODE = 50005;
   private static ObjectMapper jsonDeserializer = new ObjectMapper();
+  private SSLContext sslContext;
+
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
@@ -98,6 +104,20 @@ public class RestService {
   }
 
   private UrlList baseUrls;
+
+  public RestService(UrlList baseUrls, Map<String, Object> config) {
+    sslContext = createSslContext(config);
+    this.baseUrls = baseUrls;
+  }
+
+  public RestService(List<String> baseUrls, Map<String, Object> config) {
+    this(new UrlList(baseUrls), config);
+  }
+
+  public RestService(String baseUrlConfig, Map<String, Object> config) {
+    this(parseBaseUrl(baseUrlConfig), config);
+  }
+
 
   public RestService(UrlList baseUrls) {
     this.baseUrls = baseUrls;
@@ -133,6 +153,7 @@ public class RestService {
     try {
       URL url = new URL(requestUrl);
       connection = (HttpURLConnection) url.openConnection();
+      configureSsl(connection);
       connection.setRequestMethod(method);
 
       // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
@@ -467,5 +488,18 @@ public class RestService {
     return baseUrls;
   }
 
+  private void configureSsl(HttpURLConnection connection) {
+    if (connection instanceof HttpsURLConnection) {
+      ((HttpsURLConnection) connection).setSSLSocketFactory(sslContext.getSocketFactory());
+    }
+  }
+
+  private SSLContext createSslContext(Map<String, Object> config) {
+    SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+    ConfigDef cd = new ConfigDef();
+    SslConfigs.addClientSslSupport(cd) ;
+    sslFactory.configure(cd.parse(config));
+    return sslFactory.sslContext();
+  }
 
 }
