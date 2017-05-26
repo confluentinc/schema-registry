@@ -106,7 +106,9 @@ public class RestService {
   private UrlList baseUrls;
 
   public RestService(UrlList baseUrls, Map<String, Object> config) {
-    sslContext = createSslContext(config);
+    if (baseUrls.size() > 0 && baseUrls.current().startsWith("https")) {
+      sslContext = createSslContext(config);
+    }
     this.baseUrls = baseUrls;
   }
 
@@ -183,31 +185,40 @@ public class RestService {
         }
       }
 
-      int responseCode = connection.getResponseCode();
-      if (responseCode == HttpURLConnection.HTTP_OK) {
-        InputStream is = connection.getInputStream();
-        T result = jsonDeserializer.readValue(is, responseFormat);
-        is.close();
-        return result;
-      } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
-        return null;
-      } else {
-        InputStream es = connection.getErrorStream();
-        ErrorMessage errorMessage;
-        try {
-          errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
-        } catch (JsonProcessingException e) {
-          errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, e.getMessage());
-        }
-        es.close();
-        throw new RestClientException(errorMessage.getMessage(), responseCode,
-                                      errorMessage.getErrorCode());
-      }
+      return verifyResponseCode(responseFormat, connection);
 
     } finally {
       if (connection != null) {
         connection.disconnect();
       }
+    }
+  }
+
+  private <T> T verifyResponseCode(TypeReference<T> responseFormat,
+                                   HttpURLConnection connection)
+          throws IOException, RestClientException {
+    int responseCode = connection.getResponseCode();
+    if (responseCode == HttpURLConnection.HTTP_OK) {
+      InputStream is = connection.getInputStream();
+      T result = jsonDeserializer.readValue(is, responseFormat);
+      is.close();
+      return result;
+    } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
+      return null;
+    } else if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+      throw new RestClientException("Client unauthorized", responseCode,
+              HttpURLConnection.HTTP_UNAUTHORIZED);
+    } else {
+      InputStream es = connection.getErrorStream();
+      ErrorMessage errorMessage;
+      try {
+        errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
+      } catch (JsonProcessingException e) {
+        errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, e.getMessage());
+      }
+      es.close();
+      throw new RestClientException(errorMessage.getMessage(), responseCode,
+                                    errorMessage.getErrorCode());
     }
   }
 
