@@ -43,8 +43,10 @@ import java.util.regex.Pattern;
 public class SchemaRegistrySimpleAclAuthorizer implements RestAuthorizer, RestConfigurable {
 
   private static final Pattern SUBJECTS_RESOURCE_PATTERN = Pattern.compile("^/subjects/([^/]+)$");
-  private static final Pattern SUBJECT_VERSIONS_RESOURCE_PATTERN = Pattern.compile("^/subjects/([^/]+)/versions");
-  private static final Pattern COMPATIBILITY_RESOURCE_PATTERN = Pattern.compile("^/compatibility/subjects/([^/]+)/versions/[^/]+$");
+  private static final Pattern SUBJECT_VERSIONS_RESOURCE_PATTERN =
+          Pattern.compile("^/subjects/([^/]+)/versions");
+  private static final Pattern COMPATIBILITY_RESOURCE_PATTERN =
+          Pattern.compile("^/compatibility/subjects/([^/]+)/versions/[^/]+$");
   private static final Pattern CONFIG_RESOURCE_PATTERN = Pattern.compile("^/config/([^/]+)$");
   private static final List<Pattern> SUBJECT_PATTERN_LIST = Arrays.asList(
           SUBJECTS_RESOURCE_PATTERN,
