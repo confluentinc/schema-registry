@@ -1,12 +1,16 @@
 package io.confluent.kafka.schemaregistry;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.auth.PrincipalNameConverter;
 import jersey.repackaged.com.google.common.collect.ImmutableMap;
 import kafka.security.auth.*;
+import org.apache.avro.Schema;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
@@ -51,17 +55,17 @@ public class SSLClusterRequiringAuthorizationTestHarness extends ClusterTestHarn
 
     }
 
+    public static final String SCHEMA_REGISTRY_URL = "https://localhost:8080";
+    public static final String SSL_PASSWORD = "test1234";
     private static final Logger log = LoggerFactory.getLogger(SSLClusterTestHarness.class);
-
-    private static final String SSL_PASSWORD = "test1234";
     private static final boolean DO_NOT_SETUP_REST_APP = false;
 
     private SchemaRegistryRestApplication schemaRegistryApp;
     private Server schemaRegistryServer;
-    private File trustStore;
-    private File clientKeystore;
     private File serverKeystore;
     private String clientUserName;
+    protected File clientKeystore;
+    protected File trustStore;
 
     public SSLClusterRequiringAuthorizationTestHarness(String clientUserName) {
         super(DEFAULT_NUM_BROKERS, DO_NOT_SETUP_REST_APP);
@@ -142,16 +146,29 @@ public class SSLClusterRequiringAuthorizationTestHarness extends ClusterTestHarn
         authorizer.addAcls(aclSetScala, new Resource(Topic$.MODULE$, topic));
     }
 
-    public int updateSchema(String topic, String schema) throws Exception {
-        String uri = "https://localhost:8080";
-        return makePostRequest(uri + "/subjects/" + topic + "-value/versions", schema,
+    public int updateSchemaUsingHttpClient(String topic, String schema) throws Exception {
+        return makePostRequest(SCHEMA_REGISTRY_URL + "/subjects/" + topic + "-value/versions", schema,
                 clientKeystore.getAbsolutePath(), SSL_PASSWORD, SSL_PASSWORD);
+    }
+
+    public void updateSchemaRegistryUsingSchemaRegistryClient(String topic, String schemaText) throws IOException, RestClientException {
+        Map<String, Object> clientConfig = new HashMap<>();
+        clientConfig.put("security.protocol", "SSL");
+        clientConfig.put("ssl.truststore.location", trustStore.getAbsolutePath());
+        clientConfig.put("ssl.truststore.password", SSL_PASSWORD);
+        clientConfig.put("ssl.keystore.location", clientKeystore.getAbsolutePath());
+        clientConfig.put("ssl.keystore.password", SSL_PASSWORD);
+        clientConfig.put("ssl.key.password", SSL_PASSWORD);
+        SchemaRegistryClient client = new CachedSchemaRegistryClient(SCHEMA_REGISTRY_URL, 1000, clientConfig);
+        String subject = topic + "-value";
+        Schema.Parser parser = new Schema.Parser();
+        Schema schema = parser.parse(schemaText);
+        client.register(subject, schema);
     }
 
     private void setUpSchemaRegistry() throws Exception {
         Properties props = new Properties();
-        String uri = "https://localhost:8080";
-        props.put(RestConfig.LISTENERS_CONFIG, uri);
+        props.put(RestConfig.LISTENERS_CONFIG, SCHEMA_REGISTRY_URL);
         configServerKeystore(props);
         configServerTruststore(props);
         enableSslClientAuth(props);
