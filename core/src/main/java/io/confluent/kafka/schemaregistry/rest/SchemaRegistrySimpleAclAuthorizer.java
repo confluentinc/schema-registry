@@ -32,11 +32,25 @@ import org.slf4j.LoggerFactory;
 import javax.servlet.http.HttpServletRequest;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * SchemaRegistry authorizer using SimpleAclAuthorizer.
  */
 public class SchemaRegistrySimpleAclAuthorizer implements RestAuthorizer, RestConfigurable {
+
+  private static final Pattern SUBJECTS_RESOURCE_PATTERN = Pattern.compile("^/subjects/([^/]+)$");
+  private static final Pattern SUBJECT_VERSIONS_RESOURCE_PATTERN = Pattern.compile("^/subjects/([^/]+)/versions");
+  private static final Pattern COMPATIBILITY_RESOURCE_PATTERN = Pattern.compile("^/compatibility/subjects/([^/]+)/versions/[^/]+$");
+  private static final Pattern CONFIG_RESOURCE_PATTERN = Pattern.compile("^/config/([^/]+)$");
+  private static final List<Pattern> SUBJECT_PATTERN_LIST = Arrays.asList(
+          SUBJECTS_RESOURCE_PATTERN,
+          SUBJECT_VERSIONS_RESOURCE_PATTERN,
+          COMPATIBILITY_RESOURCE_PATTERN,
+          CONFIG_RESOURCE_PATTERN);
 
   private static final Logger log =
           LoggerFactory.getLogger(SchemaRegistrySimpleAclAuthorizer.class);
@@ -45,17 +59,58 @@ public class SchemaRegistrySimpleAclAuthorizer implements RestAuthorizer, RestCo
 
   @Override
   public boolean authorize(String principalName, HttpServletRequest request) {
-    String topicName = getTopicName(request);
-    boolean authorized;
-    if ("POST".equals(request.getMethod()) && topicName != null) {
-      log.debug("Authorizing {} for topic {}", principalName, topicName);
-      RequestChannel.Session kafkaSession = getKafkaSession(principalName, request);
-      authorized = authorizer
-              .authorize(kafkaSession, Write$.MODULE$, Resource.fromString("Topic:" + topicName));
-    } else {
-      authorized = true;
+    if (!authorizationCheckRequired(request)) {
+      return true;
     }
-    return authorized;
+
+    String topicName = getTopicName(request);
+    log.debug("Authorizing {} for topic {}", principalName, topicName);
+    RequestChannel.Session kafkaSession = getKafkaSession(principalName, request);
+    Resource topicResource = Resource.fromString("Topic:" + topicName);
+    return authorizer.authorize(kafkaSession, Write$.MODULE$, topicResource);
+  }
+
+  private boolean authorizationCheckRequired(HttpServletRequest request) {
+    return isModifyingHttpMethod(request) && isProtectedResource(request);
+  }
+
+  private boolean isProtectedResource(HttpServletRequest request) {
+    return isSubjectsResource(request) ||
+            isSubjectVersionsResource(request) ||
+            isCompatibilityResource(request) ||
+            isConfigResource(request);
+  }
+
+  private boolean isModifyingHttpMethod(HttpServletRequest request) {
+    return isPost(request) || isDelete(request) || isPut(request);
+  }
+
+  private boolean isConfigResource(HttpServletRequest request) {
+    return COMPATIBILITY_RESOURCE_PATTERN.matcher(request.getRequestURI()).matches();
+  }
+
+  private boolean isCompatibilityResource(HttpServletRequest request) {
+    return COMPATIBILITY_RESOURCE_PATTERN.matcher(request.getRequestURI()).matches();
+  }
+
+  private boolean isSubjectVersionsResource(HttpServletRequest request) {
+    return SUBJECT_VERSIONS_RESOURCE_PATTERN.matcher(request.getRequestURI()).matches();
+  }
+
+  private boolean isSubjectsResource(HttpServletRequest request) {
+    return SUBJECTS_RESOURCE_PATTERN.matcher(request.getRequestURI()).matches();
+  }
+
+  private boolean isPost(HttpServletRequest request) {
+    return "POST".equals(request.getMethod());
+  }
+
+  private boolean isDelete(HttpServletRequest request) {
+    return "DELETE".equals(request.getMethod());
+  }
+
+  private boolean isPut(HttpServletRequest request) {
+    return "PUT".equals(request.getMethod());
   }
 
   @Override
@@ -74,11 +129,14 @@ public class SchemaRegistrySimpleAclAuthorizer implements RestAuthorizer, RestCo
   private String getTopicName(HttpServletRequest req) {
     String subject = null;
     String reqUri = req.getRequestURI();
-    if (reqUri.startsWith("/subjects")) {
-      subject = reqUri.substring("/subjects/".length(), reqUri.indexOf("/versions"));
-      subject = removeSuffix(subject, "-value");
-      subject = removeSuffix(subject, "-key");
+    for (Pattern pattern : SUBJECT_PATTERN_LIST) {
+      Matcher matcher = pattern.matcher(reqUri);
+      if (matcher.find()) {
+        subject = matcher.group(1);
+      }
     }
+    subject = removeSuffix(subject, "-value");
+    subject = removeSuffix(subject, "-key");
     return subject;
   }
 
