@@ -166,7 +166,7 @@ The subjects resource provides a list of all registered subjects in your schema 
 
 .. http:delete:: /subjects/(string: subject)
 
-   Deletes the specified subject and its associated compatibility level if registered. It is recommended to use this API only in development environments. In production environments, it must be use with care as it would delete all the registered schemas for the subject. One of the potential scenario to use in production is when a topic needs to be recycled.
+   Deletes the specified subject and its associated compatibility level if registered. It is recommended to use this API only when a topic needs to be recycled or in development environment.
 
    :param string subject: the name of the subject
 
@@ -366,7 +366,7 @@ The subjects resource provides a list of all registered subjects in your schema 
 
 .. http:delete:: /subjects/(string: subject)/versions/(versionId: version)
 
-   deletes a specific version of the schema registered under this subject. This API is recommended to be used only in development environments or under extreme circumstances where-in, its required to delete a previously registered schema for compatibility purposes or re-register previously registered schema
+   Deletes a specific version of the schema registered under this subject. This only deletes the version and the schema id remains intact making it still possible to decode data using the schema id. This API is recommended to be used only in development environments or under extreme circumstances where-in, its required to delete a previously registered schema for compatibility purposes or re-register previously registered schema.
 
    :param string subject: Name of the subject
    :param versionId version: Version of the schema to be deleted. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" deletes the last registered schema under the specified subject. Note that there may be a new latest schema that gets registered right after this request is served.
