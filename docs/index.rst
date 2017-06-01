@@ -19,4 +19,5 @@ Contents:
    operations
    security
    serializer-formatter
+   schema-deletion-guidelines
    maven-plugin
