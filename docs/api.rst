@@ -181,7 +181,7 @@ The subjects resource provides a list of all registered subjects in your schema 
 
    .. sourcecode:: http
 
-      DELETE /subjects/test/versions HTTP/1.1
+      DELETE /subjects/test HTTP/1.1
       Host: schemaregistry.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
 
