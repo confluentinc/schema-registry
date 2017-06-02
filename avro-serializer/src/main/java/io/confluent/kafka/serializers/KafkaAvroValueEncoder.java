@@ -40,7 +40,7 @@ public class KafkaAvroValueEncoder extends AbstractKafkaAvroSerializer implement
     @Override
     public byte[] toBytes(Object object) {
         if (object instanceof GenericContainer) {
-            return serializeImpl(getSubjectName(((GenericContainer) object).getSchema().getName(), false), object);
+            return serializeImpl(getSubjectName(((GenericContainer) object).getSchema().getFullName(), false), object);
         } else {
             throw new SerializationException("Primitive types are not supported yet");
         }
