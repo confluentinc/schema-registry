@@ -77,10 +77,10 @@ public class SchemaRegistrySimpleAclAuthorizer implements RestAuthorizer, RestCo
   }
 
   private boolean isProtectedResource(HttpServletRequest request) {
-    return isSubjectsResource(request) ||
-            isSubjectVersionsResource(request) ||
-            isCompatibilityResource(request) ||
-            isConfigResource(request);
+    return isSubjectsResource(request)
+            || isSubjectVersionsResource(request)
+            || isCompatibilityResource(request)
+            || isConfigResource(request);
   }
 
   private boolean isModifyingHttpMethod(HttpServletRequest request) {
