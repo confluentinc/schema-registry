@@ -886,8 +886,18 @@ public class AvroData {
   // though you can get a default value from the schema, default values for complex structures need
   // to perform the same translation but those defaults will be part of the original top-level
   // (complex type) default value, not part of the child schema.
-  private static JsonNode defaultValueFromConnect(Schema schema, Object defaultVal) {
+  private static JsonNode defaultValueFromConnect(Schema schema, Object value) {
     try {
+      // If this is a logical type, convert it from the convenient Java type to the underlying
+      // serializeable format
+      Object defaultVal = value;
+      if (schema != null && schema.name() != null) {
+        LogicalTypeConverter logicalConverter = TO_AVRO_LOGICAL_CONVERTERS.get(schema.name());
+        if (logicalConverter != null && value != null) {
+          defaultVal = logicalConverter.convert(schema, value);
+        }
+      }
+
       switch (schema.type()) {
         case INT8:
           return JsonNodeFactory.instance.numberNode((Byte) defaultVal);
