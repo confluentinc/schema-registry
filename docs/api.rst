@@ -142,7 +142,7 @@ The subjects resource provides a list of all registered subjects in your schema 
 
    :statuscode 404:
       * Error code 40401 -- Subject not found
-   :statuscode 500: 
+   :statuscode 500:
       * Error code 50001 -- Error in the backend datastore
 
    **Example request**:
@@ -150,6 +150,38 @@ The subjects resource provides a list of all registered subjects in your schema 
    .. sourcecode:: http
 
       GET /subjects/test/versions HTTP/1.1
+      Host: schemaregistry.example.com
+      Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+
+   **Example response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 200 OK
+      Content-Type: application/vnd.schemaregistry.v1+json
+
+      [
+        1, 2, 3, 4
+      ]
+
+.. http:delete:: /subjects/(string: subject)
+
+   Deletes the specified subject and its associated compatibility level if registered. It is recommended to use this API only when a topic needs to be recycled or in development environment.
+
+   :param string subject: the name of the subject
+
+   :>jsonarr int version: version of the schema deleted under this subject
+
+   :statuscode 404:
+      * Error code 40401 -- Subject not found
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend datastore
+
+   **Example request**:
+
+   .. sourcecode:: http
+
+      DELETE /subjects/test HTTP/1.1
       Host: schemaregistry.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
 
@@ -331,6 +363,40 @@ The subjects resource provides a list of all registered subjects in your schema 
 		        ]
 		    }"
 	  }
+
+.. http:delete:: /subjects/(string: subject)/versions/(versionId: version)
+
+   Deletes a specific version of the schema registered under this subject. This only deletes the version and the schema id remains intact making it still possible to decode data using the schema id. This API is recommended to be used only in development environments or under extreme circumstances where-in, its required to delete a previously registered schema for compatibility purposes or re-register previously registered schema.
+
+   :param string subject: Name of the subject
+   :param versionId version: Version of the schema to be deleted. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" deletes the last registered schema under the specified subject. Note that there may be a new latest schema that gets registered right after this request is served.
+
+   :>json int: Version of the deleted schema
+
+   :statuscode 404:
+      * Error code 40401 -- Subject not found
+      * Error code 40402 -- Version not found
+   :statuscode 422:
+      * Error code 42202 -- Invalid version
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend data store
+
+   **Example request**:
+
+   .. sourcecode:: http
+
+      DELETE /subjects/test/versions/1 HTTP/1.1
+      Host: schemaregistry.example.com
+      Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+
+   **Example response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 200 OK
+      Content-Type: application/vnd.schemaregistry.v1+json
+
+      1
 
 Compatibility
 -------------
