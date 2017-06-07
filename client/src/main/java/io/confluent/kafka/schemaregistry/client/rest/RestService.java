@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.MasterResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -85,6 +86,9 @@ public class RestService {
       };
   private static final TypeReference<? extends List<Integer>> DELETE_SUBJECT_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
+      };
+  private static final TypeReference<MasterResponse> GET_MASTER_RESPONSE_TYPE =
+      new TypeReference<MasterResponse>() {
       };
 
   private static final int JSON_PARSE_ERROR_CODE = 50005;
@@ -453,6 +457,11 @@ public class RestService {
     List<Integer> response = httpRequest(path, "DELETE", null, DEFAULT_REQUEST_PROPERTIES,
                                          DELETE_SUBJECT_RESPONSE_TYPE);
     return response;
+  }
+
+  public MasterResponse getMaster() throws IOException, RestClientException {
+    return httpRequest("/master", "GET", null, DEFAULT_REQUEST_PROPERTIES,
+        GET_MASTER_RESPONSE_TYPE);
   }
 
   private static List<String> parseBaseUrl(String baseUrl) {
