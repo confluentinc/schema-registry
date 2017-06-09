@@ -211,7 +211,7 @@ dependencies as well.
 Requirements
 ------------
 
-- Kafka: 0.11.1.0-SNAPSHOT
+- Kafka: 0.11.0.0-SNAPSHOT
 
 Contribute
 ----------
