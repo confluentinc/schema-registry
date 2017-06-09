@@ -51,15 +51,35 @@ Start by running the Schema Registry and the services it depends on: ZooKeeper a
     $ curl -X GET http://localhost:8081/subjects/Kafka-value/versions/1
       {"subject":"Kafka-value","version":1,"id":1,"schema":"\"string\""}
 
-    # Fetch the most recently registered schema under subject "Kafka-value"
-    $ curl -X GET http://localhost:8081/subjects/Kafka-value/versions/latest
-      {"subject":"Kafka-value","version":1,"id":1,"schema":"\"string\""}
+    # Deletes version 1 of the schema registered under subject "Kafka-value"
+    $ curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/1
+      1
+
+    # Register the same schema under the subject "Kafka-value"
+    $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+        --data '{"schema": "{\"type\": \"string\"}"}' \
+         http://localhost:8081/subjects/Kafka-value/versions
+      {"id":1}
+
+    # Deletes the most recently registered schema under subject "Kafka-value"
+    $ curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/latest
+      2
+
+    # Register the same schema under the subject "Kafka-value"
+    $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+        --data '{"schema": "{\"type\": \"string\"}"}' \
+         http://localhost:8081/subjects/Kafka-value/versions
+      {"id":1}
+
+    # Fetch the schema again by globally unique id 1
+    $ curl -X GET http://localhost:8081/schemas/ids/1
+      {"schema":"\"string\""}
 
     # Check whether a schema has been registered under subject "Kafka-key"
     $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
         --data '{"schema": "{\"type\": \"string\"}"}' \
         http://localhost:8081/subjects/Kafka-key
-      {"subject":"Kafka-key","version":1,"id":1,"schema":"\"string\""}
+      {"subject":"Kafka-key","version":3,"id":1,"schema":"\"string\""}
 
     # Test compatibility of a schema with the latest schema under subject "Kafka-value"
     $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
@@ -82,6 +102,14 @@ Start by running the Schema Registry and the services it depends on: ZooKeeper a
         --data '{"compatibility": "BACKWARD"}' \
         http://localhost:8081/config/Kafka-value
       {"compatibility":"BACKWARD"}
+
+    # Deletes all schema versions registered under the subject "Kafka-value"
+    $ curl -X DELETE http://localhost:8081/subjects/Kafka-value
+      [3]
+
+    # List all subjects
+    $ curl -X GET http://localhost:8081/subjects
+      ["Kafka-key"]
 
 Installation
 ------------
