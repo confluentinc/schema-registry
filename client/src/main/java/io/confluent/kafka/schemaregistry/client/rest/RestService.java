@@ -39,6 +39,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -133,13 +134,9 @@ public class RestService {
     HttpURLConnection connection = null;
     try {
       URL url = new URL(requestUrl);
-      String userInfo = url.getUserInfo();
       connection = (HttpURLConnection) url.openConnection();
       connection.setRequestMethod(method);
-      if (userInfo != null) {
-        String authHeader = DatatypeConverter.printBase64Binary(userInfo.getBytes());
-        connection.setRequestProperty("Authorization", "Basic " + authHeader);
-      }
+      setBasicAuthRequestHeader(connection, url.getUserInfo());
       // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
       // On the other hand, leaving this out breaks nothing.
       connection.setDoInput(true);
@@ -472,5 +469,11 @@ public class RestService {
     return baseUrls;
   }
 
-
+  private void setBasicAuthRequestHeader(HttpURLConnection connection, String userInfo) {
+    if (userInfo != null) {
+      byte[] userInfoBytes = userInfo.getBytes(StandardCharsets.UTF_8);
+      String authHeader = DatatypeConverter.printBase64Binary(userInfoBytes);
+      connection.setRequestProperty("Authorization", "Basic " + authHeader);
+    }
+  }
 }
