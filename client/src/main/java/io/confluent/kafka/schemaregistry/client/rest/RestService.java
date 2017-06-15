@@ -39,10 +39,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.xml.bind.DatatypeConverter;
 
 /**
  * Rest access layer for sending requests to the schema registry.
@@ -134,7 +136,7 @@ public class RestService {
       URL url = new URL(requestUrl);
       connection = (HttpURLConnection) url.openConnection();
       connection.setRequestMethod(method);
-
+      setBasicAuthRequestHeader(connection, url.getUserInfo());
       // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
       // On the other hand, leaving this out breaks nothing.
       connection.setDoInput(true);
@@ -467,5 +469,11 @@ public class RestService {
     return baseUrls;
   }
 
-
+  private void setBasicAuthRequestHeader(HttpURLConnection connection, String userInfo) {
+    if (userInfo != null) {
+      byte[] userInfoBytes = userInfo.getBytes(StandardCharsets.UTF_8);
+      String authHeader = DatatypeConverter.printBase64Binary(userInfoBytes);
+      connection.setRequestProperty("Authorization", "Basic " + authHeader);
+    }
+  }
 }
