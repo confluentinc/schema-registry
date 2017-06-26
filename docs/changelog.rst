@@ -3,6 +3,22 @@
 Changelog
 =========
 
+Version 3.3.0
+-------------
+
+* Upgrade avro to 1.8.2
+* `PR-561 <https://github.com/confluentinc/schema-registry/pull/561>`_ - Use TO_AVRO_LOGICAL_CONVERTERS to convert default values that are Kafka connect logical data types to internal format which correspond to schema type. Logic copied from AvroData fromConnectData
+* `PR-549 <https://github.com/confluentinc/schema-registry/pull/549>`_ - Replace usage of deprecated ZkUtils.DefaultAcls()
+* Allow for some retries when validating that all nodes have the same master
+* Relocate Avro serdes under a new `avro` package
+* Increment Magic Byte for SchemaKey and add compatibility tests
+* Add Delete Schema support
+* Added avro-serde for Kafka Streams. Pulled from the example project.
+* `#506 <https://github.com/confluentinc/schema-registry/issues/506>`_ - The AvroMessageFormatter passes byte[] to an Avro encoder, but Avro only likes ByteBuffer. So we need to ByteBuffer.wrap() instead.
+* Added optional kafkastore.group.id config to override the one automatically created by the schema registry
+* `PR-476 <https://github.com/confluentinc/schema-registry/pull/476>`_ - Adapt to KAFKA-4636 changes: Per listener security settings overrides (KIP-103)
+
+
 Version 3.2.1
 -------------
 
