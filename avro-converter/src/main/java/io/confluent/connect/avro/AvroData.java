@@ -616,11 +616,11 @@ public class AvroData {
   }
 
   public org.apache.avro.Schema fromConnectSchema(Schema schema) {
-    return fromConnectSchema(schema, new HashMap<String, org.apache.avro.Schema>());
+    return fromConnectSchema(schema, new HashMap<Schema, org.apache.avro.Schema>());
   }
 
   public org.apache.avro.Schema fromConnectSchema(Schema schema,
-                                                  Map<String, org.apache.avro.Schema> schemaMap) {
+                                                  Map<Schema, org.apache.avro.Schema> schemaMap) {
     return fromConnectSchema(schema, schemaMap, false);
   }
 
@@ -637,7 +637,7 @@ public class AvroData {
    * schemas used to avoid re-resolving when presented with the same source schema.
    */
   public org.apache.avro.Schema fromConnectSchema(Schema schema,
-                                                  Map<String, org.apache.avro.Schema> schemaMap,
+                                                  Map<Schema, org.apache.avro.Schema> schemaMap,
                                                   boolean ignoreOptional) {
     if (schema == null) {
       return ANYTHING_SCHEMA;
@@ -646,7 +646,7 @@ public class AvroData {
     org.apache.avro.Schema cached = fromConnectSchemaCache.get(schema);
 
     if (cached == null && !AVRO_TYPE_UNION.equals(schema.name()) && !schema.isOptional()) {
-      cached = schemaMap.get(schema.name());
+      cached = schemaMap.get(schema);
     }
     if (cached != null) {
       return cached;
@@ -691,9 +691,6 @@ public class AvroData {
       case STRING:
         if (enhancedSchemaSupport && schema.parameters() != null
             && schema.parameters().containsKey(AVRO_TYPE_ENUM)) {
-          String enumSchemaName = schema.parameters().get(AVRO_TYPE_ENUM);
-          org.apache.avro.Schema cachedEnum = schemaMap.get(enumSchemaName);
-          if (cachedEnum == null) {
             List<String> symbols = new ArrayList<>();
             for (Map.Entry<String, String> entry : schema.parameters().entrySet()) {
               if (entry.getKey().startsWith(AVRO_TYPE_ENUM + ".")) {
@@ -705,10 +702,6 @@ public class AvroData {
                     schema.parameters().get(AVRO_TYPE_ENUM))
                     .doc(schema.parameters().get(CONNECT_ENUM_DOC_PROP))
                     .symbols(symbols.toArray(new String[symbols.size()]));
-            schemaMap.put(enumSchemaName, baseSchema);
-          } else {
-            baseSchema = cachedEnum;
-          }
         } else {
           baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
         }
@@ -856,8 +849,8 @@ public class AvroData {
       }
     }
 
-    if (schema.name() != null && !schema.isOptional()) {
-      schemaMap.put(schema.name(), finalSchema);
+    if (!schema.isOptional()) {
+      schemaMap.put(schema, finalSchema);
     }
     fromConnectSchemaCache.put(schema, finalSchema);
     return finalSchema;
@@ -866,7 +859,7 @@ public class AvroData {
 
   private void addAvroRecordField(
       org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler,
-      String fieldName, Schema fieldSchema, Map<String, org.apache.avro.Schema> schemaMap) {
+      String fieldName, Schema fieldSchema, Map<Schema, org.apache.avro.Schema> schemaMap) {
     org.apache.avro.SchemaBuilder.GenericDefault<org.apache.avro.Schema> fieldAvroSchema
         = fieldAssembler.name(fieldName).doc(fieldSchema.doc()).type(fromConnectSchema(fieldSchema,
                                                                                        schemaMap));
