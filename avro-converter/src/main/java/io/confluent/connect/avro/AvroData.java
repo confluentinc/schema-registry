@@ -923,7 +923,7 @@ public class AvroData {
           }
         case ARRAY: {
           ArrayNode array = JsonNodeFactory.instance.arrayNode();
-          for (Object elem : (List<Object>) defaultVal) {
+          for (Object elem : (Collection<Object>) defaultVal) {
             array.add(defaultValueFromConnect(schema.valueSchema(), elem));
           }
           return array;
@@ -1058,12 +1058,42 @@ public class AvroData {
             arrayVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_ARRAY_FIELD).pos());
         if (arrayVal != null) {
-          return toConnectData(SchemaBuilder.array(null).build(), arrayVal);
+          // We cannot reuse the logic like we do in other cases because it is not possible to
+          // construct an array schema with a null item schema, but the items have no schema.
+          if (!(arrayVal instanceof Collection)) {
+            throw new DataException(
+                "Expected a Collection for schemaless array field but found a "
+                + arrayVal.getClass().getName()
+            );
+          }
+          Collection<Object> original = (Collection<Object>) arrayVal;
+          List<Object> result = new ArrayList<>(original.size());
+          for (Object elem : original) {
+            result.add(toConnectData((Schema) null, elem));
+          }
+          return result;
         }
 
         Object mapVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_MAP_FIELD).pos());
         if (mapVal != null) {
-          return toConnectData(SchemaBuilder.map(null, null).build(), mapVal);
+          // We cannot reuse the logic like we do in other cases because it is not possible to
+          // construct a map schema with a null item schema, but the items have no schema.
+          if (!(mapVal instanceof Collection)) {
+            throw new DataException(
+                "Expected a List for schemaless map field but found a "
+                + mapVal.getClass().getName()
+            );
+          }
+          Collection<IndexedRecord> original = (Collection<IndexedRecord>) mapVal;
+          Map<Object, Object> result = new HashMap<>(original.size());
+          for (IndexedRecord entry : original) {
+            int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
+            int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
+            Object convertedKey = toConnectData((Schema) null, entry.get(avroKeyFieldIndex));
+            Object convertedValue = toConnectData((Schema) null, entry.get(avroValueFieldIndex));
+            result.put(convertedKey, convertedValue);
+          }
+          return result;
         }
 
         // If nothing was set, it's null
@@ -1160,7 +1190,7 @@ public class AvroData {
             converted = result;
           } else {
             // Arbitrary keys
-            List<IndexedRecord> original = (List<IndexedRecord>) value;
+            Collection<IndexedRecord> original = (Collection<IndexedRecord>) value;
             Map<Object, Object> result = new HashMap<>(original.size());
             for (IndexedRecord entry : original) {
               int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
