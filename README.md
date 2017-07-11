@@ -45,6 +45,14 @@ The following assumes you have Kafka and an instance of the Schema Registry runn
     $ curl -X GET http://localhost:8081/subjects/Kafka-value/versions/latest
       {"subject":"Kafka-value","version":1,"id":1,"schema":"\"string\""}
 
+    # Delete version 3 of the schema registered under subject "Kafka-value"
+        $ curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/3
+      3
+
+    # Delete all versions of the schema registered under subject "Kafka-value"
+    $ curl -X DELETE http://localhost:8081/subjects/Kafka-value
+      [1, 2, 3, 4, 5]
+
     # Check whether a schema has been registered under subject "Kafka-key"
     $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
         --data '{"schema": "{\"type\": \"string\"}"}' \
