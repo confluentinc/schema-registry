@@ -46,7 +46,7 @@ The following assumes you have Kafka and an instance of the Schema Registry runn
       {"subject":"Kafka-value","version":1,"id":1,"schema":"\"string\""}
 
     # Delete version 3 of the schema registered under subject "Kafka-value"
-        $ curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/3
+    $ curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/3
       3
 
     # Delete all versions of the schema registered under subject "Kafka-value"
