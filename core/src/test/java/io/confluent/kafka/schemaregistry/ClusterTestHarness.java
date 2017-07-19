@@ -98,6 +98,7 @@ public abstract class ClusterTestHarness {
   protected List<KafkaServer> servers = null;
   protected String brokerList = null;
 
+  protected int schemaRegistryPort ;
   protected RestApp restApp = null;
 
   public ClusterTestHarness() {
@@ -150,9 +151,17 @@ public abstract class ClusterTestHarness {
                                               getSecurityProtocol());
 
     if (setupRestApp) {
-      restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType);
+      schemaRegistryPort = choosePort();
+      Properties schemaRegistryProps = getSchemaRegistryProperties();
+      schemaRegistryProps.put(SchemaRegistryConfig.LISTENERS_CONFIG,getSchemaRegistryProtocol()+
+          "://0.0.0.0:"+schemaRegistryPort);
+      restApp = new RestApp(schemaRegistryPort, zkConnect, KAFKASTORE_TOPIC, compatibilityType, schemaRegistryProps);
       restApp.start();
     }
+  }
+
+  protected Properties getSchemaRegistryProperties() {
+    return new Properties();
   }
 
   protected void injectProperties(Properties props) {
@@ -173,6 +182,10 @@ public abstract class ClusterTestHarness {
 
   protected SecurityProtocol getSecurityProtocol() {
     return SecurityProtocol.PLAINTEXT;
+  }
+
+  protected String getSchemaRegistryProtocol(){
+    return "http";
   }
 
   @After

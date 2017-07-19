@@ -200,7 +200,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
    * of say the last, is arbitrary.
    */
   // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
-  static int getPortForIdentity(int port, List<String> configuredListeners) {
+  public static int getPortForIdentity(int port, List<String> configuredListeners) {
     List<URI> listeners = Application.parseListeners(configuredListeners, port,
                                                      Arrays.asList("http", "https"), "http");
     return listeners.get(0).getPort();
@@ -946,10 +946,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     this.kafkaStore.delete(configKey);
   }
 
-  /**
-   * For testing.
-   */
-  KafkaStore<SchemaRegistryKey, SchemaRegistryValue> getKafkaStore() {
+
+  public KafkaStore<SchemaRegistryKey, SchemaRegistryValue> getKafkaStore() {
     return this.kafkaStore;
   }
 

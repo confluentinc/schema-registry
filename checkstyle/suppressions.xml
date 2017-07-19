@@ -33,4 +33,7 @@
     <suppress checks="AbbreviationAsWordInName"
               files=".*SchemaRegistryClient.java"/>
 
+    <suppress checks="MethodLength"
+              files="SchemaRegistryConfig.java"/>
+
 </suppressions>

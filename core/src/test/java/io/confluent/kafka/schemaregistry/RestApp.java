@@ -16,15 +16,15 @@
 package io.confluent.kafka.schemaregistry;
 
 
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import org.eclipse.jetty.server.Server;
 
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 
@@ -37,16 +37,27 @@ public class RestApp {
   public String restConnect;
 
   public RestApp(int port, String zkConnect, String kafkaTopic) {
-    this(port, zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name);
+    this(port, zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name, null);
   }
 
-  public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType) {
-    this(port, zkConnect, kafkaTopic, compatibilityType, true);
+  public RestApp(
+      int port,
+      String zkConnect,
+      String kafkaTopic,
+      String compatibilityType,
+      Properties schemaRegistryProps
+  ) {
+    this(port, zkConnect, kafkaTopic, compatibilityType, true, schemaRegistryProps);
   }
 
-  public RestApp(int port, String zkConnect, String kafkaTopic,
-                 String compatibilityType, boolean masterEligibility) {
+  public RestApp(
+      int port, String zkConnect, String kafkaTopic,
+      String compatibilityType, boolean masterEligibility, Properties schemaRegistryProps
+  ) {
     prop = new Properties();
+    if (schemaRegistryProps != null) {
+      prop.putAll(schemaRegistryProps);
+    }
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
     prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
     prop.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
@@ -59,8 +70,9 @@ public class RestApp {
     restServer = restApp.createServer();
     restServer.start();
     restConnect = restServer.getURI().toString();
-    if (restConnect.endsWith("/"))
-      restConnect = restConnect.substring(0, restConnect.length()-1);
+    if (restConnect.endsWith("/")) {
+      restConnect = restConnect.substring(0, restConnect.length() - 1);
+    }
     restClient = new RestService(restConnect);
   }
 
@@ -88,7 +100,7 @@ public class RestApp {
   public SchemaRegistryIdentity masterIdentity() {
     return restApp.schemaRegistry().masterIdentity();
   }
-  
+
   public SchemaRegistry schemaRegistry() {
     return restApp.schemaRegistry();
   }

@@ -252,7 +252,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     for (int i = 0; i < numSlaves; i++) {
       RestApp slave = new RestApp(choosePort(),
                                   zkConnect, KAFKASTORE_TOPIC,
-                                  AvroCompatibilityLevel.NONE.name, false);
+                                  AvroCompatibilityLevel.NONE.name, false, null);
       slaveApps.add(slave);
       slave.start();
       aSlave = slave;
@@ -280,7 +280,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     for (int i = 0; i < numMasters; i++) {
       RestApp master = new RestApp(choosePort(),
                                    zkConnect, KAFKASTORE_TOPIC,
-                                   AvroCompatibilityLevel.NONE.name, true);
+                                   AvroCompatibilityLevel.NONE.name, true, null);
       masterApps.add(master);
       master.start();
       waitUntilMasterElectionCompletes(masterApps);
@@ -331,7 +331,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     for (int i = 0; i < numSlaves; i++) {
       RestApp slave = new RestApp(choosePort(),
                                   zkConnect, KAFKASTORE_TOPIC,
-                                  AvroCompatibilityLevel.NONE.name, false);
+                                  AvroCompatibilityLevel.NONE.name, false, null);
       slaveApps.add(slave);
       slave.start();
       aSlave = slave;
@@ -356,7 +356,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     for (int i = 0; i < numMasters; i++) {
       RestApp master = new RestApp(choosePort(),
                                    zkConnect, KAFKASTORE_TOPIC,
-                                   AvroCompatibilityLevel.NONE.name, true);
+                                   AvroCompatibilityLevel.NONE.name, true, null);
       masterApps.add(master);
       master.start();
       aMaster = master;
