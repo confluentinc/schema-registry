@@ -135,6 +135,9 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.sasl.kerberos.ticket.renew.jitter";
   public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =
       "kafkastore.sasl.kerberos.ticket.renew.window.factor";
+  public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
+      "schema.registry.resource.extension.class";
+
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper url for the Kafka cluster";
   protected static final String KAFKASTORE_BOOTSTRAP_SERVERS_DOC =
@@ -248,12 +251,18 @@ public class SchemaRegistryConfig extends RestConfig {
       "Login thread will sleep until the specified window factor of time from last refresh to "
       + "ticket's expiry has "
       + "been reached, at which time it will try to renew the ticket.";
+  protected static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC =
+      "Fully qualified class name of a valid implementation of the interface "
+      + "SchemaRegistryResourceExtension. This can be used to inject user defined resources like "
+      + "filters. Typically used to add custom capability like logging, security, etc  ";
+
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
   // TODO: move to Apache's ConfigDef
   private static final ConfigDef config;
+
 
   static {
     config = baseConfigDef()
@@ -369,7 +378,9 @@ public class SchemaRegistryConfig extends RestConfig {
                 0.8, ConfigDef.Importance.LOW,
                 KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC)
         .define(KAFKASTORE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, "",
-                ConfigDef.Importance.LOW, KAFKASTORE_GROUP_ID_DOC);
+                ConfigDef.Importance.LOW, KAFKASTORE_GROUP_ID_DOC)
+        .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.STRING, "",
+            ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC);
 
   }
 
