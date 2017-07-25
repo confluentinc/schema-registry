@@ -58,16 +58,14 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testInitialization() {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
-                                                                                       zkClient);
+  public void testInitialization() throws Exception {
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect);
     kafkaStore.close();
   }
 
   @Test(expected = StoreInitializationException.class)
-  public void testDoubleInitialization() throws StoreInitializationException {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
-                                                                                       zkClient);
+  public void testDoubleInitialization() throws Exception {
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect);
     try {
       kafkaStore.init();
     } finally {
@@ -77,8 +75,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testSimplePut() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
-                                                                                       zkClient);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect);
     String key = "Kafka";
     String value = "Rocks";
     try {
@@ -123,11 +120,12 @@ public class KafkaStoreTest extends ClusterTestHarness {
 //  }
 
   @Test
-  public void testSimpleGetAfterFailure() throws InterruptedException {
+  public void testSimpleGetAfterFailure() throws Exception {
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
-                                                                                       zkClient,
-                                                                                       inMemoryStore);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(
+        zkConnect,
+        inMemoryStore
+    );
     String key = "Kafka";
     String value = "Rocks";
     String retrievedValue = null;
@@ -148,7 +146,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     }
 
     // recreate kafka store
-    kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore);
+    kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore);
     try {
       try {
         retrievedValue = kafkaStore.get(key);
@@ -162,9 +160,8 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testSimpleDelete() throws InterruptedException {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
-                                                                                       zkClient);
+  public void testSimpleDelete() throws Exception {
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect);
     String key = "Kafka";
     String value = "Rocks";
     try {
@@ -198,11 +195,12 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testDeleteAfterRestart() throws InterruptedException {
+  public void testDeleteAfterRestart() throws Exception {
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
-                                                                                       zkClient,
-                                                                                       inMemoryStore);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(
+        zkConnect,
+        inMemoryStore
+    );
     String key = "Kafka";
     String value = "Rocks";
     try {
@@ -233,7 +231,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
       assertNull("Value should have been deleted", retrievedValue);
       kafkaStore.close();
       // recreate kafka store
-      kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore);
+      kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore);
       // verify that key still doesn't exist in the store
       retrievedValue = value;
       try {
@@ -319,28 +317,28 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testCustomGroupIdConfig() {
+  public void testCustomGroupIdConfig() throws Exception {
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
     String groupId = "test-group-id";
     Properties props = new Properties();
     props.put(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG, groupId);
-    KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, props);
+    KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
 
     assertEquals(kafkaStore.getKafkaStoreReaderThread().getConsumerProperty(org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG), groupId);
   }
 
 
   @Test
-  public void testDefaultGroupIdConfig() {
+  public void testDefaultGroupIdConfig() throws Exception {
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
     Properties props = new Properties();
-    KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, props);
+    KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
 
     assertTrue(kafkaStore.getKafkaStoreReaderThread().getConsumerProperty(org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG).startsWith("schema-registry-"));
   }
 
-  @Test(expected=IllegalStateException.class)
-  public void testMandatoryCompationPolicy() {
+  @Test(expected=StoreInitializationException.class)
+  public void testMandatoryCompationPolicy() throws Exception {
     Properties kafkaProps = new Properties();
     Properties topicProps = new Properties();
     topicProps.put(LogConfig.CleanupPolicyProp(), "delete");
@@ -349,6 +347,21 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
 
-    KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, kafkaProps);
+    KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, kafkaProps);
   }
+
+  @Test(expected=StoreInitializationException.class)
+  public void testTooManyPartitions() throws Exception {
+    Properties kafkaProps = new Properties();
+    Properties topicProps = new Properties();
+    topicProps.put(LogConfig.CleanupPolicyProp(), "compact");
+
+    AdminUtils.createTopic(zkUtils, SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 3, 1,
+                           topicProps, RackAwareMode.Enforced$.MODULE$);
+
+    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+
+    StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, kafkaProps);
+  }
+
 }
