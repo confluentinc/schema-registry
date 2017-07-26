@@ -151,17 +151,9 @@ public abstract class ClusterTestHarness {
                                               getSecurityProtocol());
 
     if (setupRestApp) {
-      schemaRegistryPort = choosePort();
-      Properties schemaRegistryProps = getSchemaRegistryProperties();
-      schemaRegistryProps.put(SchemaRegistryConfig.LISTENERS_CONFIG,getSchemaRegistryProtocol()+
-          "://0.0.0.0:"+schemaRegistryPort);
-      restApp = new RestApp(schemaRegistryPort, zkConnect, KAFKASTORE_TOPIC, compatibilityType, schemaRegistryProps);
+      restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType);
       restApp.start();
     }
-  }
-
-  protected Properties getSchemaRegistryProperties() {
-    return new Properties();
   }
 
   protected void injectProperties(Properties props) {
