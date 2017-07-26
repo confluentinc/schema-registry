@@ -3,6 +3,39 @@
 Changelog
 =========
 
+Version 3.4.0
+-------------
+
+Upgrade Notes
+^^^^^^^^^^^^^
+
+In 3.4.0, initial creation or validation of the topic used to store schemas has been
+reimplemented to use native Kafka protocol requests instead of accessing Zookeeper directly. This
+means that you are no longer required to have direct access to the Zookeeper cluster backing your
+Kafka cluster. However, note that this also requires appropriate permissions to create topics (on
+first execution of the Schema Registry) or describe topics and configs (on subsequent executions
+to validate the topic is configured correctly). If you have authentication and authorization enabled
+on your Kafka cluster, you must ensure your principal has the correct permissions before
+upgrading the Schema Registry cluster. Your principal must have the following permissions:
+
+Create Schemas Topic
+
+=========  ===========================  ===============================================
+Operation  Resource                     Reason
+=========  ===========================  ===============================================
+Describe   Topic: ``kafkastore.topic``  Check existence of topic
+Create     Cluster                      Create the schemas topic, set compaction policy
+=========  ===========================  ===============================================
+
+Validate Schemas Topic
+
+===============  ===========================  =============================================
+Operation        Resource                     Reason
+===============  ===========================  =============================================
+Describe         Topic: ``kafkastore.topic``  Check existence of topic
+DescribeConfigs  Topic: ``kafkastore.topic``  Validate correct compaction policy on topic
+===============  ===========================  =============================================
+
 Version 3.3.0
 -------------
 
