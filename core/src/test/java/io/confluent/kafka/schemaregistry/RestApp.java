@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 
@@ -40,26 +41,32 @@ public class RestApp {
     this(port, zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name, null);
   }
 
-  public RestApp(
-      int port,
-      String zkConnect,
-      String kafkaTopic,
-      String compatibilityType,
-      Properties schemaRegistryProps
-  ) {
-    this(port, zkConnect, kafkaTopic, compatibilityType, true, schemaRegistryProps);
+  public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType, Properties schemaRegistryProps) {
+    this(port, null, zkConnect, kafkaTopic, compatibilityType, true, schemaRegistryProps);
   }
 
-  public RestApp(
-      int port, String zkConnect, String kafkaTopic,
-      String compatibilityType, boolean masterEligibility, Properties schemaRegistryProps
-  ) {
+  public RestApp(int port, String srZkConnect, String zkConnect, String kafkaTopic,
+                 String compatibilityType, boolean masterEligibility) {
+    this(port, srZkConnect, zkConnect, null, kafkaTopic, compatibilityType, masterEligibility,
+        null);
+  }
+
+  public RestApp(int port, String srZkConnect, String zkConnect, String bootstrapBrokers,
+                 String kafkaTopic, String compatibilityType, boolean masterEligibility, Properties schemaRegistryProps) {
     prop = new Properties();
     if (schemaRegistryProps != null) {
       prop.putAll(schemaRegistryProps);
     }
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
-    prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    if (srZkConnect != null) {
+      prop.setProperty(SchemaRegistryConfig.SCHEMAREGISTRY_CONNECTION_URL_CONFIG, srZkConnect);
+    }
+    if (zkConnect != null) {
+      prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    }
+    if (bootstrapBrokers != null) {
+      prop.setProperty(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
+    }
     prop.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
     prop.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, compatibilityType);
     prop.put(SchemaRegistryConfig.MASTER_ELIGIBILITY, masterEligibility);
@@ -70,9 +77,8 @@ public class RestApp {
     restServer = restApp.createServer();
     restServer.start();
     restConnect = restServer.getURI().toString();
-    if (restConnect.endsWith("/")) {
-      restConnect = restConnect.substring(0, restConnect.length() - 1);
-    }
+    if (restConnect.endsWith("/"))
+      restConnect = restConnect.substring(0, restConnect.length()-1);
     restClient = new RestService(restConnect);
   }
 
@@ -100,7 +106,7 @@ public class RestApp {
   public SchemaRegistryIdentity masterIdentity() {
     return restApp.schemaRegistry().masterIdentity();
   }
-
+  
   public SchemaRegistry schemaRegistry() {
     return restApp.schemaRegistry();
   }
