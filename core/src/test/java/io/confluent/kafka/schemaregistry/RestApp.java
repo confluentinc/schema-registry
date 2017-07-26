@@ -46,9 +46,9 @@ public class RestApp {
   }
 
   public RestApp(int port, String srZkConnect, String zkConnect, String kafkaTopic,
-                 String compatibilityType, boolean masterEligibility) {
+                 String compatibilityType, boolean masterEligibility, Properties schemaRegistryProps) {
     this(port, srZkConnect, zkConnect, null, kafkaTopic, compatibilityType, masterEligibility,
-        null);
+        schemaRegistryProps);
   }
 
   public RestApp(int port, String srZkConnect, String zkConnect, String bootstrapBrokers,

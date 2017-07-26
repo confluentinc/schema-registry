@@ -138,6 +138,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.sasl.kerberos.ticket.renew.jitter";
   public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =
       "kafkastore.sasl.kerberos.ticket.renew.window.factor";
+  public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
+      "schema.registry.resource.extension.class";
 
   protected static final String SCHEMAREGISTRY_CONNECTION_URL_DOC =
       "Zookeeper URL used by the schema registry instances to coordinate. If not specified, it "
@@ -147,9 +149,6 @@ public class SchemaRegistryConfig extends RestConfig {
       + "This setting is useful if you need to use a different Zookeeper cluster than your Kafka "
       + "cluster uses, for example if you use a cloud hosted Kafka cluster that does not expose "
       + "its underlying Zookeeper cluster.";
-
-  public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
-      "schema.registry.resource.extension.class";
 
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper URL for the Kafka cluster";
