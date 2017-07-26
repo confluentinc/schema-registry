@@ -137,6 +137,15 @@ Configuration Options
   * Default: false
   * Importance: high
 
+``schema.registry.connection.url``
+  Zookeeper URL used by the schema registry instances to coordinate. If not specified, it will default to using the kafkastore.connection.url, i.e. the same Zookeeper cluster as your Kafka cluster uses.
+
+  This setting is useful if you need to use a different Zookeeper cluster than your Kafka cluster uses, for example if you use a cloud hosted Kafka cluster that does not expose its underlying Zookeeper cluster.
+
+  * Type: string
+  * Default: ""
+  * Importance: medium
+
 ``kafkastore.init.timeout.ms``
   The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
 
@@ -266,16 +275,15 @@ Configuration Options
 ``kafkastore.bootstrap.servers``
   A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
 
-  If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list
-  from ZooKeeper (configured with `kafkastore.connection.url`). Note that if `kafkastore.bootstrap.servers` is configured,
-  `kafkastore.connection.url` still needs to be configured, too.
+  If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used. Note that if `kafkastore.bootstrap.servers` is configured, `kafkastore.connection.url` still needs to be configured, too.
 
-  This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that
-  all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.
+  This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.
 
- * Type: list
- * Default: "" (when left blank, bootstrap servers are fetched from ZooKeeper)
- * Importance: medium
+  Additionally, this setting should be used if the Zookeeper cluster used to coordinate Schema Registry instances is different than the one used by the Kafka cluster storing the kafkastore.topic. For example, this might be the case if you are using a hosted Kafka service which does not provide access to the underlying Zookeeper cluster.
+
+  * Type: list
+  * Default: []
+  * Importance: medium
 
 ``access.control.allow.origin``
   Set value for Jetty Access-Control-Allow-Origin header

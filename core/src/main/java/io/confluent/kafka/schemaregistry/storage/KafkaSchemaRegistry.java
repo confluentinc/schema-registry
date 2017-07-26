@@ -101,6 +101,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   private final Object masterLock = new Object();
   private final AvroCompatibilityLevel defaultCompatibilityLevel;
   private final String schemaRegistryZkNamespace;
+  private final String srClusterZkUrl;
   private final String kafkaClusterZkUrl;
   private final int zkSessionTimeoutMs;
   private final int kafkaStoreTimeoutMs;
@@ -136,6 +137,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
         config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
     this.isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
+    this.srClusterZkUrl = config.schemaRegistryZkUrl();
     this.kafkaClusterZkUrl =
         config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     this.zkSessionTimeoutMs =
@@ -228,10 +230,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   private void createZkNamespace() {
-    int kafkaNamespaceIndex = kafkaClusterZkUrl.indexOf("/");
+    int kafkaNamespaceIndex = srClusterZkUrl.indexOf("/");
     String zkConnForNamespaceCreation = kafkaNamespaceIndex > 0
-                                        ? kafkaClusterZkUrl.substring(0, kafkaNamespaceIndex)
-                                        : kafkaClusterZkUrl;
+                                        ? srClusterZkUrl.substring(0, kafkaNamespaceIndex)
+                                        : srClusterZkUrl;
 
     String schemaRegistryNamespace = "/" + schemaRegistryZkNamespace;
     schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;

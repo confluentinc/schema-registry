@@ -41,14 +41,27 @@ public class RestApp {
   }
 
   public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType) {
-    this(port, zkConnect, kafkaTopic, compatibilityType, true);
+    this(port, null, zkConnect, kafkaTopic, compatibilityType, true);
   }
 
-  public RestApp(int port, String zkConnect, String kafkaTopic,
+  public RestApp(int port, String srZkConnect, String zkConnect, String kafkaTopic,
                  String compatibilityType, boolean masterEligibility) {
+    this(port, srZkConnect, zkConnect, null, kafkaTopic, compatibilityType, masterEligibility);
+  }
+
+  public RestApp(int port, String srZkConnect, String zkConnect, String bootstrapBrokers,
+                 String kafkaTopic, String compatibilityType, boolean masterEligibility) {
     prop = new Properties();
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
-    prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    if (srZkConnect != null) {
+      prop.setProperty(SchemaRegistryConfig.SCHEMAREGISTRY_CONNECTION_URL_CONFIG, srZkConnect);
+    }
+    if (zkConnect != null) {
+      prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    }
+    if (bootstrapBrokers != null) {
+      prop.setProperty(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
+    }
     prop.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
     prop.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, compatibilityType);
     prop.put(SchemaRegistryConfig.MASTER_ELIGIBILITY, masterEligibility);

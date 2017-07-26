@@ -40,6 +40,9 @@ public class SchemaRegistryConfig extends RestConfig {
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
   private static final String SCHEMAREGISTRY_LISTENERS_DEFAULT = "";
 
+  public static final String SCHEMAREGISTRY_CONNECTION_URL_CONFIG
+      = "schema.registry.connection.url";
+
   @Deprecated
   public static final String KAFKASTORE_SECURITY_PROTOCOL_SSL = "SSL";
   @Deprecated
@@ -135,22 +138,37 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.sasl.kerberos.ticket.renew.jitter";
   public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =
       "kafkastore.sasl.kerberos.ticket.renew.window.factor";
+
+  protected static final String SCHEMAREGISTRY_CONNECTION_URL_DOC =
+      "Zookeeper URL used by the schema registry instances to coordinate. If not specified, it "
+      + "will default to using the kafkastore.connection.url, i.e. the same Zookeeper cluster as "
+      + "your Kafka cluster uses."
+      + "\n"
+      + "This setting is useful if you need to use a different Zookeeper cluster than your Kafka "
+      + "cluster uses, for example if you use a cloud hosted Kafka cluster that does not expose "
+      + "its underlying Zookeeper cluster.";
+
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
-      "Zookeeper url for the Kafka cluster";
+      "Zookeeper URL for the Kafka cluster";
   protected static final String KAFKASTORE_BOOTSTRAP_SERVERS_DOC =
       "A list of Kafka brokers to connect to. For example, "
       + "`PLAINTEXT://hostname:9092,SSL://hostname2:9092`\n"
       + "\n"
       + "If this configuration is not specified, the Schema Registry's internal Kafka clients will "
-      + "get their Kafka bootstrap server list\nfrom ZooKeeper "
+      + "get their Kafka bootstrap server list from ZooKeeper "
       + "(configured with `kafkastore.connection.url`). In that case, all available listeners "
-      + "matching the\n`kafkastore.security.protocol` setting will be used. Note that if "
-      + "`kafkastore.bootstrap.servers` is configured,\n`kafkastore.connection.url` still needs to "
-      + "be configured, too.\n"
+      + "matching the `kafkastore.security.protocol` setting will be used. Note that if "
+      + "`kafkastore.bootstrap.servers` is configured, `kafkastore.connection.url` still needs to "
+      + "be configured, too."
       + "\n"
       + "This configuration is particularly important when Kafka security is enabled, because Kafka"
-      + " may expose multiple endpoints that\nall will be stored in ZooKeeper, but the "
-      + "Schema Registry may need to be configured with just one of those endpoints.";
+      + " may expose multiple endpoints that all will be stored in ZooKeeper, but the "
+      + "Schema Registry may need to be configured with just one of those endpoints."
+      + "\n"
+      + "Additionally, this setting should be used if the Zookeeper cluster used to coordinate "
+      + "Schema Registry instances is different than the one used by the Kafka cluster storing "
+      + "the kafkastore.topic. For example, this might be the case if you are using a hosted "
+      + "Kafka service which does not provide access to the underlying Zookeeper cluster.";
   protected static final String KAFKASTORE_GROUP_ID_DOC =
       "Use this setting to override the group.id for the KafkaStore consumer.\n"
       + "This setting can become important when security is enabled, to ensure stability over "
@@ -275,11 +293,13 @@ public class SchemaRegistryConfig extends RestConfig {
                         SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT,
                         ConfigDef.Importance.HIGH,
                         RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
-        .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
-                KAFKASTORE_CONNECTION_URL_DOC)
+        .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, "",
+                ConfigDef.Importance.HIGH, KAFKASTORE_CONNECTION_URL_DOC)
         .define(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, "",
                 ConfigDef.Importance.MEDIUM,
                 KAFKASTORE_BOOTSTRAP_SERVERS_DOC)
+        .define(SCHEMAREGISTRY_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, "",
+                ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_CONNECTION_URL_DOC)
         .define(SCHEMAREGISTRY_ZK_NAMESPACE, ConfigDef.Type.STRING,
                 DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
                 ConfigDef.Importance.LOW, SCHEMAREGISTRY_ZK_NAMESPACE_DOC)
@@ -406,11 +426,25 @@ public class SchemaRegistryConfig extends RestConfig {
     }
   }
 
+  public AvroCompatibilityLevel compatibilityType() {
+    return compatibilityType;
+  }
+
+  public String schemaRegistryZkUrl() {
+    String result = getString(SCHEMAREGISTRY_CONNECTION_URL_CONFIG);
+    if (result.isEmpty()) {
+      result = getString(KAFKASTORE_CONNECTION_URL_CONFIG);
+    }
+    if (result.isEmpty()) {
+      throw new ConfigException("Must specify at least one of "
+                                + KAFKASTORE_CONNECTION_URL_CONFIG + " or "
+                                + SCHEMAREGISTRY_CONNECTION_URL_CONFIG);
+    }
+    return result;
+  }
+
   public static void main(String[] args) {
     System.out.println(config.toRst());
   }
 
-  public AvroCompatibilityLevel compatibilityType() {
-    return compatibilityType;
-  }
 }

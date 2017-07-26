@@ -81,8 +81,9 @@ public abstract class ClusterTestHarness {
   }
 
   private int numBrokers;
+  private boolean dedicatedSchemaRegistryZookeeper;
   private boolean setupRestApp;
-  private String compatibilityType;
+  protected String compatibilityType;
 
   // ZK Config
   protected EmbeddedZookeeper zookeeper;
@@ -92,6 +93,14 @@ public abstract class ClusterTestHarness {
   protected int zkConnectionTimeout = 30000; // a larger connection timeout is required for SASL tests
                                              // because SASL connections tend to take longer.
   protected int zkSessionTimeout = 6000;
+
+  // Optional dedicated zookeeper cluster for schema registry instance coordination (master
+  // election/ID storage)
+  protected EmbeddedZookeeper srZookeeper;
+  protected String srZkConnect;
+  protected ZkUtils srZkUtils;
+  protected ZkClient srZkClient;
+
 
   // Kafka Config
   protected List<KafkaConfig> configs = null;
@@ -113,12 +122,17 @@ public abstract class ClusterTestHarness {
   }
 
   public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType) {
+    this(numBrokers, false, setupRestApp, compatibilityType);
+  }
+  public ClusterTestHarness(int numBrokers, boolean dedicatedSchemaRegistryZookeeper,
+                            boolean setupRestApp, String compatibilityType) {
     this.numBrokers = numBrokers;
+    this.dedicatedSchemaRegistryZookeeper = dedicatedSchemaRegistryZookeeper;
     this.setupRestApp = setupRestApp;
     this.compatibilityType = compatibilityType;
   }
 
-  private boolean setZkAcls() {
+  protected boolean setZkAcls() {
     return getSecurityProtocol() == SecurityProtocol.SASL_PLAINTEXT ||
            getSecurityProtocol() == SecurityProtocol.SASL_SSL;
   }
@@ -149,8 +163,18 @@ public abstract class ClusterTestHarness {
         TestUtils.getBrokerListStrFromServers(JavaConversions.asScalaBuffer(servers),
                                               getSecurityProtocol());
 
+    if (dedicatedSchemaRegistryZookeeper) {
+      srZookeeper = new EmbeddedZookeeper();
+      srZkConnect = String.format("localhost:%d", srZookeeper.port());
+      srZkUtils = ZkUtils.apply(
+          srZkConnect, zkSessionTimeout, zkConnectionTimeout,
+          setZkAcls());
+      srZkClient = srZkUtils.zkClient();
+    }
+
     if (setupRestApp) {
-      restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType);
+      restApp = new RestApp(choosePort(), srZkConnect, zkConnect, KAFKASTORE_TOPIC,
+                            compatibilityType, true);
       restApp.start();
     }
   }

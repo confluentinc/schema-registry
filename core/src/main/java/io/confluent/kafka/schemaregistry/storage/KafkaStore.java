@@ -17,19 +17,24 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.rest.RestConfig;
-import kafka.admin.RackAwareMode;
 import kafka.cluster.EndPoint;
-import kafka.server.ConfigType;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
@@ -37,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -56,9 +62,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import kafka.admin.AdminUtils;
 import kafka.cluster.Broker;
-import kafka.log.LogConfig;
 import kafka.utils.ZkUtils;
 import scala.collection.JavaConversions;
 import scala.collection.Seq;
@@ -82,9 +86,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final AtomicBoolean initialized = new AtomicBoolean(false);
   private final int initTimeout;
   private final int timeout;
-  private final Seq<Broker> brokerSeq;
   private final String bootstrapBrokers;
-  private final ZkUtils zkUtils;
   private KafkaProducer<byte[], byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
   // Noop key is only used to help reliably determine last offset; reader thread ignores
@@ -121,17 +123,25 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     int zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
-    this.zkUtils = ZkUtils.apply(
-        kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-        KafkaSchemaRegistry.checkZkAclConfig(this.config));
-    this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
     List<String>
         bootstrapServersConfig =
         config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
     List<String> endpoints;
     if (bootstrapServersConfig.isEmpty()) {
-      endpoints = brokersToEndpoints(JavaConversions.seqAsJavaList(this.brokerSeq));
+      ZkUtils zkUtils = null;
+      try {
+        zkUtils = ZkUtils.apply(
+            kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
+            KafkaSchemaRegistry.checkZkAclConfig(this.config));
+        Seq<Broker> brokerSeq = zkUtils.getAllBrokersInCluster();
+        endpoints = brokersToEndpoints(JavaConversions.seqAsJavaList(brokerSeq));
+      } finally {
+        if (zkUtils != null) {
+          zkUtils.close();
+        }
+        log.debug("Kafka store zookeeper client shut down");
+      }
     } else {
       endpoints = bootstrapServersConfig;
     }
@@ -148,8 +158,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
           "Illegal state while initializing store. Store was already initialized");
     }
 
-    // create the schema topic if needed
-    createSchemaTopic();
+    createOrVerifySchemaTopic();
 
     // set the producer properties and initialize a Kafka producer client
     Properties props = new Properties();
@@ -278,15 +287,46 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
   }
 
-  private void createSchemaTopic() throws StoreInitializationException {
-    if (AdminUtils.topicExists(zkUtils, topic)) {
-      verifySchemaTopic();
-      return;
+  private void createOrVerifySchemaTopic() throws StoreInitializationException {
+    Properties props = new Properties();
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
+    props.put(AdminClientConfig.SECURITY_PROTOCOL_CONFIG,
+              this.config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
+    addSecurityConfigsToClientProperties(this.config, props);
+
+    try (AdminClient admin = AdminClient.create(props)) {
+      //
+      Set<String> allTopics = admin.listTopics().names().get(initTimeout, TimeUnit.MILLISECONDS);
+      if (allTopics.contains(topic)) {
+        verifySchemaTopic(admin);
+      } else {
+        createSchemaTopic(admin);
+      }
+    } catch (TimeoutException e) {
+      throw new StoreInitializationException(
+          "Timed out trying to create or validate schema topic configuration",
+          e
+      );
+    } catch (InterruptedException | ExecutionException e) {
+      throw new StoreInitializationException(
+          "Failed trying to create or validate schema topic configuration",
+          e
+      );
     }
-    int numLiveBrokers = brokerSeq.size();
+  }
+
+  private void createSchemaTopic(AdminClient admin) throws StoreInitializationException,
+                                                           InterruptedException,
+                                                           ExecutionException,
+                                                           TimeoutException {
+    log.info("Creating schemas topic {}", topic);
+
+    int numLiveBrokers = admin.describeCluster().nodes()
+        .get(initTimeout, TimeUnit.MILLISECONDS).size();
     if (numLiveBrokers <= 0) {
       throw new StoreInitializationException("No live Kafka brokers");
     }
+
     int schemaTopicReplicationFactor = Math.min(numLiveBrokers, desiredReplicationFactor);
     if (schemaTopicReplicationFactor < desiredReplicationFactor) {
       log.warn("Creating the schema topic "
@@ -297,14 +337,69 @@ public class KafkaStore<K, V> implements Store<K, V> {
                + desiredReplicationFactor + ". If this is a production environment, it's "
                + "crucial to add more brokers and increase the replication factor of the topic.");
     }
-    Properties schemaTopicProps = new Properties();
-    schemaTopicProps.put(LogConfig.CleanupPolicyProp(), "compact");
 
+    NewTopic schemaTopicRequest = new NewTopic(topic, 1, (short) schemaTopicReplicationFactor);
+    schemaTopicRequest.configs(
+        Collections.singletonMap(
+            TopicConfig.CLEANUP_POLICY_CONFIG,
+            TopicConfig.CLEANUP_POLICY_COMPACT
+        )
+    );
     try {
-      AdminUtils.createTopic(zkUtils, topic, 1, schemaTopicReplicationFactor, schemaTopicProps,
-                             RackAwareMode.Enforced$.MODULE$);
-    } catch (TopicExistsException e) {
-      // This is ok.
+      admin.createTopics(Collections.singleton(schemaTopicRequest)).all()
+          .get(initTimeout, TimeUnit.MILLISECONDS);
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof TopicExistsException) {
+        // This is ok.
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  private void verifySchemaTopic(AdminClient admin) throws StoreInitializationException,
+                                                           InterruptedException,
+                                                           ExecutionException,
+                                                           TimeoutException {
+    log.info("Validating schemas topic {}", topic);
+
+    Set<String> topics = Collections.singleton(topic);
+    Map<String, TopicDescription> topicDescription = admin.describeTopics(topics)
+        .all().get(initTimeout, TimeUnit.MILLISECONDS);
+
+    TopicDescription description = topicDescription.get(topic);
+    final int numPartitions = description.partitions().size();
+    if (numPartitions != 1) {
+      throw new StoreInitializationException("The schema topic " + topic + " should have only 1 "
+                                             + "partition but has " + numPartitions);
+    }
+
+    if (description.partitions().get(0).replicas().size() < desiredReplicationFactor) {
+      log.warn("The replication factor of the schema topic "
+               + topic
+               + " is less than the desired one of "
+               + desiredReplicationFactor
+               + ". If this is a production environment, it's crucial to add more brokers and "
+               + "increase the replication factor of the topic.");
+    }
+
+    ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+
+    Map<ConfigResource, Config> configs =
+        admin.describeConfigs(Collections.singleton(topicResource)).all()
+            .get(initTimeout, TimeUnit.MILLISECONDS);
+    Config topicConfigs = configs.get(topicResource);
+    String retentionPolicy = topicConfigs.get(TopicConfig.CLEANUP_POLICY_CONFIG).value();
+    if (retentionPolicy == null || !TopicConfig.CLEANUP_POLICY_COMPACT.equals(retentionPolicy)) {
+      log.error("The retention policy of the schema topic " + topic + " is incorrect. "
+                + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
+                + "deleting your schemas after a week. "
+                + "Refer to Kafka documentation for more details on cleanup policies");
+
+      throw new StoreInitializationException("The retention policy of the schema topic " + topic
+                                             + " is incorrect. Expected cleanup.policy to be "
+                                             + "'compact' but it is " + retentionPolicy);
+
     }
   }
 
@@ -357,44 +452,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
 
     return sb.toString();
-  }
-
-  private void verifySchemaTopic() {
-    Set<String> topics = new HashSet<String>();
-    topics.add(topic);
-
-    // check # partition and the replication factor
-    scala.collection.Map partitionAssignment = zkUtils.getPartitionAssignmentForTopics(
-        JavaConversions.asScalaSet(topics).toSeq())
-        .get(topic).get();
-
-    if (partitionAssignment.size() != 1) {
-      log.warn("The schema topic " + topic + " should have only 1 partition.");
-    }
-
-    if (((Seq) partitionAssignment.get(0).get()).size() < desiredReplicationFactor) {
-      log.warn("The replication factor of the schema topic "
-               + topic
-               + " is less than the desired one of "
-               + desiredReplicationFactor
-               + ". If this is a production environment, it's crucial to add more brokers and "
-               + "increase the replication factor of the topic.");
-    }
-
-    // check the retention policy
-    Properties prop = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic(), topic);
-    String retentionPolicy = prop.getProperty(LogConfig.CleanupPolicyProp());
-    if (retentionPolicy == null || "compact".compareTo(retentionPolicy) != 0) {
-      log.error("The retention policy of the schema topic " + topic + " is incorrect. "
-                + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
-                + "deleting your schemas after a week. "
-                + "Refer to Kafka documentation for more details on cleanup policies");
-
-      throw new IllegalStateException("The retention policy of the schema topic " + topic
-                                      + " is incorrect. Expected cleanup.policy to be 'compact' "
-                                      + "but it is " + retentionPolicy);
-
-    }
   }
 
   /**
@@ -495,8 +552,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
     log.debug("Kafka store reader thread shut down");
     producer.close();
     log.debug("Kafka store producer shut down");
-    zkUtils.close();
-    log.debug("Kafka store zookeeper client shut down");
     localStore.close();
     log.debug("Kafka store shut down complete");
   }
