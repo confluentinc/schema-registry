@@ -16,16 +16,19 @@
 
 package io.confluent.kafka.schemaregistry.rest.extensions;
 
+import java.io.Closeable;
+
 import javax.ws.rs.core.Configurable;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 
-public interface SchemaRegistryResourceExtension {
+public interface SchemaRegistryResourceExtension extends Closeable {
 
-  void register(Configurable<?> config,
-                SchemaRegistryConfig schemaRegistryConfig,
-                KafkaSchemaRegistry schemaRegistry);
+  void register(
+      Configurable<?> config,
+      SchemaRegistryConfig schemaRegistryConfig,
+      SchemaRegistry schemaRegistry
+  );
 
-  void clean();
 }

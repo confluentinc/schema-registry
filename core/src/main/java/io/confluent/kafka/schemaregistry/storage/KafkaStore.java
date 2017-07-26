@@ -70,11 +70,7 @@ import scala.collection.Seq;
 public class KafkaStore<K, V> implements Store<K, V> {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStore.class);
-  private static final Set<SecurityProtocol> SUPPORTED_SECURITY_PROTOCOLS = new HashSet<>(
-      Arrays
-          .asList(SecurityProtocol.PLAINTEXT, SecurityProtocol.SSL, SecurityProtocol.SASL_PLAINTEXT,
-                  SecurityProtocol.SASL_SSL)
-  );
+
 
   private final String kafkaClusterZkUrl;
   private final String topic;
@@ -120,34 +116,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.localStore = localStore;
     this.noopKey = noopKey;
     this.config = config;
+    this.bootstrapBrokers = config.bootstrapBrokers();
 
-    int zkSessionTimeoutMs =
-        config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
-
-    List<String>
-        bootstrapServersConfig =
-        config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
-    List<String> endpoints;
-    if (bootstrapServersConfig.isEmpty()) {
-      ZkUtils zkUtils = null;
-      try {
-        zkUtils = ZkUtils.apply(
-            kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
-            KafkaSchemaRegistry.checkZkAclConfig(this.config));
-        Seq<Broker> brokerSeq = zkUtils.getAllBrokersInCluster();
-        endpoints = brokersToEndpoints(JavaConversions.seqAsJavaList(brokerSeq));
-      } finally {
-        if (zkUtils != null) {
-          zkUtils.close();
-        }
-        log.debug("Kafka store zookeeper client shut down");
-      }
-    } else {
-      endpoints = bootstrapServersConfig;
-    }
-    this.bootstrapBrokers =
-        endpointsToBootstrapServers(endpoints, config
-            .getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
     log.info("Initializing KafkaStore with broker endpoints: " + this.bootstrapBrokers);
   }
 
@@ -403,56 +373,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
   }
 
-  static List<String> brokersToEndpoints(List<Broker> brokers) {
-    final List<String> endpoints = new LinkedList<>();
-    for (Broker broker : brokers) {
-      for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints())) {
-        String
-            hostport =
-            ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
-        String endpoint = ep.securityProtocol() + "://" + hostport;
 
-        endpoints.add(endpoint);
-      }
-    }
-
-    return endpoints;
-  }
-
-  static String endpointsToBootstrapServers(List<String> endpoints, String securityProtocol) {
-    if (!SUPPORTED_SECURITY_PROTOCOLS.contains(SecurityProtocol.forName(securityProtocol))) {
-      throw new ConfigException(
-          "Only PLAINTEXT, SSL, SASL_PLAINTEXT, and SASL_SSL Kafka endpoints are supported.");
-    }
-
-    final String securityProtocolUrlPrefix = securityProtocol + "://";
-    final StringBuilder sb = new StringBuilder();
-    for (String endpoint : endpoints) {
-      if (!endpoint.startsWith(securityProtocolUrlPrefix)) {
-        log.warn(
-            "Ignoring Kafka broker endpoint " + endpoint + " that does not match the setting for "
-            + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + "=" + securityProtocol);
-        continue;
-      }
-
-      if (sb.length() > 0) {
-        sb.append(",");
-      }
-      sb.append(endpoint);
-    }
-
-    if (sb.length() == 0) {
-      throw new ConfigException("No supported Kafka endpoints are configured. Either "
-                                + SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
-                                + " must have at least one endpoint matching "
-                                + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG
-                                + " or broker endpoints loaded from ZooKeeper "
-                                + "must have at least one endpoint matching "
-                                + SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG + ".");
-    }
-
-    return sb.toString();
-  }
 
   /**
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.

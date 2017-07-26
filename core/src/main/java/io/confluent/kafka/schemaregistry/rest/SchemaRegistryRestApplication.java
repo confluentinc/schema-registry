@@ -20,6 +20,7 @@ import org.eclipse.jetty.util.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Properties;
 
 import javax.ws.rs.core.Configurable;
@@ -101,7 +102,11 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   public void onShutdown() {
     schemaRegistry.close();
     if (schemaRegistryResourceExtension != null) {
-      schemaRegistryResourceExtension.clean();
+      try {
+        schemaRegistryResourceExtension.close();
+      } catch (IOException e) {
+        log.error("Error closing the extension resource", e);
+      }
     }
   }
 

@@ -16,25 +16,39 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.Map;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import kafka.cluster.Broker;
+import kafka.cluster.EndPoint;
+import kafka.utils.ZkUtils;
+import scala.collection.JavaConversions;
+import scala.collection.Seq;
 
 import static io.confluent.common.config.ConfigDef.Range.atLeast;
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES;
-import static io.confluent.kafka.schemaregistry.client.rest.Versions
-    .SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT;
+import static io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT;
 
 public class SchemaRegistryConfig extends RestConfig {
+
+  private static final Logger log = LoggerFactory.getLogger(SchemaRegistryConfig.class);
 
   private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
@@ -292,120 +306,160 @@ public class SchemaRegistryConfig extends RestConfig {
 
     return baseConfigDef()
         .defineOverride(PORT_CONFIG, ConfigDef.Type.INT, SCHEMAREGISTRY_PORT_DEFAULT,
-                        ConfigDef.Importance.LOW, PORT_CONFIG_DOC)
+            ConfigDef.Importance.LOW, PORT_CONFIG_DOC
+        )
         .defineOverride(LISTENERS_CONFIG, ConfigDef.Type.LIST, SCHEMAREGISTRY_LISTENERS_DEFAULT,
-                        ConfigDef.Importance.HIGH, LISTENERS_DOC + "\n\n"
-                                                   + "Schema Registry identities are stored in "
-                                                   + "ZooKeeper and are made up of a hostname and "
-                                                   + "port. "
-                                                   + "If multiple listeners are configured, the "
-                                                   + "first listener's port is used for its "
-                                                   + "identity.")
+            ConfigDef.Importance.HIGH, LISTENERS_DOC + "\n\n"
+                                       + "Schema Registry identities are stored in "
+                                       + "ZooKeeper and are made up of a hostname and "
+                                       + "port. "
+                                       + "If multiple listeners are configured, the "
+                                       + "first listener's port is used for its "
+                                       + "identity."
+        )
         .defineOverride(RESPONSE_MEDIATYPE_PREFERRED_CONFIG, ConfigDef.Type.LIST,
-                        PREFERRED_RESPONSE_TYPES,
-                        ConfigDef.Importance.HIGH,
-                        RESPONSE_MEDIATYPE_PREFERRED_CONFIG_DOC)
+            PREFERRED_RESPONSE_TYPES,
+            ConfigDef.Importance.HIGH,
+            RESPONSE_MEDIATYPE_PREFERRED_CONFIG_DOC
+        )
         .defineOverride(RESPONSE_MEDIATYPE_DEFAULT_CONFIG, ConfigDef.Type.STRING,
-                        SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT,
-                        ConfigDef.Importance.HIGH,
-                        RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC)
+            SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT,
+            ConfigDef.Importance.HIGH,
+            RESPONSE_MEDIATYPE_DEFAULT_CONFIG_DOC
+        )
         .define(KAFKASTORE_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, "",
-                ConfigDef.Importance.HIGH, KAFKASTORE_CONNECTION_URL_DOC)
+            ConfigDef.Importance.HIGH, KAFKASTORE_CONNECTION_URL_DOC
+        )
         .define(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, "",
-                ConfigDef.Importance.MEDIUM,
-                KAFKASTORE_BOOTSTRAP_SERVERS_DOC)
+            ConfigDef.Importance.MEDIUM,
+            KAFKASTORE_BOOTSTRAP_SERVERS_DOC
+        )
         .define(SCHEMAREGISTRY_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, "",
-                ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_CONNECTION_URL_DOC)
+            ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_CONNECTION_URL_DOC
+        )
         .define(SCHEMAREGISTRY_ZK_NAMESPACE, ConfigDef.Type.STRING,
-                DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
-                ConfigDef.Importance.LOW, SCHEMAREGISTRY_ZK_NAMESPACE_DOC)
+            DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
+            ConfigDef.Importance.LOW, SCHEMAREGISTRY_ZK_NAMESPACE_DOC
+        )
         .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 30000, atLeast(0),
-                ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC)
+            ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC
+        )
         .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKASTORE_TOPIC,
-                ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_DOC)
+            ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_DOC
+        )
         .define(KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,
-                DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR,
-                ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC)
+            DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR,
+            ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC
+        )
         .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
-                ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC)
+            ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC
+        )
         .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
-                ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC)
+            ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC
+        )
         .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
-                ConfigDef.Importance.HIGH, HOST_DOC)
+            ConfigDef.Importance.HIGH, HOST_DOC
+        )
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
-                ConfigDef.Importance.HIGH, COMPATIBILITY_DOC)
+            ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
+        )
         .define(ZOOKEEPER_SET_ACL_CONFIG, ConfigDef.Type.BOOLEAN, ZOOKEEPER_SET_ACL_DEFAULT,
-                ConfigDef.Importance.HIGH, ZOOKEEPER_SET_ACL_DOC)
+            ConfigDef.Importance.HIGH, ZOOKEEPER_SET_ACL_DOC
+        )
         .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY,
-                ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC)
+            ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC
+        )
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
-                        METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
-                        METRICS_JMX_PREFIX_DOC)
+            METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
+            METRICS_JMX_PREFIX_DOC
+        )
         .define(KAFKASTORE_SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
-                SecurityProtocol.PLAINTEXT.toString(), ConfigDef.Importance.MEDIUM,
-                KAFKASTORE_SECURITY_PROTOCOL_DOC)
+            SecurityProtocol.PLAINTEXT.toString(), ConfigDef.Importance.MEDIUM,
+            KAFKASTORE_SECURITY_PROTOCOL_DOC
+        )
         .define(KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG, ConfigDef.Type.STRING,
-                "", ConfigDef.Importance.HIGH,
-                KAFKASTORE_SSL_TRUSTSTORE_LOCATION_DOC)
+            "", ConfigDef.Importance.HIGH,
+            KAFKASTORE_SSL_TRUSTSTORE_LOCATION_DOC
+        )
         .define(KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG, ConfigDef.Type.STRING,
-                "", ConfigDef.Importance.HIGH,
-                KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_DOC)
+            "", ConfigDef.Importance.HIGH,
+            KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_DOC
+        )
         .define(KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG, ConfigDef.Type.STRING,
-                "JKS", ConfigDef.Importance.MEDIUM,
-                KAFAKSTORE_SSL_TRUSTSTORE_TYPE_DOC)
+            "JKS", ConfigDef.Importance.MEDIUM,
+            KAFAKSTORE_SSL_TRUSTSTORE_TYPE_DOC
+        )
         .define(KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_CONFIG, ConfigDef.Type.STRING,
-                "PKIX", ConfigDef.Importance.LOW,
-                KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_DOC)
+            "PKIX", ConfigDef.Importance.LOW,
+            KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_DOC
+        )
         .define(KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG, ConfigDef.Type.STRING,
-                "", ConfigDef.Importance.HIGH,
-                KAFKASTORE_SSL_KEYSTORE_LOCATION_DOC)
+            "", ConfigDef.Importance.HIGH,
+            KAFKASTORE_SSL_KEYSTORE_LOCATION_DOC
+        )
         .define(KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG, ConfigDef.Type.STRING,
-                "", ConfigDef.Importance.HIGH,
-                KAFKASTORE_SSL_KEYSTORE_PASSWORD_DOC)
+            "", ConfigDef.Importance.HIGH,
+            KAFKASTORE_SSL_KEYSTORE_PASSWORD_DOC
+        )
         .define(KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG, ConfigDef.Type.STRING,
-                "JKS", ConfigDef.Importance.MEDIUM,
-                KAFAKSTORE_SSL_KEYSTORE_TYPE_DOC)
+            "JKS", ConfigDef.Importance.MEDIUM,
+            KAFAKSTORE_SSL_KEYSTORE_TYPE_DOC
+        )
         .define(KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_CONFIG, ConfigDef.Type.STRING,
-                "SunX509", ConfigDef.Importance.LOW,
-                KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_DOC)
+            "SunX509", ConfigDef.Importance.LOW,
+            KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_DOC
+        )
         .define(KAFKASTORE_SSL_KEY_PASSWORD_CONFIG, ConfigDef.Type.STRING,
-                "", ConfigDef.Importance.HIGH,
-                KAFKASTORE_SSL_KEY_PASSWORD_DOC)
+            "", ConfigDef.Importance.HIGH,
+            KAFKASTORE_SSL_KEY_PASSWORD_DOC
+        )
         .define(KAFKASTORE_SSL_ENABLED_PROTOCOLS_CONFIG, ConfigDef.Type.STRING,
-                "TLSv1.2,TLSv1.1,TLSv1", ConfigDef.Importance.MEDIUM,
-                KAFAKSTORE_SSL_ENABLED_PROTOCOLS_DOC)
+            "TLSv1.2,TLSv1.1,TLSv1", ConfigDef.Importance.MEDIUM,
+            KAFAKSTORE_SSL_ENABLED_PROTOCOLS_DOC
+        )
         .define(KAFKASTORE_SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
-                "TLS", ConfigDef.Importance.MEDIUM,
-                KAFAKSTORE_SSL_PROTOCOL_DOC)
+            "TLS", ConfigDef.Importance.MEDIUM,
+            KAFAKSTORE_SSL_PROTOCOL_DOC
+        )
         .define(KAFKASTORE_SSL_PROVIDER_CONFIG, ConfigDef.Type.STRING,
-                "", ConfigDef.Importance.MEDIUM,
-                KAFAKSTORE_SSL_PROVIDER_DOC)
+            "", ConfigDef.Importance.MEDIUM,
+            KAFAKSTORE_SSL_PROVIDER_DOC
+        )
         .define(KAFKASTORE_SSL_CIPHER_SUITES_CONFIG, ConfigDef.Type.STRING,
-                "", ConfigDef.Importance.LOW,
-                KAFKASTORE_SSL_CIPHER_SUITES_DOC)
+            "", ConfigDef.Importance.LOW,
+            KAFKASTORE_SSL_CIPHER_SUITES_DOC
+        )
         .define(KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ConfigDef.Type.STRING,
-                "", ConfigDef.Importance.LOW,
-                KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
+            "", ConfigDef.Importance.LOW,
+            KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC
+        )
         .define(KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_CONFIG, ConfigDef.Type.STRING,
-                "", ConfigDef.Importance.MEDIUM,
-                KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_DOC)
+            "", ConfigDef.Importance.MEDIUM,
+            KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_DOC
+        )
         .define(KAFKASTORE_SASL_MECHANISM_CONFIG, ConfigDef.Type.STRING,
-                "GSSAPI", ConfigDef.Importance.MEDIUM,
-                KAFKASTORE_SASL_MECHANISM_DOC)
+            "GSSAPI", ConfigDef.Importance.MEDIUM,
+            KAFKASTORE_SASL_MECHANISM_DOC
+        )
         .define(KAFKASTORE_SASL_KERBEROS_KINIT_CMD_CONFIG, ConfigDef.Type.STRING,
-                "/usr/bin/kinit", ConfigDef.Importance.LOW,
-                KAFKASTORE_SASL_KERBEROS_KINIT_CMD_DOC)
+            "/usr/bin/kinit", ConfigDef.Importance.LOW,
+            KAFKASTORE_SASL_KERBEROS_KINIT_CMD_DOC
+        )
         .define(KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG, ConfigDef.Type.LONG,
-                60000, ConfigDef.Importance.LOW,
-                KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC)
+            60000, ConfigDef.Importance.LOW,
+            KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC
+        )
         .define(KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG, ConfigDef.Type.DOUBLE,
-                0.05, ConfigDef.Importance.LOW,
-                KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_DOC)
+            0.05, ConfigDef.Importance.LOW,
+            KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_DOC
+        )
         .define(KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG, ConfigDef.Type.DOUBLE,
-                0.8, ConfigDef.Importance.LOW,
-                KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC)
+            0.8, ConfigDef.Importance.LOW,
+            KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC
+        )
         .define(KAFKASTORE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, "",
-                ConfigDef.Importance.LOW, KAFKASTORE_GROUP_ID_DOC)
+            ConfigDef.Importance.LOW, KAFKASTORE_GROUP_ID_DOC
+        )
         .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.STRING, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
         );
@@ -419,7 +473,7 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   public SchemaRegistryConfig(Properties props) throws RestConfigException {
-    this(config,props);
+    this(config, props);
   }
 
   public SchemaRegistryConfig(ConfigDef configDef, Properties props) throws RestConfigException {
@@ -460,6 +514,111 @@ public class SchemaRegistryConfig extends RestConfig {
                                 + SCHEMAREGISTRY_CONNECTION_URL_CONFIG);
     }
     return result;
+  }
+
+  public String bootstrapBrokers() {
+    int zkSessionTimeoutMs = getInt(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
+
+    List<String> bootstrapServersConfig = getList(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
+    List<String> endpoints;
+    if (bootstrapServersConfig.isEmpty()) {
+      ZkUtils zkUtils = null;
+      try {
+        zkUtils =
+            ZkUtils.apply(getString(KAFKASTORE_CONNECTION_URL_CONFIG),
+                zkSessionTimeoutMs,
+                zkSessionTimeoutMs,
+                checkZkAclConfig()
+            );
+        Seq<Broker> brokerSeq = zkUtils.getAllBrokersInCluster();
+        endpoints = brokersToEndpoints(JavaConversions.seqAsJavaList(brokerSeq));
+      } finally {
+        if (zkUtils != null) {
+          zkUtils.close();
+        }
+        log.debug("Kafka store zookeeper client shut down");
+      }
+    } else {
+      endpoints = bootstrapServersConfig;
+    }
+    return endpointsToBootstrapServers(
+        endpoints,
+        this.getString(KAFKASTORE_SECURITY_PROTOCOL_CONFIG)
+    );
+  }
+
+  /**
+   * Checks if the user has configured ZooKeeper ACLs or not. Throws an exception if the ZooKeeper
+   * client is set to create znodes with an ACL, yet the JAAS config is not present. Otherwise,
+   * returns whether or not the user has enabled ZooKeeper ACLs.
+   */
+  public boolean checkZkAclConfig() {
+    if (getBoolean(ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils.isZkSecurityEnabled()) {
+      throw new ConfigException(ZOOKEEPER_SET_ACL_CONFIG
+                                + " is set to true but ZooKeeper's "
+                                + "JAAS SASL configuration is not configured.");
+    }
+    return getBoolean(ZOOKEEPER_SET_ACL_CONFIG);
+  }
+
+  static List<String> brokersToEndpoints(List<Broker> brokers) {
+    final List<String> endpoints = new LinkedList<>();
+    for (Broker broker : brokers) {
+      for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints())) {
+        String
+            hostport =
+            ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
+        String endpoint = ep.securityProtocol() + "://" + hostport;
+
+        endpoints.add(endpoint);
+      }
+    }
+
+    return endpoints;
+  }
+
+  static String endpointsToBootstrapServers(List<String> endpoints, String securityProtocol) {
+    final Set<SecurityProtocol> supportedSecurityProtocols = new HashSet<>(
+        Arrays
+            .asList(
+                SecurityProtocol.PLAINTEXT,
+                SecurityProtocol.SSL,
+                SecurityProtocol.SASL_PLAINTEXT,
+                SecurityProtocol.SASL_SSL
+            )
+    );
+    if (!supportedSecurityProtocols.contains(SecurityProtocol.forName(securityProtocol))) {
+      throw new ConfigException(
+          "Only PLAINTEXT, SSL, SASL_PLAINTEXT, and SASL_SSL Kafka endpoints are supported.");
+    }
+
+    final String securityProtocolUrlPrefix = securityProtocol + "://";
+    final StringBuilder sb = new StringBuilder();
+    for (String endpoint : endpoints) {
+      if (!endpoint.startsWith(securityProtocolUrlPrefix)) {
+        log.warn(
+            "Ignoring Kafka broker endpoint " + endpoint + " that does not match the setting for "
+            + KAFKASTORE_SECURITY_PROTOCOL_CONFIG + "=" + securityProtocol);
+        continue;
+      }
+
+      if (sb.length() > 0) {
+        sb.append(",");
+      }
+      sb.append(endpoint);
+    }
+
+    if (sb.length() == 0) {
+      throw new ConfigException("No supported Kafka endpoints are configured. Either "
+                                + KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
+                                + " must have at least one endpoint matching "
+                                + KAFKASTORE_SECURITY_PROTOCOL_CONFIG
+                                + " or broker endpoints loaded from ZooKeeper "
+                                + "must have at least one endpoint matching "
+                                + KAFKASTORE_SECURITY_PROTOCOL_CONFIG + ".");
+    }
+
+    return sb.toString();
   }
 
   public static void main(String[] args) {

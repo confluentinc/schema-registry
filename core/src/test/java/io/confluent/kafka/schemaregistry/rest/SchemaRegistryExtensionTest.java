@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -44,7 +45,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testBasic() throws Exception {
+  public void testAllowResource() throws Exception {
     String subject = "testSubject";
 
     String schemaString1 = AvroUtils.parseSchema(
@@ -53,8 +54,6 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
         .canonicalString;
-
-    restApp.restClient.registerSchema(schemaString1, subject);
     int expectedIdSchema1 = 1;
     assertEquals(
         "Registering should succeed",
@@ -62,11 +61,15 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
         restApp.restClient.registerSchema(schemaString1, subject)
     );
 
+  }
+
+  @Test
+  public void tesRejectResource() throws Exception {
+    String subject = "testSubject";
+
     try {
       restApp.restClient.getLatestVersion(subject);
-      fail("Getting all versions from non-existing subject1 should fail with "
-           + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
-           + " (subject not found)");
+      fail("Getting all versions from non-existing subject1 should fail with 401");
     } catch (RestClientException rce) {
       assertEquals(
           "Should get a 401 status for GET operations",
@@ -76,6 +79,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
     }
   }
 
+  @Override
   protected Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.put(
@@ -91,7 +95,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
     public void register(
         Configurable<?> config,
         SchemaRegistryConfig schemaRegistryConfig,
-        KafkaSchemaRegistry schemaRegistry
+        SchemaRegistry schemaRegistry
     ) {
       config.register(new ContainerRequestFilter() {
 
@@ -108,7 +112,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
     }
 
     @Override
-    public void clean() {
+    public void close() {
 
     }
   }
