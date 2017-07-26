@@ -190,7 +190,7 @@ public abstract class ClusterTestHarness {
     Properties props = TestUtils.createBrokerConfig(
             brokerId, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
             noFile, EMPTY_SASL_PROPERTIES, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
-            TestUtils.RandomPort(), Option.<String>empty());
+            TestUtils.RandomPort(), Option.<String>empty(), 1);
     injectProperties(props);
     return KafkaConfig.fromProps(props);
   }
