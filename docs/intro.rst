@@ -8,13 +8,24 @@ Schema Registry provides a serving layer for your metadata. It provides a RESTfu
 Quickstart
 ----------
 
-Start by running the Schema Registry and the services it depends on: ZooKeeper and Kafka:
+Start by running the Schema Registry and the services it depends on: ZooKeeper and Kafka.
+You can do this in one command with Confluent CLI:
 
 .. sourcecode:: bash
 
-   $ ./bin/zookeeper-server-start ./etc/kafka/zookeeper.properties &
-   $ ./bin/kafka-server-start ./etc/kafka/server.properties &
-   $ ./bin/schema-registry-start ./etc/schema-registry/schema-registry.properties &
+   $ confluent start schema-registry
+
+Each service reads its configuration from its property files under ``etc``.
+
+.. note::
+
+   To manually start each service in its own terminal, run instead:
+
+   .. sourcecode:: bash
+
+      $ bin/zookeeper-server-start ./etc/kafka/zookeeper.properties
+      $ bin/kafka-server-start ./etc/kafka/server.properties
+      $ bin/schema-registry-start ./etc/schema-registry/schema-registry.properties
 
 .. ifconfig:: platform_docs
 
@@ -138,7 +149,7 @@ Note: The Schema Registry version must not exceed the CP/Kafka version. That's t
 
 .. sourcecode:: bash
 
-   $ cd confluent-3.0.0/
+   $ cd confluent-3.3.0/
 
    # The default settings in schema-registry.properties work automatically with
    # the default settings for local ZooKeeper and Kafka nodes.
