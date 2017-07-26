@@ -275,9 +275,15 @@ Configuration Options
 ``kafkastore.bootstrap.servers``
   A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
 
+  The effect of this setting depends on whether you specify `kafkastore.connection.url`.
+
+  If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate schema registry instances and store schema data.
+
+  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka and is particularly important when Kafka security is enabled.
+
   If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used. Note that if `kafkastore.bootstrap.servers` is configured, `kafkastore.connection.url` still needs to be configured, too.
 
-  This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.
+  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
 
   Additionally, this setting should be used if the Zookeeper cluster used to coordinate Schema Registry instances is different than the one used by the Kafka cluster storing the kafkastore.topic. For example, this might be the case if you are using a hosted Kafka service which does not provide access to the underlying Zookeeper cluster.
 

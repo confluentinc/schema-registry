@@ -69,7 +69,7 @@
         </module>
         <module name="RightCurly">
             <property name="id" value="RightCurlySame"/>
-            <property name="tokens" value="LITERAL_TRY, LITERAL_CATCH, LITERAL_FINALLY, LITERAL_IF, LITERAL_ELSE, LITERAL_DO"/>
+            <property name="tokens" value="LITERAL_TRY, LITERAL_CATCH, LITERAL_FINALLY, LITERAL_IF, LITERAL_ELSE"/>
         </module>
         <module name="RightCurly">
             <property name="id" value="RightCurlyAlone"/>

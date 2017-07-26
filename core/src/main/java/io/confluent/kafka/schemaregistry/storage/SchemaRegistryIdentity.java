@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 Confluent Inc.
+ * Copyright 2017 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,14 +12,16 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
+ **/
 
-package io.confluent.kafka.schemaregistry.zookeeper;
+package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * The identity of a schema registry instance. The master will store the json representation of its
@@ -27,7 +29,7 @@ import java.io.IOException;
  */
 public class SchemaRegistryIdentity {
 
-  public static int CURRENT_VERSION = 1;
+  public static final int CURRENT_VERSION = 1;
 
   private Integer version;
   private String host;
@@ -45,6 +47,16 @@ public class SchemaRegistryIdentity {
 
   public static SchemaRegistryIdentity fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, SchemaRegistryIdentity.class);
+  }
+
+  public static SchemaRegistryIdentity fromJson(ByteBuffer json) {
+    try {
+      byte[] jsonBytes = new byte[json.remaining()];
+      json.get(jsonBytes);
+      return new ObjectMapper().readValue(jsonBytes, SchemaRegistryIdentity.class);
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Error deserializing identity information", e);
+    }
   }
 
   @JsonProperty("version")
@@ -135,5 +147,18 @@ public class SchemaRegistryIdentity {
 
   public String toJson() throws IOException {
     return new ObjectMapper().writeValueAsString(this);
+  }
+
+  public ByteBuffer toJsonBytes() {
+    try {
+      return ByteBuffer.wrap(new ObjectMapper().writeValueAsBytes(this));
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Error serializing identity information", e);
+    }
+  }
+
+  @JsonIgnore
+  public String getUrl() {
+    return String.format("http://%s:%d", host, port);
   }
 }

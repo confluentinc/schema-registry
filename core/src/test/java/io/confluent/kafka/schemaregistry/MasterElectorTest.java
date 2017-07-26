@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 Confluent Inc.
+ * Copyright 2017 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,29 +12,31 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-package io.confluent.kafka.schemaregistry.zookeeper;
+ **/
+package io.confluent.kafka.schemaregistry;
 
-import io.confluent.common.utils.zookeeper.ZkUtils;
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.RestApp;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
-import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import org.I0Itec.zkclient.ZkClient;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
+
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.utils.TestUtils;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
+import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
 
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
@@ -45,11 +47,49 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@RunWith(Parameterized.class)
 public class MasterElectorTest extends ClusterTestHarness {
-  private static final int ID_BATCH_SIZE =
-      ZookeeperMasterElector.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
-  private static final String ZK_ID_COUNTER_PATH =
-      "/schema_registry" + ZookeeperMasterElector.ZOOKEEPER_SCHEMA_ID_COUNTER;
+
+  @Parameters(name = "{0}")
+  public static Collection<Object[]> data() {
+    return Arrays.asList(new Object[][] {
+        {
+            "kafka",
+            0, // reservation size, i.e. how many IDs are reserved and potentially discarded
+        },
+        {
+          "zookeeper",
+          ZookeeperMasterElector.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE
+        }
+    });
+  }
+
+  @Parameter(0)
+  public String electorType;
+  @Parameter(1)
+  public int reservationBatchSize;
+
+  private String zkConnect() {
+    switch (electorType) {
+      case "zookeeper":
+        return zkConnect;
+      case "kafka":
+        return null;
+      default:
+        throw new IllegalArgumentException();
+    }
+  }
+
+  private String bootstrapServers() {
+    switch (electorType) {
+      case "zookeeper":
+        return null;
+      case "kafka":
+        return bootstrapServers;
+      default:
+        throw new IllegalArgumentException();
+    }
+  }
 
   @Test
   public void testAutoFailover() throws Exception {
@@ -57,14 +97,28 @@ public class MasterElectorTest extends ClusterTestHarness {
     final String configSubject = "configTopic";
     List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(4);
 
+    // Since master selection depends on the lexicographic ordering of members, we need to make
+    // sure the first instance gets a lower port.
+    int port1 = choosePort();
+    int port2 = choosePort();
+    if (port2 < port1) {
+      int tmp = port2;
+      port2 = port1;
+      port1 = tmp;
+    }
+
     // create schema registry instance 1
-    final RestApp restApp1 = new RestApp(choosePort(),
-                                         zkConnect, KAFKASTORE_TOPIC);
+    final RestApp restApp1 = new RestApp(port1,
+                                         null, zkConnect(),
+                                         bootstrapServers(), KAFKASTORE_TOPIC,
+                                         AvroCompatibilityLevel.NONE.name, true, null);
     restApp1.start();
 
     // create schema registry instance 2
-    final RestApp restApp2 = new RestApp(choosePort(),
-                                         zkConnect, KAFKASTORE_TOPIC);
+    final RestApp restApp2 = new RestApp(port2,
+                                         null, zkConnect(),
+                                         bootstrapServers(), KAFKASTORE_TOPIC,
+                                         AvroCompatibilityLevel.NONE.name, true, null);
     restApp2.start();
     assertTrue("Schema registry instance 1 should be the master", restApp1.isMaster());
     assertFalse("Schema registry instance 2 shouldn't be the master", restApp2.isMaster());
@@ -200,7 +254,12 @@ public class MasterElectorTest extends ClusterTestHarness {
     // registering a schema to the master
     final String thirdSchema = avroSchemas.get(2);
     final int thirdSchemaExpectedVersion = 3;
-    final int thirdSchemaExpectedId = ID_BATCH_SIZE + 1;
+    final int thirdSchemaExpectedId;
+    if (electorType == "zookeeper") {
+      thirdSchemaExpectedId = reservationBatchSize + 1;
+    } else {
+      thirdSchemaExpectedId = secondSchemaExpectedId + 1;
+    }
     assertEquals("Registering a new schema to the master should succeed",
             thirdSchemaExpectedId,
             restApp1.restClient.registerSchema(thirdSchema, subject));
@@ -229,7 +288,12 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     // register a schema to the new master
     final String fourthSchema = avroSchemas.get(3);
-    final int fourthSchemaExpectedId = 2 * ID_BATCH_SIZE + 1;
+    final int fourthSchemaExpectedId;
+    if (electorType == "zookeeper") {
+      fourthSchemaExpectedId = 2 * reservationBatchSize + 1;
+    } else {
+      fourthSchemaExpectedId = thirdSchemaExpectedId + 1;
+    }
     TestUtils.registerAndVerifySchema(restApp2.restClient, fourthSchema,
                                       fourthSchemaExpectedId,
                                       subject);
@@ -251,8 +315,8 @@ public class MasterElectorTest extends ClusterTestHarness {
     RestApp aSlave = null;
     for (int i = 0; i < numSlaves; i++) {
       RestApp slave = new RestApp(choosePort(),
-                                  srZkConnect,
-                                  zkConnect, KAFKASTORE_TOPIC,
+                                  null, zkConnect(),
+                                  bootstrapServers(), KAFKASTORE_TOPIC,
                                   AvroCompatibilityLevel.NONE.name, false, null);
       slaveApps.add(slave);
       slave.start();
@@ -280,8 +344,8 @@ public class MasterElectorTest extends ClusterTestHarness {
     final Set<RestApp> masterApps = new HashSet<RestApp>();
     for (int i = 0; i < numMasters; i++) {
       RestApp master = new RestApp(choosePort(),
-                                   srZkConnect,
-                                   zkConnect, KAFKASTORE_TOPIC,
+                                   null, zkConnect(),
+                                   bootstrapServers(), KAFKASTORE_TOPIC,
                                    AvroCompatibilityLevel.NONE.name, true, null);
       masterApps.add(master);
       master.start();
@@ -332,8 +396,8 @@ public class MasterElectorTest extends ClusterTestHarness {
     RestApp aSlave = null;
     for (int i = 0; i < numSlaves; i++) {
       RestApp slave = new RestApp(choosePort(),
-                                  srZkConnect,
-                                  zkConnect, KAFKASTORE_TOPIC,
+                                  null, zkConnect(),
+                                  bootstrapServers(), KAFKASTORE_TOPIC,
                                   AvroCompatibilityLevel.NONE.name, false, null);
       slaveApps.add(slave);
       slave.start();
@@ -358,8 +422,8 @@ public class MasterElectorTest extends ClusterTestHarness {
     RestApp aMaster = null;
     for (int i = 0; i < numMasters; i++) {
       RestApp master = new RestApp(choosePort(),
-                                   srZkConnect,
-                                   zkConnect, KAFKASTORE_TOPIC,
+                                   null, zkConnect(),
+                                   bootstrapServers(), KAFKASTORE_TOPIC,
                                    AvroCompatibilityLevel.NONE.name, true, null);
       masterApps.add(master);
       master.start();
@@ -439,147 +503,6 @@ public class MasterElectorTest extends ClusterTestHarness {
     }
   }
 
-  @Test
-  /**
-   * If the zk id counter used to help hand out unique ids is lower than the lowest id in the
-   * kafka store, KafkaSchemaRegistry should still do the right thing and continue to hand out
-   * increasing ids when new schemas are registered.
-   */
-  public void testIncreasingIdZkResetLow() throws Exception {
-    // create schema registry instance 1
-    final RestApp restApp1 = new RestApp(choosePort(),
-                                         zkConnect, KAFKASTORE_TOPIC);
-    restApp1.start();
-    List<String> schemas = TestUtils.getRandomCanonicalAvroString(ID_BATCH_SIZE);
-    String subject = "testSubject";
-
-    Set<Integer> ids = new HashSet<Integer>();
-    int maxId = -1;
-    for (int i = 0; i < ID_BATCH_SIZE / 2; i++) {
-      int newId = restApp1.restClient.registerSchema(schemas.get(i), subject);
-      ids.add(newId);
-
-      // Sanity check - ids should be increasing
-      assertTrue(newId > maxId);
-      maxId = newId;
-    }
-
-    // Overwrite zk id counter to 0
-    final ZkClient zkClient = new ZkClient(zkConnect, 10000, 10000, new ZkStringSerializer());
-    int zkIdCounter = getZkIdCounter(zkClient);
-    assertEquals(ID_BATCH_SIZE, zkIdCounter); // sanity check
-    ZkUtils.updatePersistentPath(zkClient, ZK_ID_COUNTER_PATH, "0");
-
-    // Make sure ids are still increasing
-    String anotherSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
-    int newId = restApp1.restClient.registerSchema(anotherSchema, subject);
-    assertTrue("Next assigned id should be greater than all previous.", newId > maxId);
-    maxId = newId;
-
-    // Add another schema registry and trigger reelection
-    final RestApp restApp2 = new RestApp(choosePort(),
-                                         zkConnect, KAFKASTORE_TOPIC);
-    restApp2.start();
-    restApp1.stop();
-    Callable<Boolean> electionComplete = new Callable<Boolean>() {
-      @Override
-      public Boolean call() throws Exception {
-        return restApp2.isMaster();
-      }
-    };
-    TestUtils.waitUntilTrue(electionComplete, 15000,
-                            "Schema registry instance 2 should become the master");
-    // Reelection should have triggered zk id to update to the next batch
-    assertEquals("Zk counter is not the expected value.",
-                 2 * ID_BATCH_SIZE, getZkIdCounter(zkClient));
-
-    // Overwrite zk id counter again, then register another batch to trigger id batch update
-    // (meanwhile verifying that ids continue to increase)
-    ZkUtils.updatePersistentPath(zkClient, ZK_ID_COUNTER_PATH, "0");
-    schemas = TestUtils.getRandomCanonicalAvroString(ID_BATCH_SIZE);
-    for (int i = 0; i < ID_BATCH_SIZE; i++) {
-      newId = restApp2.restClient.registerSchema(schemas.get(i), subject);
-      ids.add(newId);
-
-      // Sanity check - ids should be increasing
-      assertTrue("new id " + newId + " should be greater than previous max " + maxId,
-                 newId > maxId);
-      maxId = newId;
-    }
-
-    // We just wrote another batch worth of schemas, so zk counter should jump
-    assertEquals("Zk counter is not the expected value.",
-                 3 * ID_BATCH_SIZE, getZkIdCounter(zkClient));
-  }
-
-  @Test
-  /**
-   * If there is no schema data in the kafka, but there is id data in zookeeper when a SchemaRegistry
-   * instance is booted up, newly assigned ids should be greater than whatever is in zookeeper.
-   *
-   * Strange preexisting values in zk id counter path should be dealt with gracefully.
-   * I.e. regardless of initial value, after zk id counter is updated
-   * it should be a multiple of if ID_BATCH_SIZE.
-   */
-  public void testIdBehaviorWithZkWithoutKafka() throws Exception {
-    // Overwrite the value in zk
-    final ZkClient zkClient = new ZkClient(zkConnect, 10000, 10000, new ZkStringSerializer());
-    int weirdInitialCounterValue = ID_BATCH_SIZE - 1;
-    ZkUtils.createPersistentPath(zkClient, ZK_ID_COUNTER_PATH, "" + weirdInitialCounterValue);
-
-    // Check that zookeeper id counter is updated sensibly during SchemaRegistry bootstrap process
-    final RestApp restApp = new RestApp(choosePort(),
-                                         zkConnect, KAFKASTORE_TOPIC);
-    restApp.start();
-    assertEquals("", 2 * ID_BATCH_SIZE, getZkIdCounter(zkClient));
-  }
-
-  @Test
-  /**
-   * Verify correct id allocation when a SchemaRegistry instance is initialized, and there is
-   * preexisting data in the kafkastore, but no zookeeper id counter node.
-   */
-  public void testIdBehaviorWithoutZkWithKafka() throws Exception {
-
-    // Pre-populate kafkastore with a few schemas
-    int numSchemas = 2;
-    List<String> schemas = TestUtils.getRandomCanonicalAvroString(numSchemas);
-    String subject = "testSubject";
-    Set<Integer> ids = new HashSet<Integer>();
-    RestApp restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC);
-    restApp.start();
-    for (String schema: schemas) {
-      int id = restApp.restClient.registerSchema(schema, subject);
-      ids.add(id);
-      waitUntilIdExists(restApp.restClient, id, "Expected id to be available.");
-    }
-    restApp.stop();
-
-    // Sanity check id counter then remove it
-    int zkIdCounter = getZkIdCounter(zkClient);
-    assertEquals("Incorrect ZK id counter.", ID_BATCH_SIZE, zkIdCounter);
-    zkClient.delete(ZK_ID_COUNTER_PATH);
-
-    // start up another app instance and verify zk id node
-    restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC);
-    restApp.start();
-    zkIdCounter = getZkIdCounter(zkClient);
-    assertEquals("ZK id counter was incorrectly initialized.", 2 * ID_BATCH_SIZE, zkIdCounter);
-    restApp.stop();
-  }
-
-  @Test
-  /** Verify expected value of zk schema id counter when schema registry starts up. */
-  public void testZkCounterOnStartup() throws Exception {
-    RestApp restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC);
-    restApp.start();
-
-    int zkIdCounter = getZkIdCounter(zkClient);
-    assertEquals("Initial value of ZooKeeper id counter is incorrect.", ID_BATCH_SIZE, zkIdCounter);
-
-    restApp.stop();
-  }
-
   /** Return the first node which reports itself as master, or null if none does. */
   private static RestApp findMaster(Collection<RestApp> cluster) {
     for (RestApp restApp: cluster) {
@@ -616,11 +539,6 @@ public class MasterElectorTest extends ClusterTestHarness {
                      expectedMasterIdentity, masterIdentity);
       }
     }
-  }
-
-  private static int getZkIdCounter(ZkClient zkClient) {
-    return Integer.valueOf(ZkUtils.readData(
-        zkClient, ZK_ID_COUNTER_PATH).getData());
   }
 
   /**

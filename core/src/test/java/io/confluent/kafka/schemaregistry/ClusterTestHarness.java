@@ -16,8 +16,10 @@
 package io.confluent.kafka.schemaregistry;
 
 import org.I0Itec.zkclient.ZkClient;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.experimental.categories.Category;
@@ -112,6 +114,7 @@ public abstract class ClusterTestHarness {
   protected List<KafkaConfig> configs = null;
   protected List<KafkaServer> servers = null;
   protected String brokerList = null;
+  protected String bootstrapServers = null;
 
   protected int schemaRegistryPort;
   protected RestApp restApp = null;
@@ -176,6 +179,20 @@ public abstract class ClusterTestHarness {
             getSecurityProtocol()
         );
 
+    // Initialize the rest app ourselves so we can ensure we don't pass any info about the Kafka
+    // zookeeper. The format for this config includes the security protocol scheme in the URLs so
+    // we can't use the pre-generated server list.
+    String[] serverUrls = new String[servers.size()];
+    ListenerName listenerType = ListenerName.forSecurityProtocol(getSecurityProtocol());
+    for(int i = 0; i < servers.size(); i++) {
+      serverUrls[i] = getSecurityProtocol() + "://" +
+                      Utils.formatAddress(
+                          servers.get(i).config().advertisedListeners().head().host(),
+                          servers.get(i).boundPort(listenerType)
+                      );
+    }
+    bootstrapServers = Utils.join(serverUrls, ",");
+
     if (dedicatedSchemaRegistryZookeeper) {
       srZookeeper = new EmbeddedZookeeper();
       srZkConnect = String.format("localhost:%d", srZookeeper.port());
@@ -187,15 +204,13 @@ public abstract class ClusterTestHarness {
     }
 
     if (setupRestApp) {
-
       schemaRegistryPort = choosePort();
       Properties schemaRegistryProps = getSchemaRegistryProperties();
       schemaRegistryProps.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
                                                                      "://0.0.0.0:"
                                                                      + schemaRegistryPort);
-      restApp = new RestApp(schemaRegistryPort, zkConnect, KAFKASTORE_TOPIC, compatibilityType,
-          schemaRegistryProps
-      );
+      restApp = new RestApp(schemaRegistryPort, srZkConnect, zkConnect, null, KAFKASTORE_TOPIC,
+                            compatibilityType, true, schemaRegistryProps);
       restApp.start();
 
     }

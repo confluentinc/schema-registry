@@ -26,7 +26,6 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import kafka.server.KafkaServer;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
