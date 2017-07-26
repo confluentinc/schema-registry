@@ -47,9 +47,9 @@ import static org.junit.Assert.fail;
 
 public class MasterElectorTest extends ClusterTestHarness {
   private static final int ID_BATCH_SIZE =
-      KafkaSchemaRegistry.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+      ZookeeperMasterElector.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
   private static final String ZK_ID_COUNTER_PATH =
-      "/schema_registry" + KafkaSchemaRegistry.ZOOKEEPER_SCHEMA_ID_COUNTER;
+      "/schema_registry" + ZookeeperMasterElector.ZOOKEEPER_SCHEMA_ID_COUNTER;
 
   @Test
   public void testAutoFailover() throws Exception {
