@@ -107,7 +107,7 @@ public abstract class ClusterTestHarness {
   protected List<KafkaServer> servers = null;
   protected String brokerList = null;
 
-  protected int schemaRegistryPort ;
+  protected int schemaRegistryPort;
   protected RestApp restApp = null;
 
   public ClusterTestHarness() {
