@@ -494,7 +494,7 @@ public class SchemaRegistryConfig extends RestConfig {
     }
   }
 
-  public Properties getOriginalProperties() {
+  public Properties originalProperties() {
     return originalProperties;
   }
 
