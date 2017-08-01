@@ -57,7 +57,7 @@ public class SchemaRegistryDedicatedZkTest extends ClusterTestHarness {
     String bootstrapServers = Utils.join(serverUrls, ",");
 
     restApp = new RestApp(choosePort(), srZkConnect, null, bootstrapServers, KAFKASTORE_TOPIC,
-                          compatibilityType, true);
+                          compatibilityType, true, null);
     restApp.start();
   }
 

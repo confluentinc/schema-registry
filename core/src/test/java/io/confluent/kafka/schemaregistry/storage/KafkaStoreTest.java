@@ -245,76 +245,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     }
   }
 
-  @Test
-  public void testFilterBrokerEndpointsSinglePlaintext() {
-    String endpoint = "PLAINTEXT://hostname:1234";
-    List<String> endpointsList = new ArrayList<String>();
-    endpointsList.add(endpoint);
-    assertEquals("Expected one PLAINTEXT endpoint for localhost", endpoint,
-            KafkaStore.endpointsToBootstrapServers(endpointsList, SecurityProtocol.PLAINTEXT.toString()));
-  }
 
-  @Test(expected = ConfigException.class)
-  public void testGetBrokerEndpointsEmpty() {
-    KafkaStore.endpointsToBootstrapServers(new ArrayList<String>(), SecurityProtocol.PLAINTEXT.toString());
-  }
-
-  @Test(expected = ConfigException.class)
-  public void testGetBrokerEndpointsNoSecurityProtocolMatches() {
-    KafkaStore.endpointsToBootstrapServers(Collections.singletonList("SSL://localhost:1234"), SecurityProtocol.PLAINTEXT.toString());
-  }
-
-  @Test(expected = ConfigException.class)
-  public void testGetBrokerEndpointsUnsupportedSecurityProtocol() {
-    KafkaStore.endpointsToBootstrapServers(Collections.singletonList("TRACE://localhost:1234"), "TRACE");
-  }
-
-  @Test
-  public void testGetBrokerEndpointsMixed() throws IOException {
-    List<String> endpointsList = new ArrayList<String>(4);
-    endpointsList.add("PLAINTEXT://localhost0:1234");
-    endpointsList.add("PLAINTEXT://localhost1:1234");
-    endpointsList.add("SASL_PLAINTEXT://localhost1:1235");
-    endpointsList.add("SSL://localhost1:1236");
-    endpointsList.add("SASL_SSL://localhost2:1234");
-    endpointsList.add("TRACE://localhost3:1234");
-
-    assertEquals("PLAINTEXT://localhost0:1234,PLAINTEXT://localhost1:1234",
-            KafkaStore.endpointsToBootstrapServers(endpointsList, SecurityProtocol.PLAINTEXT.toString()));
-
-    assertEquals("SASL_PLAINTEXT://localhost1:1235",
-            KafkaStore.endpointsToBootstrapServers(endpointsList, SecurityProtocol.SASL_PLAINTEXT.toString()));
-
-    assertEquals("SSL://localhost1:1236",
-            KafkaStore.endpointsToBootstrapServers(endpointsList, SecurityProtocol.SSL.toString()));
-
-    assertEquals("SASL_SSL://localhost2:1234",
-            KafkaStore.endpointsToBootstrapServers(endpointsList, SecurityProtocol.SASL_SSL.toString()));
-  }
-
-  @Test
-  public void testBrokersToEndpoints() {
-    List<Broker> brokersList = new ArrayList<Broker>(4);
-    brokersList.add(new Broker(0, "localhost", 1, new ListenerName("CLIENT"), SecurityProtocol.PLAINTEXT));
-    brokersList.add(new Broker(1, "localhost1", 12, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT));
-    brokersList.add(new Broker(2, "localhost2", 123, new ListenerName("SECURE_REPLICATION"), SecurityProtocol.SASL_PLAINTEXT));
-    brokersList.add(new Broker(2, "localhost2", 123, ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT), SecurityProtocol.SASL_PLAINTEXT));
-    brokersList.add(new Broker(3, "localhost3", 1234, ListenerName.forSecurityProtocol(SecurityProtocol.SSL), SecurityProtocol.SSL));
-    List<String> endpointsList = KafkaStore.brokersToEndpoints((brokersList));
-
-    List<String> expected = new ArrayList<String>(4);
-    expected.add("PLAINTEXT://localhost:1");
-    expected.add("PLAINTEXT://localhost1:12");
-    expected.add("SASL_PLAINTEXT://localhost2:123");
-    expected.add("SASL_PLAINTEXT://localhost2:123");
-    expected.add("SSL://localhost3:1234");
-
-    assertEquals("Expected the same size list.", expected.size(), endpointsList.size());
-
-    for (int i = 0; i < endpointsList.size(); i++) {
-      assertEquals("Expected a different endpoint", expected.get(i), endpointsList.get(i));
-    }
-  }
 
   @Test
   public void testCustomGroupIdConfig() throws Exception {

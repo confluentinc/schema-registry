@@ -65,8 +65,9 @@ public abstract class ClusterTestHarness {
         sockets[i] = new ServerSocket(0, 0, InetAddress.getByName("0.0.0.0"));
         ports[i] = sockets[i].getLocalPort();
       }
-      for (int i = 0; i < count; i++)
+      for (int i = 0; i < count; i++) {
         sockets[i].close();
+      }
       return ports;
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -107,6 +108,7 @@ public abstract class ClusterTestHarness {
   protected List<KafkaServer> servers = null;
   protected String brokerList = null;
 
+  protected int schemaRegistryPort;
   protected RestApp restApp = null;
 
   public ClusterTestHarness() {
@@ -124,8 +126,11 @@ public abstract class ClusterTestHarness {
   public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType) {
     this(numBrokers, false, setupRestApp, compatibilityType);
   }
-  public ClusterTestHarness(int numBrokers, boolean dedicatedSchemaRegistryZookeeper,
-                            boolean setupRestApp, String compatibilityType) {
+
+  public ClusterTestHarness(
+      int numBrokers, boolean dedicatedSchemaRegistryZookeeper,
+      boolean setupRestApp, String compatibilityType
+  ) {
     this.numBrokers = numBrokers;
     this.dedicatedSchemaRegistryZookeeper = dedicatedSchemaRegistryZookeeper;
     this.setupRestApp = setupRestApp;
@@ -143,10 +148,11 @@ public abstract class ClusterTestHarness {
     zkConnect = String.format("localhost:%d", zookeeper.port());
     zkUtils = ZkUtils.apply(
         zkConnect, zkSessionTimeout, zkConnectionTimeout,
-        setZkAcls()); // true or false doesn't matter because the schema registry Kafka principal is the same as the
-                // Kafka broker principal, so ACLs won't make any difference. The principals are the same because
-                // ZooKeeper, Kafka, and the Schema Registry are run in the same process during testing and hence share
-                // the same JAAS configuration file. Read comments in ASLClusterTestHarness.java for more details.
+        setZkAcls()
+    ); // true or false doesn't matter because the schema registry Kafka principal is the same as the
+    // Kafka broker principal, so ACLs won't make any difference. The principals are the same because
+    // ZooKeeper, Kafka, and the Schema Registry are run in the same process during testing and hence share
+    // the same JAAS configuration file. Read comments in ASLClusterTestHarness.java for more details.
     zkClient = zkUtils.zkClient();
 
     configs = new Vector<>();
@@ -160,23 +166,38 @@ public abstract class ClusterTestHarness {
     }
 
     brokerList =
-        TestUtils.getBrokerListStrFromServers(JavaConversions.asScalaBuffer(servers),
-                                              getSecurityProtocol());
+        TestUtils.getBrokerListStrFromServers(
+            JavaConversions.asScalaBuffer(servers),
+            getSecurityProtocol()
+        );
 
     if (dedicatedSchemaRegistryZookeeper) {
       srZookeeper = new EmbeddedZookeeper();
       srZkConnect = String.format("localhost:%d", srZookeeper.port());
       srZkUtils = ZkUtils.apply(
           srZkConnect, zkSessionTimeout, zkConnectionTimeout,
-          setZkAcls());
+          setZkAcls()
+      );
       srZkClient = srZkUtils.zkClient();
     }
 
     if (setupRestApp) {
-      restApp = new RestApp(choosePort(), srZkConnect, zkConnect, KAFKASTORE_TOPIC,
-                            compatibilityType, true);
+
+      schemaRegistryPort = choosePort();
+      Properties schemaRegistryProps = getSchemaRegistryProperties();
+      schemaRegistryProps.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
+                                                                     "://0.0.0.0:"
+                                                                     + schemaRegistryPort);
+      restApp = new RestApp(schemaRegistryPort, zkConnect, KAFKASTORE_TOPIC, compatibilityType,
+          schemaRegistryProps
+      );
       restApp.start();
+
     }
+  }
+
+  protected Properties getSchemaRegistryProperties() {
+    return new Properties();
   }
 
   protected void injectProperties(Properties props) {
@@ -185,18 +206,39 @@ public abstract class ClusterTestHarness {
   }
 
   protected KafkaConfig getKafkaConfig(int brokerId) {
+
     final Option<java.io.File> noFile = scala.Option.apply(null);
     final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
     Properties props = TestUtils.createBrokerConfig(
-            brokerId, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
-            noFile, EMPTY_SASL_PROPERTIES, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
-            TestUtils.RandomPort(), Option.<String>empty(), 1);
+        brokerId,
+        zkConnect,
+        false,
+        false,
+        TestUtils.RandomPort(),
+        noInterBrokerSecurityProtocol,
+        noFile,
+        EMPTY_SASL_PROPERTIES,
+        true,
+        false,
+        TestUtils.RandomPort(),
+        false,
+        TestUtils.RandomPort(),
+        false,
+        TestUtils.RandomPort(),
+        Option.<String>empty(),
+        1
+    );
     injectProperties(props);
     return KafkaConfig.fromProps(props);
+
   }
 
   protected SecurityProtocol getSecurityProtocol() {
     return SecurityProtocol.PLAINTEXT;
+  }
+
+  protected String getSchemaRegistryProtocol() {
+    return "http";
   }
 
   @After
