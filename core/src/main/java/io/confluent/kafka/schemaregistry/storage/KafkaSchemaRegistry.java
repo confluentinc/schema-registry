@@ -56,14 +56,11 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import kafka.utils.ZkUtils;
 
-import org.apache.kafka.common.config.ConfigException;
-
 import scala.Tuple2;
 
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.security.JaasUtils;
 import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -171,24 +168,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                            + " node where all register schema and config update requests are "
                            + "served.");
     this.masterNodeSensor.add(m, new Gauge());
-    this.zkAclsEnabled = checkZkAclConfig(config);
+    this.zkAclsEnabled = config.checkZkAclConfig();
   }
 
-  /**
-   * Checks if the user has configured ZooKeeper ACLs or not. Throws an exception if the ZooKeeper
-   * client is set to create znodes with an ACL, yet the JAAS config is not present. Otherwise,
-   * returns whether or not the user has enabled ZooKeeper ACLs.
-   */
-  public static boolean checkZkAclConfig(SchemaRegistryConfig config) {
-    if (config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils
-        .isZkSecurityEnabled()) {
-      throw new ConfigException(
-          SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG
-          + " is set to true but ZooKeeper's "
-          + "JAAS SASL configuration is not configured.");
-    }
-    return config.getBoolean(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG);
-  }
+
 
   /**
    * A Schema Registry instance's identity is in part the port it listens on. Currently the port can
@@ -948,9 +931,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
     this.kafkaStore.delete(configKey);
   }
 
-  /**
-   * For testing.
-   */
+
   KafkaStore<SchemaRegistryKey, SchemaRegistryValue> getKafkaStore() {
     return this.kafkaStore;
   }

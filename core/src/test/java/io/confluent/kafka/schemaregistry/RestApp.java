@@ -16,12 +16,13 @@
 package io.confluent.kafka.schemaregistry;
 
 
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import org.eclipse.jetty.server.Server;
 
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
@@ -37,21 +38,25 @@ public class RestApp {
   public String restConnect;
 
   public RestApp(int port, String zkConnect, String kafkaTopic) {
-    this(port, zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name);
+    this(port, zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name, null);
   }
 
-  public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType) {
-    this(port, null, zkConnect, kafkaTopic, compatibilityType, true);
+  public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType, Properties schemaRegistryProps) {
+    this(port, null, zkConnect, kafkaTopic, compatibilityType, true, schemaRegistryProps);
   }
 
   public RestApp(int port, String srZkConnect, String zkConnect, String kafkaTopic,
-                 String compatibilityType, boolean masterEligibility) {
-    this(port, srZkConnect, zkConnect, null, kafkaTopic, compatibilityType, masterEligibility);
+                 String compatibilityType, boolean masterEligibility, Properties schemaRegistryProps) {
+    this(port, srZkConnect, zkConnect, null, kafkaTopic, compatibilityType, masterEligibility,
+        schemaRegistryProps);
   }
 
   public RestApp(int port, String srZkConnect, String zkConnect, String bootstrapBrokers,
-                 String kafkaTopic, String compatibilityType, boolean masterEligibility) {
+                 String kafkaTopic, String compatibilityType, boolean masterEligibility, Properties schemaRegistryProps) {
     prop = new Properties();
+    if (schemaRegistryProps != null) {
+      prop.putAll(schemaRegistryProps);
+    }
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
     if (srZkConnect != null) {
       prop.setProperty(SchemaRegistryConfig.SCHEMAREGISTRY_CONNECTION_URL_CONFIG, srZkConnect);
