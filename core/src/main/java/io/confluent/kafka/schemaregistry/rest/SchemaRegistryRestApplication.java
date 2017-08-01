@@ -16,13 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Properties;
-
-import javax.ws.rs.core.Configurable;
-
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ConfigResource;
 import io.confluent.kafka.schemaregistry.rest.resources.RootResource;
@@ -30,10 +24,19 @@ import io.confluent.kafka.schemaregistry.rest.resources.SchemasResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.rest.Application;
+import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
+import org.eclipse.jetty.servlet.FilterHolder;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.servlet.Filter;
+import javax.ws.rs.core.Configurable;
+import java.util.Map;
+import java.util.Properties;
 
 public class SchemaRegistryRestApplication extends Application<SchemaRegistryConfig> {
 
@@ -52,7 +55,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
     try {
       schemaRegistry = new KafkaSchemaRegistry(schemaRegistryConfig,
-                                               new SchemaRegistrySerializer());
+              new SchemaRegistrySerializer());
       schemaRegistry.init();
     } catch (SchemaRegistryException e) {
       log.error("Error starting the schema registry", e);
@@ -64,6 +67,24 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new SchemasResource(schemaRegistry));
     config.register(new SubjectVersionsResource(schemaRegistry));
     config.register(new CompatibilityResource(schemaRegistry));
+  }
+
+  protected void configurePreResourceHandling(final ServletContextHandler context) {
+    if (config.getBoolean(RestConfig.AUTHORIZATION_ENABLED_CONFIG)) {
+      Filter filter = config
+              .getConfiguredInstance(RestConfig.AUTHORIZATION_FILTER_CLASS_CONFIG, Filter.class);
+      FilterHolder authorizationFilterHolder = new FilterHolder(filter);
+      if (!(filter instanceof org.apache.kafka.common.Configurable)) {
+        authorizationFilterHolder
+                .setInitParameters((Map<String, String>) (Map) config.originalsWithPrefix(""));
+      }
+      String authorizationPath = "/subjects/*";
+      if (!RestConfig.AUTHORIZATION_FILTER_PATH_DEFAULT
+              .equals(config.getString(RestConfig.AUTHORIZATION_SUPER_USERS_CONFIG))) {
+        authorizationPath = config.getString(RestConfig.AUTHORIZATION_FILTER_PATH_CONFIG);
+      }
+      context.addFilter(authorizationFilterHolder, authorizationPath, null);
+    }
   }
 
   @Override

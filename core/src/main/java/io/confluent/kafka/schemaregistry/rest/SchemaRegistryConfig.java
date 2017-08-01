@@ -389,8 +389,12 @@ public class SchemaRegistryConfig extends RestConfig {
                 0.8, ConfigDef.Importance.LOW,
                 KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC)
         .define(KAFKASTORE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, "",
-                ConfigDef.Importance.LOW, KAFKASTORE_GROUP_ID_DOC);
-
+                ConfigDef.Importance.LOW, KAFKASTORE_GROUP_ID_DOC)
+        .defineOverride(AUTHORIZATION_AUTHORIZER_CLASS_CONFIG,
+                ConfigDef.Type.CLASS,
+                SchemaRegistrySimpleAclAuthorizer.class,
+                ConfigDef.Importance.LOW,
+                AUTHORIZATION_AUTHORIZER_CLASS_DOC);
   }
 
   private final AvroCompatibilityLevel compatibilityType;

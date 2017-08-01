@@ -39,12 +39,23 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Integer, Schema>> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
 
+
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
     this(new RestService(baseUrl), identityMapCapacity);
   }
 
+  public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity,
+                                    Map<String, Object> config) {
+    this(new RestService(baseUrl, config), identityMapCapacity);
+  }
+
   public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity) {
     this(new RestService(baseUrls), identityMapCapacity);
+  }
+
+  public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity,
+                                    Map<String, Object> config) {
+    this(new RestService(baseUrls, config), identityMapCapacity);
   }
 
   public CachedSchemaRegistryClient(RestService restService, int identityMapCapacity) {
