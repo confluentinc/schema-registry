@@ -20,6 +20,7 @@ import java.io.Closeable;
 
 import javax.ws.rs.core.Configurable;
 
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 
@@ -29,6 +30,6 @@ public interface SchemaRegistryResourceExtension extends Closeable {
       Configurable<?> config,
       SchemaRegistryConfig schemaRegistryConfig,
       SchemaRegistry schemaRegistry
-  );
+  ) throws SchemaRegistryException;
 
 }
