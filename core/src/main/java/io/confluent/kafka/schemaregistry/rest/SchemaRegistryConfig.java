@@ -498,7 +498,6 @@ public class SchemaRegistryConfig extends RestConfig {
     return originalProperties;
   }
 
-
   public AvroCompatibilityLevel compatibilityType() {
     return compatibilityType;
   }
