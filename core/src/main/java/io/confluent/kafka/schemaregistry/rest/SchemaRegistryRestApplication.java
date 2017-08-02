@@ -94,7 +94,12 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new CompatibilityResource(schemaRegistry));
 
     if (schemaRegistryResourceExtension != null) {
-      schemaRegistryResourceExtension.register(config, schemaRegistryConfig, schemaRegistry);
+      try {
+        schemaRegistryResourceExtension.register(config, schemaRegistryConfig, schemaRegistry);
+      } catch (SchemaRegistryException e) {
+        log.error("Error starting the schema registry", e);
+        System.exit(1);
+      }
     }
   }
 
