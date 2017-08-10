@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.zookeeper;
+package io.confluent.kafka.schemaregistry.masterelector.zookeeper;
 
 import org.I0Itec.zkclient.IZkDataListener;
 import org.I0Itec.zkclient.IZkStateListener;
@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.storage.MasterElector;
 import io.confluent.kafka.schemaregistry.storage.SchemaIdRange;
 import io.confluent.kafka.schemaregistry.storage.MasterAwareSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import kafka.utils.ZkUtils;
 import scala.Tuple2;
 
@@ -56,11 +57,10 @@ public class ZookeeperMasterElector implements MasterElector {
 
   public ZookeeperMasterElector(SchemaRegistryConfig config,
                                 SchemaRegistryIdentity myIdentity,
-                                MasterAwareSchemaRegistry schemaRegistry,
-                                boolean isEligibleForMasterElection)
+                                MasterAwareSchemaRegistry schemaRegistry)
       throws SchemaRegistryStoreException {
 
-    this.isEligibleForMasterElection = isEligibleForMasterElection;
+    this.isEligibleForMasterElection = myIdentity.getMasterEligibility();
     this.zkUtils = createZkNamespace(config);
     this.zkClient = zkUtils.zkClient();
 
@@ -131,7 +131,7 @@ public class ZookeeperMasterElector implements MasterElector {
     boolean zkAclsEnabled = config.checkZkAclConfig();
     String schemaRegistryZkNamespace =
         config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
-    String srClusterZkUrl = config.schemaRegistryZkUrl();
+    String srClusterZkUrl = config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     int zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
 
@@ -206,7 +206,7 @@ public class ZookeeperMasterElector implements MasterElector {
         }
 
         // Compute the lower bound of next id batch based on zk data and kafkastore data
-        int zkIdCounterValue = Integer.valueOf(counterData);
+        int zkIdCounterValue = Integer.parseInt(counterData);
         int zkNextIdBatchLowerBound = zkIdCounterValue + 1;
         if (zkIdCounterValue % ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE != 0) {
           // ZooKeeper id counter should be an integer multiple of id batch size in normal

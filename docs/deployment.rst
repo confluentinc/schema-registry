@@ -71,11 +71,43 @@ The full set of configuration options are documented in :ref:`schemaregistry_con
 
 However, there are some logistical configurations that should be changed for production. These changes are necessary because there is no way to set a good default (because it depends on your cluster layout).
 
+First, there are two ways to deploy the Schema Registry depending on how the Schema Registry
+instances coordinate with each other to choose the :ref:`master<schemaregistry_single_master>`:
+with ZooKeeper (which may be shared with Kafka) or via Kafka itself. ZooKeeper-based master
+election is available in all versions of Schema Registry and you should continue to use it for
+compatibility if you already have a Schema Registry deployment. Kafka-based master election can
+be used in cases where ZooKeeper is not available, for example for hosted or cloud Kafka
+environments, or if access to ZooKeeper has been locked down.
+
+To configure the Schema Registry to use ZooKeeper for master election, configure the
+``kafkastore.connection.url`` setting.
+
 ``kafkastore.connection.url``
 Zookeeper url for the Kafka cluster
 
 * Type: string
 * Importance: high
+
+To configure the Schema Registry to use Kafka for master election, configure the
+``kafkastore.bootstrap.servers`` setting.
+
+``kafkastore.bootstrap.servers``
+  A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
+
+  The effect of this setting depends on whether you specify `kafkastore.connection.url`.
+
+  If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate schema registry instances (master election) and store schema data.
+
+  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
+
+  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
+
+  * Type: list
+  * Default: []
+  * Importance: medium
+
+Additionally, there are some configurations that may commonly need to be set in either type of
+deployment.
 
 ``port``
 Port to listen on for new connections.
@@ -97,35 +129,6 @@ Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this 
      schemas to be higher than 1. For example, if the ``kafkastore.topic.replication.factor`` is 3, then set
      ``min.insync.replicas`` on the Kafka server for the ``kafkastore.topic`` to 2. This ensures that the
      register schema write is considered durable if it gets committed on at least 2 replicas out of 3. Furthermore, it is best to set ``unclean.leader.election.enable`` to false so that a replica outside of the isr is never elected leader (potentially resulting in data loss).
-
-If you are deploying the Schema Registry backed by a Kafka cluster that does not expose the
-underlying Zookeeper nodes (for example, in a hosted cloud environment), you will need to run a
-separate Zookeeper cluster for the Schema Registry instances to use for coordination. The
-connection information for this separate cluster should be used as the setting for
-``schema.registry.connection.url``. You must also specify the ``kafkastore.bootstrap.servers``
-setting to the Kafka cluster.
-
-``schema.registry.connection.url``
-  Zookeeper URL used by the schema registry instances to coordinate. If not specified, it will default to using the kafkastore.connection.url, i.e. the same Zookeeper cluster as your Kafka cluster uses.
-
-  This setting is useful if you need to use a different Zookeeper cluster than your Kafka cluster uses, for example if you use a cloud hosted Kafka cluster that does not expose its underlying Zookeeper cluster.
-
-  * Type: string
-  * Default: ""
-  * Importance: medium
-
-``kafkastore.bootstrap.servers``
-  A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
-
-  If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used. Note that if `kafkastore.bootstrap.servers` is configured, `kafkastore.connection.url` still needs to be configured, too.
-
-  This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.
-
-  Additionally, this setting is required if the Zookeeper cluster used to coordinate Schema Registry instances is different than the one used by the Kafka cluster storing the kafkastore.topic. For example, this might be the case if you are using a hosted Kafka service which does not provide access to the underlying Zookeeper cluster.
-
-  * Type: list
-  * Default: []
-  * Importance: medium
 
 Don't Touch These Settings!
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -54,8 +54,7 @@ public class SchemaRegistryConfig extends RestConfig {
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
   private static final String SCHEMAREGISTRY_LISTENERS_DEFAULT = "";
 
-  public static final String SCHEMAREGISTRY_CONNECTION_URL_CONFIG
-      = "schema.registry.connection.url";
+  public static final String SCHEMAREGISTRY_GROUP_ID_CONFIG = "schema.registry.group.id";
 
   @Deprecated
   public static final String KAFKASTORE_SECURITY_PROTOCOL_SSL = "SSL";
@@ -155,14 +154,12 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
       "schema.registry.resource.extension.class";
 
-  protected static final String SCHEMAREGISTRY_CONNECTION_URL_DOC =
-      "Zookeeper URL used by the schema registry instances to coordinate. If not specified, it "
-      + "will default to using the kafkastore.connection.url, i.e. the same Zookeeper cluster as "
-      + "your Kafka cluster uses."
-      + "\n"
-      + "This setting is useful if you need to use a different Zookeeper cluster than your Kafka "
-      + "cluster uses, for example if you use a cloud hosted Kafka cluster that does not expose "
-      + "its underlying Zookeeper cluster.";
+  protected static final String SCHEMAREGISTRY_GROUP_ID_DOC =
+      "Use this setting to override the group.id for the Kafka group used when Kafka is used for "
+      + "master election.\n"
+      + "Without this configuration, group.id will be \"schema-registry\". If you want to run "
+      + "more than one schema registry cluster against a single Kafka cluster you should make "
+      + "this setting unique for each cluster.";
 
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper URL for the Kafka cluster";
@@ -170,21 +167,23 @@ public class SchemaRegistryConfig extends RestConfig {
       "A list of Kafka brokers to connect to. For example, "
       + "`PLAINTEXT://hostname:9092,SSL://hostname2:9092`\n"
       + "\n"
-      + "If this configuration is not specified, the Schema Registry's internal Kafka clients will "
-      + "get their Kafka bootstrap server list from ZooKeeper "
-      + "(configured with `kafkastore.connection.url`). In that case, all available listeners "
-      + "matching the `kafkastore.security.protocol` setting will be used. Note that if "
-      + "`kafkastore.bootstrap.servers` is configured, `kafkastore.connection.url` still needs to "
-      + "be configured, too."
+      + "The effect of this setting depends on whether you specify `kafkastore.connection.url`."
       + "\n"
-      + "This configuration is particularly important when Kafka security is enabled, because Kafka"
-      + " may expose multiple endpoints that all will be stored in ZooKeeper, but the "
-      + "Schema Registry may need to be configured with just one of those endpoints."
+      + "If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these "
+      + "bootstrap servers will be used both to coordinate schema registry instances (master "
+      + "election) and store schema data."
       + "\n"
-      + "Additionally, this setting should be used if the Zookeeper cluster used to coordinate "
-      + "Schema Registry instances is different than the one used by the Kafka cluster storing "
-      + "the kafkastore.topic. For example, this might be the case if you are using a hosted "
-      + "Kafka service which does not provide access to the underlying Zookeeper cluster.";
+      + "If `kafkastore.connection.url` is specified, then this setting is used to control how "
+      + "the schema registry connects to Kafka to store schema data and is particularly important "
+      + "when Kafka security is enabled. When this configuration is not specified, the Schema "
+      + "Registry's internal Kafka clients will get their Kafka bootstrap server list from "
+      + "ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available "
+      + "listeners matching the `kafkastore.security.protocol` setting will be used."
+      + "\n"
+      + "By specifiying this configuration, you can control which endpoints are used to connect "
+      + "to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but "
+      + "the Schema Registry may need to be configured with just one of those endpoints, for "
+      + "example to control which security protocol it uses.";
   protected static final String KAFKASTORE_GROUP_ID_DOC =
       "Use this setting to override the group.id for the KafkaStore consumer.\n"
       + "This setting can become important when security is enabled, to ensure stability over "
@@ -334,12 +333,12 @@ public class SchemaRegistryConfig extends RestConfig {
             ConfigDef.Importance.MEDIUM,
             KAFKASTORE_BOOTSTRAP_SERVERS_DOC
         )
-        .define(SCHEMAREGISTRY_CONNECTION_URL_CONFIG, ConfigDef.Type.STRING, "",
-            ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_CONNECTION_URL_DOC
-        )
         .define(SCHEMAREGISTRY_ZK_NAMESPACE, ConfigDef.Type.STRING,
-            DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
-            ConfigDef.Importance.LOW, SCHEMAREGISTRY_ZK_NAMESPACE_DOC
+                DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
+                ConfigDef.Importance.LOW, SCHEMAREGISTRY_ZK_NAMESPACE_DOC
+        )
+        .define(SCHEMAREGISTRY_GROUP_ID_CONFIG, ConfigDef.Type.STRING, "schema-registry",
+                ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_GROUP_ID_DOC
         )
         .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 30000, atLeast(0),
             ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC
@@ -502,17 +501,16 @@ public class SchemaRegistryConfig extends RestConfig {
     return compatibilityType;
   }
 
-  public String schemaRegistryZkUrl() {
-    String result = getString(SCHEMAREGISTRY_CONNECTION_URL_CONFIG);
-    if (result.isEmpty()) {
-      result = getString(KAFKASTORE_CONNECTION_URL_CONFIG);
+  public boolean useKafkaCoordination() {
+    boolean haveStoreConnectionUrl = !getString(KAFKASTORE_CONNECTION_URL_CONFIG).isEmpty();
+    boolean haveBootstrapServers = !getList(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG).isEmpty();
+    if (!haveStoreConnectionUrl && ! haveBootstrapServers) {
+      throw new ConfigException(
+          "Must configure at least one bootstrap connection method, either "
+          + KAFKASTORE_CONNECTION_URL_CONFIG + " or " + KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
+      );
     }
-    if (result.isEmpty()) {
-      throw new ConfigException("Must specify at least one of "
-                                + KAFKASTORE_CONNECTION_URL_CONFIG + " or "
-                                + SCHEMAREGISTRY_CONNECTION_URL_CONFIG);
-    }
-    return result;
+    return !haveStoreConnectionUrl;
   }
 
   public String bootstrapBrokers() {
@@ -520,6 +518,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
     List<String> bootstrapServersConfig = getList(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
     List<String> endpoints;
+
     if (bootstrapServersConfig.isEmpty()) {
       ZkUtils zkUtils = null;
       try {
