@@ -619,6 +619,16 @@ public class SchemaRegistryConfig extends RestConfig {
     return sb.toString();
   }
 
+  // NOTE: Provided for plugins, maintain this for compatibility
+  public String schemaRegistryZkUrl() {
+    String result = getString(KAFKASTORE_CONNECTION_URL_CONFIG);
+    if (result.isEmpty()) {
+      throw new ConfigException("Must specify " + KAFKASTORE_CONNECTION_URL_CONFIG + " if using "
+                                + "ZooKeeper coordination.");
+    }
+    return result;
+  }
+
   public static void main(String[] args) {
     System.out.println(config.toRst());
   }
