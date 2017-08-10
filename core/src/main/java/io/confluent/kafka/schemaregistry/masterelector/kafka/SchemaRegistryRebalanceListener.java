@@ -14,18 +14,20 @@
  * limitations under the License.
  **/
 
-package io.confluent.kafka.schemaregistry.storage;
-
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
 /**
- * Internal interface for schema registry implementations. Used as a restricted interface for
- * MasterElectors to interact with.
+ * Listener for rebalance events in the Kafka group.
  */
-public interface MasterAwareSchemaRegistry {
-  void setMaster(SchemaRegistryIdentity newMaster) throws SchemaRegistryTimeoutException,
-                                                          SchemaRegistryStoreException;
+interface SchemaRegistryRebalanceListener {
+  /**
+   * Invoked when a new assignment is created by joining the schema registry group. This is
+   * invoked for both successful and unsuccessful assignments.
+   */
+  void onAssigned(SchemaRegistryProtocol.Assignment assignment, int generation);
 
-  int getMaxIdInKafkaStore();
+  /**
+   * Invoked when a rebalance operation starts, revoking leadership
+   */
+  void onRevoked();
 }

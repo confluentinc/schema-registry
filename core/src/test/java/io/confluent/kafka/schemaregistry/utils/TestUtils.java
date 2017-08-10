@@ -110,9 +110,8 @@ public class TestUtils {
   public static void registerAndVerifySchema(RestService restService, String schemaString,
                                              int expectedId, String subject)
       throws IOException, RestClientException {
-    assertEquals("Registering a new schema should succeed",
-                 expectedId,
-                 restService.registerSchema(schemaString, subject));
+    int registeredId = restService.registerSchema(schemaString, subject);
+    assertEquals("Registering a new schema should succeed", expectedId, registeredId);
 
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",

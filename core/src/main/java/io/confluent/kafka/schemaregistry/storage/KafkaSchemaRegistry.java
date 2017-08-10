@@ -42,6 +42,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForward
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
+import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -49,8 +50,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
-import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
+import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
@@ -179,8 +179,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
 
     try {
-      masterElector = new ZookeeperMasterElector(config, myIdentity, this,
-                                                 isEligibleForMasterElector);
+      if (config.useKafkaCoordination()) {
+        log.info("Joining schema registry with Kafka-based coordination");
+        masterElector = new KafkaGroupMasterElector(config, myIdentity, this);
+      } else {
+        log.info("Joining schema registry with Zookeeper-based coordination");
+        masterElector = new ZookeeperMasterElector(config, myIdentity, this);
+      }
       masterElector.init();
     } catch (SchemaRegistryStoreException e) {
       throw new SchemaRegistryInitializationException(
@@ -225,9 +230,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       if (masterIdentity == null) {
         masterRestService = null;
       } else {
-        masterRestService = new RestService(String.format("http://%s:%d",
-                                                          masterIdentity.getHost(),
-                                                          masterIdentity.getPort()));
+        masterRestService = new RestService(masterIdentity.getUrl());
       }
 
       if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {

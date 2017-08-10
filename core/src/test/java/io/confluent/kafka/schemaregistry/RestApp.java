@@ -25,9 +25,8 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
-import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 public class RestApp {
 
@@ -42,25 +41,25 @@ public class RestApp {
   }
 
   public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType, Properties schemaRegistryProps) {
-    this(port, null, zkConnect, kafkaTopic, compatibilityType, true, schemaRegistryProps);
+    this(port, zkConnect, null, kafkaTopic, compatibilityType, true, schemaRegistryProps);
   }
 
-  public RestApp(int port, String srZkConnect, String zkConnect, String kafkaTopic,
+  public RestApp(int port,
+                 String zkConnect, String kafkaTopic,
                  String compatibilityType, boolean masterEligibility, Properties schemaRegistryProps) {
-    this(port, srZkConnect, zkConnect, null, kafkaTopic, compatibilityType, masterEligibility,
-        schemaRegistryProps);
+    this(port, zkConnect, null, kafkaTopic, compatibilityType,
+         masterEligibility, schemaRegistryProps);
   }
 
-  public RestApp(int port, String srZkConnect, String zkConnect, String bootstrapBrokers,
-                 String kafkaTopic, String compatibilityType, boolean masterEligibility, Properties schemaRegistryProps) {
+  public RestApp(int port,
+                 String zkConnect, String bootstrapBrokers,
+                 String kafkaTopic, String compatibilityType, boolean masterEligibility,
+                 Properties schemaRegistryProps) {
     prop = new Properties();
     if (schemaRegistryProps != null) {
       prop.putAll(schemaRegistryProps);
     }
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
-    if (srZkConnect != null) {
-      prop.setProperty(SchemaRegistryConfig.SCHEMAREGISTRY_CONNECTION_URL_CONFIG, srZkConnect);
-    }
     if (zkConnect != null) {
       prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
     }

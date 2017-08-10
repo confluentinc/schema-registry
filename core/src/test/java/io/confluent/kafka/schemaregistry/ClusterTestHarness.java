@@ -16,8 +16,10 @@
 package io.confluent.kafka.schemaregistry;
 
 import org.I0Itec.zkclient.ZkClient;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.experimental.categories.Category;
@@ -84,7 +86,6 @@ public abstract class ClusterTestHarness {
   }
 
   private int numBrokers;
-  private boolean dedicatedSchemaRegistryZookeeper;
   private boolean setupRestApp;
   protected String compatibilityType;
 
@@ -100,18 +101,11 @@ public abstract class ClusterTestHarness {
   // because SASL connections tend to take longer.
   protected int zkSessionTimeout = 6000;
 
-  // Optional dedicated zookeeper cluster for schema registry instance coordination (master
-  // election/ID storage)
-  protected EmbeddedZookeeper srZookeeper;
-  protected String srZkConnect;
-  protected ZkUtils srZkUtils;
-  protected ZkClient srZkClient;
-
-
   // Kafka Config
   protected List<KafkaConfig> configs = null;
   protected List<KafkaServer> servers = null;
   protected String brokerList = null;
+  protected String bootstrapServers = null;
 
   protected int schemaRegistryPort;
   protected RestApp restApp = null;
@@ -128,16 +122,9 @@ public abstract class ClusterTestHarness {
     this(numBrokers, setupRestApp, AvroCompatibilityLevel.NONE.name);
   }
 
-  public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType) {
-    this(numBrokers, false, setupRestApp, compatibilityType);
-  }
-
-  public ClusterTestHarness(
-      int numBrokers, boolean dedicatedSchemaRegistryZookeeper,
-      boolean setupRestApp, String compatibilityType
+  public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType
   ) {
     this.numBrokers = numBrokers;
-    this.dedicatedSchemaRegistryZookeeper = dedicatedSchemaRegistryZookeeper;
     this.setupRestApp = setupRestApp;
     this.compatibilityType = compatibilityType;
   }
@@ -176,26 +163,28 @@ public abstract class ClusterTestHarness {
             getSecurityProtocol()
         );
 
-    if (dedicatedSchemaRegistryZookeeper) {
-      srZookeeper = new EmbeddedZookeeper();
-      srZkConnect = String.format("localhost:%d", srZookeeper.port());
-      srZkUtils = ZkUtils.apply(
-          srZkConnect, zkSessionTimeout, zkConnectionTimeout,
-          setZkAcls()
-      );
-      srZkClient = srZkUtils.zkClient();
+    // Initialize the rest app ourselves so we can ensure we don't pass any info about the Kafka
+    // zookeeper. The format for this config includes the security protocol scheme in the URLs so
+    // we can't use the pre-generated server list.
+    String[] serverUrls = new String[servers.size()];
+    ListenerName listenerType = ListenerName.forSecurityProtocol(getSecurityProtocol());
+    for(int i = 0; i < servers.size(); i++) {
+      serverUrls[i] = getSecurityProtocol() + "://" +
+                      Utils.formatAddress(
+                          servers.get(i).config().advertisedListeners().head().host(),
+                          servers.get(i).boundPort(listenerType)
+                      );
     }
+    bootstrapServers = Utils.join(serverUrls, ",");
 
     if (setupRestApp) {
-
       schemaRegistryPort = choosePort();
       Properties schemaRegistryProps = getSchemaRegistryProperties();
       schemaRegistryProps.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
                                                                      "://0.0.0.0:"
                                                                      + schemaRegistryPort);
-      restApp = new RestApp(schemaRegistryPort, zkConnect, KAFKASTORE_TOPIC, compatibilityType,
-          schemaRegistryProps
-      );
+      restApp = new RestApp(schemaRegistryPort, zkConnect, null, KAFKASTORE_TOPIC,
+                            compatibilityType, true, schemaRegistryProps);
       restApp.start();
 
     }
