@@ -86,7 +86,6 @@ public abstract class ClusterTestHarness {
   }
 
   private int numBrokers;
-  private boolean dedicatedSchemaRegistryZookeeper;
   private boolean setupRestApp;
   protected String compatibilityType;
 
@@ -101,14 +100,6 @@ public abstract class ClusterTestHarness {
       // a larger connection timeout is required for SASL tests
   // because SASL connections tend to take longer.
   protected int zkSessionTimeout = 6000;
-
-  // Optional dedicated zookeeper cluster for schema registry instance coordination (master
-  // election/ID storage)
-  protected EmbeddedZookeeper srZookeeper;
-  protected String srZkConnect;
-  protected ZkUtils srZkUtils;
-  protected ZkClient srZkClient;
-
 
   // Kafka Config
   protected List<KafkaConfig> configs = null;
@@ -131,16 +122,9 @@ public abstract class ClusterTestHarness {
     this(numBrokers, setupRestApp, AvroCompatibilityLevel.NONE.name);
   }
 
-  public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType) {
-    this(numBrokers, false, setupRestApp, compatibilityType);
-  }
-
-  public ClusterTestHarness(
-      int numBrokers, boolean dedicatedSchemaRegistryZookeeper,
-      boolean setupRestApp, String compatibilityType
+  public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType
   ) {
     this.numBrokers = numBrokers;
-    this.dedicatedSchemaRegistryZookeeper = dedicatedSchemaRegistryZookeeper;
     this.setupRestApp = setupRestApp;
     this.compatibilityType = compatibilityType;
   }
@@ -193,23 +177,13 @@ public abstract class ClusterTestHarness {
     }
     bootstrapServers = Utils.join(serverUrls, ",");
 
-    if (dedicatedSchemaRegistryZookeeper) {
-      srZookeeper = new EmbeddedZookeeper();
-      srZkConnect = String.format("localhost:%d", srZookeeper.port());
-      srZkUtils = ZkUtils.apply(
-          srZkConnect, zkSessionTimeout, zkConnectionTimeout,
-          setZkAcls()
-      );
-      srZkClient = srZkUtils.zkClient();
-    }
-
     if (setupRestApp) {
       schemaRegistryPort = choosePort();
       Properties schemaRegistryProps = getSchemaRegistryProperties();
       schemaRegistryProps.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
                                                                      "://0.0.0.0:"
                                                                      + schemaRegistryPort);
-      restApp = new RestApp(schemaRegistryPort, srZkConnect, zkConnect, null, KAFKASTORE_TOPIC,
+      restApp = new RestApp(schemaRegistryPort, zkConnect, null, KAFKASTORE_TOPIC,
                             compatibilityType, true, schemaRegistryProps);
       restApp.start();
 

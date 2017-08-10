@@ -131,7 +131,7 @@ public class ZookeeperMasterElector implements MasterElector {
     boolean zkAclsEnabled = config.checkZkAclConfig();
     String schemaRegistryZkNamespace =
         config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
-    String srClusterZkUrl = config.schemaRegistryZkUrl();
+    String srClusterZkUrl = config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     int zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
 

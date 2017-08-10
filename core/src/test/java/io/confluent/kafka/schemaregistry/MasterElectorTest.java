@@ -58,8 +58,8 @@ public class MasterElectorTest extends ClusterTestHarness {
             0, // reservation size, i.e. how many IDs are reserved and potentially discarded
         },
         {
-          "zookeeper",
-          ZookeeperMasterElector.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE
+            "zookeeper",
+            ZookeeperMasterElector.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE
         }
     });
   }
@@ -109,15 +109,13 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     // create schema registry instance 1
     final RestApp restApp1 = new RestApp(port1,
-                                         null, zkConnect(),
-                                         bootstrapServers(), KAFKASTORE_TOPIC,
+                                         zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                          AvroCompatibilityLevel.NONE.name, true, null);
     restApp1.start();
 
     // create schema registry instance 2
     final RestApp restApp2 = new RestApp(port2,
-                                         null, zkConnect(),
-                                         bootstrapServers(), KAFKASTORE_TOPIC,
+                                         zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                          AvroCompatibilityLevel.NONE.name, true, null);
     restApp2.start();
     assertTrue("Schema registry instance 1 should be the master", restApp1.isMaster());
@@ -315,8 +313,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     RestApp aSlave = null;
     for (int i = 0; i < numSlaves; i++) {
       RestApp slave = new RestApp(choosePort(),
-                                  null, zkConnect(),
-                                  bootstrapServers(), KAFKASTORE_TOPIC,
+                                  zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                   AvroCompatibilityLevel.NONE.name, false, null);
       slaveApps.add(slave);
       slave.start();
@@ -344,8 +341,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     final Set<RestApp> masterApps = new HashSet<RestApp>();
     for (int i = 0; i < numMasters; i++) {
       RestApp master = new RestApp(choosePort(),
-                                   null, zkConnect(),
-                                   bootstrapServers(), KAFKASTORE_TOPIC,
+                                   zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                    AvroCompatibilityLevel.NONE.name, true, null);
       masterApps.add(master);
       master.start();
@@ -396,8 +392,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     RestApp aSlave = null;
     for (int i = 0; i < numSlaves; i++) {
       RestApp slave = new RestApp(choosePort(),
-                                  null, zkConnect(),
-                                  bootstrapServers(), KAFKASTORE_TOPIC,
+                                  zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                   AvroCompatibilityLevel.NONE.name, false, null);
       slaveApps.add(slave);
       slave.start();
@@ -422,8 +417,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     RestApp aMaster = null;
     for (int i = 0; i < numMasters; i++) {
       RestApp master = new RestApp(choosePort(),
-                                   null, zkConnect(),
-                                   bootstrapServers(), KAFKASTORE_TOPIC,
+                                   zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                    AvroCompatibilityLevel.NONE.name, true, null);
       masterApps.add(master);
       master.start();
