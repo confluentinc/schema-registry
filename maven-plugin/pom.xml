@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>3.3.1-SNAPSHOT</version>
+        <version>3.3.0-hotfix.1</version>
     </parent>
 
     <artifactId>kafka-schema-registry-maven-plugin</artifactId>
