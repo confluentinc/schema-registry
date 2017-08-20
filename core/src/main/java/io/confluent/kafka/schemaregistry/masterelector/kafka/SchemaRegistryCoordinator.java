@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +53,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
    * Initialize the coordination manager.
    */
   public SchemaRegistryCoordinator(
+      LogContext logContext,
       ConsumerNetworkClient client,
       String groupId,
       int rebalanceTimeoutMs,
@@ -63,7 +65,8 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       long retryBackoffMs,
       SchemaRegistryIdentity identity,
       SchemaRegistryRebalanceListener listener) {
-    super(client,
+    super(logContext,
+          client,
           groupId,
           rebalanceTimeoutMs,
           sessionTimeoutMs,

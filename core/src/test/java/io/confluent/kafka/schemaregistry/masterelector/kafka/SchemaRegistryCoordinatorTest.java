@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -88,13 +89,15 @@ public class SchemaRegistryCoordinatorTest {
     this.client = new MockClient(time);
     this.metadata = new Metadata(0, Long.MAX_VALUE, true);
     this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
-    this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
+    LogContext logContext = new LogContext();
+    this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000);
     this.metrics = new Metrics(time);
     this.rebalanceListener = new MockRebalanceListener();
 
     client.setNode(node);
 
     this.coordinator = new SchemaRegistryCoordinator(
+        logContext,
         consumerClient,
         groupId,
         rebalanceTimeoutMs,
