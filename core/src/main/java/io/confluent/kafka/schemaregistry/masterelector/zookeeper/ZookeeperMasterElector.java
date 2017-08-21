@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
@@ -77,7 +78,8 @@ public class ZookeeperMasterElector implements MasterElector {
     zkClient.subscribeDataChanges(MASTER_PATH, new MasterChangeListener());
   }
 
-  public void init() throws SchemaRegistryTimeoutException, SchemaRegistryStoreException {
+  public void init() throws SchemaRegistryTimeoutException, SchemaRegistryStoreException,
+                            SchemaRegistryInitializationException {
     if (isEligibleForMasterElection) {
       electMaster();
     } else {
@@ -91,7 +93,8 @@ public class ZookeeperMasterElector implements MasterElector {
   }
 
   public void electMaster() throws
-                            SchemaRegistryStoreException, SchemaRegistryTimeoutException {
+                            SchemaRegistryStoreException, SchemaRegistryTimeoutException,
+                            SchemaRegistryInitializationException {
     SchemaRegistryIdentity masterIdentity = null;
     try {
       zkUtils.createEphemeralPathExpectConflict(MASTER_PATH, myIdentityString,
@@ -105,7 +108,8 @@ public class ZookeeperMasterElector implements MasterElector {
   }
 
   public void readCurrentMaster()
-      throws SchemaRegistryTimeoutException, SchemaRegistryStoreException {
+      throws SchemaRegistryTimeoutException, SchemaRegistryStoreException,
+             SchemaRegistryInitializationException {
     SchemaRegistryIdentity masterIdentity = null;
     // If someone else has written the path, read the new master back
     try {
@@ -116,8 +120,13 @@ public class ZookeeperMasterElector implements MasterElector {
         log.error("Can't parse schema registry identity json string " + masterIdentityString);
       }
     } catch (ZkNoNodeException znne) {
-      // NOTE: masterIdentity is already initialized to null. The master will then be updated to 
+      // NOTE: masterIdentity is already initialized to null. The master will then be updated to
       // null so register requests directed to this node can throw the right error code back
+    }
+    if (myIdentity.equals(masterIdentity)) {
+      log.error("The node's identity is same as elected master. Check the ``listeners`` config or "
+                + "the ``host.name`` and the ``port`` config");
+      throw new SchemaRegistryInitializationException("Invalid identity");
     }
     schemaRegistry.setMaster(masterIdentity);
   }
