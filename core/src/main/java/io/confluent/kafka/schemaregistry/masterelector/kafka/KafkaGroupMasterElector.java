@@ -31,6 +31,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,7 +134,11 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           time,
           true,
           new ApiVersions());
+      String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
+      LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
+          + groupId + "] ");
       this.client = new ConsumerNetworkClient(
+          logContext,
           netClient,
           metadata,
           time,
@@ -141,8 +146,9 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
       );
       this.coordinator = new SchemaRegistryCoordinator(
+          logContext,
           this.client,
-          config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG),
+          groupId,
           300000, // Default MAX_POLL_INTERVAL_MS_CONFIG
           10000, // Default SESSION_TIMEOUT_MS_CONFIG)
           3000, // Default HEARTBEAT_INTERVAL_MS_CONFIG
