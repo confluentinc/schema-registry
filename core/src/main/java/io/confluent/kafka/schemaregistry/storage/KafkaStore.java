@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.rest.RestConfig;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -30,11 +29,8 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TopicExistsException;
-import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,9 +75,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final SchemaRegistryConfig config;
 
   public KafkaStore(SchemaRegistryConfig config,
-                    StoreUpdateHandler<K, V> storeUpdateHandler,
-                    Serializer<K, V> serializer,
-                    Store<K, V> localStore,
+      StoreUpdateHandler<K, V> storeUpdateHandler,
+      Serializer<K, V> serializer,
+      Store<K, V> localStore,
                     K noopKey) {
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
@@ -91,7 +87,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
             config.getList(RestConfig.LISTENERS_CONFIG));
     this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG).isEmpty()
                    ? String.format("schema-registry-%s-%d",
-                                 config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
+        config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
                                  port)
                    : config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG);
     initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
@@ -117,6 +113,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     // set the producer properties and initialize a Kafka producer client
     Properties props = new Properties();
+    addSchemaRegistryConfigsToClientProperties(this.config, props);
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
     props.put(ProducerConfig.ACKS_CONFIG, "-1");
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
@@ -125,17 +122,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
 
-    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-              this.config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
-    addSecurityConfigsToClientProperties(this.config, props);
-
     producer = new KafkaProducer<byte[], byte[]>(props);
 
     // start the background thread that subscribes to the Kafka topic and applies updates.
     // the thread must be created after the schema topic has been created.
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
-                                     this.storeUpdateHandler, serializer, this.localStore,
+            this.storeUpdateHandler, serializer, this.localStore,
                                      this.noopKey, this.config);
     this.kafkaTopicReader.start();
 
@@ -152,102 +145,18 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
   }
 
-  public static void addSecurityConfigsToClientProperties(SchemaRegistryConfig config,
-                                                          Properties props) {
-    addSslConfigsToClientProperties(config, props);
-    addSaslConfigsToClientProperties(config, props);
+  public static void addSchemaRegistryConfigsToClientProperties(SchemaRegistryConfig config,
+                                                                Properties props) {
+    props.putAll(config.originalProperties());
+    props.putAll(config.originalsWithPrefix("kafkastore."));
   }
 
-  public static void addSslConfigsToClientProperties(SchemaRegistryConfig config,
-                                                     Properties props) {
-    if (config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
-        SecurityProtocol.SSL.toString())
-        || config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
-            SecurityProtocol.SASL_SSL.toString())) {
-      props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
-                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG));
-      props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
-                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG));
-      props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
-                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG));
-      props.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
-                config
-                    .getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_CONFIG));
-      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
-                          config.getString(
-                              SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG), props);
-      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-                          config.getString(
-                              SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG), props);
-      props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
-                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG));
-      props.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
-                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_CONFIG));
-      putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG,
-                          config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG),
-                          props);
-      putIfNotEmptyString(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
-                          config.getString(
-                              SchemaRegistryConfig.KAFKASTORE_SSL_ENABLED_PROTOCOLS_CONFIG), props);
-      props.put(SslConfigs.SSL_PROTOCOL_CONFIG,
-                config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROTOCOL_CONFIG));
-      putIfNotEmptyString(SslConfigs.SSL_PROVIDER_CONFIG,
-                          config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROVIDER_CONFIG),
-                          props);
-      putIfNotEmptyString(SslConfigs.SSL_CIPHER_SUITES_CONFIG,
-                          config
-                              .getString(SchemaRegistryConfig.KAFKASTORE_SSL_CIPHER_SUITES_CONFIG),
-                          props);
-      putIfNotEmptyString(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
-                          config.getString(
-                              SchemaRegistryConfig
-                                  .KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG),
-                          props);
-    }
-  }
 
-  public static void addSaslConfigsToClientProperties(SchemaRegistryConfig config,
-                                                      Properties props) {
-    if (config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
-        SecurityProtocol.SASL_PLAINTEXT.toString())
-        || config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
-            SecurityProtocol.SASL_SSL.toString())) {
-      putIfNotEmptyString(SaslConfigs.SASL_KERBEROS_SERVICE_NAME,
-                          config.getString(
-                              SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_CONFIG),
-                          props);
-      props.put(SaslConfigs.SASL_MECHANISM,
-                config.getString(SchemaRegistryConfig.KAFKASTORE_SASL_MECHANISM_CONFIG));
-      props.put(SaslConfigs.SASL_KERBEROS_KINIT_CMD,
-                config.getString(SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_KINIT_CMD_CONFIG));
-      props.put(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN,
-                config.getLong(
-                    SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG));
-      props.put(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER,
-                config.getDouble(
-                    SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG));
-      props.put(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR,
-                config.getDouble(
-                    SchemaRegistryConfig.KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG)
-      );
-    }
-  }
-
-  // helper method to only add a property if its not the empty string. This is required
-  // because some Kafka client configs expect a null default value, yet ConfigDef doesn't
-  // support null default values.
-  private static void putIfNotEmptyString(String parameter, String value, Properties props) {
-    if (!value.trim().isEmpty()) {
-      props.put(parameter, value);
-    }
-  }
 
   private void createOrVerifySchemaTopic() throws StoreInitializationException {
     Properties props = new Properties();
+    addSchemaRegistryConfigsToClientProperties(this.config, props);
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
-    props.put(AdminClientConfig.SECURITY_PROTOCOL_CONFIG,
-              this.config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
-    addSecurityConfigsToClientProperties(this.config, props);
 
     try (AdminClient admin = AdminClient.create(props)) {
       //
@@ -392,7 +301,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     try {
       producerRecord =
           new ProducerRecord<byte[], byte[]>(topic, 0, this.serializer.serializeKey(key),
-                                             value == null ? null : this.serializer.serializeValue(
+              value == null ? null : this.serializer.serializeValue(
                                                  value));
     } catch (SerializationException e) {
       throw new StoreException("Error serializing schema while creating the Kafka produce "
