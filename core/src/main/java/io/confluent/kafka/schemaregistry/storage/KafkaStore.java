@@ -75,9 +75,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final SchemaRegistryConfig config;
 
   public KafkaStore(SchemaRegistryConfig config,
-      StoreUpdateHandler<K, V> storeUpdateHandler,
-      Serializer<K, V> serializer,
-      Store<K, V> localStore,
+                    StoreUpdateHandler<K, V> storeUpdateHandler,
+                    Serializer<K, V> serializer,
+                    Store<K, V> localStore,
                     K noopKey) {
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
@@ -87,8 +87,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
             config.getList(RestConfig.LISTENERS_CONFIG));
     this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG).isEmpty()
                    ? String.format("schema-registry-%s-%d",
-        config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
-                                 port)
+                        config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG), port)
                    : config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG);
     initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
@@ -128,7 +127,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     // the thread must be created after the schema topic has been created.
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
-            this.storeUpdateHandler, serializer, this.localStore,
+                                     this.storeUpdateHandler, serializer, this.localStore,
                                      this.noopKey, this.config);
     this.kafkaTopicReader.start();
 
@@ -301,7 +300,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     try {
       producerRecord =
           new ProducerRecord<byte[], byte[]>(topic, 0, this.serializer.serializeKey(key),
-              value == null ? null : this.serializer.serializeValue(
+                                             value == null ? null : this.serializer.serializeValue(
                                                  value));
     } catch (SerializationException e) {
       throw new StoreException("Error serializing schema while creating the Kafka produce "
