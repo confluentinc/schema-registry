@@ -547,6 +547,7 @@ public class AvroData {
 
   /**
    * Connect optional fields are represented as a unions (null & type) in Avro
+   * If multiple types are available prefers the matching one using the full name
    * Return the Avro schema of the actual type in the Union (instead of the union itself)
    */
   private static org.apache.avro.Schema avroSchemaForUnderlyingTypeIfOptional(
@@ -554,16 +555,24 @@ public class AvroData {
 
     if (schema != null && schema.isOptional()) {
       if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
+        org.apache.avro.Schema nonNullTypeSchema = null;
         for (org.apache.avro.Schema typeSchema : avroSchema
             .getTypes()) {
           if (!typeSchema.getType().equals(
-              org.apache.avro.Schema.Type.NULL)) {
-            return typeSchema;
+                  org.apache.avro.Schema.Type.NULL)) {
+            if (typeSchema.getFullName().equals(schema.name())) {
+              return typeSchema;
+            } else if (nonNullTypeSchema == null) {
+              nonNullTypeSchema = typeSchema;
+            }
           }
+        }
+        if (nonNullTypeSchema != null) {
+          return nonNullTypeSchema;
         }
       } else {
         throw new DataException(
-            "An optinal schema should have an Avro Union type, not "
+            "An optimal schema should have an Avro Union type, not "
             + schema.type());
       }
     }
