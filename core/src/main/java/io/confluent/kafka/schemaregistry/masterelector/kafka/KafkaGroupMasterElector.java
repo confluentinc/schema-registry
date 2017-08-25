@@ -104,7 +104,8 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
 
       Time time = Time.SYSTEM;
 
-      ClientConfig clientConfig = new ClientConfig(config.originalsWithPrefix(""), false);
+      ClientConfig clientConfig = new ClientConfig(config.originalsWithPrefix("kafkastore."),
+          false);
 
       this.metrics = new Metrics(metricConfig, reporters, time);
       this.retryBackoffMs = clientConfig.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
