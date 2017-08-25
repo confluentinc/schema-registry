@@ -146,7 +146,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   public static void addSchemaRegistryConfigsToClientProperties(SchemaRegistryConfig config,
                                                                 Properties props) {
-    props.putAll(config.originalProperties());
     props.putAll(config.originalsWithPrefix("kafkastore."));
   }
 
