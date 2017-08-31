@@ -16,8 +16,6 @@
 
 package io.confluent.connect.avro;
 
-import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
-import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -56,6 +54,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
+import io.confluent.kafka.serializers.NonRecordContainer;
 
 /**
  * Utilities for converting between our runtime data format and Avro, and (de)serializing that data.
@@ -427,11 +428,11 @@ public class AvroData {
 
         case MAP: {
           Map<Object, Object> map = (Map<Object, Object>) value;
-
+          org.apache.avro.Schema underlyingAvroSchema;
           if (schema != null &&
               schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
             // TODO most types don't need a new converted object since types pass through
-            org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
+           underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
             Map<String, Object> converted = new HashMap<>();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               // Key is a String, no conversion needed
@@ -443,8 +444,7 @@ public class AvroData {
             return maybeAddContainer(avroSchema, converted, requireContainer);
           } else {
             List<GenericRecord> converted = new ArrayList<>(map.size());
-            org.apache.avro.Schema underlyingAvroSchema =
-                avroSchemaForUnderlyingMapEntryType(schema, avroSchema);
+            underlyingAvroSchema = avroSchemaForUnderlyingMapEntryType(schema, avroSchema);
             org.apache.avro.Schema elementSchema =
                 schema != null ? underlyingAvroSchema.getElementType() : ANYTHING_SCHEMA_MAP_ELEMENT;
             org.apache.avro.Schema avroKeySchema = elementSchema.getField(KEY_FIELD).schema();
@@ -503,21 +503,28 @@ public class AvroData {
     }
   }
 
+  /**
+   * MapEntry types in connect Schemas are represented as Arrays of record.
+   * Return the array type from the union instead of the union itself.
+   * @param schema
+   * @param avroSchema
+   * @return
+   */
   private static org.apache.avro.Schema avroSchemaForUnderlyingMapEntryType(
       Schema schema,
-      org.apache.avro.Schema avroSchema
-  ) {
+      org.apache.avro.Schema avroSchema) {
+
     if (schema != null && schema.isOptional()) {
       if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
         for (org.apache.avro.Schema typeSchema : avroSchema.getTypes()) {
           if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL) &&
-              typeSchema.getFullName().equals("array")) {
+              Schema.Type.ARRAY.getName().equals(typeSchema.getType().getName())) {
             return typeSchema;
           }
         }
       } else {
         throw new DataException(
-            "An optinal schema should have an Avro Union type, not "
+            "An optional schema should have an Avro Union type, not "
             + schema.type());
       }
     }
@@ -545,7 +552,7 @@ public class AvroData {
         }
       } else {
         throw new DataException(
-            "An optinal schema should have an Avro Union type, not "
+            "An optional schema should have an Avro Union type, not "
                 + schema.type());
       }
     }
