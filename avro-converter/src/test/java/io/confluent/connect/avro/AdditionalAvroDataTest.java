@@ -2,9 +2,14 @@ package io.confluent.connect.avro;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 
 import io.test.avro.core.AvroMessage;
 import io.test.avro.doc.DocTestRecord;
+import io.test.avro.union.FirstOption;
+import io.test.avro.union.MultiTypeUnionMessage;
+import io.test.avro.union.SecondOption;
+
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.generic.GenericData;
@@ -85,7 +90,34 @@ public class AdditionalAvroDataTest
         Assert.assertEquals(SpecificData.get().toString(avroMessage), SpecificData.get().toString(output));
     }
 
-    
+
+    @Test
+    public void testComplexMultiUnionData() throws IOException
+    {
+        PodamFactory factory = new PodamFactoryImpl();
+
+        MultiTypeUnionMessage avroMessage = factory.manufacturePojo(MultiTypeUnionMessage.class);
+
+        org.apache.kafka.connect.data.SchemaAndValue connectSchemaAndValue = avroData.toConnectData(avroMessage.getSchema(), avroMessage);
+        Object output = avroData.fromConnectData(connectSchemaAndValue.schema(), connectSchemaAndValue.value());
+        Assert.assertEquals(SpecificData.get().toString(avroMessage), SpecificData.get().toString(output));
+
+        avroMessage.setCompositeRecord(new FirstOption("x",2l));
+        connectSchemaAndValue = avroData.toConnectData(avroMessage.getSchema(), avroMessage);
+        output = avroData.fromConnectData(connectSchemaAndValue.schema(), connectSchemaAndValue.value());
+        Assert.assertEquals(SpecificData.get().toString(avroMessage), SpecificData.get().toString(output));
+
+        avroMessage.setCompositeRecord(new SecondOption("y",3l));
+        connectSchemaAndValue = avroData.toConnectData(avroMessage.getSchema(), avroMessage);
+        output = avroData.fromConnectData(connectSchemaAndValue.schema(), connectSchemaAndValue.value());
+        Assert.assertEquals(SpecificData.get().toString(avroMessage), SpecificData.get().toString(output));
+
+        avroMessage.setCompositeRecord(Arrays.asList(new String[]{"1","2"}));
+        connectSchemaAndValue = avroData.toConnectData(avroMessage.getSchema(), avroMessage);
+        output = avroData.fromConnectData(connectSchemaAndValue.schema(), connectSchemaAndValue.value());
+        Assert.assertEquals(SpecificData.get().toString(avroMessage), SpecificData.get().toString(output));
+
+    }
     @Test
     /**
      * @see https://github.com/confluentinc/schema-registry/issues/405
