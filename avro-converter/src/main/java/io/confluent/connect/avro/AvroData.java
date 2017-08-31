@@ -427,10 +427,11 @@ public class AvroData {
 
         case MAP: {
           Map<Object, Object> map = (Map<Object, Object>) value;
-          org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
+
           if (schema != null &&
               schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
             // TODO most types don't need a new converted object since types pass through
+            org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
             Map<String, Object> converted = new HashMap<>();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               // Key is a String, no conversion needed
@@ -442,6 +443,8 @@ public class AvroData {
             return maybeAddContainer(avroSchema, converted, requireContainer);
           } else {
             List<GenericRecord> converted = new ArrayList<>(map.size());
+            org.apache.avro.Schema underlyingAvroSchema =
+                avroSchemaForUnderlyingMapEntryType(schema, avroSchema);
             org.apache.avro.Schema elementSchema =
                 schema != null ? underlyingAvroSchema.getElementType() : ANYTHING_SCHEMA_MAP_ELEMENT;
             org.apache.avro.Schema avroKeySchema = elementSchema.getField(KEY_FIELD).schema();
@@ -500,6 +503,27 @@ public class AvroData {
     }
   }
 
+  private static org.apache.avro.Schema avroSchemaForUnderlyingMapEntryType(
+      Schema schema,
+      org.apache.avro.Schema avroSchema
+  ) {
+    if (schema != null && schema.isOptional()) {
+      if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
+        for (org.apache.avro.Schema typeSchema : avroSchema.getTypes()) {
+          if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL) &&
+              typeSchema.getFullName().equals("array")) {
+            return typeSchema;
+          }
+        }
+      } else {
+        throw new DataException(
+            "An optinal schema should have an Avro Union type, not "
+            + schema.type());
+      }
+    }
+    return avroSchema;
+  }
+
   /**
    * Connect optional fields are represented as a unions (null & type) in Avro
    * Return the Avro schema of the actual type in the Union (instead of the union itself)
@@ -513,8 +537,9 @@ public class AvroData {
       if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
         for (org.apache.avro.Schema typeSchema : avroSchema
             .getTypes()) {
-          if (!typeSchema.getType().equals(
-              org.apache.avro.Schema.Type.NULL)) {
+          if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL) &&
+              (typeSchema.getFullName().equals(schema.name()) ||
+               typeSchema.getType().getName().equals(schema.type().getName()))) {
             return typeSchema;
           }
         }
