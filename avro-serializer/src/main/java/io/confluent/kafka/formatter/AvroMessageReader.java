@@ -98,8 +98,10 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
   /**
    * For testing only.
    */
-  AvroMessageReader(SchemaRegistryClient schemaRegistryClient, Schema keySchema, Schema valueSchema,
-                    String topic, boolean parseKey, BufferedReader reader) {
+  AvroMessageReader(
+      SchemaRegistryClient schemaRegistryClient, Schema keySchema, Schema valueSchema,
+      String topic, boolean parseKey, BufferedReader reader, boolean autoRegister
+  ) {
     this.schemaRegistry = schemaRegistryClient;
     this.keySchema = keySchema;
     this.valueSchema = valueSchema;
@@ -108,6 +110,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     this.valueSubject = topic + "-value";
     this.parseKey = parseKey;
     this.reader = reader;
+    this.autoRegister = autoRegister;
   }
 
   @Override
@@ -145,6 +148,11 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     }
     keySubject = topic + "-key";
     valueSubject = topic + "-value";
+    if (props.containsKey("auto.register")) {
+      this.autoRegister = Boolean.valueOf(props.getProperty("ignore.error"));
+    } else {
+      this.autoRegister = true;
+    }
   }
 
   @Override

@@ -24,7 +24,6 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -65,7 +64,7 @@ public class AvroConverter implements Converter {
                                          avroConverterConfig.getMaxSchemasPerSubject());
     }
 
-    serializer = new Serializer(schemaRegistry);
+    serializer = new Serializer(schemaRegistry, avroConverterConfig.autoRegister());
     deserializer = new Deserializer(schemaRegistry);
     avroData = new AvroData(new AvroDataConfig(configs));
   }
@@ -102,8 +101,9 @@ public class AvroConverter implements Converter {
 
   private static class Serializer extends AbstractKafkaAvroSerializer {
 
-    public Serializer(SchemaRegistryClient client) {
+    public Serializer(SchemaRegistryClient client, boolean autoRegister) {
       schemaRegistry = client;
+      this.autoRegister = autoRegister;
     }
 
     public byte[] serialize(String topic, boolean isKey, Object value) {

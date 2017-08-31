@@ -41,6 +41,7 @@ public abstract class AbstractKafkaAvroSerDe {
 
   private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
+  protected boolean autoRegister;
 
   static {
     Schema.Parser parser = new Schema.Parser();
@@ -68,10 +69,10 @@ public abstract class AbstractKafkaAvroSerDe {
     try {
       List<String> urls = config.getSchemaRegistryUrls();
       int maxSchemaObject = config.getMaxSchemasPerSubject();
-
       if (null == schemaRegistry) {
         schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject);
       }
+      autoRegister = config.autoRegister();
     } catch (io.confluent.common.config.ConfigException e) {
       throw new ConfigException(e.getMessage());
     }

@@ -54,4 +54,6 @@ public interface SchemaRegistryClient {
   public String getCompatibility(String subject) throws IOException, RestClientException;
 
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
+
+  int getId(String subject, Schema schema) throws IOException, RestClientException;
 }

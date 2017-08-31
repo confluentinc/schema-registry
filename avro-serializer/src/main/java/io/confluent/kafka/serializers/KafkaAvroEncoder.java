@@ -27,8 +27,13 @@ import kafka.utils.VerifiableProperties;
  */
 public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Encoder<Object> {
 
-  public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry) {
+  public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry, VerifiableProperties props) {
     this.schemaRegistry = schemaRegistry;
+    configure(serializerConfig(props));
+  }
+
+  protected void configure(VerifiableProperties props) {
+    configure(serializerConfig(props));
   }
 
   /**
