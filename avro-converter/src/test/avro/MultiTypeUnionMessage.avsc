@@ -1,0 +1,45 @@
+{
+  "type": "record",
+  "name": "MultiTypeUnionMessage",
+  "namespace": "io.test.avro.union",
+  "fields": [
+    {
+      "name": "CompositeRecord",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "FirstOption",
+          "fields": [
+            {
+              "name": "x",
+              "type": "string"
+            },
+            {
+              "name": "y",
+              "type": "long"
+            }
+          ]
+        },
+        {
+          "type": "record",
+          "name": "SecondOption",
+          "fields": [
+            {
+              "name": "a",
+              "type": "string"
+            },
+            {
+              "name": "b",
+              "type": "long"
+            }
+          ]
+        },
+        {
+          "type": "array",
+          "items": "string"
+        }
+      ]
+    }
+  ]
+}
