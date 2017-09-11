@@ -122,6 +122,10 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
 
       ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig);
       long maxIdleMs = clientConfig.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
+
+      String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
+      LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
+                                             + groupId + "] ");
       NetworkClient netClient = new NetworkClient(
           new Selector(maxIdleMs, metrics, time, metricGrpPrefix, channelBuilder),
           this.metadata,
@@ -134,10 +138,9 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
           time,
           true,
-          new ApiVersions());
-      String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
-      LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
-          + groupId + "] ");
+          new ApiVersions(),
+          logContext);
+
       this.client = new ConsumerNetworkClient(
           logContext,
           netClient,
