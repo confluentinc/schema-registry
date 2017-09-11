@@ -127,7 +127,7 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
                                              + groupId + "] ");
       NetworkClient netClient = new NetworkClient(
-          new Selector(maxIdleMs, metrics, time, metricGrpPrefix, channelBuilder),
+          new Selector(maxIdleMs, metrics, time, metricGrpPrefix, channelBuilder, logContext),
           this.metadata,
           clientId,
           100, // a fixed large enough value will suffice
