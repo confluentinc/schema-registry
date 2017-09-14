@@ -32,7 +32,6 @@ import java.io.PrintStream;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
-import kafka.producer.KeyedMessage;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -61,7 +60,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader);
+        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader, true);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
     byte[] serializedValue = message.value();
@@ -83,7 +82,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, intSchema, recordSchema, "topic1", true, reader);
+        new AvroMessageReader(schemaRegistry, intSchema, recordSchema, "topic1", true, reader, true);
     ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
 
     byte[] serializedKey = message.key();
@@ -106,7 +105,7 @@ public class KafkaAvroFormatterTest {
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     AvroMessageReader avroReader =
-        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader);
+        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader, true);
     try {
       avroReader.readMessage();
     } catch (SerializationException e) {

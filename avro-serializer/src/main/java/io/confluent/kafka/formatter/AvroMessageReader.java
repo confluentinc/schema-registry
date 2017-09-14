@@ -34,7 +34,6 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import kafka.common.KafkaException;
-import kafka.producer.KeyedMessage;
 import kafka.common.MessageReader;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 
@@ -98,8 +97,10 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
   /**
    * For testing only.
    */
-  AvroMessageReader(SchemaRegistryClient schemaRegistryClient, Schema keySchema, Schema valueSchema,
-                    String topic, boolean parseKey, BufferedReader reader) {
+  AvroMessageReader(
+      SchemaRegistryClient schemaRegistryClient, Schema keySchema, Schema valueSchema,
+      String topic, boolean parseKey, BufferedReader reader, boolean autoRegister
+  ) {
     this.schemaRegistry = schemaRegistryClient;
     this.keySchema = keySchema;
     this.valueSchema = valueSchema;
@@ -108,6 +109,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     this.valueSubject = topic + "-value";
     this.parseKey = parseKey;
     this.reader = reader;
+    this.autoRegisterSchema = autoRegister;
   }
 
   @Override
@@ -145,6 +147,11 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     }
     keySubject = topic + "-key";
     valueSubject = topic + "-value";
+    if (props.containsKey("auto.register")) {
+      this.autoRegisterSchema = Boolean.valueOf(props.getProperty("auto.register").trim());
+    } else {
+      this.autoRegisterSchema = true;
+    }
   }
 
   @Override

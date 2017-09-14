@@ -16,9 +16,6 @@
 
 package io.confluent.connect.avro;
 
-import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
-import io.confluent.kafka.serializers.NonRecordContainer;
-
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -57,6 +54,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
+import io.confluent.kafka.serializers.NonRecordContainer;
 
 
 /**
@@ -532,7 +532,8 @@ public class AvroData {
               org.apache.avro.Schema fieldAvroSchema = theField.schema();
               convertedBuilder.set(
                   field.name(),
-                  fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false, true));
+                  fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false, true)
+              );
             }
             return convertedBuilder.build();
           }

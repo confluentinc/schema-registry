@@ -68,7 +68,6 @@ public abstract class AbstractKafkaAvroSerDe {
     try {
       List<String> urls = config.getSchemaRegistryUrls();
       int maxSchemaObject = config.getMaxSchemasPerSubject();
-
       if (null == schemaRegistry) {
         schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject);
       }
