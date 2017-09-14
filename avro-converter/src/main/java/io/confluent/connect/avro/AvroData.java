@@ -58,6 +58,7 @@ import java.util.Set;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
+
 /**
  * Utilities for converting between our runtime data format and Avro, and (de)serializing that data.
  */
@@ -464,13 +465,12 @@ public class AvroData {
 
         case MAP: {
           Map<Object, Object> map = (Map<Object, Object>) value;
-          org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
-              schema, avroSchema);
-          if (schema != null
-              && schema.keySchema().type()
-                 == Schema.Type.STRING
+          org.apache.avro.Schema underlyingAvroSchema;
+          if (schema != null && schema.keySchema().type() == Schema.Type.STRING
               && !schema.keySchema().isOptional()) {
+
             // TODO most types don't need a new converted object since types pass through
+            underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
             Map<String, Object> converted = new HashMap<>();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               // Key is a String, no conversion needed
@@ -482,6 +482,7 @@ public class AvroData {
             return maybeAddContainer(avroSchema, converted, requireContainer);
           } else {
             List<GenericRecord> converted = new ArrayList<>(map.size());
+            underlyingAvroSchema = avroSchemaForUnderlyingMapEntryType(schema, avroSchema);
             org.apache.avro.Schema elementSchema =
                 schema != null
                 ? underlyingAvroSchema.getElementType()
@@ -547,6 +548,31 @@ public class AvroData {
   }
 
   /**
+   * MapEntry types in connect Schemas are represented as Arrays of record.
+   * Return the array type from the union instead of the union itself.
+   */
+  private static org.apache.avro.Schema avroSchemaForUnderlyingMapEntryType(
+      Schema schema,
+      org.apache.avro.Schema avroSchema) {
+
+    if (schema != null && schema.isOptional()) {
+      if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
+        for (org.apache.avro.Schema typeSchema : avroSchema.getTypes()) {
+          if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL)
+              && Schema.Type.ARRAY.getName().equals(typeSchema.getType().getName())) {
+            return typeSchema;
+          }
+        }
+      } else {
+        throw new DataException(
+            "An optional schema should have an Avro Union type, not "
+            + schema.type());
+      }
+    }
+    return avroSchema;
+  }
+
+  /**
    * Connect optional fields are represented as a unions (null & type) in Avro
    * Return the Avro schema of the actual type in the Union (instead of the union itself)
    */
@@ -557,15 +583,16 @@ public class AvroData {
       if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
         for (org.apache.avro.Schema typeSchema : avroSchema
             .getTypes()) {
-          if (!typeSchema.getType().equals(
-              org.apache.avro.Schema.Type.NULL)) {
+          if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL)
+              && (typeSchema.getFullName().equals(schema.name())
+                  || typeSchema.getType().getName().equals(schema.type().getName()))) {
             return typeSchema;
           }
         }
       } else {
         throw new DataException(
             "An optinal schema should have an Avro Union type, not "
-            + schema.type());
+                + schema.type());
       }
     }
     return avroSchema;
