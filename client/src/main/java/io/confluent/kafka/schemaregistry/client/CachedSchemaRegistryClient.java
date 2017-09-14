@@ -73,6 +73,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return response.getVersion();
   }
 
+  private int getIdFromRegistry(String subject, Schema schema)
+      throws IOException, RestClientException {
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
+        restService.lookUpSubjectVersion(schema.toString(), subject, false);
+    return response.getId();
+  }
+
   @Override
   public synchronized int register(String subject, Schema schema)
       throws IOException, RestClientException {
@@ -162,7 +169,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     if (versionCache.containsKey(subject)) {
       schemaVersionMap = versionCache.get(subject);
     } else {
-      schemaVersionMap = new IdentityHashMap<Schema, Integer>();
+      schemaVersionMap = new IdentityHashMap();
       versionCache.put(subject, schemaVersionMap);
     }
 
@@ -175,6 +182,30 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       int version = getVersionFromRegistry(subject, schema);
       schemaVersionMap.put(schema, version);
       return version;
+    }
+  }
+
+  @Override
+  public synchronized int getId(String subject, Schema schema)
+      throws IOException, RestClientException {
+    Map<Schema, Integer> schemaIdMap;
+    if (schemaCache.containsKey(subject)) {
+      schemaIdMap = schemaCache.get(subject);
+    } else {
+      schemaIdMap = new IdentityHashMap();
+      schemaCache.put(subject, schemaIdMap);
+    }
+
+    if (schemaIdMap.containsKey(schema)) {
+      return schemaIdMap.get(schema);
+    } else {
+      if (schemaIdMap.size() >= identityMapCapacity) {
+        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
+      }
+      int id = getIdFromRegistry(subject, schema);
+      schemaIdMap.put(schema, id);
+      idCache.get(null).put(id, schema);
+      return id;
     }
   }
 
