@@ -169,7 +169,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     if (versionCache.containsKey(subject)) {
       schemaVersionMap = versionCache.get(subject);
     } else {
-      schemaVersionMap = new IdentityHashMap<Schema, Integer>();
+      schemaVersionMap = new IdentityHashMap();
       versionCache.put(subject, schemaVersionMap);
     }
 
@@ -192,7 +192,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     if (schemaCache.containsKey(subject)) {
       schemaIdMap = schemaCache.get(subject);
     } else {
-      schemaIdMap = new IdentityHashMap<Schema, Integer>();
+      schemaIdMap = new IdentityHashMap();
       schemaCache.put(subject, schemaIdMap);
     }
 

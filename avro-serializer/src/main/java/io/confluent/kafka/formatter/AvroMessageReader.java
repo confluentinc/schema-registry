@@ -34,7 +34,6 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import kafka.common.KafkaException;
-import kafka.producer.KeyedMessage;
 import kafka.common.MessageReader;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 
@@ -110,7 +109,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     this.valueSubject = topic + "-value";
     this.parseKey = parseKey;
     this.reader = reader;
-    this.autoRegister = autoRegister;
+    this.autoRegisterSchema = autoRegister;
   }
 
   @Override
@@ -149,9 +148,9 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     keySubject = topic + "-key";
     valueSubject = topic + "-value";
     if (props.containsKey("auto.register")) {
-      this.autoRegister = Boolean.valueOf(props.getProperty("ignore.error"));
+      this.autoRegisterSchema = Boolean.valueOf(props.getProperty("auto.register").trim());
     } else {
-      this.autoRegister = true;
+      this.autoRegisterSchema = true;
     }
   }
 

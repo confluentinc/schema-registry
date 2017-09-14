@@ -24,6 +24,10 @@ import org.apache.avro.Schema;
 
 public class KafkaAvroDecoder extends AbstractKafkaAvroDeserializer implements Decoder<Object> {
 
+  public KafkaAvroDecoder(SchemaRegistryClient schemaRegistry) {
+    this.schemaRegistry = schemaRegistry;
+  }
+
   public KafkaAvroDecoder(SchemaRegistryClient schemaRegistry, VerifiableProperties props) {
     this.schemaRegistry = schemaRegistry;
     configure(deserializerConfig(props));

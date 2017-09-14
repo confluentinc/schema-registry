@@ -53,7 +53,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
                 Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
         .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
-                Importance.LOW, AUTO_REGISTER_SCHEMAS_DOC
+                Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC
         );
   }
 
@@ -69,7 +69,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
     return this.getList(SCHEMA_REGISTRY_URL_CONFIG);
   }
 
-  public boolean autoRegister() {
+  public boolean autoRegisterSchema() {
     return this.getBoolean(AUTO_REGISTER_SCHEMAS);
   }
 

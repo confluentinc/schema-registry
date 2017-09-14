@@ -37,9 +37,11 @@ import kafka.utils.VerifiableProperties;
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
+  protected boolean autoRegisterSchema;
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config);
+    autoRegisterSchema = config.autoRegisterSchema();
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -72,7 +74,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
     try {
       int id;
       schema = getSchema(object);
-      if (autoRegister) {
+      if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema: ";
         id = schemaRegistry.register(subject, schema);
       } else {

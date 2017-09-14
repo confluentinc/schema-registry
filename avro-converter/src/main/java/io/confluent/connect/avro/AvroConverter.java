@@ -64,7 +64,7 @@ public class AvroConverter implements Converter {
                                          avroConverterConfig.getMaxSchemasPerSubject());
     }
 
-    serializer = new Serializer(schemaRegistry, avroConverterConfig.autoRegister());
+    serializer = new Serializer(schemaRegistry, avroConverterConfig.autoRegisterSchema());
     deserializer = new Deserializer(schemaRegistry);
     avroData = new AvroData(new AvroDataConfig(configs));
   }
@@ -101,9 +101,9 @@ public class AvroConverter implements Converter {
 
   private static class Serializer extends AbstractKafkaAvroSerializer {
 
-    public Serializer(SchemaRegistryClient client, boolean autoRegister) {
+    public Serializer(SchemaRegistryClient client, boolean autoRegisterSchema) {
       schemaRegistry = client;
-      this.autoRegister = autoRegister;
+      this.autoRegisterSchema = autoRegisterSchema;
     }
 
     public byte[] serialize(String topic, boolean isKey, Object value) {

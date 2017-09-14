@@ -25,6 +25,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 import avro.shaded.com.google.common.collect.ImmutableMap;
@@ -163,20 +164,26 @@ public class KafkaAvroSerializerTest {
 
   @Test(expected = SerializationException.class)
   public void testKafkaAvroSerializerWithoutAutoRegister() {
-    avroSerializer.configure(ImmutableMap.of(KafkaAvroDeserializerConfig
-            .SCHEMA_REGISTRY_URL_CONFIG, "bogus", KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
         false
-    ), false);
+    );
+    avroSerializer.configure(configs, false);
     IndexedRecord avroRecord = createAvroRecord();
     avroSerializer.serialize(topic, avroRecord);
   }
 
   @Test
   public void testKafkaAvroSerializerWithPreRegistered() throws IOException, RestClientException {
-    avroSerializer.configure(ImmutableMap.of(KafkaAvroDeserializerConfig
-            .SCHEMA_REGISTRY_URL_CONFIG, "bogus", KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
         false
-    ), false);
+    );
+    avroSerializer.configure(configs, false);
     IndexedRecord avroRecord = createAvroRecord();
     schemaRegistry.register(topic + "-value", avroRecord.getSchema());
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
