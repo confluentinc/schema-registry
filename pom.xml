@@ -48,6 +48,7 @@
         <module>package-kafka-serde-tools</module>
         <module>maven-plugin</module>
         <module>avro-serde</module>
+        <module>avro-console-scripts</module>
     </modules>
 
     <properties>
