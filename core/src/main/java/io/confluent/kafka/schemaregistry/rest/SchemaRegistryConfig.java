@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 
@@ -576,16 +577,8 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   static String endpointsToBootstrapServers(List<String> endpoints, String securityProtocol) {
-    final Set<SecurityProtocol> supportedSecurityProtocols = new HashSet<>(
-        Arrays
-            .asList(
-                SecurityProtocol.PLAINTEXT,
-                SecurityProtocol.SSL,
-                SecurityProtocol.SASL_PLAINTEXT,
-                SecurityProtocol.SASL_SSL
-            )
-    );
-    if (!supportedSecurityProtocols.contains(SecurityProtocol.forName(securityProtocol))) {
+    final Set<String> supportedSecurityProtocols = new HashSet<>(SecurityProtocol.names());
+    if (!supportedSecurityProtocols.contains(securityProtocol.toUpperCase(Locale.ROOT))) {
       throw new ConfigException(
           "Only PLAINTEXT, SSL, SASL_PLAINTEXT, and SASL_SSL Kafka endpoints are supported.");
     }
