@@ -37,9 +37,11 @@ import kafka.utils.VerifiableProperties;
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
+  protected boolean autoRegisterSchema;
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config);
+    autoRegisterSchema = config.autoRegisterSchema();
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -68,10 +70,17 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
     if (object == null) {
       return null;
     }
-
+    String restClientErrorMsg = "";
     try {
+      int id;
       schema = getSchema(object);
-      int id = schemaRegistry.register(subject, schema);
+      if (autoRegisterSchema) {
+        restClientErrorMsg = "Error registering Avro schema: ";
+        id = schemaRegistry.register(subject, schema);
+      } else {
+        restClientErrorMsg = "Error retrieving Avro schema: ";
+        id = schemaRegistry.getId(subject, schema);
+      }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
@@ -100,7 +109,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
       // ClassCastException, etc
       throw new SerializationException("Error serializing Avro message", e);
     } catch (RestClientException e) {
-      throw new SerializationException("Error registering Avro schema: " + schema, e);
+      throw new SerializationException(restClientErrorMsg + schema, e);
     }
   }
 }

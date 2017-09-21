@@ -18,8 +18,10 @@ package io.confluent.kafka.schemaregistry;
 import io.confluent.common.utils.IntegrationTest;
 import kafka.utils.CoreUtils;
 import org.I0Itec.zkclient.ZkClient;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.experimental.categories.Category;
@@ -65,8 +67,9 @@ public abstract class ClusterTestHarness {
         sockets[i] = new ServerSocket(0, 0, InetAddress.getByName("0.0.0.0"));
         ports[i] = sockets[i].getLocalPort();
       }
-      for (int i = 0; i < count; i++)
+      for (int i = 0; i < count; i++) {
         sockets[i].close();
+      }
       return ports;
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -82,7 +85,7 @@ public abstract class ClusterTestHarness {
 
   private int numBrokers;
   private boolean setupRestApp;
-  private String compatibilityType;
+  protected String compatibilityType;
 
   // ZK Config
   protected EmbeddedZookeeper zookeeper;
@@ -97,7 +100,9 @@ public abstract class ClusterTestHarness {
   protected List<KafkaConfig> configs = null;
   protected List<KafkaServer> servers = null;
   protected String brokerList = null;
+  protected String bootstrapServers = null;
 
+  protected int schemaRegistryPort;
   protected RestApp restApp = null;
 
   public ClusterTestHarness() {
@@ -112,13 +117,14 @@ public abstract class ClusterTestHarness {
     this(numBrokers, setupRestApp, AvroCompatibilityLevel.NONE.name);
   }
 
-  public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType) {
+  public ClusterTestHarness(int numBrokers, boolean setupRestApp, String compatibilityType
+  ) {
     this.numBrokers = numBrokers;
     this.setupRestApp = setupRestApp;
     this.compatibilityType = compatibilityType;
   }
 
-  private boolean setZkAcls() {
+  protected boolean setZkAcls() {
     return getSecurityProtocol() == SecurityProtocol.SASL_PLAINTEXT ||
            getSecurityProtocol() == SecurityProtocol.SASL_SSL;
   }
@@ -129,10 +135,11 @@ public abstract class ClusterTestHarness {
     zkConnect = String.format("localhost:%d", zookeeper.port());
     zkUtils = ZkUtils.apply(
         zkConnect, zkSessionTimeout, zkConnectionTimeout,
-        setZkAcls()); // true or false doesn't matter because the schema registry Kafka principal is the same as the
-                // Kafka broker principal, so ACLs won't make any difference. The principals are the same because
-                // ZooKeeper, Kafka, and the Schema Registry are run in the same process during testing and hence share
-                // the same JAAS configuration file. Read comments in ASLClusterTestHarness.java for more details.
+        setZkAcls()
+    ); // true or false doesn't matter because the schema registry Kafka principal is the same as the
+    // Kafka broker principal, so ACLs won't make any difference. The principals are the same because
+    // ZooKeeper, Kafka, and the Schema Registry are run in the same process during testing and hence share
+    // the same JAAS configuration file. Read comments in ASLClusterTestHarness.java for more details.
     zkClient = zkUtils.zkClient();
 
     configs = new Vector<>();
@@ -146,13 +153,40 @@ public abstract class ClusterTestHarness {
     }
 
     brokerList =
-        TestUtils.getBrokerListStrFromServers(JavaConversions.asScalaBuffer(servers),
-                                              getSecurityProtocol());
+        TestUtils.getBrokerListStrFromServers(
+            JavaConversions.asScalaBuffer(servers),
+            getSecurityProtocol()
+        );
+
+    // Initialize the rest app ourselves so we can ensure we don't pass any info about the Kafka
+    // zookeeper. The format for this config includes the security protocol scheme in the URLs so
+    // we can't use the pre-generated server list.
+    String[] serverUrls = new String[servers.size()];
+    ListenerName listenerType = ListenerName.forSecurityProtocol(getSecurityProtocol());
+    for(int i = 0; i < servers.size(); i++) {
+      serverUrls[i] = getSecurityProtocol() + "://" +
+                      Utils.formatAddress(
+                          servers.get(i).config().advertisedListeners().head().host(),
+                          servers.get(i).boundPort(listenerType)
+                      );
+    }
+    bootstrapServers = Utils.join(serverUrls, ",");
 
     if (setupRestApp) {
-      restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType);
+      schemaRegistryPort = choosePort();
+      Properties schemaRegistryProps = getSchemaRegistryProperties();
+      schemaRegistryProps.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
+                                                                     "://0.0.0.0:"
+                                                                     + schemaRegistryPort);
+      restApp = new RestApp(schemaRegistryPort, zkConnect, null, KAFKASTORE_TOPIC,
+                            compatibilityType, true, schemaRegistryProps);
       restApp.start();
+
     }
+  }
+
+  protected Properties getSchemaRegistryProperties() {
+    return new Properties();
   }
 
   protected void injectProperties(Properties props) {
@@ -161,18 +195,39 @@ public abstract class ClusterTestHarness {
   }
 
   protected KafkaConfig getKafkaConfig(int brokerId) {
+
     final Option<java.io.File> noFile = scala.Option.apply(null);
     final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
     Properties props = TestUtils.createBrokerConfig(
-            brokerId, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
-            noFile, EMPTY_SASL_PROPERTIES, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
-            TestUtils.RandomPort(), Option.<String>empty());
+        brokerId,
+        zkConnect,
+        false,
+        false,
+        TestUtils.RandomPort(),
+        noInterBrokerSecurityProtocol,
+        noFile,
+        EMPTY_SASL_PROPERTIES,
+        true,
+        false,
+        TestUtils.RandomPort(),
+        false,
+        TestUtils.RandomPort(),
+        false,
+        TestUtils.RandomPort(),
+        Option.<String>empty(),
+        1
+    );
     injectProperties(props);
     return KafkaConfig.fromProps(props);
+
   }
 
   protected SecurityProtocol getSecurityProtocol() {
     return SecurityProtocol.PLAINTEXT;
+  }
+
+  protected String getSchemaRegistryProtocol() {
+    return "http";
   }
 
   @After

@@ -1,20 +1,31 @@
 .. _schemaregistry_intro:
 
-Schema Registry
-================
+Introduction
+============
 
 Schema Registry provides a serving layer for your metadata. It provides a RESTful interface for storing and retrieving Avro schemas. It stores a versioned history of all schemas, provides multiple compatibility settings and allows evolution of schemas according to the configured compatibility setting. It provides serializers that plug into Kafka clients that handle schema storage and retrieval for Kafka messages that are sent in the Avro format.
 
 Quickstart
 ----------
 
-Start by running the Schema Registry and the services it depends on: ZooKeeper and Kafka:
+Start by running the Schema Registry and the services it depends on: ZooKeeper and Kafka.
+You can do this in one command with Confluent CLI:
 
 .. sourcecode:: bash
 
-   $ ./bin/zookeeper-server-start ./etc/kafka/zookeeper.properties &
-   $ ./bin/kafka-server-start ./etc/kafka/server.properties &
-   $ ./bin/schema-registry-start ./etc/schema-registry/schema-registry.properties &
+   $ confluent start schema-registry
+
+Each service reads its configuration from its property files under ``etc``.
+
+.. note::
+
+   To manually start each service in its own terminal, run instead:
+
+   .. sourcecode:: bash
+
+      $ bin/zookeeper-server-start ./etc/kafka/zookeeper.properties
+      $ bin/kafka-server-start ./etc/kafka/server.properties
+      $ bin/schema-registry-start ./etc/schema-registry/schema-registry.properties
 
 .. ifconfig:: platform_docs
 
@@ -138,7 +149,7 @@ Note: The Schema Registry version must not exceed the CP/Kafka version. That's t
 
 .. sourcecode:: bash
 
-   $ cd confluent-3.0.0/
+   $ cd confluent-3.3.0/
 
    # The default settings in schema-registry.properties work automatically with
    # the default settings for local ZooKeeper and Kafka nodes.
@@ -211,7 +222,7 @@ dependencies as well.
 Requirements
 ------------
 
-- Kafka: 0.11.0.0-SNAPSHOT
+- Kafka: 1.0.0-SNAPSHOT
 
 Contribute
 ----------

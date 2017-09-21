@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>3.5.0-SNAPSHOT</version>
+        <version>4.0.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
@@ -48,6 +48,7 @@
         <module>package-kafka-serde-tools</module>
         <module>maven-plugin</module>
         <module>avro-serde</module>
+        <module>avro-console-scripts</module>
     </modules>
 
     <properties>

@@ -16,17 +16,17 @@
 package io.confluent.kafka.schemaregistry;
 
 
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import org.eclipse.jetty.server.Server;
 
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
-import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 public class RestApp {
 
@@ -37,18 +37,35 @@ public class RestApp {
   public String restConnect;
 
   public RestApp(int port, String zkConnect, String kafkaTopic) {
-    this(port, zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name);
+    this(port, zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name, null);
   }
 
-  public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType) {
-    this(port, zkConnect, kafkaTopic, compatibilityType, true);
+  public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType, Properties schemaRegistryProps) {
+    this(port, zkConnect, null, kafkaTopic, compatibilityType, true, schemaRegistryProps);
   }
 
-  public RestApp(int port, String zkConnect, String kafkaTopic,
-                 String compatibilityType, boolean masterEligibility) {
+  public RestApp(int port,
+                 String zkConnect, String kafkaTopic,
+                 String compatibilityType, boolean masterEligibility, Properties schemaRegistryProps) {
+    this(port, zkConnect, null, kafkaTopic, compatibilityType,
+         masterEligibility, schemaRegistryProps);
+  }
+
+  public RestApp(int port,
+                 String zkConnect, String bootstrapBrokers,
+                 String kafkaTopic, String compatibilityType, boolean masterEligibility,
+                 Properties schemaRegistryProps) {
     prop = new Properties();
+    if (schemaRegistryProps != null) {
+      prop.putAll(schemaRegistryProps);
+    }
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
-    prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    if (zkConnect != null) {
+      prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    }
+    if (bootstrapBrokers != null) {
+      prop.setProperty(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
+    }
     prop.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
     prop.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, compatibilityType);
     prop.put(SchemaRegistryConfig.MASTER_ELIGIBILITY, masterEligibility);

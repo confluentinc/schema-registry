@@ -9,11 +9,14 @@
     <suppress checks="ParameterName"
               files="ErrorMessage.java"/>
 
+    <suppress checks="ParameterNumber"
+              files="SchemaRegistryCoordinator.java"/>
+
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(AvroMessageReader|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroData).java"/>
+              files="(AvroMessageReader|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroData|KafkaGroupMasterElector).java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData).java"/>
+              files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData|KafkaGroupMasterElector).java"/>
 
     <suppress checks="LineLength"
               files="(Errors|AvroMessageReader).java"/>
@@ -32,5 +35,8 @@
 
     <suppress checks="AbbreviationAsWordInName"
               files=".*SchemaRegistryClient.java"/>
+
+    <suppress checks="MethodLength"
+              files="SchemaRegistryConfig.java"/>
 
 </suppressions>

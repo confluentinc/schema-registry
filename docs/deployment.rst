@@ -71,11 +71,43 @@ The full set of configuration options are documented in :ref:`schemaregistry_con
 
 However, there are some logistical configurations that should be changed for production. These changes are necessary because there is no way to set a good default (because it depends on your cluster layout).
 
+First, there are two ways to deploy the Schema Registry depending on how the Schema Registry
+instances coordinate with each other to choose the :ref:`master<schemaregistry_single_master>`:
+with ZooKeeper (which may be shared with Kafka) or via Kafka itself. ZooKeeper-based master
+election is available in all versions of Schema Registry and you should continue to use it for
+compatibility if you already have a Schema Registry deployment. Kafka-based master election can
+be used in cases where ZooKeeper is not available, for example for hosted or cloud Kafka
+environments, or if access to ZooKeeper has been locked down.
+
+To configure the Schema Registry to use ZooKeeper for master election, configure the
+``kafkastore.connection.url`` setting.
+
 ``kafkastore.connection.url``
 Zookeeper url for the Kafka cluster
 
 * Type: string
 * Importance: high
+
+To configure the Schema Registry to use Kafka for master election, configure the
+``kafkastore.bootstrap.servers`` setting.
+
+``kafkastore.bootstrap.servers``
+  A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
+
+  The effect of this setting depends on whether you specify `kafkastore.connection.url`.
+
+  If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate schema registry instances (master election) and store schema data.
+
+  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
+
+  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
+
+  * Type: list
+  * Default: []
+  * Importance: medium
+
+Additionally, there are some configurations that may commonly need to be set in either type of
+deployment.
 
 ``port``
 Port to listen on for new connections.
@@ -138,6 +170,29 @@ Kafka & ZooKeeper
 Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and ZooKeeper.
 
 .. _schemaregistry_mirroring:
+
+
+Backup and Restore
+~~~~~~~~~~~~~~~~~~
+
+As discussed in :ref: `_schemaregistry_design`, all schemas, subject/version and id metadata, and compatibility settings are appended as messages to a special Kafka topic ``<kafkastore.topic>`` (default ``_schemas``). This topic is a common source of truth for schema IDs, and you should back it up. In case of some unexpected event that makes the topic inaccessible, you can restore this schemas topic from the backup, enabling consumers to continue to read Kafka messages that were sent in the Avro format.
+
+As a best practice, we recommend backing up the ``<kafkastore.topic>``. If you already have a multi-datacenter Kafka deployment, you can backup this topic to another Kafka cluster using `Confluent Replicator <https://docs.confluent.io/current/multi-dc/index.html>`_. Otherwise, you can use a `Kafka sink connector <https://docs.confluent.io/current/connect/index.html>`_ to copy the topic data from Kafka to a separate storage (e.g. AWS S3). These will continuously update as the schema topic updates.
+
+In lieu of either of those options, you can also use Kafka command line tools to periodically save the contents of the topic to a file. For the following examples, we assume that ``<kafkastore.topic>`` has its default value "_schemas".
+
+To backup the topic, use the ``kafka-console-consumer`` to capture messages from the schemas topic to a file called "schemas.log". Save this file off the Kafka cluster.
+
+.. sourcecode:: bash
+
+   bin/kafka-console-consumer --bootstrap-server localhost:9092 --topic _schemas --from-beginning --property print.key=true --timeout-ms 1000 1> schemas.log
+
+To restore the topic, use the ``kafka-console-producer`` to write the contents of file "schemas.log" to a new schemas topic. This examples uses a new schemas topic name "_schemas_restore". If you use a new topic name or use the old one (i.e. "_schemas"), make sure to set ``<kafkastore.topic>`` accordingly.
+
+.. sourcecode:: bash
+
+   bin/kafka-console-producer --broker-list localhost:9092 --topic _schemas_restore --property parse.key=true < schemas.log
+
 
 Multi-DC Setup
 ~~~~~~~~~~~~~~

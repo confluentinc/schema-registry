@@ -9,6 +9,21 @@ Configuration Options
   * Default: ""
   * Importance: high
 
+``kafkastore.bootstrap.servers``
+  A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
+
+  The effect of this setting depends on whether you specify `kafkastore.connection.url`.
+
+  If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate schema registry instances (master election) and store schema data.
+
+  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
+
+  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
+
+  * Type: list
+  * Default: []
+  * Importance: medium
+
 ``listeners``
   Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
@@ -262,20 +277,6 @@ Configuration Options
   * Type: list
   * Default: "" (Jetty's default)
   * Importance: medium
-
-``kafkastore.bootstrap.servers``
-  A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
-
-  If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list
-  from ZooKeeper (configured with `kafkastore.connection.url`). Note that if `kafkastore.bootstrap.servers` is configured,
-  `kafkastore.connection.url` still needs to be configured, too.
-
-  This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that
-  all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.
-
- * Type: list
- * Default: "" (when left blank, bootstrap servers are fetched from ZooKeeper)
- * Importance: medium
 
 ``access.control.allow.origin``
   Set value for Jetty Access-Control-Allow-Origin header

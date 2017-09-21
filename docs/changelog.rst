@@ -3,6 +3,55 @@
 Changelog
 =========
 
+Version 3.4.0
+-------------
+
+Upgrade Notes
+^^^^^^^^^^^^^
+
+In 3.4.0, initial creation or validation of the topic used to store schemas has been
+reimplemented to use native Kafka protocol requests instead of accessing Zookeeper directly. This
+means that you are no longer required to have direct access to the Zookeeper cluster backing your
+Kafka cluster. However, note that this also requires appropriate permissions to create topics (on
+first execution of the Schema Registry) or describe topics and configs (on subsequent executions
+to validate the topic is configured correctly). If you have authentication and authorization enabled
+on your Kafka cluster, you must ensure your principal has the correct permissions before
+upgrading the Schema Registry cluster. Your principal must have the following permissions:
+
+Create Schemas Topic
+
+=========  ===========================  ===============================================
+Operation  Resource                     Reason
+=========  ===========================  ===============================================
+Describe   Topic: ``kafkastore.topic``  Check existence of topic
+Create     Cluster                      Create the schemas topic, set compaction policy
+=========  ===========================  ===============================================
+
+Validate Schemas Topic
+
+===============  ===========================  =============================================
+Operation        Resource                     Reason
+===============  ===========================  =============================================
+Describe         Topic: ``kafkastore.topic``  Check existence of topic
+DescribeConfigs  Topic: ``kafkastore.topic``  Validate correct compaction policy on topic
+===============  ===========================  =============================================
+
+Version 3.3.0
+-------------
+
+* Upgrade avro to 1.8.2
+* `PR-561 <https://github.com/confluentinc/schema-registry/pull/561>`_ - Use TO_AVRO_LOGICAL_CONVERTERS to convert default values that are Kafka connect logical data types to internal format which correspond to schema type. Logic copied from AvroData fromConnectData
+* `PR-549 <https://github.com/confluentinc/schema-registry/pull/549>`_ - Replace usage of deprecated ZkUtils.DefaultAcls()
+* Allow for some retries when validating that all nodes have the same master
+* Relocate Avro serdes under a new `avro` package
+* Increment Magic Byte for SchemaKey and add compatibility tests
+* Add Delete Schema support
+* Added avro-serde for Kafka Streams. Pulled from the example project.
+* `#506 <https://github.com/confluentinc/schema-registry/issues/506>`_ - The AvroMessageFormatter passes byte[] to an Avro encoder, but Avro only likes ByteBuffer. So we need to ByteBuffer.wrap() instead.
+* Added optional kafkastore.group.id config to override the one automatically created by the schema registry
+* `PR-476 <https://github.com/confluentinc/schema-registry/pull/476>`_ - Adapt to KAFKA-4636 changes: Per listener security settings overrides (KIP-103)
+
+
 Version 3.2.1
 -------------
 

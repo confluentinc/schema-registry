@@ -16,9 +16,6 @@
 
 package io.confluent.connect.avro;
 
-import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
-import io.confluent.kafka.serializers.NonRecordContainer;
-
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -57,6 +54,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
+import io.confluent.kafka.serializers.NonRecordContainer;
+
 
 /**
  * Utilities for converting between our runtime data format and Avro, and (de)serializing that data.
@@ -464,13 +465,12 @@ public class AvroData {
 
         case MAP: {
           Map<Object, Object> map = (Map<Object, Object>) value;
-          org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
-              schema, avroSchema);
-          if (schema != null
-              && schema.keySchema().type()
-                 == Schema.Type.STRING
+          org.apache.avro.Schema underlyingAvroSchema;
+          if (schema != null && schema.keySchema().type() == Schema.Type.STRING
               && !schema.keySchema().isOptional()) {
+
             // TODO most types don't need a new converted object since types pass through
+            underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
             Map<String, Object> converted = new HashMap<>();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               // Key is a String, no conversion needed
@@ -482,6 +482,7 @@ public class AvroData {
             return maybeAddContainer(avroSchema, converted, requireContainer);
           } else {
             List<GenericRecord> converted = new ArrayList<>(map.size());
+            underlyingAvroSchema = avroSchemaForUnderlyingMapEntryType(schema, avroSchema);
             org.apache.avro.Schema elementSchema =
                 schema != null
                 ? underlyingAvroSchema.getElementType()
@@ -531,7 +532,8 @@ public class AvroData {
               org.apache.avro.Schema fieldAvroSchema = theField.schema();
               convertedBuilder.set(
                   field.name(),
-                  fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false, true));
+                  fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false, true)
+              );
             }
             return convertedBuilder.build();
           }
@@ -546,6 +548,31 @@ public class AvroData {
   }
 
   /**
+   * MapEntry types in connect Schemas are represented as Arrays of record.
+   * Return the array type from the union instead of the union itself.
+   */
+  private static org.apache.avro.Schema avroSchemaForUnderlyingMapEntryType(
+      Schema schema,
+      org.apache.avro.Schema avroSchema) {
+
+    if (schema != null && schema.isOptional()) {
+      if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
+        for (org.apache.avro.Schema typeSchema : avroSchema.getTypes()) {
+          if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL)
+              && Schema.Type.ARRAY.getName().equals(typeSchema.getType().getName())) {
+            return typeSchema;
+          }
+        }
+      } else {
+        throw new DataException(
+            "An optional schema should have an Avro Union type, not "
+            + schema.type());
+      }
+    }
+    return avroSchema;
+  }
+
+  /**
    * Connect optional fields are represented as a unions (null & type) in Avro
    * Return the Avro schema of the actual type in the Union (instead of the union itself)
    */
@@ -556,15 +583,16 @@ public class AvroData {
       if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
         for (org.apache.avro.Schema typeSchema : avroSchema
             .getTypes()) {
-          if (!typeSchema.getType().equals(
-              org.apache.avro.Schema.Type.NULL)) {
+          if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL)
+              && (typeSchema.getFullName().equals(schema.name())
+                  || typeSchema.getType().getName().equals(schema.type().getName()))) {
             return typeSchema;
           }
         }
       } else {
         throw new DataException(
             "An optinal schema should have an Avro Union type, not "
-            + schema.type());
+                + schema.type());
       }
     }
     return avroSchema;
@@ -616,11 +644,11 @@ public class AvroData {
   }
 
   public org.apache.avro.Schema fromConnectSchema(Schema schema) {
-    return fromConnectSchema(schema, new HashMap<String, org.apache.avro.Schema>());
+    return fromConnectSchema(schema, new HashMap<Schema, org.apache.avro.Schema>());
   }
 
   public org.apache.avro.Schema fromConnectSchema(Schema schema,
-                                                  Map<String, org.apache.avro.Schema> schemaMap) {
+                                                  Map<Schema, org.apache.avro.Schema> schemaMap) {
     return fromConnectSchema(schema, schemaMap, false);
   }
 
@@ -637,7 +665,7 @@ public class AvroData {
    * schemas used to avoid re-resolving when presented with the same source schema.
    */
   public org.apache.avro.Schema fromConnectSchema(Schema schema,
-                                                  Map<String, org.apache.avro.Schema> schemaMap,
+                                                  Map<Schema, org.apache.avro.Schema> schemaMap,
                                                   boolean ignoreOptional) {
     if (schema == null) {
       return ANYTHING_SCHEMA;
@@ -646,7 +674,7 @@ public class AvroData {
     org.apache.avro.Schema cached = fromConnectSchemaCache.get(schema);
 
     if (cached == null && !AVRO_TYPE_UNION.equals(schema.name()) && !schema.isOptional()) {
-      cached = schemaMap.get(schema.name());
+      cached = schemaMap.get(schema);
     }
     if (cached != null) {
       return cached;
@@ -691,24 +719,17 @@ public class AvroData {
       case STRING:
         if (enhancedSchemaSupport && schema.parameters() != null
             && schema.parameters().containsKey(AVRO_TYPE_ENUM)) {
-          String enumSchemaName = schema.parameters().get(AVRO_TYPE_ENUM);
-          org.apache.avro.Schema cachedEnum = schemaMap.get(enumSchemaName);
-          if (cachedEnum == null) {
-            List<String> symbols = new ArrayList<>();
-            for (Map.Entry<String, String> entry : schema.parameters().entrySet()) {
-              if (entry.getKey().startsWith(AVRO_TYPE_ENUM + ".")) {
-                symbols.add(entry.getValue());
-              }
+          List<String> symbols = new ArrayList<>();
+          for (Map.Entry<String, String> entry : schema.parameters().entrySet()) {
+            if (entry.getKey().startsWith(AVRO_TYPE_ENUM + ".")) {
+              symbols.add(entry.getValue());
             }
-            baseSchema =
-                org.apache.avro.SchemaBuilder.builder().enumeration(
-                    schema.parameters().get(AVRO_TYPE_ENUM))
-                    .doc(schema.parameters().get(CONNECT_ENUM_DOC_PROP))
-                    .symbols(symbols.toArray(new String[symbols.size()]));
-            schemaMap.put(enumSchemaName, baseSchema);
-          } else {
-            baseSchema = cachedEnum;
           }
+          baseSchema =
+              org.apache.avro.SchemaBuilder.builder().enumeration(
+                  schema.parameters().get(AVRO_TYPE_ENUM))
+                  .doc(schema.parameters().get(CONNECT_ENUM_DOC_PROP))
+                  .symbols(symbols.toArray(new String[symbols.size()]));
         } else {
           baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
         }
@@ -856,8 +877,8 @@ public class AvroData {
       }
     }
 
-    if (schema.name() != null && !schema.isOptional()) {
-      schemaMap.put(schema.name(), finalSchema);
+    if (!schema.isOptional()) {
+      schemaMap.put(schema, finalSchema);
     }
     fromConnectSchemaCache.put(schema, finalSchema);
     return finalSchema;
@@ -866,7 +887,7 @@ public class AvroData {
 
   private void addAvroRecordField(
       org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler,
-      String fieldName, Schema fieldSchema, Map<String, org.apache.avro.Schema> schemaMap) {
+      String fieldName, Schema fieldSchema, Map<Schema, org.apache.avro.Schema> schemaMap) {
     org.apache.avro.SchemaBuilder.GenericDefault<org.apache.avro.Schema> fieldAvroSchema
         = fieldAssembler.name(fieldName).doc(fieldSchema.doc()).type(fromConnectSchema(fieldSchema,
                                                                                        schemaMap));
@@ -923,7 +944,7 @@ public class AvroData {
           }
         case ARRAY: {
           ArrayNode array = JsonNodeFactory.instance.arrayNode();
-          for (Object elem : (List<Object>) defaultVal) {
+          for (Object elem : (Collection<Object>) defaultVal) {
             array.add(defaultValueFromConnect(schema.valueSchema(), elem));
           }
           return array;
@@ -1058,12 +1079,42 @@ public class AvroData {
             arrayVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_ARRAY_FIELD).pos());
         if (arrayVal != null) {
-          return toConnectData(SchemaBuilder.array(null).build(), arrayVal);
+          // We cannot reuse the logic like we do in other cases because it is not possible to
+          // construct an array schema with a null item schema, but the items have no schema.
+          if (!(arrayVal instanceof Collection)) {
+            throw new DataException(
+                "Expected a Collection for schemaless array field but found a "
+                + arrayVal.getClass().getName()
+            );
+          }
+          Collection<Object> original = (Collection<Object>) arrayVal;
+          List<Object> result = new ArrayList<>(original.size());
+          for (Object elem : original) {
+            result.add(toConnectData((Schema) null, elem));
+          }
+          return result;
         }
 
         Object mapVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_MAP_FIELD).pos());
         if (mapVal != null) {
-          return toConnectData(SchemaBuilder.map(null, null).build(), mapVal);
+          // We cannot reuse the logic like we do in other cases because it is not possible to
+          // construct a map schema with a null item schema, but the items have no schema.
+          if (!(mapVal instanceof Collection)) {
+            throw new DataException(
+                "Expected a List for schemaless map field but found a "
+                + mapVal.getClass().getName()
+            );
+          }
+          Collection<IndexedRecord> original = (Collection<IndexedRecord>) mapVal;
+          Map<Object, Object> result = new HashMap<>(original.size());
+          for (IndexedRecord entry : original) {
+            int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
+            int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
+            Object convertedKey = toConnectData((Schema) null, entry.get(avroKeyFieldIndex));
+            Object convertedValue = toConnectData((Schema) null, entry.get(avroValueFieldIndex));
+            result.put(convertedKey, convertedValue);
+          }
+          return result;
         }
 
         // If nothing was set, it's null
@@ -1160,7 +1211,7 @@ public class AvroData {
             converted = result;
           } else {
             // Arbitrary keys
-            List<IndexedRecord> original = (List<IndexedRecord>) value;
+            Collection<IndexedRecord> original = (Collection<IndexedRecord>) value;
             Map<Object, Object> result = new HashMap<>(original.size());
             for (IndexedRecord entry : original) {
               int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();

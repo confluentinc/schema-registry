@@ -31,6 +31,11 @@ public class KafkaAvroEncoder extends AbstractKafkaAvroSerializer implements Enc
     this.schemaRegistry = schemaRegistry;
   }
 
+  public KafkaAvroEncoder(SchemaRegistryClient schemaRegistry, VerifiableProperties props) {
+    this.schemaRegistry = schemaRegistry;
+    configure(serializerConfig(props));
+  }
+
   /**
    * Constructor used by Kafka producer.
    */

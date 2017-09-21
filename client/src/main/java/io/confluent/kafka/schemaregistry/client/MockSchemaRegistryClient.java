@@ -53,24 +53,31 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     idCache.put(null, new HashMap<Integer, Schema>());
   }
 
-  private int getIdFromRegistry(String subject, Schema schema) throws IOException {
+  private int getIdFromRegistry(String subject, Schema schema, boolean registerRequest)
+      throws IOException, RestClientException {
     Map<Integer, Schema> idSchemaMap;
     if (idCache.containsKey(subject)) {
       idSchemaMap = idCache.get(subject);
       for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
         if (entry.getValue().toString().equals(schema.toString())) {
-          generateVersion(subject, schema);
+          if (registerRequest) {
+            generateVersion(subject, schema);
+          }
           return entry.getKey();
         }
       }
     } else {
       idSchemaMap = new HashMap<Integer, Schema>();
     }
-    int id = ids.incrementAndGet();
-    idSchemaMap.put(id, schema);
-    idCache.put(subject, idSchemaMap);
-    generateVersion(subject, schema);
-    return id;
+    if (registerRequest) {
+      int id = ids.incrementAndGet();
+      idSchemaMap.put(id, schema);
+      idCache.put(subject, idSchemaMap);
+      generateVersion(subject, schema);
+      return id;
+    } else {
+      throw new RestClientException("Schema Not Found", 404, 404001);
+    }
   }
 
   private void generateVersion(String subject, Schema schema) {
@@ -121,7 +128,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (schemaIdMap.containsKey(schema)) {
       return schemaIdMap.get(schema);
     } else {
-      int id = getIdFromRegistry(subject, schema);
+      int id = getIdFromRegistry(subject, schema, true);
       schemaIdMap.put(schema, id);
       idCache.get(null).put(id, schema);
       return id;
@@ -259,5 +266,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     results.addAll(this.schemaCache.keySet());
     Collections.sort(results, String.CASE_INSENSITIVE_ORDER);
     return results;
+  }
+
+  @Override
+  public int getId(String subject, Schema schema) throws IOException, RestClientException {
+    return getIdFromRegistry(subject, schema, false);
   }
 }
