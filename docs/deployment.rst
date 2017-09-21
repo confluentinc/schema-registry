@@ -169,58 +169,27 @@ Kafka & ZooKeeper
 
 Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and ZooKeeper.
 
-.. _schemaregistry_mirroring:
+Migration from Zookeeper master election to Kafka master election
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Multi-DC Setup
-~~~~~~~~~~~~~~
+It is not required to migrate from Zookeeper based election to Kafka based master election. If
+you choose to do so, you need to make the below outlined config changes as the first step in all
+Schema Registry nodes
 
-Overview
-^^^^^^^^
-Spanning multiple datacenters with your Schema Registry provides additional protection against data loss and improved latency. The recommended multi-datacenter deployment designates one datacenter as "master" and all others as "slaves". If the "master" datacenter fails and is unrecoverable, a "slave" datacenter will need to be manually designated the new "master" through the steps in the Run Book below.
+- Remove ``kafkastore.connection.url``
+- Remove ``schema.registry.zk.namespace`` if its configured
+- Configure ``kafkastore.bootstrap.servers``
 
+After that, you need to shut down all the nodes and then start all the nodes starting
+from master eligible nodes. Please note that this would lead to temporary down time for
+Schema Registry.
 
-Recommended Deployment
-^^^^^^^^^^^^^^^^^^^^^^
+If you would like to avoid complete down time, you can do so by having downtime
+for write operations only. The steps for that are outlined below
 
-.. image:: multi-dc-setup.png
-
-In the image above, there are two datacenters - DC A, and DC B. Each of the two datacenters has its own ZooKeeper
-cluster, Kafka cluster, and Schema Registry cluster. Both Schema Registry clusters link to Kafka and ZooKeeper in DC A. Note that the Schema Registry instances in DC B have ``master.eligibility`` set to false, meaning that none can ever be elected master.
-
-To protect against complete loss of DC A, Kafka cluster A (the source) is replicated to Kafka cluster B (the target). This is achieved by running the :ref:`Replicator` <connect_replicator>` local to the target cluster.
-
-Important Settings
-^^^^^^^^^^^^^^^^^^
-
-``kafkastore.connection.url``
-kafkastore.connection.url should be identical across all schema registry nodes. By sharing this setting, all Schema Registry instances will point to the same ZooKeeper cluster.
-
-``schema.registry.zk.namespace``
-Namespace under which schema registry related metadata is stored in Zookeeper. This setting should be identical across all nodes in the same schema registry.
-
-``master.eligibility``
-A schema registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. Schema Registry instances in a "slave" data center should have this set to false, and Schema Registry instances local to the shared Kafka cluster should have this set to true.
-
-Setup
-^^^^^
-
-Assuming you have Schema Registry running, here are the recommended steps to add Schema Registry instances in a new "slave" datacenter (call it DC B):
-
-- In DC B, make sure Kafka has ``unclean.leader.election.enable`` set to false.
-
-- In Kafka in DC B, create the ``_schemas`` topic. It should have 1 partition, ``kafkastore.topic.replication.factor`` of 3, and ``min.insync.replicas`` at least 2.
-
-- In DC B, run Replicator with Kafka in the "master" datacenter (DC A) as the source and Kafka in DC B as the target.
-
-- In the Schema Registry config files in DC B, set ``kafkastore.connection.url`` and ``schema.registry.zk.namespace`` to match the instances already running, and set ``master.eligibility`` to false.
-
-- Start your new Schema Registry instances with these configs.
-
-Run Book
-^^^^^^^^
-
-Let's say you have Schema Registry running in multiple datacenters, and you have lost your "master" datacenter; what do you do? First, note that the remaining Schema Registry instances will continue to be able to serve any request which does not result in a write to Kafka. This includes GET requests on existing ids and POST requests on schemas already in the registry.
-
-- If possible, revive the "master" datacenter by starting Kafka and Schema Registry as before.
-
-- If you must designate a new datacenter (call it DC B) as "master", update the Schema Registry config files so that ``kafkastore.connection.url`` points to the local ZooKeeper, and change ``master.eligibility`` to true. The restart your Schema Registry instances with these new configs in a rolling fashion.
+- Shutdown all Schema registry nodes except the master
+- Make above outlined config changes on that node and also ensure ``master.eligibility`` is set to false in each one of them
+- Start all the nodes on which the changes are made. These nodes will not be aware of the master since they are not aware of the ZK based master. All writes that come into these nodes will fail but reads will be successful.
+- Now shut down the master node, make the above outlined config changes and then start the node.
+- We can now start taking write traffics as well.
+- For the other nodes, set ``master.eligibility`` to true as needed and restart.
