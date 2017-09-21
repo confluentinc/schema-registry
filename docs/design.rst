@@ -8,12 +8,6 @@ The Schema Registry is a distributed storage layer for Avro Schemas which uses K
 * Kafka provides the durable backend, and functions as a write-ahead changelog for the state of the Schema Registry and the schemas it contains.
 * The Schema Registry is designed to be distributed, with single-master architecture, and ZooKeeper/Kafka coordinates master election (based on the configuration).
 
-.. figure:: schema-registry-design.png
-   :alt: Zookeeper based Schema Registry
-   :align: center
-
-   Zookeeper based Schema Registry
-
 Batch ID Allocation
 ~~~~~~~~~~~~~~~~~~~
 Schema ids are allocated in batches by the current Schema Registry master and handed out one by one to newly registered schemas.
@@ -40,12 +34,22 @@ Master election can now optionally happen via Kafka Coordinator protocol as well
 Zookeeper Master Election
 +++++++++++++++++++++++++
 
+.. figure:: schema-registry-design.png
+   :align: center
+
+   Zookeeper based Schema Registry
+
 Zookeeper maser election is chosen when Zookeeper URL is specified in the Schema Registry config
 ``<kafkastore.connection.url>``.
 The current master is maintained as data in the ephemeral node on the``/<schema.registry.zk.namespace>/schema_registry_master`` path in ZooKeeper. Schema Registry nodes listen to data change and deletion events on this path, and shutdown or failure of the master process triggers each node with ``master.eligibility=true`` to participate in a new round of election. Master election is a simple 'first writer wins' policy: the first node to successfully write its own data to ``/<schema.registry.zk.namespace>/schema_registry_master`` is the new master.
 
 Kafka Coordinator Master Election
 +++++++++++++++++++++++++++++++++
+
+.. figure:: schema-registry-design-kafka.png
+   :align: center
+
+   Kafka based Schema Registry
 
 Kafka coordinator based master elction is done when Schema Registry configs has no Zookeeper
 URL ``<kafkastore.connection.url>`` specified and has the Kafka bootstrap brokers ``<kafkastore.bootstrap.servers>`` specified. The coordinator algorithm, chooses the chronologically first
