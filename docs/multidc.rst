@@ -34,6 +34,9 @@ Important Settings
 ``kafkastore.bootstrap.servers``
 kafkastore.bootstrap.servers should point to the local Kafka cluster
 
+``schema.registry.group.id``
+Use this setting to override the group.id for the Kafka group used when Kafka is used for master election. Without this configuration, group.id will be "schema-registry". If you want to run more than one schema registry cluster against a single Kafka cluster you should make this setting unique for each cluster.
+
 ``master.eligibility``
 A schema registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. Schema Registry instances in a "slave" data center should have this set to false, and Schema Registry instances local to the shared Kafka cluster should have this set to true.
 

@@ -179,7 +179,7 @@ Schema Registry nodes
 - Remove ``kafkastore.connection.url``
 - Remove ``schema.registry.zk.namespace`` if its configured
 - Configure ``kafkastore.bootstrap.servers``
-- Configure ``schema.registry.group.id"`` if you originally had ``schema.registry.zk.namespace`` for multiple Schema Registry clusters
+- Configure ``schema.registry.group.id`` if you originally had ``schema.registry.zk.namespace`` for multiple Schema Registry clusters
 
 Down Time for Writes
 ^^^^^^^^^^^^^^^^^^^^
