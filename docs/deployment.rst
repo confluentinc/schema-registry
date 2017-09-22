@@ -1,5 +1,5 @@
 Production Deployment
----------------------
+=====================
 
 This section is not meant to be an exhaustive guide to running your Schema Registry in production, but it
 covers the key things to consider before putting your cluster live. Three main areas are covered:
@@ -12,19 +12,19 @@ covers the key things to consider before putting your cluster live. Three main a
    :maxdepth: 3
 
 Hardware
-~~~~~~~~
+--------
 
 If you’ve been following the normal development path, you’ve probably been playing with Schema Registry
 on your laptop or on a small cluster of machines laying around. But when it comes time to deploying 
 Schema Registry to production, there are a few recommendations that you should consider. Nothing is a hard-and-fast rule.
 
 Memory
-^^^^^^
+------
 
 Schema Registry uses Kafka as a commit log to store all registered schemas durably, and maintains a few in-memory indices to make schema lookups faster. A conservative upper bound on the number of unique schemas registered in a large data-oriented company like LinkedIn is around 10,000. Assuming roughly 1000 bytes heap overhead per schema on average, heap size of 1GB would be more than sufficient.
 
 CPUs
-^^^^
+----
 
 CPU usage in Schema Registry is light. The most computationally intensive task is checking compatibility of two schemas, an infrequent operation which occurs primarily when new schemas versions are registered under a subject.
 
@@ -32,12 +32,12 @@ If you need to choose between faster CPUs or more cores, choose more cores. The 
 cores offers will far outweigh a slightly faster clock speed.
 
 Disks
-^^^^^
+-----
 
 Schema Registry does not have any disk resident data. It currently uses Kafka as a commit log to store all schemas durably and holds in-memory indices of all schemas. Therefore, the only disk usage comes from storing the log4j logs.
 
 Network
-^^^^^^^
+-------
 
 A fast and reliable network is obviously important to performance in a distributed system. Low latency helps ensure that nodes can communicate easily, while high bandwidth helps shard movement and recovery. Modern data-center networking (1 GbE, 10 GbE) is sufficient for the vast majority of clusters.
 
@@ -48,7 +48,7 @@ Larger latencies tend to exacerbate problems in distributed systems and make deb
 Often, people might assume the pipe between multiple data centers is robust or low latency. But this is usually not true and network failures might happen at some point. Please refer to our recommended :ref:`schemaregistry_mirroring`.
 
 JVM
-~~~
+---
 
 We recommend running the latest version of JDK 1.8 with the G1 collector (older freely available versions have disclosed security vulnerabilities).
 
@@ -65,7 +65,7 @@ Our recommended GC tuning looks like this:
           -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80
 
 Important Configuration Options
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------
 
 The full set of configuration options are documented in :ref:`schemaregistry_config`.
 
@@ -131,7 +131,7 @@ Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this 
      register schema write is considered durable if it gets committed on at least 2 replicas out of 3. Furthermore, it is best to set ``unclean.leader.election.enable`` to false so that a replica outside of the isr is never elected leader (potentially resulting in data loss).
 
 Don't Touch These Settings!
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------
 
 Storage settings
 ^^^^^^^^^^^^^^^^
@@ -165,12 +165,12 @@ The timeout for an operation on the Kafka store. This is the maximum time that a
 * Importance: medium
 
 Kafka & ZooKeeper
-~~~~~~~~~~~~~~~~~
+-----------------
 
 Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and ZooKeeper.
 
 Migration from Zookeeper master election to Kafka master election
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------------------------------------------
 
 It is not required to migrate from Zookeeper based election to Kafka based master election. If
 you choose to do so, you need to make the below outlined config changes as the first step in all
@@ -179,17 +179,21 @@ Schema Registry nodes
 - Remove ``kafkastore.connection.url``
 - Remove ``schema.registry.zk.namespace`` if its configured
 - Configure ``kafkastore.bootstrap.servers``
+- Configure ``schema.registry.group.id"`` if you originally had ``schema.registry.zk.namespace`` for multiple Schema Registry clusters
 
-After that, you need to shut down all the nodes and then start all the nodes starting
-from master eligible nodes. Please note that this would lead to temporary down time for
-Schema Registry.
+Down Time for Writes
+^^^^^^^^^^^^^^^^^^^^
 
-If you would like to avoid complete down time, you can do so by having downtime
-for write operations only. The steps for that are outlined below
+You can migrate from Zookeeper based master election to Kafka based master election by following
+below outlined steps. These steps would lead to Schema Registry not being available for writes
+for a brief amount of time.
 
-- Shutdown all Schema registry nodes except the master
-- Make above outlined config changes on that node and also ensure ``master.eligibility`` is set to false in each one of them
-- Start all the nodes on which the changes are made. These nodes will not be aware of the master since they are not aware of the ZK based master. All writes that come into these nodes will fail but reads will be successful.
-- Now shut down the master node, make the above outlined config changes and then start the node.
-- We can now start taking write traffics as well.
-- For the other nodes, set ``master.eligibility`` to true as needed and restart.
+- Make above outlined config changes on that node and also ensure ``master.eligibility`` is set to false in all the nodes
+- Do a rolling bounce of all the nodes.
+- Configure ``master.eligibility`` to true on the nodes that can be master eligible and bounce them
+
+Complete Down Time
+^^^^^^^^^^^^^^^^^^
+
+If you want to keep things simple, you can take a temporary down time for Schema Registry and do
+the migration. To do so, simply shutdown all the nodes and start them again with the new configs.
