@@ -16,10 +16,10 @@
 package io.confluent.kafka.schemaregistry.client.rest;
 
 import static junit.framework.TestCase.assertEquals;
-import static org.easymock.EasyMock.anyBoolean;
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
+import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.verify;
@@ -37,7 +37,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({RestService.class, URL.class})
+@PrepareForTest(RestService.class)
 public class RestServiceTest {
 
   @Test
@@ -74,20 +74,17 @@ public class RestServiceTest {
 
   @Mock
   private URL url;
-
-  @Mock
-  private HttpURLConnection httpURLConnection;
-
-  @Mock
-  private InputStream inputStream;
-
+  
   /*
    * Test setBasicAuthRequestHeader (private method) indirectly through getAllSubjects.
    */
   @Test
   public void testSetBasicAuthRequestHeader() throws Exception {
-    RestService restService = new RestService("http://localhost:8081");
+    RestService restService = new RestService("http://user:password@localhost:8081");
 
+    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
+    InputStream inputStream = createNiceMock(InputStream.class);
+    
     expectNew(URL.class, anyString()).andReturn(url).anyTimes();
 
     expect(url.openConnection()).andReturn(httpURLConnection).anyTimes();
@@ -99,21 +96,6 @@ public class RestServiceTest {
     // Make sure that the Authorization header is set with the correct value for "user:password"
     httpURLConnection.setRequestProperty("Authorization", "Basic dXNlcjpwYXNzd29yZA==");
     expectLastCall().once();
-
-    httpURLConnection.setRequestProperty("Content-Type", "application/vnd.schemaregistry.v1+json");
-    expectLastCall().anyTimes();
-
-    httpURLConnection.disconnect();
-    expectLastCall().anyTimes();
-
-    httpURLConnection.setRequestMethod(anyString());
-    expectLastCall().anyTimes();
-
-    httpURLConnection.setDoInput(anyBoolean());
-    expectLastCall().anyTimes();
-
-    httpURLConnection.setUseCaches(anyBoolean());
-    expectLastCall().anyTimes();
 
     expect(httpURLConnection.getInputStream()).andReturn(inputStream).anyTimes();
 
@@ -131,9 +113,6 @@ public class RestServiceTest {
             return json.length;
           }
         }).anyTimes();
-
-    inputStream.close();
-    expectLastCall().anyTimes();
 
     replay(URL.class, url);
     replay(HttpURLConnection.class, httpURLConnection);
