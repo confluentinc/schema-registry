@@ -181,7 +181,7 @@ Schema Registry nodes
 - Configure ``kafkastore.bootstrap.servers``
 - Configure ``schema.registry.group.id`` if you originally had ``schema.registry.zk.namespace`` for multiple Schema Registry clusters
 
-Down Time for Writes
+Downtime for Writes
 ^^^^^^^^^^^^^^^^^^^^
 
 You can migrate from Zookeeper based master election to Kafka based master election by following
@@ -192,8 +192,8 @@ for a brief amount of time.
 - Do a rolling bounce of all the nodes.
 - Configure ``master.eligibility`` to true on the nodes that can be master eligible and bounce them
 
-Complete Down Time
+Complete downtime
 ^^^^^^^^^^^^^^^^^^
 
-If you want to keep things simple, you can take a temporary down time for Schema Registry and do
+If you want to keep things simple, you can take a temporary downtime for Schema Registry and do
 the migration. To do so, simply shutdown all the nodes and start them again with the new configs.

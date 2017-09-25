@@ -11,10 +11,10 @@ The Schema Registry is a distributed storage layer for Avro Schemas which uses K
 Schema ID Allocation
 --------------------
 
-SchemaId allocation always happen in the master node and they ensure that the Schema Ids are
-monotonically increasing
+Schema ID allocation always happen in the master node and they ensure that the Schema ISs are
+monotonically increasing.
 
-If you are using Kafka master election, the Schema id is always based off the last id that was
+If you are using Kafka master election, the Schema ID is always based off the last ID that was
 written to Kafka store. During a master re-election, batch allocation happens only after the new
 master has caught up with all the records in the store ``<kafkastore.topic>``.
 
