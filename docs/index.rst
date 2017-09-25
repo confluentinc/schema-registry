@@ -19,6 +19,7 @@ Contents:
    config
    design
    operations
+   multidc
    security
    serializer-formatter
    schema-deletion-guidelines
