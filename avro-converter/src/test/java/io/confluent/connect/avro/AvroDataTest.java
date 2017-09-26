@@ -1175,7 +1175,6 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .enumeration("TestEnum").symbols("foo", "bar", "baz");
     SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
-    builder.parameter(CONNECT_ENUM_DOC_PROP, null);
     builder.parameter(AVRO_TYPE_ENUM, "TestEnum");
     for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
       builder.parameter(AVRO_TYPE_ENUM+"."+enumSymbol, enumSymbol);
