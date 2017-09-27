@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import org.junit.Test;
 
+import java.util.AbstractMap;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -28,24 +29,43 @@ public class KafkaSchemaRegistryTest {
     List<String> listeners = new LinkedList<String>();
     listeners.add("http://localhost:456");
 
-    int port = KafkaSchemaRegistry.getPortForIdentity(123, listeners);
-    assertEquals("Expected listeners to take precedence over port.", 456, port);
+    AbstractMap.SimpleEntry<String, Integer>  schemeAndPort = KafkaSchemaRegistry
+        .getSchemeAndPortForIdentity(123, listeners);
+    assertEquals("Expected listeners to take precedence over port.", Integer.valueOf(456),
+        schemeAndPort.getValue());
+    assertEquals("Expected Scheme match", "http", schemeAndPort.getKey());
   }
 
   @Test
   public void testGetPortForIdentityNoListeners() {
     List<String> listeners = new LinkedList<String>();
-    int port = KafkaSchemaRegistry.getPortForIdentity(123, listeners);
-    assertEquals("Expected port to take the configured port value", 123, port);
+    AbstractMap.SimpleEntry<String, Integer>  schemeAndPort = KafkaSchemaRegistry.getSchemeAndPortForIdentity(123, listeners);
+    assertEquals("Expected port to take the configured port value", Integer.valueOf(123),
+        schemeAndPort.getValue());
+    assertEquals("Expected Scheme match", "http", schemeAndPort.getKey());
+  }
+
+  @Test
+  public void testGetPortForIdentityMultipleListenersWithHttps() {
+    List<String> listeners = new LinkedList<String>();
+    listeners.add("http://localhost:123");
+    listeners.add("https://localhost:456");
+
+    AbstractMap.SimpleEntry<String, Integer>  schemeAndPort = KafkaSchemaRegistry.getSchemeAndPortForIdentity(-1, listeners);
+    assertEquals("Expected HTTPS listener's port to be returned", Integer.valueOf(456),
+        schemeAndPort.getValue());
+    assertEquals("Expected Scheme match", "https", schemeAndPort.getKey());
   }
 
   @Test
   public void testGetPortForIdentityMultipleListeners() {
     List<String> listeners = new LinkedList<String>();
     listeners.add("http://localhost:123");
-    listeners.add("https://localhost:456");
+    listeners.add("http://localhost:456");
 
-    int port = KafkaSchemaRegistry.getPortForIdentity(-1, listeners);
-    assertEquals("Expected first listener's port to be returned", 123, port);
+    AbstractMap.SimpleEntry<String, Integer>  schemeAndPort = KafkaSchemaRegistry.getSchemeAndPortForIdentity(-1, listeners);
+    assertEquals("Expected first listener's port to be returned", Integer.valueOf(123),
+        schemeAndPort.getValue());
+    assertEquals("Expected Scheme match", "http", schemeAndPort.getKey());
   }
 }

@@ -16,14 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 
 public interface MasterElector {
 
-  void init() throws SchemaRegistryTimeoutException, SchemaRegistryStoreException,
-                     SchemaRegistryInitializationException;
+  void init() throws SchemaRegistryException;
 
   SchemaIdRange nextRange() throws SchemaRegistryStoreException;
 

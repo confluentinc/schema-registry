@@ -59,12 +59,14 @@ public class SchemaRegistryCoordinatorTest {
   private static final SchemaRegistryIdentity LEADER_INFO = new SchemaRegistryIdentity(
       LEADER_HOST,
       LEADER_PORT,
-      true
+      true,
+      "http"
   );
   private static final SchemaRegistryIdentity INELIGIBLE_LEADER_INFO = new SchemaRegistryIdentity(
       LEADER_HOST,
       LEADER_PORT,
-      false
+      false,
+      "http"
   );
 
   private String groupId = "test-group";

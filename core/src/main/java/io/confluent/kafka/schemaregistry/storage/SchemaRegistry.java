@@ -23,11 +23,10 @@ import java.util.Set;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
 
 public interface SchemaRegistry {
 
-  void init() throws SchemaRegistryInitializationException;
+  void init() throws SchemaRegistryException;
 
   int register(String subject, Schema schema) throws SchemaRegistryException;
 
