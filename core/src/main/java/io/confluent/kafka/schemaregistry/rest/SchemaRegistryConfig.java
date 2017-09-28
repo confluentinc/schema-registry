@@ -289,7 +289,7 @@ public class SchemaRegistryConfig extends RestConfig {
       + "filters. Typically used to add custom capability like logging, security, etc  ";
   protected static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC =
       "The protocol used while making calls between the instances of schema registry. The slave "
-      + "to master node calls for writes and deletes will use the specified protocl. The default "
+      + "to master node calls for writes and deletes will use the specified protocol. The default "
       + "value would be `http`. When `https` is set, `ssl.keystore.` and "
       + "`ssl.truststore.` configs are used while making the call.";
 
