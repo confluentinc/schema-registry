@@ -16,14 +16,16 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 
 /**
  * Internal interface for schema registry implementations. Used as a restricted interface for
  * MasterElectors to interact with.
  */
 public interface MasterAwareSchemaRegistry {
-  void setMaster(SchemaRegistryIdentity newMaster) throws SchemaRegistryException;
+  void setMaster(SchemaRegistryIdentity newMaster) throws SchemaRegistryTimeoutException,
+                                                          SchemaRegistryStoreException;
 
   int getMaxIdInKafkaStore();
 }

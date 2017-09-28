@@ -78,7 +78,8 @@ public class ZookeeperMasterElector implements MasterElector {
     zkClient.subscribeDataChanges(MASTER_PATH, new MasterChangeListener());
   }
 
-  public void init() throws SchemaRegistryException {
+  public void init() throws SchemaRegistryTimeoutException, SchemaRegistryStoreException,
+                            SchemaRegistryInitializationException {
     if (isEligibleForMasterElection) {
       electMaster();
     } else {
@@ -91,7 +92,9 @@ public class ZookeeperMasterElector implements MasterElector {
     zkUtils.close();
   }
 
-  public void electMaster() throws SchemaRegistryException {
+  public void electMaster() throws
+                            SchemaRegistryStoreException, SchemaRegistryTimeoutException,
+                            SchemaRegistryInitializationException {
     SchemaRegistryIdentity masterIdentity = null;
     try {
       zkUtils.createEphemeralPathExpectConflict(MASTER_PATH, myIdentityString,
@@ -104,7 +107,9 @@ public class ZookeeperMasterElector implements MasterElector {
     }
   }
 
-  public void readCurrentMaster() throws SchemaRegistryException {
+  public void readCurrentMaster()
+      throws SchemaRegistryTimeoutException, SchemaRegistryStoreException,
+             SchemaRegistryInitializationException {
     SchemaRegistryIdentity masterIdentity = null;
     // If someone else has written the path, read the new master back
     try {

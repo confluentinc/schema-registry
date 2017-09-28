@@ -43,7 +43,7 @@ public class SslFactory {
   private SSLContext sslContext;
 
 
-  public void configure(SchemaRegistryConfig configs) throws SchemaRegistryException {
+  public SslFactory(SchemaRegistryConfig configs) throws SchemaRegistryException {
     this.protocol = configs.getString(SchemaRegistryConfig.SSL_PROTOCOL_CONFIG);
     this.provider = configs.getString(SchemaRegistryConfig.SSL_PROVIDER_CONFIG);
 
@@ -65,7 +65,7 @@ public class SslFactory {
     try {
       this.sslContext = createSslContext();
     } catch (Exception e) {
-      throw new SchemaRegistryException(e);
+      throw new SchemaRegistryException("Error initializing the ssl context for RestService", e);
     }
   }
 
@@ -119,7 +119,7 @@ public class SslFactory {
     } else if (path != null && password == null) {
       throw new SchemaRegistryException(
           "SSL key store is specified, but key store password is not specified.");
-    } else if (path != null && password != null) {
+    } else if (StringUtil.isNotBlank(path) && StringUtil.isNotBlank(password)) {
       this.keystore = new SecurityStore(type, path, password);
       this.keyPassword = keyPassword;
     }
@@ -130,7 +130,7 @@ public class SslFactory {
     if (path == null && password != null) {
       throw new SchemaRegistryException(
           "SSL trust store is not specified, but trust store password is specified.");
-    } else if (path != null) {
+    } else if (StringUtil.isNotBlank(path)) {
       this.truststore = new SecurityStore(type, path, password);
     }
   }

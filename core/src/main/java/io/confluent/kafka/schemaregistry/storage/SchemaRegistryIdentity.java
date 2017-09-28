@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+
 /**
  * The identity of a schema registry instance. The master will store the json representation of its
  * identity in Zookeeper.
@@ -41,7 +43,7 @@ public class SchemaRegistryIdentity {
       @JsonProperty("host") String host,
       @JsonProperty("port") Integer port,
       @JsonProperty("master_eligibility") Boolean masterEligibility,
-      @JsonProperty(value = "scheme", defaultValue = "http") String scheme
+      @JsonProperty(value = "scheme", defaultValue = SchemaRegistryConfig.HTTP) String scheme
   ) {
     this.version = CURRENT_VERSION;
     this.host = host;
@@ -104,12 +106,12 @@ public class SchemaRegistryIdentity {
     this.masterEligibility = eligibility;
   }
 
-  @JsonProperty(value = "scheme", defaultValue = "http")
+  @JsonProperty(value = "scheme", defaultValue = SchemaRegistryConfig.HTTP)
   public String getScheme() {
     return scheme;
   }
 
-  @JsonProperty(value = "scheme", defaultValue = "http")
+  @JsonProperty(value = "scheme", defaultValue = SchemaRegistryConfig.HTTP)
   public void setScheme(String scheme) {
     this.scheme = scheme;
   }

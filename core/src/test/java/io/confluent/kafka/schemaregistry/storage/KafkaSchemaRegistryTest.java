@@ -17,55 +17,57 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import org.junit.Test;
 
-import java.util.AbstractMap;
 import java.util.LinkedList;
 import java.util.List;
+
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
 import static org.junit.Assert.assertEquals;
 
 public class KafkaSchemaRegistryTest {
+
   @Test
-  public void testGetPortForIdentityPrecedence() {
+  public void testGetPortForIdentityPrecedence() throws SchemaRegistryException {
     List<String> listeners = new LinkedList<String>();
     listeners.add("http://localhost:456");
 
-    AbstractMap.SimpleEntry<String, Integer>  schemeAndPort = KafkaSchemaRegistry
-        .getSchemeAndPortForIdentity(123, listeners);
-    assertEquals("Expected listeners to take precedence over port.", Integer.valueOf(456),
-        schemeAndPort.getValue());
-    assertEquals("Expected Scheme match", "http", schemeAndPort.getKey());
+    KafkaSchemaRegistry.SchemeAndPort schemeAndPort =
+        KafkaSchemaRegistry.getSchemeAndPortForIdentity(123, listeners, SchemaRegistryConfig.HTTP);
+    assertEquals("Expected listeners to take precedence over port.", 456, schemeAndPort.port);
+    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, schemeAndPort.scheme);
   }
 
   @Test
-  public void testGetPortForIdentityNoListeners() {
+  public void testGetPortForIdentityNoListeners() throws SchemaRegistryException {
     List<String> listeners = new LinkedList<String>();
-    AbstractMap.SimpleEntry<String, Integer>  schemeAndPort = KafkaSchemaRegistry.getSchemeAndPortForIdentity(123, listeners);
-    assertEquals("Expected port to take the configured port value", Integer.valueOf(123),
-        schemeAndPort.getValue());
-    assertEquals("Expected Scheme match", "http", schemeAndPort.getKey());
+    KafkaSchemaRegistry.SchemeAndPort schemeAndPort =
+        KafkaSchemaRegistry.getSchemeAndPortForIdentity(123, listeners, SchemaRegistryConfig.HTTP);
+    assertEquals("Expected port to take the configured port value", 123, schemeAndPort.port);
+    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, schemeAndPort.scheme);
   }
 
   @Test
-  public void testGetPortForIdentityMultipleListenersWithHttps() {
+  public void testGetPortForIdentityMultipleListenersWithHttps() throws SchemaRegistryException {
     List<String> listeners = new LinkedList<String>();
     listeners.add("http://localhost:123");
     listeners.add("https://localhost:456");
 
-    AbstractMap.SimpleEntry<String, Integer>  schemeAndPort = KafkaSchemaRegistry.getSchemeAndPortForIdentity(-1, listeners);
-    assertEquals("Expected HTTPS listener's port to be returned", Integer.valueOf(456),
-        schemeAndPort.getValue());
-    assertEquals("Expected Scheme match", "https", schemeAndPort.getKey());
+    KafkaSchemaRegistry.SchemeAndPort schemeAndPort =
+        KafkaSchemaRegistry.getSchemeAndPortForIdentity(-1, listeners, SchemaRegistryConfig.HTTPS);
+    assertEquals("Expected HTTPS listener's port to be returned", 456, schemeAndPort.port);
+    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTPS, schemeAndPort.scheme);
   }
 
   @Test
-  public void testGetPortForIdentityMultipleListeners() {
+  public void testGetPortForIdentityMultipleListeners() throws SchemaRegistryException {
     List<String> listeners = new LinkedList<String>();
     listeners.add("http://localhost:123");
     listeners.add("http://localhost:456");
 
-    AbstractMap.SimpleEntry<String, Integer>  schemeAndPort = KafkaSchemaRegistry.getSchemeAndPortForIdentity(-1, listeners);
-    assertEquals("Expected first listener's port to be returned", Integer.valueOf(123),
-        schemeAndPort.getValue());
-    assertEquals("Expected Scheme match", "http", schemeAndPort.getKey());
+    KafkaSchemaRegistry.SchemeAndPort schemeAndPort =
+        KafkaSchemaRegistry.getSchemeAndPortForIdentity(-1, listeners, SchemaRegistryConfig.HTTP);
+    assertEquals("Expected first listener's port to be returned", 123, schemeAndPort.port);
+    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, schemeAndPort.scheme);
   }
 }
