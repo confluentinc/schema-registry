@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import org.eclipse.jetty.util.StringUtil;
+
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -70,7 +72,7 @@ public class SslFactory {
 
   private SSLContext createSslContext() throws GeneralSecurityException, IOException {
     SSLContext sslContext;
-    if (provider != null) {
+    if (StringUtil.isNotBlank(provider)) {
       sslContext = SSLContext.getInstance(protocol, provider);
     } else {
       sslContext = SSLContext.getInstance(protocol);
@@ -79,7 +81,8 @@ public class SslFactory {
     KeyManager[] keyManagers = null;
     if (keystore != null) {
       String kmfAlgorithm =
-          this.kmfAlgorithm != null ? this.kmfAlgorithm : KeyManagerFactory.getDefaultAlgorithm();
+          StringUtil.isNotBlank(this.kmfAlgorithm) ? this.kmfAlgorithm
+                                                   : KeyManagerFactory.getDefaultAlgorithm();
       KeyManagerFactory kmf = KeyManagerFactory.getInstance(kmfAlgorithm);
       KeyStore ks = keystore.load();
       String keyPassword = this.keyPassword != null ? this.keyPassword : keystore.password;
@@ -88,7 +91,8 @@ public class SslFactory {
     }
 
     String tmfAlgorithm =
-        this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
+        StringUtil.isNotBlank(this.tmfAlgorithm) ? this.tmfAlgorithm
+                                                : TrustManagerFactory.getDefaultAlgorithm();
     TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
     KeyStore ts = truststore == null ? null : truststore.load();
     tmf.init(ts);
