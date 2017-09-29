@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.rest.RestConfigException;
 
 public class SchemaRegistryMain {
