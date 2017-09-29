@@ -34,19 +34,35 @@ in both the Schema Registry and Kafka.
 Upgrade from HTTP to HTTPS for REST API
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-By default Schema Registry ships with configs that allow you to make REST API calls over HTTP. If you would want to upgrade to HTTPS in an existing cluster, you need to perform the outlined steps:
+By default Schema Registry ships with configs that allow you to make REST API calls over HTTP. The following configuration determine the protocol used by Schema Registry:
+
+``listeners``
+  Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
+
+  Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
+
+  * Type: list
+  * Default: "http://0.0.0.0:8081"
+  * Importance: high
+
+``schema.registry.inter.instance.protocol``
+  The protocol used while making calls between the instances of schema registry. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
+
+  * Type: string
+  * Default: "http"
+  * Importance: low
+
+If you would want to upgrade to HTTPS in an existing cluster, you need to perform the outlined steps:
 
 - Add/Modify the ``listeners`` config  to include HTTPS. For example: http://0.0.0.0:8081,https://0.0.0.0:8082
 - Configure the appropriate SSL configurations
 
-    - ``ssl.keystore.`` configs to setup keystore related configs
-    - ``ssl.truststore.`` configs to setup truststore related configs (required only when ``ssl.client.auth`` set to true)
+    - ``ssl.keystore.*`` configs to setup keystore related configs
+    - ``ssl.truststore.*`` configs to setup truststore related configs (required only when ``ssl.client.auth`` set to true)
    
 - Do a rolling bounce of the cluster
 
-By default, all communications(forwarding from slave to master for schema register) between the
-schema registry nodes is HTTP. If you need your cluster to not to be open for HTTP, then perform
-the following outlined steps:
+This process enables https, but still defaults to http so schema registry instances can still communicate before all nodes have been restarted. They will continue to use http as the default until configured not to. To switch to https as the default and disable http support, perform the following steps:
 
 - Enable HTTPS as mentioned in first section of upgrade (both HTTP & HTTPS will be enabled)
 - Configure ``schema.registry.inter.instance.protocol`` to `https` in all the nodes
