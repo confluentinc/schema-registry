@@ -34,7 +34,6 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import kafka.common.KafkaException;
-import kafka.producer.KeyedMessage;
 import kafka.common.MessageReader;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 

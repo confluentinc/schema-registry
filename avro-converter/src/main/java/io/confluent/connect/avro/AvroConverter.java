@@ -24,7 +24,6 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
