@@ -16,6 +16,25 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import org.apache.avro.reflect.Nullable;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Vector;
+import java.util.concurrent.TimeUnit;
+
 import io.confluent.common.metrics.JmxReporter;
 import io.confluent.common.metrics.MetricConfig;
 import io.confluent.common.metrics.MetricName;
@@ -43,36 +62,18 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
 import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
+import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.rest.SslFactory;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
-
-import org.apache.avro.reflect.Nullable;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.net.URI;
-import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.Vector;
-import java.util.concurrent.TimeUnit;
 
 public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaRegistry {
 
@@ -95,6 +96,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private final boolean isEligibleForMasterElector;
   private SchemaRegistryIdentity masterIdentity;
   private RestService masterRestService;
+  private SslFactory sslFactory;
   private MasterElector masterElector = null;
   private Metrics metrics;
   private Sensor masterNodeSensor;
@@ -116,10 +118,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throws SchemaRegistryException {
     this.config = config;
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
-    int port = getPortForIdentity(config.getInt(SchemaRegistryConfig.PORT_CONFIG),
-                                  config.getList(RestConfig.LISTENERS_CONFIG));
+    SchemeAndPort schemeAndPort = getSchemeAndPortForIdentity(
+        config.getInt(SchemaRegistryConfig.PORT_CONFIG),
+        config.getList(RestConfig.LISTENERS_CONFIG),
+        config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG)
+    );
     this.isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
-    this.myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
+    this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
+        isEligibleForMasterElector, schemeAndPort.scheme);
+    this.sslFactory = new SslFactory(config);
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.serializer = serializer;
@@ -163,14 +170,29 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
    * of say the last, is arbitrary.
    */
   // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
-  static int getPortForIdentity(int port, List<String> configuredListeners) {
+  static SchemeAndPort getSchemeAndPortForIdentity(int port, List<String> configuredListeners,
+                                                   String requestedScheme)
+      throws SchemaRegistryException {
     List<URI> listeners = Application.parseListeners(configuredListeners, port,
-                                                     Arrays.asList("http", "https"), "http");
-    return listeners.get(0).getPort();
+                                                     Arrays.asList(
+                                                         SchemaRegistryConfig.HTTP,
+                                                         SchemaRegistryConfig.HTTPS
+                                                     ), SchemaRegistryConfig.HTTP
+    );
+    if (requestedScheme.isEmpty()) {
+      requestedScheme = SchemaRegistryConfig.HTTP;
+    }
+    for (URI listener: listeners) {
+      if (requestedScheme.equalsIgnoreCase(listener.getScheme())) {
+        return new SchemeAndPort(listener.getScheme(), listener.getPort());
+      }
+    }
+    throw new SchemaRegistryException(" No listener configured with requested scheme "
+                                      + requestedScheme);
   }
 
   @Override
-  public void init() throws SchemaRegistryInitializationException {
+  public void init() throws SchemaRegistryException {
     try {
       kafkaStore.init();
     } catch (StoreInitializationException e) {
@@ -231,6 +253,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         masterRestService = null;
       } else {
         masterRestService = new RestService(masterIdentity.getUrl());
+        if (sslFactory != null && sslFactory.sslContext() != null) {
+          masterRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
+        }
       }
 
       if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {
@@ -850,5 +875,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
    */
   private boolean reachedEndOfIdBatch() {
     return nextAvailableSchemaId > idBatchInclusiveUpperBound;
+  }
+
+  public static class SchemeAndPort {
+    public int port;
+    public String scheme;
+
+    public SchemeAndPort(String scheme, int port) {
+      this.port = port;
+      this.scheme = scheme;
+    }
   }
 }

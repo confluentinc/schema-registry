@@ -231,7 +231,7 @@ public abstract class ClusterTestHarness {
   }
 
   protected String getSchemaRegistryProtocol() {
-    return "http";
+    return SchemaRegistryConfig.HTTP;
   }
 
   @After

@@ -42,6 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 import static org.junit.Assert.assertEquals;
@@ -59,12 +60,14 @@ public class SchemaRegistryCoordinatorTest {
   private static final SchemaRegistryIdentity LEADER_INFO = new SchemaRegistryIdentity(
       LEADER_HOST,
       LEADER_PORT,
-      true
+      true,
+      SchemaRegistryConfig.HTTP
   );
   private static final SchemaRegistryIdentity INELIGIBLE_LEADER_INFO = new SchemaRegistryIdentity(
       LEADER_HOST,
       LEADER_PORT,
-      false
+      false,
+      SchemaRegistryConfig.HTTP
   );
 
   private String groupId = "test-group";

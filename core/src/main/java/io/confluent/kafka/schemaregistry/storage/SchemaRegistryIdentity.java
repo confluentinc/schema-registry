@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+
 /**
  * The identity of a schema registry instance. The master will store the json representation of its
  * identity in Zookeeper.
@@ -35,14 +37,19 @@ public class SchemaRegistryIdentity {
   private String host;
   private Integer port;
   private Boolean masterEligibility;
+  private String scheme;
 
-  public SchemaRegistryIdentity(@JsonProperty("host") String host,
-                                @JsonProperty("port") Integer port,
-                                @JsonProperty("master_eligibility") Boolean masterEligibility) {
+  public SchemaRegistryIdentity(
+      @JsonProperty("host") String host,
+      @JsonProperty("port") Integer port,
+      @JsonProperty("master_eligibility") Boolean masterEligibility,
+      @JsonProperty(value = "scheme", defaultValue = SchemaRegistryConfig.HTTP) String scheme
+  ) {
     this.version = CURRENT_VERSION;
     this.host = host;
     this.port = port;
     this.masterEligibility = masterEligibility;
+    this.scheme = scheme;
   }
 
   public static SchemaRegistryIdentity fromJson(String json) throws IOException {
@@ -99,6 +106,20 @@ public class SchemaRegistryIdentity {
     this.masterEligibility = eligibility;
   }
 
+  @JsonProperty(value = "scheme", defaultValue = SchemaRegistryConfig.HTTP)
+  public String getScheme() {
+    return scheme;
+  }
+
+  @JsonProperty(value = "scheme", defaultValue = SchemaRegistryConfig.HTTP)
+  public void setScheme(String scheme) {
+    this.scheme = scheme;
+  }
+
+  public static int getCurrentVersion() {
+    return CURRENT_VERSION;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -122,7 +143,9 @@ public class SchemaRegistryIdentity {
     if (!this.masterEligibility.equals(that.masterEligibility)) {
       return false;
     }
-
+    if (!this.scheme.equals(that.scheme)) {
+      return false;
+    }
     return true;
   }
 
@@ -132,6 +155,7 @@ public class SchemaRegistryIdentity {
     result = 31 * result + host.hashCode();
     result = 31 * result + version;
     result = 31 * result + masterEligibility.hashCode();
+    result = 31 * result + scheme.hashCode();
     return result;
   }
 
@@ -141,6 +165,7 @@ public class SchemaRegistryIdentity {
     sb.append("version=" + this.version + ",");
     sb.append("host=" + this.host + ",");
     sb.append("port=" + this.port + ",");
+    sb.append("scheme=" + this.scheme + ",");
     sb.append("masterEligibility=" + this.masterEligibility);
     return sb.toString();
   }
@@ -159,6 +184,6 @@ public class SchemaRegistryIdentity {
 
   @JsonIgnore
   public String getUrl() {
-    return String.format("http://%s:%d", host, port);
+    return String.format("%s://%s:%d", scheme, host, port);
   }
 }
