@@ -126,6 +126,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
         isEligibleForMasterElector, schemeAndPort.scheme);
+    this.sslFactory = new SslFactory(config);
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.serializer = serializer;
@@ -182,7 +183,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       requestedScheme = SchemaRegistryConfig.HTTP;
     }
     for (URI listener: listeners) {
-      if (requestedScheme.equals(listener.getScheme())) {
+      if (requestedScheme.equalsIgnoreCase(listener.getScheme())) {
         return new SchemeAndPort(listener.getScheme(), listener.getPort());
       }
     }
