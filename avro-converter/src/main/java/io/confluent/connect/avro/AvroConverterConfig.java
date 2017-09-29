@@ -19,8 +19,6 @@ package io.confluent.connect.avro;
 import java.util.HashMap;
 import java.util.Map;
 
-import io.confluent.common.config.AbstractConfig;
-import io.confluent.common.config.ConfigDef;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 
 public class AvroConverterConfig extends AbstractKafkaAvroSerDeConfig {
