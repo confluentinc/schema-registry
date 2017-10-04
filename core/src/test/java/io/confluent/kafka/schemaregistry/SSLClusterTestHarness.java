@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.TestSslUtils;
 import scala.Option;
 

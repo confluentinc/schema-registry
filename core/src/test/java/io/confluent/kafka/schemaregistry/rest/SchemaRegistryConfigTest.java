@@ -16,17 +16,16 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.common.config.ConfigException;
+import kafka.cluster.Broker;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import io.confluent.common.config.ConfigException;
-import kafka.cluster.Broker;
 
 import static org.junit.Assert.assertEquals;
 
