@@ -17,7 +17,6 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.protocol.SecurityProtocol;
 
 import java.util.Map;
 import java.util.Properties;
@@ -27,6 +26,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.rest.RestConfigException;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 /**
  * For all store related utility methods.
