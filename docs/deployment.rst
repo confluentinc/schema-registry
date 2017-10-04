@@ -139,6 +139,29 @@ Please refer to :ref:`schemaregistry_operations` for recommendations on operatio
 
 .. _schemaregistry_mirroring:
 
+
+Backup and Restore
+~~~~~~~~~~~~~~~~~~
+
+As discussed in :ref: `_schemaregistry_design`, all schemas, subject/version and id metadata, and compatibility settings are appended as messages to a special Kafka topic ``<kafkastore.topic>`` (default ``_schemas``). This topic is a common source of truth for schema IDs, and you should back it up. In case of some unexpected event that makes the topic inaccessible, you can restore this schemas topic from the backup, enabling consumers to continue to read Kafka messages that were sent in the Avro format.
+
+As a best practice, we recommend backing up the ``<kafkastore.topic>``. If you already have a multi-datacenter Kafka deployment, you can backup this topic to another Kafka cluster using `Confluent Replicator <https://docs.confluent.io/current/multi-dc/index.html>`_. Otherwise, you can use a `Kafka sink connector <https://docs.confluent.io/current/connect/index.html>`_ to copy the topic data from Kafka to a separate storage (e.g. AWS S3). These will continuously update as the schema topic updates.
+
+In lieu of either of those options, you can also use Kafka command line tools to periodically save the contents of the topic to a file. For the following examples, we assume that ``<kafkastore.topic>`` has its default value "_schemas".
+
+To backup the topic, use the ``kafka-console-consumer`` to capture messages from the schemas topic to a file called "schemas.log". Save this file off the Kafka cluster.
+
+.. sourcecode:: bash
+
+   bin/kafka-console-consumer --bootstrap-server localhost:9092 --topic _schemas --from-beginning --property print.key=true --timeout-ms 1000 1> schemas.log
+
+To restore the topic, use the ``kafka-console-producer`` to write the contents of file "schemas.log" to a new schemas topic. This examples uses a new schemas topic name "_schemas_restore". If you use a new topic name or use the old one (i.e. "_schemas"), make sure to set ``<kafkastore.topic>`` accordingly.
+
+.. sourcecode:: bash
+
+   bin/kafka-console-producer --broker-list localhost:9092 --topic _schemas_restore --property parse.key=true < schemas.log
+
+
 Multi-DC Setup
 ~~~~~~~~~~~~~~
 
