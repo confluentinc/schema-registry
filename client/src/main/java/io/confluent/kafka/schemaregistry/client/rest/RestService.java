@@ -46,6 +46,9 @@ import java.util.List;
 import java.util.Map;
 import javax.xml.bind.DatatypeConverter;
 
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLSocketFactory;
+
 /**
  * Rest access layer for sending requests to the schema registry.
  */
@@ -100,6 +103,7 @@ public class RestService {
   }
 
   private UrlList baseUrls;
+  private SSLSocketFactory sslSocketFactory;
 
   public RestService(UrlList baseUrls) {
     this.baseUrls = baseUrls;
@@ -113,6 +117,9 @@ public class RestService {
     this(parseBaseUrl(baseUrlConfig));
   }
 
+  public void setSslSocketFactory(SSLSocketFactory sslSocketFactory) {
+    this.sslSocketFactory = sslSocketFactory;
+  }
 
   /**
    * @param requestUrl        HTTP connection will be established with this url.
@@ -135,6 +142,8 @@ public class RestService {
     try {
       URL url = new URL(requestUrl);
       connection = (HttpURLConnection) url.openConnection();
+
+      setupSsl(connection);
       connection.setRequestMethod(method);
       setBasicAuthRequestHeader(connection, url.getUserInfo());
       // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
@@ -189,6 +198,12 @@ public class RestService {
       if (connection != null) {
         connection.disconnect();
       }
+    }
+  }
+
+  private void setupSsl(HttpURLConnection connection) {
+    if (connection instanceof HttpsURLConnection && sslSocketFactory != null) {
+      ((HttpsURLConnection)connection).setSSLSocketFactory(sslSocketFactory);
     }
   }
 

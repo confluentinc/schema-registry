@@ -369,6 +369,20 @@ Configuration Options
   * Default: "io.confluent.rest-utils.requests"
   * Importance: low
 
+``schema.registry.inter.instance.protocol``
+  The protocol used while making calls between the instances of schema registry. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
+
+  * Type: string
+  * Default: "http"
+  * Importance: low
+
+``schema.registry.resource.extension.class``
+  Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc
+
+  * Type: string
+  * Default: ""
+  * Importance: low
+
 ``schema.registry.zk.namespace``
   The string that is used as the zookeeper namespace for storing schema registry metadata. SchemaRegistry instances which are part of the same schema registry service should have the same ZooKeeper namespace.
 

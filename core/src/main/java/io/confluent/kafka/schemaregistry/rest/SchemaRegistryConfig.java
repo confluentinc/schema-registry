@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -154,6 +153,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.sasl.kerberos.ticket.renew.window.factor";
   public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
       "schema.registry.resource.extension.class";
+  public static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG =
+      "schema.registry.inter.instance.protocol";
 
   protected static final String SCHEMAREGISTRY_GROUP_ID_DOC =
       "Use this setting to override the group.id for the Kafka group used when Kafka is used for "
@@ -286,6 +287,11 @@ public class SchemaRegistryConfig extends RestConfig {
       "Fully qualified class name of a valid implementation of the interface "
       + "SchemaRegistryResourceExtension. This can be used to inject user defined resources like "
       + "filters. Typically used to add custom capability like logging, security, etc  ";
+  protected static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC =
+      "The protocol used while making calls between the instances of schema registry. The slave "
+      + "to master node calls for writes and deletes will use the specified protocol. The default "
+      + "value would be `http`. When `https` is set, `ssl.keystore.` and "
+      + "`ssl.truststore.` configs are used while making the call.";
 
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
@@ -293,6 +299,9 @@ public class SchemaRegistryConfig extends RestConfig {
 
   // TODO: move to Apache's ConfigDef
   private static final ConfigDef config;
+
+  public static final String HTTPS = "https";
+  public static final String HTTP = "http";
 
   private Properties originalProperties;
 
@@ -462,7 +471,9 @@ public class SchemaRegistryConfig extends RestConfig {
         )
         .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.STRING, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
-        );
+        )
+        .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,
+            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
 
   }
 
