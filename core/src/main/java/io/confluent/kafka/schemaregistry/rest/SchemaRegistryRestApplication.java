@@ -63,6 +63,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
       );
       schemaRegistry.init();
     } catch (SchemaRegistryException e) {
+      onShutdown();
       log.error("Error starting the schema registry", e);
       System.exit(1);
     }
@@ -105,7 +106,11 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   @Override
   public void onShutdown() {
-    schemaRegistry.close();
+
+    if (schemaRegistry != null) {
+      schemaRegistry.close();
+    }
+
     if (schemaRegistryResourceExtension != null) {
       try {
         schemaRegistryResourceExtension.close();
