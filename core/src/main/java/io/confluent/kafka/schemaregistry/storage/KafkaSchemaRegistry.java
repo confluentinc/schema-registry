@@ -93,6 +93,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private final Object masterLock = new Object();
   private final AvroCompatibilityLevel defaultCompatibilityLevel;
   private final int kafkaStoreTimeoutMs;
+  private final int initTimeout;
   private final boolean isEligibleForMasterElector;
   private SchemaRegistryIdentity masterIdentity;
   private RestService masterRestService;
@@ -129,6 +130,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.sslFactory = new SslFactory(config);
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
+    this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
@@ -265,7 +267,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         //ensure the new master catches up with the offsets before it gets nextid and assigns
         // master
         try {
-          kafkaStore.waitUntilKafkaReaderReachesLastOffset(kafkaStoreTimeoutMs);
+          kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
         } catch (StoreException e) {
           throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
         }
