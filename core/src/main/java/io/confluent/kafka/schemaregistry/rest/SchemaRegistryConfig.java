@@ -390,7 +390,7 @@ public class SchemaRegistryConfig extends RestConfig {
             "", ConfigDef.Importance.HIGH,
             KAFKASTORE_SSL_TRUSTSTORE_LOCATION_DOC
         )
-        .define(KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG, ConfigDef.Type.STRING,
+        .define(KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG, ConfigDef.Type.PASSWORD,
             "", ConfigDef.Importance.HIGH,
             KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_DOC
         )
@@ -406,7 +406,7 @@ public class SchemaRegistryConfig extends RestConfig {
             "", ConfigDef.Importance.HIGH,
             KAFKASTORE_SSL_KEYSTORE_LOCATION_DOC
         )
-        .define(KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG, ConfigDef.Type.STRING,
+        .define(KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG, ConfigDef.Type.PASSWORD,
             "", ConfigDef.Importance.HIGH,
             KAFKASTORE_SSL_KEYSTORE_PASSWORD_DOC
         )
@@ -418,7 +418,7 @@ public class SchemaRegistryConfig extends RestConfig {
             "SunX509", ConfigDef.Importance.LOW,
             KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_DOC
         )
-        .define(KAFKASTORE_SSL_KEY_PASSWORD_CONFIG, ConfigDef.Type.STRING,
+        .define(KAFKASTORE_SSL_KEY_PASSWORD_CONFIG, ConfigDef.Type.PASSWORD,
             "", ConfigDef.Importance.HIGH,
             KAFKASTORE_SSL_KEY_PASSWORD_DOC
         )
