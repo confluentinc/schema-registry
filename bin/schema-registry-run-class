@@ -22,6 +22,13 @@ fi
 
 base_dir=$(dirname $0)/..
 
+# CYGINW == 1 if Cygwin is detected, else 0.
+if [[ $(uname -a) =~ "CYGWIN" ]]; then
+  CYGWIN=1
+else
+  CYGWIN=0
+fi
+
 # Development jars. `mvn package` should collect all the required dependency jars here
 for dir in $base_dir/package-schema-registry/target/kafka-schema-registry-package-*-development; do
   CLASSPATH=$CLASSPATH:$dir/share/java/schema-registry/*
@@ -47,13 +54,21 @@ if [ "x$SCHEMA_REGISTRY_LOG4J_OPTS" = "x" ]; then
   # Test for files from dev -> packages so this will work as expected in dev if you have packages
   # installed
   if [ -e "$base_dir/config/log4j.properties" ]; then # Dev environment
-    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/log4j.properties"
+    LOG4J_DIR="$base_dir/config/log4j.properties"
   elif [ -e "$base_dir/etc/schema-registry/log4j.properties" ]; then # Simple zip file layout
-    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/etc/schema-registry/log4j.properties"
+    LOG4J_DIR="$base_dir/etc/schema-registry/log4j.properties"
   elif [ -e "/etc/schema-registry/log4j.properties" ]; then # Normal install layout
-    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:/etc/schema-registry/log4j.properties"
+    LOG4J_DIR="/etc/schema-registry/log4j.properties"
   fi
+
+    # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
+    (( CYGWIN )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
+
+    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
 fi
+
+# If Cygwin is detected, LOG_DIR is converted to Windows format.
+(( CYGWIN )) && LOG_DIR=$(cygpath --path --mixed "${LOG_DIR}")
 
 SCHEMA_REGISTRY_LOG4J_OPTS="-Dschema-registry.log.dir=$LOG_DIR $SCHEMA_REGISTRY_LOG4J_OPTS"
 
@@ -132,6 +147,9 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
   SCHEMA_REGISTRY_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
 fi
+
+# If Cygwin is detected, classpath is converted to Windows format.
+(( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
