@@ -193,7 +193,7 @@ In the following example, we read both the key and the value of the messages in 
       "key1" \t {"f1": "value1"}
 
 
-If the topic contains a  key in a format other than avro, you could specify your own key
+If the topic contains a  key in a format other than avro, you can specify your own key
 deserializer
 
 .. sourcecode:: bash
