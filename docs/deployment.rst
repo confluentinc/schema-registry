@@ -83,9 +83,9 @@ To configure the Schema Registry to use ZooKeeper for master election, configure
 ``kafkastore.connection.url`` setting.
 
 ``kafkastore.connection.url``
-Zookeeper url for the Kafka cluster
+Comma separated list for Zookeeper urls for the Kafka cluster
 
-* Type: string
+* Type: list
 * Importance: high
 
 To configure the Schema Registry to use Kafka for master election, configure the
