@@ -193,6 +193,17 @@ In the following example, we read both the key and the value of the messages in 
       "key1" \t {"f1": "value1"}
 
 
+If the topic contains a  key in a format other than avro, you can specify your own key
+deserializer
+
+.. sourcecode:: bash
+
+   bin/kafka-avro-console-consumer --topic t2 \
+     --zookeeper localhost:2181 \
+     --property print.key=true
+     --key.deserializer=org.apache.kafka.common.serialization.StringDeserializer
+
+
 Wire Format
 -----------
 
