@@ -122,8 +122,9 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     if (printKey) {
       try {
         if (keyDeserializer != null) {
-          Object deserializedKey = consumerRecord.key() == null ? null :
-                                   keyDeserializer.deserialize(null, consumerRecord.key());
+          Object deserializedKey = consumerRecord.key() == null
+                                   ? null
+                                   : keyDeserializer.deserialize(null, consumerRecord.key());
           output.write(
               deserializedKey != null ? deserializedKey.toString().getBytes(StandardCharsets.UTF_8)
                                       : NULL_BYTES);
