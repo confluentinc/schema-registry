@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -66,7 +67,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    AvroMessageFormatter formatter = new AvroMessageFormatter(schemaRegistry, false);
+    AvroMessageFormatter formatter = new AvroMessageFormatter(schemaRegistry, false, null);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
         "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
         null, serializedValue);
@@ -89,7 +90,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    AvroMessageFormatter formatter = new AvroMessageFormatter(schemaRegistry, true);
+    AvroMessageFormatter formatter = new AvroMessageFormatter(schemaRegistry, true, null);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
         "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
         serializedValue.length, serializedKey, serializedValue);
@@ -112,5 +113,30 @@ public class KafkaAvroFormatterTest {
       assertTrue("The cause of the exception should be avro",
                  e.getCause() instanceof AvroRuntimeException);
     }
+  }
+
+  @Test
+  public void testStringKey() {
+    String inputJson = "{\"name\":\"myname\"}\n";
+    String expectedJson = "TestKey\t"+inputJson;
+    BufferedReader reader =
+        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    AvroMessageReader avroReader =
+        new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+            true);
+    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+
+    byte[] serializedKey = "TestKey".getBytes();
+    byte[] serializedValue = message.value();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    AvroMessageFormatter formatter = new AvroMessageFormatter(schemaRegistry, true, new StringDeserializer());
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
+        serializedValue.length, serializedKey, serializedValue);
+    formatter.writeTo(crecord, ps);
+    String outputJson = baos.toString();
+
+    assertEquals("Input key/value json should match output key/value json", expectedJson, outputJson);
   }
 }

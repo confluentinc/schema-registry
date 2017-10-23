@@ -46,7 +46,7 @@ public class AvroMessageFormatterTest {
   public void testDeserializeBytesIssue506() throws IOException, RestClientException {
     Map<String,String> properties = new HashMap<String,String>();
     properties.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    AvroMessageFormatter formatter = new AvroMessageFormatter(schemaRegistry, false);
+    AvroMessageFormatter formatter = new AvroMessageFormatter(schemaRegistry, false, null);
 		
     byte[] message = new byte[1 + SCHEMA_ID.length + SOME_BYTES.length];
     message[0] = MAGIC_BYTE;
