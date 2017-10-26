@@ -39,7 +39,7 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.TestUtils;
 import kafka.utils.ZkUtils;
-import kafka.zk.EmbeddedZookeeper;
+import kafka.zk.EmbeddedZooKeeper;
 import scala.Option;
 import scala.Option$;
 import scala.collection.JavaConversions;
@@ -88,7 +88,7 @@ public abstract class ClusterTestHarness {
   protected String compatibilityType;
 
   // ZK Config
-  protected EmbeddedZookeeper zookeeper;
+  protected EmbeddedZooKeeper zookeeper;
   protected String zkConnect;
   protected ZkClient zkClient;
   protected ZkUtils zkUtils;
@@ -131,7 +131,7 @@ public abstract class ClusterTestHarness {
 
   @Before
   public void setUp() throws Exception {
-    zookeeper = new EmbeddedZookeeper();
+    zookeeper = new EmbeddedZooKeeper();
     zkConnect = String.format("localhost:%d", zookeeper.port());
     zkUtils = ZkUtils.apply(
         zkConnect, zkSessionTimeout, zkConnectionTimeout,
