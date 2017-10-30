@@ -74,6 +74,7 @@ public class AvroData {
   public static final String KEY_FIELD = "key";
   public static final String VALUE_FIELD = "value";
 
+  public static final String CONNECT_FIELD_DOC_PROP_PREFIX = "connect.field.doc.";
   public static final String CONNECT_NAME_PROP = "connect.name";
   public static final String CONNECT_DOC_PROP = "connect.doc";
   public static final String CONNECT_RECORD_DOC_PROP = "connect.record.doc";
@@ -766,8 +767,8 @@ public class AvroData {
               = org.apache.avro.SchemaBuilder.builder()
               .array().items()
               .record(MAP_ENTRY_TYPE_NAME).namespace(NAMESPACE).fields();
-          addAvroRecordField(fieldAssembler, KEY_FIELD, schema.keySchema(), schemaMap);
-          addAvroRecordField(fieldAssembler, VALUE_FIELD, schema.valueSchema(), schemaMap);
+          addAvroRecordField(fieldAssembler, KEY_FIELD, null, schema.keySchema(), schemaMap);
+          addAvroRecordField(fieldAssembler, VALUE_FIELD, null, schema.valueSchema(), schemaMap);
           baseSchema = fieldAssembler.endRecord();
         }
         break;
@@ -794,9 +795,17 @@ public class AvroData {
               fieldAssembler =
               org.apache.avro.SchemaBuilder.record(name != null ? name : DEFAULT_SCHEMA_NAME)
                   .namespace(namespace)
-                  .doc(doc).fields();
+                  .doc(doc)
+                  .fields();
           for (Field field : schema.fields()) {
-            addAvroRecordField(fieldAssembler, field.name(), field.schema(), schemaMap);
+            String fieldDoc = schema.parameters() != null
+                    ? schema.parameters().get(CONNECT_FIELD_DOC_PROP_PREFIX + field.name())
+                    : null;
+            addAvroRecordField(fieldAssembler,
+                    field.name(),
+                    fieldDoc,
+                    field.schema(),
+                    schemaMap);
           }
           baseSchema = fieldAssembler.endRecord();
         }
@@ -886,11 +895,14 @@ public class AvroData {
 
 
   private void addAvroRecordField(
-      org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler,
-      String fieldName, Schema fieldSchema, Map<Schema, org.apache.avro.Schema> schemaMap) {
+          org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler,
+          String fieldName, String fieldDoc, Schema fieldSchema,
+          Map<Schema, org.apache.avro.Schema> schemaMap) {
     org.apache.avro.SchemaBuilder.GenericDefault<org.apache.avro.Schema> fieldAvroSchema
-        = fieldAssembler.name(fieldName).doc(fieldSchema.doc()).type(fromConnectSchema(fieldSchema,
-                                                                                       schemaMap));
+        = fieldAssembler
+            .name(fieldName)
+            .doc(fieldDoc)
+            .type(fromConnectSchema(fieldSchema, schemaMap));
     if (fieldSchema.defaultValue() != null) {
       fieldAvroSchema.withDefault(defaultValueFromConnect(fieldSchema, fieldSchema.defaultValue()));
     } else {
@@ -1407,9 +1419,11 @@ public class AvroData {
       case RECORD: {
         builder = SchemaBuilder.struct();
         for (org.apache.avro.Schema.Field field : schema.getFields()) {
-          Schema fieldSchema = toConnectSchema(field.schema(), false, field.defaultValue(),
-                                               field.doc());
+          Schema fieldSchema = toConnectSchema(field.schema(), false, field.defaultValue(),null);
           builder.field(field.name(), fieldSchema);
+          if (field.doc() != null) {
+            builder.parameter(CONNECT_FIELD_DOC_PROP_PREFIX + field.name(), field.doc());
+          }
         }
         break;
       }

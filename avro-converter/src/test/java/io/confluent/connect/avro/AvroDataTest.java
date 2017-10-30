@@ -1215,13 +1215,39 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testDuplicateTypeFieldsInStruct() throws Exception {
+    org.apache.avro.Schema childSchema = org.apache.avro.SchemaBuilder.record("childSchema")
+            .fields()
+            .name("childField")
+            .type().optional().booleanType()
+            .endRecord();
+    org.apache.avro.Schema schema = org.apache.avro.SchemaBuilder.record("parentSchema")
+            .fields()
+            .name("field1")
+            .type(childSchema)
+            .noDefault()
+            .name("field2")
+            .doc("field documentation")
+            .type(childSchema)
+            .noDefault()
+            .endRecord();
+
+    Schema connectSchema = avroData.toConnectSchema(schema);
+    org.apache.avro.Schema convertedSchema = avroData.fromConnectSchema(connectSchema);
+
+    //to JSON. Used to test child schema redefinition
+    System.out.println(convertedSchema.toString());
+  }
+
+  @Test
   public void testToConnectRecordWithMetadata() {
     // One important difference between record schemas in Avro and Connect is that Avro has some
     // per-field metadata (doc, default value) that Connect holds in the schema itself. We set
     // these properties on one of these fields to ensure they are properly converted
     Schema schema = SchemaBuilder.struct()
         .name("io.confluent.test.TestSchema").version(12).doc("doc")
-        .field("int32", SchemaBuilder.int32().defaultValue(7).doc("field doc").build())
+        .parameter(AvroData.CONNECT_FIELD_DOC_PROP_PREFIX + "int32", "field doc")
+        .field("int32", SchemaBuilder.int32().defaultValue(7).build())
         .build();
     Struct struct = new Struct(schema)
         .put("int32", 12);
