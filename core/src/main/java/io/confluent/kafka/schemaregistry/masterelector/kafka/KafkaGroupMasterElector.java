@@ -147,7 +147,8 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           metadata,
           time,
           retryBackoffMs,
-          clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
+          clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+          Integer.MAX_VALUE
       );
       this.coordinator = new SchemaRegistryCoordinator(
           logContext,
