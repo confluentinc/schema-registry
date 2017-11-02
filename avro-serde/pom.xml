@@ -10,7 +10,6 @@
         <version>4.1.0-SNAPSHOT</version>
     </parent>
 
-    <groupId>io.confluent</groupId>
     <artifactId>kafka-streams-avro-serde</artifactId>
     <packaging>jar</packaging>
     <name>kafka-streams-avro-serde</name>
