@@ -49,6 +49,7 @@
         <module>maven-plugin</module>
         <module>avro-serde</module>
         <module>avro-console-scripts</module>
+        <module>schema-registry-console-scripts</module>
     </modules>
 
     <properties>
