@@ -16,6 +16,7 @@
 
 package io.confluent.connect.avro;
 
+import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
@@ -34,6 +35,7 @@ import org.codehaus.jackson.node.IntNode;
 import org.codehaus.jackson.node.JsonNodeFactory;
 import org.codehaus.jackson.node.ObjectNode;
 import org.hamcrest.core.IsEqual;
+import org.junit.Assert;
 import org.junit.Test;
 import org.powermock.reflect.Whitebox;
 
@@ -615,6 +617,79 @@ public class AvroDataTest {
     // Should hit limit of cache
     avroData.fromConnectData(Schema.STRING_SCHEMA, "foo");
     assertEquals(2, cache.size());
+  }
+
+  @Test
+  public void testEnum() throws Exception {
+    GenericData genericData = GenericData.get();
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+        .build();
+
+    AvroData avroData = new AvroData(avroDataConfig);
+
+    EnumTest testModel = EnumTest.newBuilder()
+        .setName("name")
+        .setKind(Kind.ONE)
+        .build();
+
+    SchemaAndValue schemaAndValue = avroData.toConnectData(EnumTest.SCHEMA$, testModel);
+    org.apache.kafka.connect.data.Schema schema = schemaAndValue.schema();
+    Object schemaValue = schemaAndValue.value();
+
+    GenericData.Record value = (GenericData.Record) avroData.fromConnectData(schema, schemaValue);
+    GenericContainer userTypeValue = (GenericContainer) value.get("kind");
+    Assert.assertEquals(userTypeValue.getSchema().getType(), org.apache.avro.Schema.Type.ENUM);
+  }
+
+  @Test
+  public void testEnumUnion() throws Exception {
+    GenericData genericData = GenericData.get();
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+        .build();
+
+    AvroData avroData = new AvroData(avroDataConfig);
+
+    EnumUnion testModel = EnumUnion.newBuilder()
+        .setUserType(UserType.ANONYMOUS)
+        .build();
+
+    SchemaAndValue schemaAndValue = avroData.toConnectData(EnumUnion.SCHEMA$, testModel);
+    org.apache.kafka.connect.data.Schema schema = schemaAndValue.schema();
+    Object schemaValue = schemaAndValue.value();
+
+    GenericData.Record value = (GenericData.Record) avroData.fromConnectData(schema, schemaValue);
+
+    org.apache.avro.Schema userTypeSchema = EnumUnion.SCHEMA$.getField("userType").schema();
+
+    Object userTypeValue = value.get("userType");
+
+
+    int unionIndex = genericData.resolveUnion(userTypeSchema, userTypeValue);
+    Assert.assertEquals(1, unionIndex);
+  }
+
+  @Test
+  public void testEnumUnionNullValue() throws Exception {
+    GenericData genericData = GenericData.get();
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+        .build();
+
+    AvroData avroData = new AvroData(avroDataConfig);
+
+    EnumUnion testModel = EnumUnion.newBuilder()
+        .setUserType(null)
+        .build();
+
+    SchemaAndValue schemaAndValue = avroData.toConnectData(EnumUnion.SCHEMA$, testModel);
+    org.apache.kafka.connect.data.Schema schema = schemaAndValue.schema();
+    Object schemaValue = schemaAndValue.value();
+
+    GenericData.Record value = (GenericData.Record) avroData.fromConnectData(schema, schemaValue);
+    Object userTypeValue = value.get("userType");
+    Assert.assertNull(userTypeValue);
   }
 
   // Avro -> Connect. Validate a) all Avro types that convert directly to Avro, b) specialized

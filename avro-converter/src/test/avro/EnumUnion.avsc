@@ -1,0 +1,22 @@
+{
+  "type": "record",
+  "name": "EnumUnion",
+  "namespace": "io.confluent.connect.avro",
+  "fields": [
+    {
+      "name": "userType",
+      "type": [
+        "null",
+        {
+          "type": "enum",
+          "name": "UserType",
+          "symbols": [
+            "ANONYMOUS",
+            "REGISTERED"
+          ]
+        }
+      ],
+      "default": null
+    }
+  ]
+}
