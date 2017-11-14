@@ -24,3 +24,4 @@ Contents:
    serializer-formatter
    schema-deletion-guidelines
    maven-plugin
+   connect
