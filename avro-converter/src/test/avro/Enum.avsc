@@ -1,0 +1,16 @@
+{
+  "namespace": "io.confluent.connect.avro",
+  "type": "record",
+  "name": "EnumTest",
+  "fields": [
+    {"name": "name", "type": "string"},
+    {
+      "name": "kind",
+      "type": {
+        "name": "Kind",
+        "type": "enum",
+        "symbols" : ["ONE", "TWO", "THREE"]
+      }
+    }
+  ]
+}
