@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "EnumUnion",
-  "namespace": "io.confluent.connect.avro",
+  "namespace": "com.connect.avro",
   "fields": [
     {
       "name": "userType",
