@@ -1,9 +1,9 @@
 {
-  "namespace": "io.confluent.connect.avro",
+  "namespace": "foo.bar",
   "type": "record",
   "name": "EnumTest",
   "fields": [
-    {"name": "name", "type": "string"},
+    {"name": "testkey", "type": "string"},
     {
       "name": "kind",
       "type": {
