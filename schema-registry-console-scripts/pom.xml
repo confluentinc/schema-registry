@@ -11,7 +11,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
     </parent>
 
     <groupId>io.confluent</groupId>
-    <artifactId>avro-console-scripts</artifactId>
+    <artifactId>schema-registry-console-scripts</artifactId>
     <packaging>pom</packaging>
     <name>${project.artifactId}</name>
 

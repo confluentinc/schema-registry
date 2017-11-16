@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 import static org.junit.Assert.assertEquals;
@@ -60,12 +61,14 @@ public class SchemaRegistryCoordinatorTest {
   private static final SchemaRegistryIdentity LEADER_INFO = new SchemaRegistryIdentity(
       LEADER_HOST,
       LEADER_PORT,
-      true
+      true,
+      SchemaRegistryConfig.HTTP
   );
   private static final SchemaRegistryIdentity INELIGIBLE_LEADER_INFO = new SchemaRegistryIdentity(
       LEADER_HOST,
       LEADER_PORT,
-      false
+      false,
+      SchemaRegistryConfig.HTTP
   );
 
   private String groupId = "test-group";
@@ -90,7 +93,7 @@ public class SchemaRegistryCoordinatorTest {
     this.metadata = new Metadata(0, Long.MAX_VALUE, true);
     this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
     LogContext logContext = new LogContext();
-    this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000);
+    this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000, Integer.MAX_VALUE);
     this.metrics = new Metrics(time);
     this.rebalanceListener = new MockRebalanceListener();
 

@@ -147,7 +147,8 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           metadata,
           time,
           retryBackoffMs,
-          clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
+          clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+          Integer.MAX_VALUE
       );
       this.coordinator = new SchemaRegistryCoordinator(
           logContext,
@@ -164,7 +165,7 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           this
       );
 
-      AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
+      AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
 
       initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
 
@@ -308,7 +309,7 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
     ClientUtils.closeQuietly(coordinator, "coordinator", firstException);
     ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
     ClientUtils.closeQuietly(client, "consumer network client", firstException);
-    AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId);
+    AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
     if (firstException.get() != null && !swallowException) {
       throw new KafkaException(
           "Failed to stop the schema registry group member",
