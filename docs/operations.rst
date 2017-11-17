@@ -1,7 +1,7 @@
 .. _schemaregistry_operations:
 
-Operations
-==========
+Schema Registry Operations
+==========================
 
 In this document, you will learn how to manage a Schema Registry cluster.
 
