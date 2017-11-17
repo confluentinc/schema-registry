@@ -16,6 +16,7 @@
 
 package io.confluent.connect.avro;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -322,7 +323,7 @@ public class AvroData {
    */
   public Object fromConnectData(Schema schema, Object value) {
     org.apache.avro.Schema avroSchema = fromConnectSchema(schema);
-    return fromConnectData(schema, avroSchema, value, true, false);
+    return fromConnectData(schema, avroSchema, value, true, false, enhancedSchemaSupport);
   }
 
   /**
@@ -342,9 +343,11 @@ public class AvroData {
    *                                       null
    * @return the converted data
    */
-  private static Object fromConnectData(Schema schema, org.apache.avro.Schema avroSchema,
-                                        Object logicalValue, boolean requireContainer, boolean
-                                            requireSchemalessContainerNull) {
+  private static Object fromConnectData(
+      Schema schema, org.apache.avro.Schema avroSchema,
+      Object logicalValue, boolean requireContainer,
+      boolean requireSchemalessContainerNull, boolean enhancedSchemaSupport
+  ) {
     Schema.Type schemaType = schema != null
                              ? schema.type()
                              : schemaTypeForSchemalessJavaType(logicalValue);
@@ -428,7 +431,20 @@ public class AvroData {
               maybeWrapSchemaless(schema, value, ANYTHING_SCHEMA_BOOLEAN_FIELD),
               requireContainer);
         case STRING:
-          String stringValue = (String) value; // Check for correct type
+          if (enhancedSchemaSupport && schema != null && schema.parameters() != null
+              && schema.parameters().containsKey(AVRO_TYPE_ENUM)) {
+            String enumSchemaName = schema.parameters().get(AVRO_TYPE_ENUM);
+            org.apache.avro.Schema enumSchema;
+            if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
+              int enumIndex = avroSchema.getIndexNamed(enumSchemaName);
+              enumSchema = avroSchema.getTypes().get(enumIndex);
+            } else {
+              enumSchema = avroSchema;
+            }
+            value = new GenericData.EnumSymbol(enumSchema, (String) value);
+          } else {
+            String stringValue = (String) value; // Check for correct type
+          }
           return maybeAddContainer(
               avroSchema,
               maybeWrapSchemaless(schema, value, ANYTHING_SCHEMA_STRING_FIELD),
@@ -454,7 +470,14 @@ public class AvroData {
               schema != null ? underlyingAvroSchema.getElementType() : ANYTHING_SCHEMA;
           for (Object val : list) {
             converted.add(
-                fromConnectData(elementSchema, elementAvroSchema, val, false, true)
+                fromConnectData(
+                    elementSchema,
+                    elementAvroSchema,
+                    val,
+                    false,
+                    true,
+                    enhancedSchemaSupport
+                )
             );
           }
           return maybeAddContainer(
@@ -475,8 +498,9 @@ public class AvroData {
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               // Key is a String, no conversion needed
               Object convertedValue = fromConnectData(schema.valueSchema(),
-                                                      underlyingAvroSchema.getValueType(),
-                                                      entry.getValue(), false, true);
+                  underlyingAvroSchema.getValueType(),
+                  entry.getValue(), false, true, enhancedSchemaSupport
+              );
               converted.put((String) entry.getKey(), convertedValue);
             }
             return maybeAddContainer(avroSchema, converted, requireContainer);
@@ -491,10 +515,11 @@ public class AvroData {
             org.apache.avro.Schema avroValueSchema = elementSchema.getField(VALUE_FIELD).schema();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               Object keyConverted = fromConnectData(schema != null ? schema.keySchema() : null,
-                                                    avroKeySchema, entry.getKey(), false, true);
+                                                    avroKeySchema, entry.getKey(), false, true,
+                  enhancedSchemaSupport);
               Object valueConverted = fromConnectData(schema != null ? schema.valueSchema() : null,
                                                       avroValueSchema, entry.getValue(), false,
-                                                      true);
+                                                      true, enhancedSchemaSupport);
               converted.add(
                   new GenericRecordBuilder(elementSchema)
                       .set(KEY_FIELD, keyConverted)
@@ -519,10 +544,17 @@ public class AvroData {
             for (Field field : schema.fields()) {
               Object object = struct.get(field);
               if (object != null) {
-                return fromConnectData(field.schema(), avroSchema, object, false, true);
+                return fromConnectData(
+                    field.schema(),
+                    avroSchema,
+                    object,
+                    false,
+                    true,
+                    enhancedSchemaSupport
+                );
               }
             }
-            return fromConnectData(schema, avroSchema, null, false, true);
+            return fromConnectData(schema, avroSchema, null, false, true, enhancedSchemaSupport);
           } else {
             org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
                 schema, avroSchema);
@@ -532,7 +564,8 @@ public class AvroData {
               org.apache.avro.Schema fieldAvroSchema = theField.schema();
               convertedBuilder.set(
                   field.name(),
-                  fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false, true)
+                  fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false,
+                      true, enhancedSchemaSupport)
               );
             }
             return convertedBuilder.build();
