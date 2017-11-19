@@ -16,9 +16,12 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.specific.SpecificData;
@@ -32,9 +35,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import kafka.utils.VerifiableProperties;
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSerDe {
 
@@ -129,9 +129,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       } else {
         int start = buffer.position() + buffer.arrayOffset();
         DatumReader reader = getDatumReader(schema, readerSchema);
-        Object
-            object =
-            reader.read(null, decoderFactory.binaryDecoder(buffer.array(), start, length, null));
+        BinaryDecoder decoder = getBinaryDecoder(buffer.array(), start, length);
+        Object object = reader.read(null, decoder);
 
         if (schema.getType().equals(Schema.Type.STRING)) {
           object = object.toString(); // Utf8 -> String
@@ -194,7 +193,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     return (GenericContainer) deserialize(true, topic, isKey, payload, null);
   }
 
-  private DatumReader getDatumReader(Schema writerSchema, Schema readerSchema) {
+  protected DatumReader getDatumReader(Schema writerSchema, Schema readerSchema) {
     boolean writerSchemaIsPrimitive = getPrimitiveSchemas().values().contains(writerSchema);
     // do not use SpecificDatumReader if writerSchema is a primitive
     if (useSpecificAvroReader && !writerSchemaIsPrimitive) {
@@ -208,6 +207,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       }
       return new GenericDatumReader(writerSchema, readerSchema);
     }
+  }
+
+  protected BinaryDecoder getBinaryDecoder(byte[] bytes, int start, int length) {
+    return decoderFactory.binaryDecoder(bytes, start, length, null);
   }
 
   @SuppressWarnings("unchecked")

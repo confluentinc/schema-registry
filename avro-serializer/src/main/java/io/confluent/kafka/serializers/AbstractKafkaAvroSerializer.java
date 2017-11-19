@@ -36,8 +36,6 @@ import kafka.utils.VerifiableProperties;
 
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
 
-  private final EncoderFactory encoderFactory = EncoderFactory.get();
-
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config);
   }
@@ -78,17 +76,9 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
       if (object instanceof byte[]) {
         out.write((byte[]) object);
       } else {
-        BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
-        DatumWriter<Object> writer;
-        Object
-            value =
-            object instanceof NonRecordContainer ? ((NonRecordContainer) object).getValue()
-                                                 : object;
-        if (value instanceof SpecificRecord) {
-          writer = new SpecificDatumWriter<>(schema);
-        } else {
-          writer = new GenericDatumWriter<>(schema);
-        }
+        BinaryEncoder encoder = getBinaryEncoder(out);
+        DatumWriter<Object> writer = getDatumWriter(object, schema);
+        Object value = getValue(object);
         writer.write(value, encoder);
         encoder.flush();
       }
