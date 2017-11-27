@@ -173,6 +173,8 @@ public class RestService {
         return result;
       } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
         return null;
+      } else if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+        throw new RestClientException("Unauthorized", responseCode, responseCode);
       } else {
         InputStream es = connection.getErrorStream();
         ErrorMessage errorMessage;
