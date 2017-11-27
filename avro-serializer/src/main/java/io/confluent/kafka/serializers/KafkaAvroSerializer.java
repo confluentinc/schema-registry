@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
 
+import io.confluent.kafka.SecureConfigParser;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements Serializer<Object> {
@@ -39,6 +40,7 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   public KafkaAvroSerializer(SchemaRegistryClient client, Map<String, ?> props) {
     schemaRegistry = client;
+    SecureConfigParser.parse((Map<String, Object>) props);
     configure(serializerConfig(props));
   }
 

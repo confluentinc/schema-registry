@@ -31,8 +31,11 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
+import io.confluent.kafka.SecureConfigParser;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
@@ -95,8 +98,10 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
+
+    Map<String, Object> originals = getPropertiesMap(props);
     schemaRegistry = new CachedSchemaRegistryClient(
-        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
+        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, originals);
 
     if (props.containsKey("print.key")) {
       printKey = props.getProperty("print.key").trim().toLowerCase().equals("true");
@@ -115,6 +120,16 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
         throw new ConfigException("Error initializing Key deserializer", e);
       }
     }
+  }
+
+  private Map<String, Object> getPropertiesMap(Properties props) {
+    Map<String,Object> originals = new HashMap<>();
+    for (final String name: props.stringPropertyNames()) {
+      originals.put(name, props.getProperty(name));
+    }
+
+    SecureConfigParser.parse(originals);
+    return originals;
   }
 
   @Override

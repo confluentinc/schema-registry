@@ -16,20 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.client.rest;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,10 +33,22 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.xml.bind.DatatypeConverter;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
+import javax.xml.bind.DatatypeConverter;
+
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 
 /**
  * Rest access layer for sending requests to the schema registry.
@@ -104,6 +105,7 @@ public class RestService {
 
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
+  private BasicAuthCredentialProvider basicAuthCredentialProvider;
 
   public RestService(UrlList baseUrls) {
     this.baseUrls = baseUrls;
@@ -145,7 +147,7 @@ public class RestService {
 
       setupSsl(connection);
       connection.setRequestMethod(method);
-      setBasicAuthRequestHeader(connection, url.getUserInfo());
+      setBasicAuthRequestHeader(connection);
       // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
       // On the other hand, leaving this out breaks nothing.
       connection.setDoInput(true);
@@ -484,11 +486,18 @@ public class RestService {
     return baseUrls;
   }
 
-  private void setBasicAuthRequestHeader(HttpURLConnection connection, String userInfo) {
-    if (userInfo != null) {
+  private void setBasicAuthRequestHeader(HttpURLConnection connection) {
+    String userInfo;
+    if (basicAuthCredentialProvider != null
+        && (userInfo = basicAuthCredentialProvider.getUserInfo(connection.getURL())) != null) {
       byte[] userInfoBytes = userInfo.getBytes(StandardCharsets.UTF_8);
       String authHeader = DatatypeConverter.printBase64Binary(userInfoBytes);
       connection.setRequestProperty("Authorization", "Basic " + authHeader);
     }
+  }
+
+  public void setBasicAuthCredentialProvider(
+      BasicAuthCredentialProvider basicAuthCredentialProvider) {
+    this.basicAuthCredentialProvider = basicAuthCredentialProvider;
   }
 }

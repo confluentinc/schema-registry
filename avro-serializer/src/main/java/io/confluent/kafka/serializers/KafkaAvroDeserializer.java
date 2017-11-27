@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
 
+import io.confluent.kafka.SecureConfigParser;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
@@ -41,6 +42,7 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   public KafkaAvroDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
     schemaRegistry = client;
+    SecureConfigParser.parse((Map<String, Object>) props);
     configure(deserializerConfig(props));
   }
 

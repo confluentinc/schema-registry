@@ -68,8 +68,9 @@ public abstract class AbstractKafkaAvroSerDe {
     try {
       List<String> urls = config.getSchemaRegistryUrls();
       int maxSchemaObject = config.getMaxSchemasPerSubject();
+      Map<String, Object> originals = config.originalsWithPrefix("");
       if (null == schemaRegistry) {
-        schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject);
+        schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject, originals);
       }
     } catch (io.confluent.common.config.ConfigException e) {
       throw new ConfigException(e.getMessage());
