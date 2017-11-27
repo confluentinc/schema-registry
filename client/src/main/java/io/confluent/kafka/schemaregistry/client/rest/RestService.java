@@ -135,6 +135,11 @@ public class RestService {
       connection = (HttpURLConnection) url.openConnection();
       connection.setRequestMethod(method);
 
+      if (url.getUserInfo() != null) {
+        String basicAuth = "Basic " + javax.xml.bind.DatatypeConverter.printBase64Binary(url.getUserInfo().getBytes());
+        connection.setRequestProperty("Authorization", basicAuth);
+      }
+
       // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
       // On the other hand, leaving this out breaks nothing.
       connection.setDoInput(true);
