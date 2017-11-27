@@ -125,9 +125,9 @@ public class RestService {
                                 Map<String, String> requestProperties,
                                 TypeReference<T> responseFormat)
       throws IOException, RestClientException {
-    log.debug(String.format("Sending %s with input %s to %s",
+    log.debug(String.format("Sending %s with input %s to %s with properties %s",
                             method, requestBodyData == null ? "null" : new String(requestBodyData),
-                            requestUrl));
+                            requestUrl, requestProperties));
 
     HttpURLConnection connection = null;
     try {
@@ -163,6 +163,9 @@ public class RestService {
       }
 
       int responseCode = connection.getResponseCode();
+      log.debug(String.format("Response code: %s", responseCode));
+      log.debug(String.format("Response headers: %s", connection.getHeaderFields()));
+
       if (responseCode == HttpURLConnection.HTTP_OK) {
         InputStream is = connection.getInputStream();
         T result = jsonDeserializer.readValue(is, responseFormat);
