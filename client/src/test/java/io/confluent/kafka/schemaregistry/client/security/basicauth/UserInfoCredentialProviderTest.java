@@ -24,25 +24,25 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.confluent.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
-public class UrlBasicAuthCredentialProviderTest {
+public class UserInfoCredentialProviderTest {
 
   @Test
-  public void testUrlUserInfo() throws MalformedURLException {
+  public void testUserInfo() throws MalformedURLException {
     Map<String, Object> clientConfig = new HashMap<>();
-    UrlBasicAuthCredentialProvider provider = new UrlBasicAuthCredentialProvider();
+    clientConfig.put(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG, "user:password");
+    UserInfoCredentialProvider provider = new UserInfoCredentialProvider();
     provider.configure(clientConfig);
-    Assert.assertEquals("user:password",
-        provider.getUserInfo(new URL("http://user:password@localhost")));
+    Assert.assertEquals("user:password", provider.getUserInfo(new URL("http://localhost")));
   }
 
-  @Test
+  @Test(expected = ConfigException.class)
   public void testNullUserInfo() throws MalformedURLException {
     Map<String, Object> clientConfig = new HashMap<>();
-    UrlBasicAuthCredentialProvider provider = new UrlBasicAuthCredentialProvider();
+    UserInfoCredentialProvider provider = new UserInfoCredentialProvider();
     provider.configure(clientConfig);
-    Assert.assertNull(provider.getUserInfo(new URL("http://localhost")));
   }
 
 }

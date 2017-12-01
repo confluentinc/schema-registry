@@ -33,6 +33,8 @@ import java.util.Map;
 
 import javax.security.auth.login.Configuration;
 
+import io.confluent.common.config.ConfigException;
+
 public class SaslBasicAuthCredentialProviderTest {
 
   @Test
@@ -85,7 +87,7 @@ public class SaslBasicAuthCredentialProviderTest {
     Assert.assertEquals("user:password", provider.getUserInfo(null));
   }
 
-  @Test
+  @Test(expected = ConfigException.class)
   public void testClientJaasConfigWithKerberos() throws IOException {
     Map<String, Object> clientConfig = new HashMap<>();
     clientConfig.put(SaslConfigs.SASL_JAAS_CONFIG,
@@ -99,7 +101,6 @@ public class SaslBasicAuthCredentialProviderTest {
 
     SaslBasicAuthCredentialProvider provider = new SaslBasicAuthCredentialProvider();
     provider.configure(clientConfig);
-    Assert.assertNull(provider.getUserInfo(null));
   }
 
 }

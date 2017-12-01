@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpd
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialSource;
 
 public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
@@ -41,19 +42,30 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Integer, Schema>> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
 
+  public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
+    this(new RestService(baseUrl), identityMapCapacity);
+  }
+
+  public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity) {
+    this(new RestService(baseUrls), identityMapCapacity);
+  }
+
+  public CachedSchemaRegistryClient(RestService restService, int identityMapCapacity) {
+    this(restService, identityMapCapacity, null);
+  }
+
   public CachedSchemaRegistryClient(
       String baseUrl,
       int identityMapCapacity,
-      Map<String, Object> configs) {
-    this(new RestService(baseUrl), identityMapCapacity, configs);
+      Map<String, ?> originals) {
+    this(new RestService(baseUrl), identityMapCapacity, originals);
   }
 
   public CachedSchemaRegistryClient(
       List<String> baseUrls,
       int identityMapCapacity,
-      Map<String, ?> configs
-  ) {
-    this(new RestService(baseUrls), identityMapCapacity, configs);
+      Map<String, ?> originals) {
+    this(new RestService(baseUrls), identityMapCapacity, originals);
   }
 
   public CachedSchemaRegistryClient(
@@ -69,14 +81,24 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     configureRestService(configs);
   }
 
+
+
+
   private void configureRestService(Map<String, ?> configs) {
     if (configs != null) {
-      BasicAuthCredentialProvider basicAuthCredentialProvider =
-          BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
-              (String) configs.get(BasicAuthCredentialProvider.BASIC_AUTH_CREDENTIALS_SOURCE),
-              configs
-          );
-      restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+
+      String credentialSourceConfig =
+          (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
+
+      if (credentialSourceConfig != null && !credentialSourceConfig.isEmpty()) {
+
+        BasicAuthCredentialProvider basicAuthCredentialProvider =
+            BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
+                BasicAuthCredentialSource.valueOf(credentialSourceConfig),
+                configs);
+
+        restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+      }
     }
   }
 

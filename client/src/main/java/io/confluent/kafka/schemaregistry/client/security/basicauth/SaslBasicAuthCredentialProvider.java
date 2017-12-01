@@ -24,12 +24,15 @@ import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
+import io.confluent.common.config.ConfigException;
+
 public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvider {
 
   private String userInfo;
 
   @Override
   public void configure(Map<String, ?> configs) {
+
     JaasContext jaasContext = JaasContext.load(JaasContext.Type.CLIENT, null, configs);
     List<AppConfigurationEntry> appConfigurationEntries = jaasContext.configurationEntries();
     if (appConfigurationEntries != null && !appConfigurationEntries.isEmpty()) {
@@ -39,6 +42,11 @@ public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvi
         userInfoBuilder.append(options.get("username")).append(":").append(options.get("password"));
         userInfo = userInfoBuilder.toString();
       }
+    }
+
+    if (userInfo == null || userInfo.isEmpty()) {
+      throw new ConfigException("Provided SASL Login module doesn't provide username and password"
+                                + " options and can't be inherited");
     }
   }
 

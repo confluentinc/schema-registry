@@ -16,7 +16,6 @@
 
 package io.confluent.connect.avro;
 
-import io.confluent.kafka.SecureConfigParser;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
@@ -56,8 +55,6 @@ public class AvroConverter implements Converter {
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
-
-    SecureConfigParser.parse((Map<String, Object>) configs);
     AvroConverterConfig avroConverterConfig = new AvroConverterConfig(configs);
 
     if (schemaRegistry == null) {

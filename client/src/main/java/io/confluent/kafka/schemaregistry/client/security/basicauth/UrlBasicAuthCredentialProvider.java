@@ -21,21 +21,12 @@ import java.util.Map;
 
 public class UrlBasicAuthCredentialProvider implements BasicAuthCredentialProvider {
 
-  protected static final String SCHEMA_REGISTRY_USER_INFO = "schema.registry.url.user.info";
-
-  private String userInfo;
-
   @Override
   public void configure(Map<String, ?> configs) {
-    userInfo = (String) configs.get(SCHEMA_REGISTRY_USER_INFO);
   }
 
   @Override
   public String getUserInfo(URL url) {
-    if (userInfo != null && !userInfo.isEmpty()) {
-      return userInfo;
-    } else {
-      return url.getUserInfo();
-    }
+    return url.getUserInfo();
   }
 }

@@ -20,19 +20,23 @@ import java.util.Map;
 
 public class BasicAuthCredentialProviderFactory {
 
-  private static final String URL_BASIC_AUTH = "URL";
-
-  private static final String SASL_INHERIT_BASIC_AUTH = "SASL_INHERIT";
-
   public static BasicAuthCredentialProvider getBasicAuthCredentialProvider(
-      String basicAuthProvider,
+      BasicAuthCredentialSource basicAuthCredentialSource,
       Map<String, ?> configs) {
 
     BasicAuthCredentialProvider basicAuthCredentialProvider = null;
-    if (URL_BASIC_AUTH.equals(basicAuthProvider)) {
-      basicAuthCredentialProvider = new UrlBasicAuthCredentialProvider();
-    } else if (SASL_INHERIT_BASIC_AUTH.equals(basicAuthProvider)) {
-      basicAuthCredentialProvider = new SaslBasicAuthCredentialProvider();
+    switch (basicAuthCredentialSource) {
+      case URL:
+        basicAuthCredentialProvider = new UrlBasicAuthCredentialProvider();
+        break;
+      case USER_INFO:
+        basicAuthCredentialProvider = new UserInfoCredentialProvider();
+        break;
+      case SASL_INHERIT:
+        basicAuthCredentialProvider = new SaslBasicAuthCredentialProvider();
+        break;
+      default:
+        break;
     }
     if (basicAuthCredentialProvider != null) {
       basicAuthCredentialProvider.configure(configs);

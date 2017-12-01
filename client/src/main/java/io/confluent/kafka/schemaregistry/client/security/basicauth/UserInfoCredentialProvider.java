@@ -20,10 +20,23 @@ import java.net.URL;
 import java.util.Map;
 
 import io.confluent.common.config.ConfigException;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
-public interface BasicAuthCredentialProvider {
+public class UserInfoCredentialProvider implements BasicAuthCredentialProvider {
 
-  void configure(Map<String, ?> configs) throws ConfigException;
+  private String userInfo;
 
-  String getUserInfo(URL url);
+  @Override
+  public void configure(Map<String, ?> configs) {
+    userInfo = (String) configs.get(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG);
+    if (userInfo == null || userInfo.isEmpty()) {
+      throw new ConfigException("UserInfo must be provided when basic.auth.credentials.source is "
+                                + "set to USER_INFO");
+    }
+  }
+
+  @Override
+  public String getUserInfo(URL url) {
+    return userInfo;
+  }
 }

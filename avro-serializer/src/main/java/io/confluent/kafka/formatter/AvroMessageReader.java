@@ -33,7 +33,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import io.confluent.kafka.SecureConfigParser;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
@@ -166,7 +165,6 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     for (final String name: props.stringPropertyNames()) {
       originals.put(name, props.getProperty(name));
     }
-    SecureConfigParser.parse(originals);
     return originals;
   }
 

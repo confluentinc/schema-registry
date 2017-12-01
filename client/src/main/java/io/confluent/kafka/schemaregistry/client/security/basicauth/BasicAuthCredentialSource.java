@@ -16,14 +16,19 @@
 
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
-import java.net.URL;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
-import io.confluent.common.config.ConfigException;
+public enum BasicAuthCredentialSource {
+  URL, USER_INFO, SASL_INHERIT;
+  public static final List<String> NAMES;
 
-public interface BasicAuthCredentialProvider {
-
-  void configure(Map<String, ?> configs) throws ConfigException;
-
-  String getUserInfo(URL url);
+  static {
+    List<String> names = new ArrayList<>(values().length);
+    for (BasicAuthCredentialSource restAuthType : values()) {
+      names.add(restAuthType.name());
+    }
+    NAMES = Collections.unmodifiableList(names);
+  }
 }
