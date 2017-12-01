@@ -64,6 +64,7 @@ public class RequestHeaderBuilderTest {
     HttpHeaders httpHeaders = EasyMock.createMock(HttpHeaders.class);
     EasyMock.expect(httpHeaders.getHeaderString("Content-Type")).andReturn("application/json");
     EasyMock.expect(httpHeaders.getHeaderString("Accept")).andReturn("application/json");
+    EasyMock.expect(httpHeaders.getHeaderString("Authorization")).andReturn(null);
     EasyMock.replay(httpHeaders);
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
