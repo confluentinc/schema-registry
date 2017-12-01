@@ -20,7 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -29,13 +28,14 @@ import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
-import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.HttpHeaders;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -66,6 +66,8 @@ public class SubjectVersionsResource {
   private static final Logger log = LoggerFactory.getLogger(SubjectVersionsResource.class);
 
   private final KafkaSchemaRegistry schemaRegistry;
+
+  private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
   public SubjectVersionsResource(KafkaSchemaRegistry registry) {
     this.schemaRegistry = registry;
@@ -141,14 +143,12 @@ public class SubjectVersionsResource {
   @POST
   @PerformanceMetric("subjects.versions.register")
   public void register(final @Suspended AsyncResponse asyncResponse,
-                       final @HeaderParam("Content-Type") String contentType,
-                       final @HeaderParam("Accept") String accept,
+                       @Context HttpHeaders headers,
                        @PathParam("subject") String subjectName,
                        @NotNull RegisterSchemaRequest request) {
 
-    Map<String, String> headerProperties = new HashMap<String, String>();
-    headerProperties.put("Content-Type", contentType);
-    headerProperties.put("Accept", accept);
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+
     Schema schema = new Schema(subjectName, 0, 0, request.getSchema());
     int id = 0;
     try {
@@ -180,6 +180,7 @@ public class SubjectVersionsResource {
   @Path("/{version}")
   @PerformanceMetric("subjects.versions.deleteSchemaVersion-schema")
   public void deleteSchemaVersion(final @Suspended AsyncResponse asyncResponse,
+                                  @Context HttpHeaders headers,
                                   @PathParam("subject") String subject,
                                   @PathParam("version") String version) {
     VersionId versionId = null;
@@ -207,7 +208,8 @@ public class SubjectVersionsResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     try {
-      schemaRegistry.deleteSchemaVersionOrForward(subject, schema);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+      schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject, schema);
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Delete Schema Version operation timed out", e);
     } catch (SchemaRegistryStoreException e) {

@@ -19,7 +19,6 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,7 +28,6 @@ import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
-import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -37,6 +35,8 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.HttpHeaders;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -58,6 +58,7 @@ public class SubjectsResource {
 
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
+  private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
   public SubjectsResource(KafkaSchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
@@ -67,16 +68,11 @@ public class SubjectsResource {
   @Path("/{subject}")
   @PerformanceMetric("subjects.get-schema")
   public void lookUpSchemaUnderSubject(final @Suspended AsyncResponse asyncResponse,
-                                       final @HeaderParam("Content-Type") String contentType,
-                                       final @HeaderParam("Accept") String accept,
                                        @PathParam("subject") String subject,
                                        @QueryParam("deleted") boolean
                                            lookupDeletedSchema,
                                        @NotNull RegisterSchemaRequest request) {
     // returns version if the schema exists. Otherwise returns 404
-    Map<String, String> headerProperties = new HashMap<String, String>();
-    headerProperties.put("Content-Type", contentType);
-    headerProperties.put("Accept", accept);
     Schema schema = new Schema(subject, 0, 0, request.getSchema());
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
     try {
@@ -95,6 +91,8 @@ public class SubjectsResource {
     asyncResponse.resume(matchingSchema);
   }
 
+
+
   @GET
   @Valid
   @PerformanceMetric("subjects.list")
@@ -112,17 +110,20 @@ public class SubjectsResource {
   @Path("/{subject}")
   @PerformanceMetric("subjects.delete-subject")
   public void deleteSubject(final @Suspended AsyncResponse asyncResponse,
+                            @Context HttpHeaders headers,
                             @PathParam("subject") String subject) {
     List<Integer> deletedVersions;
     try {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
-      deletedVersions = schemaRegistry.deleteSubjectOrForward(subject);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+      deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties, subject);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting the subject " + subject,
                                            e);
     }
     asyncResponse.resume(deletedVersions);
   }
+
 }

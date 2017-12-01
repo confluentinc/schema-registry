@@ -454,20 +454,27 @@ public class RestService {
     return response;
   }
 
-  public Integer deleteSchemaVersion(String subject, String version) throws IOException,
+  public Integer deleteSchemaVersion(
+      Map<String, String> requestProperties,
+      String subject,
+      String version
+  ) throws IOException,
                                                                             RestClientException {
     String path = String.format("/subjects/%s/versions/%s", subject, version);
 
-    Integer response = httpRequest(path, "DELETE", null, DEFAULT_REQUEST_PROPERTIES,
+    Integer response = httpRequest(path, "DELETE", null, requestProperties,
                                    DELETE_SUBJECT_VERSION_RESPONSE_TYPE);
     return response;
   }
 
-  public List<Integer> deleteSubject(String subject) throws IOException,
+  public List<Integer> deleteSubject(
+      Map<String, String> requestProperties,
+      String subject
+  ) throws IOException,
                                                             RestClientException {
     String path = String.format("/subjects/%s", subject);
 
-    List<Integer> response = httpRequest(path, "DELETE", null, DEFAULT_REQUEST_PROPERTIES,
+    List<Integer> response = httpRequest(path, "DELETE", null, requestProperties,
                                          DELETE_SUBJECT_RESPONSE_TYPE);
     return response;
   }
