@@ -41,6 +41,8 @@ public abstract class AbstractKafkaAvroSerDe {
 
   private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
+  protected boolean keyMultiType = false;
+  protected boolean valueMultiType = false;
 
   static {
     Schema.Parser parser = new Schema.Parser();
@@ -72,6 +74,8 @@ public abstract class AbstractKafkaAvroSerDe {
       if (null == schemaRegistry) {
         schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject, originals);
       }
+      keyMultiType = config.keyMultiType();
+      valueMultiType = config.valueMultiType();
     } catch (io.confluent.common.config.ConfigException e) {
       throw new ConfigException(e.getMessage());
     }
@@ -80,11 +84,11 @@ public abstract class AbstractKafkaAvroSerDe {
   /**
    * Get the subject name for the given topic and value type.
    */
-  protected static String getSubjectName(String topic, boolean isKey) {
+  protected String getSubjectName(String topic, boolean isKey, Object value) {
     if (isKey) {
-      return topic + "-key";
+      return keyMultiType ? getRecordName(value) : topic + "-key";
     } else {
-      return topic + "-value";
+      return valueMultiType ? getRecordName(value) : topic + "-value";
     }
   }
 
@@ -92,12 +96,35 @@ public abstract class AbstractKafkaAvroSerDe {
    * Get the subject name used by the old Encoder interface, which relies only on the value type
    * rather than the topic.
    */
-  protected static String getOldSubjectName(Object value) {
-    if (value instanceof GenericContainer) {
+  protected String getOldSubjectName(Object value) {
+    if (valueMultiType) {
+      return getRecordName(value);
+    } else if (value instanceof GenericContainer) {
       return ((GenericContainer) value).getSchema().getName() + "-value";
     } else {
       throw new SerializationException("Primitive types are not supported yet");
     }
+  }
+
+  /**
+   * If the value is an Avro record type, returns its fully-qualified name.
+   * Otherwise throws an error.
+   */
+  private String getRecordName(Object value) {
+    // Null is passed through unserialized, since it has special meaning in
+    // log-compacted Kafka topics.
+    if (value == null) {
+      return null;
+    }
+
+    if (value instanceof GenericContainer) {
+      Schema schema = ((GenericContainer) value).getSchema();
+      if (schema.getType() == Schema.Type.RECORD) {
+        return schema.getFullName();
+      }
+    }
+    throw new SerializationException("When multiType serialization is configured, messages "
+        + "must only be Avro records");
   }
 
   protected Schema getSchema(Object object) {

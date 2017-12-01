@@ -92,6 +92,17 @@ public class KafkaAvroSerializerTest {
     return avroRecord;
   }
 
+  private IndexedRecord createAccountRecord() {
+    String accountSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+                           "\"name\": \"Account\"," +
+                           "\"fields\": [{\"name\": \"accountNumber\", \"type\": \"string\"}]}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(accountSchema);
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("accountNumber", "0123456789");
+    return avroRecord;
+  }
+
   private IndexedRecord createSpecificAvroRecord() {
     return User.newBuilder().setName("testUser").build();
   }
@@ -189,6 +200,37 @@ public class KafkaAvroSerializerTest {
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
     assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithMultiType() throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.VALUE_MULTI_TYPE,
+        true
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord record1 = createAvroRecord();
+    IndexedRecord record2 = createAccountRecord();
+    byte[] bytes1 = avroSerializer.serialize(topic, record1);
+    byte[] bytes2 = avroSerializer.serialize(topic, record2);
+    assertNotNull(schemaRegistry.getLatestSchemaMetadata("example.avro.User"));
+    assertNotNull(schemaRegistry.getLatestSchemaMetadata("example.avro.Account"));
+    assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
+    assertEquals(record2, avroDeserializer.deserialize(topic, bytes2));
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroSerializerWithMultiTypeError() {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.VALUE_MULTI_TYPE,
+        true
+    );
+    avroSerializer.configure(configs, false);
+    avroSerializer.serialize(topic, "a string should not be allowed");
   }
 
   @Test

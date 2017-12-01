@@ -61,6 +61,17 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String SCHEMA_REGISTRY_USER_INFO_DOC =
       "Specify the user info for Basic Auth in the form of {username}:{password}";
 
+  public static final String KEY_MULTI_TYPE = "key.multi.type";
+  public static final boolean KEY_MULTI_TYPE_DEFAULT = false;
+  public static final String KEY_MULTI_TYPE_DOC =
+      "If true, the keys of messages in the topic may contain a mixture of "
+      + "different Avro record types.";
+
+  public static final String VALUE_MULTI_TYPE = "value.multi.type";
+  public static final boolean VALUE_MULTI_TYPE_DEFAULT = false;
+  public static final String VALUE_MULTI_TYPE_DOC =
+      "If true, the values of messages in the topic may contain a mixture of "
+      + "different Avro record types.";
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
@@ -74,7 +85,11 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
             ConfigDef.ValidString.in(BasicAuthCredentialSource.NAMES),
             Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(SCHEMA_REGISTRY_USER_INFO_CONFIG, Type.PASSWORD, SCHEMA_REGISTRY_USER_INFO_DEFAULT,
-            Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC);
+            Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
+        .define(KEY_MULTI_TYPE, Type.BOOLEAN, KEY_MULTI_TYPE_DEFAULT,
+                Importance.MEDIUM, KEY_MULTI_TYPE_DOC)
+        .define(VALUE_MULTI_TYPE, Type.BOOLEAN, VALUE_MULTI_TYPE_DEFAULT,
+                Importance.MEDIUM, VALUE_MULTI_TYPE_DOC);
   }
 
   public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
@@ -93,4 +108,11 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
     return this.getBoolean(AUTO_REGISTER_SCHEMAS);
   }
 
+  public boolean keyMultiType() {
+    return this.getBoolean(KEY_MULTI_TYPE);
+  }
+
+  public boolean valueMultiType() {
+    return this.getBoolean(VALUE_MULTI_TYPE);
+  }
 }
