@@ -19,6 +19,7 @@ import static junit.framework.TestCase.assertEquals;
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
+import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
@@ -29,12 +30,14 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(RestService.class)
@@ -80,24 +83,25 @@ public class RestServiceTest {
    */
   @Test
   public void testSetBasicAuthRequestHeader() throws Exception {
-    RestService restService = new RestService("http://user:password@localhost:8081");
+    RestService restService = new RestService("http://localhost:8081");
+
+    BasicAuthCredentialProvider basicAuthCredentialProvider = createMock(BasicAuthCredentialProvider.class);
+    restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
 
     HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
     InputStream inputStream = createNiceMock(InputStream.class);
-    
-    expectNew(URL.class, anyString()).andReturn(url).anyTimes();
 
-    expect(url.openConnection()).andReturn(httpURLConnection).anyTimes();
-
-    expect(url.getUserInfo()).andReturn("user:password").anyTimes();
-
-    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK).anyTimes();
+    expectNew(URL.class, anyString()).andReturn(url);
+    expect(url.openConnection()).andReturn(httpURLConnection);
+    expect(httpURLConnection.getURL()).andReturn(url);
+    expect(basicAuthCredentialProvider.getUserInfo(anyObject(URL.class))).andReturn("user:password");
+    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
 
     // Make sure that the Authorization header is set with the correct value for "user:password"
     httpURLConnection.setRequestProperty("Authorization", "Basic dXNlcjpwYXNzd29yZA==");
     expectLastCall().once();
 
-    expect(httpURLConnection.getInputStream()).andReturn(inputStream).anyTimes();
+    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
 
     expect(inputStream.read((byte[]) anyObject(), anyInt(), anyInt()))
         .andDelegateTo(new InputStream() {
@@ -116,14 +120,11 @@ public class RestServiceTest {
 
     replay(URL.class, url);
     replay(HttpURLConnection.class, httpURLConnection);
+    replay(basicAuthCredentialProvider);
     replay(InputStream.class, inputStream);
 
-    List<String> allSubjects = restService.getAllSubjects();
+    restService.getAllSubjects();
 
-    verify(inputStream);
     verify(httpURLConnection);
-
-    assertEquals(1, allSubjects.size());
-    assertEquals("abc", allSubjects.get(0));
   }
 }

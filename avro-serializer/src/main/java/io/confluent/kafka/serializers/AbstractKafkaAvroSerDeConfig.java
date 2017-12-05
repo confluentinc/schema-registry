@@ -23,6 +23,8 @@ import io.confluent.common.config.AbstractConfig;
 import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigDef.Importance;
 import io.confluent.common.config.ConfigDef.Type;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialSource;
 
 /**
  * Base class for configs for serializers and deserializers, defining a few common configs and
@@ -46,6 +48,20 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String AUTO_REGISTER_SCHEMAS_DOC =
       "Specify if the Serializer should attempt to register the Schema with Schema Registry";
 
+  public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
+      .BASIC_AUTH_CREDENTIALS_SOURCE;
+  public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
+  public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DOC =
+      "Specify how to pick the credentials for Basic uth header. "
+      + "The supported values are URL, USER_INFO and SASL_INHERIT";
+
+  public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
+      SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG;
+  public static final String SCHEMA_REGISTRY_USER_INFO_DEFAULT = "";
+  public static final String SCHEMA_REGISTRY_USER_INFO_DOC =
+      "Specify the user info for Basic Auth in the form of {username}:{password}";
+
+
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
         .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
@@ -53,8 +69,12 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
                 Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
         .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
-                Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC
-        );
+                Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
+        .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
+            ConfigDef.ValidString.in(BasicAuthCredentialSource.NAMES),
+            Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
+        .define(SCHEMA_REGISTRY_USER_INFO_CONFIG, Type.PASSWORD, SCHEMA_REGISTRY_USER_INFO_DEFAULT,
+            Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC);
   }
 
   public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {

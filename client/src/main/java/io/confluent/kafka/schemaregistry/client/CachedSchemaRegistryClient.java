@@ -16,12 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -30,6 +24,15 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialSource;
 
 public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
@@ -48,12 +51,55 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   public CachedSchemaRegistryClient(RestService restService, int identityMapCapacity) {
+    this(restService, identityMapCapacity, null);
+  }
+
+  public CachedSchemaRegistryClient(
+      String baseUrl,
+      int identityMapCapacity,
+      Map<String, ?> originals) {
+    this(new RestService(baseUrl), identityMapCapacity, originals);
+  }
+
+  public CachedSchemaRegistryClient(
+      List<String> baseUrls,
+      int identityMapCapacity,
+      Map<String, ?> originals) {
+    this(new RestService(baseUrls), identityMapCapacity, originals);
+  }
+
+  public CachedSchemaRegistryClient(
+      RestService restService,
+      int identityMapCapacity,
+      Map<String, ?> configs) {
     this.identityMapCapacity = identityMapCapacity;
     this.schemaCache = new HashMap<String, Map<Schema, Integer>>();
     this.idCache = new HashMap<String, Map<Integer, Schema>>();
     this.versionCache = new HashMap<String, Map<Schema, Integer>>();
     this.restService = restService;
     this.idCache.put(null, new HashMap<Integer, Schema>());
+    configureRestService(configs);
+  }
+
+
+
+
+  private void configureRestService(Map<String, ?> configs) {
+    if (configs != null) {
+
+      String credentialSourceConfig =
+          (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
+
+      if (credentialSourceConfig != null && !credentialSourceConfig.isEmpty()) {
+
+        BasicAuthCredentialProvider basicAuthCredentialProvider =
+            BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
+                BasicAuthCredentialSource.valueOf(credentialSourceConfig),
+                configs);
+
+        restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+      }
+    }
   }
 
   private int registerAndGetId(String subject, Schema schema)

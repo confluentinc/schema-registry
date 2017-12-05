@@ -55,13 +55,12 @@ public class AvroConverter implements Converter {
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
-
     AvroConverterConfig avroConverterConfig = new AvroConverterConfig(configs);
 
     if (schemaRegistry == null) {
       schemaRegistry =
           new CachedSchemaRegistryClient(avroConverterConfig.getSchemaRegistryUrls(),
-                                         avroConverterConfig.getMaxSchemasPerSubject());
+                                         avroConverterConfig.getMaxSchemasPerSubject(), configs);
     }
 
     serializer = new Serializer(schemaRegistry, avroConverterConfig.autoRegisterSchema());

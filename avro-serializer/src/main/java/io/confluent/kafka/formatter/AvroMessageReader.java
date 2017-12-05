@@ -29,6 +29,9 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -129,8 +132,11 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
+
+    Map<String, Object> originals = getPropertiesMap(props);
+
     schemaRegistry = new CachedSchemaRegistryClient(
-        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
+        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, originals);
     if (!props.containsKey("value.schema")) {
       throw new ConfigException("Must provide the Avro schema string in value.schema");
     }
@@ -152,6 +158,14 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     } else {
       this.autoRegisterSchema = true;
     }
+  }
+
+  private Map<String, Object> getPropertiesMap(Properties props) {
+    Map<String, Object> originals = new HashMap<>();
+    for (final String name: props.stringPropertyNames()) {
+      originals.put(name, props.getProperty(name));
+    }
+    return originals;
   }
 
   @Override
