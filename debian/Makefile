@@ -84,7 +84,7 @@ else
 endif
 
 install: build
-	./create_archive.sh
+	./resources/create_archive.sh
 
 clean:
 	rm -rf $(DESTDIR)
