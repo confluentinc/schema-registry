@@ -232,6 +232,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public List<Integer> getAllVersions(String subject)
+      throws IOException, RestClientException {
+    return restService.getAllVersions(subject);
+  }
+
+  @Override
   public synchronized int getId(String subject, Schema schema)
       throws IOException, RestClientException {
     Map<Schema, Integer> schemaIdMap;
