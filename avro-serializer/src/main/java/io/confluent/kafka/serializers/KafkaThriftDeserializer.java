@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.converters.TBaseToGenericRecord;
 import io.confluent.kafka.io.GenericBinaryDecoder;
 import io.confluent.kafka.io.ThriftReader;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -23,6 +24,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.DatumReader;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.thrift.TBase;
 
 import java.util.Map;
 
@@ -30,6 +32,8 @@ public class KafkaThriftDeserializer extends AbstractKafkaAvroDeserializer
     implements Deserializer<Object> {
 
   private boolean isKey;
+  private Schema writerSchema;
+  private boolean convertToGenericRecord;
 
   /**
    * Constructor used by Kafka consumer.
@@ -50,12 +54,17 @@ public class KafkaThriftDeserializer extends AbstractKafkaAvroDeserializer
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
+    convertToGenericRecord = configs.get("convertToGenericRecord") != null;
     configure(new KafkaAvroDeserializerConfig(configs));
   }
 
   @Override
   public Object deserialize(String s, byte[] bytes) {
-    return deserialize(bytes);
+    Object message = deserialize(bytes);
+    if (convertToGenericRecord) {
+      return TBaseToGenericRecord.convert((TBase) message, writerSchema);
+    }
+    return message;
   }
 
   /**
@@ -72,6 +81,7 @@ public class KafkaThriftDeserializer extends AbstractKafkaAvroDeserializer
 
   @Override
   protected DatumReader getDatumReader(Schema writerSchema, Schema readerSchema) {
+    this.writerSchema = writerSchema;
     return new ThriftReader(writerSchema);
   }
 

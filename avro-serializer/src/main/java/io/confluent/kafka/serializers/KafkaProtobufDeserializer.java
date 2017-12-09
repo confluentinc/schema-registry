@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.serializers;
 
+import com.google.protobuf.GeneratedMessage;
+import io.confluent.kafka.converters.GeneratedMessageToGenericRecord;
 import io.confluent.kafka.io.GenericBinaryDecoder;
 import io.confluent.kafka.io.ProtobufReader;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -30,6 +32,8 @@ public class KafkaProtobufDeserializer extends AbstractKafkaAvroDeserializer
     implements Deserializer<Object> {
 
   private boolean isKey;
+  private Schema writerSchema;
+  private boolean convertToGenericRecord;
 
   /**
    * Constructor used by Kafka consumer.
@@ -50,12 +54,17 @@ public class KafkaProtobufDeserializer extends AbstractKafkaAvroDeserializer
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
+    convertToGenericRecord = configs.get("convertToGenericRecord") != null;
     configure(new KafkaAvroDeserializerConfig(configs));
   }
 
   @Override
   public Object deserialize(String s, byte[] bytes) {
-    return deserialize(bytes);
+    Object message = deserialize(bytes);
+    if (convertToGenericRecord) {
+      return GeneratedMessageToGenericRecord.convert((GeneratedMessage)message, writerSchema);
+    }
+    return message;
   }
 
   /**
@@ -72,6 +81,7 @@ public class KafkaProtobufDeserializer extends AbstractKafkaAvroDeserializer
 
   @Override
   protected DatumReader getDatumReader(Schema writerSchema, Schema readerSchema) {
+    this.writerSchema = writerSchema;
     return new ProtobufReader(writerSchema);
   }
 
