@@ -41,8 +41,8 @@ public abstract class AbstractKafkaAvroSerDe {
 
   private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
-  protected boolean keyMultiType = false;
-  protected boolean valueMultiType = false;
+  protected String keySubjectNameStrategy = "topic-key";
+  protected String valueSubjectNameStrategy = "topic-value";
 
   static {
     Schema.Parser parser = new Schema.Parser();
@@ -74,8 +74,8 @@ public abstract class AbstractKafkaAvroSerDe {
       if (null == schemaRegistry) {
         schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject, originals);
       }
-      keyMultiType = config.keyMultiType();
-      valueMultiType = config.valueMultiType();
+      keySubjectNameStrategy = config.keySubjectNameStrategy();
+      valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     } catch (io.confluent.common.config.ConfigException e) {
       throw new ConfigException(e.getMessage());
     }
@@ -86,9 +86,29 @@ public abstract class AbstractKafkaAvroSerDe {
    */
   protected String getSubjectName(String topic, boolean isKey, Object value) {
     if (isKey) {
-      return keyMultiType ? getRecordName(value) : topic + "-key";
+      if (keySubjectNameStrategy.equals("topic-key")) {
+        return topic + "-key";
+      } else if (keySubjectNameStrategy.equals("type")) {
+        return getRecordName(value, isKey);
+      } else if (keySubjectNameStrategy.equals("topic-type")) {
+        return topic + "-" + getRecordName(value, isKey);
+      } else {
+        throw new SerializationException("Unknown value for "
+                + AbstractKafkaAvroSerDeConfig.KEY_SUBJECT_NAME_STRATEGY + ": "
+                + keySubjectNameStrategy);
+      }
     } else {
-      return valueMultiType ? getRecordName(value) : topic + "-value";
+      if (valueSubjectNameStrategy.equals("topic-value")) {
+        return topic + "-value";
+      } else if (valueSubjectNameStrategy.equals("type")) {
+        return getRecordName(value, isKey);
+      } else if (valueSubjectNameStrategy.equals("topic-type")) {
+        return topic + "-" + getRecordName(value, isKey);
+      } else {
+        throw new SerializationException("Unknown value for "
+                + AbstractKafkaAvroSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY + ": "
+                + valueSubjectNameStrategy);
+      }
     }
   }
 
@@ -97,8 +117,8 @@ public abstract class AbstractKafkaAvroSerDe {
    * rather than the topic.
    */
   protected String getOldSubjectName(Object value) {
-    if (valueMultiType) {
-      return getRecordName(value);
+    if (valueSubjectNameStrategy.equals("type")) {
+      return getRecordName(value, false);
     } else if (value instanceof GenericContainer) {
       return ((GenericContainer) value).getSchema().getName() + "-value";
     } else {
@@ -110,7 +130,7 @@ public abstract class AbstractKafkaAvroSerDe {
    * If the value is an Avro record type, returns its fully-qualified name.
    * Otherwise throws an error.
    */
-  private String getRecordName(Object value) {
+  private String getRecordName(Object value, boolean isKey) {
     // Null is passed through unserialized, since it has special meaning in
     // log-compacted Kafka topics.
     if (value == null) {
@@ -123,8 +143,17 @@ public abstract class AbstractKafkaAvroSerDe {
         return schema.getFullName();
       }
     }
-    throw new SerializationException("When multiType serialization is configured, messages "
-        + "must only be Avro records");
+
+    // isKey is only used to produce more helpful error messages
+    if (isKey) {
+      throw new SerializationException("In configuration "
+          + AbstractKafkaAvroSerDeConfig.KEY_SUBJECT_NAME_STRATEGY + " = "
+          + keySubjectNameStrategy + ", the message key must only be an Avro record");
+    } else {
+      throw new SerializationException("In configuration "
+          + AbstractKafkaAvroSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY + " = "
+          + valueSubjectNameStrategy + ", the message value must only be an Avro record");
+    }
   }
 
   protected Schema getSchema(Object object) {

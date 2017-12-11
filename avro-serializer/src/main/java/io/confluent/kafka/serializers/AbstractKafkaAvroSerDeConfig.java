@@ -61,17 +61,17 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String SCHEMA_REGISTRY_USER_INFO_DOC =
       "Specify the user info for Basic Auth in the form of {username}:{password}";
 
-  public static final String KEY_MULTI_TYPE = "key.multi.type";
-  public static final boolean KEY_MULTI_TYPE_DEFAULT = false;
-  public static final String KEY_MULTI_TYPE_DOC =
-      "If true, the keys of messages in the topic may contain a mixture of "
-      + "different Avro record types.";
+  public static final String KEY_SUBJECT_NAME_STRATEGY = "key.subject.name.strategy";
+  public static final String KEY_SUBJECT_NAME_STRATEGY_DEFAULT = "topic-key";
+  public static final String KEY_SUBJECT_NAME_STRATEGY_DOC =
+      "Determines how to construct the subject name under which the key schema is registered "
+      + "with the schema registry";
 
-  public static final String VALUE_MULTI_TYPE = "value.multi.type";
-  public static final boolean VALUE_MULTI_TYPE_DEFAULT = false;
-  public static final String VALUE_MULTI_TYPE_DOC =
-      "If true, the values of messages in the topic may contain a mixture of "
-      + "different Avro record types.";
+  public static final String VALUE_SUBJECT_NAME_STRATEGY = "value.subject.name.strategy";
+  public static final String VALUE_SUBJECT_NAME_STRATEGY_DEFAULT = "topic-value";
+  public static final String VALUE_SUBJECT_NAME_STRATEGY_DOC =
+      "Determines how to construct the subject name under which the value schema is registered "
+      + "with the schema registry";
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
@@ -86,10 +86,10 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
             Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(SCHEMA_REGISTRY_USER_INFO_CONFIG, Type.PASSWORD, SCHEMA_REGISTRY_USER_INFO_DEFAULT,
             Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
-        .define(KEY_MULTI_TYPE, Type.BOOLEAN, KEY_MULTI_TYPE_DEFAULT,
-                Importance.MEDIUM, KEY_MULTI_TYPE_DOC)
-        .define(VALUE_MULTI_TYPE, Type.BOOLEAN, VALUE_MULTI_TYPE_DEFAULT,
-                Importance.MEDIUM, VALUE_MULTI_TYPE_DOC);
+        .define(KEY_SUBJECT_NAME_STRATEGY, Type.STRING, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
+                Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
+        .define(VALUE_SUBJECT_NAME_STRATEGY, Type.STRING, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
+                Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC);
   }
 
   public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
@@ -108,11 +108,11 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
     return this.getBoolean(AUTO_REGISTER_SCHEMAS);
   }
 
-  public boolean keyMultiType() {
-    return this.getBoolean(KEY_MULTI_TYPE);
+  public String keySubjectNameStrategy() {
+    return this.getString(KEY_SUBJECT_NAME_STRATEGY);
   }
 
-  public boolean valueMultiType() {
-    return this.getBoolean(VALUE_MULTI_TYPE);
+  public String valueSubjectNameStrategy() {
+    return this.getString(VALUE_SUBJECT_NAME_STRATEGY);
   }
 }

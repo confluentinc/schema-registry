@@ -207,16 +207,16 @@ public class KafkaAvroSerializerTest {
     Map configs = ImmutableMap.of(
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus",
-        KafkaAvroSerializerConfig.VALUE_MULTI_TYPE,
-        true
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        "topic-type"
     );
     avroSerializer.configure(configs, false);
     IndexedRecord record1 = createAvroRecord();
     IndexedRecord record2 = createAccountRecord();
     byte[] bytes1 = avroSerializer.serialize(topic, record1);
     byte[] bytes2 = avroSerializer.serialize(topic, record2);
-    assertNotNull(schemaRegistry.getLatestSchemaMetadata("example.avro.User"));
-    assertNotNull(schemaRegistry.getLatestSchemaMetadata("example.avro.Account"));
+    assertNotNull(schemaRegistry.getLatestSchemaMetadata(topic + "-example.avro.User"));
+    assertNotNull(schemaRegistry.getLatestSchemaMetadata(topic + "-example.avro.Account"));
     assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
     assertEquals(record2, avroDeserializer.deserialize(topic, bytes2));
   }
@@ -226,8 +226,8 @@ public class KafkaAvroSerializerTest {
     Map configs = ImmutableMap.of(
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus",
-        KafkaAvroSerializerConfig.VALUE_MULTI_TYPE,
-        true
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        "topic-type"
     );
     avroSerializer.configure(configs, false);
     avroSerializer.serialize(topic, "a string should not be allowed");
