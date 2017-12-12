@@ -429,6 +429,21 @@ public class AvroData {
               requireContainer);
         case STRING:
           String stringValue = (String) value; // Check for correct type
+          if (schema.parameters() != null && schema.parameters().containsKey(AVRO_TYPE_ENUM)) {
+            List<String> symbols = new ArrayList<>();
+            for (Map.Entry<String, String> entry : schema.parameters().entrySet()) {
+              if (entry.getKey().startsWith(AVRO_TYPE_ENUM + ".")) {
+                symbols.add(entry.getValue());
+              }
+            }
+            org.apache.avro.Schema originalSchema =
+                    org.apache.avro.SchemaBuilder.builder().enumeration(
+                            schema.parameters().get(AVRO_TYPE_ENUM))
+                            .doc(schema.parameters().get(CONNECT_ENUM_DOC_PROP))
+                            .symbols(symbols.toArray(new String[symbols.size()]));
+            value = new GenericData.EnumSymbol(originalSchema, value);
+            avroSchema = originalSchema;
+          }
           return maybeAddContainer(
               avroSchema,
               maybeWrapSchemaless(schema, value, ANYTHING_SCHEMA_STRING_FIELD),

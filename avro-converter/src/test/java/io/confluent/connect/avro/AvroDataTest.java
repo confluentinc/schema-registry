@@ -16,9 +16,19 @@
 
 package io.confluent.connect.avro;
 
+import org.apache.avro.file.DataFileReader;
+import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DatumReader;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.DirectBinaryEncoder;
+import org.apache.avro.specific.SpecificData;
+import org.apache.avro.specific.SpecificDatumReader;
+import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.connect.data.Date;
@@ -37,19 +47,15 @@ import org.hamcrest.core.IsEqual;
 import org.junit.Test;
 import org.powermock.reflect.Whitebox;
 
+import java.io.File;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.GregorianCalendar;
-import java.util.HashMap;
-import java.util.List;
-import java.util.TimeZone;
+import java.util.*;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
+import sun.net.www.content.text.Generic;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
@@ -1185,6 +1191,78 @@ public class AvroDataTest {
                  avroData.toConnectData(avroSchema, "bar"));
     assertEquals(new SchemaAndValue(builder.build(), "bar"),
                  avroData.toConnectData(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar")));
+  }
+
+  private void testFromConnectToConnect(org.apache.avro.Schema schema, Object data) {
+    Map<String, String> avroDataConfigParams = new HashMap();
+    avroDataConfigParams.put("enhanced.avro.schema.support", "true");
+    avroDataConfigParams.put("connect.meta.data", "true");
+    AvroData enhancedAvroData = new AvroData(new AvroDataConfig(avroDataConfigParams));
+
+    org.apache.avro.Schema origSchema = org.apache.avro.SchemaBuilder.builder()
+            .record("TestRecord").namespace("x.y.z")
+            .fields()
+            .name("testField").type(schema).noDefault()
+            .endRecord();
+    GenericData.Record originalRecord = new GenericData.Record(origSchema);
+    originalRecord.put("testField", data);
+
+    SchemaAndValue connectData = enhancedAvroData.toConnectData(origSchema, originalRecord);
+    GenericData.Record convertedRecord = (GenericData.Record) enhancedAvroData.fromConnectData(
+            connectData.schema(), connectData.value());
+
+    assertEquals(
+            convertedRecord.getSchema().getField("testField").schema().getType(),
+            originalRecord.getSchema().getField("testField").schema().getType()
+    );
+    assertEquals(originalRecord.get("testField"), convertedRecord.get("testField"));
+  }
+
+  @Test
+  public void testFromConnectToConnectEnum() {
+    org.apache.avro.Schema enumSchema = org.apache.avro.SchemaBuilder.builder()
+            .enumeration("TestEnum")
+            .symbols("foo", "bar", "baz");
+    GenericData.EnumSymbol enumSymbol = new GenericData.EnumSymbol(enumSchema, "foo");
+    testFromConnectToConnect(enumSchema, enumSymbol);
+  }
+
+  @Test
+  public void testFromConnectToConnectEnumWithUnion() {
+    org.apache.avro.Schema enumSchema = org.apache.avro.SchemaBuilder.builder()
+            .enumeration("TestEnum")
+            .symbols("foo", "bar", "baz");
+    org.apache.avro.Schema nullSchema = org.apache.avro.Schema.create(org.apache.avro.Schema.Type.NULL);
+    org.apache.avro.Schema unionSchema = org.apache.avro.Schema.createUnion(Arrays.asList(nullSchema, enumSchema));
+
+    GenericData.EnumSymbol enumSymbol = new GenericData.EnumSymbol(enumSchema, "foo");
+    testFromConnectToConnect(unionSchema, enumSymbol);
+    testFromConnectToConnect(unionSchema, null);
+  }
+
+  @Test
+  public void testFromConnectToConnectArray() {
+    org.apache.avro.Schema arraySchema = org.apache.avro.SchemaBuilder.builder()
+            .array().items().stringType();
+    ArrayList<String> array = new ArrayList<>();
+    array.add("foo");
+    array.add("bar");
+    GenericData.Array arrayValue = new GenericData.Array(arraySchema, array);
+    testFromConnectToConnect(arraySchema, arrayValue);
+  }
+
+  @Test
+  public void testFromConnectToConnectArrayWithUnion() {
+    org.apache.avro.Schema arraySchema = org.apache.avro.SchemaBuilder.builder()
+            .array().items().stringType();
+    org.apache.avro.Schema nullSchema = org.apache.avro.Schema.create(org.apache.avro.Schema.Type.NULL);
+    org.apache.avro.Schema unionSchema = org.apache.avro.Schema.createUnion(Arrays.asList(nullSchema, arraySchema));
+    ArrayList<String> array = new ArrayList<>();
+    array.add("foo");
+    array.add("bar");
+    GenericData.Array arrayValue = new GenericData.Array(arraySchema, array);
+    testFromConnectToConnect(unionSchema, arrayValue);
+    testFromConnectToConnect(unionSchema, null);
   }
 
   @Test
