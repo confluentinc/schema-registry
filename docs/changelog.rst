@@ -6,6 +6,9 @@ Changelog
 Version 3.4.0
 -------------
 
+* `PR-686 <https://github.com/confluentinc/schema-registry/pull/686>` - Added REST endpoint to return the unescaped Avro schema
+  for a specific subject and version. 
+
 Upgrade Notes
 ^^^^^^^^^^^^^
 
