@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -423,12 +424,12 @@ public class RestService {
   }
 
   public Schema getLatestVersion(Map<String, String> requestProperties,
-            String subject)
-            throws IOException, RestClientException {
+                                 String subject)
+      throws IOException, RestClientException {
     String path = String.format("/subjects/%s/versions/latest", subject);
 
     Schema response = httpRequest(path, "GET", null, requestProperties,
-                GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
+                                  GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
     return response;
   }
 

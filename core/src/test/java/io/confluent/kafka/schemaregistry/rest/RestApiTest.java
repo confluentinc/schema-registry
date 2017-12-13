@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
+
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -412,7 +413,7 @@ public class RestApiTest extends ClusterTestHarness {
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
 
-    assertEquals("Latest schema should be the same as version 1",
+    assertEquals("Retrieved schema should be the same as version 1",
                 schemas.get(0),
                 restApp.restClient.getVersionSchemaOnly(subject, 1));
   }
