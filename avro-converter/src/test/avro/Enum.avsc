@@ -1,0 +1,16 @@
+{
+  "namespace": "foo.bar",
+  "type": "record",
+  "name": "EnumTest",
+  "fields": [
+    {"name": "testkey", "type": "string"},
+    {
+      "name": "kind",
+      "type": {
+        "name": "Kind",
+        "type": "enum",
+        "symbols" : ["ONE", "TWO", "THREE"]
+      }
+    }
+  ]
+}
