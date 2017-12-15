@@ -363,10 +363,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   @Override
   public void close() {
-    kafkaTopicReader.shutdown();
-    log.debug("Kafka store reader thread shut down");
-    producer.close();
-    log.debug("Kafka store producer shut down");
+    if (kafkaTopicReader != null) {
+      kafkaTopicReader.shutdown();
+      log.debug("Kafka store reader thread shut down");
+    }
+    if (producer != null) {
+      producer.close();
+      log.debug("Kafka store producer shut down");
+    }
     localStore.close();
     log.debug("Kafka store shut down complete");
   }
