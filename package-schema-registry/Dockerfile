@@ -49,4 +49,6 @@ ADD target/kafka-schema-registry-package-${PROJECT_VERSION}-package/share/doc/* 
 ADD target/kafka-schema-registry-package-${PROJECT_VERSION}-package/bin/* /usr/bin/
 ADD target/kafka-schema-registry-package-${PROJECT_VERSION}-package/etc/* /etc/
 
+ENV CLASSPATH=/usr/share/java/${ARTIFACT_ID}/*
+
 CMD ["/etc/confluent/docker/run"]
