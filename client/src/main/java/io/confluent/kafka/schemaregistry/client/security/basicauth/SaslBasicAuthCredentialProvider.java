@@ -16,9 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.JaasContext;
 
 import java.net.URL;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,7 +36,8 @@ public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvi
   @Override
   public void configure(Map<String, ?> configs) {
 
-    JaasContext jaasContext = JaasContext.load(JaasContext.Type.CLIENT, null, configs);
+    Map<String, Object> updatedConfigs = getConfigsForJaasUtil(configs);
+    JaasContext jaasContext = JaasContext.load(JaasContext.Type.CLIENT, null, updatedConfigs);
     List<AppConfigurationEntry> appConfigurationEntries = jaasContext.configurationEntries();
     if (appConfigurationEntries != null && !appConfigurationEntries.isEmpty()) {
       Map<String, ?> options = appConfigurationEntries.get(0).getOptions();
@@ -48,6 +52,23 @@ public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvi
       throw new ConfigException("Provided SASL Login module doesn't provide username and password"
                                 + " options and can't be inherited");
     }
+  }
+
+  //visible for unit test
+  Map<String, Object> getConfigsForJaasUtil(Map<String, ?> configs) {
+    Map<String, Object> updatedConfigs = new HashMap<>(configs);
+    if (updatedConfigs.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {
+      Object saslJaasConfig = updatedConfigs.get(SaslConfigs.SASL_JAAS_CONFIG);
+      if (saslJaasConfig instanceof String) {
+        updatedConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password((String) saslJaasConfig));
+      } else if (saslJaasConfig instanceof io.confluent.common.config.types.Password) {
+        updatedConfigs.put(
+            SaslConfigs.SASL_JAAS_CONFIG,
+            new Password(((io.confluent.common.config.types.Password) saslJaasConfig).value())
+        );
+      }
+    }
+    return updatedConfigs;
   }
 
   @Override

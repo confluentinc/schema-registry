@@ -33,6 +33,7 @@ import java.util.Map;
 
 import javax.security.auth.login.Configuration;
 
+import avro.shaded.com.google.common.collect.ImmutableMap;
 import io.confluent.common.config.ConfigException;
 
 public class SaslBasicAuthCredentialProviderTest {
@@ -101,6 +102,40 @@ public class SaslBasicAuthCredentialProviderTest {
 
     SaslBasicAuthCredentialProvider provider = new SaslBasicAuthCredentialProvider();
     provider.configure(clientConfig);
+  }
+
+  @Test
+  public void testGetUpdatedConfigsForJaasUtilWithString(){
+
+    String jaasConfig = "org.apache.kafka.common.security.scram.ScramLoginModule required "
+                        + "username=\"user\""
+                        + " password=\"password\";";
+    Map<String, String> originalMap = ImmutableMap.of("test-key", "test-value",
+        SaslConfigs.SASL_JAAS_CONFIG, jaasConfig);
+
+    SaslBasicAuthCredentialProvider provider = new SaslBasicAuthCredentialProvider();
+    Map<String, Object> updatedMap = provider.getConfigsForJaasUtil(originalMap);
+    Assert.assertNotNull(updatedMap);
+    Assert.assertEquals(originalMap.keySet(), updatedMap.keySet());
+    Assert.assertTrue(updatedMap.get(SaslConfigs.SASL_JAAS_CONFIG) instanceof Password);
+    Assert.assertEquals(new Password(jaasConfig), updatedMap.get(SaslConfigs.SASL_JAAS_CONFIG) );
+  }
+
+  @Test
+  public void testGetUpdatedConfigsForJaasUtilWithPassword(){
+
+    String jaasConfig = "org.apache.kafka.common.security.scram.ScramLoginModule required "
+                        + "username=\"user\""
+                        + " password=\"password\";";
+    Map<String, Object> originalMap = ImmutableMap.of("test-key", "test-value",
+        SaslConfigs.SASL_JAAS_CONFIG, new io.confluent.common.config.types.Password(jaasConfig));
+
+    SaslBasicAuthCredentialProvider provider = new SaslBasicAuthCredentialProvider();
+    Map<String, Object> updatedMap = provider.getConfigsForJaasUtil(originalMap);
+    Assert.assertNotNull(updatedMap);
+    Assert.assertEquals(originalMap.keySet(), updatedMap.keySet());
+    Assert.assertTrue(updatedMap.get(SaslConfigs.SASL_JAAS_CONFIG) instanceof Password);
+    Assert.assertEquals(new Password(jaasConfig), updatedMap.get(SaslConfigs.SASL_JAAS_CONFIG) );
   }
 
 }
