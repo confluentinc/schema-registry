@@ -1,0 +1,98 @@
+---
+version: '2'
+networks:
+  zk:
+    driver: bridge
+services:
+  zookeeper-bridge:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    networks:
+    - zk
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+    - 22181:2181
+    - 32888:2888
+    - 33888:3888
+    labels:
+    - io.confluent.docker.testing=true
+
+  kafka-bridge:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    networks:
+    - zk
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-bridge:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-bridge:19092
+    ports:
+    - 19092:19092
+    labels:
+    - io.confluent.docker.testing=true
+
+  zookeeper-host:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    network_mode: host
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 32181
+      ZOOKEEPER_TICK_TIME: 2000
+    labels:
+    - io.confluent.docker.testing=true
+
+  kafka-host:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    network_mode: host
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: localhost:32181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:29092
+    labels:
+    - io.confluent.docker.testing=true
+
+  schema-registry-host:
+    image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
+    network_mode: host
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: localhost:32181
+      SCHEMA_REGISTRY_HOST_NAME: localhost
+    labels:
+    - io.confluent.docker.testing=true
+
+  schema-registry-bridge:
+    image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
+    networks:
+    - zk
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper-bridge:2181
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry-bridge
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:18081"
+    ports:
+    - 18081:18081
+    labels:
+    - io.confluent.docker.testing=true
+
+  schema-registry-bridge-jmx:
+    image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
+    networks:
+    - zk
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper-bridge:2181
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry-bridge-jmx
+      SCHEMA_REGISTRY_JMX_PORT: 39999
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+    labels:
+    - io.confluent.docker.testing=true
+
+  schema-registry-host-jmx:
+    image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
+    network_mode: host
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: localhost:32181
+      SCHEMA_REGISTRY_HOST_NAME: localhost
+      SCHEMA_REGISTRY_JMX_PORT: 9999
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:28081"
+    labels:
+    - io.confluent.docker.testing=true
+
+

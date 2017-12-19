@@ -1,0 +1,120 @@
+---
+version: '2'
+networks:
+  zk:
+    driver: bridge
+services:
+  zookeeper-1:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+    networks:
+    - zk
+    ports:
+    - 22181:2181
+    - 22888:2888
+    - 23888:3888
+    labels:
+    - io.confluent.docker.testing=true
+  zookeeper-2:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    environment:
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+    networks:
+    - zk
+    ports:
+    - 32181:2181
+    - 32888:2888
+    - 33888:3888
+    labels:
+    - io.confluent.docker.testing=true
+  zookeeper-3:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    environment:
+      ZOOKEEPER_SERVER_ID: 3
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+    networks:
+    - zk
+    ports:
+    - 42181:2181
+    - 42888:2888
+    - 43888:3888
+    labels:
+    - io.confluent.docker.testing=true
+  kafka-1:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    networks:
+    - zk
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:9092
+    labels:
+    - io.confluent.docker.testing=true
+  kafka-2:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    networks:
+    - zk
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2:9092
+    labels:
+    - io.confluent.docker.testing=true
+  kafka-3:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    networks:
+    - zk
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-3:9092
+    labels:
+    - io.confluent.docker.testing=true
+  schema-registry-1:
+    image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
+    networks:
+    - zk
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry-1
+    ports:
+    - 18081:8081
+    labels:
+    - io.confluent.docker.testing=true
+  schema-registry-2:
+    image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
+    networks:
+    - zk
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry-2
+    ports:
+    - 28081:8081
+    labels:
+    - io.confluent.docker.testing=true
+  schema-registry-3:
+    image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
+    networks:
+    - zk
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry-3
+    ports:
+    - 38081:8081
+    labels:
+    - io.confluent.docker.testing=true

@@ -44,9 +44,9 @@ VOLUME ["/etc/${COMPONENT}/secrets"]
 
 COPY include/etc/confluent/docker /etc/confluent/docker
 
-ADD target/${ARTIFACT_ID}-${PROJECT_VERSION}-package/share/java/${ARTIFACT_ID}/* /usr/share/java/${ARTIFACT_ID}/
-ADD target/${ARTIFACT_ID}-${PROJECT_VERSION}-package/share/doc/* /usr/share/doc/${ARTIFACT_ID}/
-ADD target/${ARTIFACT_ID}-${PROJECT_VERSION}-package/bin/* /usr/bin/
-ADD target/${ARTIFACT_ID}-${PROJECT_VERSION}-package/etc/* /etc/
+ADD target/kafka-schema-registry-package-${PROJECT_VERSION}-package/share/java/kafka-schema-registry-package/* /usr/share/java/${ARTIFACT_ID}/
+ADD target/kafka-schema-registry-package-${PROJECT_VERSION}-package/share/doc/* /usr/share/doc/${ARTIFACT_ID}/
+ADD target/kafka-schema-registry-package-${PROJECT_VERSION}-package/bin/* /usr/bin/
+ADD target/kafka-schema-registry-package-${PROJECT_VERSION}-package/etc/* /etc/
 
 CMD ["/etc/confluent/docker/run"]

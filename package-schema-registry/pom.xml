@@ -16,6 +16,7 @@
 
     <properties>
         <docker.skip-build>false</docker.skip-build>
+        <docker.skip-test>false</docker.skip-test>
     </properties>
 
     <!-- Dependencies are required only to ensure this module is built last. -->
@@ -84,6 +85,38 @@
                                 <descriptor>src/assembly/standalone.xml</descriptor>
                             </descriptors>
                         </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <!-- Override build args to use "cp-schema-registry" as the image name. -->
+            <id>docker</id>
+            <activation>
+                <property>
+                    <name>env.BUILD_NUMBER</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.spotify</groupId>
+                        <artifactId>dockerfile-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>package</id>
+                                <goals>
+                                    <goal>build</goal>
+                                </goals>
+                                <configuration combine.self="append">
+                                    <buildArgs>
+                                        <ARTIFACT_ID>cp-schema-registry</ARTIFACT_ID>
+                                    </buildArgs>
+                                    <repository>${docker.registry}confluentinc/cp-schema-registry</repository>
+                                </configuration>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>
