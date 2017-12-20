@@ -236,6 +236,40 @@ The subjects resource provides a list of all registered subjects in your schema 
         "schema": "{\"type\": \"string\"}"
       }
 
+.. http:get:: /subjects/(string: subject)/versions/(versionId: version)/schema
+
+   Get the avro schema for the specified version of this subject. The unescaped schema only is returned.
+
+   :param string subject: Name of the subject
+   :param versionId version: Version of the schema to be returned. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" returns the last registered schema under the specified subject. Note that there may be a new latest schema that gets registered right after this request is served.
+
+   :>json string schema: The Avro schema string (unescaped)
+
+   :statuscode 404:
+      * Error code 40401 -- Subject not found
+      * Error code 40402 -- Version not found
+   :statuscode 422:
+      * Error code 42202 -- Invalid version
+   :statuscode 500:
+      * Error code 50001 -- Error in the backend data store
+
+   **Example request**:
+
+   .. sourcecode:: http
+
+      GET /subjects/test/versions/1/schema HTTP/1.1
+      Host: schemaregistry.example.com
+      Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+
+   **Example response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 200 OK
+      Content-Type: application/vnd.schemaregistry.v1+json
+
+      {"type": "string"}
+
 .. http:post:: /subjects/(string: subject)/versions
 
    Register a new schema under the specified subject. If successfully registered, this returns the unique identifier of this schema in the registry. The returned identifier should be used to retrieve this schema from the schemas resource and is different from the schema's version which is associated with the subject.

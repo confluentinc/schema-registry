@@ -396,6 +396,29 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGetLatestVersionSchemaOnly() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    String subject = "test";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
+
+    assertEquals("Latest schema should be the same as version 2",
+                 schemas.get(1),
+                 restApp.restClient.getLatestVersionSchemaOnly(subject));
+  }
+
+  @Test
+  public void testGetVersionSchemaOnly() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(1);
+    String subject = "test";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
+
+    assertEquals("Retrieved schema should be the same as version 1",
+                schemas.get(0),
+                restApp.restClient.getVersionSchemaOnly(subject, 1));
+  }
+
+  @Test
   public void testLookUpSchemaUnderNonExistentSubject() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {

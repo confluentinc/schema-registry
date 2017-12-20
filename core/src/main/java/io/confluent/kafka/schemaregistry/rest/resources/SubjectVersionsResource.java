@@ -106,6 +106,14 @@ public class SubjectVersionsResource {
   }
 
   @GET
+  @Path("/{version}/schema")
+  @PerformanceMetric("subjects.versions.get-schema.only")
+  public String getSchemaOnly(@PathParam("subject") String subject,
+                              @PathParam("version") String version) {
+    return getSchema(subject, version).getSchema();
+  }
+
+  @GET
   @PerformanceMetric("subjects.versions.list")
   public List<Integer> list(@PathParam("subject") String subject) {
     // check if subject exists. If not, throw 404
