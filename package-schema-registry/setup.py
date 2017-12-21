@@ -6,14 +6,14 @@ import setuptools
 remote_requirements = '\n'.join(str(r.req) for r in parse_requirements("requirements.txt", session='dummy') if r.req)
 
 setuptools.setup(
-    name='cp-kafka-tests',
+    name='cp-schema-registry-tests',
     version='0.0.1',
 
     author="Confluent, Inc.",
 
     description='Docker image tests',
 
-    url="https://github.com/confluentinc/kafka-images",
+    url="https://github.com/confluentinc/schema-registry",
 
     install_requires=remote_requirements,
 
