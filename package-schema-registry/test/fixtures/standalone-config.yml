@@ -24,6 +24,8 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181/defaultconfig
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     labels:
     - io.confluent.docker.testing=true
   default-config:
@@ -37,6 +39,6 @@ services:
     image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
     environment:
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
-      SCHEMA_REGISTRY_HOST_NAME: default-config
+      SCHEMA_REGISTRY_HOST_NAME: default-config-kafka
     labels:
     - io.confluent.docker.testing=true

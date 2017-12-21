@@ -38,7 +38,7 @@ services:
     labels:
     - io.confluent.docker.testing=true
   kafka-1:
-    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
     network_mode: host
     environment:
       KAFKA_BROKER_ID: 1
