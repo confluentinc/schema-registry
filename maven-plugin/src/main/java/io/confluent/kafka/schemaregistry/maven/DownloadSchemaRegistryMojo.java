@@ -1,5 +1,5 @@
 /**
-` * Copyright 2016 Confluent Inc.
+ * ` * Copyright 2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
+
 package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -39,6 +41,7 @@ import java.util.regex.Pattern;
 
 @Mojo(name = "download")
 public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
+
   @Parameter(required = false, defaultValue = ".avsc")
   String schemaExtension;
   @Parameter(required = true)
@@ -79,15 +82,18 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
   @Override
   public void execute() throws MojoExecutionException, MojoFailureException {
     try {
-      getLog().debug(String.format("Checking if '%s' exists and is not a directory.", this.outputDirectory));
+      getLog().debug(
+          String.format("Checking if '%s' exists and is not a directory.", this.outputDirectory));
       if (outputDirectory.exists() && !outputDirectory.isDirectory()) {
         throw new IllegalStateException("outputDirectory must be a directory");
       }
-      getLog().debug(String.format("Checking if outputDirectory('%s') exists.", this.outputDirectory));
+      getLog()
+          .debug(String.format("Checking if outputDirectory('%s') exists.", this.outputDirectory));
       if (!outputDirectory.isDirectory()) {
         getLog().debug(String.format("Creating outputDirectory('%s').", this.outputDirectory));
         if (!outputDirectory.mkdirs()) {
-          throw new IllegalStateException("Could not create output directory " + this.outputDirectory);
+          throw new IllegalStateException(
+              "Could not create output directory " + this.outputDirectory);
         }
       }
     } catch (Exception ex) {
@@ -122,11 +128,13 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
 
     for (String subject : allSubjects) {
       for (Pattern pattern : patterns) {
-        getLog().debug(String.format("Checking '%s' against pattern '%s'", subject, pattern.pattern()));
+        getLog()
+            .debug(String.format("Checking '%s' against pattern '%s'", subject, pattern.pattern()));
         Matcher matcher = pattern.matcher(subject);
 
         if (matcher.matches()) {
-          getLog().debug(String.format("'%s' matches pattern '%s' so downloading.", subject, pattern.pattern()));
+          getLog().debug(String.format("'%s' matches pattern '%s' so downloading.", subject,
+                                       pattern.pattern()));
           subjectsToDownload.add(subject);
           break;
         }
@@ -147,7 +155,8 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         writer.write(kvp.getValue().toString(this.prettyPrintSchemas));
       } catch (IOException ex) {
         throw new MojoExecutionException(
-            String.format("Exception thrown while writing subject('%s') schema to %s", kvp.getKey(), outputFile),
+            String.format("Exception thrown while writing subject('%s') schema to %s", kvp.getKey(),
+                          outputFile),
             ex
         );
       }

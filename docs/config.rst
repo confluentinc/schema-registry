@@ -9,6 +9,21 @@ Configuration Options
   * Default: ""
   * Importance: high
 
+``kafkastore.bootstrap.servers``
+  A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
+
+  The effect of this setting depends on whether you specify `kafkastore.connection.url`.
+
+  If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate schema registry instances (master election) and store schema data.
+
+  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
+
+  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
+
+  * Type: list
+  * Default: []
+  * Importance: medium
+
 ``listeners``
   Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
@@ -19,7 +34,7 @@ Configuration Options
   * Importance: high
 
 ``avro.compatibility.level``
-  The Avro compatibility type. Valid values are: none (new schema can be any valid Avro schema), backward (new schema can read data produced by latest registered schema), backward_transitive (new schema can read data produced by all previously registered schemas), forward (latest registered schema can read data produced by the new schema), forward_transitive (all previously registered schemas can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema), transitive_full (new schema is backward and forward compatible with all previously registered schemas)
+  The Avro compatibility type. Valid values are: none (new schema can be any valid Avro schema), backward (new schema can read data produced by latest registered schema), backward_transitive (new schema can read data produced by all previously registered schemas), forward (latest registered schema can read data produced by the new schema), forward_transitive (all previously registered schemas can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema), full_transitive (new schema is backward and forward compatible with all previously registered schemas)
 
   * Type: string
   * Default: "backward"
@@ -145,7 +160,7 @@ Configuration Options
   * Importance: medium
 
 ``kafkastore.security.protocol``
-  The security protocol to use when connecting with Kafka, the underlying persistent storage. Values can be `PLAINTEXT` or `SSL`.
+  The security protocol to use when connecting with Kafka, the underlying persistent storage. Values can be `PLAINTEXT`, `SASL_PLAINTEXT`, `SSL` or `SASL_SSL`.
 
   * Type: string
   * Default: "PLAINTEXT"
@@ -263,20 +278,6 @@ Configuration Options
   * Default: "" (Jetty's default)
   * Importance: medium
 
-``kafkastore.bootstrap.servers``
-  A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
-
-  If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list
-  from ZooKeeper (configured with `kafkastore.connection.url`). Note that if `kafkastore.bootstrap.servers` is configured,
-  `kafkastore.connection.url` still needs to be configured, too.
-
-  This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that
-  all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.
-
- * Type: list
- * Default: "" (when left blank, bootstrap servers are fetched from ZooKeeper)
- * Importance: medium
-
 ``access.control.allow.origin``
   Set value for Jetty Access-Control-Allow-Origin header
 
@@ -368,6 +369,20 @@ Configuration Options
   * Default: "io.confluent.rest-utils.requests"
   * Importance: low
 
+``schema.registry.inter.instance.protocol``
+  The protocol used while making calls between the instances of schema registry. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
+
+  * Type: string
+  * Default: "http"
+  * Importance: low
+
+``schema.registry.resource.extension.class``
+  Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc
+
+  * Type: string
+  * Default: ""
+  * Importance: low
+
 ``schema.registry.zk.namespace``
   The string that is used as the zookeeper namespace for storing schema registry metadata. SchemaRegistry instances which are part of the same schema registry service should have the same ZooKeeper namespace.
 
@@ -436,4 +451,13 @@ Configuration Options
 
   * Type: double
   * Default: 0.8
+  * Importance: low
+
+``kafkastore.group.id``
+  Use this setting to override the group.id for the KafkaStore consumer.
+  This setting can become important when security is enabled, to ensure stability over the schema registry consumer's group.id
+  Without this configuration, group.id will be "schema-registry-<host>-<port>"
+
+  * Type: string
+  * Default: ""
   * Importance: low

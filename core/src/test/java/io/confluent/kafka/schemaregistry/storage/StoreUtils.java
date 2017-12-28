@@ -15,20 +15,18 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import org.I0Itec.zkclient.ZkClient;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.types.Password;
 
 import java.util.Map;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.rest.RestConfigException;
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.protocol.SecurityProtocol;
-
-import static org.junit.Assert.fail;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 /**
  * For all store related utility methods.
@@ -38,17 +36,18 @@ public class StoreUtils {
   /**
    * Get a new instance of KafkaStore and initialize it.
    */
-  public static KafkaStore<String, String> createAndInitKafkaStoreInstance(
-      String zkConnect, ZkClient zkClient) {
+  public static KafkaStore<String, String> createAndInitKafkaStoreInstance(String zkConnect)
+      throws RestConfigException, StoreInitializationException, SchemaRegistryException {
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
-    return createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore);
+    return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore);
   }
   /**
    * Get a new instance of KafkaStore and initialize it.
    */
   public static KafkaStore<String, String> createAndInitKafkaStoreInstance(
-      String zkConnect, ZkClient zkClient, Store<String, String> inMemoryStore) {
-    return createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore,
+      String zkConnect, Store<String, String> inMemoryStore)
+      throws RestConfigException, StoreInitializationException, SchemaRegistryException {
+    return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore,
             new Properties());
   }
 
@@ -59,7 +58,8 @@ public class StoreUtils {
    * or ZooKeeper SASL individually, the other must have SASL enabled.
    */
   public static KafkaStore<String, String> createAndInitSASLStoreInstance(
-          String zkConnect, ZkClient zkClient) {
+          String zkConnect)
+      throws RestConfigException, StoreInitializationException, SchemaRegistryException {
     Properties props = new Properties();
 
     props.put(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG,
@@ -68,15 +68,15 @@ public class StoreUtils {
     props.put(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG, false);
 
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
-    return createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, props);
+    return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
   }
 
   /**
    * Get a new instance of an SSL KafkaStore and initialize it.
    */
   public static KafkaStore<String, String> createAndInitSSLKafkaStoreInstance(
-          String zkConnect, ZkClient zkClient, Map<String, Object> sslConfigs,
-          boolean requireSSLClientAuth) {
+          String zkConnect, Map<String, Object> sslConfigs, boolean requireSSLClientAuth)
+      throws RestConfigException, StoreInitializationException, SchemaRegistryException {
     Properties props = new Properties();
 
     props.put(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG,
@@ -95,34 +95,27 @@ public class StoreUtils {
     }
 
     Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
-    return createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore, props);
+    return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
   }
 
   /**
    * Get a new instance of KafkaStore and initialize it.
    */
   public static KafkaStore<String, String> createAndInitKafkaStoreInstance(
-          String zkConnect, ZkClient zkClient, Store<String, String> inMemoryStore,
-          Properties props) {
+          String zkConnect, Store<String, String> inMemoryStore,
+          Properties props)
+      throws RestConfigException, StoreInitializationException, SchemaRegistryException {
     props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
 
     SchemaRegistryConfig config = null;
-    try {
-      config = new SchemaRegistryConfig(props);
-    } catch (RestConfigException e) {
-      fail("Can't initialize configs");
-    }
+    config = new SchemaRegistryConfig(props);
 
     KafkaStore<String, String> kafkaStore =
             new KafkaStore<String, String>(config, new StringMessageHandler(),
                     StringSerializer.INSTANCE,
                     inMemoryStore, new NoopKey().toString());
-    try {
-      kafkaStore.init();
-    } catch (StoreInitializationException e) {
-      fail("Kafka store failed to initialize");
-    }
+    kafkaStore.init();
     return kafkaStore;
   }
 

@@ -26,16 +26,14 @@ import static org.junit.Assert.fail;
 // tests SASL with ZooKeeper and Kafka.
 public class KafkaStoreSASLTest extends SASLClusterTestHarness {
   @Test
-  public void testInitialization() {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect,
-            zkClient);
+  public void testInitialization() throws Exception {
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect);
     kafkaStore.close();
   }
 
   @Test(expected = StoreInitializationException.class)
-  public void testDoubleInitialization() throws StoreInitializationException {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect,
-            zkClient);
+  public void testDoubleInitialization() throws Exception {
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect);
     try {
       kafkaStore.init();
     } finally {
@@ -45,8 +43,7 @@ public class KafkaStoreSASLTest extends SASLClusterTestHarness {
 
   @Test
   public void testSimplePut() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect,
-            zkClient);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect);
     String key = "Kafka";
     String value = "Rocks";
     try {

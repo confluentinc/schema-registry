@@ -95,7 +95,8 @@ public class CompatibilityResource {
       throw Errors.invalidVersionException();
     }
     try {
-      schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId());
+      //Don't check compatibility against deleted schema
+      schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), false);
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException();
     } catch (SchemaRegistryException e) {
@@ -114,7 +115,7 @@ public class CompatibilityResource {
     } else {
       try {
         isCompatible = schemaRegistry
-                .isCompatible(subject, request.getSchema(), schemaForSpecifiedVersion.getSchema());
+            .isCompatible(subject, request.getSchema(), schemaForSpecifiedVersion.getSchema());
       } catch (InvalidSchemaException e) {
         throw Errors.invalidAvroException("Invalid input schema " + request.getSchema(), e);
       } catch (SchemaRegistryStoreException e) {

@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 
 public class SchemaString {
+
   private String schemaString;
 
   public SchemaString() {

@@ -28,9 +28,9 @@ public class RestInvalidVersionException extends RestConstraintViolationExceptio
 
   public RestInvalidVersionException() {
     this("The specified version is not a valid version id. Allowed values are between "
-          + "[1, 2^31-1] and the string \"latest\"");
+         + "[1, 2^31-1] and the string \"latest\"");
   }
-  
+
   public RestInvalidVersionException(String message) {
     super(message, ERROR_CODE);
   }

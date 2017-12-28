@@ -13,11 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
 import io.confluent.rest.exceptions.RestConstraintViolationException;
 
 public class RestInvalidCompatibilityException extends RestConstraintViolationException {
+
   public static final int ERROR_CODE = Errors.INVALID_COMPATIBILITY_LEVEL_ERROR_CODE;
 
   public RestInvalidCompatibilityException() {

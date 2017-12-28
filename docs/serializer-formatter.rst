@@ -193,6 +193,17 @@ In the following example, we read both the key and the value of the messages in 
       "key1" \t {"f1": "value1"}
 
 
+If the topic contains a  key in a format other than avro, you can specify your own key
+deserializer
+
+.. sourcecode:: bash
+
+   bin/kafka-avro-console-consumer --topic t2 \
+     --zookeeper localhost:2181 \
+     --property print.key=true
+     --key.deserializer=org.apache.kafka.common.serialization.StringDeserializer
+
+
 Wire Format
 -----------
 
@@ -241,5 +252,5 @@ following:
   deserializing any earlier formats will be supported indefinitely as long as there is no notified reason for
   incompatibility.
 
-If you have any doubts about compatibility or support, reach out to the `community mailing list
-<https://groups.google.com/forum/#!forum/confluent-platform>`_. for details and  explanations.
+For more information about compatibility or support, reach out to the `community mailing list
+<https://groups.google.com/forum/#!forum/confluent-platform>`_.

@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.client;
 
 public class SchemaMetadata {
+
   private int id;
   private int version;
   private String schema;

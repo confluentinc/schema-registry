@@ -20,6 +20,7 @@ package io.confluent.kafka.schemaregistry.exceptions;
  * Indicates the schema is incompatible with the registered schema
  */
 public class IncompatibleSchemaException extends SchemaRegistryException {
+
   public IncompatibleSchemaException(String message, Throwable cause) {
     super(message, cause);
   }

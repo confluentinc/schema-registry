@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client;
 
 import org.apache.avro.Schema;
@@ -26,21 +27,33 @@ public interface SchemaRegistryClient {
 
   public int register(String subject, Schema schema) throws IOException, RestClientException;
 
+  @Deprecated
   public Schema getByID(int id) throws IOException, RestClientException;
 
+  public Schema getById(int id) throws IOException, RestClientException;
+
+  @Deprecated
   public Schema getBySubjectAndID(String subject, int id) throws IOException, RestClientException;
 
-  public SchemaMetadata getLatestSchemaMetadata(String subject) throws IOException, RestClientException;
+  public Schema getBySubjectAndId(String subject, int id) throws IOException, RestClientException;
 
-  public SchemaMetadata getSchemaMetadata(String subject, int version) throws IOException, RestClientException;
+  public SchemaMetadata getLatestSchemaMetadata(String subject)
+      throws IOException, RestClientException;
+
+  public SchemaMetadata getSchemaMetadata(String subject, int version)
+      throws IOException, RestClientException;
 
   public int getVersion(String subject, Schema schema) throws IOException, RestClientException;
 
-  public boolean testCompatibility(String subject, Schema schema) throws IOException, RestClientException;
+  public boolean testCompatibility(String subject, Schema schema)
+      throws IOException, RestClientException;
 
-  public String updateCompatibility(String subject, String compatibility) throws IOException, RestClientException;
+  public String updateCompatibility(String subject, String compatibility)
+      throws IOException, RestClientException;
 
   public String getCompatibility(String subject) throws IOException, RestClientException;
 
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
+
+  int getId(String subject, Schema schema) throws IOException, RestClientException;
 }

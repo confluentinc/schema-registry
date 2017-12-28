@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.storage.serialization;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -23,6 +24,8 @@ import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.storage.ConfigValue;
+import io.confluent.kafka.schemaregistry.storage.DeleteSubjectKey;
+import io.confluent.kafka.schemaregistry.storage.DeleteSubjectValue;
 import io.confluent.kafka.schemaregistry.storage.NoopKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.confluent.kafka.schemaregistry.storage.ConfigKey;
@@ -76,27 +79,25 @@ public class SchemaRegistrySerializer
       try {
         Map<Object, Object> keyObj = null;
         keyObj = new ObjectMapper().readValue(key,
-                                              new TypeReference<Map<Object, Object>>() {
-                                              });
+                                              new TypeReference<Map<Object, Object>>() {});
         keyType = SchemaRegistryKeyType.forName((String) keyObj.get("keytype"));
         if (keyType == SchemaRegistryKeyType.CONFIG) {
           schemaKey = new ObjectMapper().readValue(key, ConfigKey.class);
         } else if (keyType == SchemaRegistryKeyType.NOOP) {
           schemaKey = new ObjectMapper().readValue(key, NoopKey.class);
-        } else {
+        } else if (keyType == SchemaRegistryKeyType.DELETE_SUBJECT) {
+          schemaKey = new ObjectMapper().readValue(key, DeleteSubjectKey.class);
+        } else if (keyType == SchemaRegistryKeyType.SCHEMA) {
           schemaKey = new ObjectMapper().readValue(key, SchemaKey.class);
+          validateMagicByte((SchemaKey) schemaKey);
         }
       } catch (JsonProcessingException e) {
 
         String type = "unknown";
-        if (keyType == SchemaRegistryKeyType.CONFIG) {
-          type = SchemaRegistryKeyType.CONFIG.name();
-        } else if (keyType == SchemaRegistryKeyType.SCHEMA) {
-          type = SchemaRegistryKeyType.SCHEMA.name();
-        } else if (keyType == SchemaRegistryKeyType.NOOP) {
-          type = SchemaRegistryKeyType.NOOP.name();
-        } 
-        
+        if (keyType != null) {
+          type = keyType.name();
+        }
+
         throw new SerializationException("Failed to deserialize " + type + " key", e);
       }
     } catch (IOException e) {
@@ -105,11 +106,14 @@ public class SchemaRegistrySerializer
     return schemaKey;
   }
 
+
   /**
    * @param key   Typed key corresponding to this value
    * @param value Bytes of the serialized value
-   * @return Typed deserialized value. Must be one of {@link io.confluent.kafka.schemaregistry.storage.ConfigValue}
-   * or {@link io.confluent.kafka.schemaregistry.storage.SchemaValue}
+   * @return Typed deserialized value. Must be one of
+   *     {@link io.confluent.kafka.schemaregistry.storage.ConfigValue}
+   *     or {@link io.confluent.kafka.schemaregistry.storage.SchemaValue}
+   *     or {@link io.confluent.kafka.schemaregistry.storage.DeleteSubjectValue}
    */
   @Override
   public SchemaRegistryValue deserializeValue(SchemaRegistryKey key, byte[] value)
@@ -123,9 +127,16 @@ public class SchemaRegistrySerializer
       }
     } else if (key.getKeyType().equals(SchemaRegistryKeyType.SCHEMA)) {
       try {
+        validateMagicByte((SchemaKey) key);
         schemaRegistryValue = new ObjectMapper().readValue(value, SchemaValue.class);
       } catch (IOException e) {
         throw new SerializationException("Error while deserializing schema", e);
+      }
+    } else if (key.getKeyType().equals(SchemaRegistryKeyType.DELETE_SUBJECT)) {
+      try {
+        schemaRegistryValue = new ObjectMapper().readValue(value, DeleteSubjectValue.class);
+      } catch (IOException e) {
+        throw new SerializationException("Error while deserializing Delete Subject message", e);
       }
     } else {
       throw new SerializationException("Unrecognized key type. Must be one of schema or config");
@@ -141,5 +152,12 @@ public class SchemaRegistrySerializer
   @Override
   public void configure(Map<String, ?> stringMap) {
 
+  }
+
+  private void validateMagicByte(SchemaKey schemaKey) throws SerializationException {
+    if (schemaKey.getMagicByte() != 0 && schemaKey.getMagicByte() != 1) {
+      throw new SerializationException("Can't deserialize schema for the magic byte "
+                                       + schemaKey.getMagicByte());
+    }
   }
 }

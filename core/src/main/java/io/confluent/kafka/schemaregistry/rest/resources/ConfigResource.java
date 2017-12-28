@@ -113,7 +113,7 @@ public class ConfigResource {
     try {
       AvroCompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(subject);
       if (compatibilityLevel == null) {
-          throw Errors.subjectNotFoundException();
+        throw Errors.subjectNotFoundException();
       }
       config = new Config(compatibilityLevel.name);
     } catch (SchemaRegistryStoreException e) {

@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.TestSslUtils;
 import scala.Option;
 
@@ -52,7 +52,7 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
     Properties props = TestUtils.createBrokerConfig(
             brokerId, zkConnect, false, false, TestUtils.RandomPort(), sslInterBrokerSecurityProtocol,
             trustStoreFileOption, EMPTY_SASL_PROPERTIES, false, false, TestUtils.RandomPort(),
-            true, TestUtils.RandomPort(), false, TestUtils.RandomPort(), Option.<String>empty());
+            true, TestUtils.RandomPort(), false, TestUtils.RandomPort(), Option.<String>empty(), 1);
 
     // setup client SSL. Needs to happen before the broker is initialized, because the client's cert
     // needs to be added to the broker's trust store.

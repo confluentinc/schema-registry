@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.formatter;
 
 import org.apache.avro.AvroRuntimeException;
@@ -33,7 +34,6 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import kafka.common.KafkaException;
-import kafka.producer.KeyedMessage;
 import kafka.common.MessageReader;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 
@@ -44,26 +44,26 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
  * in the classpath of kafka-console-producer.sh. Then run the following
  * command.
  *
- * 1. Send Avro string as value. (make sure there is no space in the schema string)
+ * <p>1. Send Avro string as value. (make sure there is no space in the schema string)
  * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
  *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
  *   --property schema.registry.url=http://localhost:8081 \
  *   --property value.schema='{"type":"string"}'
  *
- * In the shell, type in the following.
+ * <p>In the shell, type in the following.
  * "a"
  * "b"
  *
- * 2. Send Avro record as value.
+ * <p>2. Send Avro record as value.
  * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
  *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
  *   --property schema.registry.url=http://localhost:8081 \
  *   --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
  *
- * In the shell, type in the following.
+ * <p>In the shell, type in the following.
  * {"f1": "value1"}
  *
- * 3. Send Avro string as key and Avro record as value.
+ * <p>3. Send Avro string as key and Avro record as value.
  * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
  *   --line-reader io.confluent.kafka.formatter.AvroMessageReader \
  *   --property schema.registry.url=http://localhost:8081 \
@@ -71,7 +71,7 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
  *   --property key.schema='{"type":"string"}' \
  *   --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
  *
- * In the shell, type in the following.
+ * <p>In the shell, type in the following.
  * "key1" \t {"f1": "value1"}
  *
  */
@@ -97,8 +97,10 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
   /**
    * For testing only.
    */
-  AvroMessageReader(SchemaRegistryClient schemaRegistryClient, Schema keySchema, Schema valueSchema,
-                    String topic, boolean parseKey, BufferedReader reader) {
+  AvroMessageReader(
+      SchemaRegistryClient schemaRegistryClient, Schema keySchema, Schema valueSchema,
+      String topic, boolean parseKey, BufferedReader reader, boolean autoRegister
+  ) {
     this.schemaRegistry = schemaRegistryClient;
     this.keySchema = keySchema;
     this.valueSchema = valueSchema;
@@ -107,6 +109,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     this.valueSubject = topic + "-value";
     this.parseKey = parseKey;
     this.reader = reader;
+    this.autoRegisterSchema = autoRegister;
   }
 
   @Override
@@ -144,6 +147,11 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     }
     keySubject = topic + "-key";
     valueSubject = topic + "-value";
+    if (props.containsKey("auto.register")) {
+      this.autoRegisterSchema = Boolean.valueOf(props.getProperty("auto.register").trim());
+    } else {
+      this.autoRegisterSchema = true;
+    }
   }
 
   @Override
@@ -169,8 +177,9 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
           }
         } else {
           String keyString = line.substring(0, keyIndex);
-          String valueString = (keyIndex + keySeparator.length() > line.length()) ?
-                               "" : line.substring(keyIndex + keySeparator.length());
+          String valueString = (keyIndex + keySeparator.length() > line.length())
+                               ? ""
+                               : line.substring(keyIndex + keySeparator.length());
           Object key = jsonToAvro(keyString, keySchema);
           byte[] serializedKey = serializeImpl(keySubject, key);
           Object value = jsonToAvro(valueString, valueSchema);

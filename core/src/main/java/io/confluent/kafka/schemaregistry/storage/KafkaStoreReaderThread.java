@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import org.apache.kafka.clients.CommonClientConfigs;
+
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -24,7 +25,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
@@ -47,7 +47,7 @@ import kafka.utils.ShutdownableThread;
  * Thread that reads schema registry state from the Kafka compacted topic and modifies
  * the local store to be consistent.
  *
- * On startup, this thread will always read from the beginning of the topic. We assume
+ * <p>On startup, this thread will always read from the beginning of the topic. We assume
  * the topic will always be small, hence the startup time to read the topic won't take
  * too long. Because the topic is always read from the beginning, the consumer never
  * commits offsets.
@@ -70,6 +70,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   // messages with this key
   private final K noopKey;
 
+  private Properties consumerProps = new Properties();
+
   public KafkaStoreReaderThread(String bootstrapBrokers,
                                 String topic,
                                 String groupId,
@@ -88,7 +90,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.localStore = localStore;
     this.noopKey = noopKey;
 
-    Properties consumerProps = new Properties();
+    KafkaStore.addSchemaRegistryConfigsToClientProperties(config, consumerProps);
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
     consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "KafkaStore-reader-" + this.topic);
 
@@ -96,24 +98,21 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-            org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
+                      org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-            org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
-
-    consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
-    KafkaStore.addSecurityConfigsToClientProperties(config, consumerProps);
+                      org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
 
     this.consumer = new KafkaConsumer<>(consumerProps);
 
-    // Include a few retries since topic creation may take some time to propagate and schema registry is often started
-    // immediately after creating the schemas topic.
+    // Include a few retries since topic creation may take some time to propagate and schema
+    // registry is often started immediately after creating the schemas topic.
     int retries = 0;
     List<PartitionInfo> partitions = null;
     while (retries++ < 10) {
       partitions = this.consumer.partitionsFor(this.topic);
-      if (partitions != null && partitions.size() >= 1)
+      if (partitions != null && partitions.size() >= 1) {
         break;
+      }
 
       try {
         Thread.sleep(1000);
@@ -123,11 +122,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     }
 
     if (partitions == null || partitions.size() < 1) {
-      throw new IllegalArgumentException("Unable to subscribe to the Kafka topic " + topic +
-                                         " backing this data store. Topic may not exist.");
+      throw new IllegalArgumentException("Unable to subscribe to the Kafka topic "
+                                         + topic
+                                         + " backing this data store. Topic may not exist.");
     } else if (partitions.size() > 1) {
-      throw new IllegalStateException("Unexpected number of partitions in the " + topic +
-                                      " topic. Expected 1 and instead got " + partitions.size());
+      throw new IllegalStateException("Unexpected number of partitions in the "
+                                      + topic
+                                      + " topic. Expected 1 and instead got " + partitions.size());
     }
 
     this.topicPartition = new TopicPartition(topic, 0);
@@ -136,8 +137,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
     log.info("Initialized last consumed offset to " + offsetInSchemasTopic);
 
-    log.debug("Kafka store reader thread started with consumer properties " +
-              consumerProps.toString());
+    log.debug("Kafka store reader thread started with consumer properties "
+              + consumerProps.toString());
   }
 
   @Override
@@ -152,7 +153,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           log.error("Failed to deserialize the schema or config key", e);
           continue;
         }
-        
+
         if (messageKey.equals(noopKey)) {
           // If it's a noop, update local offset counter and do nothing else
           try {
@@ -166,14 +167,18 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           V message = null;
           try {
             message =
-                record.value() == null ? null : serializer.deserializeValue(messageKey, record.value());
+                record.value() == null ? null
+                                       : serializer.deserializeValue(messageKey, record.value());
           } catch (SerializationException e) {
             log.error("Failed to deserialize a schema or config update", e);
             continue;
           }
           try {
-            log.trace("Applying update (" + messageKey + "," + message + ") to the local " +
-                      "store");
+            log.trace("Applying update ("
+                      + messageKey
+                      + ","
+                      + message
+                      + ") to the local store");
             if (message == null) {
               localStore.delete(messageKey);
             } else {
@@ -188,7 +193,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
               offsetUpdateLock.unlock();
             }
           } catch (StoreException se) {
-            log.error("Failed to add record from the Kafka topic" + topic + " the local store");
+            log.error("Failed to add record from the Kafka topic"
+                      + topic
+                      + " the local store");
           }
         }
       }
@@ -241,12 +248,17 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     } finally {
       offsetUpdateLock.unlock();
     }
-    
+
     if (offsetInSchemasTopic < offset) {
       throw new StoreTimeoutException(
           "KafkaStoreReaderThread failed to reach target offset within the timeout interval. "
-          + "targetOffset: " + offset + ", offsetReached: " + offsetInSchemasTopic 
+          + "targetOffset: " + offset + ", offsetReached: " + offsetInSchemasTopic
           + ", timeout(ms): " + TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
     }
+  }
+
+  /* for testing purposes */
+  public String getConsumerProperty(String key) {
+    return this.consumerProps.getProperty(key);
   }
 }

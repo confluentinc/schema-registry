@@ -19,7 +19,8 @@ package io.confluent.kafka.schemaregistry.storage;
 public enum SchemaRegistryKeyType {
   CONFIG("CONFIG"),
   SCHEMA("SCHEMA"),
-  NOOP("NOOP");
+  NOOP("NOOP"),
+  DELETE_SUBJECT("DELETE_SUBJECT");
 
   public final String keyType;
 
@@ -28,16 +29,12 @@ public enum SchemaRegistryKeyType {
   }
 
   public static SchemaRegistryKeyType forName(String keyType) {
-    if (CONFIG.keyType.equals(keyType)) {
-      return CONFIG;
-    } else if (SCHEMA.keyType.equals(keyType)) {
-      return SCHEMA;
-    } else if (NOOP.keyType.equals(keyType)) {
-      return NOOP;
-    } else {
-      throw new IllegalArgumentException("Unknown schema registry key type : " + keyType
-                                         + " Valid key types are {config, schema}");
+    for (SchemaRegistryKeyType type : values()) {
+      if (type.keyType.equals(keyType)) {
+        return type;
+      }
     }
+    throw new IllegalArgumentException("Unknown schema registry key type : " + keyType);
   }
 }
 

@@ -26,12 +26,14 @@ import java.util.Objects;
  * Wrapper for all non-record types that includes the schema for the data.
  */
 public class NonRecordContainer implements GenericContainer {
+
   private final Schema schema;
   private final Object value;
 
   public NonRecordContainer(Schema schema, Object value) {
-    if (schema == null)
+    if (schema == null) {
       throw new SerializationException("Schema may not be null.");
+    }
     this.schema = schema;
     this.value = value;
   }
@@ -47,11 +49,15 @@ public class NonRecordContainer implements GenericContainer {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     NonRecordContainer that = (NonRecordContainer) o;
-    return Objects.equals(schema, that.schema) &&
-            Objects.equals(value, that.value);
+    return Objects.equals(schema, that.schema)
+           && Objects.equals(value, that.value);
   }
 
   @Override

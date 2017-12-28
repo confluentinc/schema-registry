@@ -22,7 +22,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 import java.io.IOException;
@@ -101,11 +100,14 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
   }
 
   protected void close() {
-    // We can see some failures due to things like timeouts, but we want it to be obvious if there are too many
-    // failures (indicating a real underlying problem). 1% is an arbitrarily chosen limit.
-    if (successfullyRegisteredSchemas / (double)targetRegisteredSchemas < 0.99) {
-      throw new RuntimeException("Too many schema registration errors: " + successfullyRegisteredSchemas
-              + " registered successfully out of " + targetRegisteredSchemas + " attempted");
+    // We can see some failures due to things like timeouts, but we want it to be obvious
+    // if there are too many failures (indicating a real underlying problem). 1% is an arbitrarily
+    // chosen limit.
+    if (successfullyRegisteredSchemas / (double) targetRegisteredSchemas < 0.99) {
+      throw new RuntimeException("Too many schema registration errors: "
+                                 + successfullyRegisteredSchemas
+                                 + " registered successfully out of " + targetRegisteredSchemas
+                                 + " attempted");
     }
   }
 

@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE suppressions PUBLIC
+        "-//Puppy Crawl//DTD Suppressions 1.1//EN"
+        "http://www.puppycrawl.com/dtds/suppressions_1_1.dtd">
+
+<suppressions>
+
+    <suppress checks="ParameterName"
+              files="ErrorMessage.java"/>
+
+    <suppress checks="ParameterNumber"
+              files="SchemaRegistryCoordinator.java"/>
+
+    <suppress checks="ClassDataAbstractionCoupling"
+              files="(AvroMessageReader|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroData|KafkaGroupMasterElector).java"/>
+
+    <suppress checks="ClassFanOutComplexity"
+              files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData|KafkaGroupMasterElector).java"/>
+
+    <suppress checks="LineLength"
+              files="(Errors|AvroMessageReader).java"/>
+
+    <suppress checks="CyclomaticComplexity"
+              files="(AbstractKafkaAvroDeserializer|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo).java"/>
+
+    <suppress checks="NPathComplexity"
+              files="(AvroData|DownloadSchemaRegistryMojo).java"/>
+
+    <suppress checks="JavaNCSS"
+              files="AvroData.java"/>
+
+    <suppress checks="MethodLength"
+              files="AvroData.java"/>
+
+    <suppress checks="AbbreviationAsWordInName"
+              files=".*SchemaRegistryClient.java"/>
+
+    <suppress checks="MethodLength"
+              files="SchemaRegistryConfig.java"/>
+
+</suppressions>

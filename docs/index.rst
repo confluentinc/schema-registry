@@ -6,6 +6,8 @@
 Schema Registry
 ================
 
+Schema Registry is part of the `Confluent Open Source <https://www.confluent.io/product/confluent-open-source/>`_ and `Confluent Enterprise <https://www.confluent.io/product/confluent-enterprise/>`_ distributions.  The Schema Registry stores a versioned history of all schemas and allows for the evolution of schemas according to the configured compatibility settings and expanded Avro support. 
+
 Contents:
 
 .. toctree::
@@ -17,6 +19,9 @@ Contents:
    config
    design
    operations
+   multidc
    security
    serializer-formatter
+   schema-deletion-guidelines
    maven-plugin
+   connect

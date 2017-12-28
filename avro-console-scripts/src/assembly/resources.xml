@@ -1,0 +1,17 @@
+<assembly>
+  <id>resources</id>
+  <formats>
+    <format>zip</format>
+  </formats>
+
+  <fileSets>
+    <fileSet>
+      <directory>../bin</directory>
+      <outputDirectory></outputDirectory>
+      <includes>
+        <include>kafka-avro-console-*</include>
+        <include>schema-registry-run-class</include>
+      </includes>
+    </fileSet>
+  </fileSets>
+</assembly>

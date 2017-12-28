@@ -17,12 +17,11 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.common.config.ConfigDef;
-import io.confluent.common.config.ConfigDef.Importance;
-import io.confluent.common.config.ConfigDef.Type;
 
 import java.util.Map;
 
 public class KafkaAvroSerializerConfig extends AbstractKafkaAvroSerDeConfig {
+
   private static ConfigDef config;
 
   static {

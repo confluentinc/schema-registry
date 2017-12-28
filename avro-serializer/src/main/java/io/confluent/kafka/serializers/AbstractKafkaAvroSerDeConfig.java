@@ -16,13 +16,13 @@
 
 package io.confluent.kafka.serializers;
 
-import io.confluent.common.config.AbstractConfig;
-import io.confluent.common.config.ConfigDef;
-import io.confluent.common.config.ConfigDef.Type;
-import io.confluent.common.config.ConfigDef.Importance;
-
 import java.util.List;
 import java.util.Map;
+
+import io.confluent.common.config.AbstractConfig;
+import io.confluent.common.config.ConfigDef;
+import io.confluent.common.config.ConfigDef.Importance;
+import io.confluent.common.config.ConfigDef.Type;
 
 /**
  * Base class for configs for serializers and deserializers, defining a few common configs and
@@ -31,32 +31,46 @@ import java.util.Map;
 public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
   public static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
-  public static final String SCHEMA_REGISTRY_URL_DOC =
-      "Comma-separated list of URLs for schema registry instances that can be used to register or look up schemas.";
+  public static final String
+      SCHEMA_REGISTRY_URL_DOC =
+      "Comma-separated list of URLs for schema registry instances that can be used to register "
+      + "or look up schemas.";
 
   public static final String MAX_SCHEMAS_PER_SUBJECT_CONFIG = "max.schemas.per.subject";
   public static final int MAX_SCHEMAS_PER_SUBJECT_DEFAULT = 1000;
   public static final String MAX_SCHEMAS_PER_SUBJECT_DOC =
       "Maximum number of schemas to create or cache locally.";
 
+  public static final String AUTO_REGISTER_SCHEMAS = "auto.register.schemas";
+  public static final boolean AUTO_REGISTER_SCHEMAS_DEFAULT = true;
+  public static final String AUTO_REGISTER_SCHEMAS_DOC =
+      "Specify if the Serializer should attempt to register the Schema with Schema Registry";
+
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
         .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
                 Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
-                Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC);
+                Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
+        .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
+                Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC
+        );
   }
 
   public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
     super(config, props);
   }
 
-  public int getMaxSchemasPerSubject(){
+  public int getMaxSchemasPerSubject() {
     return this.getInt(MAX_SCHEMAS_PER_SUBJECT_CONFIG);
   }
 
-  public List<String> getSchemaRegistryUrls(){
+  public List<String> getSchemaRegistryUrls() {
     return this.getList(SCHEMA_REGISTRY_URL_CONFIG);
+  }
+
+  public boolean autoRegisterSchema() {
+    return this.getBoolean(AUTO_REGISTER_SCHEMAS);
   }
 
 }

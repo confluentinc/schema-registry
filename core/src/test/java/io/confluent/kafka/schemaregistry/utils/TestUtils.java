@@ -55,7 +55,7 @@ public class TestUtils {
   }
 
   /**
-   * Recursively delete the given file/directory and any subfiles (if any exist)
+   * Recursively deleteSchemaVersion the given file/directory and any subfiles (if any exist)
    *
    * @param file The root file at which to begin deleting
    */
@@ -110,9 +110,8 @@ public class TestUtils {
   public static void registerAndVerifySchema(RestService restService, String schemaString,
                                              int expectedId, String subject)
       throws IOException, RestClientException {
-    assertEquals("Registering a new schema should succeed",
-                 expectedId,
-                 restService.registerSchema(schemaString, subject));
+    int registeredId = restService.registerSchema(schemaString, subject);
+    assertEquals("Registering a new schema should succeed", expectedId, registeredId);
 
     // the newly registered schema should be immediately readable on the master
     assertEquals("Registered schema should be found",

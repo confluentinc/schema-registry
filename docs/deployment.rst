@@ -1,5 +1,5 @@
 Production Deployment
----------------------
+=====================
 
 This section is not meant to be an exhaustive guide to running your Schema Registry in production, but it
 covers the key things to consider before putting your cluster live. Three main areas are covered:
@@ -12,19 +12,19 @@ covers the key things to consider before putting your cluster live. Three main a
    :maxdepth: 3
 
 Hardware
-~~~~~~~~
+--------
 
 If you’ve been following the normal development path, you’ve probably been playing with Schema Registry
 on your laptop or on a small cluster of machines laying around. But when it comes time to deploying 
 Schema Registry to production, there are a few recommendations that you should consider. Nothing is a hard-and-fast rule.
 
 Memory
-^^^^^^
+------
 
 Schema Registry uses Kafka as a commit log to store all registered schemas durably, and maintains a few in-memory indices to make schema lookups faster. A conservative upper bound on the number of unique schemas registered in a large data-oriented company like LinkedIn is around 10,000. Assuming roughly 1000 bytes heap overhead per schema on average, heap size of 1GB would be more than sufficient.
 
 CPUs
-^^^^
+----
 
 CPU usage in Schema Registry is light. The most computationally intensive task is checking compatibility of two schemas, an infrequent operation which occurs primarily when new schemas versions are registered under a subject.
 
@@ -32,12 +32,12 @@ If you need to choose between faster CPUs or more cores, choose more cores. The 
 cores offers will far outweigh a slightly faster clock speed.
 
 Disks
-^^^^^
+-----
 
 Schema Registry does not have any disk resident data. It currently uses Kafka as a commit log to store all schemas durably and holds in-memory indices of all schemas. Therefore, the only disk usage comes from storing the log4j logs.
 
 Network
-^^^^^^^
+-------
 
 A fast and reliable network is obviously important to performance in a distributed system. Low latency helps ensure that nodes can communicate easily, while high bandwidth helps shard movement and recovery. Modern data-center networking (1 GbE, 10 GbE) is sufficient for the vast majority of clusters.
 
@@ -48,7 +48,7 @@ Larger latencies tend to exacerbate problems in distributed systems and make deb
 Often, people might assume the pipe between multiple data centers is robust or low latency. But this is usually not true and network failures might happen at some point. Please refer to our recommended :ref:`schemaregistry_mirroring`.
 
 JVM
-~~~
+---
 
 We recommend running the latest version of JDK 1.8 with the G1 collector (older freely available versions have disclosed security vulnerabilities).
 
@@ -65,17 +65,49 @@ Our recommended GC tuning looks like this:
           -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80
 
 Important Configuration Options
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------
 
 The full set of configuration options are documented in :ref:`schemaregistry_config`.
 
 However, there are some logistical configurations that should be changed for production. These changes are necessary because there is no way to set a good default (because it depends on your cluster layout).
+
+First, there are two ways to deploy the Schema Registry depending on how the Schema Registry
+instances coordinate with each other to choose the :ref:`master<schemaregistry_single_master>`:
+with ZooKeeper (which may be shared with Kafka) or via Kafka itself. ZooKeeper-based master
+election is available in all versions of Schema Registry and you should continue to use it for
+compatibility if you already have a Schema Registry deployment. Kafka-based master election can
+be used in cases where ZooKeeper is not available, for example for hosted or cloud Kafka
+environments, or if access to ZooKeeper has been locked down.
+
+To configure the Schema Registry to use ZooKeeper for master election, configure the
+``kafkastore.connection.url`` setting.
 
 ``kafkastore.connection.url``
 Zookeeper url for the Kafka cluster
 
 * Type: string
 * Importance: high
+
+To configure the Schema Registry to use Kafka for master election, configure the
+``kafkastore.bootstrap.servers`` setting.
+
+``kafkastore.bootstrap.servers``
+  A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
+
+  The effect of this setting depends on whether you specify `kafkastore.connection.url`.
+
+  If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate schema registry instances (master election) and store schema data.
+
+  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
+
+  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
+
+  * Type: list
+  * Default: []
+  * Importance: medium
+
+Additionally, there are some configurations that may commonly need to be set in either type of
+deployment.
 
 ``port``
 Port to listen on for new connections.
@@ -99,7 +131,7 @@ Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this 
      register schema write is considered durable if it gets committed on at least 2 replicas out of 3. Furthermore, it is best to set ``unclean.leader.election.enable`` to false so that a replica outside of the isr is never elected leader (potentially resulting in data loss).
 
 Don't Touch These Settings!
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------
 
 Storage settings
 ^^^^^^^^^^^^^^^^
@@ -133,62 +165,80 @@ The timeout for an operation on the Kafka store. This is the maximum time that a
 * Importance: medium
 
 Kafka & ZooKeeper
-~~~~~~~~~~~~~~~~~
+-----------------
 
 Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and ZooKeeper.
 
-.. _schemaregistry_mirroring:
-
-Multi-DC Setup
-~~~~~~~~~~~~~~
-
-Overview
-^^^^^^^^
-Spanning multiple datacenters with your Schema Registry provides additional protection against data loss and improved latency. The recommended multi-datacenter deployment designates one datacenter as "master" and all others as "slaves". If the "master" datacenter fails and is unrecoverable, a "slave" datacenter will need to be manually designated the new "master" through the steps in the Run Book below.
 
 
-Recommended Deployment
-^^^^^^^^^^^^^^^^^^^^^^
+Backup and Restore
+~~~~~~~~~~~~~~~~~~
 
-.. image:: multi-dc-setup.png
+As discussed in :ref: `_schemaregistry_design`, all schemas, subject/version and id metadata, and compatibility settings are appended as messages to a special Kafka topic ``<kafkastore.topic>`` (default ``_schemas``). This topic is a common source of truth for schema IDs, and you should back it up. In case of some unexpected event that makes the topic inaccessible, you can restore this schemas topic from the backup, enabling consumers to continue to read Kafka messages that were sent in the Avro format.
 
-In the image above, there are two datacenters - DC A, and DC B. Each of the two datacenters has its own ZooKeeper
-cluster, Kafka cluster, and Schema Registry cluster. Both Schema Registry clusters link to Kafka and ZooKeeper in DC A. Note that the Schema Registry instances in DC B have ``master.eligibility`` set to false, meaning that none can ever be elected master.
+As a best practice, we recommend backing up the ``<kafkastore.topic>``. If you already have a multi-datacenter Kafka deployment, you can backup this topic to another Kafka cluster using `Confluent Replicator <https://docs.confluent.io/current/multi-dc/index.html>`_. Otherwise, you can use a `Kafka sink connector <https://docs.confluent.io/current/connect/index.html>`_ to copy the topic data from Kafka to a separate storage (e.g. AWS S3). These will continuously update as the schema topic updates.
 
-To protect against complete loss of DC A, Kafka cluster A (the source) is replicated to Kafka cluster B (the target). This is achieved by running the :ref:`Replicator` <connect_replicator>` local to the target cluster.
+In lieu of either of those options, you can also use Kafka command line tools to periodically save the contents of the topic to a file. For the following examples, we assume that ``<kafkastore.topic>`` has its default value "_schemas".
 
-Important Settings
+To backup the topic, use the ``kafka-console-consumer`` to capture messages from the schemas topic to a file called "schemas.log". Save this file off the Kafka cluster.
+
+.. sourcecode:: bash
+
+   bin/kafka-console-consumer --bootstrap-server localhost:9092 --topic _schemas --from-beginning --property print.key=true --timeout-ms 1000 1> schemas.log
+
+To restore the topic, use the ``kafka-console-producer`` to write the contents of file "schemas.log" to a new schemas topic. This examples uses a new schemas topic name "_schemas_restore". If you use a new topic name or use the old one (i.e. "_schemas"), make sure to set ``<kafkastore.topic>`` accordingly.
+
+.. sourcecode:: bash
+
+   bin/kafka-console-producer --broker-list localhost:9092 --topic _schemas_restore --property parse.key=true < schemas.log
+
+
+Migration from Zookeeper master election to Kafka master election
+-----------------------------------------------------------------
+
+It is not required to migrate from Zookeeper based election to Kafka based master election. If
+you choose to do so, you need to make the below outlined config changes as the first step in all
+Schema Registry nodes
+
+- Remove ``kafkastore.connection.url``
+- Remove ``schema.registry.zk.namespace`` if its configured
+- Configure ``kafkastore.bootstrap.servers``
+- Configure ``schema.registry.group.id`` if you originally had ``schema.registry.zk.namespace`` for multiple Schema Registry clusters
+
+Downtime for Writes
+^^^^^^^^^^^^^^^^^^^^
+
+You can migrate from Zookeeper based master election to Kafka based master election by following
+below outlined steps. These steps would lead to Schema Registry not being available for writes
+for a brief amount of time.
+
+- Make above outlined config changes on that node and also ensure ``master.eligibility`` is set to false in all the nodes
+- Do a rolling bounce of all the nodes.
+- Configure ``master.eligibility`` to true on the nodes that can be master eligible and bounce them
+
+Complete downtime
 ^^^^^^^^^^^^^^^^^^
 
-``kafkastore.connection.url``
-kafkastore.connection.url should be identical across all schema registry nodes. By sharing this setting, all Schema Registry instances will point to the same ZooKeeper cluster.
+If you want to keep things simple, you can take a temporary downtime for Schema Registry and do
+the migration. To do so, simply shutdown all the nodes and start them again with the new configs.
 
-``schema.registry.zk.namespace``
-Namespace under which schema registry related metadata is stored in Zookeeper. This setting should be identical across all nodes in the same schema registry.
+Backup and Restore
+------------------
 
-``master.eligibility``
-A schema registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. Schema Registry instances in a "slave" data center should have this set to false, and Schema Registry instances local to the shared Kafka cluster should have this set to true.
+As discussed in :ref: `_schemaregistry_design`, all schemas, subject/version and id metadata, and compatibility settings are appended as messages to a special Kafka topic ``<kafkastore.topic>`` (default ``_schemas``). This topic is a common source of truth for schema IDs, and you should back it up. In case of some unexpected event that makes the topic inaccessible, you can restore this schemas topic from the backup, enabling consumers to continue to read Kafka messages that were sent in the Avro format.
 
-Setup
-^^^^^
+As a best practice, we recommend backing up the ``<kafkastore.topic>``. If you already have a multi-datacenter Kafka deployment, you can backup this topic to another Kafka cluster using `Confluent Replicator <https://docs.confluent.io/current/multi-dc/index.html>`_. Otherwise, you can use a `Kafka sink connector <https://docs.confluent.io/current/connect/index.html>`_ to copy the topic data from Kafka to a separate storage (e.g. AWS S3). These will continuously update as the schema topic updates.
 
-Assuming you have Schema Registry running, here are the recommended steps to add Schema Registry instances in a new "slave" datacenter (call it DC B):
+In lieu of either of those options, you can also use Kafka command line tools to periodically save the contents of the topic to a file. For the following examples, we assume that ``<kafkastore.topic>`` has its default value "_schemas".
 
-- In DC B, make sure Kafka has ``unclean.leader.election.enable`` set to false.
+To backup the topic, use the ``kafka-console-consumer`` to capture messages from the schemas topic to a file called "schemas.log". Save this file off the Kafka cluster.
 
-- In Kafka in DC B, create the ``_schemas`` topic. It should have 1 partition, ``kafkastore.topic.replication.factor`` of 3, and ``min.insync.replicas`` at least 2.
+.. sourcecode:: bash
 
-- In DC B, run Replicator with Kafka in the "master" datacenter (DC A) as the source and Kafka in DC B as the target.
+   bin/kafka-console-consumer --bootstrap-server localhost:9092 --topic _schemas --from-beginning --property print.key=true --timeout-ms 1000 1> schemas.log
 
-- In the Schema Registry config files in DC B, set ``kafkastore.connection.url`` and ``schema.registry.zk.namespace`` to match the instances already running, and set ``master.eligibility`` to false.
+To restore the topic, use the ``kafka-console-producer`` to write the contents of file "schemas.log" to a new schemas topic. This examples uses a new schemas topic name "_schemas_restore". If you use a new topic name or use the old one (i.e. "_schemas"), make sure to set ``<kafkastore.topic>`` accordingly.
 
-- Start your new Schema Registry instances with these configs.
+.. sourcecode:: bash
 
-Run Book
-^^^^^^^^
-
-Let's say you have Schema Registry running in multiple datacenters, and you have lost your "master" datacenter; what do you do? First, note that the remaining Schema Registry instances will continue to be able to serve any request which does not result in a write to Kafka. This includes GET requests on existing ids and POST requests on schemas already in the registry.
-
-- If possible, revive the "master" datacenter by starting Kafka and Schema Registry as before.
-
-- If you must designate a new datacenter (call it DC B) as "master", update the Schema Registry config files so that ``kafkastore.connection.url`` points to the local ZooKeeper, and change ``master.eligibility`` to true. The restart your Schema Registry instances with these new configs in a rolling fashion.
+   bin/kafka-console-producer --broker-list localhost:9092 --topic _schemas_restore --property parse.key=true < schemas.log

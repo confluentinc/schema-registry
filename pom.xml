@@ -4,10 +4,14 @@
 
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.confluent</groupId>
+    <parent>
+        <groupId>io.confluent</groupId>
+        <artifactId>rest-utils-parent</artifactId>
+        <version>4.1.0-SNAPSHOT</version>
+    </parent>
+
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
-    <version>3.2.1</version>
     <name>kafka-schema-registry-parent</name>
     <organization>
         <name>Confluent, Inc.</name>
@@ -43,28 +47,18 @@
         <module>package-schema-registry</module>
         <module>package-kafka-serde-tools</module>
         <module>maven-plugin</module>
+        <module>avro-serde</module>
+        <module>avro-console-scripts</module>
+        <module>schema-registry-console-scripts</module>
     </modules>
 
     <properties>
-        <jersey.version>2.19</jersey.version>
-        <confluent-common.version>3.2.1</confluent-common.version>
-        <kafka.version>0.10.2.1-cp1</kafka.version>
-        <kafka.scala.version>2.11</kafka.scala.version>
-        <log4j.version>1.7.6</log4j.version>
-        <restutils.version>3.2.1</restutils.version>
-        <avro.version>1.7.7</avro.version>
-        <jackson.version>2.5.4</jackson.version>
-        <junit.version>4.12</junit.version>
-        <easymock.version>3.3.1</easymock.version>
-        <powermock.version>1.6.2</powermock.version>
-        <powermock.api.easymock.version>1.6.2</powermock.api.easymock.version>
-        <podam.version>6.0.2.RELEASE</podam.version>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven-assembly.version>2.6</maven-assembly.version>
-        <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
-        <bouncycastle.bcpkix.version>1.54</bouncycastle.bcpkix.version>
         <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
         <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
+        <avro.version>1.8.2</avro.version>
+        <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
+        <exec-maven-plugin.version>1.2.1</exec-maven-plugin.version>
+        <podam.version>6.0.2.RELEASE</podam.version>
     </properties>
 
     <repositories>
@@ -78,11 +72,46 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>org.glassfish.jersey</groupId>
-                <artifactId>jersey-bom</artifactId>
-                <version>${jersey.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro</artifactId>
+                <version>${avro.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>uk.co.jemos.podam</groupId>
+                <artifactId>podam</artifactId>
+                <version>${podam.version}</version>
+            </dependency>
+
+            <!--children-->
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-avro-serializer</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-json-serializer</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-avro-converter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-schema-registry-client</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-schema-registry</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-streams-avro-serde</artifactId>
+                <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -90,18 +119,22 @@
     <build>
         <pluginManagement>
             <plugins>
-              <plugin>
-                  <groupId>org.apache.maven.plugins</groupId>
-                  <artifactId>maven-assembly-plugin</artifactId>
-                  <version>${maven-assembly.version}</version>
-              </plugin>
+                <plugin>
+                    <groupId>org.apache.avro</groupId>
+                    <artifactId>avro-maven-plugin</artifactId>
+                    <version>${avro.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>${exec-maven-plugin.version}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>2.5.1</version>
                 <inherited>true</inherited>
                 <configuration>
                     <source>1.7</source>
@@ -109,57 +142,13 @@
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>2.17</version>
-                <executions>
-                    <execution>
-                        <id>validate</id>
-                        <phase>validate</phase>
-                        <configuration>
-                            <configLocation>checkstyle/checkstyle.xml</configLocation>
-                            <encoding>UTF-8</encoding>
-                            <consoleOutput>true</consoleOutput>
-                            <failsOnError>false</failsOnError>
-                            <failOnViolation>false</failOnViolation>
-                            <includeResources>false</includeResources>
-                            <includeTestResources>false</includeTestResources>
-                        </configuration>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
-                <version>1.2.1</version>
                 <executions>
                     <execution>
                         <goals>
                             <goal>java</goal>
                         </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.18.1</version>
-                <configuration>
-                    <argLine>-Djava.awt.headless=true</argLine>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>2.6</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>test-jar</goal>
-                          </goals>
                     </execution>
                 </executions>
             </plugin>

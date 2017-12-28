@@ -23,6 +23,7 @@ import org.codehaus.jackson.annotate.JsonPropertyOrder;
  */
 @JsonPropertyOrder(value = {"keytype", "magic"})
 public class NoopKey extends SchemaRegistryKey {
+
   private static final int MAGIC_BYTE = 0;
 
   public NoopKey() {

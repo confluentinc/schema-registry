@@ -1,0 +1,22 @@
+{
+  "type": "record",
+  "name": "EnumUnion",
+  "namespace": "com.connect.avro",
+  "fields": [
+    {
+      "name": "userType",
+      "type": [
+        "null",
+        {
+          "type": "enum",
+          "name": "UserType",
+          "symbols": [
+            "ANONYMOUS",
+            "REGISTERED"
+          ]
+        }
+      ],
+      "default": null
+    }
+  ]
+}

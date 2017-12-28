@@ -24,12 +24,12 @@ import io.confluent.rest.exceptions.RestNotFoundException;
 public class Errors {
 
   // HTTP 404
-  public final static String SUBJECT_NOT_FOUND_MESSAGE = "Subject not found.";
-  public final static int SUBJECT_NOT_FOUND_ERROR_CODE = 40401;
-  public final static String VERSION_NOT_FOUND_MESSAGE = "Version not found.";
-  public final static int VERSION_NOT_FOUND_ERROR_CODE = 40402;
-  public final static String SCHEMA_NOT_FOUND_MESSAGE = "Schema not found";
-  public final static int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
+  public static final String SUBJECT_NOT_FOUND_MESSAGE = "Subject not found.";
+  public static final int SUBJECT_NOT_FOUND_ERROR_CODE = 40401;
+  public static final String VERSION_NOT_FOUND_MESSAGE = "Version not found.";
+  public static final int VERSION_NOT_FOUND_ERROR_CODE = 40402;
+  public static final String SCHEMA_NOT_FOUND_MESSAGE = "Schema not found";
+  public static final int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
 
   // HTTP 409
   public static final int INCOMPATIBLE_SCHEMA_ERROR_CODE = Response.Status.CONFLICT.getStatusCode();

@@ -13,24 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 
@@ -52,7 +56,6 @@ import io.confluent.rest.annotations.PerformanceMetric;
            Versions.JSON, Versions.GENERIC_REQUEST})
 public class SubjectsResource {
 
-  public final static String MESSAGE_SUBJECT_NOT_FOUND = "Subject not found.";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
@@ -67,6 +70,8 @@ public class SubjectsResource {
                                        final @HeaderParam("Content-Type") String contentType,
                                        final @HeaderParam("Accept") String accept,
                                        @PathParam("subject") String subject,
+                                       @QueryParam("deleted") boolean
+                                           lookupDeletedSchema,
                                        @NotNull RegisterSchemaRequest request) {
     // returns version if the schema exists. Otherwise returns 404
     Map<String, String> headerProperties = new HashMap<String, String>();
@@ -78,7 +83,8 @@ public class SubjectsResource {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
-      matchingSchema = schemaRegistry.lookUpSchemaUnderSubject(subject, schema);
+      matchingSchema =
+          schemaRegistry.lookUpSchemaUnderSubject(subject, schema, lookupDeletedSchema);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);
@@ -100,5 +106,23 @@ public class SubjectsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while listing subjects", e);
     }
+  }
+
+  @DELETE
+  @Path("/{subject}")
+  @PerformanceMetric("subjects.delete-subject")
+  public void deleteSubject(final @Suspended AsyncResponse asyncResponse,
+                            @PathParam("subject") String subject) {
+    List<Integer> deletedVersions;
+    try {
+      if (!schemaRegistry.listSubjects().contains(subject)) {
+        throw Errors.subjectNotFoundException();
+      }
+      deletedVersions = schemaRegistry.deleteSubjectOrForward(subject);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while deleting the subject " + subject,
+                                           e);
+    }
+    asyncResponse.resume(deletedVersions);
   }
 }

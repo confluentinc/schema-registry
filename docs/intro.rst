@@ -1,20 +1,31 @@
 .. _schemaregistry_intro:
 
-Schema Registry
-================
+Introduction
+============
 
 Schema Registry provides a serving layer for your metadata. It provides a RESTful interface for storing and retrieving Avro schemas. It stores a versioned history of all schemas, provides multiple compatibility settings and allows evolution of schemas according to the configured compatibility setting. It provides serializers that plug into Kafka clients that handle schema storage and retrieval for Kafka messages that are sent in the Avro format.
 
 Quickstart
 ----------
 
-Start by running the Schema Registry and the services it depends on: ZooKeeper and Kafka:
+Start by running the Schema Registry and the services it depends on: ZooKeeper and Kafka.
+You can do this in one command with Confluent CLI:
 
 .. sourcecode:: bash
 
-   $ ./bin/zookeeper-server-start ./etc/kafka/zookeeper.properties &
-   $ ./bin/kafka-server-start ./etc/kafka/server.properties &
-   $ ./bin/schema-registry-start ./etc/schema-registry/schema-registry.properties &
+   $ confluent start schema-registry
+
+Each service reads its configuration from its property files under ``etc``.
+
+.. note::
+
+   To manually start each service in its own terminal, run instead:
+
+   .. sourcecode:: bash
+
+      $ bin/zookeeper-server-start ./etc/kafka/zookeeper.properties
+      $ bin/kafka-server-start ./etc/kafka/server.properties
+      $ bin/schema-registry-start ./etc/schema-registry/schema-registry.properties
 
 .. ifconfig:: platform_docs
 
@@ -51,15 +62,35 @@ Start by running the Schema Registry and the services it depends on: ZooKeeper a
     $ curl -X GET http://localhost:8081/subjects/Kafka-value/versions/1
       {"subject":"Kafka-value","version":1,"id":1,"schema":"\"string\""}
 
-    # Fetch the most recently registered schema under subject "Kafka-value"
-    $ curl -X GET http://localhost:8081/subjects/Kafka-value/versions/latest
-      {"subject":"Kafka-value","version":1,"id":1,"schema":"\"string\""}
+    # Deletes version 1 of the schema registered under subject "Kafka-value"
+    $ curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/1
+      1
+
+    # Register the same schema under the subject "Kafka-value"
+    $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+        --data '{"schema": "{\"type\": \"string\"}"}' \
+         http://localhost:8081/subjects/Kafka-value/versions
+      {"id":1}
+
+    # Deletes the most recently registered schema under subject "Kafka-value"
+    $ curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/latest
+      2
+
+    # Register the same schema under the subject "Kafka-value"
+    $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+        --data '{"schema": "{\"type\": \"string\"}"}' \
+         http://localhost:8081/subjects/Kafka-value/versions
+      {"id":1}
+
+    # Fetch the schema again by globally unique id 1
+    $ curl -X GET http://localhost:8081/schemas/ids/1
+      {"schema":"\"string\""}
 
     # Check whether a schema has been registered under subject "Kafka-key"
     $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
         --data '{"schema": "{\"type\": \"string\"}"}' \
         http://localhost:8081/subjects/Kafka-key
-      {"subject":"Kafka-key","version":1,"id":1,"schema":"\"string\""}
+      {"subject":"Kafka-key","version":3,"id":1,"schema":"\"string\""}
 
     # Test compatibility of a schema with the latest schema under subject "Kafka-value"
     $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
@@ -82,6 +113,14 @@ Start by running the Schema Registry and the services it depends on: ZooKeeper a
         --data '{"compatibility": "BACKWARD"}' \
         http://localhost:8081/config/Kafka-value
       {"compatibility":"BACKWARD"}
+
+    # Deletes all schema versions registered under the subject "Kafka-value"
+    $ curl -X DELETE http://localhost:8081/subjects/Kafka-value
+      [3]
+
+    # List all subjects
+    $ curl -X GET http://localhost:8081/subjects
+      ["Kafka-key"]
 
 Installation
 ------------
@@ -110,7 +149,7 @@ Note: The Schema Registry version must not exceed the CP/Kafka version. That's t
 
 .. sourcecode:: bash
 
-   $ cd confluent-3.0.0/
+   $ cd confluent-3.3.0/
 
    # The default settings in schema-registry.properties work automatically with
    # the default settings for local ZooKeeper and Kafka nodes.
@@ -183,7 +222,7 @@ dependencies as well.
 Requirements
 ------------
 
-- Kafka: 0.10.2.1-cp1
+- Kafka: 1.1.0-SNAPSHOT
 
 Contribute
 ----------

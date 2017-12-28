@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.Iterator;
@@ -22,25 +23,29 @@ import java.util.Set;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
 
 public interface SchemaRegistry {
 
-  void init() throws SchemaRegistryInitializationException;
+  void init() throws SchemaRegistryException;
 
   int register(String subject, Schema schema) throws SchemaRegistryException;
 
-  Schema get(String subject, int version) throws SchemaRegistryException;
+  Schema get(String subject, int version, boolean returnDeletedSchema)
+      throws SchemaRegistryException;
 
   SchemaString get(int id) throws SchemaRegistryException;
 
   Set<String> listSubjects() throws SchemaRegistryException;
 
-  Iterator<Schema> getAllVersions(String subject) throws SchemaRegistryException;
+  Iterator<Schema> getAllVersions(String subject, boolean filterDeletes)
+      throws SchemaRegistryException;
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
 
-  Schema lookUpSchemaUnderSubject(String subject, Schema schema) throws SchemaRegistryException;
+  List<Integer> deleteSubject(String subject) throws SchemaRegistryException;
+
+  Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
+      throws SchemaRegistryException;
 
   boolean isCompatible(String subject,
                        String inputSchema,
@@ -52,4 +57,5 @@ public interface SchemaRegistry {
 
   void close();
 
+  void deleteSchemaVersion(String subject, Schema schema) throws SchemaRegistryException;
 }

@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.storage.exceptions;
 
 /**
- * Error while (de)serializing data while reading from or writing to a 
+ * Error while (de)serializing data while reading from or writing to a
  * * <code>io.confluent.kafka.schemaregistry.storage.Store</code>
  */
 public class SerializationException extends Exception {

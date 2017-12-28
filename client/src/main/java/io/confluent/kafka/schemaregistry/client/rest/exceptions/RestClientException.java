@@ -13,9 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client.rest.exceptions;
 
 public class RestClientException extends Exception {
+
   private final int status;
   private final int errorCode;
 
