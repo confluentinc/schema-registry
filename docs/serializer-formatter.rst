@@ -252,5 +252,5 @@ following:
   deserializing any earlier formats will be supported indefinitely as long as there is no notified reason for
   incompatibility.
 
-If you have any doubts about compatibility or support, reach out to the `community mailing list
-<https://groups.google.com/forum/#!forum/confluent-platform>`_. for details and  explanations.
+For more information about compatibility or support, reach out to the `community mailing list
+<https://groups.google.com/forum/#!forum/confluent-platform>`_.
