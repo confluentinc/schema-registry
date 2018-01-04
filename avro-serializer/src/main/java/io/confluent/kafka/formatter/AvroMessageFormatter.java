@@ -65,8 +65,8 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   private static final byte[] NULL_BYTES = "null".getBytes(StandardCharsets.UTF_8);
   private boolean printKey = false;
-  private byte[] keySeparator = "\t".getBytes();
-  private byte[] lineSeparator = "\n".getBytes();
+  private byte[] keySeparator = "\t".getBytes(StandardCharsets.UTF_8);
+  private byte[] lineSeparator = "\n".getBytes(StandardCharsets.UTF_8);
   private Deserializer keyDeserializer;
 
   /**
@@ -106,10 +106,10 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
       printKey = props.getProperty("print.key").trim().toLowerCase().equals("true");
     }
     if (props.containsKey("key.separator")) {
-      keySeparator = props.getProperty("key.separator").getBytes();
+      keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8);
     }
     if (props.containsKey("line.separator")) {
-      lineSeparator = props.getProperty("line.separator").getBytes();
+      lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8);
     }
     if (props.containsKey("key.deserializer")) {
       try {
