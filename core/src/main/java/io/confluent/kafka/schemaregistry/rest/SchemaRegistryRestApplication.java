@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.Properties;
 
 import javax.ws.rs.core.Configurable;
@@ -47,6 +48,13 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   public SchemaRegistryRestApplication(Properties props) throws RestConfigException {
     this(new SchemaRegistryConfig(props));
+  }
+
+  @Override
+  public void configureBaseApplication(
+      Configurable<?> config, Map<String, String> metricTags
+  ) {
+    super.configureBaseApplication(config, metricTags);
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {

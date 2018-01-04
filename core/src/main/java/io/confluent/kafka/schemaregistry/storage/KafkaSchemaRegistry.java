@@ -152,11 +152,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     reporters.add(new JmxReporter(jmxPrefix));
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
     this.masterNodeSensor = metrics.sensor("master-slave-role");
+
+    Map<String, String> configuredTags = config.getMap(RestConfig.METRICS_TAGS_CONFIG);
     MetricName
         m = new MetricName("master-slave-role", "master-slave-role",
                            "1.0 indicates the node is the active master in the cluster and is the"
                            + " node where all register schema and config update requests are "
-                           + "served.");
+                           + "served.", configuredTags);
     this.masterNodeSensor.add(m, new Gauge());
   }
 
