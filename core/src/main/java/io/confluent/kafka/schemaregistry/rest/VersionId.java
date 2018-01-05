@@ -31,7 +31,7 @@ public class VersionId {
       this.version = -1;
     } else {
       try {
-        this.version = Integer.valueOf(version.trim());
+        this.version = Integer.parseInt(version.trim());
       } catch (NumberFormatException nfe) {
         throw new InvalidVersionException();
       }

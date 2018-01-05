@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -127,7 +128,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     if (props.containsKey("ignore.error")) {
       ignoreError = props.getProperty("ignore.error").trim().toLowerCase().equals("true");
     }
-    reader = new BufferedReader(new InputStreamReader(inputStream));
+    reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
     String url = props.getProperty(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");

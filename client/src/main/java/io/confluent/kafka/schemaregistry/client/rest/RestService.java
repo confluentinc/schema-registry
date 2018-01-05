@@ -140,8 +140,11 @@ public class RestService {
                                 Map<String, String> requestProperties,
                                 TypeReference<T> responseFormat)
       throws IOException, RestClientException {
+    String requestData = requestBodyData == null
+                         ? "null"
+                         : new String(requestBodyData, StandardCharsets.UTF_8);
     log.debug(String.format("Sending %s with input %s to %s",
-                            method, requestBodyData == null ? "null" : new String(requestBodyData),
+                            method, requestData,
                             requestUrl));
 
     HttpURLConnection connection = null;
@@ -265,7 +268,8 @@ public class RestService {
     if (requestProperties.isEmpty()) {
       requestProperties = DEFAULT_REQUEST_PROPERTIES;
     }
-    Schema schema = httpRequest(path, "POST", registerSchemaRequest.toJson().getBytes(),
+    Schema schema = httpRequest(path, "POST",
+                                registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
                                 requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
 
     return schema;
@@ -289,7 +293,8 @@ public class RestService {
     String path = String.format("/subjects/%s?deleted=%s", subject,
                                 lookupDeletedSchema);
 
-    Schema schema = httpRequest(path, "POST", registerSchemaRequest.toJson().getBytes(),
+    Schema schema = httpRequest(path, "POST",
+                                registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
                                 requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
 
     return schema;
@@ -312,10 +317,11 @@ public class RestService {
       throws IOException, RestClientException {
     String path = String.format("/subjects/%s/versions", subject);
 
-    RegisterSchemaResponse response = httpRequest(path, "POST",
-                                                  registerSchemaRequest.toJson().getBytes(),
-                                                  requestProperties,
-                                                  REGISTER_RESPONSE_TYPE);
+    RegisterSchemaResponse response = httpRequest(
+        path, "POST",
+        registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties,
+        REGISTER_RESPONSE_TYPE);
 
     return response.getId();
   }
@@ -343,7 +349,8 @@ public class RestService {
     String path = String.format("/compatibility/subjects/%s/versions/%s", subject, version);
 
     CompatibilityCheckResponse response =
-        httpRequest(path, "POST", registerSchemaRequest.toJson().getBytes(),
+        httpRequest(path, "POST",
+                    registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
                     requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
     return response.getIsCompatible();
   }
@@ -371,7 +378,7 @@ public class RestService {
     String path = subject != null ? String.format("/config/%s", subject) : "/config";
 
     ConfigUpdateRequest response =
-        httpRequest(path, "PUT", configUpdateRequest.toJson().getBytes(),
+        httpRequest(path, "PUT", configUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
                     requestProperties, UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE);
     return response;
   }

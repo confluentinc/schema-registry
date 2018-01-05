@@ -1185,11 +1185,11 @@ public class AvroData {
 
         case INT8:
           // Encoded as an Integer
-          converted = value == null ? null : ((Integer) value).byteValue();
+          converted = ((Integer) value).byteValue();
           break;
         case INT16:
           // Encoded as an Integer
-          converted = value == null ? null : ((Integer) value).shortValue();
+          converted = ((Integer) value).shortValue();
           break;
 
         case STRING:

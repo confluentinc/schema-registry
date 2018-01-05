@@ -71,7 +71,7 @@ public class SchemaKey extends SchemaRegistryKey {
     if (!subject.equals(that.subject)) {
       return false;
     }
-    if (version != that.version) {
+    if (!version.equals(that.version)) {
       return false;
     }
     return true;

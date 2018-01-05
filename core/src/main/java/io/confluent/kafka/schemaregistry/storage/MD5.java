@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -43,7 +44,7 @@ public class MD5 {
   public static MD5 ofString(String str) {
     try {
       MessageDigest md = MessageDigest.getInstance("MD5");
-      md.update(str.getBytes());
+      md.update(str.getBytes(StandardCharsets.UTF_8));
       return new MD5(md.digest());
     } catch (NoSuchAlgorithmException e) {
       throw new RuntimeException(e);

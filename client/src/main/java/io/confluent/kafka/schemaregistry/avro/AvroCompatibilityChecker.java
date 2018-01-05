@@ -28,48 +28,48 @@ import java.util.List;
 public class AvroCompatibilityChecker {
 
   // Check if the new schema can be used to read data produced by the previous schema
-  private static SchemaValidator BACKWARD_VALIDATOR =
+  private static final SchemaValidator BACKWARD_VALIDATOR =
       new SchemaValidatorBuilder().canReadStrategy().validateLatest();
-  public static AvroCompatibilityChecker BACKWARD_CHECKER = new AvroCompatibilityChecker(
-      BACKWARD_VALIDATOR);
+  public static final AvroCompatibilityChecker BACKWARD_CHECKER
+      = new AvroCompatibilityChecker(BACKWARD_VALIDATOR);
 
   // Check if data produced by the new schema can be read by the previous schema
-  private static SchemaValidator FORWARD_VALIDATOR =
+  private static final SchemaValidator FORWARD_VALIDATOR =
       new SchemaValidatorBuilder().canBeReadStrategy().validateLatest();
-  public static AvroCompatibilityChecker FORWARD_CHECKER = new AvroCompatibilityChecker(
-      FORWARD_VALIDATOR);
+  public static final AvroCompatibilityChecker FORWARD_CHECKER
+      = new AvroCompatibilityChecker(FORWARD_VALIDATOR);
 
   // Check if the new schema is both forward and backward compatible with the previous schema
-  private static SchemaValidator FULL_VALIDATOR =
+  private static final SchemaValidator FULL_VALIDATOR =
       new SchemaValidatorBuilder().mutualReadStrategy().validateLatest();
-  public static AvroCompatibilityChecker FULL_CHECKER = new AvroCompatibilityChecker(
-      FULL_VALIDATOR);
+  public static final AvroCompatibilityChecker FULL_CHECKER
+      = new AvroCompatibilityChecker(FULL_VALIDATOR);
 
   // Check if the new schema can be used to read data produced by all earlier schemas
-  private static SchemaValidator BACKWARD_TRANSITIVE_VALIDATOR =
+  private static final SchemaValidator BACKWARD_TRANSITIVE_VALIDATOR =
       new SchemaValidatorBuilder().canReadStrategy().validateAll();
-  public static AvroCompatibilityChecker BACKWARD_TRANSITIVE_CHECKER = new AvroCompatibilityChecker(
-      BACKWARD_TRANSITIVE_VALIDATOR);
+  public static final AvroCompatibilityChecker BACKWARD_TRANSITIVE_CHECKER
+      = new AvroCompatibilityChecker(BACKWARD_TRANSITIVE_VALIDATOR);
 
   // Check if data produced by the new schema can be read by all earlier schemas
-  private static SchemaValidator FORWARD_TRANSITIVE_VALIDATOR =
+  private static final SchemaValidator FORWARD_TRANSITIVE_VALIDATOR =
       new SchemaValidatorBuilder().canBeReadStrategy().validateAll();
-  public static AvroCompatibilityChecker FORWARD_TRANSITIVE_CHECKER = new AvroCompatibilityChecker(
-      FORWARD_TRANSITIVE_VALIDATOR);
+  public static final AvroCompatibilityChecker FORWARD_TRANSITIVE_CHECKER
+      = new AvroCompatibilityChecker(FORWARD_TRANSITIVE_VALIDATOR);
 
   // Check if the new schema is both forward and backward compatible with all earlier schemas
-  private static SchemaValidator FULL_TRANSITIVE_VALIDATOR =
+  private static final SchemaValidator FULL_TRANSITIVE_VALIDATOR =
       new SchemaValidatorBuilder().mutualReadStrategy().validateAll();
-  public static AvroCompatibilityChecker FULL_TRANSITIVE_CHECKER = new AvroCompatibilityChecker(
-      FULL_TRANSITIVE_VALIDATOR);
+  public static final AvroCompatibilityChecker FULL_TRANSITIVE_CHECKER
+      = new AvroCompatibilityChecker(FULL_TRANSITIVE_VALIDATOR);
 
-  private static SchemaValidator NO_OP_VALIDATOR = new SchemaValidator() {
+  private static final SchemaValidator NO_OP_VALIDATOR = new SchemaValidator() {
     @Override
     public void validate(Schema schema, Iterable<Schema> schemas) throws SchemaValidationException {
       // do nothing
     }
   };
-  public static AvroCompatibilityChecker NO_OP_CHECKER = new AvroCompatibilityChecker(
+  public static final AvroCompatibilityChecker NO_OP_CHECKER = new AvroCompatibilityChecker(
       NO_OP_VALIDATOR);
 
   private final SchemaValidator validator;
