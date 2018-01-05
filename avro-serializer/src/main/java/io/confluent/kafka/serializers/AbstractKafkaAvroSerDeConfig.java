@@ -25,6 +25,8 @@ import io.confluent.common.config.ConfigDef.Importance;
 import io.confluent.common.config.ConfigDef.Type;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialSource;
+import io.confluent.kafka.serializers.subject.SubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
 /**
  * Base class for configs for serializers and deserializers, defining a few common configs and
@@ -62,13 +64,15 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
       "Specify the user info for Basic Auth in the form of {username}:{password}";
 
   public static final String KEY_SUBJECT_NAME_STRATEGY = "key.subject.name.strategy";
-  public static final String KEY_SUBJECT_NAME_STRATEGY_DEFAULT = "topic-key";
+  public static final String KEY_SUBJECT_NAME_STRATEGY_DEFAULT =
+      TopicNameStrategy.class.getName();
   public static final String KEY_SUBJECT_NAME_STRATEGY_DOC =
       "Determines how to construct the subject name under which the key schema is registered "
       + "with the schema registry";
 
   public static final String VALUE_SUBJECT_NAME_STRATEGY = "value.subject.name.strategy";
-  public static final String VALUE_SUBJECT_NAME_STRATEGY_DEFAULT = "topic-value";
+  public static final String VALUE_SUBJECT_NAME_STRATEGY_DEFAULT =
+      TopicNameStrategy.class.getName();
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DOC =
       "Determines how to construct the subject name under which the value schema is registered "
       + "with the schema registry";
@@ -86,9 +90,9 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
             Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(SCHEMA_REGISTRY_USER_INFO_CONFIG, Type.PASSWORD, SCHEMA_REGISTRY_USER_INFO_DEFAULT,
             Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
-        .define(KEY_SUBJECT_NAME_STRATEGY, Type.STRING, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
+        .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
-        .define(VALUE_SUBJECT_NAME_STRATEGY, Type.STRING, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
+        .define(VALUE_SUBJECT_NAME_STRATEGY, Type.CLASS, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC);
   }
 
@@ -108,11 +112,11 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
     return this.getBoolean(AUTO_REGISTER_SCHEMAS);
   }
 
-  public String keySubjectNameStrategy() {
-    return this.getString(KEY_SUBJECT_NAME_STRATEGY);
+  public SubjectNameStrategy keySubjectNameStrategy() {
+    return this.getConfiguredInstance(KEY_SUBJECT_NAME_STRATEGY, SubjectNameStrategy.class);
   }
 
-  public String valueSubjectNameStrategy() {
-    return this.getString(VALUE_SUBJECT_NAME_STRATEGY);
+  public SubjectNameStrategy valueSubjectNameStrategy() {
+    return this.getConfiguredInstance(VALUE_SUBJECT_NAME_STRATEGY, SubjectNameStrategy.class);
   }
 }

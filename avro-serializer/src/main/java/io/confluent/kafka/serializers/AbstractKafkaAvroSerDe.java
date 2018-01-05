@@ -30,6 +30,7 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.subject.SubjectNameStrategy;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -41,8 +42,8 @@ public abstract class AbstractKafkaAvroSerDe {
 
   private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
-  protected String keySubjectNameStrategy = "topic-key";
-  protected String valueSubjectNameStrategy = "topic-value";
+  protected SubjectNameStrategy keySubjectNameStrategy;
+  protected SubjectNameStrategy valueSubjectNameStrategy;
 
   static {
     Schema.Parser parser = new Schema.Parser();
@@ -85,30 +86,14 @@ public abstract class AbstractKafkaAvroSerDe {
    * Get the subject name for the given topic and value type.
    */
   protected String getSubjectName(String topic, boolean isKey, Object value) {
-    if (isKey) {
-      if (keySubjectNameStrategy.equals("topic-key")) {
-        return topic + "-key";
-      } else if (keySubjectNameStrategy.equals("type")) {
-        return getRecordName(value, isKey);
-      } else if (keySubjectNameStrategy.equals("topic-type")) {
-        return topic + "-" + getRecordName(value, isKey);
-      } else {
-        throw new SerializationException("Unknown value for "
-                + AbstractKafkaAvroSerDeConfig.KEY_SUBJECT_NAME_STRATEGY + ": "
-                + keySubjectNameStrategy);
-      }
+    // Null is passed through unserialized, since it has special meaning in
+    // log-compacted Kafka topics.
+    if (value == null) {
+      return null;
+    } else if (isKey) {
+      return keySubjectNameStrategy.getSubjectName(topic, isKey, value);
     } else {
-      if (valueSubjectNameStrategy.equals("topic-value")) {
-        return topic + "-value";
-      } else if (valueSubjectNameStrategy.equals("type")) {
-        return getRecordName(value, isKey);
-      } else if (valueSubjectNameStrategy.equals("topic-type")) {
-        return topic + "-" + getRecordName(value, isKey);
-      } else {
-        throw new SerializationException("Unknown value for "
-                + AbstractKafkaAvroSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY + ": "
-                + valueSubjectNameStrategy);
-      }
+      return valueSubjectNameStrategy.getSubjectName(topic, isKey, value);
     }
   }
 
@@ -117,42 +102,10 @@ public abstract class AbstractKafkaAvroSerDe {
    * rather than the topic.
    */
   protected String getOldSubjectName(Object value) {
-    if (valueSubjectNameStrategy.equals("type")) {
-      return getRecordName(value, false);
-    } else if (value instanceof GenericContainer) {
+    if (value instanceof GenericContainer) {
       return ((GenericContainer) value).getSchema().getName() + "-value";
     } else {
       throw new SerializationException("Primitive types are not supported yet");
-    }
-  }
-
-  /**
-   * If the value is an Avro record type, returns its fully-qualified name.
-   * Otherwise throws an error.
-   */
-  private String getRecordName(Object value, boolean isKey) {
-    // Null is passed through unserialized, since it has special meaning in
-    // log-compacted Kafka topics.
-    if (value == null) {
-      return null;
-    }
-
-    if (value instanceof GenericContainer) {
-      Schema schema = ((GenericContainer) value).getSchema();
-      if (schema.getType() == Schema.Type.RECORD) {
-        return schema.getFullName();
-      }
-    }
-
-    // isKey is only used to produce more helpful error messages
-    if (isKey) {
-      throw new SerializationException("In configuration "
-          + AbstractKafkaAvroSerDeConfig.KEY_SUBJECT_NAME_STRATEGY + " = "
-          + keySubjectNameStrategy + ", the message key must only be an Avro record");
-    } else {
-      throw new SerializationException("In configuration "
-          + AbstractKafkaAvroSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY + " = "
-          + valueSubjectNameStrategy + ", the message value must only be an Avro record");
     }
   }
 

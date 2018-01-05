@@ -34,6 +34,7 @@ import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
 import kafka.utils.VerifiableProperties;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -208,7 +209,7 @@ public class KafkaAvroSerializerTest {
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus",
         KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
-        "topic-type"
+        TopicRecordNameStrategy.class.getName()
     );
     avroSerializer.configure(configs, false);
     IndexedRecord record1 = createAvroRecord();
@@ -227,7 +228,7 @@ public class KafkaAvroSerializerTest {
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus",
         KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
-        "topic-type"
+        TopicRecordNameStrategy.class.getName()
     );
     avroSerializer.configure(configs, false);
     avroSerializer.serialize(topic, "a string should not be allowed");
