@@ -68,14 +68,14 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
       TopicNameStrategy.class.getName();
   public static final String KEY_SUBJECT_NAME_STRATEGY_DOC =
       "Determines how to construct the subject name under which the key schema is registered "
-      + "with the schema registry";
+      + "with the schema registry. By default, <topic>-key is used as subject.";
 
   public static final String VALUE_SUBJECT_NAME_STRATEGY = "value.subject.name.strategy";
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DEFAULT =
       TopicNameStrategy.class.getName();
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DOC =
       "Determines how to construct the subject name under which the value schema is registered "
-      + "with the schema registry";
+      + "with the schema registry. By default, <topic>-value is used as subject.";
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
