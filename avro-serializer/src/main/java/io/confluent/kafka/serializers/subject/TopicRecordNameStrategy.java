@@ -30,6 +30,12 @@ public class TopicRecordNameStrategy extends RecordNameStrategy {
 
   @Override
   public String getSubjectName(String topic, boolean isKey, Object value) {
+    // Null is passed through unserialized, since it has special meaning in
+    // log-compacted Kafka topics.
+    if (value == null) {
+      return null;
+    }
+
     return topic + "-" + getRecordName(value, isKey);
   }
 }

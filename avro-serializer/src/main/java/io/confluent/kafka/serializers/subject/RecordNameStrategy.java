@@ -38,6 +38,12 @@ public class RecordNameStrategy implements SubjectNameStrategy {
 
   @Override
   public String getSubjectName(String topic, boolean isKey, Object value) {
+    // Null is passed through unserialized, since it has special meaning in
+    // log-compacted Kafka topics.
+    if (value == null) {
+      return null;
+    }
+
     return getRecordName(value, isKey);
   }
 

@@ -31,6 +31,7 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.SubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -42,8 +43,8 @@ public abstract class AbstractKafkaAvroSerDe {
 
   private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
-  protected SubjectNameStrategy keySubjectNameStrategy;
-  protected SubjectNameStrategy valueSubjectNameStrategy;
+  protected SubjectNameStrategy keySubjectNameStrategy = new TopicNameStrategy();
+  protected SubjectNameStrategy valueSubjectNameStrategy = new TopicNameStrategy();
 
   static {
     Schema.Parser parser = new Schema.Parser();
@@ -86,11 +87,7 @@ public abstract class AbstractKafkaAvroSerDe {
    * Get the subject name for the given topic and value type.
    */
   protected String getSubjectName(String topic, boolean isKey, Object value) {
-    // Null is passed through unserialized, since it has special meaning in
-    // log-compacted Kafka topics.
-    if (value == null) {
-      return null;
-    } else if (isKey) {
+    if (isKey) {
       return keySubjectNameStrategy.getSubjectName(topic, isKey, value);
     } else {
       return valueSubjectNameStrategy.getSubjectName(topic, isKey, value);
