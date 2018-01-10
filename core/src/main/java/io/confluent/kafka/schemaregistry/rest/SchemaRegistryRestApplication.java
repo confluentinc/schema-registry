@@ -16,17 +16,16 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import org.eclipse.jetty.util.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 
 import javax.ws.rs.core.Configurable;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestSchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ConfigResource;
@@ -43,7 +42,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryRestApplication.class);
   private KafkaSchemaRegistry schemaRegistry = null;
-  private SchemaRegistryResourceExtension schemaRegistryResourceExtension = null;
+  private List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions = null;
 
   public SchemaRegistryRestApplication(Properties props) throws RestConfigException {
     this(new SchemaRegistryConfig(props));
@@ -68,24 +67,10 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
       System.exit(1);
     }
 
-    String extensionClassName =
-        schemaRegistryConfig.getString(SchemaRegistryConfig
-            .SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG);
-
-    if (StringUtil.isNotBlank(extensionClassName)) {
-      try {
-        Class<SchemaRegistryResourceExtension>
-            restResourceExtensionClass =
-            (Class<SchemaRegistryResourceExtension>) Class.forName(extensionClassName);
-
-        schemaRegistryResourceExtension = restResourceExtensionClass.newInstance();
-      } catch (ClassNotFoundException | IllegalAccessException | InstantiationException e) {
-        throw new RestSchemaRegistryException(
-            "Unable to load resource extension class " + extensionClassName
-            + ". Check your classpath and that the configured class implements "
-            + "the SchemaRegistryResourceExtension interface.");
-      }
-    }
+    schemaRegistryResourceExtensions =
+        schemaRegistryConfig.getConfiguredInstances(
+            SchemaRegistryConfig.SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG,
+            SchemaRegistryResourceExtension.class);
 
     config.register(RootResource.class);
     config.register(new ConfigResource(schemaRegistry));
@@ -94,9 +79,12 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new SubjectVersionsResource(schemaRegistry));
     config.register(new CompatibilityResource(schemaRegistry));
 
-    if (schemaRegistryResourceExtension != null) {
+    if (schemaRegistryResourceExtensions != null) {
       try {
-        schemaRegistryResourceExtension.register(config, schemaRegistryConfig, schemaRegistry);
+        for (SchemaRegistryResourceExtension
+            schemaRegistryResourceExtension : schemaRegistryResourceExtensions) {
+          schemaRegistryResourceExtension.register(config, schemaRegistryConfig, schemaRegistry);
+        }
       } catch (SchemaRegistryException e) {
         log.error("Error starting the schema registry", e);
         System.exit(1);
@@ -111,11 +99,14 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
       schemaRegistry.close();
     }
 
-    if (schemaRegistryResourceExtension != null) {
-      try {
-        schemaRegistryResourceExtension.close();
-      } catch (IOException e) {
-        log.error("Error closing the extension resource", e);
+    if (schemaRegistryResourceExtensions != null) {
+      for (SchemaRegistryResourceExtension
+          schemaRegistryResourceExtension : schemaRegistryResourceExtensions) {
+        try {
+          schemaRegistryResourceExtension.close();
+        } catch (IOException e) {
+          log.error("Error closing the extension resource", e);
+        }
       }
     }
   }
