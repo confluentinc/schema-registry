@@ -88,7 +88,13 @@ public class SchemaNormalizationWithDefault {
         for (Schema.Field f: s.getFields()) {
           if (! firstTime) o.append(','); else firstTime = false;
           o.append("{\"name\":\"").append(f.name()).append("\"");
-          build(env, f.schema(), o.append(",\"type\":")).append("}");
+          build(env, f.schema(), o.append(",\"type\":"));
+          if (f.defaultValue() != null) {
+            o.append(",\"default\":")
+              .append(f.defaultValue().toString())
+              .append("");
+          }
+          o.append("}");
         }
         o.append("]");
       }
