@@ -1450,7 +1450,9 @@ public class AvroData {
       case ENUM:
         // enums are unwrapped to strings and the original enum is not preserved
         builder = SchemaBuilder.string();
-        builder.parameter(CONNECT_ENUM_DOC_PROP, schema.getDoc());
+        if (schema.getDoc() != null) {
+          builder.parameter(CONNECT_ENUM_DOC_PROP, schema.getDoc());
+        }
         builder.parameter(AVRO_TYPE_ENUM, schema.getFullName());
         for (String enumSymbol : schema.getEnumSymbols()) {
           builder.parameter(AVRO_TYPE_ENUM + "." + enumSymbol, enumSymbol);
@@ -1539,11 +1541,13 @@ public class AvroData {
       while (paramIt.hasNext()) {
         Map.Entry<String, JsonNode> field = paramIt.next();
         JsonNode jsonValue = field.getValue();
-        if (!jsonValue.isTextual()) {
-          throw new DataException("Expected schema parameter values to be strings but found: "
-                                  + jsonValue);
+        if (!jsonValue.isNull()) {
+          if (!jsonValue.isTextual()) {
+            throw new DataException("Expected schema parameter values to be strings but found: "
+                    + jsonValue);
+          }
+          builder.parameter(field.getKey(), jsonValue.getTextValue());
         }
-        builder.parameter(field.getKey(), jsonValue.getTextValue());
       }
     }
 
