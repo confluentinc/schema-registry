@@ -1,7 +1,7 @@
 ---
 version: '2'
 networks:
-  zk:
+  bridged:
     driver: bridge
 services:
   zookeeper-1:
@@ -14,7 +14,7 @@ services:
       ZOOKEEPER_SYNC_LIMIT: 2
       ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
     networks:
-    - zk
+    - bridged
     ports:
     - 22181:2181
     - 22888:2888
@@ -31,7 +31,7 @@ services:
       ZOOKEEPER_SYNC_LIMIT: 2
       ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
     networks:
-    - zk
+    - bridged
     ports:
     - 32181:2181
     - 32888:2888
@@ -48,7 +48,7 @@ services:
       ZOOKEEPER_SYNC_LIMIT: 2
       ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
     networks:
-    - zk
+    - bridged
     ports:
     - 42181:2181
     - 42888:2888
@@ -58,7 +58,7 @@ services:
   kafka-1:
     image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
     networks:
-    - zk
+    - bridged
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
@@ -68,7 +68,7 @@ services:
   kafka-2:
     image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
     networks:
-    - zk
+    - bridged
     environment:
       KAFKA_BROKER_ID: 2
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
@@ -78,7 +78,7 @@ services:
   kafka-3:
     image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
     networks:
-    - zk
+    - bridged
     environment:
       KAFKA_BROKER_ID: 3
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
@@ -88,7 +88,7 @@ services:
   schema-registry-1:
     image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
     networks:
-    - zk
+    - bridged
     environment:
       SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
       SCHEMA_REGISTRY_HOST_NAME: schema-registry-1
@@ -99,7 +99,7 @@ services:
   schema-registry-2:
     image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
     networks:
-    - zk
+    - bridged
     environment:
       SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
       SCHEMA_REGISTRY_HOST_NAME: schema-registry-2
@@ -110,7 +110,7 @@ services:
   schema-registry-3:
     image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
     networks:
-    - zk
+    - bridged
     environment:
       SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
       SCHEMA_REGISTRY_HOST_NAME: schema-registry-3
