@@ -30,6 +30,8 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.subject.SubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -41,6 +43,8 @@ public abstract class AbstractKafkaAvroSerDe {
 
   private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
+  protected SubjectNameStrategy keySubjectNameStrategy = new TopicNameStrategy();
+  protected SubjectNameStrategy valueSubjectNameStrategy = new TopicNameStrategy();
 
   static {
     Schema.Parser parser = new Schema.Parser();
@@ -72,6 +76,8 @@ public abstract class AbstractKafkaAvroSerDe {
       if (null == schemaRegistry) {
         schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject, originals);
       }
+      keySubjectNameStrategy = config.keySubjectNameStrategy();
+      valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     } catch (io.confluent.common.config.ConfigException e) {
       throw new ConfigException(e.getMessage());
     }
@@ -80,11 +86,11 @@ public abstract class AbstractKafkaAvroSerDe {
   /**
    * Get the subject name for the given topic and value type.
    */
-  protected static String getSubjectName(String topic, boolean isKey) {
+  protected String getSubjectName(String topic, boolean isKey, Object value) {
     if (isKey) {
-      return topic + "-key";
+      return keySubjectNameStrategy.getSubjectName(topic, isKey, value);
     } else {
-      return topic + "-value";
+      return valueSubjectNameStrategy.getSubjectName(topic, isKey, value);
     }
   }
 
@@ -92,7 +98,7 @@ public abstract class AbstractKafkaAvroSerDe {
    * Get the subject name used by the old Encoder interface, which relies only on the value type
    * rather than the topic.
    */
-  protected static String getOldSubjectName(Object value) {
+  protected String getOldSubjectName(Object value) {
     if (value instanceof GenericContainer) {
       return ((GenericContainer) value).getSchema().getName() + "-value";
     } else {
