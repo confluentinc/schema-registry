@@ -7,7 +7,7 @@ remote_requirements = '\n'.join(str(r.req) for r in parse_requirements("requirem
 
 setuptools.setup(
     name='cp-schema-registry-tests',
-    version='4.1.0',
+    version='4.0.1',
 
     author="Confluent, Inc.",
 
