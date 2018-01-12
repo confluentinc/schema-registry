@@ -2,11 +2,17 @@
 
 Security Overview
 -----------------
-The Schema Registry currently supports all Kafka security features, including: communication and authentication with a
-secure Kafka cluster over SSL; authentication with ZooKeeper over SASL; authentication with Kafka over SASL; and
-end-user REST API calls over HTTPS.
+
+The Schema Registry currently supports all Kafka security features, including:
+
+* :ref:`SSL encryption <encryption-ssl-schema-registry>` with a secure Kafka cluster
+* :ref:`SSL authentication<authentication-ssl-schema-registry>` with a secure Kafka Cluster
+* :ref:`SASL authentication<kafka_sasl_auth>`  with a secure Kafka Cluster 
+* Authentication with ZooKeeper over SASL
+* End-user REST API calls over HTTPS
 
 For more details, check the :ref:`configuration options<schemaregistry_config>`.
+
 
 Kafka Store
 ~~~~~~~~~~~
@@ -71,4 +77,22 @@ This process enables https, but still defaults to http so schema registry instan
 - Do a rolling bounce of the cluster
 
 
+Authorizing Access to the Schemas Topic
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Relatively few services need access to the Schema Registry, and they are likely internal, so you can restrict access via firewall rules and/or network segmentation.
+
+Note that if you have enabled :ref:`Kafka authorization <kafka_authorization>`, you will need
+to grant read and write access to this topic to Schema Registry's principal.
+
+.. sourcecode:: bash
+
+   $ export KAFKA_OPTS="-Djava.security.auth.login.config=<path to JAAS conf file>"
+
+   $ bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal 'User:<sr-principal>' --allow-host '*' --operation Read --topic _schemas
+
+   $ bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal 'User:<sr-principal>' --allow-host '*' --operation Write --topic _schemas
+
+.. note::
+  **Removing world-level permissions:**
+  In previous versions of the Schema Registry, we recommended making the `_schemas` topic world readable and writable. Now that the Schema Registry supports SASL, the world-level permissions can be dropped.
