@@ -1,4 +1,4 @@
-.. _schemaregistry_api:
+.. _schemaregistry_deletion:
 
 Schema Deletion Guidelines
 ==========================
