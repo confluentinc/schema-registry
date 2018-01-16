@@ -215,7 +215,8 @@ public abstract class ClusterTestHarness {
         false,
         TestUtils.RandomPort(),
         Option.<String>empty(),
-        1
+        1,
+        false
     );
     injectProperties(props);
     return KafkaConfig.fromProps(props);
