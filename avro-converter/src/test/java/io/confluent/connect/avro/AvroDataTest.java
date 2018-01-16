@@ -1295,6 +1295,24 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testToConnectEnumWithNoDoc() {
+    // Enums are just converted to strings, original enum is preserved in parameters
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
+            .enumeration("TestEnum")
+            .symbols("foo", "bar", "baz");
+    SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
+    builder.parameter(AVRO_TYPE_ENUM, "TestEnum");
+    for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
+      builder.parameter(AVRO_TYPE_ENUM+"."+enumSymbol, enumSymbol);
+    }
+
+    assertEquals(new SchemaAndValue(builder.build(), "bar"),
+            avroData.toConnectData(avroSchema, "bar"));
+    assertEquals(new SchemaAndValue(builder.build(), "bar"),
+            avroData.toConnectData(avroSchema, new GenericData.EnumSymbol(avroSchema, "bar")));
+  }
+
+  @Test
   public void testToConnectOptionalPrimitiveWithConnectMetadata() {
     Schema schema = SchemaBuilder.string().
         doc("doc").defaultValue("foo").name("io.confluent.stringtype").version(2).optional()
