@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import subprocess
+
 from pip.req import parse_requirements
 import setuptools
 
@@ -7,7 +9,7 @@ remote_requirements = '\n'.join(str(r.req) for r in parse_requirements("requirem
 
 setuptools.setup(
     name='cp-schema-registry-tests',
-    version='4.0.1',
+    version = subprocess.check_output("grep version pom.xml |head -1 |sed -e 's/<[^>]*>//g;s/ //g;s/-SNAPSHOT//'", shell=True),
 
     author="Confluent, Inc.",
 
