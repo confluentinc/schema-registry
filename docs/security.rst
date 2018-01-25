@@ -13,7 +13,7 @@ The Schema Registry currently supports all Kafka security features, including:
 
 For more details, check the :ref:`configuration options<schemaregistry_config>`.
 
-If you want to see configurations for a fully secured Schema Registry, please refer to the :ref:`Confluent Platform demo<tutorials>`
+If you want to see full configurations for a secured Schema Registry, please refer to the :ref:`Confluent Platform demo<tutorials>`
 
 
 Kafka Store
@@ -65,13 +65,13 @@ The following configuration determine the protocol used by Schema Registry:
   * Default: "http"
   * Importance: low
 
-On the client, configure the ``schema.registry.listener`` to match the Schema Registry configured listener.
+On the client, configure the ``schema.registry.listener`` to match the configured Schema Registry listener.
 
 
 Additional configurations for HTTPS
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you are using HTTPS, configure the Schema Registry with appropriate SSL configurations to setup the keystore and optionally truststore. The truststore is required only when ``ssl.client.auth`` set to true.
+If you are using HTTPS, configure the Schema Registry with appropriate SSL configurations for the keystore and optionally truststore. The truststore is required only when ``ssl.client.auth`` set to true.
 
 .. sourcecode:: bash
 
@@ -83,16 +83,16 @@ If you are using HTTPS, configure the Schema Registry with appropriate SSL confi
 
 To configure clients to use HTTPS to Schema Registry:
 
-1. On the client, configure the ``schema.registry.listener`` to match the Schema Registry configured listener for HTTPS.
+1. On the client, configure the ``schema.registry.listener`` to match the configured listener for HTTPS.
 
-2. On the client, configure the JVM env variable to set the SSL keystore and truststore. You will need to set the appropriate env variable depending on the client (one of ``KAFKA_OPTS``, ``SCHEMA_REGISTRY_OPTS``, ``KSQL_OPTS``). For example:
+2. On the client, configure the environment variables to set the SSL keystore and truststore. You will need to set the appropriate env variable depending on the client (one of ``KAFKA_OPTS``, ``SCHEMA_REGISTRY_OPTS``, ``KSQL_OPTS``). For example:
 
 .. sourcecode:: bash
 
-      KAFKA_OPTS: -Djavax.net.ssl.trustStore=/etc/kafka/secrets/kafka.client.truststore.jks
-                  -Djavax.net.ssl.trustStorePassword=confluent
-                  -Djavax.net.ssl.keyStore=/etc/kafka/secrets/kafka.client.keystore.jks
-                  -Djavax.net.ssl.keyStorePassword=confluent
+      $ export KAFKA_OPTS="-Djavax.net.ssl.trustStore=/etc/kafka/secrets/kafka.client.truststore.jks \
+                  -Djavax.net.ssl.trustStorePassword=confluent \
+                  -Djavax.net.ssl.keyStore=/etc/kafka/secrets/kafka.client.keystore.jks \
+                  -Djavax.net.ssl.keyStorePassword=confluent"
 
 
 Migrating from HTTP to HTTPS
