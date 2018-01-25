@@ -377,7 +377,10 @@ Configuration Options
   * Importance: low
 
 ``schema.registry.resource.extension.class``
-  Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc
+  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface
+  <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources
+  like filters to Schema Registry. Typically used to add custom capability like logging,
+  security, etc.
 
   * Type: string
   * Default: ""

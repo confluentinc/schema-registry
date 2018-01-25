@@ -1,3 +1,8 @@
+# Schema Registry Documentation
+The full Confluent Platform documentation is available at [docs.confluent.io](https://docs.confluent.io/current/schema-registry/docs/index.html).
+
+# Building the documentation
+
 This documentation is built using [Sphinx](http://sphinx-doc.org). It also uses some extensions for theming and REST API
 documentation support.
 

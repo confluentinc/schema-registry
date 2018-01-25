@@ -43,7 +43,7 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
 
   protected SchemaRegistryClient client() {
     if (null == this.client) {
-      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000);
+      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, null);
     }
 
     return this.client;

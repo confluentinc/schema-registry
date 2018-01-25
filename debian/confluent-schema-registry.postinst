@@ -1,0 +1,46 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    configure)
+	_user=cp-schema-registry
+	_group=confluent
+
+	(getent group $_group 2>&1 >/dev/null) || addgroup --quiet --system $_group
+        adduser --system --disabled-password --disabled-login --home /var/empty \
+                --no-create-home --quiet --force-badname --ingroup $_group $_user
+
+	_permwarn=
+	for dir in /var/log/confluent ; do
+	    if [ $dir = /var/log/confluent ]; then
+		# Confluent log directory should be writable by group
+		_perm="chown ${_user}:${_group} $dir && chmod u+wx,g+wx,o= $dir"
+	    else
+		# Other dirs are only readable by group
+		_perm="chown ${_user}:${_group} $dir && chmod u+wx,g+r,o= $dir"
+	    fi
+
+	    if [ ! -d $dir ]; then
+		echo "Creating directory $dir with owner $_user:$_group"
+		mkdir -p $dir
+		eval $_perm
+	    else
+		echo "Notice: Not creating existing directory $dir, ensure proper permissions for user $_user group $_group"
+		_permwarn="${_permwarn}${_perm}\n"
+	    fi
+	done
+
+	if [ -n "$_permwarn" ]; then
+	    echo "Notice: If you are planning to use the provided systemd service units for"
+	    echo "Notice: confluent-schema-registry, make sure that read-write permissions"
+	    echo "Notice: for user $_user and group $_group are set up according to the"
+	    echo "Notice: following commands:"
+	    /bin/echo -e "$_permwarn"
+	fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -81,7 +81,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   private void generateVersion(String subject, Schema schema) {
-    ArrayList<Integer> versions = getAllVersions(subject);
+    List<Integer> versions = getAllVersions(subject);
     Map<Schema, Integer> schemaVersionMap;
     int currentVersion;
     if (versions.isEmpty()) {
@@ -95,7 +95,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     versionCache.put(subject, schemaVersionMap);
   }
 
-  private ArrayList<Integer> getAllVersions(String subject) {
+  @Override
+  public synchronized List<Integer> getAllVersions(String subject) {
     ArrayList<Integer> versions = new ArrayList<Integer>();
     if (versionCache.containsKey(subject)) {
       versions.addAll(versionCache.get(subject).values());
@@ -173,7 +174,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private int getLatestVersion(String subject)
       throws IOException, RestClientException {
-    ArrayList<Integer> versions = getAllVersions(subject);
+    List<Integer> versions = getAllVersions(subject);
     if (versions.isEmpty()) {
       throw new IOException("No schema registered under subject!");
     } else {

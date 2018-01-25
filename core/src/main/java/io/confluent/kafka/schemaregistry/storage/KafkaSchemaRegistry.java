@@ -152,11 +152,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     reporters.add(new JmxReporter(jmxPrefix));
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
     this.masterNodeSensor = metrics.sensor("master-slave-role");
+
+    Map<String, String> configuredTags = config.getMap(RestConfig.METRICS_TAGS_CONFIG);
     MetricName
         m = new MetricName("master-slave-role", "master-slave-role",
                            "1.0 indicates the node is the active master in the cluster and is the"
                            + " node where all register schema and config update requests are "
-                           + "served.");
+                           + "served.", configuredTags);
     this.masterNodeSensor.add(m, new Gauge());
   }
 
@@ -415,9 +417,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
 
-  public void deleteSchemaVersionOrForward(String subject,
-                                           Schema schema)
-      throws SchemaRegistryException {
+  public void deleteSchemaVersionOrForward(
+      Map<String, String> headerProperties, String subject,
+      Schema schema) throws SchemaRegistryException {
 
     synchronized (masterLock) {
       if (isMaster()) {
@@ -425,7 +427,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
-          forwardDeleteSchemaVersionRequestToMaster(subject, schema.getVersion());
+          forwardDeleteSchemaVersionRequestToMaster(headerProperties, subject, schema.getVersion());
         } else {
           throw new UnknownMasterException("Register schema request failed since master is "
                                            + "unknown");
@@ -462,14 +464,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  public List<Integer> deleteSubjectOrForward(String subject) throws SchemaRegistryException {
+  public List<Integer> deleteSubjectOrForward(
+      Map<String, String> requestProperties,
+      String subject) throws SchemaRegistryException {
     synchronized (masterLock) {
       if (isMaster()) {
         return deleteSubject(subject);
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
-          return forwardDeleteSubjectRequestToMaster(subject);
+          return forwardDeleteSubjectRequestToMaster(requestProperties, subject);
         } else {
           throw new UnknownMasterException("Register schema request failed since master is "
                                            + "unknown");
@@ -553,14 +557,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private void forwardDeleteSchemaVersionRequestToMaster(String subject, Integer version)
-      throws SchemaRegistryRequestForwardingException {
+  private void forwardDeleteSchemaVersionRequestToMaster(
+      Map<String, String> headerProperties,
+      String subject,
+      Integer version) throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = masterRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding deleteSchemaVersion schema version request %s-%s to %s",
                             subject, version, baseUrl));
     try {
-      masterRestService.deleteSchemaVersion(subject, String.valueOf(version));
+      masterRestService.deleteSchemaVersion(headerProperties, subject, String.valueOf(version));
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
@@ -571,14 +577,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private List<Integer> forwardDeleteSubjectRequestToMaster(String subject)
-      throws SchemaRegistryRequestForwardingException {
+  private List<Integer> forwardDeleteSubjectRequestToMaster(
+      Map<String, String> requestProperties,
+      String subject) throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = masterRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding delete subject request for  %s to %s",
                             subject, baseUrl));
     try {
-      return masterRestService.deleteSubject(subject);
+      return masterRestService.deleteSubject(requestProperties, subject);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(

@@ -284,9 +284,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "ticket's expiry has "
       + "been reached, at which time it will try to renew the ticket.";
   protected static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC =
-      "Fully qualified class name of a valid implementation of the interface "
-      + "SchemaRegistryResourceExtension. This can be used to inject user defined resources like "
-      + "filters. Typically used to add custom capability like logging, security, etc  ";
+      "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
+      + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
+      + " like filters to Schema Registry. Typically used to add custom capability like logging, "
+      + " security, etc.";
   protected static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC =
       "The protocol used while making calls between the instances of schema registry. The slave "
       + "to master node calls for writes and deletes will use the specified protocol. The default "
@@ -469,7 +470,7 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(KAFKASTORE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, "",
             ConfigDef.Importance.LOW, KAFKASTORE_GROUP_ID_DOC
         )
-        .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.STRING, "",
+        .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
         )
         .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,

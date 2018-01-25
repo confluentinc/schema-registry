@@ -1185,11 +1185,11 @@ public class AvroData {
 
         case INT8:
           // Encoded as an Integer
-          converted = value == null ? null : ((Integer) value).byteValue();
+          converted = ((Integer) value).byteValue();
           break;
         case INT16:
           // Encoded as an Integer
-          converted = value == null ? null : ((Integer) value).shortValue();
+          converted = ((Integer) value).shortValue();
           break;
 
         case STRING:
@@ -1450,7 +1450,9 @@ public class AvroData {
       case ENUM:
         // enums are unwrapped to strings and the original enum is not preserved
         builder = SchemaBuilder.string();
-        builder.parameter(CONNECT_ENUM_DOC_PROP, schema.getDoc());
+        if (schema.getDoc() != null) {
+          builder.parameter(CONNECT_ENUM_DOC_PROP, schema.getDoc());
+        }
         builder.parameter(AVRO_TYPE_ENUM, schema.getFullName());
         for (String enumSymbol : schema.getEnumSymbols()) {
           builder.parameter(AVRO_TYPE_ENUM + "." + enumSymbol, enumSymbol);
