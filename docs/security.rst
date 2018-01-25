@@ -13,6 +13,8 @@ The Schema Registry currently supports all Kafka security features, including:
 
 For more details, check the :ref:`configuration options<schemaregistry_config>`.
 
+If you want to see configurations for a fully secured Schema Registry, please refer to the :ref:`Confluent Platform demo<tutorials>`
+
 
 Kafka Store
 ~~~~~~~~~~~
