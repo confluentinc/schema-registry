@@ -9,7 +9,7 @@ The Schema Registry currently supports all Kafka security features, including:
 * :ref:`SSL authentication<authentication-ssl-schema-registry>` with a secure Kafka Cluster
 * :ref:`SASL authentication<kafka_sasl_auth>`  with a secure Kafka Cluster 
 * Authentication with ZooKeeper over SASL
-* End-user REST API calls over HTTPS
+* :ref:`End-user REST API calls over HTTPS<schema_registry_http_https>`
 
 For more details, check the :ref:`configuration options<schemaregistry_config>`.
 
@@ -37,13 +37,18 @@ either with `kafkastore.sasl.kerberos.service.name` or in the JAAS file.
 If the Schema Registry has a different service name than Kafka, at this time `zookeeper.set.acl` must be set to `false`
 in both the Schema Registry and Kafka.
 
-Upgrade from HTTP to HTTPS for REST API
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-By default Schema Registry ships with configs that allow you to make REST API calls over HTTP. The following configuration determine the protocol used by Schema Registry:
+.. _schema_registry_http_https:
+
+Configuring the REST API for HTTP or HTTPS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default Schema Registry allows you to make REST API calls over HTTP. You may configure Schema Registry to allow either HTTP or HTTPS or both at the same time.
+
+The following configuration determine the protocol used by Schema Registry:
 
 ``listeners``
-  Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
+  Comma-separated list of listeners that listen for API requests over HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
   Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
 
@@ -52,23 +57,52 @@ By default Schema Registry ships with configs that allow you to make REST API ca
   * Importance: high
 
 ``schema.registry.inter.instance.protocol``
-  The protocol used while making calls between the instances of schema registry. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
+  The protocol used while making calls between the instances of Schema Registry. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
 
   * Type: string
   * Default: "http"
   * Importance: low
 
-If you would want to upgrade to HTTPS in an existing cluster, you need to perform the outlined steps:
+On the client, configure the ``schema.registry.listener`` to match the Schema Registry configured listener.
+
+
+Additional configurations for HTTPS
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you are using HTTPS, configure the Schema Registry with appropriate SSL configurations to setup the keystore and optionally truststore. The truststore is required only when ``ssl.client.auth`` set to true.
+
+.. sourcecode:: bash
+
+   ssl.truststore.location=/var/private/ssl/kafka.client.truststore.jks
+   ssl.truststore.password=test1234
+   ssl.keystore.location=/var/private/ssl/kafka.client.keystore.jks
+   ssl.keystore.password=test1234
+   ssl.key.password=test1234
+
+To configure clients to use HTTPS to Schema Registry:
+
+1. On the client, configure the ``schema.registry.listener`` to match the Schema Registry configured listener for HTTPS.
+
+2. On the client, configure the JVM env variable to set the SSL keystore and truststore. You will need to set the appropriate env variable depending on the client (one of ``KAFKA_OPTS``, ``SCHEMA_REGISTRY_OPTS``, ``KSQL_OPTS``). For example:
+
+.. sourcecode:: bash
+
+      KAFKA_OPTS: -Djavax.net.ssl.trustStore=/etc/kafka/secrets/kafka.client.truststore.jks
+                  -Djavax.net.ssl.trustStorePassword=confluent
+                  -Djavax.net.ssl.keyStore=/etc/kafka/secrets/kafka.client.keystore.jks
+                  -Djavax.net.ssl.keyStorePassword=confluent
+
+
+Migrating from HTTP to HTTPS
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To upgrade Schema Registry to allow REST API calls over HTTPS in an existing cluster:
 
 - Add/Modify the ``listeners`` config  to include HTTPS. For example: http://0.0.0.0:8081,https://0.0.0.0:8082
-- Configure the appropriate SSL configurations
-
-    - ``ssl.keystore.*`` configs to setup keystore related configs
-    - ``ssl.truststore.*`` configs to setup truststore related configs (required only when ``ssl.client.auth`` set to true)
-   
+- Configure the Schema Registry with appropriate SSL configurations to setup the keystore and optionally truststore
 - Do a rolling bounce of the cluster
 
-This process enables https, but still defaults to http so schema registry instances can still communicate before all nodes have been restarted. They will continue to use http as the default until configured not to. To switch to https as the default and disable http support, perform the following steps:
+This process enables HTTPS, but still defaults to HTTP so Schema Registry instances can still communicate before all nodes have been restarted. They will continue to use HTTP as the default until configured not to. To switch to HTTPS as the default and disable HTTP support, perform the following steps:
 
 - Enable HTTPS as mentioned in first section of upgrade (both HTTP & HTTPS will be enabled)
 - Configure ``schema.registry.inter.instance.protocol`` to `https` in all the nodes
