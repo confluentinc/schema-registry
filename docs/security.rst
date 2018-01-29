@@ -47,10 +47,10 @@ Configuring the REST API for HTTP or HTTPS
 
 By default Schema Registry allows you to make REST API calls over HTTP. You may configure Schema Registry to allow either HTTP or HTTPS or both at the same time.
 
-The following configuration determine the protocol used by Schema Registry:
+The following configuration determines the protocol used by Schema Registry:
 
 ``listeners``
-  Comma-separated list of listeners that listen for API requests over HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
+  Comma-separated list of listeners that listen for API requests over HTTP or HTTPS or both. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
   Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
 
@@ -58,20 +58,15 @@ The following configuration determine the protocol used by Schema Registry:
   * Default: "http://0.0.0.0:8081"
   * Importance: high
 
-``schema.registry.inter.instance.protocol``
-  The protocol used while making calls between the instances of Schema Registry. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
-
-  * Type: string
-  * Default: "http"
-  * Importance: low
-
-On the client, configure the ``schema.registry.listener`` to match the configured Schema Registry listener.
+On the clients, configure ``schema.registry.url`` to match the configured Schema Registry listener.
 
 
 Additional configurations for HTTPS
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you are using HTTPS, configure the Schema Registry with appropriate SSL configurations for the keystore and optionally truststore. The truststore is required only when ``ssl.client.auth`` set to true.
+If you configure an HTTPS listener, there are several additional configurations for the Schema Registry.
+
+First, configure the appropriate SSL configurations for the keystore and optionally truststore. The truststore is required only when ``ssl.client.auth`` is set to true.
 
 .. sourcecode:: bash
 
@@ -81,9 +76,18 @@ If you are using HTTPS, configure the Schema Registry with appropriate SSL confi
    ssl.keystore.password=test1234
    ssl.key.password=test1234
 
+You may specify which protocol to use while making calls between the instances of Schema Registry. The slave to master node calls for writes and deletes will use the specified protocol.
+
+``schema.registry.inter.instance.protocol``
+  The protocol used while making calls between the instances of Schema Registry. The default value is `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
+
+  * Type: string
+  * Default: "http"
+  * Importance: low
+
 To configure clients to use HTTPS to Schema Registry:
 
-1. On the client, configure the ``schema.registry.listener`` to match the configured listener for HTTPS.
+1. On the client, configure the ``schema.registry.url`` to match the configured listener for HTTPS.
 
 2. On the client, configure the environment variables to set the SSL keystore and truststore. You will need to set the appropriate env variable depending on the client (one of ``KAFKA_OPTS``, ``SCHEMA_REGISTRY_OPTS``, ``KSQL_OPTS``). For example:
 
