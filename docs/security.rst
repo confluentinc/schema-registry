@@ -52,8 +52,6 @@ The following configuration determines the protocol used by Schema Registry:
 ``listeners``
   Comma-separated list of listeners that listen for API requests over HTTP or HTTPS or both. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
-  Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
-
   * Type: list
   * Default: "http://0.0.0.0:8081"
   * Importance: high
