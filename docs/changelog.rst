@@ -3,7 +3,7 @@
 Changelog
 =========
 
-Version 3.4.0
+Version 4.0.0
 -------------
 
 * `PR-686 <https://github.com/confluentinc/schema-registry/pull/686>` - Added REST endpoint to return the unescaped Avro schema
@@ -12,7 +12,7 @@ Version 3.4.0
 Upgrade Notes
 ^^^^^^^^^^^^^
 
-In 3.4.0, initial creation or validation of the topic used to store schemas has been
+In 4.0.0, initial creation or validation of the topic used to store schemas has been
 reimplemented to use native Kafka protocol requests instead of accessing Zookeeper directly. This
 means that you are no longer required to have direct access to the Zookeeper cluster backing your
 Kafka cluster. However, note that this also requires appropriate permissions to create topics (on
