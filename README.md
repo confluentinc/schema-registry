@@ -107,7 +107,7 @@ installing these, you can build the Schema Registry
 with Maven.
 
 This project uses the [Google java code style](https://google.github.io/styleguide/javaguide.html)
-to keep code clean and consistant.
+to keep code clean and consistent.
 
 Contribute
 ----------
