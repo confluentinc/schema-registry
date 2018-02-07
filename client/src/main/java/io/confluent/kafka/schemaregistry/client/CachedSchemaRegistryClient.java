@@ -279,8 +279,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public Integer deleteSchemaVersion(Map<String, String> requestProperties, String subject,
-                                     String version) throws IOException, RestClientException {
+  public Integer deleteSchemaVersion(
+      Map<String, String> requestProperties,
+      String subject,
+      String version)
+      throws IOException, RestClientException {
     return restService.deleteSchemaVersion(requestProperties, subject, version);
   }
 

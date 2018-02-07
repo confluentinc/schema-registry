@@ -281,10 +281,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public List<Integer> deleteSubject(Map<String, String> requestProperties, String subject)
+  public List<Integer> deleteSubject(
+      Map<String, String> requestProperties,
+      String subject)
       throws IOException, RestClientException {
     schemaCache.remove(subject);
-    idCache.remove(subject);
     versionCache.remove(subject);
     compatibilityCache.remove(subject);
     return Arrays.asList(0);
@@ -297,8 +298,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public Integer deleteSchemaVersion(Map<String, String> requestProperties, String subject,
-                                     String version) throws IOException, RestClientException {
+  public Integer deleteSchemaVersion(
+      Map<String, String> requestProperties,
+      String subject,
+      String version)
+      throws IOException, RestClientException {
     if (versionCache.containsKey(subject)) {
       versionCache.get(subject).remove(version);
       return 0;

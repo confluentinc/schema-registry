@@ -65,15 +65,16 @@ public interface SchemaRegistryClient {
 
   public List<Integer> deleteSubject(
       Map<String, String> requestProperties,
-      String subject
-  ) throws IOException, RestClientException;
+      String subject)
+      throws IOException, RestClientException;
 
-  public Integer deleteSchemaVersion(String subject, String version) throws IOException,
-                                                                            RestClientException;
+  public Integer deleteSchemaVersion(String subject,
+                                     String version)
+      throws IOException, RestClientException;
 
   public Integer deleteSchemaVersion(
       Map<String, String> requestProperties,
       String subject,
-      String version
-  ) throws IOException, RestClientException;
+      String version)
+      throws IOException, RestClientException;
 }
