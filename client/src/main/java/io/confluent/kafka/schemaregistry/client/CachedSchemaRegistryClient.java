@@ -262,6 +262,29 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public List<Integer> deleteSubject(String subject) throws IOException, RestClientException {
+    return deleteSubject(restService.DEFAULT_REQUEST_PROPERTIES, subject);
+  }
+
+  @Override
+  public List<Integer> deleteSubject(Map<String, String> requestProperties, String subject)
+      throws IOException, RestClientException {
+    return restService.deleteSubject(requestProperties, subject);
+  }
+
+  @Override
+  public Integer deleteSchemaVersion(String subject, String version)
+      throws IOException, RestClientException {
+    return deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, version);
+  }
+
+  @Override
+  public Integer deleteSchemaVersion(Map<String, String> requestProperties, String subject,
+                                     String version) throws IOException, RestClientException {
+    return restService.deleteSchemaVersion(requestProperties, subject, version);
+  }
+
+  @Override
   public boolean testCompatibility(String subject, Schema schema)
       throws IOException, RestClientException {
     return restService.testCompatibility(schema.toString(), subject, "latest");
