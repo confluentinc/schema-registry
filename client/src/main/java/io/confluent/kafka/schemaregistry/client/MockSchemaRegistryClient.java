@@ -304,7 +304,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String version)
       throws IOException, RestClientException {
     if (versionCache.containsKey(subject)) {
-      versionCache.get(subject).remove(version);
+      versionCache.get(subject).values().remove(Integer.valueOf(version));
       return 0;
     }
     return -1;
