@@ -37,7 +37,7 @@ public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvi
   public void configure(Map<String, ?> configs) {
 
     Map<String, Object> updatedConfigs = getConfigsForJaasUtil(configs);
-    JaasContext jaasContext = JaasContext.load(JaasContext.Type.CLIENT, null, updatedConfigs);
+    JaasContext jaasContext = JaasContext.loadClientContext(updatedConfigs);
     List<AppConfigurationEntry> appConfigurationEntries = jaasContext.configurationEntries();
     if (appConfigurationEntries != null && !appConfigurationEntries.isEmpty()) {
       Map<String, ?> options = appConfigurationEntries.get(0).getOptions();
