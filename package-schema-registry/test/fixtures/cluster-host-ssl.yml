@@ -1,0 +1,90 @@
+---
+version: '2'
+services:
+  zookeeper-1:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 22181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: localhost:22888:23888;localhost:32888:33888;localhost:42888:43888
+    network_mode: host
+    labels:
+    - io.confluent.docker.testing=true
+  zookeeper-2:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    environment:
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPER_CLIENT_PORT: 32181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: localhost:22888:23888;localhost:32888:33888;localhost:42888:43888
+    network_mode: host
+    labels:
+    - io.confluent.docker.testing=true
+  zookeeper-3:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    environment:
+      ZOOKEEPER_SERVER_ID: 3
+      ZOOKEEPER_CLIENT_PORT: 42181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: localhost:22888:23888;localhost:32888:33888;localhost:42888:43888
+    network_mode: host
+    labels:
+    - io.confluent.docker.testing=true
+  kafka-ssl-1:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    network_mode: host
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: localhost:22181,localhost:32181,localhost:42181/ssl
+      KAFKA_ADVERTISED_LISTENERS: SSL://localhost:19093
+      KAFKA_SSL_KEYSTORE_FILENAME: kafka.broker1.keystore.jks
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: broker1_keystore_creds
+      KAFKA_SSL_KEY_CREDENTIALS: broker1_sslkey_creds
+      KAFKA_SSL_TRUSTSTORE_FILENAME: kafka.broker1.truststore.jks
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: broker1_truststore_creds
+      KAFKA_SECURITY_INTER_BROKER_PROTOCOL: SSL
+    volumes:
+    - /tmp/kafka-cluster-host-test/secrets:/etc/kafka/secrets
+    labels:
+    - io.confluent.docker.testing=true
+  kafka-ssl-2:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    network_mode: host
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: localhost:22181,localhost:32181,localhost:42181/ssl
+      KAFKA_ADVERTISED_LISTENERS: SSL://localhost:29093
+      KAFKA_SSL_KEYSTORE_FILENAME: kafka.broker2.keystore.jks
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: broker2_keystore_creds
+      KAFKA_SSL_KEY_CREDENTIALS: broker2_sslkey_creds
+      KAFKA_SSL_TRUSTSTORE_FILENAME: kafka.broker2.truststore.jks
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: broker2_truststore_creds
+      KAFKA_SECURITY_INTER_BROKER_PROTOCOL: SSL
+    volumes:
+    - /tmp/kafka-cluster-host-test/secrets:/etc/kafka/secrets
+    labels:
+    - io.confluent.docker.testing=true
+  kafka-ssl-3:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    network_mode: host
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: localhost:22181,localhost:32181,localhost:42181/ssl
+      KAFKA_ADVERTISED_LISTENERS: SSL://localhost:39093
+      KAFKA_SSL_KEYSTORE_FILENAME: kafka.broker3.keystore.jks
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: broker3_keystore_creds
+      KAFKA_SSL_KEY_CREDENTIALS: broker3_sslkey_creds
+      KAFKA_SSL_TRUSTSTORE_FILENAME: kafka.broker3.truststore.jks
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: broker3_truststore_creds
+      KAFKA_SECURITY_INTER_BROKER_PROTOCOL: SSL
+    volumes:
+    - /tmp/kafka-cluster-host-test/secrets:/etc/kafka/secrets
+    labels:
+    - io.confluent.docker.testing=true

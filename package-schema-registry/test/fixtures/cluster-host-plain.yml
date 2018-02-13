@@ -1,0 +1,93 @@
+---
+version: '2'
+services:
+  zookeeper-1:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 22181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: localhost:22888:23888;localhost:32888:33888;localhost:42888:43888
+    network_mode: host
+    labels:
+    - io.confluent.docker.testing=true
+  zookeeper-2:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    environment:
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPER_CLIENT_PORT: 32181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: localhost:22888:23888;localhost:32888:33888;localhost:42888:43888
+    network_mode: host
+    labels:
+    - io.confluent.docker.testing=true
+  zookeeper-3:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-zookeeper:${DOCKER_TEST_TAG}
+    environment:
+      ZOOKEEPER_SERVER_ID: 3
+      ZOOKEEPER_CLIENT_PORT: 42181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: localhost:22888:23888;localhost:32888:33888;localhost:42888:43888
+    network_mode: host
+    labels:
+    - io.confluent.docker.testing=true
+  kafka-1:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    network_mode: host
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: localhost:22181,localhost:32181,localhost:42181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:19092
+    labels:
+    - io.confluent.docker.testing=true
+  kafka-2:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    network_mode: host
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: localhost:22181,localhost:32181,localhost:42181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:29092
+    labels:
+    - io.confluent.docker.testing=true
+  kafka-3:
+    image: ${DOCKER_TEST_REGISTRY}confluentinc/cp-kafka:${DOCKER_TEST_TAG}
+    network_mode: host
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: localhost:22181,localhost:32181,localhost:42181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:39092
+    labels:
+    - io.confluent.docker.testing=true
+  schema-registry-1:
+    image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
+    network_mode: host
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: localhost:22181,localhost:32181,localhost:42181
+      SCHEMA_REGISTRY_HOST_NAME: localhost
+      SCHEMA_REGISTRY_LISTENERS: http://localhost:8081
+    labels:
+    - io.confluent.docker.testing=true
+  schema-registry-2:
+    image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
+    network_mode: host
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: localhost:22181,localhost:32181,localhost:42181
+      SCHEMA_REGISTRY_HOST_NAME: localhost
+      SCHEMA_REGISTRY_LISTENERS: http://localhost:8082
+    labels:
+    - io.confluent.docker.testing=true
+  schema-registry-3:
+    image: ${DOCKER_REGISTRY}confluentinc/cp-schema-registry:${DOCKER_TAG}
+    network_mode: host
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: localhost:22181,localhost:32181,localhost:42181
+      SCHEMA_REGISTRY_HOST_NAME: localhost
+      SCHEMA_REGISTRY_LISTENERS: http://localhost:8083
+    labels:
+    - io.confluent.docker.testing=true
