@@ -46,10 +46,10 @@ archive: install
 	rm -f $(CURDIR)/$(PACKAGE_NAME).tar.gz && cd $(DESTDIR) && tar -czf $(CURDIR)/$(PACKAGE_NAME).tar.gz $(PREFIX)
 	rm -f $(CURDIR)/$(PACKAGE_NAME).zip && cd $(DESTDIR) && zip -r $(CURDIR)/$(PACKAGE_NAME).zip $(PREFIX)
 
-apply-patches: $(wildcard patches/*)
+apply-patches: $(wildcard debian/patches/*)
 ifeq ($(APPLY_PATCHES),yes)
 	git reset --hard HEAD
-	cat patches/series | xargs -iPATCH bash -c 'patch -p1 < patches/PATCH'
+	cat debian/patches/series | xargs -iPATCH bash -c 'patch -p1 < debian/patches/PATCH'
 endif
 
 build: apply-patches
