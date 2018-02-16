@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -41,6 +42,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<String, Map<Integer, Schema>> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
+
+  public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
+
+  static {
+    DEFAULT_REQUEST_PROPERTIES = new HashMap<String, String>();
+    DEFAULT_REQUEST_PROPERTIES.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+  }
 
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
     this(new RestService(baseUrl), identityMapCapacity);
@@ -263,7 +271,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public List<Integer> deleteSubject(String subject) throws IOException, RestClientException {
-    return deleteSubject(restService.DEFAULT_REQUEST_PROPERTIES, subject);
+    return deleteSubject(DEFAULT_REQUEST_PROPERTIES, subject);
   }
 
   @Override
@@ -278,7 +286,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public Integer deleteSchemaVersion(String subject, String version)
       throws IOException, RestClientException {
-    return deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, version);
+    return deleteSchemaVersion(DEFAULT_REQUEST_PROPERTIES, subject, version);
   }
 
   @Override
