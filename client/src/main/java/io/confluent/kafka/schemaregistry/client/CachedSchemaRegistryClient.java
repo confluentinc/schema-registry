@@ -263,7 +263,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public List<Integer> deleteSubject(String subject) throws IOException, RestClientException {
-    return deleteSubject(restService.DEFAULT_REQUEST_PROPERTIES, subject);
+    return deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject);
   }
 
   @Override
