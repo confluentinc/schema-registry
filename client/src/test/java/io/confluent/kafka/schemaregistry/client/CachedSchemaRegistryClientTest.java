@@ -20,6 +20,7 @@ import org.easymock.EasyMock;
 import org.junit.Test;
 
 import java.util.HashMap;
+import java.util.Arrays;
 
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -200,4 +201,74 @@ public class CachedSchemaRegistryClientTest {
     verify(restService);
   }
 
+  @Test
+  public void testDeleteSchemaCache() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20, new
+        HashMap<String, Object>());
+
+    String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
+    Schema avroSchema = new Schema.Parser().parse(schema);
+
+    String subject = "foo";
+    int id = 25;
+
+    EasyMock.reset(restService);
+    // Expect one call to register schema
+    expect(restService.registerSchema(anyString(), eq(subject)))
+        .andReturn(id);
+
+    expect(restService.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject))
+        .andReturn(Arrays.asList(0));
+
+    replay(restService);
+
+    assertEquals(id, client.register(subject, avroSchema));
+    assertEquals(id, client.register(subject, avroSchema)); // hit the cache
+
+    assertEquals(Arrays.asList(0), client.deleteSubject(subject));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testDeleteVersionCache() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
+        HashMap<String, Object>());
+
+    String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
+    Schema avroSchema = new Schema.Parser().parse(schema);
+
+    String subject = "foo";
+    int id = 25;
+    int version = 7;
+
+    EasyMock.reset(restService);
+
+    expect(restService.registerSchema(anyString(), eq(subject)))
+        .andReturn(id);
+
+    // Expect only one call to lookup the subject (the rest should hit the cache)
+    expect(restService.lookUpSubjectVersion(anyString(), eq(subject), eq(true)))
+        .andReturn(new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(subject,
+                                                                                     version,
+                                                                                     id,
+                                                                                     schema));
+
+    expect(restService.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+                                           subject,
+                                           String.valueOf(version)))
+        .andReturn(0);
+
+    replay(restService);
+
+    assertEquals(id, client.register(subject, avroSchema));
+    assertEquals(version, client.getVersion(subject, avroSchema));
+    assertEquals(version, client.getVersion(subject, avroSchema)); // hit the cache
+
+    assertEquals(Integer.valueOf(0), client.deleteSchemaVersion(subject, String.valueOf(version)));
+
+    verify(restService);
+  }
 }

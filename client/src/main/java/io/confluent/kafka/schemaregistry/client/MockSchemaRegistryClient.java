@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
@@ -272,5 +273,40 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int getId(String subject, Schema schema) throws IOException, RestClientException {
     return getIdFromRegistry(subject, schema, false);
+  }
+
+  @Override
+  public List<Integer> deleteSubject(String subject) throws IOException, RestClientException {
+    return deleteSubject(null, subject);
+  }
+
+  @Override
+  public List<Integer> deleteSubject(
+      Map<String, String> requestProperties,
+      String subject)
+      throws IOException, RestClientException {
+    schemaCache.remove(subject);
+    versionCache.remove(subject);
+    compatibilityCache.remove(subject);
+    return Arrays.asList(0);
+  }
+
+  @Override
+  public Integer deleteSchemaVersion(String subject, String version)
+      throws IOException, RestClientException {
+    return deleteSchemaVersion(null, subject, version);
+  }
+
+  @Override
+  public Integer deleteSchemaVersion(
+      Map<String, String> requestProperties,
+      String subject,
+      String version)
+      throws IOException, RestClientException {
+    if (versionCache.containsKey(subject)) {
+      versionCache.get(subject).values().remove(Integer.valueOf(version));
+      return 0;
+    }
+    return -1;
   }
 }
