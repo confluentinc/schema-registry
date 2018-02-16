@@ -21,6 +21,7 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 

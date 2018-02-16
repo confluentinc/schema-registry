@@ -20,6 +20,7 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -273,4 +274,40 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   public int getId(String subject, Schema schema) throws IOException, RestClientException {
     return getIdFromRegistry(subject, schema, false);
   }
+
+  @Override
+  public List<Integer> deleteSubject(String subject) throws IOException, RestClientException {
+    return deleteSubject(null, subject);
+  }
+
+  @Override
+  public List<Integer> deleteSubject(
+      Map<String, String> requestProperties,
+      String subject)
+      throws IOException, RestClientException {
+    schemaCache.remove(subject);
+    versionCache.remove(subject);
+    compatibilityCache.remove(subject);
+    return Arrays.asList(0);
+  }
+
+  @Override
+  public Integer deleteSchemaVersion(String subject, String version)
+      throws IOException, RestClientException {
+    return deleteSchemaVersion(null, subject, version);
+  }
+
+  @Override
+  public Integer deleteSchemaVersion(
+      Map<String, String> requestProperties,
+      String subject,
+      String version)
+      throws IOException, RestClientException {
+    if (versionCache.containsKey(subject)) {
+      versionCache.get(subject).values().remove(Integer.valueOf(version));
+      return 0;
+    }
+    return -1;
+  }
+
 }
