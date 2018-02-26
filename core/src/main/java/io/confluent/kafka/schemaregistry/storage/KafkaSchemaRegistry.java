@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaIdDetails;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.slf4j.Logger;
@@ -656,6 +657,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   @Override
+  public SchemaIdDetails getSchemaIdDetails(int id) throws SchemaRegistryException {
+    String schemaString = get(id).getSchemaString();
+    MD5 md5 = MD5.ofString(schemaString);
+    SchemaIdAndSubjects subjectVersionKey = schemaHashToGuid.get(md5);
+    if (subjectVersionKey == null) {
+      return null;
+    }
+    return new SchemaIdDetails(subjectVersionKey.copySubjectsMap(), id, schemaString);
+  }
+
   public Set<String> listSubjects() throws SchemaRegistryException {
     try {
       Iterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys();

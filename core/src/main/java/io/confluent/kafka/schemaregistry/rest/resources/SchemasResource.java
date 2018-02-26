@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaIdDetails;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +59,27 @@ public class SchemasResource {
                           + "registry";
     try {
       schema = schemaRegistry.get(id);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    if (schema == null) {
+      throw Errors.schemaNotFoundException();
+    }
+    return schema;
+  }
+
+  @GET
+  @Path("/ids/{id}/subjects")
+  @PerformanceMetric("schemas.ids.get-schema-details")
+  public SchemaIdDetails getSchemaDetails(@PathParam("id") Integer id) {
+    SchemaIdDetails schema = null;
+    String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
+            + "registry";
+    try {
+      schema = schemaRegistry.getSchemaIdDetails(id);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);

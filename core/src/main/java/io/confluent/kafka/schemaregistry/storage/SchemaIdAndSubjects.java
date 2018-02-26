@@ -53,6 +53,10 @@ public class SchemaIdAndSubjects {
     return this.id;
   }
 
+  public Map<String, Integer> copySubjectsMap() {
+    return new HashMap<String, Integer>(subjectsAndVersions);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {

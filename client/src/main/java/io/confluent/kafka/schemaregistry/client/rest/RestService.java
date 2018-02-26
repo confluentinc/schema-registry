@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaIdDetails;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -64,6 +65,9 @@ public class RestService {
       };
   private static final TypeReference<Schema> GET_SCHEMA_BY_VERSION_RESPONSE_TYPE =
       new TypeReference<Schema>() {
+      };
+  private static final TypeReference<SchemaIdDetails> GET_SCHEMA_DETAILS_BY_ID_RESPONSE_TYPE =
+      new TypeReference<SchemaIdDetails>() {
       };
   private static final TypeReference<List<Integer>> ALL_VERSIONS_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
@@ -393,6 +397,19 @@ public class RestService {
 
     SchemaString response = httpRequest(path, "GET", null, requestProperties,
                                         GET_SCHEMA_BY_ID_RESPONSE_TYPE);
+    return response;
+  }
+
+  public SchemaIdDetails getSchemaIdDetails(int id) throws IOException, RestClientException {
+    return getSchemaIdDetails(DEFAULT_REQUEST_PROPERTIES, id);
+  }
+
+  public SchemaIdDetails getSchemaIdDetails(Map<String, String> requestProperties,
+                                            int id) throws IOException, RestClientException {
+    String path = String.format("/schemas/ids/%d/subjects", id);
+
+    SchemaIdDetails response = httpRequest(path, "GET", null, requestProperties,
+                                  GET_SCHEMA_DETAILS_BY_ID_RESPONSE_TYPE);
     return response;
   }
 

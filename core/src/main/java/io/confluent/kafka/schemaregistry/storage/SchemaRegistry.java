@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaIdDetails;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 
@@ -34,6 +35,8 @@ public interface SchemaRegistry {
       throws SchemaRegistryException;
 
   SchemaString get(int id) throws SchemaRegistryException;
+
+  SchemaIdDetails getSchemaIdDetails(int id) throws SchemaRegistryException;
 
   Set<String> listSubjects() throws SchemaRegistryException;
 
