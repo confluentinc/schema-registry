@@ -73,17 +73,17 @@ However, there are some logistical configurations that should be changed for pro
 
 First, there are two ways to deploy the Schema Registry depending on how the Schema Registry
 instances coordinate with each other to choose the :ref:`master<schemaregistry_single_master>`:
-with ZooKeeper (which may be shared with Kafka) or via Kafka itself. ZooKeeper-based master
+with |zk| (which may be shared with Kafka) or via Kafka itself. |zk|-based master
 election is available in all versions of Schema Registry and you should continue to use it for
 compatibility if you already have a Schema Registry deployment. Kafka-based master election can
-be used in cases where ZooKeeper is not available, for example for hosted or cloud Kafka
-environments, or if access to ZooKeeper has been locked down.
+be used in cases where |zk| is not available, for example for hosted or cloud Kafka
+environments, or if access to |zk| has been locked down.
 
-To configure the Schema Registry to use ZooKeeper for master election, configure the
+To configure the Schema Registry to use |zk| for master election, configure the
 ``kafkastore.connection.url`` setting.
 
 ``kafkastore.connection.url``
-Zookeeper url for the Kafka cluster
+|zk| url for the Kafka cluster
 
 * Type: string
 * Importance: high
@@ -98,9 +98,9 @@ To configure the Schema Registry to use Kafka for master election, configure the
 
   If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate schema registry instances (master election) and store schema data.
 
-  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
+  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from |zk| (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
 
-  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
+  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in |zk|, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
 
   * Type: list
   * Default: []
@@ -117,7 +117,7 @@ Port to listen on for new connections.
 * Importance: high
 
 ``host.name``
-Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may need to be different from the interface to which the broker binds. If this is not set, it will use the value returned from ``java.net.InetAddress.getCanonicalHostName()``.
+Hostname to publish to |zk| for clients to use. In IaaS environments, this may need to be different from the interface to which the broker binds. If this is not set, it will use the value returned from ``java.net.InetAddress.getCanonicalHostName()``.
 
 * Type: string
 * Default: ``host.name``
@@ -164,10 +164,10 @@ The timeout for an operation on the Kafka store. This is the maximum time that a
 * Default: 500
 * Importance: medium
 
-Kafka & ZooKeeper
+Kafka & |zk|
 -----------------
 
-Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and ZooKeeper.
+Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and |zk|.
 
 
 
@@ -193,10 +193,10 @@ To restore the topic, use the ``kafka-console-producer`` to write the contents o
    bin/kafka-console-producer --broker-list localhost:9092 --topic _schemas_restore --property parse.key=true < schemas.log
 
 
-Migration from Zookeeper master election to Kafka master election
+Migration from |zk| master election to Kafka master election
 -----------------------------------------------------------------
 
-It is not required to migrate from Zookeeper based election to Kafka based master election. If
+It is not required to migrate from |zk| based election to Kafka based master election. If
 you choose to do so, you need to make the below outlined config changes as the first step in all
 Schema Registry nodes
 
@@ -208,7 +208,7 @@ Schema Registry nodes
 Downtime for Writes
 ^^^^^^^^^^^^^^^^^^^^
 
-You can migrate from Zookeeper based master election to Kafka based master election by following
+You can migrate from |zk| based master election to Kafka based master election by following
 below outlined steps. These steps would lead to Schema Registry not being available for writes
 for a brief amount of time.
 

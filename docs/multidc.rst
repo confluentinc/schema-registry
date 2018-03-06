@@ -19,7 +19,7 @@ Recommended Deployment
     Multi DC with Kafka based master election
 
 In the image above, there are two data centers - DC A, and DC B. Each of the two data centers has
-its own ZooKeeper cluster, Kafka cluster, and Schema Registry cluster. The Schema Registry
+its own |zk| cluster, Kafka cluster, and Schema Registry cluster. The Schema Registry
 clusters link to Kafka clusters in the respective DC.
 
 Note that the Schema Registry instances in DC B have ``master.eligibility`` set to false, meaning
@@ -63,7 +63,7 @@ Let's say you have Schema Registry running in multiple datacenters, and you have
 - If you must designate a new datacenter (call it DC B) as "master", update the Schema Registry config files so that ``master.eligibility`` is set to true. Then restart your Schema Registry instances with these new configs in a rolling fashion.
 
 
-Zookeeper Election
+|zk| Election
 ------------------
 
 Recommended Deployment
@@ -75,8 +75,8 @@ Recommended Deployment
     Multi DC with Zookeeper based master election
 
 In the image above, there are two data centers - DC A, and DC B. Each of the two data centers has
-its own ZooKeeper cluster, Kafka cluster, and Schema Registry cluster. Both Schema Registry
-clusters link to Kafka and ZooKeeper in DC A.
+its own |zk| cluster, Kafka cluster, and Schema Registry cluster. Both Schema Registry
+clusters link to Kafka and |zk| in DC A.
 
 Note that the Schema Registry instances in DC B have ``master.eligibility`` set to false, meaning that none can ever be elected master.
 
@@ -86,10 +86,10 @@ Important Settings
 ^^^^^^^^^^^^^^^^^^
 
 ``kafkastore.connection.url``
-kafkastore.connection.url should be identical across all schema registry nodes. By sharing this setting, all Schema Registry instances will point to the same ZooKeeper cluster.
+kafkastore.connection.url should be identical across all schema registry nodes. By sharing this setting, all Schema Registry instances will point to the same |zk| cluster.
 
 ``schema.registry.zk.namespace``
-Namespace under which schema registry related metadata is stored in Zookeeper. This setting should be identical across all nodes in the same schema registry.
+Namespace under which schema registry related metadata is stored in |zk|. This setting should be identical across all nodes in the same schema registry.
 
 ``master.eligibility``
 A schema registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. Schema Registry instances in a "slave" data center should have this set to false, and Schema Registry instances local to the shared Kafka cluster should have this set to true.
@@ -114,4 +114,4 @@ Let's say you have Schema Registry running in multiple datacenters, and you have
 
 - If possible, revive the "master" datacenter by starting Kafka and Schema Registry as before.
 
-- If you must designate a new datacenter (call it DC B) as "master", update the Schema Registry config files so that ``kafkastore.connection.url`` points to the local ZooKeeper, and change ``master.eligibility`` to true. The restart your Schema Registry instances with these new configs in a rolling fashion.
+- If you must designate a new datacenter (call it DC B) as "master", update the Schema Registry config files so that ``kafkastore.connection.url`` points to the local |zk|, and change ``master.eligibility`` to true. The restart your Schema Registry instances with these new configs in a rolling fashion.

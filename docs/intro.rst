@@ -8,7 +8,7 @@ Schema Registry provides a serving layer for your metadata. It provides a RESTfu
 Quickstart
 ----------
 
-Start by running the Schema Registry and the services it depends on: ZooKeeper and Kafka.
+Start by running the Schema Registry and the services it depends on: |zk| and Kafka.
 You can do this in one command with Confluent CLI:
 
 .. sourcecode:: bash
@@ -160,7 +160,7 @@ as it will be on your ``PATH``. The ``schema-registry.properties`` file contains
 :ref:`configuration settings<schemaregistry_config>`. The default configuration
 included with the Schema Registry includes convenient defaults for a local testing setup and
 should be modified for a
-production deployment. By default the server starts bound to port 8081, expects Zookeeper
+production deployment. By default the server starts bound to port 8081, expects |zk|
 to be available at ``localhost:2181``, and a Kafka broker at ``localhost:9092``.
 
 If you started the service in the background, you can use the following command to stop it:

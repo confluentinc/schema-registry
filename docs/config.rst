@@ -3,7 +3,7 @@
 Configuration Options
 =====================
 ``kafkastore.connection.url``
-  Zookeeper url for the Kafka cluster
+  |zk| url for the Kafka cluster
 
   * Type: string
   * Default: ""
@@ -16,9 +16,9 @@ Configuration Options
 
   If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate schema registry instances (master election) and store schema data.
 
-  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
+  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from |zk| (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
 
-  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
+  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in |zk|, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
 
   * Type: list
   * Default: []
@@ -27,7 +27,7 @@ Configuration Options
 ``listeners``
   Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
-  Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
+  Schema Registry identities are stored in |zk| and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
 
   * Type: list
   * Default: "http://0.0.0.0:8081"
@@ -41,7 +41,7 @@ Configuration Options
   * Importance: high
 
 ``host.name``
-  The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry with multiple nodes.
+  The host name advertised in |zk|. Make sure to set this if running SchemaRegistry with multiple nodes.
 
   * Type: string
   * Default: "192.168.50.1"
@@ -146,7 +146,7 @@ Configuration Options
   * Importance: high
 
 ``zookeeper.set.acl``
-  Whether or not to set an ACL in ZooKeeper when znodes are created and ZooKeeper SASL authentication is configured. IMPORTANT: if set to `true`, the ZooKeeper SASL principal must be the same as the Kafka brokers.
+  Whether or not to set an ACL in |zk| when znodes are created and |zk| SASL authentication is configured. IMPORTANT: if set to `true`, the |zk| SASL principal must be the same as the Kafka brokers.
 
   * Type: boolean
   * Default: false
@@ -321,7 +321,7 @@ Configuration Options
   * Importance: low
 
 ``kafkastore.zk.session.timeout.ms``
-  Zookeeper session timeout
+  |zk| session timeout
 
   * Type: int
   * Default: 30000
@@ -384,7 +384,7 @@ Configuration Options
   * Importance: low
 
 ``schema.registry.zk.namespace``
-  The string that is used as the zookeeper namespace for storing schema registry metadata. SchemaRegistry instances which are part of the same schema registry service should have the same ZooKeeper namespace.
+  The string that is used as the |zk| namespace for storing schema registry metadata. SchemaRegistry instances which are part of the same schema registry service should have the same |zk| namespace.
 
   * Type: string
   * Default: "schema_registry"

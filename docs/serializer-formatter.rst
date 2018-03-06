@@ -136,7 +136,7 @@ You can use ``kafka-avro-console-producer`` and ``kafka-avro-console-consumer`` 
 receive Avro data in JSON format from the console. Under the hood, they use ``AvroMessageReader`` and
 ``AvroMessageFormatter`` to convert between Avro and JSON.
 
-To run the Kafka console tools, first make sure that Zookeeper, Kafka and the Schema Registry server
+To run the Kafka console tools, first make sure that |zk|, Kafka and the Schema Registry server
 are all started. In the following examples, we use the default value of the schema registry URL.
 You can configure that by supplying
 
