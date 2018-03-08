@@ -11,3 +11,6 @@ Environment="LOG_DIR=/var/log/confluent/schema-registry"
 ExecStart=/usr/bin/schema-registry-start /etc/schema-registry/schema-registry.properties
 TimeoutStopSec=180
 Restart=no
+
+[Install]
+WantedBy=multi-user.target
