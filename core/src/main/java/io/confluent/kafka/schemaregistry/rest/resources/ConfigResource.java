@@ -19,18 +19,18 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
-import javax.ws.rs.HeaderParam;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.HttpHeaders;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
@@ -56,6 +56,8 @@ public class ConfigResource {
   private static final Logger log = LoggerFactory.getLogger(ConfigResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
 
+  private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
+
   public ConfigResource(KafkaSchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
@@ -64,8 +66,7 @@ public class ConfigResource {
   @PUT
   public ConfigUpdateRequest updateSubjectLevelConfig(
       @PathParam("subject") String subject,
-      final @HeaderParam("Content-Type") String contentType,
-      final @HeaderParam("Accept") String accept,
+      @Context HttpHeaders headers,
       @NotNull ConfigUpdateRequest request) {
     Set<String> subjects = null;
     try {
@@ -83,9 +84,7 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
     try {
-      Map<String, String> headerProperties = new HashMap<String, String>();
-      headerProperties.put("Content-Type", contentType);
-      headerProperties.put("Accept", accept);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
       schemaRegistry.updateConfigOrForward(subject, compatibilityLevel, headerProperties);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update compatibility level", e);
@@ -126,8 +125,7 @@ public class ConfigResource {
 
   @PUT
   public ConfigUpdateRequest updateTopLevelConfig(
-      final @HeaderParam("Content-Type") String contentType,
-      final @HeaderParam("Accept") String accept,
+      @Context HttpHeaders headers,
       @NotNull ConfigUpdateRequest request) {
     AvroCompatibilityLevel compatibilityLevel =
         AvroCompatibilityLevel.forName(request.getCompatibilityLevel());
@@ -135,9 +133,7 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
     try {
-      Map<String, String> headerProperties = new HashMap<String, String>();
-      headerProperties.put("Content-Type", contentType);
-      headerProperties.put("Accept", accept);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
       schemaRegistry.updateConfigOrForward(null, compatibilityLevel, headerProperties);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update compatibility level", e);
