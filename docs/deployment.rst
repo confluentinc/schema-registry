@@ -184,13 +184,13 @@ Important Settings
 ^^^^^^^^^^^^^^^^^^
 
 ``kafkastore.connection.url``
-kafkastore.connection.url should be identical across all schema registry nodes. By sharing this setting, all Schema Registry instances will point to the same ZooKeeper cluster.
+kafkastore.connection.url should be identical across all Schema Registry nodes. By sharing this setting, all Schema Registry instances will point to the same ZooKeeper cluster.
 
 ``schema.registry.zk.namespace``
-Namespace under which schema registry related metadata is stored in Zookeeper. This setting should be identical across all nodes in the same schema registry.
+Namespace under which Schema Registry related metadata is stored in Zookeeper. This setting should be identical across all nodes in the same Schema Registry.
 
 ``master.eligibility``
-A schema registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. Schema Registry instances in a "slave" data center should have this set to false, and Schema Registry instances local to the shared Kafka cluster should have this set to true.
+A Schema Registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. Schema Registry instances in a "slave" data center should have this set to false, and Schema Registry instances local to the shared Kafka cluster should have this set to true.
 
 Setup
 ^^^^^
