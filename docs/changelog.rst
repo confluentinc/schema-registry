@@ -15,7 +15,7 @@ Version 3.3.0
 * Add Delete Schema support
 * Added avro-serde for Kafka Streams. Pulled from the example project.
 * `#506 <https://github.com/confluentinc/schema-registry/issues/506>`_ - The AvroMessageFormatter passes byte[] to an Avro encoder, but Avro only likes ByteBuffer. So we need to ByteBuffer.wrap() instead.
-* Added optional kafkastore.group.id config to override the one automatically created by the schema registry
+* Added optional kafkastore.group.id config to override the one automatically created by the Schema Registry
 * `PR-476 <https://github.com/confluentinc/schema-registry/pull/476>`_ - Adapt to KAFKA-4636 changes: Per listener security settings overrides (KIP-103)
 
 
@@ -23,7 +23,7 @@ Version 3.2.1
 -------------
 
 * `PR-503 <https://github.com/confluentinc/schema-registry/pull/503>`_ - CLIENTS-244: Update 3.2.0 changelog
-* `PR-499 <https://github.com/confluentinc/schema-registry/pull/499>`_ - making sure schema registry doesn't start with uncompacted topic
+* `PR-499 <https://github.com/confluentinc/schema-registry/pull/499>`_ - making sure Schema Registry doesn't start with uncompacted topic
 * `PR-497 <https://github.com/confluentinc/schema-registry/pull/497>`_ - CLIENTS-103: Fix ArrayIndexOutOfBoundsException in SchemaRegistryPerformance by counting the registration attempt even if it failed.
 * `PR-493 <https://github.com/confluentinc/schema-registry/pull/493>`_ - Fixes for CLIENTS-257
 * `PR-494 <https://github.com/confluentinc/schema-registry/pull/494>`_ - MINOR: Add compact schemas topic doc
@@ -170,12 +170,12 @@ Schema Registry
 * `PR-219 <https://github.com/confluentinc/schema-registry/pull/219>`_ - Update Kafka version to 0.8.3-SNAPSHOT so we can start developing using upcoming 0.8.3 features.
 * `PR-237 <https://github.com/confluentinc/schema-registry/pull/237>`_ - Update uses of ZkUtils to match changes made in KAFKA-2639.
 * `PR-240 <https://github.com/confluentinc/schema-registry/pull/240>`_ - Fixes Typo in the docs. 'actsas' -> 'acts as'
-* `PR-242 <https://github.com/confluentinc/schema-registry/pull/242>`_ - Fixed schema registry build against kafka trunk
+* `PR-242 <https://github.com/confluentinc/schema-registry/pull/242>`_ - Fixed Schema Registry build against kafka trunk
 * `PR-243 <https://github.com/confluentinc/schema-registry/pull/243>`_ - Use x.y.z versioning scheme (i.e. 2.0.0-SNAPSHOT)
 * `PR-245 <https://github.com/confluentinc/schema-registry/pull/245>`_ - Fix mvn assembly setup
 * `PR-252 <https://github.com/confluentinc/schema-registry/pull/252>`_ - Use Kafka compiled with Scala 2.11
 * `PR-257 <https://github.com/confluentinc/schema-registry/pull/257>`_ - Updated classpath in schema-registry-run-class to reflect changes in pom.xml
-* `PR-258 <https://github.com/confluentinc/schema-registry/pull/258>`_ - CC-53: Add worker configs for Avro Kafka Connect that integrates with schema registry.
+* `PR-258 <https://github.com/confluentinc/schema-registry/pull/258>`_ - CC-53: Add worker configs for Avro Kafka Connect that integrates with Schema Registry.
 
 Serializers, Formatters, and Converters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

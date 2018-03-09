@@ -369,7 +369,7 @@ Configuration Options
   * Importance: low
 
 ``schema.registry.zk.namespace``
-  The string that is used as the zookeeper namespace for storing schema registry metadata. SchemaRegistry instances which are part of the same schema registry service should have the same ZooKeeper namespace.
+  The string that is used as the zookeeper namespace for storing Schema Registry metadata. SchemaRegistry instances which are part of the same Schema Registry service should have the same ZooKeeper namespace.
 
   * Type: string
   * Default: "schema_registry"
@@ -440,7 +440,7 @@ Configuration Options
 
 ``kafkastore.group.id``
   Use this setting to override the group.id for the KafkaStore consumer.
-  This setting can become important when security is enabled, to ensure stability over the schema registry consumer's group.id
+  This setting can become important when security is enabled, to ensure stability over the Schema Registry consumer's group.id
   Without this configuration, group.id will be "schema-registry-<host>-<port>"
 
   * Type: string
