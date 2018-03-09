@@ -6,8 +6,8 @@ A Maven plugin is available to help throughout the development process.
 schema-registry:download
 ========================
 
-The `download` goal is used to pull down schemas from a schema registry server. This goal can be used to
-This plugin is used to download AVRO schemas for the requested subjects and write them to a folder on the local file system.
+The `download` goal is used to pull down schemas from a Schema Registry server. This goals is used to download Avro
+schemas for the requested subjects and write them to a folder on the local file system.
 
 ``schemaRegistryUrls``
   Schema Registry Urls to connect to.
