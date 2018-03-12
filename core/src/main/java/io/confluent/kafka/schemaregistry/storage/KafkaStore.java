@@ -84,6 +84,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final SchemaRegistryConfig config;
 
   public KafkaStore(SchemaRegistryConfig config,
+                    int identityPort,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
                     Serializer<K, V> serializer,
                     Store<K, V> localStore,
@@ -93,11 +94,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.topic = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG);
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
-    int port = KafkaSchemaRegistry.getPortForIdentity(config.getInt(SchemaRegistryConfig.PORT_CONFIG),
-            config.getList(RestConfig.LISTENERS_CONFIG));
     this.groupId = String.format("schema-registry-%s-%d",
                                  config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG),
-                                 port);
+                                 identityPort);
     initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.storeUpdateHandler = storeUpdateHandler;

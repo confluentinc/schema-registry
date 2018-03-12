@@ -52,32 +52,6 @@ public abstract class ClusterTestHarness {
   public static final String KAFKASTORE_TOPIC = SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC;
   protected static final Option<Properties> SASL_PROPERTIES = Option$.MODULE$.<Properties>empty();
 
-  /**
-   * Choose a number of random available ports
-   */
-  public static int[] choosePorts(int count) {
-    try {
-      ServerSocket[] sockets = new ServerSocket[count];
-      int[] ports = new int[count];
-      for (int i = 0; i < count; i++) {
-        sockets[i] = new ServerSocket(0, 0, InetAddress.getByName("0.0.0.0"));
-        ports[i] = sockets[i].getLocalPort();
-      }
-      for (int i = 0; i < count; i++)
-        sockets[i].close();
-      return ports;
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  /**
-   * Choose an available port
-   */
-  public static int choosePort() {
-    return choosePorts(1)[0];
-  }
-
   private int numBrokers;
   private boolean setupRestApp;
   private String compatibilityType;
@@ -139,7 +113,7 @@ public abstract class ClusterTestHarness {
                                               getSecurityProtocol());
 
     if (setupRestApp) {
-      restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType);
+      restApp = new RestApp(zkConnect, KAFKASTORE_TOPIC, compatibilityType);
       restApp.start();
     }
   }

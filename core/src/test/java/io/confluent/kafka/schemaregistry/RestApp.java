@@ -36,18 +36,18 @@ public class RestApp {
   public Server restServer;
   public String restConnect;
 
-  public RestApp(int port, String zkConnect, String kafkaTopic) {
-    this(port, zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name);
+  public RestApp(String zkConnect, String kafkaTopic) {
+    this(zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name);
   }
 
-  public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType) {
-    this(port, zkConnect, kafkaTopic, compatibilityType, true);
+  public RestApp(String zkConnect, String kafkaTopic, String compatibilityType) {
+    this(zkConnect, kafkaTopic, compatibilityType, true);
   }
 
-  public RestApp(int port, String zkConnect, String kafkaTopic,
+  public RestApp(String zkConnect, String kafkaTopic,
                  String compatibilityType, boolean masterEligibility) {
     prop = new Properties();
-    prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
+    prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, "0");
     prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
     prop.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
     prop.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, compatibilityType);

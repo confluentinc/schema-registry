@@ -87,19 +87,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   public static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_WRITE_RETRY_BACKOFF_MS = 50;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
+
+  private final Application<SchemaRegistryConfig> app;
   final Map<Integer, SchemaKey> guidToSchemaKey;
   final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
-  private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
-  private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
   private final AvroCompatibilityLevel defaultCompatibilityLevel;
   private final String schemaRegistryZkNamespace;
-  private final String kafkaClusterZkUrl;
-  private final int zkSessionTimeoutMs;
   private final int kafkaStoreTimeoutMs;
   private final boolean isEligibleForMasterElector;
-  private String schemaRegistryZkUrl;
+  private KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
+  private SchemaRegistryIdentity myIdentity;
   private ZkUtils zkUtils;
   private SchemaRegistryIdentity masterIdentity;
   private RestService masterRestService;
@@ -119,28 +118,39 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   // data is already in the kafkastore.
   private int maxIdInKafkaStore = -1;
 
-  public KafkaSchemaRegistry(SchemaRegistryConfig config,
+  public KafkaSchemaRegistry(Application<SchemaRegistryConfig> app,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
       throws SchemaRegistryException {
-    String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
-    int port = getPortForIdentity(config.getInt(SchemaRegistryConfig.PORT_CONFIG),
-            config.getList(RestConfig.LISTENERS_CONFIG));
+    this.app = app;
+    SchemaRegistryConfig config = app.getConfiguration();
     this.schemaRegistryZkNamespace = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
     this.isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
-    this.myIdentity = new SchemaRegistryIdentity(host, port, isEligibleForMasterElector);
-    this.kafkaClusterZkUrl =
-        config.getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
-    this.zkSessionTimeoutMs =
-        config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
-    this.kafkaStoreTimeoutMs = 
+    this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
     this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();
+  }
+
+  @Override
+  public void init() throws SchemaRegistryInitializationException {
+    // A Schema Registry instance's identity is in part the port it listens on. Current listeners
+    // are possible, so the first is used for the identity (and the connection to be used to
+    // forward requests if this node is the master). In theory, any port from any listener would
+    // be sufficient. Choosing the first, instead of say the last,
+    // is arbitrary.
+    //
+    // To support tests that dynamically allocate ports (i.e. set value to 0), we are careful to
+    // use the actually listening port rather than the PORT or LISTENER settings directly.
+    SchemaRegistryConfig config = app.getConfiguration();
+    String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
+    int listeningPort = app.localPorts().get(0);
+    this.myIdentity = new SchemaRegistryIdentity(host, listeningPort, isEligibleForMasterElector);
     kafkaStore =
         new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
             config,
+            listeningPort,
             new KafkaStoreMessageHandler(this),
             this.serializer,
             new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>(), new NoopKey());
@@ -161,28 +171,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
                            + " node where all register schema and config update requests are "
                            + "served.");
     this.masterNodeSensor.add(m, new Gauge());
-  }
 
-  /**
-   * A Schema Registry instance's identity is in part the port it listens on. Currently the
-   * port can either be configured via the deprecated `port` configuration, or via the `listeners`
-   * configuration.
-   *
-   * This method uses `Application.parseListeners()` from `rest-utils` to get a list of listeners, and
-   * returns the port of the first listener to be used for the instance's identity.
-   *
-   * In theory, any port from any listener would be sufficient. Choosing the first, instead of say the last,
-   * is arbitrary.
-   */
-  // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
-  static int getPortForIdentity(int port, List<String> configuredListeners) {
-    List<URI> listeners = Application.parseListeners(configuredListeners, port,
-            Arrays.asList("http", "https"), "http");
-    return listeners.get(0).getPort();
-  }
-
-  @Override
-  public void init() throws SchemaRegistryInitializationException {
     try {
       kafkaStore.init();
     } catch (StoreInitializationException e) {
@@ -203,13 +192,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
   }
 
   private void createZkNamespace() {
+    int zkSessionTimeoutMs =
+        app.getConfiguration().getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
+    String kafkaClusterZkUrl =
+        app.getConfiguration().getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
     int kafkaNamespaceIndex = kafkaClusterZkUrl.indexOf("/");
     String zkConnForNamespaceCreation = kafkaNamespaceIndex > 0 ?
                                         kafkaClusterZkUrl.substring(0, kafkaNamespaceIndex) :
                                         kafkaClusterZkUrl;
 
     String schemaRegistryNamespace = "/" + schemaRegistryZkNamespace;
-    schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;
+    String schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;
 
     ZkUtils zkUtilsForNamespaceCreation = ZkUtils.apply(
         zkConnForNamespaceCreation,

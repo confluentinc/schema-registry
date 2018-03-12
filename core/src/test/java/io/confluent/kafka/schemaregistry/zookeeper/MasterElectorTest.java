@@ -58,13 +58,11 @@ public class MasterElectorTest extends ClusterTestHarness {
     List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(4);
 
     // create schema registry instance 1
-    final RestApp restApp1 = new RestApp(choosePort(),
-                                         zkConnect, KAFKASTORE_TOPIC);
+    final RestApp restApp1 = new RestApp(zkConnect, KAFKASTORE_TOPIC);
     restApp1.start();
 
     // create schema registry instance 2
-    final RestApp restApp2 = new RestApp(choosePort(),
-                                         zkConnect, KAFKASTORE_TOPIC);
+    final RestApp restApp2 = new RestApp(zkConnect, KAFKASTORE_TOPIC);
     restApp2.start();
     assertTrue("Schema registry instance 1 should be the master", restApp1.isMaster());
     assertFalse("Schema registry instance 2 shouldn't be the master", restApp2.isMaster());
@@ -250,8 +248,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     Set<RestApp> slaveApps = new HashSet<RestApp>();
     RestApp aSlave = null;
     for (int i = 0; i < numSlaves; i++) {
-      RestApp slave = new RestApp(choosePort(),
-                                  zkConnect, KAFKASTORE_TOPIC,
+      RestApp slave = new RestApp(zkConnect, KAFKASTORE_TOPIC,
                                   AvroCompatibilityLevel.NONE.name, false);
       slaveApps.add(slave);
       slave.start();
@@ -278,8 +275,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     // Make a master-eligible 'cluster'
     final Set<RestApp> masterApps = new HashSet<RestApp>();
     for (int i = 0; i < numMasters; i++) {
-      RestApp master = new RestApp(choosePort(),
-                                   zkConnect, KAFKASTORE_TOPIC,
+      RestApp master = new RestApp(zkConnect, KAFKASTORE_TOPIC,
                                    AvroCompatibilityLevel.NONE.name, true);
       masterApps.add(master);
       master.start();
@@ -329,8 +325,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     Set<RestApp> slaveApps = new HashSet<RestApp>();
     RestApp aSlave = null;
     for (int i = 0; i < numSlaves; i++) {
-      RestApp slave = new RestApp(choosePort(),
-                                  zkConnect, KAFKASTORE_TOPIC,
+      RestApp slave = new RestApp(zkConnect, KAFKASTORE_TOPIC,
                                   AvroCompatibilityLevel.NONE.name, false);
       slaveApps.add(slave);
       slave.start();
@@ -354,8 +349,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     final Set<RestApp> masterApps = new HashSet<RestApp>();
     RestApp aMaster = null;
     for (int i = 0; i < numMasters; i++) {
-      RestApp master = new RestApp(choosePort(),
-                                   zkConnect, KAFKASTORE_TOPIC,
+      RestApp master = new RestApp(zkConnect, KAFKASTORE_TOPIC,
                                    AvroCompatibilityLevel.NONE.name, true);
       masterApps.add(master);
       master.start();
@@ -443,8 +437,7 @@ public class MasterElectorTest extends ClusterTestHarness {
    */
   public void testIncreasingIdZkResetLow() throws Exception {
     // create schema registry instance 1
-    final RestApp restApp1 = new RestApp(choosePort(),
-                                         zkConnect, KAFKASTORE_TOPIC);
+    final RestApp restApp1 = new RestApp(zkConnect, KAFKASTORE_TOPIC);
     restApp1.start();
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(ID_BATCH_SIZE);
     String subject = "testSubject";
@@ -473,8 +466,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     maxId = newId;
 
     // Add another schema registry and trigger reelection
-    final RestApp restApp2 = new RestApp(choosePort(),
-                                         zkConnect, KAFKASTORE_TOPIC);
+    final RestApp restApp2 = new RestApp(zkConnect, KAFKASTORE_TOPIC);
     restApp2.start();
     restApp1.stop();
     Callable<Boolean> electionComplete = new Callable<Boolean>() {
@@ -524,8 +516,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     ZkUtils.createPersistentPath(zkClient, ZK_ID_COUNTER_PATH, "" + weirdInitialCounterValue);
 
     // Check that zookeeper id counter is updated sensibly during SchemaRegistry bootstrap process
-    final RestApp restApp = new RestApp(choosePort(),
-                                         zkConnect, KAFKASTORE_TOPIC);
+    final RestApp restApp = new RestApp(zkConnect, KAFKASTORE_TOPIC);
     restApp.start();
     assertEquals("", 2 * ID_BATCH_SIZE, getZkIdCounter(zkClient));
   }
@@ -542,7 +533,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(numSchemas);
     String subject = "testSubject";
     Set<Integer> ids = new HashSet<Integer>();
-    RestApp restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC);
+    RestApp restApp = new RestApp(zkConnect, KAFKASTORE_TOPIC);
     restApp.start();
     for (String schema: schemas) {
       int id = restApp.restClient.registerSchema(schema, subject);
@@ -557,7 +548,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     zkClient.delete(ZK_ID_COUNTER_PATH);
 
     // start up another app instance and verify zk id node
-    restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC);
+    restApp = new RestApp(zkConnect, KAFKASTORE_TOPIC);
     restApp.start();
     zkIdCounter = getZkIdCounter(zkClient);
     assertEquals("ZK id counter was incorrectly initialized.", 2 * ID_BATCH_SIZE, zkIdCounter);
@@ -567,7 +558,7 @@ public class MasterElectorTest extends ClusterTestHarness {
   @Test
   /** Verify expected value of zk schema id counter when schema registry starts up. */
   public void testZkCounterOnStartup() throws Exception {
-    RestApp restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC);
+    RestApp restApp = new RestApp(zkConnect, KAFKASTORE_TOPIC);
     restApp.start();
 
     int zkIdCounter = getZkIdCounter(zkClient);
