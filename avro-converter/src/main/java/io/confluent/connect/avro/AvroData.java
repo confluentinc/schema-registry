@@ -92,6 +92,7 @@ public class AvroData {
   public static final String AVRO_TYPE_ENUM = NAMESPACE + ".Enum";
 
   public static final String AVRO_TYPE_ANYTHING = NAMESPACE + ".Anything";
+  public static final String DOC_PROP = ".doc";
 
   private static final Map<String, Schema.Type> NON_AVRO_TYPES_BY_TYPE_CODE = new HashMap<>();
 
@@ -1541,7 +1542,7 @@ public class AvroData {
       while (paramIt.hasNext()) {
         Map.Entry<String, JsonNode> field = paramIt.next();
         JsonNode jsonValue = field.getValue();
-        if (!jsonValue.isTextual()) {
+        if ((!field.getKey().endsWith(DOC_PROP) && !jsonValue.isTextual())) {
           throw new DataException("Expected schema parameter values to be strings but found: "
                                   + jsonValue);
         }
