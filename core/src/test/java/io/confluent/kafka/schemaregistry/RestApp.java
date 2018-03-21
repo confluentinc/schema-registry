@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry;
 
 import org.eclipse.jetty.server.Server;
 
+import java.util.Objects;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
@@ -73,9 +74,8 @@ public class RestApp {
   }
 
   public void addConfigs(Properties props) {
-    if(props != null) {
-      prop.putAll(props);
-    }
+    Objects.requireNonNull(props, "Additional properties can't be null");
+    prop.putAll(props);
   }
 
   public boolean isMaster() {
