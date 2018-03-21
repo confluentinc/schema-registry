@@ -16,15 +16,15 @@
 package io.confluent.kafka.schemaregistry;
 
 
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import org.eclipse.jetty.server.Server;
 
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 
@@ -69,6 +69,12 @@ public class RestApp {
     if (restServer != null) {
       restServer.stop();
       restServer.join();
+    }
+  }
+
+  public void addConfigs(Properties props) {
+    if(props != null) {
+      prop.putAll(props);
     }
   }
 
