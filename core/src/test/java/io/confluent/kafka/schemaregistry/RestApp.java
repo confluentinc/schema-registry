@@ -74,7 +74,6 @@ public class RestApp {
   }
 
   public void addConfigs(Properties props) {
-    Objects.requireNonNull(props, "Additional properties can't be null");
     prop.putAll(props);
   }
 
