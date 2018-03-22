@@ -72,6 +72,12 @@ public class RestApp {
     }
   }
 
+  /**
+   * This method must be called before calling {@code RestApp.start()}
+   * for the additional properties to take affect.
+   *
+   * @param props the additional properties to set
+   */
   public void addConfigs(Properties props) {
     prop.putAll(props);
   }
