@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry;
 
 import org.eclipse.jetty.server.Server;
 
-import java.util.Objects;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
