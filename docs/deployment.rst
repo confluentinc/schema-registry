@@ -1,3 +1,5 @@
+.. _schema-registry-prod:
+
 Production Deployment
 =====================
 
@@ -63,6 +65,8 @@ Our recommended GC tuning looks like this:
    -Xms1g -Xmx1g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 \
           -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M \
           -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80
+
+.. _schema-reg-config:
 
 Important Configuration Options
 -------------------------------
