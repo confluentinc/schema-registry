@@ -6,7 +6,7 @@ Serializer and Formatter
 In this document, we describe how to use Avro with the Kafka Java client and console tools.
 
 
-Assuming that you have the Schema Registry source code checked out at ``/tmp/schema-registry``, the
+Assuming that you have the |sr| source code checked out at ``/tmp/schema-registry``, the
 following is how you can obtain all needed jars.
 
 .. sourcecode:: bash
@@ -31,8 +31,8 @@ to ``KafkaAvroSerializer`` will
 cause a ``SerializationException``. Typically, ``IndexedRecord`` will be used for the value of the Kafka
 message. If used, the key of the Kafka message is often of one of the primitive types. When sending
 a message to a topic *t*, the Avro schema for the key and the value will be automatically registered
-in the schema registry under the subject *t-key* and *t-value*, respectively, if the compatibility
-test passes. The only exception is that the ``null`` type is never registered in the schema registry.
+in the |sr| under the subject *t-key* and *t-value*, respectively, if the compatibility
+test passes. The only exception is that the ``null`` type is never registered in the |sr|.
 
 In the following example, we send a message with key of type string and value of type Avro record
 to Kafka. A ``SerializationException`` may occur during the send call, if the data is not well formed.
@@ -136,13 +136,13 @@ You can use ``kafka-avro-console-producer`` and ``kafka-avro-console-consumer`` 
 receive Avro data in JSON format from the console. Under the hood, they use ``AvroMessageReader`` and
 ``AvroMessageFormatter`` to convert between Avro and JSON.
 
-To run the Kafka console tools, first make sure that |zk|, Kafka and the Schema Registry server
-are all started. In the following examples, we use the default value of the schema registry URL.
+To run the Kafka console tools, first make sure that |zk|, Kafka and the |sr| server
+are all started. In the following examples, we use the default value of the |sr| URL.
 You can configure that by supplying
 
 .. sourcecode:: bash
 
-   --property schema.registry.url=address of your schema registry
+   --property schema.registry.url=address of your |sr|
 
 in the commandline arguments of ``kafka-avro-console-producer`` and ``kafka-avro-console-consumer``.
 
@@ -217,7 +217,7 @@ The wire format currently has only a couple of components:
 Bytes  Area       Description
 =====  ========== ===========
 0      Magic Byte Confluent serialization format version number; currently always ``0``.
-1-4    Schema ID  4-byte schema ID as returned by the Schema Registry
+1-4    Schema ID  4-byte schema ID as returned by the |sr|
 5-...  Data       Avro serialized data in `Avro's binary encoding
                   <https://avro.apache.org/docs/1.8.1/spec.html#binary_encoding>`_. The only exception is raw bytes, which
                   will be written directly without any special Avro encoding.
