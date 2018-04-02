@@ -384,7 +384,7 @@ Configuration Options
   * Importance: low
 
 ``schema.registry.zk.namespace``
-  The string that is used as the |zk| namespace for storing |sr| metadata. SchemaRegistry instances which are part of the same |sr| service should have the same |zk| namespace.
+  The string that is used as the |zk| namespace for storing |sr| metadata. |sr| instances which are part of the same |sr| service should have the same |zk| namespace.
 
   * Type: string
   * Default: "schema_registry"
@@ -456,6 +456,7 @@ Configuration Options
 ``kafkastore.group.id``
   Use this setting to override the group.id for the KafkaStore consumer.
   This setting can become important when security is enabled, to ensure stability over the |sr| consumer's group.id
+
   Without this configuration, group.id will be "schema-registry-<host>-<port>"
 
   * Type: string

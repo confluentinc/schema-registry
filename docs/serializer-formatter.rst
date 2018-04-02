@@ -138,6 +138,7 @@ receive Avro data in JSON format from the console. Under the hood, they use ``Av
 
 To run the Kafka console tools, first make sure that |zk|, Kafka and the |sr| server
 are all started. In the following examples, we use the default value of the |sr| URL.
+
 You can configure that by supplying
 
 .. sourcecode:: bash

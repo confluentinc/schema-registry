@@ -7,7 +7,7 @@ schema-registry:download
 ========================
 
 The `download` goal is used to pull down schemas from a |sr| server. This goal can be used to
-This plugin is used to download AVRO schemas for the requested subjects and write them to a folder on the local file system.
+This plugin is used to download Avro schemas for the requested subjects and write them to a folder on the local file system.
 
 ``schemaRegistryUrls``
   |sr| Urls to connect to.
