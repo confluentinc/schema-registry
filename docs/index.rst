@@ -3,10 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Schema Registry
+|sr|
 ================
 
-Schema Registry is part of the `Confluent Open Source <https://www.confluent.io/product/confluent-open-source/>`_ and `Confluent Enterprise <https://www.confluent.io/product/confluent-enterprise/>`_ distributions.  The Schema Registry stores a versioned history of all schemas and allows for the evolution of schemas according to the configured compatibility settings and expanded Avro support. 
+|sr| is part of the `Confluent Open Source <https://www.confluent.io/product/confluent-open-source/>`_ and `Confluent Enterprise <https://www.confluent.io/product/confluent-enterprise/>`_ distributions.  The |sr| stores a versioned history of all schemas and allows for the evolution of schemas according to the configured compatibility settings and expanded Avro support.
 
 Contents:
 
