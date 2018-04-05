@@ -9,7 +9,7 @@ Overview
 Compatibility
 ^^^^^^^^^^^^^
 
-The Schema Registry server can enforce certain compatibility rules when new schemas are registered in a subject. Currently, we support the following compatibility rules.
+The |sr| server can enforce certain compatibility rules when new schemas are registered in a subject. Currently, we support the following compatibility rules.
 
 * Backward compatibility (default): A new schema is backwards compatible if it can be used to read the data written in the latest registered schema.
 * Transitive backward compatibility: A new schema is transitively backwards compatible if it can be used to read the data written in all previously registered schemas. Backward compatibility is useful for loading data into systems like Hadoop since one can always query data of all versions using the latest schema.
@@ -32,7 +32,7 @@ We recommend keeping the default backward compatibility since it's common to hav
 Content Types
 ^^^^^^^^^^^^^
 
-The Schema Registry REST server uses content types for both requests and responses to indicate the serialization format of the data as well as the version of the API being used. Currently, the only serialization format supported is JSON and the only version of the API is ``v1``. However, to remain compatible with future versions, you *should* specify preferred content types in requests and check the content types of responses.
+The |sr| REST server uses content types for both requests and responses to indicate the serialization format of the data as well as the version of the API being used. Currently, the only serialization format supported is JSON and the only version of the API is ``v1``. However, to remain compatible with future versions, you *should* specify preferred content types in requests and check the content types of responses.
 
 The preferred format for content types is ``application/vnd.schemaregistry.v1+json``, where ``v1`` is the API version and ``json`` is the serialization format. However, other less specific content types are permitted, including ``application/vnd.schemaregistry+json`` to indicate no specific API version should be used
 (the most recent stable version will be used), ``application/json``, and ``application/octet-stream``. The latter two are only supported for compatibility and ease of use.
@@ -104,7 +104,7 @@ Schemas
 Subjects
 --------
 
-The subjects resource provides a list of all registered subjects in your Schema Registry. A subject refers to the name under which the schema is registered. If you are using the Schema Registry for Kafka, then a subject refers to either a "<topic>-key" or "<topic>-value" depending on whether you are registering the key schema for that topic or the value schema.
+The subjects resource provides a list of all registered subjects in your |sr|. A subject refers to the name under which the schema is registered. If you are using the |sr| for Kafka, then a subject refers to either a "<topic>-key" or "<topic>-value" depending on whether you are registering the key schema for that topic or the value schema.
 
 .. http:get:: /subjects
 
@@ -277,7 +277,7 @@ The subjects resource provides a list of all registered subjects in your Schema 
 
    A schema should be compatible with the previously registered schema or schemas (if there are any) as per the configured compatibility level. The configured compatibility level can be obtained by issuing a ``GET http:get:: /config/(string: subject)``. If that returns null, then ``GET http:get:: /config``
 
-   When there are multiple instances of Schema Registry running in the same cluster, the schema registration request will be forwarded to one of the instances designated as the master. If the master is not available, the client will get an error code indicating that the forwarding has failed.
+   When there are multiple instances of |sr| running in the same cluster, the schema registration request will be forwarded to one of the instances designated as the master. If the master is not available, the client will get an error code indicating that the forwarding has failed.
 
    :param string subject: Subject under which the schema will be registered
    :reqjson schema: The Avro schema string
@@ -502,7 +502,7 @@ The config resource allows you to inspect the cluster-level configuration values
 
    Update global compatibility level.
 
-   When there are multiple instances of Schema Registry running in the same cluster, the update request will be forwarded to one of the instances designated as the master. If the master is not available, the client will get an error code indicating that the forwarding has failed.
+   When there are multiple instances of |sr| running in the same cluster, the update request will be forwarded to one of the instances designated as the master. If the master is not available, the client will get an error code indicating that the forwarding has failed.
 
    :<json string compatibility: New global compatibility level. Must be one of NONE, FULL, FORWARD, BACKWARD
 
