@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,27 +17,27 @@
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
 import io.confluent.common.config.ConfigException;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
-import java.net.URL;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-public class UserInfoCredentialProvider extends AbstractBasicAuthCredentialProvider {
-
-  private String userInfo;
+public abstract class AbstractBasicAuthCredentialProvider implements BasicAuthCredentialProvider {
 
   @Override
-  public void configure(Map<String, ?> configs) {
-    userInfo = decodeUserInfo(
-      (String) configs.get(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG));
-    if (userInfo == null || userInfo.isEmpty()) {
-      throw new ConfigException("UserInfo must be provided when basic.auth.credentials.source is "
-                                + "set to USER_INFO");
-    }
+  public void configure(Map<String, ?> configs) throws ConfigException {
+    // do nothing as default
   }
 
-  @Override
-  public String getUserInfo(URL url) {
-    return userInfo;
+  static String decodeUserInfo(String userInfo) {
+    if (userInfo == null) {
+      return null;
+    }
+    try {
+      return URLDecoder.decode(userInfo, StandardCharsets.UTF_8.name());
+    } catch (UnsupportedEncodingException e) {
+      throw new AssertionError("Java Runtime does not support UTF-8 for URL decoding.");
+    }
   }
 }

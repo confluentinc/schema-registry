@@ -38,6 +38,15 @@ public class UrlBasicAuthCredentialProviderTest {
   }
 
   @Test
+  public void testSpecialCharsInUrlUserInfo() throws MalformedURLException {
+    Map<String, Object> clientConfig = new HashMap<>();
+    UrlBasicAuthCredentialProvider provider = new UrlBasicAuthCredentialProvider();
+    provider.configure(clientConfig);
+    Assert.assertEquals("ü$ër:ϱα$swo|2d",
+        provider.getUserInfo(new URL("http://%C3%BC%24%C3%ABr:%CF%B1%CE%B1%24swo%7C2d@localhost")));
+  }
+
+  @Test
   public void testNullUserInfo() throws MalformedURLException {
     Map<String, Object> clientConfig = new HashMap<>();
     UrlBasicAuthCredentialProvider provider = new UrlBasicAuthCredentialProvider();

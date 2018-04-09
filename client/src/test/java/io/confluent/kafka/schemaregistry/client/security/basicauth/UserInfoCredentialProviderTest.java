@@ -38,6 +38,15 @@ public class UserInfoCredentialProviderTest {
     Assert.assertEquals("user:password", provider.getUserInfo(new URL("http://localhost")));
   }
 
+  @Test
+  public void testSpecialCharInUserInfo() throws MalformedURLException {
+    Map<String, Object> clientConfig = new HashMap<>();
+    clientConfig.put(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG, "%C3%BC%24%C3%ABr:%CF%B1%CE%B1%24swo%7C2d");
+    UserInfoCredentialProvider provider = new UserInfoCredentialProvider();
+    provider.configure(clientConfig);
+    Assert.assertEquals("ü$ër:ϱα$swo|2d", provider.getUserInfo(new URL("http://localhost")));
+  }
+
   @Test(expected = ConfigException.class)
   public void testNullUserInfo() throws MalformedURLException {
     Map<String, Object> clientConfig = new HashMap<>();

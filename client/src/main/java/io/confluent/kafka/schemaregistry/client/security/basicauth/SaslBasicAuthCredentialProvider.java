@@ -29,7 +29,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import io.confluent.common.config.ConfigException;
 
-public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvider {
+public class SaslBasicAuthCredentialProvider extends AbstractBasicAuthCredentialProvider {
 
   private String userInfo;
 
