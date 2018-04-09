@@ -37,7 +37,6 @@ import java.util.Map;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
-import javax.xml.bind.DatatypeConverter;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -523,11 +522,9 @@ public class RestService {
   }
 
   private void setBasicAuthRequestHeader(HttpURLConnection connection) {
-    String userInfo;
+    String authHeader;
     if (basicAuthCredentialProvider != null
-        && (userInfo = basicAuthCredentialProvider.getUserInfo(connection.getURL())) != null) {
-      byte[] userInfoBytes = userInfo.getBytes(StandardCharsets.UTF_8);
-      String authHeader = DatatypeConverter.printBase64Binary(userInfoBytes);
+        && (authHeader = basicAuthCredentialProvider.getAuthHeader(connection.getURL())) != null) {
       connection.setRequestProperty("Authorization", "Basic " + authHeader);
     }
   }

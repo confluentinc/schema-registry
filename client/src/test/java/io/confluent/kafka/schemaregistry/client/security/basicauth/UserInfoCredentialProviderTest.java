@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
+import io.confluent.common.config.ConfigException;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -23,9 +25,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
-
-import io.confluent.common.config.ConfigException;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
 public class UserInfoCredentialProviderTest {
 

@@ -94,7 +94,7 @@ public class RestServiceTest {
     expectNew(URL.class, anyString()).andReturn(url);
     expect(url.openConnection()).andReturn(httpURLConnection);
     expect(httpURLConnection.getURL()).andReturn(url);
-    expect(basicAuthCredentialProvider.getUserInfo(anyObject(URL.class))).andReturn("user:password");
+    expect(basicAuthCredentialProvider.getAuthHeader(anyObject(URL.class))).andReturn("dXNlcjpwYXNzd29yZA==");
     expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
 
     // Make sure that the Authorization header is set with the correct value for "user:password"

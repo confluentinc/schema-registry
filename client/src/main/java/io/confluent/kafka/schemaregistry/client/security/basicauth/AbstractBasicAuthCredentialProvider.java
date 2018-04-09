@@ -18,7 +18,9 @@ package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
 import io.confluent.common.config.ConfigException;
 
+import javax.xml.bind.DatatypeConverter;
 import java.io.UnsupportedEncodingException;
+import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -28,6 +30,12 @@ public abstract class AbstractBasicAuthCredentialProvider implements BasicAuthCr
   @Override
   public void configure(Map<String, ?> configs) throws ConfigException {
     // do nothing as default
+  }
+
+  @Override
+  public String getAuthHeader(URL url) {
+    byte[] userInfoBytes = getUserInfo(url).getBytes(StandardCharsets.UTF_8);
+    return DatatypeConverter.printBase64Binary(userInfoBytes);
   }
 
   static String decodeUserInfo(String userInfo) {
