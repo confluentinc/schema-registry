@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 public enum BasicAuthCredentialSource {
-  URL, USER_INFO, SASL_INHERIT;
+  URL, USER_INFO, SASL_INHERIT, USERNAME_PASSWORD;
   public static final List<String> NAMES;
 
   static {
