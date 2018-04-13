@@ -50,7 +50,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
     super(config);
-
   }
 
   @Override
