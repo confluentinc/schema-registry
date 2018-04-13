@@ -168,7 +168,7 @@ The timeout for an operation on the Kafka store. This is the maximum time that a
 * Default: 500
 * Importance: medium
 
-Kafka & |zk|
+Kafka & ZooKeeper
 -----------------
 
 Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and |zk|.
@@ -197,7 +197,7 @@ To restore the topic, use the ``kafka-console-producer`` to write the contents o
    bin/kafka-console-producer --broker-list localhost:9092 --topic _schemas_restore --property parse.key=true < schemas.log
 
 
-Migration from |zk| master election to Kafka master election
+Migration from ZooKeeper master election to Kafka master election
 -----------------------------------------------------------------
 
 It is not required to migrate from |zk| based election to Kafka based master election. If
