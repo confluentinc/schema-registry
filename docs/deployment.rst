@@ -1,7 +1,7 @@
 Production Deployment
 =====================
 
-This section is not meant to be an exhaustive guide to running your Schema Registry in production, but it
+This section is not meant to be an exhaustive guide to running your |sr| in production, but it
 covers the key things to consider before putting your cluster live. Three main areas are covered:
 
 * Logistical considerations, such as hardware recommendations and deployment strategies
@@ -14,19 +14,19 @@ covers the key things to consider before putting your cluster live. Three main a
 Hardware
 --------
 
-If you’ve been following the normal development path, you’ve probably been playing with Schema Registry
+If you’ve been following the normal development path, you’ve probably been playing with |sr|
 on your laptop or on a small cluster of machines laying around. But when it comes time to deploying
-Schema Registry to production, there are a few recommendations that you should consider. Nothing is a hard-and-fast rule.
+|sr| to production, there are a few recommendations that you should consider. Nothing is a hard-and-fast rule.
 
 Memory
 ------
 
-Schema Registry uses Kafka as a commit log to store all registered schemas durably, and maintains a few in-memory indices to make schema lookups faster. A conservative upper bound on the number of unique schemas registered in a large data-oriented company like LinkedIn is around 10,000. Assuming roughly 1000 bytes heap overhead per schema on average, heap size of 1GB would be more than sufficient.
+|sr| uses Kafka as a commit log to store all registered schemas durably, and maintains a few in-memory indices to make schema lookups faster. A conservative upper bound on the number of unique schemas registered in a large data-oriented company like LinkedIn is around 10,000. Assuming roughly 1000 bytes heap overhead per schema on average, heap size of 1GB would be more than sufficient.
 
 CPUs
 ----
 
-CPU usage in Schema Registry is light. The most computationally intensive task is checking compatibility of two schemas, an infrequent operation which occurs primarily when new schemas versions are registered under a subject.
+CPU usage in |sr| is light. The most computationally intensive task is checking compatibility of two schemas, an infrequent operation which occurs primarily when new schemas versions are registered under a subject.
 
 If you need to choose between faster CPUs or more cores, choose more cores. The extra concurrency that multiple
 cores offers will far outweigh a slightly faster clock speed.
@@ -34,7 +34,7 @@ cores offers will far outweigh a slightly faster clock speed.
 Disks
 -----
 
-Schema Registry does not have any disk resident data. It currently uses Kafka as a commit log to store all schemas durably and holds in-memory indices of all schemas. Therefore, the only disk usage comes from storing the log4j logs.
+|sr| does not have any disk resident data. It currently uses Kafka as a commit log to store all schemas durably and holds in-memory indices of all schemas. Therefore, the only disk usage comes from storing the log4j logs.
 
 Network
 -------
@@ -71,24 +71,24 @@ The full set of configuration options are documented in :ref:`schemaregistry_con
 
 However, there are some logistical configurations that should be changed for production. These changes are necessary because there is no way to set a good default (because it depends on your cluster layout).
 
-First, there are two ways to deploy the Schema Registry depending on how the Schema Registry
+First, there are two ways to deploy the |sr| depending on how the |sr|
 instances coordinate with each other to choose the :ref:`master<schemaregistry_single_master>`:
-with ZooKeeper (which may be shared with Kafka) or via Kafka itself. ZooKeeper-based master
-election is available in all versions of Schema Registry and you should continue to use it for
-compatibility if you already have a Schema Registry deployment. Kafka-based master election can
-be used in cases where ZooKeeper is not available, for example for hosted or cloud Kafka
-environments, or if access to ZooKeeper has been locked down.
+with |zk| (which may be shared with Kafka) or via Kafka itself. |zk|-based master
+election is available in all versions of |sr| and you should continue to use it for
+compatibility if you already have a |sr| deployment. Kafka-based master election can
+be used in cases where |zk| is not available, for example for hosted or cloud Kafka
+environments, or if access to |zk| has been locked down.
 
-To configure the Schema Registry to use ZooKeeper for master election, configure the
+To configure the |sr| to use |zk| for master election, configure the
 ``kafkastore.connection.url`` setting.
 
 ``kafkastore.connection.url``
-Zookeeper url for the Kafka cluster
+|zk| url for the Kafka cluster
 
 * Type: string
 * Importance: high
 
-To configure the Schema Registry to use Kafka for master election, configure the
+To configure the |sr| to use Kafka for master election, configure the
 ``kafkastore.bootstrap.servers`` setting.
 
 ``kafkastore.bootstrap.servers``
@@ -96,11 +96,11 @@ To configure the Schema Registry to use Kafka for master election, configure the
 
   The effect of this setting depends on whether you specify `kafkastore.connection.url`.
 
-  If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate schema registry instances (master election) and store schema data.
+  If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate |sr| instances (master election) and store schema data.
 
-  If `kafkastore.connection.url` is specified, then this setting is used to control how the schema registry connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list from ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
+  If `kafkastore.connection.url` is specified, then this setting is used to control how the |sr| connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the |sr|'s internal Kafka clients will get their Kafka bootstrap server list from |zk| (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
 
-  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
+  By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in |zk|, but the |sr| may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
 
   * Type: list
   * Default: []
@@ -117,7 +117,7 @@ Port to listen on for new connections.
 * Importance: high
 
 ``host.name``
-Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may need to be different from the interface to which the broker binds. If this is not set, it will use the value returned from ``java.net.InetAddress.getCanonicalHostName()``.
+Hostname to publish to |zk| for clients to use. In IaaS environments, this may need to be different from the interface to which the broker binds. If this is not set, it will use the value returned from ``java.net.InetAddress.getCanonicalHostName()``.
 
 * Type: string
 * Default: ``host.name``
@@ -136,7 +136,7 @@ Don't Touch These Settings!
 Storage settings
 ^^^^^^^^^^^^^^^^
 
-Schema Registry stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for the Schema Registry database and is the source of truth, writes to this store need to be durable. Schema Registry ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Finally, ``kafkastore.topic`` must be a compacted topic to avoid data loss. Whenever in doubt, leave these settings alone. If you must create the topic manually, this is an example of proper configuration:
+|sr| stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for the |sr| database and is the source of truth, writes to this store need to be durable. |sr| ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Finally, ``kafkastore.topic`` must be a compacted topic to avoid data loss. Whenever in doubt, leave these settings alone. If you must create the topic manually, this is an example of proper configuration:
 
 .. sourcecode:: bash
 
@@ -167,7 +167,7 @@ The timeout for an operation on the Kafka store. This is the maximum time that a
 Kafka & ZooKeeper
 -----------------
 
-Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and ZooKeeper.
+Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and |zk|.
 
 
 
@@ -193,23 +193,23 @@ To restore the topic, use the ``kafka-console-producer`` to write the contents o
    bin/kafka-console-producer --broker-list localhost:9092 --topic _schemas_restore --property parse.key=true < schemas.log
 
 
-Migration from Zookeeper master election to Kafka master election
+Migration from ZooKeeper master election to Kafka master election
 -----------------------------------------------------------------
 
-It is not required to migrate from Zookeeper based election to Kafka based master election. If
+It is not required to migrate from |zk| based election to Kafka based master election. If
 you choose to do so, you need to make the below outlined config changes as the first step in all
-Schema Registry nodes
+|sr| nodes
 
 - Remove ``kafkastore.connection.url``
 - Remove ``schema.registry.zk.namespace`` if its configured
 - Configure ``kafkastore.bootstrap.servers``
-- Configure ``schema.registry.group.id`` if you originally had ``schema.registry.zk.namespace`` for multiple Schema Registry clusters
+- Configure ``schema.registry.group.id`` if you originally had ``schema.registry.zk.namespace`` for multiple |sr| clusters
 
 Downtime for Writes
 ^^^^^^^^^^^^^^^^^^^^
 
-You can migrate from Zookeeper based master election to Kafka based master election by following
-below outlined steps. These steps would lead to Schema Registry not being available for writes
+You can migrate from |zk| based master election to Kafka based master election by following
+below outlined steps. These steps would lead to |sr| not being available for writes
 for a brief amount of time.
 
 - Make above outlined config changes on that node and also ensure ``master.eligibility`` is set to false in all the nodes
@@ -219,7 +219,7 @@ for a brief amount of time.
 Complete downtime
 ^^^^^^^^^^^^^^^^^^
 
-If you want to keep things simple, you can take a temporary downtime for Schema Registry and do
+If you want to keep things simple, you can take a temporary downtime for |sr| and do
 the migration. To do so, simply shutdown all the nodes and start them again with the new configs.
 
 Backup and Restore

@@ -3,12 +3,12 @@
 Introduction
 ============
 
-Schema Registry provides a serving layer for your metadata. It provides a RESTful interface for storing and retrieving Avro schemas. It stores a versioned history of all schemas, provides multiple compatibility settings and allows evolution of schemas according to the configured compatibility setting. It provides serializers that plug into Kafka clients that handle schema storage and retrieval for Kafka messages that are sent in the Avro format.
+|sr| provides a serving layer for your metadata. It provides a RESTful interface for storing and retrieving Avro schemas. It stores a versioned history of all schemas, provides multiple compatibility settings and allows evolution of schemas according to the configured compatibility setting. It provides serializers that plug into Kafka clients that handle schema storage and retrieval for Kafka messages that are sent in the Avro format.
 
 Quickstart
 ----------
 
-Start by running the Schema Registry and the services it depends on: ZooKeeper and Kafka.
+Start by running the |sr| and the services it depends on: |zk| and Kafka.
 You can do this in one command with Confluent CLI:
 
 .. sourcecode:: bash
@@ -128,24 +128,24 @@ Installation
 .. ifconfig:: platform_docs
 
    See the :ref:`installation instructions<installation>` for the Confluent
-   Platform. Before starting the Schema Registry you must start Kafka.
+   Platform. Before starting the |sr| you must start Kafka.
    The :ref:`Confluent Platform quickstart<quickstart>` explains how to start
    these services locally for testing.
 
 .. ifconfig:: not platform_docs
 
-   You can download prebuilt versions of the Schema Registry as part of the
+   You can download prebuilt versions of the |sr| as part of the
    `Confluent Platform <http://confluent.io/downloads/>`_. To install from
    source, follow the instructions in the `Development`_ section. Before
-   starting the Schema Registry you must start Kafka.
+   starting the |sr| you must start Kafka.
 
 
 Deployment
 ----------
 
-Starting the Schema Registry service is simple once its dependencies are running. 
+Starting the |sr| service is simple once its dependencies are running.
 
-Note: The Schema Registry version must not exceed the CP/Kafka version. That's to say Schema Registry 3.0 will not be compatible with Kafka 0.9.x. See the Requirements section below for version compatibility.
+Note: The |sr| version must not exceed the CP/Kafka version. That's to say |sr| 3.0 will not be compatible with Kafka 0.9.x. See the Requirements section below for version compatibility.
 
 .. sourcecode:: bash
 
@@ -158,9 +158,9 @@ Note: The Schema Registry version must not exceed the CP/Kafka version. That's t
 If you installed Debian or RPM packages, you can simply run ``schema-registry-start``
 as it will be on your ``PATH``. The ``schema-registry.properties`` file contains
 :ref:`configuration settings<schemaregistry_config>`. The default configuration
-included with the Schema Registry includes convenient defaults for a local testing setup and
+included with the |sr| includes convenient defaults for a local testing setup and
 should be modified for a
-production deployment. By default the server starts bound to port 8081, expects Zookeeper
+production deployment. By default the server starts bound to port 8081, expects |zk|
 to be available at ``localhost:2181``, and a Kafka broker at ``localhost:9092``.
 
 If you started the service in the background, you can use the following command to stop it:
@@ -176,7 +176,7 @@ Development
 To build a development version, you may need a development versions of
 `common <https://github.com/confluentinc/common>`_ and
 `rest-utils <https://github.com/confluentinc/rest-utils>`_.  After
-installing these, you can build the Schema Registry
+installing these, you can build the |sr|
 with Maven. All the standard lifecycle phases work. During development, use
 
 .. sourcecode:: bash
@@ -195,7 +195,7 @@ to run the unit and integration tests, and
 
      $ mvn exec:java
 
-to run an instance of the Schema Registry against a local Kafka cluster (using
+to run an instance of the |sr| against a local Kafka cluster (using
 the default configuration included with Kafka).
 
 To create a packaged version, optionally skipping the tests:
@@ -233,4 +233,4 @@ Contribute
 License
 -------
 
-The Schema Registry is licensed under the Apache 2 license.
+The |sr| is licensed under the Apache 2 license.
