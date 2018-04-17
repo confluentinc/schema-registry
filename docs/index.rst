@@ -24,3 +24,6 @@ Contents:
    serializer-formatter
    schema-deletion-guidelines
    maven-plugin
+
+To see a working example of |sr|, check out :ref:`Confluent Platform demo<cp-demo>`. The demo shows you how to deploy a Kafka streaming ETL, including Schema Registry, using KSQL for stream processing.
+
