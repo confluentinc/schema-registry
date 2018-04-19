@@ -72,62 +72,130 @@ to Kafka. A ``SerializationException`` may occur during the send call, if the da
       // may need to do something with it
     }
 
-You can plug in ``KafkaAvroDecoder`` to ``KafkaConsumer`` to receive messages of any Avro type from Kafka.
+You can plug in ``KafkaAvroDeserializer`` to ``KafkaConsumer`` to receive messages of any Avro type from Kafka.
 In the following example, we receive messages with key of type ``string`` and value of type Avro record
 from Kafka. When getting the message key or value, a ``SerializationException`` may occur if the data is
 not well formed.
 
 .. sourcecode:: bash
 
-    import org.apache.avro.generic.IndexedRecord;
-    import kafka.consumer.ConsumerConfig;
-    import kafka.consumer.ConsumerIterator;
-    import kafka.consumer.KafkaStream;
-    import kafka.javaapi.consumer.ConsumerConnector;
-    import io.confluent.kafka.serializers.KafkaAvroDecoder;
-    import kafka.message.MessageAndMetadata;
-    import kafka.utils.VerifiableProperties;
-    import org.apache.kafka.common.errors.SerializationException;
-    import java.util.*;
+    import org.apache.kafka.clients.consumer.Consumer;
+    import org.apache.kafka.clients.consumer.ConsumerRecord;
+    import org.apache.kafka.clients.consumer.ConsumerRecords;
+    import org.apache.kafka.clients.consumer.KafkaConsumer;
+    import org.apache.kafka.clients.consumer.ConsumerConfig;
+
+    import org.apache.avro.generic.GenericRecord;
+
+    import java.io.FileInputStream;
+    import java.io.IOException;
+    import java.io.InputStream;
+    import java.nio.file.Files;
+    import java.nio.file.Paths;
+    import java.util.Arrays;
+    import java.util.Properties;
+    import java.util.Random;
 
     Properties props = new Properties();
-    props.put("zookeeper.connect", "localhost:2181");
-    props.put("group.id", "group1");
+
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2181");
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, "group1");
+
+
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "io.confluent.kafka.serializers.KafkaAvroDeserializer");
     props.put("schema.registry.url", "http://localhost:8081");
 
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
     String topic = "topic1";
-    Map<String, Integer> topicCountMap = new HashMap<>();
-    topicCountMap.put(topic, new Integer(1));
+    final Consumer<String, GenericRecord> consumer = new KafkaConsumer<String, String>(props);
+    consumer.subscribe(Arrays.asList(topic));
 
-    VerifiableProperties vProps = new VerifiableProperties(props);
-    KafkaAvroDecoder keyDecoder = new KafkaAvroDecoder(vProps);
-    KafkaAvroDecoder valueDecoder = new KafkaAvroDecoder(vProps);
-
-    ConsumerConnector consumer = kafka.consumer.Consumer.createJavaConsumerConnector(new ConsumerConfig(props));
-
-    Map<String, List<KafkaStream<Object, Object>>> consumerMap = consumer.createMessageStreams(
-        topicCountMap, keyDecoder, valueDecoder);
-    KafkaStream stream = consumerMap.get(topic).get(0);
-    ConsumerIterator it = stream.iterator();
-    while (it.hasNext()) {
-      MessageAndMetadata messageAndMetadata = it.next();
-      try {
-        String key = (String) messageAndMetadata.key();
-        IndexedRecord value = (IndexedRecord) messageAndMetadata.message();
-
-        ...
-      } catch(SerializationException e) {
-        // may need to do something with it
+    try {
+      while (true) {
+        ConsumerRecords<String, String> records = consumer.poll(100);
+        for (ConsumerRecord<String, String> record : records) {
+          System.out.printf("offset = %d, key = %s, value = %s \n", record.offset(), record.key(), record.value());
+        }
       }
+    } finally {
+      consumer.close();
     }
 
-We recommend users use the new producer in ``org.apache.kafka.clients.producer.KafkaProducer``. If
-you are using a version of Kafka older than 0.8.2.0, you can plug ``KafkaAvroEncoder`` into the old
-producer in ``kafka.javaapi.producer``. However, there will be some limitations. You can only use
-``KafkaAvroEncoder`` for serializing the value of the message and only send value of type Avro record.
-The Avro schema for the value will be registered under the subject *recordName-value*, where
-*recordName* is the name of the Avro record. Because of this, the same Avro record type shouldn't
-be used in more than one topic.
+
+Subject Name Strategy
+^^^^^^^^^^^^^^^^^^^^^
+
+By default, the KafkaAvroSerializer and KafkaAvroDeserializer default to using *<topicName>-Key*
+and *<topicName>-value* as the corresponding subject name while registering or retrieving the
+schema.
+
+This behavior can be modified by using the following configs
+
+``key.subject.name.strategy``
+  Determines how to construct the subject name under which the key schema is registered with the schema registry. By default, <topic>-key is used as subject.
+
+  * Type: class
+  * Default: class io.confluent.kafka.serializers.subject.TopicNameStrategy
+  * Importance: medium
+
+``value.subject.name.strategy``
+  Determines how to construct the subject name under which the value schema is registered with the schema registry. By default, <topic>-value is used as subject.
+
+  * Type: class
+  * Default: class io.confluent.kafka.serializers.subject.TopicNameStrategy
+  * Importance: medium
+
+The other available options that can be configured out of the box include
+
+``io.confluent.kafka.serializers.subject.RecordNameStrategy``
+
+ For any Avro record type that is published to Kafka, registers the schema
+ in the registry under the fully-qualified record name (regardless of the
+ topic). This strategy allows a topic to contain a mixture of different
+ record types, since no intra-topic compatibility checking is performed.
+ Instead, checks compatibility of any occurrences of the same record name
+ across **all** topics.
+
+``io.confluent.kafka.serializers.subject.TopicRecordNameStrategy``
+
+ For any Avro record type that is published to Kafka topic <topicName>,
+ registers the schema in the registry under the subject name
+ <topicName>-<recordName>, where <recordName> is the
+ fully-qualified Avro record name. This strategy allows a topic to contain
+ a mixture of different record types, since no intra-topic compatibility
+ checking is performed. Moreover, different topics may contain mutually
+ incompatible versions of the same record name, since the compatibility
+ check is scoped to a particular record name within a particular topic.
+
+Basic Auth Security
+^^^^^^^^^^^^^^^^^^^
+
+Schema Registry supports ability to authenticate requests using Basic Auth headers. You can send
+the Basic Auth headers by setting the following configuration in your producer or consumer example
+
+``basic.auth.credentials.source``
+  Specify how to pick the credentials for Basic uth header. The supported values are URL, USER_INFO and SASL_INHERIT
+
+  * Type: string
+  * Default: "URL"
+  * Importance: medium
+
+
+**URL** - The user info is configured as part of the ``schema.registry.url`` config in the
+form of ``http://<username>:<password>@sr-host:<sr-port>``
+
+**USER_INFO** - The User info is configured using the below configuration.
+``schema.registry.basic.auth.user.info``
+  Specify the user info for Basic Auth in the form of {username}:{password}
+
+  * Type: password
+  * Default: ""
+  * Importance: medium
+
+**SASL_INHERIT** - If your Kafka client uses SASL SCRAM or SASL PLAIN to talk to the broker, you
+can use the same credentials to talk to your Schema Registry instance.
 
 Formatter
 ---------
