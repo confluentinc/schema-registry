@@ -127,21 +127,26 @@ not well formed.
 Subject Name Strategy
 ^^^^^^^^^^^^^^^^^^^^^
 
-By default, the KafkaAvroSerializer and KafkaAvroDeserializer default to using *<topicName>-Key*
+KafkaAvroSerializer and KafkaAvroDeserializer default to using *<topicName>-Key*
 and *<topicName>-value* as the corresponding subject name while registering or retrieving the
 schema.
 
 This behavior can be modified by using the following configs
 
 ``key.subject.name.strategy``
-  Determines how to construct the subject name under which the key schema is registered with the schema registry. By default, <topic>-key is used as subject.
+  Determines how to construct the subject name under which the key schema is registered with the
+  schema registry.
+
+  Any implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` can be specified. By default, <topic>-key is used as subject.
 
   * Type: class
   * Default: class io.confluent.kafka.serializers.subject.TopicNameStrategy
   * Importance: medium
 
 ``value.subject.name.strategy``
-  Determines how to construct the subject name under which the value schema is registered with the schema registry. By default, <topic>-value is used as subject.
+  Determines how to construct the subject name under which the value schema is registered with the schema registry.
+
+  Any implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` can be specified. By default, <topic>-value is used as subject.
 
   * Type: class
   * Default: class io.confluent.kafka.serializers.subject.TopicNameStrategy
@@ -176,7 +181,8 @@ Schema Registry supports ability to authenticate requests using Basic Auth heade
 the Basic Auth headers by setting the following configuration in your producer or consumer example
 
 ``basic.auth.credentials.source``
-  Specify how to pick the credentials for Basic uth header. The supported values are URL, USER_INFO and SASL_INHERIT
+  Specify how to pick the credentials for Basic Auth header. The supported values are URL,
+  USER_INFO and SASL_INHERIT
 
   * Type: string
   * Default: "URL"
