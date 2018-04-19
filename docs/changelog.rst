@@ -3,6 +3,24 @@
 Changelog
 =========
 
+Version 4.0.1
+-------------
+
+This release upgrades Jackson 2.5.4 to 2.9.4. Most of the other change are minor or related to documentation.
+
+* `PR-762 <https://github.com/confluentinc/schema-registry/pull/762>`_ - MINOR: method for additional configs before starting RestApp
+* `PR-750 <https://github.com/confluentinc/schema-registry/pull/750>`_ - DOCS-317 - typo / missing text on Schema Registry doc
+* `PR-753 <https://github.com/confluentinc/schema-registry/pull/753>`_ - Bump Jackson version
+* `PR-727 <https://github.com/confluentinc/schema-registry/pull/727>`_ - DOCS-262 - Fix linking
+* `PR-728 <https://github.com/confluentinc/schema-registry/pull/728>`_ - Fix changelog version from 3.4 to 4.0
+* `PR-725 <https://github.com/confluentinc/schema-registry/pull/725>`_ - Docs 238
+* `PR-719 <https://github.com/confluentinc/schema-registry/pull/719>`_ - Broken link
+* `PR-713 <https://github.com/confluentinc/schema-registry/pull/713>`_ - DOCS-234 - Wrong link to Schema Registry API
+* `PR-709 <https://github.com/confluentinc/schema-registry/pull/709>`_ - DOCS-204: add Schema Registry content from https://docs.confluent.io/…
+* `PR-700 <https://github.com/confluentinc/schema-registry/pull/700>`_ - DOCS-112 - Typo
+* `PR-692 <https://github.com/confluentinc/schema-registry/pull/692>`_ - MINOR: Backport enum fixes to 4.0.x
+* `PR-678 <https://github.com/confluentinc/schema-registry/pull/678>`_ - CC-1333: Moving avro.version variable to confluent common
+
 Version 4.0.0
 -------------
 
