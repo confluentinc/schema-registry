@@ -3,6 +3,14 @@
 Changelog
 =========
 
+Version 4.0.1
+-------------
+
+This release upgrades Jackson 2.5.4 to 2.9.4, and fixes handling of Avro enums.
+
+* `PR-753 <https://github.com/confluentinc/schema-registry/pull/753>`_ - Bump Jackson version
+* `PR-692 <https://github.com/confluentinc/schema-registry/pull/692>`_ - MINOR: Backport enum fixes to 4.0.x
+
 Version 4.0.0
 -------------
 
