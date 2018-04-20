@@ -192,7 +192,7 @@ the Basic Auth headers by setting the following configuration in your producer o
 **URL** - The user info is configured as part of the ``schema.registry.url`` config in the
 form of ``http://<username>:<password>@sr-host:<sr-port>``
 
-**USER_INFO** - The User info is configured using the below configuration.
+**USER_INFO** - The user info is configured using the below configuration.
 ``schema.registry.basic.auth.user.info``
   Specify the user info for Basic Auth in the form of {username}:{password}
 
@@ -200,8 +200,8 @@ form of ``http://<username>:<password>@sr-host:<sr-port>``
   * Default: ""
   * Importance: medium
 
-**SASL_INHERIT** - If your Kafka client uses SASL SCRAM or SASL PLAIN to talk to the broker, you
-can use the same credentials to talk to your Schema Registry instance.
+**SASL_INHERIT** - Inherit the settings used by the Kafka client to communicate with the broker
+using SASL SCRAM or SASL PLAIN.
 
 Formatter
 ---------
