@@ -3,6 +3,31 @@
 Changelog
 =========
 
+Version 4.1.0
+-------------
+
+* `PR-757 <https://github.com/confluentinc/schema-registry/pull/757>`_ - Add WantedBy dependency to ensure startup order
+* `PR-741 <https://github.com/confluentinc/schema-registry/pull/741>`_ - CC-1511 : Fix for subject strategy when used with new SubjectNameStrategy.
+* `PR-742 <https://github.com/confluentinc/schema-registry/pull/742>`_ - Added delete to the client.
+* `PR-738 <https://github.com/confluentinc/schema-registry/pull/738>`_ - CLIENTS-896: Fix path to patch/series
+* `PR-735 <https://github.com/confluentinc/schema-registry/pull/735>`_ - Change to use updated Kafka internal API for JaasContext
+* `PR-718 <https://github.com/confluentinc/schema-registry/pull/718>`_ - Log properly when Exception raised on SchemaRegistryRestApplication
+* `PR-723 <https://github.com/confluentinc/schema-registry/pull/723>`_ - Merge packaging branches into master and add systemd init scripts
+* `PR-545 <https://github.com/confluentinc/schema-registry/pull/545>`_ - #544: Add null check for schema doc while adding the property "connect.enum.doc" for schema conversion of enum types
+* `PR-680 <https://github.com/confluentinc/schema-registry/pull/680>`_ - New (key|value).multi.type option for Avro serialization
+* `PR-710 <https://github.com/confluentinc/schema-registry/pull/710>`_ - Support Multiple SchemaRegistryResourceExtension
+* `PR-702 <https://github.com/confluentinc/schema-registry/pull/702>`_ - Set metrics tag for SR metrics
+* `PR-694 <https://github.com/confluentinc/schema-registry/pull/694>`_ - check kafkaTopicReader and producer not null before closing
+* `PR-686 <https://github.com/confluentinc/schema-registry/pull/686>`_ - issue#629: endpoint to return schema literal
+* `PR-696 <https://github.com/confluentinc/schema-registry/pull/696>`_ - Fix sasl inherit
+* `PR-683 <https://github.com/confluentinc/schema-registry/pull/683>`_ - Systemd
+* `PR-681 <https://github.com/confluentinc/schema-registry/pull/681>`_ - Add getAllVersions to SchemaRegistryClient
+* `PR-673 <https://github.com/confluentinc/schema-registry/pull/673>`_ - CLIENTS-729 : ability to inject BasicAuth credentials from producer/consumer SASL
+* `PR-676 <https://github.com/confluentinc/schema-registry/pull/676>`_ - CLIENTS-774 : ability to forward authorization header
+* `PR-664 <https://github.com/confluentinc/schema-registry/pull/664>`_ - CLIENTS-708 & CLIENTS-720 Fix enum type in fromConnectData
+* `PR-571 <https://github.com/confluentinc/schema-registry/pull/571>`_ - Support basic auth credentials embedded in the schema.registry.url
+* `PR-657 <https://github.com/confluentinc/schema-registry/pull/657>`_ - Add maxPollTimeout parameter to ConsumerNetworkClient constructor
+
 Version 4.0.1
 -------------
 
