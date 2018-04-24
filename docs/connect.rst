@@ -50,3 +50,37 @@ Configuration Options
   * Type: int
   * Default: 1000
   * Importance: low
+
+``key.subject.name.strategy``
+  Determines how to construct the subject name under which the key schema is registered with the schema registry.
+
+  Any implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` can be
+  specified. By default, <topic>-key is used as subject.
+
+  * Type: class
+  * Default: class io.confluent.kafka.serializers.subject.TopicNameStrategy
+  * Importance: medium
+
+``value.subject.name.strategy``
+  Determines how to construct the subject name under which the value schema is registered with the schema registry.
+
+  Any implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` can be specified. By default, <topic>-value is used as subject.
+
+  * Type: class
+  * Default: class io.confluent.kafka.serializers.subject.TopicNameStrategy
+  * Importance: medium
+
+``basic.auth.credentials.source``
+  Specify how to pick the credentials for Basic Auth header. The supported values are URL,
+  USER_INFO and SASL_INHERIT
+
+  * Type: string
+  * Default: "URL"
+  * Importance: medium
+
+``schema.registry.basic.auth.user.info``
+  Specify the user info for Basic Auth in the form of {username}:{password}
+
+  * Type: password
+  * Default: ""
+  * Importance: medium
