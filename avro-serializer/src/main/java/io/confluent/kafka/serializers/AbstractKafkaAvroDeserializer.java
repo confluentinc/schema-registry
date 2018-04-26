@@ -16,6 +16,13 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.exceptions.SpecificRecordClassNotFound;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
@@ -28,14 +35,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.codehaus.jackson.node.JsonNodeFactory;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import kafka.utils.VerifiableProperties;
-
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSerDe {
 
   public static final String SCHEMA_REGISTRY_SCHEMA_VERSION_PROP =
@@ -44,7 +43,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<String, Schema>();
-
+  protected boolean deserializeUnknownSpecificClassAsGeneric = false;
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
@@ -54,6 +53,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     configureClientProperties(config);
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
+    deserializeUnknownSpecificClassAsGeneric = config
+        .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_UNKNOWN_AS_GENERIC_CONFIG);
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -198,15 +199,33 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     boolean writerSchemaIsPrimitive = getPrimitiveSchemas().values().contains(writerSchema);
     // do not use SpecificDatumReader if writerSchema is a primitive
     if (useSpecificAvroReader && !writerSchemaIsPrimitive) {
-      if (readerSchema == null) {
-        readerSchema = getReaderSchema(writerSchema);
+      return getSpecificDatumReader(writerSchema, readerSchema);
+    }
+    return getGenericDatumReader(writerSchema, readerSchema);
+  }
+
+  private DatumReader getSpecificDatumReader(Schema writerSchema, Schema readerSchema) {
+    if (readerSchema == null) {
+      return getSpecificDatumReaderWithWriterSchema(writerSchema);
+    }
+    return new SpecificDatumReader(writerSchema, readerSchema);
+  }
+
+  private DatumReader getGenericDatumReader(Schema writerSchema, Schema readerSchema) {
+    if (readerSchema == null) {
+      return new GenericDatumReader(writerSchema);
+    }
+    return new GenericDatumReader(writerSchema, readerSchema);
+  }
+
+  private DatumReader getSpecificDatumReaderWithWriterSchema(Schema writerSchema) {
+    try {
+      return new SpecificDatumReader(writerSchema, getReaderSchema(writerSchema));
+    } catch (SpecificRecordClassNotFound e) {
+      if (deserializeUnknownSpecificClassAsGeneric) {
+        return getGenericDatumReader(writerSchema, null);
       }
-      return new SpecificDatumReader(writerSchema, readerSchema);
-    } else {
-      if (readerSchema == null) {
-        return new GenericDatumReader(writerSchema);
-      }
-      return new GenericDatumReader(writerSchema, readerSchema);
+      throw e;
     }
   }
 
@@ -231,7 +250,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         }
         readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
       } else {
-        throw new SerializationException("Could not find class "
+        throw new SpecificRecordClassNotFound("Could not find class "
                                          + writerSchema.getFullName()
                                          + " specified in writer's schema whilst finding reader's "
                                          + "schema for a SpecificRecord.");
