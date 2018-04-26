@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.exceptions.SpecificRecordClassNotFound;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
