@@ -297,6 +297,7 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
       POST /subjects/test/versions HTTP/1.1
       Host: schemaregistry.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+      Content-Type: application/vnd.schemaregistry.v1+json
 
       {
         "schema":
@@ -349,6 +350,7 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
       POST /subjects/test HTTP/1.1
       Host: schemaregistry.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+      Content-Type: application/vnd.schemaregistry.v1+json
 
       {
 	    "schema":
@@ -462,6 +464,7 @@ The compatibility resource allows the user to test schemas for compatibility aga
       POST /compatibility/subjects/test/versions/latest HTTP/1.1
       Host: schemaregistry.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
+      Content-Type: application/vnd.schemaregistry.v1+json
 
       { 
         "schema":
