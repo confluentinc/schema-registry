@@ -101,7 +101,7 @@ fi
 
 # JVM performance options
 if [ -z "$SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS" ]; then
-  SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true"
+  SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
 fi
 
 while [ $# -gt 0 ]; do
@@ -145,7 +145,6 @@ GC_FILE_SUFFIX='-gc.log'
 GC_LOG_FILE_NAME=''
 if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
-  SCHEMA_REGISTRY_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
 
   # The first segment of the version number, which is '1' for releases before Java 9
   # it then becomes '9', '10', ...
@@ -171,5 +170,5 @@ if [ "x$DAEMON_MODE" = "xtrue" ]; then
   CONSOLE_OUTPUT_FILE=${CONSOLE_OUTPUT_FILE:-${LOG_DIR}/schema-registry-console.out}
   nohup $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_GC_LOG_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@" > "${CONSOLE_OUTPUT_FILE}" 2>&1 < /dev/null &
 else
-  exec $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@"
+  exec $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_GC_LOG_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@"
 fi
