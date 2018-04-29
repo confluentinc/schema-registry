@@ -84,7 +84,7 @@ public class KafkaAvroSerializerTest {
     return new KafkaAvroDeserializer(schemaRegistry, specificDeserializerProps);
   }
 
-  private KafkaAvroDecoder buildSpecificDecoder(
+  private static KafkaAvroDecoder buildSpecificDecoder(
       SchemaRegistryClient schemaRegistry,
       Boolean unknownAsGeneric) {
     Properties specificDecoderProps = new Properties();
