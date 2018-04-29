@@ -390,7 +390,6 @@ public class KafkaAvroSerializerTest {
     KafkaAvroDecoder specificAvroDecoder = buildSpecificDecoder(schemaRegistry,
         true);
     IndexedRecord avroRecord = createAvroRecord();
-
     bytes = avroSerializer.serialize(topic, avroRecord);
 
     try {
