@@ -1,32 +1,34 @@
-Production Deployment
----------------------
+|sr| Production Deployment
+--------------------------
 
-This section is not meant to be an exhaustive guide to running your Schema Registry in production, but it
-covers the key things to consider before putting your cluster live. Three main areas are covered:
+This section describes the key considerations before going to production with your cluster. However, it is not an
+exhaustive guide to running your |sr| in production.
+
+Three main areas are covered:
 
 * Logistical considerations, such as hardware recommendations and deployment strategies
 * Configuration more suited to a production environment
 * Post-deployment considerations, such multi-data center setup
 
-.. toctree::
-   :maxdepth: 3
+.. contents::
+    :local:
 
 Hardware
 ~~~~~~~~
 
-If you’ve been following the normal development path, you’ve probably been playing with Schema Registry
+If you’ve been following the normal development path, you’ve probably been playing with |sr|
 on your laptop or on a small cluster of machines laying around. But when it comes time to deploying
-Schema Registry to production, there are a few recommendations that you should consider. Nothing is a hard-and-fast rule.
+|sr| to production, there are a few recommendations that you should consider. Nothing is a hard-and-fast rule.
 
 Memory
 ^^^^^^
 
-Schema Registry uses Kafka as a commit log to store all registered schemas durably, and maintains a few in-memory indices to make schema lookups faster. A conservative upper bound on the number of unique schemas registered in a large data-oriented company like LinkedIn is around 10,000. Assuming roughly 1000 bytes heap overhead per schema on average, heap size of 1GB would be more than sufficient.
+|sr| uses Kafka as a commit log to store all registered schemas durably, and maintains a few in-memory indices to make schema lookups faster. A conservative upper bound on the number of unique schemas registered in a large data-oriented company like LinkedIn is around 10,000. Assuming roughly 1000 bytes heap overhead per schema on average, heap size of 1GB would be more than sufficient.
 
 CPUs
 ^^^^
 
-CPU usage in Schema Registry is light. The most computationally intensive task is checking compatibility of two schemas, an infrequent operation which occurs primarily when new schemas versions are registered under a subject.
+CPU usage in |sr| is light. The most computationally intensive task is checking compatibility of two schemas, an infrequent operation which occurs primarily when new schemas versions are registered under a subject.
 
 If you need to choose between faster CPUs or more cores, choose more cores. The extra concurrency that multiple
 cores offers will far outweigh a slightly faster clock speed.
@@ -34,7 +36,7 @@ cores offers will far outweigh a slightly faster clock speed.
 Disks
 ^^^^^
 
-Schema Registry does not have any disk resident data. It currently uses Kafka as a commit log to store all schemas durably and holds in-memory indices of all schemas. Therefore, the only disk usage comes from storing the log4j logs.
+|sr| does not have any disk resident data. It currently uses Kafka as a commit log to store all schemas durably and holds in-memory indices of all schemas. Therefore, the only disk usage comes from storing the log4j logs.
 
 Network
 ^^^^^^^
@@ -72,7 +74,7 @@ The full set of configuration options are documented in :ref:`schemaregistry_con
 However, there are some logistical configurations that should be changed for production. These changes are necessary because there is no way to set a good default (because it depends on your cluster layout).
 
 ``kafkastore.connection.url``
-Zookeeper url for the Kafka cluster
+|zk| URL for the Kafka cluster
 
 * Type: string
 * Importance: high
@@ -85,7 +87,7 @@ Port to listen on for new connections.
 * Importance: high
 
 ``host.name``
-Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may need to be different from the interface to which the broker binds. If this is not set, it will use the value returned from ``java.net.InetAddress.getCanonicalHostName()``.
+Hostname to publish to |zk| for clients to use. In IaaS environments, this may need to be different from the interface to which the broker binds. If this is not set, it will use the value returned from ``java.net.InetAddress.getCanonicalHostName()``.
 
 * Type: string
 * Default: ``host.name``
@@ -104,7 +106,7 @@ Don't Touch These Settings!
 Storage settings
 ^^^^^^^^^^^^^^^^
 
-Schema Registry stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for the Schema Registry database and is the source of truth, writes to this store need to be durable. Schema Registry ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Finally, ``kafkastore.topic`` must be a compacted topic to avoid data loss. Whenever in doubt, leave these settings alone. If you must create the topic manually, this is an example of proper configuration:
+|sr| stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for the |sr| database and is the source of truth, writes to this store need to be durable. |sr| ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Finally, ``kafkastore.topic`` must be a compacted topic to avoid data loss. Whenever in doubt, leave these settings alone. If you must create the topic manually, this is an example of proper configuration:
 
 .. sourcecode:: bash
 
@@ -135,7 +137,7 @@ The timeout for an operation on the Kafka store. This is the maximum time that a
 Kafka & ZooKeeper
 ~~~~~~~~~~~~~~~~~
 
-Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and ZooKeeper.
+Please refer to :ref:`schemaregistry_operations` for recommendations on operationalizing Kafka and |zk|.
 
 .. _schemaregistry_mirroring:
 
@@ -167,7 +169,7 @@ Multi-DC Setup
 
 Overview
 ^^^^^^^^
-Spanning multiple datacenters with your Schema Registry provides additional protection against data loss and improved latency. The recommended multi-datacenter deployment designates one datacenter as "master" and all others as "slaves". If the "master" datacenter fails and is unrecoverable, a "slave" datacenter will need to be manually designated the new "master" through the steps in the Run Book below.
+Spanning multiple datacenters with your |sr| provides additional protection against data loss and improved latency. The recommended multi-datacenter deployment designates one datacenter as "master" and all others as "slaves". If the "master" datacenter fails and is unrecoverable, a "slave" datacenter will need to be manually designated the new "master" through the steps in the Run Book below.
 
 
 Recommended Deployment
@@ -175,8 +177,8 @@ Recommended Deployment
 
 .. image:: multi-dc-setup.png
 
-In the image above, there are two datacenters - DC A, and DC B. Each of the two datacenters has its own ZooKeeper
-cluster, Kafka cluster, and Schema Registry cluster. Both Schema Registry clusters link to Kafka and ZooKeeper in DC A. Note that the Schema Registry instances in DC B have ``master.eligibility`` set to false, meaning that none can ever be elected master.
+In the image above, there are two datacenters - DC A, and DC B. Each of the two datacenters has its own |zk|
+cluster, Kafka cluster, and |sr| cluster. Both |sr| clusters link to Kafka and |zk| in DC A. Note that the |sr| instances in DC B have ``master.eligibility`` set to false, meaning that none can ever be elected master.
 
 To protect against complete loss of DC A, Kafka cluster A (the source) is replicated to Kafka cluster B (the target). This is achieved by running the :ref:`Replicator` <connect_replicator>` local to the target cluster.
 
@@ -184,18 +186,18 @@ Important Settings
 ^^^^^^^^^^^^^^^^^^
 
 ``kafkastore.connection.url``
-kafkastore.connection.url should be identical across all Schema Registry nodes. By sharing this setting, all Schema Registry instances will point to the same ZooKeeper cluster.
+kafkastore.connection.url should be identical across all |sr| nodes. By sharing this setting, all |sr| instances will point to the same |zk| cluster.
 
 ``schema.registry.zk.namespace``
-Namespace under which Schema Registry related metadata is stored in Zookeeper. This setting should be identical across all nodes in the same Schema Registry.
+Namespace under which |sr| related metadata is stored in |zk|. This setting should be identical across all nodes in the same |sr|.
 
 ``master.eligibility``
-A Schema Registry server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. Schema Registry instances in a "slave" data center should have this set to false, and Schema Registry instances local to the shared Kafka cluster should have this set to true.
+A |sr| server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. |sr| instances in a "slave" data center should have this set to false, and |sr| instances local to the shared Kafka cluster should have this set to true.
 
 Setup
 ^^^^^
 
-Assuming you have Schema Registry running, here are the recommended steps to add Schema Registry instances in a new "slave" datacenter (call it DC B):
+Assuming you have |sr| running, here are the recommended steps to add |sr| instances in a new "slave" datacenter (call it DC B):
 
 - In DC B, make sure Kafka has ``unclean.leader.election.enable`` set to false.
 
@@ -203,15 +205,15 @@ Assuming you have Schema Registry running, here are the recommended steps to add
 
 - In DC B, run Replicator with Kafka in the "master" datacenter (DC A) as the source and Kafka in DC B as the target.
 
-- In the Schema Registry config files in DC B, set ``kafkastore.connection.url`` and ``schema.registry.zk.namespace`` to match the instances already running, and set ``master.eligibility`` to false.
+- In the |sr| config files in DC B, set ``kafkastore.connection.url`` and ``schema.registry.zk.namespace`` to match the instances already running, and set ``master.eligibility`` to false.
 
-- Start your new Schema Registry instances with these configs.
+- Start your new |sr| instances with these configs.
 
 Run Book
 ^^^^^^^^
 
-Let's say you have Schema Registry running in multiple datacenters, and you have lost your "master" datacenter; what do you do? First, note that the remaining Schema Registry instances will continue to be able to serve any request which does not result in a write to Kafka. This includes GET requests on existing ids and POST requests on schemas already in the registry.
+Let's say you have |sr| running in multiple datacenters, and you have lost your "master" datacenter; what do you do? First, note that the remaining |sr| instances will continue to be able to serve any request which does not result in a write to Kafka. This includes GET requests on existing ids and POST requests on schemas already in the registry.
 
-- If possible, revive the "master" datacenter by starting Kafka and Schema Registry as before.
+- If possible, revive the "master" datacenter by starting Kafka and |sr| as before.
 
-- If you must designate a new datacenter (call it DC B) as "master", update the Schema Registry config files so that ``kafkastore.connection.url`` points to the local ZooKeeper, and change ``master.eligibility`` to true. The restart your Schema Registry instances with these new configs in a rolling fashion.
+- If you must designate a new datacenter (call it DC B) as "master", update the |sr| config files so that ``kafkastore.connection.url`` points to the local |zk|, and change ``master.eligibility`` to true. The restart your |sr| instances with these new configs in a rolling fashion.
