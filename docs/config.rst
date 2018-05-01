@@ -3,7 +3,7 @@
 Configuration Options
 =====================
 ``kafkastore.connection.url``
-  Zookeeper url for the Kafka cluster
+  |zk| URL for the Kafka cluster
 
   * Type: string
   * Default: ""
@@ -12,7 +12,7 @@ Configuration Options
 ``listeners``
   Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
-  Schema Registry identities are stored in ZooKeeper and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
+  |sr| identities are stored in |zk| and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
 
   * Type: list
   * Default: "http://0.0.0.0:8081"
@@ -26,7 +26,7 @@ Configuration Options
   * Importance: high
 
 ``host.name``
-  The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry with multiple nodes.
+  The host name advertised in |zk|. Make sure to set this if running SchemaRegistry with multiple nodes.
 
   * Type: string
   * Default: "192.168.50.1"
@@ -131,7 +131,7 @@ Configuration Options
   * Importance: high
 
 ``zookeeper.set.acl``
-  Whether or not to set an ACL in ZooKeeper when znodes are created and ZooKeeper SASL authentication is configured. IMPORTANT: if set to `true`, the ZooKeeper SASL principal must be the same as the Kafka brokers.
+  Whether or not to set an ACL in |zk| when znodes are created and |zk| SASL authentication is configured. IMPORTANT: if set to `true`, the |zk| SASL principal must be the same as the Kafka brokers.
 
   * Type: boolean
   * Default: false
@@ -266,15 +266,15 @@ Configuration Options
 ``kafkastore.bootstrap.servers``
   A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
 
-  If this configuration is not specified, the Schema Registry's internal Kafka clients will get their Kafka bootstrap server list
-  from ZooKeeper (configured with `kafkastore.connection.url`). Note that if `kafkastore.bootstrap.servers` is configured,
+  If this configuration is not specified, the |sr|'s internal Kafka clients will get their Kafka bootstrap server list
+  from |zk| (configured with `kafkastore.connection.url`). Note that if `kafkastore.bootstrap.servers` is configured,
   `kafkastore.connection.url` still needs to be configured, too.
 
   This configuration is particularly important when Kafka security is enabled, because Kafka may expose multiple endpoints that
-  all will be stored in ZooKeeper, but the Schema Registry may need to be configured with just one of those endpoints.
+  all will be stored in |zk|, but the |sr| may need to be configured with just one of those endpoints.
 
  * Type: list
- * Default: "" (when left blank, bootstrap servers are fetched from ZooKeeper)
+ * Default: "" (when left blank, bootstrap servers are fetched from |zk|)
  * Importance: medium
 
 ``access.control.allow.origin``
@@ -320,7 +320,7 @@ Configuration Options
   * Importance: low
 
 ``kafkastore.zk.session.timeout.ms``
-  Zookeeper session timeout
+  |zk| session timeout
 
   * Type: int
   * Default: 30000
@@ -369,7 +369,7 @@ Configuration Options
   * Importance: low
 
 ``schema.registry.zk.namespace``
-  The string that is used as the zookeeper namespace for storing Schema Registry metadata. SchemaRegistry instances which are part of the same Schema Registry service should have the same ZooKeeper namespace.
+  The string that is used as the |zk| namespace for storing |sr| metadata. SchemaRegistry instances which are part of the same |sr| service should have the same |zk| namespace.
 
   * Type: string
   * Default: "schema_registry"
@@ -440,7 +440,7 @@ Configuration Options
 
 ``kafkastore.group.id``
   Use this setting to override the group.id for the KafkaStore consumer.
-  This setting can become important when security is enabled, to ensure stability over the Schema Registry consumer's group.id
+  This setting can become important when security is enabled, to ensure stability over the |sr| consumer's group.id
   Without this configuration, group.id will be "schema-registry-<host>-<port>"
 
   * Type: string
