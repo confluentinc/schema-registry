@@ -1036,13 +1036,19 @@ public class AvroData {
             return array;
           }
         case STRUCT: {
-          ObjectNode node = JsonNodeFactory.instance.objectNode();
-          Struct struct = ((Struct) defaultVal);
-          for (Field field : (schema.fields())) {
-            JsonNode fieldDef = defaultValueFromConnect(field.schema(), struct.get(field));
-            node.put(field.name(), fieldDef);
+          if (AVRO_TYPE_UNION.equals(schema.name())) {
+            Field firstField = schema.fields().get(0);
+            Struct struct = ((Struct) defaultVal);
+            return defaultValueFromConnect(firstField.schema(), struct.get(firstField));
+          } else {
+            ObjectNode node = JsonNodeFactory.instance.objectNode();
+            Struct struct = ((Struct) defaultVal);
+            for (Field field : (schema.fields())) {
+              JsonNode fieldDef = defaultValueFromConnect(field.schema(), struct.get(field));
+              node.put(field.name(), fieldDef);
+            }
+            return node;
           }
-          return node;
         }
         default:
           throw new DataException("Unknown schema type:" + schema.type());
@@ -1730,8 +1736,12 @@ public class AvroData {
         if (memberAvroSchema.getType() == org.apache.avro.Schema.Type.NULL) {
           return null;
         } else {
-          return defaultValueFromAvro(schema.field(unionMemberFieldName(enhancedSchemaSupport,
-                                      memberAvroSchema)).schema(), memberAvroSchema, value);
+          Struct result = new Struct(schema);
+          String fieldName = unionMemberFieldName(enhancedSchemaSupport, memberAvroSchema);
+          Field field = schema.field(fieldName);
+          Object converted = defaultValueFromAvro(field.schema(), memberAvroSchema, value);
+          result.put(fieldName, converted);
+          return result;
         }
       }
       default: {

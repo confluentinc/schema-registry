@@ -757,6 +757,67 @@ public class AvroDataTest {
     Assert.assertNull(userTypeValue);
   }
 
+  @Test
+  public void testUnionRecordDefaultValueConversion() {
+    org.apache.avro.Schema defaultFieldSchema = org.apache.avro.SchemaBuilder
+      .record("A").fields().name("a").type().intType().noDefault().endRecord();
+    GenericData.Record defaultValue = new GenericRecordBuilder(defaultFieldSchema).set("a", 1).build();
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+      .record("Parent")
+      .fields()
+      .name("parent")
+      .type()
+      .unionOf()
+      .record("A").fields().name("a").type().intType().noDefault().endRecord().and()
+      .record("B").fields().name("b").type().stringType().noDefault().endRecord()
+      .endUnion()
+      .recordDefault(defaultValue)
+      .endRecord();
+    AvroData avroData = new AvroData(new AvroDataConfig(new HashMap<>()));
+    Schema schema = avroData.toConnectSchema(avroSchema);
+    org.apache.avro.Schema fromConnectSchema = avroData.fromConnectSchema(schema);
+    avroSchema.getField("parent").schema().getTypes().get(0).addProp("connect.name", "A");
+    avroSchema.getField("parent").schema().getTypes().get(1).addProp("connect.name", "B");
+    avroSchema.addProp("connect.name", "Parent");
+    assertEquals(avroSchema, fromConnectSchema);
+  }
+
+  @Test
+  public void testUnionIntDefaultValueConversion() {
+    org.apache.avro.Schema defaultFieldSchema = org.apache.avro.SchemaBuilder
+      .record("A").fields().name("a").type().intType().noDefault().endRecord();
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+      .record("Parent")
+      .fields()
+      .name("parent")
+      .type().unionOf().intType().and().stringType().endUnion()
+      .intDefault(1)
+      .endRecord();
+    AvroData avroData = new AvroData(new AvroDataConfig(new HashMap<>()));
+    Schema toConnectSchema = avroData.toConnectSchema(avroSchema);
+    org.apache.avro.Schema schema = avroData.fromConnectSchema(toConnectSchema);
+    avroSchema.addProp("connect.name", "Parent");
+    assertEquals(avroSchema, schema);
+  }
+
+  @Test
+  public void testUnionStringDefaultValueConversion() {
+    org.apache.avro.Schema defaultFieldSchema = org.apache.avro.SchemaBuilder
+      .record("A").fields().name("a").type().intType().noDefault().endRecord();
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+      .record("Parent")
+      .fields()
+      .name("parent")
+      .type().unionOf().stringType().and().intType().endUnion()
+      .stringDefault("x")
+      .endRecord();
+    AvroData avroData = new AvroData(new AvroDataConfig(new HashMap<>()));
+    Schema toConnectSchema = avroData.toConnectSchema(avroSchema);
+    org.apache.avro.Schema schema = avroData.fromConnectSchema(toConnectSchema);
+    avroSchema.addProp("connect.name", "Parent");
+    assertEquals(avroSchema, schema);
+  }
+
   // Avro -> Connect. Validate a) all Avro types that convert directly to Avro, b) specialized
   // Avro types where we can convert to a Connect type that doesn't have a corresponding Avro
   // type, and c) Avro types which need specialized transformation because there is no
