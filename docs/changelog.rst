@@ -188,7 +188,7 @@ Version 2.0.0
 * `PR-167 <https://github.com/confluentinc/schema-registry/pull/167>`_ - Update the versionCache with a new schemaVersionMap for a subject
 * `PR-169 <https://github.com/confluentinc/schema-registry/pull/169>`_ - Use correct URL to update compatibility setting of a subject
 * `PR-180 <https://github.com/confluentinc/schema-registry/pull/180>`_ - GH-177: Remove unneeded content-type headers for GET ops in quickstart and README
-* `PR-184 <https://github.com/confluentinc/schema-registry/pull/184>`_ - Support multiple registry urls in client
+* `PR-184 <https://github.com/confluentinc/schema-registry/pull/184>`_ - Support multiple registry URLs in client
 * `PR-186 <https://github.com/confluentinc/schema-registry/pull/186>`_ - Rename LocalSchemaRegistryClient to make it clear it is only intended to be used as a mock in tests. Fixes #185.
 * `PR-187 <https://github.com/confluentinc/schema-registry/pull/187>`_ - Correct example response for POST /subjects/(string: subject)/versions
 * `PR-188 <https://github.com/confluentinc/schema-registry/pull/188>`_ - Address GH-168; enable unit testing of CachedSchemaRegistryClient
