@@ -69,7 +69,7 @@ layout.
 
 Depending on how the |sr| instances coordinate to choose the :ref:`master<schemaregistry_single_master>`, you can deploy
 |sr| with |zk| (which can be shared with Kafka) or with Kafka itself. |zk|-based master election is available in all versions
-of |sr| and if you an existing |sr| deployment you should continue to use it for compatibility. Kafka-based master election
+of |sr| and if you have an existing |sr| deployment you should continue to use it for compatibility. Kafka-based master election
 can be used in cases where |zk| is not available, for example for hosted or cloud Kafka environments, or if access to |zk|
 has been locked down.
 
