@@ -16,6 +16,9 @@
 
 package io.confluent.connect.avro;
 
+import avro.shaded.com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -24,6 +27,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.powermock.reflect.Whitebox;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
@@ -156,25 +160,48 @@ public class AvroConverterTest {
   }
 
   @Test
-  public void testVersionExtracted() throws Exception {
+  public void testVersionExtractedForDefaultSubjectNameStrategy() throws Exception {
     // Version info should be extracted even if the data was not created with Copycat. Manually
     // register a few compatible schemas and validate that data serialized with our normal
     // serializer can be read and gets version info inserted
+    String subject = TOPIC + "-value";
     KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry);
+    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
+    avroConverter.configure(Collections.singletonMap("schema.registry.url", "http://fake-url"), false);
+    testVersionExtracted(subject, serializer, avroConverter);
 
+  }
+
+  @Test
+  public void testVersionExtractedForRecordSubjectNameStrategy() throws Exception {
+    // Version info should be extracted even if the data was not created with Copycat. Manually
+    // register a few compatible schemas and validate that data serialized with our normal
+    // serializer can be read and gets version info inserted
+    String subject =  "Foo";
+    Map<String, Object> configs = ImmutableMap.<String, Object>of("schema.registry.url", "http://fake-url", "value.subject.name.strategy", RecordNameStrategy.class.getName());
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry);
+    serializer.configure(configs, false);
+    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
+
+    avroConverter.configure(configs, false);
+    testVersionExtracted(subject, serializer, avroConverter);
+
+  }
+
+  private void testVersionExtracted(String subject, KafkaAvroSerializer serializer, AvroConverter avroConverter) throws IOException, RestClientException {
     // Pre-register to ensure ordering
     org.apache.avro.Schema avroSchema1 = org.apache.avro.SchemaBuilder
         .record("Foo").fields()
         .requiredInt("key")
         .endRecord();
-    schemaRegistry.register(TOPIC + "-value", avroSchema1);
+    schemaRegistry.register(subject, avroSchema1);
 
     org.apache.avro.Schema avroSchema2 = org.apache.avro.SchemaBuilder
         .record("Foo").fields()
         .requiredInt("key")
         .requiredString("value")
         .endRecord();
-    schemaRegistry.register(TOPIC + "-value", avroSchema2);
+    schemaRegistry.register(subject, avroSchema2);
 
 
     // Get serialized data
@@ -187,10 +214,10 @@ public class AvroConverterTest {
     byte[] serializedRecord2 = serializer.serialize(TOPIC, avroRecord2);
 
 
-    SchemaAndValue converted1 = converter.toConnectData(TOPIC, serializedRecord1);
+    SchemaAndValue converted1 = avroConverter.toConnectData(TOPIC, serializedRecord1);
     assertEquals(1L, (long) converted1.schema().version());
 
-    SchemaAndValue converted2 = converter.toConnectData(TOPIC, serializedRecord2);
+    SchemaAndValue converted2 = avroConverter.toConnectData(TOPIC, serializedRecord2);
     assertEquals(2L, (long) converted2.schema().version());
   }
 
