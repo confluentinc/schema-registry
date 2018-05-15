@@ -214,7 +214,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
           .get(initTimeout, TimeUnit.MILLISECONDS);
     } catch (ExecutionException e) {
       if (e.getCause() instanceof TopicExistsException) {
-        // This is ok.
+        // If topic already exists, ensure that it is configured correctly.
+        verifySchemaTopic(admin);
       } else {
         throw e;
       }
