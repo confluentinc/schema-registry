@@ -26,30 +26,34 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
-public class UserInfoCredentialProviderTest {
+public class UsernamePasswordCredentialProviderTest {
 
   @Test
-  public void testUserInfo() throws MalformedURLException {
+  public void testUrlUserInfo() throws MalformedURLException {
     Map<String, Object> clientConfig = new HashMap<>();
-    clientConfig.put(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG, "user:password");
-    UserInfoCredentialProvider provider = new UserInfoCredentialProvider();
+    clientConfig.put(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USERNAME_CONFIG, "user");
+    clientConfig.put(SchemaRegistryClientConfig.SCHEMA_REGISTRY_PASSWORD_CONFIG, "password");
+    UsernamePasswordCredentialProvider provider = new UsernamePasswordCredentialProvider();
     provider.configure(clientConfig);
-    Assert.assertEquals("user:password", provider.getUserInfo(new URL("http://localhost")));
+    Assert.assertEquals("user:password",
+        provider.getUserInfo(new URL("http://localhost")));
   }
 
   @Test
-  public void testSpecialCharInUserInfo() throws MalformedURLException {
+  public void testSpecialCharsInUrlUserInfo() throws MalformedURLException {
     Map<String, Object> clientConfig = new HashMap<>();
-    clientConfig.put(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG, "%C3%BC%24%C3%ABr:%CF%B1%CE%B1%24swo%7C2d");
-    UserInfoCredentialProvider provider = new UserInfoCredentialProvider();
+    clientConfig.put(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USERNAME_CONFIG, "ü$ër");
+    clientConfig.put(SchemaRegistryClientConfig.SCHEMA_REGISTRY_PASSWORD_CONFIG, "ϱα$swo|2d");
+    UsernamePasswordCredentialProvider provider = new UsernamePasswordCredentialProvider();
     provider.configure(clientConfig);
-    Assert.assertEquals("ü$ër:ϱα$swo|2d", provider.getUserInfo(new URL("http://localhost")));
+    Assert.assertEquals("ü$ër:ϱα$swo|2d",
+        provider.getUserInfo(new URL("http://localhost")));
   }
 
   @Test(expected = ConfigException.class)
-  public void testNullUserInfo() throws MalformedURLException {
+  public void testMissingUserNameAndPassword() {
     Map<String, Object> clientConfig = new HashMap<>();
-    UserInfoCredentialProvider provider = new UserInfoCredentialProvider();
+    UsernamePasswordCredentialProvider provider = new UsernamePasswordCredentialProvider();
     provider.configure(clientConfig);
   }
 

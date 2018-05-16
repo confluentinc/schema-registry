@@ -20,4 +20,8 @@ public class SchemaRegistryClientConfig {
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = "basic.auth.credentials.source";
   public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
       "schema.registry.basic.auth.user.info";
+  public static final String SCHEMA_REGISTRY_USERNAME_CONFIG =
+      "schema.registry.basic.auth.username";
+  public static final String SCHEMA_REGISTRY_PASSWORD_CONFIG =
+      "schema.registry.basic.auth.password";
 }

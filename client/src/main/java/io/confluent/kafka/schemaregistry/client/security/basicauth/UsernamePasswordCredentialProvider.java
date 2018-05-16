@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,22 +22,24 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import java.net.URL;
 import java.util.Map;
 
-public class UserInfoCredentialProvider extends AbstractBasicAuthCredentialProvider {
+public class UsernamePasswordCredentialProvider extends AbstractBasicAuthCredentialProvider {
 
   private String userInfo;
 
   @Override
-  public void configure(Map<String, ?> configs) {
-    userInfo = decodeUserInfo(
-      (String) configs.get(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG));
-    if (userInfo == null || userInfo.isEmpty()) {
-      throw new ConfigException("UserInfo must be provided when basic.auth.credentials.source is "
-                                + "set to USER_INFO");
+  public void configure(Map<String, ?> configs) throws ConfigException {
+    String user = (String) configs.get(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USERNAME_CONFIG);
+    String pass = (String) configs.get(SchemaRegistryClientConfig.SCHEMA_REGISTRY_PASSWORD_CONFIG);
+    if (user == null || user.isEmpty() || pass == null || pass.isEmpty()) {
+      throw new ConfigException("Username and password must be provided when "
+          + "basic.auth.credentials.source is set to USERNAME_PASSWORD");
     }
+    userInfo = user + ":" + pass;
   }
 
   @Override
   public String getUserInfo(URL url) {
     return userInfo;
   }
+
 }

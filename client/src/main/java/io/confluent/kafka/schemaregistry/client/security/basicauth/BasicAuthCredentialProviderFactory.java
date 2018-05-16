@@ -35,6 +35,9 @@ public class BasicAuthCredentialProviderFactory {
       case SASL_INHERIT:
         basicAuthCredentialProvider = new SaslBasicAuthCredentialProvider();
         break;
+      case USERNAME_PASSWORD:
+        basicAuthCredentialProvider = new UsernamePasswordCredentialProvider();
+        break;
       default:
         break;
     }

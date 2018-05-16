@@ -17,16 +17,12 @@
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
 import java.net.URL;
-import java.util.Map;
 
-public class UrlBasicAuthCredentialProvider implements BasicAuthCredentialProvider {
-
-  @Override
-  public void configure(Map<String, ?> configs) {
-  }
+public class UrlBasicAuthCredentialProvider extends AbstractBasicAuthCredentialProvider {
 
   @Override
   public String getUserInfo(URL url) {
-    return url.getUserInfo();
+    return decodeUserInfo(url.getUserInfo());
   }
+
 }

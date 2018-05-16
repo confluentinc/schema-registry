@@ -26,4 +26,6 @@ public interface BasicAuthCredentialProvider {
   void configure(Map<String, ?> configs) throws ConfigException;
 
   String getUserInfo(URL url);
+
+  String getAuthHeader(URL url);
 }
