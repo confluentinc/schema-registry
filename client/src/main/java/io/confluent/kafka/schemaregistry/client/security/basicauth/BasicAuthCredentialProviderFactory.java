@@ -22,7 +22,7 @@ import java.util.ServiceLoader;
 
 public class BasicAuthCredentialProviderFactory {
 
-  public static Map<String, BasicAuthCredentialProvider>
+  public static final Map<String, BasicAuthCredentialProvider>
       basicAuthCredentialProviderMap = new HashMap<>();
 
   static {
