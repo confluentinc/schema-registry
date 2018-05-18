@@ -27,6 +27,11 @@ public class UserInfoCredentialProvider implements BasicAuthCredentialProvider {
   private String userInfo;
 
   @Override
+  public String alias() {
+    return "USER_INFO";
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     userInfo = (String) configs.get(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG);
     if (userInfo == null || userInfo.isEmpty()) {

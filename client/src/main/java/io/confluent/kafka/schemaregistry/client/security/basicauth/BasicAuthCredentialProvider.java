@@ -17,13 +17,12 @@
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
 import java.net.URL;
-import java.util.Map;
 
-import io.confluent.common.config.ConfigException;
+import io.confluent.common.Configurable;
 
-public interface BasicAuthCredentialProvider {
+public interface BasicAuthCredentialProvider extends Configurable {
 
-  void configure(Map<String, ?> configs) throws ConfigException;
+  String alias();
 
   String getUserInfo(URL url);
 }
