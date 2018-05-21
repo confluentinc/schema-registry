@@ -24,7 +24,6 @@ import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigDef.Importance;
 import io.confluent.common.config.ConfigDef.Type;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialSource;
 import io.confluent.kafka.serializers.subject.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
@@ -86,7 +85,6 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
         .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
                 Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
-            ConfigDef.ValidString.in(BasicAuthCredentialSource.NAMES),
             Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(SCHEMA_REGISTRY_USER_INFO_CONFIG, Type.PASSWORD, SCHEMA_REGISTRY_USER_INFO_DEFAULT,
             Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
