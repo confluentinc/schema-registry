@@ -28,7 +28,7 @@ By specifiying this configuration, you can control which endpoints are used to c
 
 ``listeners``
 ^^^^^^^^^^^^^
-Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.<a anchor="listeners"></a>
+Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters must be set as well.
 
 |sr| identities are stored in |zk| and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
 
