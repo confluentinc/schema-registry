@@ -222,7 +222,7 @@ dependencies as well.
 Requirements
 ------------
 
-- Kafka: 1.0.2-SNAPSHOT
+- Kafka: 1.0.2-beta4
 
 Contribute
 ----------
