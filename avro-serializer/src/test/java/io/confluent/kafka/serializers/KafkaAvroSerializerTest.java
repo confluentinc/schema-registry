@@ -48,7 +48,6 @@ public class KafkaAvroSerializerTest {
 
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer;
-  private final KafkaAvroEncoder avroEncoder;
   private final KafkaAvroDeserializer avroDeserializer;
   private final KafkaAvroDecoder avroDecoder;
   private final String topic;
@@ -60,7 +59,6 @@ public class KafkaAvroSerializerTest {
     defaultConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     schemaRegistry = new MockSchemaRegistryClient();
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
-    avroEncoder = new KafkaAvroEncoder(schemaRegistry, new VerifiableProperties(defaultConfig));
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry);
     avroDecoder = new KafkaAvroDecoder(schemaRegistry, new VerifiableProperties(defaultConfig));
     topic = "test";
@@ -375,35 +373,11 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
-  public void testKafkaAvroEncoder() {
-    byte[] bytes;
-    Object obj;
-    IndexedRecord avroRecord = createAvroRecord();
-    bytes = avroEncoder.toBytes(avroRecord);
-    obj = avroDecoder.fromBytes(bytes);
-    assertEquals(avroRecord, obj);
-  }
-
-  @Test
-  public void testInvalidInput() {
+  public void testAvroSerializerInvalidInput() {
     IndexedRecord invalidRecord = createInvalidAvroRecord();
     try {
       avroSerializer.serialize(topic, invalidRecord);
       fail("Sending invalid record should fail serializer");
-    } catch (SerializationException e) {
-      // this is expected
-    }
-
-    try {
-      avroEncoder.toBytes(invalidRecord);
-      fail("Sending invalid record should fail encoder");
-    } catch (SerializationException e) {
-      // this is expected
-    }
-
-    try {
-      avroEncoder.toBytes("abc");
-      fail("Sending data of unsupported type should fail encoder");
     } catch (SerializationException e) {
       // this is expected
     }
