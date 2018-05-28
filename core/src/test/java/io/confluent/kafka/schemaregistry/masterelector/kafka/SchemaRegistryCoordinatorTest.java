@@ -140,7 +140,7 @@ public class SchemaRegistryCoordinatorTest {
     final String consumerId = LEADER_ID;
 
     client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-    coordinator.ensureCoordinatorReady();
+    coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
 
     // normal join group
     Map<String, SchemaRegistryIdentity> memberInfo = Collections.singletonMap(consumerId, LEADER_INFO);
@@ -162,7 +162,7 @@ public class SchemaRegistryCoordinatorTest {
     }, syncGroupResponse);
     coordinator.ensureActiveGroup();
 
-    assertFalse(coordinator.needRejoin());
+    assertFalse(coordinator.rejoinNeededOrPending());
     assertEquals(0, rebalanceListener.revokedCount);
     assertEquals(1, rebalanceListener.assignedCount);
     assertFalse(rebalanceListener.assignments.get(0).failed());
@@ -175,7 +175,7 @@ public class SchemaRegistryCoordinatorTest {
     final String consumerId = LEADER_ID;
 
     client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-    coordinator.ensureCoordinatorReady();
+    coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
 
     Map<String, SchemaRegistryIdentity> memberInfo = Collections.singletonMap(
         consumerId,
@@ -200,7 +200,7 @@ public class SchemaRegistryCoordinatorTest {
 
     coordinator.ensureActiveGroup();
 
-    assertFalse(coordinator.needRejoin());
+    assertFalse(coordinator.rejoinNeededOrPending());
     assertEquals(0, rebalanceListener.revokedCount);
     assertEquals(1, rebalanceListener.assignedCount);
     // No leader isn't considered a failure
@@ -214,7 +214,7 @@ public class SchemaRegistryCoordinatorTest {
     final String consumerId = LEADER_ID;
 
     client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-    coordinator.ensureCoordinatorReady();
+    coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
 
     Map<String, SchemaRegistryIdentity> memberInfo = new HashMap<>();
     // intentionally duplicate info to get duplicate URLs
@@ -239,7 +239,7 @@ public class SchemaRegistryCoordinatorTest {
 
     coordinator.ensureActiveGroup();
 
-    assertFalse(coordinator.needRejoin());
+    assertFalse(coordinator.rejoinNeededOrPending());
     assertEquals(0, rebalanceListener.revokedCount);
     assertEquals(1, rebalanceListener.assignedCount);
     assertTrue(rebalanceListener.assignments.get(0).failed());
@@ -252,7 +252,7 @@ public class SchemaRegistryCoordinatorTest {
     final String consumerId = MEMBER_ID;
 
     client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-    coordinator.ensureCoordinatorReady();
+    coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
 
     // normal join group
     client.prepareResponse(joinGroupFollowerResponse(1, consumerId, LEADER_ID, Errors.NONE));
@@ -273,7 +273,7 @@ public class SchemaRegistryCoordinatorTest {
     }, syncGroupResponse);
     coordinator.ensureActiveGroup();
 
-    assertFalse(coordinator.needRejoin());
+    assertFalse(coordinator.rejoinNeededOrPending());
     assertEquals(0, rebalanceListener.revokedCount);
     assertEquals(1, rebalanceListener.assignedCount);
     assertFalse(rebalanceListener.assignments.get(0).failed());

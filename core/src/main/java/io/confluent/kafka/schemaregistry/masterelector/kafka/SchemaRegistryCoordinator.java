@@ -203,6 +203,11 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   }
 
   @Override
+  protected synchronized boolean ensureCoordinatorReady(long timeoutMs) {
+    return super.ensureCoordinatorReady(timeoutMs);
+  }
+
+  @Override
   protected boolean rejoinNeededOrPending() {
     return super.rejoinNeededOrPending() || assignmentSnapshot == null;
   }
