@@ -94,11 +94,11 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
 
     do {
       if (coordinatorUnknown()) {
-        ensureCoordinatorReady();
+        ensureCoordinatorReady(Long.MAX_VALUE);
         now = time.milliseconds();
       }
 
-      if (needRejoin()) {
+      if (rejoinNeededOrPending()) {
         ensureActiveGroup();
         now = time.milliseconds();
       }
@@ -203,7 +203,12 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   }
 
   @Override
-  protected boolean needRejoin() {
-    return super.needRejoin() || assignmentSnapshot == null;
+  protected synchronized boolean ensureCoordinatorReady(long timeoutMs) {
+    return super.ensureCoordinatorReady(timeoutMs);
+  }
+
+  @Override
+  protected boolean rejoinNeededOrPending() {
+    return super.rejoinNeededOrPending() || assignmentSnapshot == null;
   }
 }
