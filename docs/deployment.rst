@@ -68,29 +68,26 @@ Our recommended GC tuning looks like this:
 Important Configuration Options
 -------------------------------
 
-The following logistical configurations should be changed for production environments. These options depend on your cluster
-layout.
+The following logistical configurations should be changed for production environments. These options depend on your cluster layout.
 
 Depending on how the |sr| instances coordinate to choose the :ref:`master<schemaregistry_single_master>`, you can deploy
-|sr| with |zk| (which can be shared with Kafka) or with Kafka itself. |zk|-based master election is available in all versions
-of |sr| and if you have an existing |sr| deployment you should continue to use it for compatibility. Kafka-based master election
-can be used in cases where |zk| is not available, for example for hosted or cloud Kafka environments, or if access to |zk|
-has been locked down.
+|sr| with |zk| (which can be shared with Kafka) or with Kafka itself.
 
-To configure the |sr| to use |zk| for master election, configure the ``kafkastore.connection.url`` setting.
+* Prior to version 4.0, |sr| master election was always |zk|-based. To configure the |sr| to use |zk| for master election, configure the ``kafkastore.connection.url`` setting.
 
 .. include:: includes/shared-config.rst
     :start-line: 2
     :end-line: 9
 
-To configure the |sr| to use Kafka for master election, configure the ``kafkastore.bootstrap.servers`` setting.
+* Introduced in version 4.0, |sr| master election may be either |zk|-based or Kafka-based. To configure the |sr| to use Kafka for master election, configure the ``kafkastore.bootstrap.servers`` setting.
 
 .. include:: includes/shared-config.rst
     :start-line: 10
     :end-line: 25
 
-Additionally, there are some configurations that may commonly need to be set in either type of
-deployment.
+If you configure both ``kafkastore.connection.url`` and ``kafkastore.bootstrap.servers``, |zk| will be used for master election. If you need to migrate from |zk|-based to Kafka-based master election, see the :ref:`migration <schemaregistry_zk_migration>` details.
+
+Additionally, there are some configurations that may commonly need to be set in either type of deployment.
 
 .. include:: includes/shared-config.rst
     :start-line: 28
@@ -145,17 +142,22 @@ Kafka & ZooKeeper
 
 For recommendations on operationalizing Kafka and |zk|, see :ref:`schemaregistry_operations`.
 
+.. _schemaregistry_zk_migration:
+
 Migration from ZooKeeper master election to Kafka master election
 -----------------------------------------------------------------
 
-It is not required to migrate from |zk| based election to Kafka based master election. If
-you choose to do so, you need to make the below outlined config changes as the first step in all
-|sr| nodes
+|zk|-based master election is available in all versions of |sr|, and if you have an existing |sr| deployment you may continue to use it for compatibility. It is not required to migrate from |zk| based election to Kafka based master election.
+
+Kafka-based master election can be used in version 4.0 and later in cases where |zk| is not available, for example for hosted or cloud Kafka environments, or if access to |zk| has been locked down. If you choose to migrate from |zk|-based to Kafka-based master election, make the following configuration changes in all |sr| nodes:
 
 - Remove ``kafkastore.connection.url``
 - Remove ``schema.registry.zk.namespace`` if its configured
 - Configure ``kafkastore.bootstrap.servers``
 - Configure ``schema.registry.group.id`` if you originally had ``schema.registry.zk.namespace`` for multiple |sr| clusters
+
+If you configure both ``kafkastore.connection.url`` and ``kafkastore.bootstrap.servers``, |zk| will be used for master election.
+
 
 Downtime for Writes
 ^^^^^^^^^^^^^^^^^^^^
