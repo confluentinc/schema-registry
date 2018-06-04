@@ -11,5 +11,6 @@ This section contains the |sr| configuration parameters organized by level of im
 
 .. contents::
     :local:
+    :depth: 1
 
 .. include:: includes/shared-config.rst
