@@ -90,7 +90,7 @@ public class SubjectsResource {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
     try {
       if (!schemaRegistry.hasSubjects(subject)) {
-        throw Errors.subjectNotFoundException();
+        throw Errors.subjectNotFoundException(subject);
       }
       matchingSchema =
           schemaRegistry.lookUpSchemaUnderSubject(subject, schema, lookupDeletedSchema);
@@ -140,7 +140,7 @@ public class SubjectsResource {
     List<Integer> deletedVersions;
     try {
       if (!schemaRegistry.hasSubjects(subject)) {
-        throw Errors.subjectNotFoundException();
+        throw Errors.subjectNotFoundException(subject);
       }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());

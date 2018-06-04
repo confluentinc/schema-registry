@@ -107,7 +107,7 @@ public class CompatibilityResource {
       //Don't check compatibility against deleted schema
       schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), false);
     } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException();
+      throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.storeException("Error while retrieving schema for subject "
                                   + subject + " and version "
@@ -120,7 +120,7 @@ public class CompatibilityResource {
         compatibilityCheckResponse.setIsCompatible(isCompatible);
         asyncResponse.resume(compatibilityCheckResponse);
       } else {
-        throw Errors.versionNotFoundException();
+        throw Errors.versionNotFoundException(versionId.getVersionId());
       }
     } else {
       try {
@@ -145,15 +145,15 @@ public class CompatibilityResource {
     try {
       versionId = new VersionId(version);
     } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException();
+      throw Errors.invalidVersionException(e.getMessage());
     }
     return versionId;
   }
 
   private void registerWithError(final String subject, final String errorMessage) {
     try {
-      if (!schemaRegistry.hasSubjects(subject)) {
-        throw Errors.subjectNotFoundException();
+        if (!schemaRegistry.hasSubjects(subject)) {
+        throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);

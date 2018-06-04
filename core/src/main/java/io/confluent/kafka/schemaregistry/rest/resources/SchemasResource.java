@@ -79,7 +79,7 @@ public class SchemasResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     if (schema == null) {
-      throw Errors.schemaNotFoundException();
+      throw Errors.schemaNotFoundException(id);
     }
     return schema;
   }

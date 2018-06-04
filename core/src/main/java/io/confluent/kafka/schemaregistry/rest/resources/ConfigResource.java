@@ -137,7 +137,7 @@ public class ConfigResource {
           ? schemaRegistry.getCompatibilityLevelInScope(subject)
           : schemaRegistry.getCompatibilityLevel(subject);
       if (compatibilityLevel == null) {
-        throw Errors.subjectNotFoundException();
+        throw Errors.subjectNotFoundException(subject);
       }
       config = new Config(compatibilityLevel.name);
     } catch (SchemaRegistryStoreException e) {
