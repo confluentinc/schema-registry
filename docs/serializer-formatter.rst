@@ -48,7 +48,7 @@ to Kafka. A ``SerializationException`` may occur during the send call, if the da
     import java.util.Properties;
 
     Properties props = new Properties();
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2181");
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
               io.confluent.kafka.serializers.KafkaAvroSerializer.class);
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
@@ -68,6 +68,8 @@ to Kafka. A ``SerializationException`` may occur during the send call, if the da
     ProducerRecord<Object, Object> record = new ProducerRecord<>("topic1", key, avroRecord);
     try {
       producer.send(record);
+      producer.flush()
+      producer.close()
     } catch(SerializationException e) {
       // may need to do something with it
     }
