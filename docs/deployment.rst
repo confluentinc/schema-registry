@@ -68,7 +68,7 @@ Our recommended GC tuning looks like this:
 Important Configuration Options
 -------------------------------
 
-The following logistical configurations should be changed for production environments. These options depend on your cluster layout.
+The following configurations should be changed for production environments. These options depend on your cluster layout.
 
 Depending on how the |sr| instances coordinate to choose the :ref:`master<schemaregistry_single_master>`, you can deploy |sr| with |zk| (which can be shared with Kafka) or with Kafka itself. You should configure |sr| to use either Kafka-based or |zk|-based master election:
 
