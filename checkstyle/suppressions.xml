@@ -34,7 +34,7 @@
               files="AvroData.java"/>
 
     <suppress checks="AbbreviationAsWordInName"
-              files=".*SchemaRegistryClient.java"/>
+              files="(.*SchemaRegistryClient|.*LRU.*).java"/>
 
     <suppress checks="MethodLength"
               files="SchemaRegistryConfig.java"/>
