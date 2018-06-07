@@ -227,9 +227,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     if (id != null) {
       return id;
     } else {
-      if (schemaVersionMap.size() >= identityMapCapacity) {
-        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
-      }
       int version = getVersionFromRegistry(subject, schema);
       schemaVersionMap.put(schema, version);
       return version;
