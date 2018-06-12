@@ -54,6 +54,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
@@ -605,6 +606,13 @@ public class AvroData {
     return avroSchema;
   }
 
+  private static boolean crossReferenceSchemaNames(final Schema schema,
+                                                   final org.apache.avro.Schema avroSchema) {
+    return Objects.equals(avroSchema.getFullName(), schema.name())
+        || Objects.equals(avroSchema.getType().getName(), schema.type().getName())
+        || (schema.name() == null && avroSchema.getFullName().equals(DEFAULT_SCHEMA_FULL_NAME));
+  }
+
   /**
    * Connect optional fields are represented as a unions (null & type) in Avro
    * Return the Avro schema of the actual type in the Union (instead of the union itself)
@@ -617,8 +625,7 @@ public class AvroData {
         for (org.apache.avro.Schema typeSchema : avroSchema
             .getTypes()) {
           if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL)
-              && (typeSchema.getFullName().equals(schema.name())
-                  || typeSchema.getType().getName().equals(schema.type().getName()))) {
+              && crossReferenceSchemaNames(schema, typeSchema)) {
             return typeSchema;
           }
         }
