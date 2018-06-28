@@ -151,8 +151,11 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.sasl.kerberos.ticket.renew.jitter";
   public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =
       "kafkastore.sasl.kerberos.ticket.renew.window.factor";
+  @Deprecated
   public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
       "schema.registry.resource.extension.class";
+  public static final String RESOURCE_EXTENSION_CONFIG =
+      "resource.extension.class";
   public static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG =
       "schema.registry.inter.instance.protocol";
 
@@ -287,7 +290,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
       + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
       + " like filters to Schema Registry. Typically used to add custom capability like logging, "
-      + " security, etc.";
+      + " security, etc. The schema.registry.resource.extension.class name is deprecated; "
+      + "prefer using resource.extension.class instead.";
   protected static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC =
       "The protocol used while making calls between the instances of schema registry. The slave "
       + "to master node calls for writes and deletes will use the specified protocol. The default "
@@ -471,7 +475,10 @@ public class SchemaRegistryConfig extends RestConfig {
             ConfigDef.Importance.LOW, KAFKASTORE_GROUP_ID_DOC
         )
         .define(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
-            ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
+                ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
+        )
+        .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
+                ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
         )
         .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
@@ -622,6 +629,18 @@ public class SchemaRegistryConfig extends RestConfig {
     }
 
     return sb.toString();
+  }
+
+  /**
+   * Gets the name of the config that contains resource extension classes, handling deprecated
+   * config names. If schema.registry.resource.extension.class has a non-empty value, it will
+   * return that; otherwise it returns resource.extension.class.
+   */
+  public String definedResourceExtensionConfigName() {
+    if (!getList(SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG).isEmpty()) {
+      return SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG;
+    }
+    return RESOURCE_EXTENSION_CONFIG;
   }
 
   public static void main(String[] args) {

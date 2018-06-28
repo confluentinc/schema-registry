@@ -17,8 +17,14 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Properties;
 
 import javax.ws.rs.container.ContainerRequestContext;
@@ -30,15 +36,25 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+@RunWith(Parameterized.class)
 public class SchemaRegistryExtensionTest extends ClusterTestHarness {
+
+  @Parameters(name = "{0}")
+  public static Collection<Object[]> data() {
+    return Arrays.asList(new Object[][] {
+        { SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG },
+        { SchemaRegistryConfig.SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG }
+    });
+  }
+
+  @Parameter
+  public String resourceExtensionConfigName;
 
   public SchemaRegistryExtensionTest() {
     super(1, true, AvroCompatibilityLevel.BACKWARD.name);
@@ -83,7 +99,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   protected Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.put(
-        SchemaRegistryConfig.SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG,
+        resourceExtensionConfigName,
         TestSchemaRegistryExtension.class.getName()
     );
     return props;

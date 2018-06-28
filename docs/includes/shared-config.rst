@@ -428,9 +428,17 @@ The protocol used while making calls between the instances of |sr|. The slave to
 * Default: "http"
 * Importance: low
 
+resource.extension.class
+^^^^^^^^^^^^^^^^^^^^^^^^
+Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc. The schema.registry.resource.extension.class name is deprecated; prefer using resource.extension.class instead.
+
+* Type: list
+* Default: []
+* Importance: low
+
 schema.registry.resource.extension.class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc
+Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc. The schema.registry.resource.extension.class name is deprecated; prefer using resource.extension.class instead.
 
 * Type: string
 * Default: ""
