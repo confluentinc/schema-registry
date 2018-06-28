@@ -52,6 +52,12 @@
             <artifactId>podam</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <!-- fix for Java 10: podam depends on java.xml.ws module -->
+            <groupId>javax.xml.ws</groupId>
+            <artifactId>jaxws-api</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
