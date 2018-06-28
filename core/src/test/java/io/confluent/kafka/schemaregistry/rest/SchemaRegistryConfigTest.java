@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.common.config.ConfigException;
+import io.confluent.rest.RestConfigException;
 import kafka.cluster.Broker;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
@@ -143,4 +145,32 @@ public class SchemaRegistryConfigTest {
       assertEquals("Expected a different endpoint", expected.get(i), endpointsList.get(i));
     }
   }
+
+  @Test
+  public void useDeprecatedInterInstanceProtocolIfDefined() throws RestConfigException {
+    Properties props = new Properties();
+    // We should obey the deprecated value if it is defined, even if the new one is defined as well
+    props.setProperty(SchemaRegistryConfig.SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, "https");
+    props.setProperty(SchemaRegistryConfig.INTER_INSTANCE_PROTOCOL_CONFIG, "foo");
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    assertEquals("https", config.interInstanceProtocol());
+  }
+
+  @Test
+  public void unprefixedInterInstanceProtocol() throws RestConfigException {
+    Properties props = new Properties();
+    // Validate that setting the new config name only works
+    props.setProperty(SchemaRegistryConfig.INTER_INSTANCE_PROTOCOL_CONFIG, "https");
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    assertEquals("https", config.interInstanceProtocol());
+  }
+
+  @Test
+  public void defaultInterInstanceProtocol() throws RestConfigException {
+    Properties props = new Properties();
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    assertEquals("http", config.interInstanceProtocol());
+  }
+
+
 }

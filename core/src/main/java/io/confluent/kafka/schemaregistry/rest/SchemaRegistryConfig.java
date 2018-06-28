@@ -156,8 +156,11 @@ public class SchemaRegistryConfig extends RestConfig {
       "schema.registry.resource.extension.class";
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
+  @Deprecated
   public static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG =
       "schema.registry.inter.instance.protocol";
+  public static final String INTER_INSTANCE_PROTOCOL_CONFIG =
+      "inter.instance.protocol";
 
   protected static final String SCHEMAREGISTRY_GROUP_ID_DOC =
       "Use this setting to override the group.id for the Kafka group used when Kafka is used for "
@@ -296,7 +299,9 @@ public class SchemaRegistryConfig extends RestConfig {
       "The protocol used while making calls between the instances of schema registry. The slave "
       + "to master node calls for writes and deletes will use the specified protocol. The default "
       + "value would be `http`. When `https` is set, `ssl.keystore.` and "
-      + "`ssl.truststore.` configs are used while making the call.";
+      + "`ssl.truststore.` configs are used while making the call. The "
+      + "schema.registry.inter.instance.protocol name is deprecated; prefer using "
+      + "inter.instance.protocol instead.";
 
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
@@ -480,8 +485,11 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
                 ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
         )
-        .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,
-            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
+        .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, "",
+                ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
+        .define(INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,
+                ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
+        ;
 
   }
 
@@ -641,6 +649,18 @@ public class SchemaRegistryConfig extends RestConfig {
       return SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG;
     }
     return RESOURCE_EXTENSION_CONFIG;
+  }
+
+  /**
+   * Gets the inter.instance.protocol setting, handling the deprecated
+   * schema.registry.inter.instance.protocol setting.
+   */
+  public String interInstanceProtocol() {
+    String deprecatedValue = getString(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG);
+    if (deprecatedValue != null && !deprecatedValue.isEmpty()) {
+      return deprecatedValue;
+    }
+    return getString(INTER_INSTANCE_PROTOCOL_CONFIG);
   }
 
   public static void main(String[] args) {

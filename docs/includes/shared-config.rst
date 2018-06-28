@@ -420,12 +420,20 @@ Name of the SLF4J logger to write the NCSA Common Log Format request log.
 * Default: "io.confluent.rest-utils.requests"
 * Importance: low
 
-schema.registry.inter.instance.protocol
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
+inter.instance.protocol
+^^^^^^^^^^^^^^^^^^^^^^^
+The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call. The schema.registry.inter.instance.protocol name is deprecated; prefer using inter.instance.protocol instead.
 
 * Type: string
 * Default: "http"
+* Importance: low
+
+schema.registry.inter.instance.protocol
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call. The schema.registry.inter.instance.protocol name is deprecated; prefer using inter.instance.protocol instead.
+
+* Type: string
+* Default: ""
 * Importance: low
 
 resource.extension.class
