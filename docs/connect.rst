@@ -78,8 +78,8 @@ Configuration Options
   * Default: "URL"
   * Importance: medium
 
-``schema.registry.basic.auth.user.info``
-  Specify the user info for Basic Auth in the form of {username}:{password}
+``basic.auth.user.info``
+  Specify the user info for Basic Auth in the form of {username}:{password}. schema.registry.basic.auth.user.info is a deprecated alias for this configuration.
 
   * Type: password
   * Default: ""
