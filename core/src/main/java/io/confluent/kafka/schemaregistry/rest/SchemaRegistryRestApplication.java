@@ -69,7 +69,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
     schemaRegistryResourceExtensions =
         schemaRegistryConfig.getConfiguredInstances(
-            SchemaRegistryConfig.SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG,
+            schemaRegistryConfig.definedResourceExtensionConfigName(),
             SchemaRegistryResourceExtension.class);
 
     config.register(RootResource.class);

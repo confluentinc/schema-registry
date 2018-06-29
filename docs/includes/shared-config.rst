@@ -420,17 +420,33 @@ Name of the SLF4J logger to write the NCSA Common Log Format request log.
 * Default: "io.confluent.rest-utils.requests"
 * Importance: low
 
-schema.registry.inter.instance.protocol
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
+inter.instance.protocol
+^^^^^^^^^^^^^^^^^^^^^^^
+The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call. The schema.registry.inter.instance.protocol name is deprecated; prefer using inter.instance.protocol instead.
 
 * Type: string
 * Default: "http"
 * Importance: low
 
+schema.registry.inter.instance.protocol
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call. The schema.registry.inter.instance.protocol name is deprecated; prefer using inter.instance.protocol instead.
+
+* Type: string
+* Default: ""
+* Importance: low
+
+resource.extension.class
+^^^^^^^^^^^^^^^^^^^^^^^^
+Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc. The schema.registry.resource.extension.class name is deprecated; prefer using resource.extension.class instead.
+
+* Type: list
+* Default: []
+* Importance: low
+
 schema.registry.resource.extension.class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc
+Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc. The schema.registry.resource.extension.class name is deprecated; prefer using resource.extension.class instead.
 
 * Type: string
 * Default: ""

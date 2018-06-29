@@ -76,8 +76,8 @@ First, configure the appropriate SSL configurations for the keystore and optiona
 
 You may specify which protocol to use while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol.
 
-``schema.registry.inter.instance.protocol``
-  The protocol used while making calls between the instances of |sr|. The default value is `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
+``inter.instance.protocol``
+  The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call. The schema.registry.inter.instance.protocol name is deprecated; prefer using inter.instance.protocol instead.
 
   * Type: string
   * Default: "http"
@@ -109,7 +109,7 @@ To upgrade |sr| to allow REST API calls over HTTPS in an existing cluster:
 This process enables HTTPS, but still defaults to HTTP so |sr| instances can still communicate before all nodes have been restarted. They will continue to use HTTP as the default until configured not to. To switch to HTTPS as the default and disable HTTP support, perform the following steps:
 
 - Enable HTTPS as mentioned in first section of upgrade (both HTTP & HTTPS will be enabled)
-- Configure ``schema.registry.inter.instance.protocol`` to `https` in all the nodes
+- Configure ``inter.instance.protocol`` to `https` in all the nodes
 - Do a rolling bounce of the cluster
 - Remove http listener from the ``listeners`` in all the nodes
 - Do a rolling bounce of the cluster
