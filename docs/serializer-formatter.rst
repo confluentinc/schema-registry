@@ -193,7 +193,7 @@ the Basic Auth headers by setting the following configuration in your producer o
 form of ``http://<username>:<password>@sr-host:<sr-port>``
 
 **USER_INFO** - The user info is configured using the below configuration.
-``schema.registry.basic.auth.user.info``
+``basic.auth.user.info``
   Specify the user info for Basic Auth in the form of {username}:{password}
 
   * Type: password

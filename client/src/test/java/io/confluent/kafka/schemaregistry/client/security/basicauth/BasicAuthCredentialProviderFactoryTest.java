@@ -21,6 +21,8 @@ import org.apache.kafka.common.security.JaasUtils;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import javax.security.auth.login.Configuration;
 import java.io.File;
@@ -28,17 +30,31 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@RunWith(Parameterized.class)
 public class BasicAuthCredentialProviderFactoryTest {
+
+  @Parameterized.Parameters(name = "{0}")
+  public static Collection<Object[]> data() {
+    return Arrays.asList(new Object[][] {
+        { SchemaRegistryClientConfig.USER_INFO_CONFIG },
+        { SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG }
+    });
+  }
+
+  @Parameterized.Parameter
+  public String userInfoConfigName;
 
   private Map<String, String> CONFIG_MAP = new HashMap<>();
 
   @Before
   public void setup() throws IOException {
-    CONFIG_MAP.put(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG, "user:password");
+    CONFIG_MAP.put(userInfoConfigName, "user:password");
     File jaasConfigFile = File.createTempFile("ks-jaas-",".conf");
     jaasConfigFile.deleteOnExit();
 
