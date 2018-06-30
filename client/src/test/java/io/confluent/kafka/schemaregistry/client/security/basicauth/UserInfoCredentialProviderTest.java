@@ -18,21 +18,39 @@ package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
 import io.confluent.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
+@RunWith(Parameterized.class)
 public class UserInfoCredentialProviderTest {
+
+  @Parameters(name = "{0}")
+  public static Collection<Object[]> data() {
+    return Arrays.asList(new Object[][] {
+        { SchemaRegistryClientConfig.USER_INFO_CONFIG },
+        { SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG }
+    });
+  }
+
+  @Parameter
+  public String userInfoConfigName;
 
   @Test
   public void testUserInfo() throws MalformedURLException {
     Map<String, Object> clientConfig = new HashMap<>();
-    clientConfig.put(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG, "user:password");
+    clientConfig.put(userInfoConfigName, "user:password");
     UserInfoCredentialProvider provider = new UserInfoCredentialProvider();
     provider.configure(clientConfig);
     Assert.assertEquals("user:password", provider.getUserInfo(new URL("http://localhost")));

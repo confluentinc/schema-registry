@@ -33,7 +33,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpd
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
-import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialSource;
 
 public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
@@ -102,7 +101,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
         BasicAuthCredentialProvider basicAuthCredentialProvider =
             BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
-                BasicAuthCredentialSource.valueOf(credentialSourceConfig),
+                credentialSourceConfig,
                 configs);
 
         restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);

@@ -152,7 +152,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         // schema registry's ordering (which is implicit by auto-registration time rather than
         // explicit from the Connector).
         String subject = getSubjectName(topic, isKey, result);
-        Integer version = schemaRegistry.getVersion(subject, schema);
+        Schema subjectSchema = schemaRegistry.getBySubjectAndId(subject, id);
+        Integer version = schemaRegistry.getVersion(subject, subjectSchema);
         if (schema.getType() == Schema.Type.UNION) {
           // Can't set additional properties on a union schema since it's just a list, so set it
           // on the first non-null entry

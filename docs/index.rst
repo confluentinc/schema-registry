@@ -11,10 +11,10 @@
 Contents:
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 1
 
    intro
-   changelog
+   using
    api
    config
    design
@@ -25,5 +25,6 @@ Contents:
    schema-deletion-guidelines
    maven-plugin
    connect
+   changelog
 
 To see a working example of |sr|, check out :ref:`Confluent Platform demo<cp-demo>`. The demo shows you how to deploy a Kafka streaming ETL, including Schema Registry, using KSQL for stream processing.

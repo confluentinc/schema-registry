@@ -71,6 +71,12 @@ to Kafka. A ``SerializationException`` may occur during the send call, if the da
     } catch(SerializationException e) {
       // may need to do something with it
     }
+    // When you're finished producing records, you can flush the producer to ensure it has all been written to Kafka and
+    // then close the producer to free its resources.
+    finally {
+      producer.flush();
+      producer.close();
+    }
 
 You can plug in ``KafkaAvroDeserializer`` to ``KafkaConsumer`` to receive messages of any Avro type from Kafka.
 In the following example, we receive messages with key of type ``string`` and value of type Avro record
@@ -98,7 +104,7 @@ not well formed.
 
     Properties props = new Properties();
 
-    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2181");
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
     props.put(ConsumerConfig.GROUP_ID_CONFIG, "group1");
 
 
@@ -193,7 +199,7 @@ the Basic Auth headers by setting the following configuration in your producer o
 form of ``http://<username>:<password>@sr-host:<sr-port>``
 
 **USER_INFO** - The user info is configured using the below configuration.
-``schema.registry.basic.auth.user.info``
+``basic.auth.user.info``
   Specify the user info for Basic Auth in the form of {username}:{password}
 
   * Type: password

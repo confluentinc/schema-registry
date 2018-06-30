@@ -10,7 +10,7 @@ The `download` goal is used to pull down schemas from a |sr| server. This goal c
 This plugin is used to download Avro schemas for the requested subjects and write them to a folder on the local file system.
 
 ``schemaRegistryUrls``
-  |sr| Urls to connect to.
+  |sr| URLs to connect to.
 
   * Type: String[]
   * Required: true
@@ -46,7 +46,7 @@ This plugin is used to download Avro schemas for the requested subjects and writ
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.0.0-SNAPSHOT</version>
+        <version>5.1.0-SNAPSHOT</version>
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>
@@ -66,7 +66,7 @@ This goal is used to read schemas from the local file system and test them for c
 project are compatible with the schemas in another environment.
 
 ``schemaRegistryUrls``
-  |sr| Urls to connect to.
+  |sr| URLs to connect to.
 
   * Type: String[]
   * Required: true
@@ -82,7 +82,7 @@ project are compatible with the schemas in another environment.
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.0.0-SNAPSHOT</version>
+        <version>5.1.0-SNAPSHOT</version>
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>
@@ -104,7 +104,7 @@ This goal is used to read schemas from the local file system and register them o
 This goal can be used in a continuous deployment pipeline to push schemas to a new environment.
 
 ``schemaRegistryUrls``
-  |sr| Urls to connect to.
+  |sr| URLs to connect to.
 
   * Type: String[]
   * Required: true
@@ -120,7 +120,7 @@ This goal can be used in a continuous deployment pipeline to push schemas to a n
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.0.0-SNAPSHOT</version>
+        <version>5.1.0-SNAPSHOT</version>
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>
