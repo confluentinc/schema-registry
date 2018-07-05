@@ -48,7 +48,7 @@
     <properties>
         <jersey.version>2.19</jersey.version>
         <confluent-common.version>3.2.4-SNAPSHOT</confluent-common.version>
-        <kafka.version>0.10.2.2-SNAPSHOT</kafka.version>
+        <kafka.version>0.10.2.3-SNAPSHOT</kafka.version>
         <kafka.scala.version>2.11</kafka.scala.version>
         <log4j.version>1.7.6</log4j.version>
         <restutils.version>3.2.4-SNAPSHOT</restutils.version>
