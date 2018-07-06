@@ -59,10 +59,10 @@ public class KafkaStoreMessageHandler
 
         SchemaKey schemaKey = new SchemaKey(subject, version);
         SchemaValue schemaValue = (SchemaValue) this.store.get(schemaKey);
-        schemaValue.setDeleted(true);
-        this.store.put(schemaKey, schemaValue);
-
-
+        if (schemaValue != null) {
+          schemaValue.setDeleted(true);
+          this.store.put(schemaKey, schemaValue);
+        }
       } catch (StoreException e) {
         log.error("Failed to delete subject in the local store");
       }
@@ -70,19 +70,21 @@ public class KafkaStoreMessageHandler
   }
 
   private void handleSchemaUpdate(SchemaKey schemaKey, SchemaValue schemaObj) {
-    schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
+    if (schemaObj != null) {
+      schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
 
-    // Update the maximum id seen so far
-    if (schemaRegistry.getMaxIdInKafkaStore() < schemaObj.getId()) {
-      schemaRegistry.setMaxIdInKafkaStore(schemaObj.getId());
-    }
+      // Update the maximum id seen so far
+      if (schemaRegistry.getMaxIdInKafkaStore() < schemaObj.getId()) {
+        schemaRegistry.setMaxIdInKafkaStore(schemaObj.getId());
+      }
 
-    MD5 md5 = MD5.ofString(schemaObj.getSchema());
-    SchemaIdAndSubjects schemaIdAndSubjects = schemaRegistry.schemaHashToGuid.get(md5);
-    if (schemaIdAndSubjects == null) {
-      schemaIdAndSubjects = new SchemaIdAndSubjects(schemaObj.getId());
+      MD5 md5 = MD5.ofString(schemaObj.getSchema());
+      SchemaIdAndSubjects schemaIdAndSubjects = schemaRegistry.schemaHashToGuid.get(md5);
+      if (schemaIdAndSubjects == null) {
+        schemaIdAndSubjects = new SchemaIdAndSubjects(schemaObj.getId());
+      }
+      schemaIdAndSubjects.addSubjectAndVersion(schemaKey.getSubject(), schemaKey.getVersion());
+      schemaRegistry.schemaHashToGuid.put(md5, schemaIdAndSubjects);
     }
-    schemaIdAndSubjects.addSubjectAndVersion(schemaKey.getSubject(), schemaKey.getVersion());
-    schemaRegistry.schemaHashToGuid.put(md5, schemaIdAndSubjects);
   }
 }
