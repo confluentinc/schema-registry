@@ -19,6 +19,10 @@ package io.confluent.kafka.schemaregistry.storage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 public class KafkaStoreMessageHandler
@@ -73,6 +77,16 @@ public class KafkaStoreMessageHandler
     if (schemaObj != null) {
       schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
 
+      if (schemaObj.isDeleted()) {
+        schemaRegistry.guidToDeletedSchemaKeys
+            .computeIfAbsent(schemaObj.getId(), k -> new ArrayList<>()).add(schemaKey);
+      } else {
+        List<SchemaKey> schemaKeys = schemaRegistry.guidToDeletedSchemaKeys
+            .getOrDefault(schemaObj.getId(), Collections.emptyList());
+        schemaKeys.stream().filter(v -> v.getSubject().equals(schemaObj.getSubject()))
+            .forEach(k -> tombstoneSchemaKey(k));
+      }
+
       // Update the maximum id seen so far
       if (schemaRegistry.getMaxIdInKafkaStore() < schemaObj.getId()) {
         schemaRegistry.setMaxIdInKafkaStore(schemaObj.getId());
@@ -85,6 +99,14 @@ public class KafkaStoreMessageHandler
       }
       schemaIdAndSubjects.addSubjectAndVersion(schemaKey.getSubject(), schemaKey.getVersion());
       schemaRegistry.schemaHashToGuid.put(md5, schemaIdAndSubjects);
+    }
+  }
+
+  private void tombstoneSchemaKey(SchemaKey schemaKey) {
+    try {
+      schemaRegistry.getKafkaStore().put(schemaKey, null);
+    } catch (StoreException e) {
+      log.error("Failed to tombstone {}", schemaKey);
     }
   }
 }

@@ -87,6 +87,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private final SchemaRegistryConfig config;
   final Map<Integer, SchemaKey> guidToSchemaKey;
   final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
+  final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
@@ -135,6 +136,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
     this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();
+    this.guidToDeletedSchemaKeys = new HashMap<>();
     Store store = new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>();
     kafkaStore =
         new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
