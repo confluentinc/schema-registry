@@ -105,7 +105,7 @@ dependencies as well.
 Requirements
 ------------
 
-- Kafka: 2.1.0-SNAPSHOT
+- Kafka: 2.1.0-beta180722215127
 
 Contribute
 ----------
