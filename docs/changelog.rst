@@ -3,6 +3,13 @@
 Changelog
 =========
 
+Version 4.1.2
+-------------
+
+* `PR-840 <https://github.com/confluentinc/schema-registry/pull/840>`_ - CC-2201: Handle NPE exception when tombstone messages are encountered
+* `PR-839 <https://github.com/confluentinc/schema-registry/pull/839>`_ - CC-2024 : Fix schema not found issue
+* `PR-801 <https://github.com/confluentinc/schema-registry/pull/801>`_ - CC-1902 : pass all configs to underlying Serializer/deserializer
+
 Version 4.1.1
 -------------
 
