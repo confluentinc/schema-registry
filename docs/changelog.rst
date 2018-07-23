@@ -3,6 +3,12 @@
 Changelog
 =========
 
+Version 4.1.1
+-------------
+
+* `PR-792 <https://github.com/confluentinc/schema-registry/pull/792>`_ - Improve GC options
+* `PR-787 <https://github.com/confluentinc/schema-registry/pull/787>`_ - Docs for Subject Name Strategy and Basic Auth
+
 Version 4.1.0
 -------------
 
