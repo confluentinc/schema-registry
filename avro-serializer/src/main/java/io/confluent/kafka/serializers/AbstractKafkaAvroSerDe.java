@@ -16,20 +16,26 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.specific.SpecificDatumWriter;
+import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -38,6 +44,7 @@ public abstract class AbstractKafkaAvroSerDe {
 
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
+  private final EncoderFactory encoderFactory = EncoderFactory.get();
 
   private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
@@ -124,6 +131,24 @@ public abstract class AbstractKafkaAvroSerDe {
           "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, "
           + "Float, Double, String, byte[] and IndexedRecord");
     }
+  }
+
+  protected DatumWriter<Object> getDatumWriter(Object value, Schema schema) {
+    DatumWriter<Object> writer;
+    if (value instanceof SpecificRecord) {
+      writer = new SpecificDatumWriter<>(schema);
+    } else {
+      writer = new GenericDatumWriter<>(schema);
+    }
+    return writer;
+  }
+
+  protected BinaryEncoder getBinaryEncoder(ByteArrayOutputStream out) {
+    return encoderFactory.directBinaryEncoder(out, null);
+  }
+
+  protected Object getValue(Object obj) {
+    return obj instanceof NonRecordContainer ? ((NonRecordContainer) obj).getValue() : obj;
   }
 
   public int register(String subject, Schema schema) throws IOException, RestClientException {
