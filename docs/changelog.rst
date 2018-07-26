@@ -3,6 +3,28 @@
 Changelog
 =========
 
+Version 5.0.0
+-------------
+
+* `PR-837 <https://github.com/confluentinc/schema-registry/pull/837>`_ - CC-2185: Deprecate schema.registry. prefixes on commonly modified configs and allow unprefixed versions
+* `PR-834 <https://github.com/confluentinc/schema-registry/pull/834>`_ - DOCS-381 - Rename quick start and improve navigation
+* `PR-813 <https://github.com/confluentinc/schema-registry/pull/813>`_ - Update maven-plugin-plugin to fix out of bounds error in build
+* `PR-811 <https://github.com/confluentinc/schema-registry/pull/811>`_ - Fix SchemaRegistryCoordinator for upstream changes
+* `PR-810 <https://github.com/confluentinc/schema-registry/pull/810>`_ - Remove KafkaJsonEncoder since Scala producers have been removed from Kafka
+* `PR-809 <https://github.com/confluentinc/schema-registry/pull/809>`_ - Remove KafkaAvroEncoder since the Scala producers have been removed from Kafka
+* `PR-808 <https://github.com/confluentinc/schema-registry/pull/808>`_ - Use java.util.Base64 instead of javax.xml.bind.DatatypeConverter
+* `PR-807 <https://github.com/confluentinc/schema-registry/pull/807>`_ - Fix usage of internal Jersey utilities that no longer exist
+* `PR-806 <https://github.com/confluentinc/schema-registry/pull/806>`_ - Inherit maven compiler plugin definition from common
+* `PR-804 <https://github.com/confluentinc/schema-registry/pull/804>`_ - Ability to plugin an implementation of BasicAuthCredentialProvider
+* `PR-803 <https://github.com/confluentinc/schema-registry/pull/803>`_ - CC-1958: Verify configs if createTopic fails because topic already exists
+* `PR-792 <https://github.com/confluentinc/schema-registry/pull/792>`_ - Improve GC options
+* `PR-784 <https://github.com/confluentinc/schema-registry/pull/784>`_ - Docs for Subject Name Strategy and Basic Auth
+* `PR-774 <https://github.com/confluentinc/schema-registry/pull/774>`_ - Revert "Remove |zk| from title"
+* `PR-773 <https://github.com/confluentinc/schema-registry/pull/773>`_ - Remove |zk| from title
+* `PR-756 <https://github.com/confluentinc/schema-registry/pull/756>`_ - CLIENTS-986 Forward Auth headers
+* `PR-748 <https://github.com/confluentinc/schema-registry/pull/748>`_ - confluent.maven.repo: use 'https'
+* `PR-731 <https://github.com/confluentinc/schema-registry/pull/731>`_ - Issue #704 - Make Serde constructors public
+
 Version 4.1.2
 -------------
 
