@@ -1699,7 +1699,7 @@ public class AvroData {
       Map<org.apache.avro.Schema, CyclicSchemaWrapper> toConnectCycles,
       org.apache.avro.Schema memberSchema,
       boolean optional) {
-    return new CyclicSchemaWrapper(toConnectCycles.get(memberSchema).schemaBuilder(), optional);
+    return new CyclicSchemaWrapper(toConnectCycles.get(memberSchema).schema(), optional);
   }
 
   private Object defaultValueFromAvro(
@@ -1949,25 +1949,21 @@ public class AvroData {
 
   private class CyclicSchemaWrapper implements Schema {
 
-    private SchemaBuilder schemaBuilder;
+    private Schema schema;
     private boolean optional;
 
-    public CyclicSchemaWrapper(SchemaBuilder schemaBuilder) {
-      this(schemaBuilder, schemaBuilder.isOptional());
+    public CyclicSchemaWrapper(Schema schema) {
+      this(schema, schema.isOptional());
     }
 
-    public CyclicSchemaWrapper(SchemaBuilder schemaBuilder, boolean optional) {
-      this.schemaBuilder = schemaBuilder;
+    public CyclicSchemaWrapper(Schema schema, boolean optional) {
+      this.schema = schema;
       this.optional = optional;
-    }
-
-    public SchemaBuilder schemaBuilder() {
-      return schemaBuilder;
     }
 
     @Override
     public Type type() {
-      return schemaBuilder.type();
+      return schema.type();
     }
 
     @Override
@@ -1977,52 +1973,52 @@ public class AvroData {
 
     @Override
     public Object defaultValue() {
-      return schemaBuilder.defaultValue();
+      return schema.defaultValue();
     }
 
     @Override
     public String name() {
-      return schemaBuilder.name();
+      return schema.name();
     }
 
     @Override
     public Integer version() {
-      return schemaBuilder.version();
+      return schema.version();
     }
 
     @Override
     public String doc() {
-      return schemaBuilder.doc();
+      return schema.doc();
     }
 
     @Override
     public Map<String, String> parameters() {
-      return schemaBuilder.parameters();
+      return schema.parameters();
     }
 
     @Override
     public Schema keySchema() {
-      return schemaBuilder.keySchema();
+      return schema.keySchema();
     }
 
     @Override
     public Schema valueSchema() {
-      return schemaBuilder.valueSchema();
+      return schema.valueSchema();
     }
 
     @Override
     public List<Field> fields() {
-      return schemaBuilder.fields();
+      return schema.fields();
     }
 
     @Override
     public Field field(String s) {
-      return schemaBuilder.field(s);
+      return schema.field(s);
     }
 
     @Override
     public Schema schema() {
-      return schemaBuilder.schema();
+      return schema;
     }
 
   }
