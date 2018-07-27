@@ -64,7 +64,7 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
     Map<String, Schema> results = new LinkedHashMap<>();
 
     for (Map.Entry<String, File> kvp : subjects.entrySet()) {
-      Schema.Parser parser = new Schema.Parser();
+      Schema.Parser parser = newParser();
       getLog().debug(
           String.format(
               "Loading schema for subject(%s) from %s.",
@@ -91,4 +91,28 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
 
     return results;
   }
+
+  protected Schema.Parser newParser() {
+    return new Schema.Parser();
+  }
+
+  Schema.Parser parserWithDependencies(List<String> dependencies) {
+    Schema.Parser parserWithDepencies = new Schema.Parser();
+
+    for (String dependency : dependencies) {
+      try (FileInputStream inputStream = new FileInputStream(dependency)) {
+        parserWithDepencies.parse(inputStream);
+        getLog().debug(String.format("Parsing imports:%s", dependency));
+      } catch (IOException ex) {
+        getLog().error("Exception thrown while loading dependency " + dependency, ex);
+      } catch (SchemaParseException ex) {
+        getLog().error("Exception thrown while parsing dependency " + dependency, ex);
+      }
+    }
+
+    return parserWithDepencies;
+  }
+
+
+
 }
