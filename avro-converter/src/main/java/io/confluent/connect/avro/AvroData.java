@@ -16,6 +16,9 @@
 
 package io.confluent.connect.avro;
 
+import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
+import io.confluent.kafka.serializers.NonRecordContainer;
+import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
@@ -54,10 +57,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-
-import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
-import io.confluent.kafka.serializers.NonRecordContainer;
 
 
 /**
@@ -618,7 +619,7 @@ public class AvroData {
             .getTypes()) {
           if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL)
               && (typeSchema.getFullName().equals(schema.name())
-                  || typeSchema.getType().getName().equals(schema.type().getName()))) {
+              || typeSchema.getType().getName().equals(schema.type().getName()))) {
             return typeSchema;
           }
         }
@@ -677,12 +678,16 @@ public class AvroData {
   }
 
   public org.apache.avro.Schema fromConnectSchema(Schema schema) {
-    return fromConnectSchema(schema, new HashMap<Schema, org.apache.avro.Schema>());
+    return fromConnectSchema(schema,
+        new HashMap<>(),
+        new HashMap<>());
   }
 
-  public org.apache.avro.Schema fromConnectSchema(Schema schema,
-                                                  Map<Schema, org.apache.avro.Schema> schemaMap) {
-    return fromConnectSchema(schema, schemaMap, false);
+  public org.apache.avro.Schema fromConnectSchema(
+      Schema schema,
+      Map<Schema, org.apache.avro.Schema> schemaMap,
+      Map<String, org.apache.avro.Schema> fromConnectCycles) {
+    return fromConnectSchema(schema, schemaMap, false, fromConnectCycles);
   }
 
   /**
@@ -697,9 +702,11 @@ public class AvroData {
    * <p>This is different to the global schema cache which is used to hold/cache fully resolved
    * schemas used to avoid re-resolving when presented with the same source schema.
    */
-  public org.apache.avro.Schema fromConnectSchema(Schema schema,
-                                                  Map<Schema, org.apache.avro.Schema> schemaMap,
-                                                  boolean ignoreOptional) {
+  public org.apache.avro.Schema fromConnectSchema(
+      Schema schema,
+      Map<Schema, org.apache.avro.Schema> schemaMap,
+      boolean ignoreOptional,
+      Map<String, org.apache.avro.Schema> fromConnectCycles) {
     if (schema == null) {
       return ANYTHING_SCHEMA;
     }
@@ -784,24 +791,44 @@ public class AvroData {
         }
         break;
       case ARRAY:
-        baseSchema = org.apache.avro.SchemaBuilder.builder().array()
-            .items(fromConnectSchema(schema.valueSchema()));
+        org.apache.avro.Schema arraySchema;
+        if (fromConnectCycles.containsKey(schema.valueSchema().name())) {
+          arraySchema = fromConnectCycles.get(schema.valueSchema().name());
+        } else {
+          arraySchema = fromConnectSchema(schema.valueSchema());
+        }
+        baseSchema = org.apache.avro.SchemaBuilder.builder().array().items(arraySchema);
         break;
       case MAP:
         // Avro only supports string keys, so we match the representation when possible, but
         // otherwise fall back on a record representation
         if (schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
-          baseSchema = org.apache.avro.SchemaBuilder.builder()
-              .map().values(fromConnectSchema(schema.valueSchema()));
+          org.apache.avro.Schema valueSchema;
+          if (fromConnectCycles.containsKey(schema.valueSchema().name())) {
+            valueSchema = fromConnectCycles.get(schema.valueSchema().name());
+          } else {
+            valueSchema = fromConnectSchema(schema.valueSchema());
+          }
+          baseSchema = org.apache.avro.SchemaBuilder.builder().map().values(valueSchema);
         } else {
           // Special record name indicates format
-          org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler
-              = org.apache.avro.SchemaBuilder.builder()
-              .array().items()
-              .record(MAP_ENTRY_TYPE_NAME).namespace(NAMESPACE).fields();
-          addAvroRecordField(fieldAssembler, KEY_FIELD, schema.keySchema(), schemaMap);
-          addAvroRecordField(fieldAssembler, VALUE_FIELD, schema.valueSchema(), schemaMap);
-          baseSchema = fieldAssembler.endRecord();
+          List<org.apache.avro.Schema.Field> fields = new ArrayList<>();
+          final org.apache.avro.Schema mapStructSchema = org.apache.avro.Schema.createRecord(
+              MAP_ENTRY_TYPE_NAME, null, namespace, false);
+          addAvroRecordField(
+              fields,
+              KEY_FIELD,
+              schema.keySchema(),
+              schemaMap,
+              fromConnectCycles);
+          addAvroRecordField(
+              fields,
+              VALUE_FIELD,
+              schema.valueSchema(),
+              schemaMap,
+              fromConnectCycles);
+          mapStructSchema.setFields(fields);
+          baseSchema = org.apache.avro.Schema.createArray(mapStructSchema);
         }
         break;
       case STRUCT:
@@ -811,27 +838,38 @@ public class AvroData {
             unionSchemas.add(org.apache.avro.SchemaBuilder.builder().nullType());
           }
           for (Field field : schema.fields()) {
-            unionSchemas.add(fromConnectSchema(nonOptional(field.schema()), schemaMap, true));
+            if (fromConnectCycles.containsKey(field.schema().name())) {
+              unionSchemas.add(fromConnectCycles.get(field.schema().name()));
+            } else {
+              unionSchemas.add(fromConnectSchema(
+                  nonOptional(field.schema()), schemaMap, true, fromConnectCycles));
+            }
           }
           baseSchema = org.apache.avro.Schema.createUnion(unionSchemas);
         } else if (schema.isOptional()) {
           List<org.apache.avro.Schema> unionSchemas = new ArrayList<>();
           unionSchemas.add(org.apache.avro.SchemaBuilder.builder().nullType());
-          unionSchemas.add(fromConnectSchema(nonOptional(schema), schemaMap, false));
+          if (fromConnectCycles.containsKey(schema.name())) {
+            unionSchemas.add(fromConnectCycles.get(schema.name()));
+          } else {
+            unionSchemas.add(
+                fromConnectSchema(nonOptional(schema), schemaMap, false, fromConnectCycles));
+          }
           baseSchema = org.apache.avro.Schema.createUnion(unionSchemas);
         } else {
           String doc = schema.parameters() != null
                        ? schema.parameters().get(CONNECT_RECORD_DOC_PROP)
                        : null;
-          org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema>
-              fieldAssembler =
-              org.apache.avro.SchemaBuilder.record(name != null ? name : DEFAULT_SCHEMA_NAME)
-                  .namespace(namespace)
-                  .doc(doc).fields();
-          for (Field field : schema.fields()) {
-            addAvroRecordField(fieldAssembler, field.name(), field.schema(), schemaMap);
+          baseSchema = org.apache.avro.Schema.createRecord(
+              name != null ? name : DEFAULT_SCHEMA_NAME, doc, namespace, false);
+          if (schema.name() != null) {
+            fromConnectCycles.put(schema.name(), baseSchema);
           }
-          baseSchema = fieldAssembler.endRecord();
+          List<org.apache.avro.Schema.Field> fields = new ArrayList<>();
+          for (Field field : schema.fields()) {
+            addAvroRecordField(fields, field.name(), field.schema(), schemaMap, fromConnectCycles);
+          }
+          baseSchema.setFields(fields);
         }
         break;
       default:
@@ -919,20 +957,26 @@ public class AvroData {
 
 
   private void addAvroRecordField(
-      org.apache.avro.SchemaBuilder.FieldAssembler<org.apache.avro.Schema> fieldAssembler,
-      String fieldName, Schema fieldSchema, Map<Schema, org.apache.avro.Schema> schemaMap) {
-    org.apache.avro.SchemaBuilder.GenericDefault<org.apache.avro.Schema> fieldAvroSchema
-        = fieldAssembler.name(fieldName).doc(fieldSchema.doc()).type(fromConnectSchema(fieldSchema,
-                                                                                       schemaMap));
+      List<org.apache.avro.Schema.Field> fields,
+      String fieldName, Schema fieldSchema,
+      Map<Schema, org.apache.avro.Schema> schemaMap,
+      Map<String, org.apache.avro.Schema> fromConnectCycles) {
+
+    Object defaultVal = null;
     if (fieldSchema.defaultValue() != null) {
-      fieldAvroSchema.withDefault(defaultValueFromConnect(fieldSchema, fieldSchema.defaultValue()));
-    } else {
-      if (fieldSchema.isOptional()) {
-        fieldAvroSchema.withDefault(JsonNodeFactory.instance.nullNode());
-      } else {
-        fieldAvroSchema.noDefault();
+      defaultVal = fieldSchema.defaultValue();
+      if (defaultVal instanceof Byte) {
+        defaultVal = ((Byte) defaultVal).intValue();
       }
+    } else if (fieldSchema.isOptional()) {
+      defaultVal = JsonProperties.NULL_VALUE;
     }
+    org.apache.avro.Schema.Field field = new org.apache.avro.Schema.Field(
+        fieldName,
+        fromConnectSchema(fieldSchema, schemaMap, fromConnectCycles),
+        fieldSchema.doc(),
+        defaultVal);
+    fields.add(field);
   }
 
   // Convert default values from Connect data format to Avro's format, which is an
@@ -1043,12 +1087,15 @@ public class AvroData {
     if (value == null) {
       return null;
     }
-
-    Schema schema = (avroSchema.equals(ANYTHING_SCHEMA)) ? null : toConnectSchema(avroSchema);
-    return new SchemaAndValue(schema, toConnectData(schema, value));
+    Map<org.apache.avro.Schema, CyclicSchemaWrapper> cycleReferences = new HashMap<>();
+    Schema schema = (avroSchema.equals(ANYTHING_SCHEMA)) ? null
+        : toConnectSchema(avroSchema, cycleReferences, new HashSet<>());
+    return new SchemaAndValue(schema, toConnectData(schema, value, cycleReferences));
   }
 
-  private Object toConnectData(Schema schema, Object value) {
+  private Object toConnectData(Schema schema,
+                               Object value,
+                               Map<org.apache.avro.Schema, CyclicSchemaWrapper> cycleReferences) {
     validateSchemaValue(schema, value);
     if (value == null) {
       return null;
@@ -1065,47 +1112,47 @@ public class AvroData {
             boolVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_BOOLEAN_FIELD).pos());
         if (boolVal != null) {
-          return toConnectData(Schema.BOOLEAN_SCHEMA, boolVal);
+          return toConnectData(Schema.BOOLEAN_SCHEMA, boolVal, cycleReferences);
         }
 
         Object
             bytesVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_BYTES_FIELD).pos());
         if (bytesVal != null) {
-          return toConnectData(Schema.BYTES_SCHEMA, bytesVal);
+          return toConnectData(Schema.BYTES_SCHEMA, bytesVal, cycleReferences);
         }
 
         Object
             dblVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_DOUBLE_FIELD).pos());
         if (dblVal != null) {
-          return toConnectData(Schema.FLOAT64_SCHEMA, dblVal);
+          return toConnectData(Schema.FLOAT64_SCHEMA, dblVal, cycleReferences);
         }
 
         Object
             fltVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_FLOAT_FIELD).pos());
         if (fltVal != null) {
-          return toConnectData(Schema.FLOAT32_SCHEMA, fltVal);
+          return toConnectData(Schema.FLOAT32_SCHEMA, fltVal, cycleReferences);
         }
 
         Object intVal = recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_INT_FIELD).pos());
         if (intVal != null) {
-          return toConnectData(Schema.INT32_SCHEMA, intVal);
+          return toConnectData(Schema.INT32_SCHEMA, intVal, cycleReferences);
         }
 
         Object
             longVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_LONG_FIELD).pos());
         if (longVal != null) {
-          return toConnectData(Schema.INT64_SCHEMA, longVal);
+          return toConnectData(Schema.INT64_SCHEMA, longVal, cycleReferences);
         }
 
         Object
             stringVal =
             recordValue.get(ANYTHING_SCHEMA.getField(ANYTHING_SCHEMA_STRING_FIELD).pos());
         if (stringVal != null) {
-          return toConnectData(Schema.STRING_SCHEMA, stringVal);
+          return toConnectData(Schema.STRING_SCHEMA, stringVal, cycleReferences);
         }
 
         Object
@@ -1123,7 +1170,7 @@ public class AvroData {
           Collection<Object> original = (Collection<Object>) arrayVal;
           List<Object> result = new ArrayList<>(original.size());
           for (Object elem : original) {
-            result.add(toConnectData((Schema) null, elem));
+            result.add(toConnectData((Schema) null, elem, cycleReferences));
           }
           return result;
         }
@@ -1143,8 +1190,10 @@ public class AvroData {
           for (IndexedRecord entry : original) {
             int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
             int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
-            Object convertedKey = toConnectData((Schema) null, entry.get(avroKeyFieldIndex));
-            Object convertedValue = toConnectData((Schema) null, entry.get(avroValueFieldIndex));
+            Object convertedKey = toConnectData(
+                null, entry.get(avroKeyFieldIndex), cycleReferences);
+            Object convertedValue = toConnectData(
+                null, entry.get(avroValueFieldIndex), cycleReferences);
             result.put(convertedKey, convertedValue);
           }
           return result;
@@ -1223,7 +1272,7 @@ public class AvroData {
           Collection<Object> original = (Collection<Object>) value;
           List<Object> result = new ArrayList<>(original.size());
           for (Object elem : original) {
-            result.add(toConnectData(valueSchema, elem));
+            result.add(toConnectData(valueSchema, elem, cycleReferences));
           }
           converted = result;
           break;
@@ -1239,7 +1288,7 @@ public class AvroData {
             Map<CharSequence, Object> result = new HashMap<>(original.size());
             for (Map.Entry<CharSequence, Object> entry : original.entrySet()) {
               result.put(entry.getKey().toString(),
-                         toConnectData(valueSchema, entry.getValue()));
+                         toConnectData(valueSchema, entry.getValue(), cycleReferences));
             }
             converted = result;
           } else {
@@ -1249,8 +1298,10 @@ public class AvroData {
             for (IndexedRecord entry : original) {
               int avroKeyFieldIndex = entry.getSchema().getField(KEY_FIELD).pos();
               int avroValueFieldIndex = entry.getSchema().getField(VALUE_FIELD).pos();
-              Object convertedKey = toConnectData(keySchema, entry.get(avroKeyFieldIndex));
-              Object convertedValue = toConnectData(valueSchema, entry.get(avroValueFieldIndex));
+              Object convertedKey = toConnectData(
+                  keySchema, entry.get(avroKeyFieldIndex), cycleReferences);
+              Object convertedValue = toConnectData(
+                  valueSchema, entry.get(avroValueFieldIndex), cycleReferences);
               result.put(convertedKey, convertedValue);
             }
             converted = result;
@@ -1264,15 +1315,22 @@ public class AvroData {
             Schema valueRecordSchema = null;
             if (value instanceof IndexedRecord) {
               IndexedRecord valueRecord = ((IndexedRecord) value);
-              valueRecordSchema = toConnectSchema(valueRecord.getSchema(), true, null, null);
+              if (cycleReferences.containsKey(valueRecord.getSchema())) {
+                valueRecordSchema = cyclicSchemaWrapper(
+                    cycleReferences, valueRecord.getSchema(), true);
+              } else {
+                valueRecordSchema = toConnectSchema(
+                    valueRecord.getSchema(), true, null, null, cycleReferences, new HashSet<>());
+              }
             }
             for (Field field : schema.fields()) {
               Schema fieldSchema = field.schema();
 
               if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value)
-                  || (valueRecordSchema != null && valueRecordSchema.equals(fieldSchema))) {
-                converted = new Struct(schema).put(unionMemberFieldName(fieldSchema),
-                                                   toConnectData(fieldSchema, value));
+                  || (valueRecordSchema != null && schemaEquals(valueRecordSchema, fieldSchema))) {
+                converted = new Struct(schema).put(
+                    unionMemberFieldName(fieldSchema),
+                    toConnectData(fieldSchema, value, cycleReferences));
                 break;
               }
             }
@@ -1286,7 +1344,7 @@ public class AvroData {
             for (Field field : schema.fields()) {
               int avroFieldIndex = original.getSchema().getField(field.name()).pos();
               Object convertedFieldValue
-                  = toConnectData(field.schema(), original.get(avroFieldIndex));
+                  = toConnectData(field.schema(), original.get(avroFieldIndex), cycleReferences);
               result.put(field, convertedFieldValue);
             }
             converted = result;
@@ -1310,17 +1368,23 @@ public class AvroData {
     }
   }
 
-  public Schema toConnectSchema(org.apache.avro.Schema schema) {
+  public Schema toConnectSchema(org.apache.avro.Schema schema,
+                                Map<org.apache.avro.Schema, CyclicSchemaWrapper> cycleReferences,
+                                Set<org.apache.avro.Schema> detectedCycles) {
     // We perform caching only at this top level. While it might be helpful to cache some more of
     // the internal conversions, this is the safest place to add caching since some of the internal
     // conversions take extra flags (like forceOptional) which means the resulting schema might not
     // exactly match the Avro schema.
     Schema cachedSchema = toConnectSchemaCache.get(schema);
+    if (cycleReferences == null) {
+      cycleReferences = new HashMap<>();
+    }
     if (cachedSchema != null) {
       return cachedSchema;
     }
 
-    Schema resultSchema = toConnectSchema(schema, false, null, null);
+    Schema resultSchema = toConnectSchema(
+        schema, false, null, null, cycleReferences, detectedCycles);
     toConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
   }
@@ -1330,15 +1394,19 @@ public class AvroData {
    * @param forceOptional   make the resulting schema optional, for converting Avro unions to a
    *                        record format and simple Avro unions of null + type to optional schemas
    * @param fieldDefaultVal if non-null, override any connect-annotated default values with this
-   *                        one; used when converting Avro record fields since they define default
-   *                        values with the field spec, but Connect specifies them with the field's
-   *                        schema
+*                        one; used when converting Avro record fields since they define default
+*                        values with the field spec, but Connect specifies them with the field's
+*                        schema
    * @param docDefaultVal   if non-null, override any connect-annotated documentation with this one;
-   *                        used when converting Avro record fields since they define doc values
-   *                        with the field spec, but Connect specifies them with the field's schema
+*                        used when converting Avro record fields since they define doc values
+   * @param cycleReferences cycle references
+   * @param detectedCycles schemas that have cycles
    */
   private Schema toConnectSchema(org.apache.avro.Schema schema, boolean forceOptional,
-                                 Object fieldDefaultVal, String docDefaultVal) {
+                                 Object fieldDefaultVal, String docDefaultVal,
+                                 Map<org.apache.avro.Schema, CyclicSchemaWrapper> cycleReferences,
+                                 Set<org.apache.avro.Schema> detectedCycles) {
+
     String type = schema.getProp(CONNECT_TYPE_PROP);
     String logicalType = schema.getProp(AVRO_LOGICAL_TYPE_PROP);
 
@@ -1424,24 +1492,41 @@ public class AvroData {
             throw new DataException("Found map encoded as array of key-value pairs, but array "
                                     + "elements do not match the expected format.");
           }
-          builder = SchemaBuilder.map(
-              toConnectSchema(elemSchema.getField(KEY_FIELD).schema()),
-              toConnectSchema(elemSchema.getField(VALUE_FIELD).schema())
-          );
+          Schema keySchema = toConnectSchema(
+              elemSchema.getField(KEY_FIELD).schema(), cycleReferences, detectedCycles);
+          Schema valueSchema = toConnectSchema(
+              elemSchema.getField(VALUE_FIELD).schema(), cycleReferences, detectedCycles);
+          builder = SchemaBuilder.map(keySchema, valueSchema);
         } else {
-          builder = SchemaBuilder.array(toConnectSchema(schema.getElementType()));
+          Schema arraySchema;
+          if (cycleReferences.containsKey(schema.getElementType())) {
+            detectedCycles.add(schema.getElementType());
+            arraySchema = cyclicSchemaWrapper(cycleReferences, schema.getElementType(), false);
+          } else {
+            arraySchema = toConnectSchema(schema.getElementType(), cycleReferences, detectedCycles);
+          }
+          builder = SchemaBuilder.array(arraySchema);
         }
         break;
 
       case MAP:
-        builder = SchemaBuilder.map(Schema.STRING_SCHEMA, toConnectSchema(schema.getValueType()));
+        Schema valueSchema;
+        if (cycleReferences.containsKey(schema.getValueType())) {
+          detectedCycles.add(schema.getValueType());
+          valueSchema = cyclicSchemaWrapper(cycleReferences, schema.getValueType(), false);
+        } else {
+          valueSchema = toConnectSchema(schema.getValueType(), cycleReferences, detectedCycles);
+        }
+        builder = SchemaBuilder.map(Schema.STRING_SCHEMA, valueSchema);
         break;
 
       case RECORD: {
         builder = SchemaBuilder.struct();
+        cycleReferences.put(schema, new CyclicSchemaWrapper(builder));
         for (org.apache.avro.Schema.Field field : schema.getFields()) {
+
           Schema fieldSchema = toConnectSchema(field.schema(), false, field.defaultValue(),
-                                               field.doc());
+                                               field.doc(), cycleReferences, detectedCycles);
           builder.field(field.name(), fieldSchema);
         }
         break;
@@ -1464,7 +1549,10 @@ public class AvroData {
           if (schema.getTypes().contains(NULL_AVRO_SCHEMA)) {
             for (org.apache.avro.Schema memberSchema : schema.getTypes()) {
               if (!memberSchema.equals(NULL_AVRO_SCHEMA)) {
-                return toConnectSchema(memberSchema, true, null, docDefaultVal);
+                if (!cycleReferences.containsKey(memberSchema)) {
+                  return toConnectSchema(
+                      memberSchema, true, null, docDefaultVal, cycleReferences, detectedCycles);
+                }
               }
             }
           }
@@ -1480,7 +1568,16 @@ public class AvroData {
               throw new DataException("Multiple union schemas map to the Connect union field name");
             }
             fieldNames.add(fieldName);
-            builder.field(fieldName, toConnectSchema(memberSchema, true, null, null));
+            Schema fieldSchema;
+            if (!cycleReferences.containsKey(memberSchema)) {
+              fieldSchema = toConnectSchema(memberSchema, true, null, null, cycleReferences,
+                  detectedCycles);
+            } else {
+              detectedCycles.add(memberSchema);
+              fieldSchema = cyclicSchemaWrapper(cycleReferences, memberSchema, true);
+
+            }
+            builder.field(fieldName, fieldSchema);
           }
         }
         break;
@@ -1498,7 +1595,7 @@ public class AvroData {
     }
 
     String docVal = docDefaultVal != null ? docDefaultVal :
-                    (schema.getDoc() != null ? schema.getDoc() : schema.getProp(CONNECT_DOC_PROP));
+        (schema.getDoc() != null ? schema.getDoc() : schema.getProp(CONNECT_DOC_PROP));
     if (docVal != null) {
       builder.doc(docVal);
     }
@@ -1535,7 +1632,7 @@ public class AvroData {
     if (parameters != null) {
       if (!parameters.isObject()) {
         throw new DataException("Expected JSON object for schema parameters but found: "
-                                + parameters);
+            + parameters);
       }
       Iterator<Map.Entry<String, JsonNode>> paramIt = parameters.getFields();
       while (paramIt.hasNext()) {
@@ -1543,7 +1640,7 @@ public class AvroData {
         JsonNode jsonValue = field.getValue();
         if (!jsonValue.isTextual()) {
           throw new DataException("Expected schema parameter values to be strings but found: "
-                                  + jsonValue);
+              + jsonValue);
         }
         builder.parameter(field.getKey(), jsonValue.getTextValue());
       }
@@ -1559,7 +1656,7 @@ public class AvroData {
       fieldDefaultVal = schema.getJsonProp(CONNECT_DEFAULT_VALUE_PROP);
     }
     if (fieldDefaultVal != null) {
-      builder.defaultValue(defaultValueFromAvro(builder, schema, fieldDefaultVal));
+      builder.defaultValue(defaultValueFromAvro(builder, schema, fieldDefaultVal, cycleReferences));
     }
 
     JsonNode connectNameJson = schema.getJsonProp(CONNECT_NAME_PROP);
@@ -1571,16 +1668,16 @@ public class AvroData {
       name = connectNameJson.asText();
 
     } else if (schema.getType() == org.apache.avro.Schema.Type.RECORD
-               || schema.getType() == org.apache.avro.Schema.Type.ENUM) {
+        || schema.getType() == org.apache.avro.Schema.Type.ENUM) {
       name = schema.getFullName();
     }
     if (name != null && !name.equals(DEFAULT_SCHEMA_FULL_NAME)) {
       if (builder.name() != null) {
         if (!name.equals(builder.name())) {
           throw new DataException("Mismatched names: name already added to SchemaBuilder ("
-                                  + builder.name()
-                                  + ") differs from name in source schema ("
-                                  + name + ")");
+              + builder.name()
+              + ") differs from name in source schema ("
+              + name + ")");
         }
       } else {
         builder.name(name);
@@ -1591,18 +1688,30 @@ public class AvroData {
       builder.optional();
     }
 
+    if (!detectedCycles.contains(schema) && cycleReferences.containsKey(schema)) {
+      cycleReferences.remove(schema);
+    }
+
     return builder.build();
   }
 
+  private CyclicSchemaWrapper cyclicSchemaWrapper(
+      Map<org.apache.avro.Schema, CyclicSchemaWrapper> toConnectCycles,
+      org.apache.avro.Schema memberSchema,
+      boolean optional) {
+    return new CyclicSchemaWrapper(toConnectCycles.get(memberSchema).schemaBuilder(), optional);
+  }
 
-  private Object defaultValueFromAvro(Schema schema,
-                                      org.apache.avro.Schema avroSchema,
-                                      Object value) {
+  private Object defaultValueFromAvro(
+      Schema schema,
+      org.apache.avro.Schema avroSchema,
+      Object value,
+      Map<org.apache.avro.Schema, CyclicSchemaWrapper> toConnectCycles) {
     // The type will be JsonNode if this default was pulled from a Connect default field, or an
     // Object if it's the actual Avro-specified default. If it's a regular Java object, we can
     // use our existing conversion tools.
     if (!(value instanceof JsonNode)) {
-      return toConnectData(schema, value);
+      return toConnectData(schema, value, toConnectCycles);
     }
 
     JsonNode jsonValue = (JsonNode) value;
@@ -1650,7 +1759,8 @@ public class AvroData {
         }
         List<Object> result = new ArrayList<>(jsonValue.size());
         for (JsonNode elem : jsonValue) {
-          result.add(defaultValueFromAvro(schema, avroSchema.getElementType(), elem));
+          result.add(
+              defaultValueFromAvro(schema, avroSchema.getElementType(), elem, toConnectCycles));
         }
         return result;
       }
@@ -1663,8 +1773,8 @@ public class AvroData {
         Iterator<Map.Entry<String, JsonNode>> fieldIt = jsonValue.getFields();
         while (fieldIt.hasNext()) {
           Map.Entry<String, JsonNode> field = fieldIt.next();
-          Object converted = defaultValueFromAvro(schema, avroSchema.getElementType(),
-                                                  field.getValue());
+          Object converted = defaultValueFromAvro(
+              schema, avroSchema.getElementType(), field.getValue(), toConnectCycles);
           result.put(field.getKey(), converted);
         }
         return result;
@@ -1679,7 +1789,8 @@ public class AvroData {
         for (org.apache.avro.Schema.Field avroField : avroSchema.getFields()) {
           Field field = schema.field(avroField.name());
           JsonNode fieldJson = ((JsonNode) value).get(field.name());
-          Object converted = defaultValueFromAvro(field.schema(), avroField.schema(), fieldJson);
+          Object converted = defaultValueFromAvro(
+              field.schema(), avroField.schema(), fieldJson, toConnectCycles);
           result.put(avroField.name(), converted);
         }
         return result;
@@ -1691,8 +1802,11 @@ public class AvroData {
         if (memberAvroSchema.getType() == org.apache.avro.Schema.Type.NULL) {
           return null;
         } else {
-          return defaultValueFromAvro(schema.field(unionMemberFieldName(memberAvroSchema)).schema(),
-                                      memberAvroSchema, value);
+          return defaultValueFromAvro(
+              schema.field(unionMemberFieldName(memberAvroSchema)).schema(),
+              memberAvroSchema,
+              value,
+              toConnectCycles);
         }
       }
       default: {
@@ -1763,8 +1877,16 @@ public class AvroData {
   }
 
   private interface LogicalTypeConverter {
-
     Object convert(Schema schema, Object value);
+  }
+
+  public static Schema optional(Schema schema) {
+    return new ConnectSchema(schema.type(), true, schema.defaultValue(), schema.name(),
+        schema.version(), schema.doc(),
+        schema.parameters(),
+        fields(schema),
+        keySchema(schema),
+        valueSchema(schema));
   }
 
   public static Schema nonOptional(Schema schema) {
@@ -1801,6 +1923,108 @@ public class AvroData {
     } else {
       return null;
     }
+  }
+
+  private static boolean schemaEquals(Schema src, Schema that) {
+    boolean equals = Objects.equals(src.isOptional(), that.isOptional())
+        && Objects.equals(src.version(), that.version())
+        && Objects.equals(src.name(), that.name())
+        && Objects.equals(src.doc(), that.doc())
+        && Objects.equals(src.type(), that.type())
+        && Objects.deepEquals(src.defaultValue(), that.defaultValue())
+        && Objects.equals(src.fields(), that.fields())
+        && Objects.equals(src.parameters(), that.parameters());
+
+    switch (src.type()) {
+      case ARRAY:
+        return equals && Objects.equals(src.valueSchema(), that.valueSchema());
+      case MAP:
+        return equals
+            && Objects.equals(src.valueSchema(), that.valueSchema())
+            && Objects.equals(src.keySchema(), that.keySchema());
+      default:
+        return equals;
+    }
+  }
+
+  private class CyclicSchemaWrapper implements Schema {
+
+    private SchemaBuilder schemaBuilder;
+    private boolean optional;
+
+    public CyclicSchemaWrapper(SchemaBuilder schemaBuilder) {
+      this(schemaBuilder, schemaBuilder.isOptional());
+    }
+
+    public CyclicSchemaWrapper(SchemaBuilder schemaBuilder, boolean optional) {
+      this.schemaBuilder = schemaBuilder;
+      this.optional = optional;
+    }
+
+    public SchemaBuilder schemaBuilder() {
+      return schemaBuilder;
+    }
+
+    @Override
+    public Type type() {
+      return schemaBuilder.type();
+    }
+
+    @Override
+    public boolean isOptional() {
+      return optional;
+    }
+
+    @Override
+    public Object defaultValue() {
+      return schemaBuilder.defaultValue();
+    }
+
+    @Override
+    public String name() {
+      return schemaBuilder.name();
+    }
+
+    @Override
+    public Integer version() {
+      return schemaBuilder.version();
+    }
+
+    @Override
+    public String doc() {
+      return schemaBuilder.doc();
+    }
+
+    @Override
+    public Map<String, String> parameters() {
+      return schemaBuilder.parameters();
+    }
+
+    @Override
+    public Schema keySchema() {
+      return schemaBuilder.keySchema();
+    }
+
+    @Override
+    public Schema valueSchema() {
+      return schemaBuilder.valueSchema();
+    }
+
+    @Override
+    public List<Field> fields() {
+      return schemaBuilder.fields();
+    }
+
+    @Override
+    public Field field(String s) {
+      return schemaBuilder.field(s);
+    }
+
+    @Override
+    public Schema schema() {
+      return schemaBuilder.schema();
+    }
+
   }
 
 }

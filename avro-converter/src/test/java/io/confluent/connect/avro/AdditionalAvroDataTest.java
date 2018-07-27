@@ -3,6 +3,8 @@ package io.confluent.connect.avro;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 
 import io.test.avro.core.AvroMessage;
 import io.test.avro.doc.DocTestRecord;
@@ -44,7 +46,8 @@ public class AdditionalAvroDataTest
     {
         Schema avroSchema = new Parser().parse(new File("src/test/avro/DocTestRecord.avsc"));
 
-        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
+        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema,
+            new HashMap<>(), new HashSet<>());
 
         Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
 
@@ -70,7 +73,7 @@ public class AdditionalAvroDataTest
         // Here is a schema complex union schema
         Schema avroSchema = new Parser().parse(new File("src/test/avro/AvroMessage.avsc"));
 
-        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
+        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema, new HashMap<>(), new HashSet<>());
 
         Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
 
@@ -159,7 +162,7 @@ public class AdditionalAvroDataTest
         GenericData.Record nestedRecord = new GenericRecordBuilder(myImpl1Schema).set("data", "mydata").build();
         GenericData.Record obj = new GenericRecordBuilder(myAvroObjectSchema).set("obj", nestedRecord).build();
 
-        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(myAvroObjectSchema);
+        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(myAvroObjectSchema, new HashMap<>(), new HashSet<>());
         SchemaAndValue schemaAndValue = avroData.toConnectData(myAvroObjectSchema, obj);
         Object o = avroData.fromConnectData(schemaAndValue.schema(), schemaAndValue.value());
         Assert.assertEquals(obj ,o);
