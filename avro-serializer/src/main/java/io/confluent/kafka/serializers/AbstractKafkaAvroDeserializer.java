@@ -151,10 +151,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         String subject = getSubjectName(topic, isKey, result);
         Schema subjectSchema = schemaRegistry.getBySubjectAndId(subject, id);
         Integer version = schemaRegistry.getVersion(subject, subjectSchema);
-        if (schema.getType() == Schema.Type.UNION) {
+        if (subjectSchema.getType() == Schema.Type.UNION) {
           // Can't set additional properties on a union schema since it's just a list, so set it
           // on the first non-null entry
-          for (Schema memberSchema : schema.getTypes()) {
+          for (Schema memberSchema : subjectSchema.getTypes()) {
             if (memberSchema.getType() != Schema.Type.NULL) {
               memberSchema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
                                    JsonNodeFactory.instance.numberNode(version));
@@ -162,13 +162,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
             }
           }
         } else {
-          schema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
+          subjectSchema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
                          JsonNodeFactory.instance.numberNode(version));
         }
-        if (schema.getType().equals(Schema.Type.RECORD)) {
+        if (subjectSchema.getType().equals(Schema.Type.RECORD)) {
           return result;
         } else {
-          return new NonRecordContainer(schema, result);
+          return new NonRecordContainer(subjectSchema, result);
         }
       } else {
         return result;
