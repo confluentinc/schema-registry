@@ -86,6 +86,57 @@
                     <stringType>String</stringType>
                 </configuration>
             </plugin>
+            
+            <plugin>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-maven-plugin</artifactId>
+                <version>0.11.0</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>kafka-connect</goal>
+                        </goals>
+                        <configuration>
+                            <title>Kafka Connect Avro Converter</title>
+                            <documentationUrl>https://docs.confluent.io/current/schema-registry/docs/connect.html</documentationUrl>
+                            <description><![CDATA[
+                                The Kafka Connect Avro Converter integrates with <a href="https://docs.confluent.io/current/schema-registry/docs/intro.html">
+                                to convert data for Kafka Connect to and from Avro format.
+                            ]]></description>
+                            
+                            <supportProviderName>Confluent, Inc.</supportProviderName>
+                            <supportSummary>Confluent supports the Avro Converter alongside community members as part of its Confluent Platform open source offering.</supportSummary>
+                            <supportUrl>https://docs.confluent.io/current/</supportUrl>
+                            <supportLogo>logos/confluent.png</supportLogo>
+                            
+                            <ownerUsername>confluentinc</ownerUsername>
+                            <ownerType>organization</ownerType>
+                            <ownerName>Confluent, Inc.</ownerName>
+                            <ownerUrl>https://confluent.io/</ownerUrl>
+                            <ownerLogo>logos/confluent.png</ownerLogo>
+                            
+                            <dockerNamespace>confluentinc</dockerNamespace>
+                            <dockerName>cp-kafka-connect</dockerName>
+                            <dockerTag>${project.version}</dockerTag>
+                            
+                            <componentTypes>
+                                <componentType>converter</componentType>
+                            </componentTypes>
+                            
+                            <tags>
+                                <tag>avro</tag>
+                                <tag>schema registry</tag>
+                            </tags>
+                            
+                            <kafkaConnectApi>false</kafkaConnectApi>
+                            <singleMessageTransforms>false</singleMessageTransforms>
+                            <supportedEncodings>
+                                <supportedEncoding>avro</supportedEncoding>
+                            </supportedEncodings>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>
