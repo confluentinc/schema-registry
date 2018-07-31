@@ -78,22 +78,8 @@ public class CompatibilityResource {
     boolean isCompatible = false;
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     String errorMessage = "Error while retrieving list of all subjects";
-    try {
-      if (!schemaRegistry.listSubjects().contains(subject)) {
-        throw Errors.subjectNotFoundException();
-      }
-    } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException(errorMessage, e);
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException(errorMessage, e);
-    }
     Schema schemaForSpecifiedVersion = null;
-    VersionId versionId = null;
-    try {
-      versionId = new VersionId(version);
-    } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException();
-    }
+    VersionId versionId = parseVersionId(version);
     try {
       //Don't check compatibility against deleted schema
       schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), false);
@@ -104,6 +90,7 @@ public class CompatibilityResource {
                                   + subject + " and version "
                                   + versionId.getVersionId(), e);
     }
+    registerWithError(subject, errorMessage);
     if (schemaForSpecifiedVersion == null) {
       if (versionId.isLatest()) {
         isCompatible = true;
@@ -127,6 +114,28 @@ public class CompatibilityResource {
       }
       compatibilityCheckResponse.setIsCompatible(isCompatible);
       asyncResponse.resume(compatibilityCheckResponse);
+    }
+  }
+
+  private static VersionId parseVersionId(String version) {
+    final VersionId versionId;
+    try {
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException();
+    }
+    return versionId;
+  }
+
+  private void registerWithError(final String subject, final String errorMessage) {
+    try {
+      if (!schemaRegistry.listSubjects().contains(subject)) {
+        throw Errors.subjectNotFoundException();
+      }
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
     }
   }
 }
