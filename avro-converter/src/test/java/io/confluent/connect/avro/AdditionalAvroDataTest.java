@@ -44,8 +44,7 @@ public class AdditionalAvroDataTest
     {
         Schema avroSchema = new Parser().parse(new File("src/test/avro/DocTestRecord.avsc"));
 
-        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema
-        );
+        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
 
         Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
 

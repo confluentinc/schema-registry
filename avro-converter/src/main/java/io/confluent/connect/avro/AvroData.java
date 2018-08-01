@@ -16,8 +16,6 @@
 
 package io.confluent.connect.avro;
 
-import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
-import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -60,6 +58,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
+import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
+import io.confluent.kafka.serializers.NonRecordContainer;
 
 
 /**
@@ -700,9 +701,9 @@ public class AvroData {
    * <p>This is different to the global schema cache which is used to hold/cache fully resolved
    * schemas used to avoid re-resolving when presented with the same source schema.
    */
-  private org.apache.avro.Schema fromConnectSchema(
-      Schema schema,
-      FromConnectContext fromConnectContext, boolean ignoreOptional) {
+  public org.apache.avro.Schema fromConnectSchema(Schema schema,
+                                                  FromConnectContext fromConnectContext,
+                                                  boolean ignoreOptional) {
     if (schema == null) {
       return ANYTHING_SCHEMA;
     }
@@ -1350,9 +1351,7 @@ public class AvroData {
 
   public Schema toConnectSchema(org.apache.avro.Schema schema) {
     return toConnectSchema(
-        schema,
-        new ToConnectContext(new IdentityHashMap<>(), new HashSet<>())
-    );
+        schema, new ToConnectContext(new IdentityHashMap<>(), new HashSet<>()));
   }
 
 
@@ -1686,11 +1685,10 @@ public class AvroData {
     return new CyclicSchemaWrapper(toConnectCycles.get(memberSchema).schema(), optional);
   }
 
-  private Object defaultValueFromAvro(
-      Schema schema,
-      org.apache.avro.Schema avroSchema,
-      Object value,
-      ToConnectContext toConnectContext) {
+  private Object defaultValueFromAvro(Schema schema,
+                                      org.apache.avro.Schema avroSchema,
+                                      Object value,
+                                      ToConnectContext toConnectContext) {
     // The type will be JsonNode if this default was pulled from a Connect default field, or an
     // Object if it's the actual Avro-specified default. If it's a regular Java object, we can
     // use our existing conversion tools.

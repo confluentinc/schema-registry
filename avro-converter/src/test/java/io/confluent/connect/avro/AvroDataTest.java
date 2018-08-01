@@ -16,12 +16,9 @@
 
 package io.confluent.connect.avro;
 
-import avro.shaded.com.google.common.collect.ImmutableMap;
 import com.connect.avro.EnumUnion;
 import com.connect.avro.UserType;
-import foo.bar.EnumTest;
-import foo.bar.Kind;
-import io.confluent.kafka.serializers.NonRecordContainer;
+
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -58,15 +55,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 
+import avro.shaded.com.google.common.collect.ImmutableMap;
+import foo.bar.EnumTest;
+import foo.bar.Kind;
+import io.confluent.kafka.serializers.NonRecordContainer;
+
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_RECORD_DOC_PROP;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class AvroDataTest {
   private static final int TEST_SCALE = 2;
