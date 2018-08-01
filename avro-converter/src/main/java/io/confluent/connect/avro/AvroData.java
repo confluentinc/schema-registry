@@ -1074,7 +1074,9 @@ public class AvroData {
     if (value == null) {
       return null;
     }
-    ToConnectContext toConnectContext = new ToConnectContext(new IdentityHashMap<>(), new HashSet<>());
+    ToConnectContext toConnectContext = new ToConnectContext(
+        new IdentityHashMap<>(),
+        new HashSet<>());
     Schema schema = (avroSchema.equals(ANYTHING_SCHEMA))
         ? null
         : toConnectSchema(avroSchema, toConnectContext);
