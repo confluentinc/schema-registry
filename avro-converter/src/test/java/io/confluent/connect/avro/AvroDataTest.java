@@ -54,7 +54,6 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
@@ -64,6 +63,7 @@ import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_RECORD_DOC_PROP;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -92,109 +92,6 @@ public class AvroDataTest {
   private AvroData avroData = new AvroData(2);
 
   // Connect -> Avro
-
-  @Test
-  public void testCyclicalAvroSchema() {
-    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
-        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
-        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, false)
-        .build();
-    AvroData listAvroData = new AvroData(avroDataConfig);
-    String linkedListAvroSchema =
-        "{\"type\": \"record\",\"name\": \"linked_list\",\"fields\" : "
-            + "[{\"name\": \"value\", \"type\": \"long\"},"
-            + "{\"name\": \"next\", \"type\": [\"null\", \"linked_list\"],\"default\" : null}]}";
-    org.apache.avro.Schema.Parser avroParser = new org.apache.avro.Schema.Parser();
-    org.apache.avro.Schema avroSchema = avroParser.parse(linkedListAvroSchema);
-
-    GenericRecord next = new GenericRecordBuilder(avroSchema)
-        .set("value", 2l)
-        .set("next", null)
-        .build();
-
-    GenericRecord headNode = new GenericRecordBuilder(avroSchema)
-        .set("value", 3l)
-        .set("next", next)
-        .build();
-
-    SchemaAndValue schema = listAvroData.toConnectData(avroSchema, headNode);
-    GenericRecord genericRecord = (GenericRecord) listAvroData.fromConnectData(
-        schema.schema(), schema.value());
-
-    assertEquals(headNode, genericRecord);
-
-  }
-
-  @Test
-  public void testGraph() {
-
-    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
-        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
-        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, false)
-        .build();
-    AvroData graphAvroData = new AvroData(avroDataConfig);
-    org.apache.avro.Schema.Parser avroParser = new org.apache.avro.Schema.Parser();
-
-    String graphAvroSchema = "{\"type\": \"record\",\"name\": \"Users\",\"fields\" : [{\"name\": " +
-        "\"name\", \"type\": \"string\"},{\"name\": \"friends\", \"type\" : [ \"null\", " +
-        "{\"type\": \"array\", \"items\":\"Users\"}], \"default\" : null}]}";
-
-    org.apache.avro.Schema graphSchema = avroParser.parse(graphAvroSchema);
-    GenericRecord friend1 = new GenericRecordBuilder(graphSchema)
-        .set("name", "Person A")
-        .build();
-    GenericRecord friend2 = new GenericRecordBuilder(graphSchema)
-        .set("name", "Person A")
-        .build();
-
-    org.apache.avro.Schema arraySchema = graphSchema.getField("friends").schema().getTypes().get(1);
-    GenericData.Array friends = new GenericData.Array(arraySchema, Arrays.asList(friend1, friend2));
-    GenericRecord person = new GenericRecordBuilder(graphSchema)
-        .set("name", "Person C")
-        .set("friends", friends)
-        .build();
-
-    SchemaAndValue schema = graphAvroData.toConnectData(graphSchema, person);
-    GenericRecord genericRecord = (GenericRecord) graphAvroData.fromConnectData(
-        schema.schema(), schema.value());
-
-    assertEquals(person, genericRecord);
-  }
-
-  @Test
-  public void testMapCycle() {
-
-    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
-        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
-        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, false)
-        .build();
-    AvroData graphAvroData = new AvroData(avroDataConfig);
-    org.apache.avro.Schema.Parser avroParser = new org.apache.avro.Schema.Parser();
-
-    String mapCycleSchema = "{\"type\": \"record\",\"name\": \"Node\",\"fields\" : [{\"name\": " +
-        "\"value\", \"type\": \"long\"},{\"name\": \"siblings\", \"type\" : [ \"null\", " +
-        "{\"type\": \"map\", \"values\":\"Node\"}], \"default\" : null}]}";
-
-    org.apache.avro.Schema graphSchema = avroParser.parse(mapCycleSchema);
-    GenericRecord node1 = new GenericRecordBuilder(graphSchema)
-        .set("value", 1l)
-        .build();
-    GenericRecord node2 = new GenericRecordBuilder(graphSchema)
-        .set("value", 2l)
-        .build();
-
-    Map siblings = ImmutableMap.of("node1", node1, "node2", node2);
-    GenericRecord person = new GenericRecordBuilder(graphSchema)
-        .set("value", 3l)
-        .set("siblings", siblings)
-        .build();
-
-    SchemaAndValue schema = graphAvroData.toConnectData(graphSchema, person);
-    GenericRecord genericRecord = (GenericRecord) graphAvroData.fromConnectData(
-        schema.schema(), schema.value());
-
-    assertEquals(person, genericRecord);
-  }
 
   @Test
   public void testFromConnectBoolean() {
@@ -1613,7 +1510,7 @@ public class AvroDataTest {
             .name("value").type().intType().noDefault()
             .endRecord();
 
-    avroData.toConnectSchema(avroSchema, new HashMap<>(), new HashSet<>());
+    avroData.toConnectSchema(avroSchema);
   }
 
   @Test
@@ -1621,7 +1518,7 @@ public class AvroDataTest {
     // When we use a logical type, the builder we get sets a version. If a version is also included in the schema we're
     // converting, the conversion should still work as long as the versions match.
     org.apache.avro.Schema schema = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Message\",\"namespace\":\"org.cmatta.kafka.connect.irc\",\"fields\":[{\"name\":\"createdat\",\"type\":{\"type\":\"long\",\"connect.doc\":\"When this message was received.\",\"connect.version\":1,\"connect.name\":\"org.apache.kafka.connect.data.Timestamp\",\"logicalType\":\"timestamp-millis\"}}]}");
-    avroData.toConnectSchema(schema, new HashMap<>(), new HashSet<>());
+    avroData.toConnectSchema(schema);
   }
 
   @Test(expected = DataException.class)
@@ -1629,7 +1526,7 @@ public class AvroDataTest {
     // When we use a logical type, the builder we get sets a version. If a version is also included in the schema we're
     // converting, a mismatch between the versions should cause an exception.
     org.apache.avro.Schema schema = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Message\",\"namespace\":\"org.cmatta.kafka.connect.irc\",\"fields\":[{\"name\":\"createdat\",\"type\":{\"type\":\"long\",\"connect.doc\":\"When this message was received.\",\"connect.version\":1,\"connect.name\":\"com.custom.Timestamp\",\"logicalType\":\"timestamp-millis\"}}]}");
-    avroData.toConnectSchema(schema, new HashMap<>(), new HashSet<>());
+    avroData.toConnectSchema(schema);
   }
 
   @Test(expected = DataException.class)
@@ -1637,7 +1534,181 @@ public class AvroDataTest {
     // When we use a logical type, the builder we get sets a version. If a version is also included in the schema we're
     // converting, a mismatch between the versions should cause an exception.
     org.apache.avro.Schema schema = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"Message\",\"namespace\":\"org.cmatta.kafka.connect.irc\",\"fields\":[{\"name\":\"createdat\",\"type\":{\"type\":\"long\",\"connect.doc\":\"When this message was received.\",\"connect.version\":2,\"connect.name\":\"org.apache.kafka.connect.data.Timestamp\",\"logicalType\":\"timestamp-millis\"}}]}");
-    avroData.toConnectSchema(schema, new HashMap<>(), new HashSet<>());
+    avroData.toConnectSchema(schema);
+  }
+
+  @Test
+  public void testCyclicalAvroSchema() {
+    //This test would test the round trip and asserting the intermediate connect data as well
+
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, false)
+        .build();
+    AvroData listAvroData = new AvroData(avroDataConfig);
+    String linkedListAvroSchema =
+        "{\"type\": \"record\",\"name\": \"linked_list\",\"fields\" : "
+            + "[{\"name\": \"value\", \"type\": \"long\"},"
+            + "{\"name\": \"next\", \"type\": [\"null\", \"linked_list\"],\"default\" : null}]}";
+    org.apache.avro.Schema.Parser avroParser = new org.apache.avro.Schema.Parser();
+    org.apache.avro.Schema avroSchema = avroParser.parse(linkedListAvroSchema);
+
+    GenericRecord next = new GenericRecordBuilder(avroSchema)
+        .set("value", 2l)
+        .set("next", null)
+        .build();
+
+    GenericRecord headNode = new GenericRecordBuilder(avroSchema)
+        .set("value", 3l)
+        .set("next", next)
+        .build();
+
+    SchemaAndValue schemaAndValue = listAvroData.toConnectData(avroSchema, headNode);
+
+    assertNonNullSchemaValue(schemaAndValue);
+    Struct linkedListNode = (Struct) schemaAndValue.value();
+    assertEquals(3l, linkedListNode.get("value"));
+    assertNotNull(linkedListNode.get("next"));
+    linkedListNode = (Struct) linkedListNode.get("next");
+    assertEquals(2l, linkedListNode.get("value"));
+    assertNull(linkedListNode.get("next"));
+
+    GenericRecord genericRecord = (GenericRecord) listAvroData.fromConnectData(
+        schemaAndValue.schema(), schemaAndValue.value());
+
+    assertEquals(headNode, genericRecord);
+
+  }
+
+  @Test
+  public void testArrayCycle() {
+    //This test would test the round trip and asserting the intermediate connect data as well
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, false)
+        .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+    org.apache.avro.Schema.Parser avroParser = new org.apache.avro.Schema.Parser();
+
+    String graphAvroSchema = "{\"type\": \"record\",\"name\": \"Users\",\"fields\" : [{\"name\": " +
+        "\"name\", \"type\": \"string\"},{\"name\": \"friends\", \"type\" : [ \"null\", " +
+        "{\"type\": \"array\", \"items\":\"Users\"}], \"default\" : null}]}";
+
+    org.apache.avro.Schema graphSchema = avroParser.parse(graphAvroSchema);
+    org.apache.avro.Schema friendsListSchema = graphSchema.getField("friends").schema().getTypes().get(1);
+
+    GenericRecord friend1 = new GenericRecordBuilder(graphSchema)
+        .set("name", "Person A")
+        .build();
+    GenericRecord friend2 = new GenericRecordBuilder(graphSchema)
+        .set("name", "Person B")
+        .set("friends", new GenericData.Array(friendsListSchema, Arrays.asList(friend1)))
+        .build();
+
+    GenericRecord person = new GenericRecordBuilder(graphSchema)
+        .set("name", "Person C")
+        .set("friends", new GenericData.Array(friendsListSchema, Arrays.asList(friend1, friend2)))
+        .build();
+
+    SchemaAndValue schemaAndValue = graphAvroData.toConnectData(graphSchema, person);
+
+    Map<String,List<String>> expectedMap = ImmutableMap.of(
+        "Person C", Arrays.asList("Person A", "Person B"),
+        "Person B", Arrays.asList("Person A"),
+        "Person A", Arrays.asList()
+    );
+    assertNonNullSchemaValue(schemaAndValue);
+    assertPersons("Person C", schemaAndValue.value(), expectedMap);
+
+    GenericRecord genericRecord = (GenericRecord) graphAvroData.fromConnectData(
+        schemaAndValue.schema(), schemaAndValue.value());
+
+    assertEquals(person, genericRecord);
+  }
+
+  private void assertPersons(
+      String currentPerson, Object value, Map<String, List<String>> expectedMap) {
+
+    assertNotNull(value);
+    assertTrue(value instanceof Struct);
+    Struct personStruct = (Struct) value;
+    assertEquals(currentPerson, personStruct.get("name"));
+    if (expectedMap.containsKey(currentPerson) && expectedMap.get(currentPerson).size() > 0) {
+      assertNotNull(personStruct.get("friends"));
+      assertTrue(personStruct.get("friends") instanceof List);
+      List friends = personStruct.getArray("friends");
+      assertEquals(expectedMap.get(currentPerson).size(), friends.size());
+      for (int i = 0; i < friends.size(); i++) {
+        assertPersons(expectedMap.get(currentPerson).get(i), friends.get(i), expectedMap);
+      }
+    } else {
+      assertNull(personStruct.get("friends"));
+    }
+
+  }
+
+  @Test
+  public void testMapCycle() {
+    //This test would test the round trip and asserting the intermediate connect data as well
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData avroData = new AvroData(avroDataConfig);
+    org.apache.avro.Schema.Parser avroParser = new org.apache.avro.Schema.Parser();
+
+    String mapCycleSchema = "{\"type\": \"record\",\"name\": \"Node\",\"fields\" : [{\"name\": " +
+        "\"value\", \"type\": \"long\"},{\"name\": \"siblings\", \"type\" : [ \"null\", " +
+        "{\"type\": \"map\", \"values\":\"Node\"}], \"default\" : null}]}";
+
+    org.apache.avro.Schema graphSchema = avroParser.parse(mapCycleSchema);
+    GenericRecord node1 = new GenericRecordBuilder(graphSchema)
+        .set("value", 1l)
+        .build();
+    GenericRecord node2 = new GenericRecordBuilder(graphSchema)
+        .set("value", 2l)
+        .set("siblings", ImmutableMap.of("node1", node1))
+        .build();
+
+    Map siblings = ImmutableMap.of("node1", node1, "node2", node2);
+    GenericRecord person = new GenericRecordBuilder(graphSchema)
+        .set("value", 3l)
+        .set("siblings", siblings)
+        .build();
+
+    SchemaAndValue schemaAndValue = avroData.toConnectData(graphSchema, person);
+    Map<Long,Map<String, Long>> expectedMap = ImmutableMap.of(
+        3l, ImmutableMap.of("node1",1l, "node2", 2l),
+        2l, ImmutableMap.of("node1",1l),
+        1l, ImmutableMap.of()
+    );
+    assertNonNullSchemaValue(schemaAndValue);
+    assertMapCycle(3l, schemaAndValue.value(), expectedMap);
+    GenericRecord genericRecord = (GenericRecord) avroData.fromConnectData(
+        schemaAndValue.schema(), schemaAndValue.value());
+
+    assertEquals(person, genericRecord);
+  }
+
+  private void assertMapCycle(
+      Long current, Object value, Map<Long, Map<String, Long>> expectedMap) {
+
+    assertNotNull(value);
+    assertTrue(value instanceof Struct);
+    Struct struct = (Struct) value;
+    assertEquals(current, struct.get("value"));
+    if (expectedMap.containsKey(current) && expectedMap.get(current).size() > 0) {
+      assertNotNull(struct.get("siblings"));
+      assertTrue(struct.get("siblings") instanceof Map);
+      Map siblings = struct.getMap("siblings");
+      assertEquals(expectedMap.get(current).size(), siblings.size());
+      assertTrue(expectedMap.get(current).keySet().equals(siblings.keySet()));
+      for (Map.Entry<String, Long> entry : expectedMap.get(current).entrySet()) {
+        assertMapCycle(entry.getValue(), siblings.get(entry.getKey()), expectedMap);
+      }
+    } else {
+      assertNull(struct.get("siblings"));
+    }
+
   }
 
   private NonRecordContainer checkNonRecordConversion(
@@ -1657,4 +1728,12 @@ public class AvroDataTest {
     Object converted = avroData.fromConnectData(schema, null);
     assertNull(converted);
   }
+
+  private void assertNonNullSchemaValue(SchemaAndValue schemaAndValue) {
+    assertNotNull(schemaAndValue);
+    assertNotNull(schemaAndValue.schema());
+    assertNotNull(schemaAndValue.value());
+  }
+
+
 }
