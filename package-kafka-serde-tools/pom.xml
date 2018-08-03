@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>5.0.1-SNAPSHOT</version>
+        <version>5.0.1-beta180802235906</version>
     </parent>
 
     <artifactId>kafka-serde-tools-package</artifactId>
