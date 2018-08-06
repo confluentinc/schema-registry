@@ -140,7 +140,7 @@ public class SchemaRegistryCoordinatorTest {
     final String consumerId = LEADER_ID;
 
     client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-    coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
     // normal join group
     Map<String, SchemaRegistryIdentity> memberInfo = Collections.singletonMap(consumerId, LEADER_INFO);
@@ -175,7 +175,7 @@ public class SchemaRegistryCoordinatorTest {
     final String consumerId = LEADER_ID;
 
     client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-    coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
     Map<String, SchemaRegistryIdentity> memberInfo = Collections.singletonMap(
         consumerId,
@@ -214,7 +214,7 @@ public class SchemaRegistryCoordinatorTest {
     final String consumerId = LEADER_ID;
 
     client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-    coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
     Map<String, SchemaRegistryIdentity> memberInfo = new HashMap<>();
     // intentionally duplicate info to get duplicate URLs
@@ -252,7 +252,7 @@ public class SchemaRegistryCoordinatorTest {
     final String consumerId = MEMBER_ID;
 
     client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-    coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
     // normal join group
     client.prepareResponse(joinGroupFollowerResponse(1, consumerId, LEADER_ID, Errors.NONE));
