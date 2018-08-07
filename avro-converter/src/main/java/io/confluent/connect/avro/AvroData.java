@@ -1074,9 +1074,7 @@ public class AvroData {
     if (value == null) {
       return null;
     }
-    ToConnectContext toConnectContext = new ToConnectContext(
-        new IdentityHashMap<>(),
-        new HashSet<>());
+    ToConnectContext toConnectContext = new ToConnectContext();
     Schema schema = (avroSchema.equals(ANYTHING_SCHEMA))
         ? null
         : toConnectSchema(avroSchema, toConnectContext);
@@ -1352,8 +1350,7 @@ public class AvroData {
   }
 
   public Schema toConnectSchema(org.apache.avro.Schema schema) {
-    return toConnectSchema(
-        schema, new ToConnectContext(new IdentityHashMap<>(), new HashSet<>()));
+    return toConnectSchema(schema, new ToConnectContext());
   }
 
 
@@ -2007,13 +2004,12 @@ public class AvroData {
     private final Set<org.apache.avro.Schema> detectedCycles;
 
     /**
-     * @param cycleReferences map that holds connect Schema references to resolve cycles
-     * @param detectedCycles  avro schemas that have been detected to have cycles
+     * cycleReferences - map that holds connect Schema references to resolve cycles
+     * detectedCycles - avro schemas that have been detected to have cycles
      */
-    private ToConnectContext(Map<org.apache.avro.Schema, CyclicSchemaWrapper> cycleReferences,
-                             Set<org.apache.avro.Schema> detectedCycles) {
-      this.cycleReferences = cycleReferences;
-      this.detectedCycles = detectedCycles;
+    private ToConnectContext() {
+      this.cycleReferences = new IdentityHashMap<>();
+      this.detectedCycles = new HashSet<>();
     }
   }
 
