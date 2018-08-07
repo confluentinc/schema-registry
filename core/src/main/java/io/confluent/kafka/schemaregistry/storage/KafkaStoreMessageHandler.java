@@ -16,10 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class KafkaStoreMessageHandler
     implements StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> {
@@ -27,11 +32,13 @@ public class KafkaStoreMessageHandler
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final Store store;
+  private final ExecutorService tombstoneExecutor;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
                                   Store store) {
     this.schemaRegistry = schemaRegistry;
     this.store = store;
+    this.tombstoneExecutor = Executors.newSingleThreadExecutor();
   }
 
   /**
@@ -62,6 +69,7 @@ public class KafkaStoreMessageHandler
         if (schemaValue != null) {
           schemaValue.setDeleted(true);
           this.store.put(schemaKey, schemaValue);
+          handleDeleteSchemaKey(schemaKey, schemaValue);
         }
       } catch (StoreException e) {
         log.error("Failed to delete subject in the local store");
@@ -85,6 +93,39 @@ public class KafkaStoreMessageHandler
       }
       schemaIdAndSubjects.addSubjectAndVersion(schemaKey.getSubject(), schemaKey.getVersion());
       schemaRegistry.schemaHashToGuid.put(md5, schemaIdAndSubjects);
+
+      // If the schema is marked to be deleted, we store it in an internal datastructure
+      // that holds all deleted schema keys for an id.
+      // Whenever we encounter a new schema for a subject, we check to see if the same schema
+      // (same id) was deleted for the subject ever. If so, we tombstone those delete keys.
+      // This helps optimize the storage. The main reason we only allow soft deletes in SR is that
+      // consumers should be able to access the schemas by id. This is guaranteed when the schema is
+      // re-registered again and hence we can tombstone the record.
+      if (schemaObj.isDeleted()) {
+        handleDeleteSchemaKey(schemaKey, schemaObj);
+      } else {
+        List<SchemaKey> schemaKeys = schemaRegistry.guidToDeletedSchemaKeys
+            .getOrDefault(schemaObj.getId(), Collections.emptyList());
+        schemaKeys.stream().filter(v -> v.getSubject().equals(schemaObj.getSubject()))
+            .forEach(this::tombstoneSchemaKey);
+      }
     }
+  }
+
+  private void handleDeleteSchemaKey(SchemaKey schemaKey, SchemaValue schemaValue) {
+    schemaRegistry.guidToDeletedSchemaKeys
+        .computeIfAbsent(schemaValue.getId(), k -> new ArrayList<>()).add(schemaKey);
+  }
+
+  private void tombstoneSchemaKey(SchemaKey schemaKey) {
+    tombstoneExecutor.execute(() -> {
+          try {
+            schemaRegistry.getKafkaStore().put(schemaKey, null);
+            log.debug("Tombstoned {}", schemaKey);
+          } catch (StoreException e) {
+            log.error("Failed to tombstone {}", schemaKey, e);
+          }
+        }
+    );
   }
 }
