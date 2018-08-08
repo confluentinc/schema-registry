@@ -90,6 +90,9 @@ public class RestService {
       new TypeReference<List<Integer>>() {
       };
 
+  private static final int HTTP_CONNECT_TIMEOUT_MS = 60000;
+  private static final int HTTP_READ_TIMEOUT_MS = 60000;
+
   private static final int JSON_PARSE_ERROR_CODE = 50005;
   private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
@@ -140,6 +143,9 @@ public class RestService {
     try {
       URL url = new URL(requestUrl);
       connection = (HttpURLConnection) url.openConnection();
+      
+      connection.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
+      connection.setReadTimeout(HTTP_READ_TIMEOUT_MS);
 
       setupSsl(connection);
       connection.setRequestMethod(method);
