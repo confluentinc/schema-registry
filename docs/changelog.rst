@@ -1,7 +1,7 @@
 .. _schemaregistry_changelog:
 
-Changelog
-=========
+|sr| Changelog
+==============
 
 Version 4.1.1
 -------------

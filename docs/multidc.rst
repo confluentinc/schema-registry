@@ -1,10 +1,8 @@
 .. _schemaregistry_mirroring:
 
-Multi-DC Setup
-==============
+|sr| Multi-DC Setup
+===================
 
-Overview
---------
 Spanning multiple datacenters with your |sr| provides additional protection against data loss and improved latency. The recommended multi-datacenter deployment designates one datacenter as "master" and all others as "slaves". If the "master" datacenter fails and is unrecoverable, a "slave" datacenter will need to be manually designated the new "master" through the steps in the Run Book below.
 
 Kafka Election
@@ -56,7 +54,7 @@ Assuming you have |sr| running, here are the recommended steps to add |sr| insta
 Run Book
 ^^^^^^^^
 
-Let's say you have |sr| running in multiple datacenters, and you have lost your "master" datacenter; what do you do? First, note that the remaining |sr| instances will continue to be able to serve any request which does not result in a write to Kafka. This includes GET requests on existing ids and POST requests on schemas already in the registry.
+Let's say you have |sr| running in multiple datacenters, and you have lost your "master" datacenter; what do you do? First, note that the remaining |sr| instances will continue to be able to serve any request which does not result in a write to Kafka. This includes GET requests on existing IDs and POST requests on schemas already in the registry.
 
 - If possible, revive the "master" datacenter by starting Kafka and |sr| as before.
 
@@ -110,7 +108,7 @@ Assuming you have |sr| running, here are the recommended steps to add |sr| insta
 Run Book
 ^^^^^^^^
 
-Let's say you have |sr| running in multiple datacenters, and you have lost your "master" datacenter; what do you do? First, note that the remaining |sr| instances will continue to be able to serve any request which does not result in a write to Kafka. This includes GET requests on existing ids and POST requests on schemas already in the registry.
+Let's say you have |sr| running in multiple datacenters, and you have lost your "master" datacenter; what do you do? First, note that the remaining |sr| instances will continue to be able to serve any request which does not result in a write to Kafka. This includes GET requests on existing IDs and POST requests on schemas already in the registry.
 
 - If possible, revive the "master" datacenter by starting Kafka and |sr| as before.
 

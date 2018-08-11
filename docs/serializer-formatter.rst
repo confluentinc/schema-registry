@@ -1,19 +1,19 @@
 .. _serializer_and_formatter:
 
-Serializer and Formatter
-========================
+|sr| Serializer and Formatter
+=============================
 
-In this document, we describe how to use Avro with the Kafka Java client and console tools.
+This document describes how to use Avro with the Kafka Java client and console tools.
 
 
 Assuming that you have the |sr| source code checked out at ``/tmp/schema-registry``, the
-following is how you can obtain all needed jars.
+following is how you can obtain all needed JARs.
 
 .. sourcecode:: bash
 
    mvn package
 
-The jars can be found in
+The JARs can be found in
 
 .. sourcecode:: bash
 
@@ -141,7 +141,7 @@ This behavior can be modified by using the following configs
 
 ``key.subject.name.strategy``
   Determines how to construct the subject name under which the key schema is registered with the
-  schema registry.
+  |sr|.
 
   Any implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` can be specified. By default, <topic>-key is used as subject.
 
@@ -150,7 +150,7 @@ This behavior can be modified by using the following configs
   * Importance: medium
 
 ``value.subject.name.strategy``
-  Determines how to construct the subject name under which the value schema is registered with the schema registry.
+  Determines how to construct the subject name under which the value schema is registered with the |sr|.
 
   Any implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` can be specified. By default, <topic>-value is used as subject.
 
@@ -183,7 +183,7 @@ The other available options that can be configured out of the box include
 Basic Auth Security
 ^^^^^^^^^^^^^^^^^^^
 
-Schema Registry supports ability to authenticate requests using Basic Auth headers. You can send
+|sr| supports ability to authenticate requests using Basic Auth headers. You can send
 the Basic Auth headers by setting the following configuration in your producer or consumer example
 
 ``basic.auth.credentials.source``

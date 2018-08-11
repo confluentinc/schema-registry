@@ -1,7 +1,7 @@
 .. _schema-registry-prod:
 
-Production Deployment
-=====================
+|sr| System Requirements
+========================
 
 This section describes the key considerations before going to production with your cluster. However, it is not an
 exhaustive guide to running your |sr| in production.

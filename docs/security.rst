@@ -1,7 +1,7 @@
 .. _schemaregistry_security:
 
-Security Overview
------------------
+|sr| Security Overview
+----------------------
 
 The |sr| currently supports all Kafka security features, including:
 

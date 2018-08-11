@@ -1,7 +1,7 @@
 .. _schemaregistry_api:
 
-API Reference
-=============
+|sr| API Reference
+==================
 
 Overview
 --------
@@ -71,11 +71,11 @@ Schemas
 
 .. http:get:: /schemas/ids/{int: id}
 
-   Get the schema string identified by the input id.
+   Get the schema string identified by the input ID.
 
    :param int id: the globally unique identifier of the schema
 
-   :>json string schema: Schema string identified by the id
+   :>json string schema: Schema string identified by the ID
 
    :statuscode 404:
       * Error code 40403 -- Schema not found
@@ -400,7 +400,7 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
 
 .. http:delete:: /subjects/(string: subject)/versions/(versionId: version)
 
-   Deletes a specific version of the schema registered under this subject. This only deletes the version and the schema id remains intact making it still possible to decode data using the schema id. This API is recommended to be used only in development environments or under extreme circumstances where-in, its required to delete a previously registered schema for compatibility purposes or re-register previously registered schema.
+   Deletes a specific version of the schema registered under this subject. This only deletes the version and the schema ID remains intact making it still possible to decode data using the schema ID. This API is recommended to be used only in development environments or under extreme circumstances where-in, its required to delete a previously registered schema for compatibility purposes or re-register previously registered schema.
 
    :param string subject: Name of the subject
    :param versionId version: Version of the schema to be deleted. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" deletes the last registered schema under the specified subject. Note that there may be a new latest schema that gets registered right after this request is served.

@@ -3,7 +3,7 @@
 Schema Deletion Guidelines
 ==========================
 
-|sr| API supports deleting a specific schema version or all versions of a subject. The API only deletes the version and the underlying schema id would still be available for any lookup.
+|sr| API supports deleting a specific schema version or all versions of a subject. The API only deletes the version and the underlying schema ID would still be available for any lookup.
 
 .. sourcecode:: bash
 
