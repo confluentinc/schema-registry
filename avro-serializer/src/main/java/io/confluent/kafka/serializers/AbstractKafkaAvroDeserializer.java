@@ -45,7 +45,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   protected boolean useSpecificAvroReader = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<String, Schema>();
 
-
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
    * Useful for testing, where a mock client is injected.
@@ -118,7 +117,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     try {
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
-      Schema schema = schemaRegistry.getById(id);
+      Schema schemaFromRegistry = schemaRegistry.getById(id);
+      Schema schema = new Schema.Parser().parse(schemaFromRegistry.toString());
       int length = buffer.limit() - 1 - idSize;
       final Object result;
       if (schema.getType().equals(Schema.Type.BYTES)) {
@@ -151,10 +151,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         String subject = getSubjectName(topic, isKey, result);
         Schema subjectSchema = schemaRegistry.getBySubjectAndId(subject, id);
         Integer version = schemaRegistry.getVersion(subject, subjectSchema);
-        if (subjectSchema.getType() == Schema.Type.UNION) {
+
+        if (schema.getType() == Schema.Type.UNION) {
           // Can't set additional properties on a union schema since it's just a list, so set it
           // on the first non-null entry
-          for (Schema memberSchema : subjectSchema.getTypes()) {
+          for (Schema memberSchema : schema.getTypes()) {
             if (memberSchema.getType() != Schema.Type.NULL) {
               memberSchema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
                                    JsonNodeFactory.instance.numberNode(version));
@@ -162,13 +163,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
             }
           }
         } else {
-          subjectSchema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
+          schema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
                          JsonNodeFactory.instance.numberNode(version));
         }
-        if (subjectSchema.getType().equals(Schema.Type.RECORD)) {
+        if (schema.getType().equals(Schema.Type.RECORD)) {
           return result;
         } else {
-          return new NonRecordContainer(subjectSchema, result);
+          return new NonRecordContainer(schema, result);
         }
       } else {
         return result;

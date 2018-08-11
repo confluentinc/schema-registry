@@ -16,21 +16,20 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 /**
  * Mock implementation of SchemaRegistryClient that can be used for tests. This version is NOT
@@ -40,6 +39,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private String defaultCompatibility = "BACKWARD";
   private final Map<String, Map<Schema, Integer>> schemaCache;
+  private final Map<Schema, Integer> schemaIdCache;
   private final Map<String, Map<Integer, Schema>> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
   private final Map<String, String> compatibilityCache;
@@ -47,6 +47,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   public MockSchemaRegistryClient() {
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
+    schemaIdCache = new HashMap<>();
     idCache = new HashMap<String, Map<Integer, Schema>>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();
     compatibilityCache = new HashMap<String, String>();
@@ -71,7 +72,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       idSchemaMap = new HashMap<Integer, Schema>();
     }
     if (registerRequest) {
-      int id = ids.incrementAndGet();
+      int id;
+      if (schemaIdCache.containsKey(schema)) {
+        id = schemaIdCache.get(schema);
+      } else {
+        id = ids.incrementAndGet();
+        schemaIdCache.put(schema, id);
+      }
       idSchemaMap.put(id, schema);
       idCache.put(subject, idSchemaMap);
       generateVersion(subject, schema);
@@ -132,7 +139,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     } else {
       int id = getIdFromRegistry(subject, schema, true);
       schemaIdMap.put(schema, id);
-      idCache.get(null).put(id, schema);
+      if (!idCache.get(null).containsKey(id)) {
+        Schema.Parser parser = new Schema.Parser();
+        idCache.get(null).put(id, parser.parse(schema.toString()));
+      }
       return id;
     }
   }
