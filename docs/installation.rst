@@ -6,18 +6,13 @@ Installing and Configuring |sr|
 |sr| is included in |cpe| and |cos|. The binaries are located at https://www.confluent.io/download/ as a part of the |cpe|
 and |cos| bundles.
 
+For installation instructions, see the :ref:`installation`.
+
 
 System Requirements
 -------------------
 
 Review the :ref:`system requirements <schema-registry-prod>` before installing |sr|.
-
-Installation
-------------
-
-For installation instructions, see the :ref:`installation`. Before starting the |sr| you must start Kafka.
-The :ref:`Confluent Platform quickstart<quickstart>` explains how to start these services locally for testing.
-
 
 Development
 -----------
@@ -25,7 +20,7 @@ Development
 To build a development version, you may need a development versions of
 `common <https://github.com/confluentinc/common>`_ and
 `rest-utils <https://github.com/confluentinc/rest-utils>`_.  After
-installing these, you can build the |sr|
+installing these, you can build |sr|
 with Maven. All the standard lifecycle phases work. During development, use
 
 .. sourcecode:: bash
@@ -44,7 +39,7 @@ to run the unit and integration tests, and
 
        mvn exec:java
 
-to run an instance of the |sr| against a local Kafka cluster (using
+to run an instance of |sr| against a local Kafka cluster (using
 the default configuration included with Kafka).
 
 To create a packaged version, optionally skipping the tests:

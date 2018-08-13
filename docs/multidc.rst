@@ -17,10 +17,10 @@ Recommended Deployment
     Multi DC with Kafka based master election
 
 In the image above, there are two data centers - DC A, and DC B. Each of the two data centers has
-its own |zk| cluster, Kafka cluster, and |sr| cluster. The |sr|
+its own |zk| cluster, Kafka cluster, and |sr| cluster. |sr|
 clusters link to Kafka clusters in the respective DC.
 
-Note that the |sr| instances in DC B have ``master.eligibility`` set to false, meaning
+Note that |sr| instances in DC B have ``master.eligibility`` set to false, meaning
 that none can ever be elected master.
 
 To protect against complete loss of DC A, Kafka cluster A (the source) is replicated to Kafka cluster B (the target). This is achieved by running the :ref:`Replicator` <connect_replicator>` local to the target cluster.
@@ -47,7 +47,7 @@ Assuming you have |sr| running, here are the recommended steps to add |sr| insta
 
 - In DC B, run Replicator with Kafka in the "master" datacenter (DC A) as the source and Kafka in DC B as the target.
 
-- In the |sr| config files in DC B, set the ``kafkastore.bootstrap.servers`` to point to Kafka Cluster in DC B and set ``master.eligibility`` to false.
+- In |sr| config files in DC B, set the ``kafkastore.bootstrap.servers`` to point to Kafka Cluster in DC B and set ``master.eligibility`` to false.
 
 - Start your new |sr| instances with these configs.
 
@@ -58,7 +58,7 @@ Let's say you have |sr| running in multiple datacenters, and you have lost your 
 
 - If possible, revive the "master" datacenter by starting Kafka and |sr| as before.
 
-- If you must designate a new datacenter (call it DC B) as "master", update the |sr| config files so that ``master.eligibility`` is set to true. Then restart your |sr| instances with these new configs in a rolling fashion.
+- If you must designate a new datacenter (call it DC B) as "master", update |sr| config files so that ``master.eligibility`` is set to true. Then restart your |sr| instances with these new configs in a rolling fashion.
 
 
 |zk| Election
@@ -76,7 +76,7 @@ In the image above, there are two data centers - DC A, and DC B. Each of the two
 its own |zk| cluster, Kafka cluster, and |sr| cluster. Both |sr|
 clusters link to Kafka and |zk| in DC A.
 
-Note that the |sr| instances in DC B have ``master.eligibility`` set to false, meaning that none can ever be elected master.
+Note that |sr| instances in DC B have ``master.eligibility`` set to false, meaning that none can ever be elected master.
 
 To protect against complete loss of DC A, Kafka cluster A (the source) is replicated to Kafka cluster B (the target). This is achieved by running the :ref:`Replicator` <connect_replicator>` local to the target cluster.
 
@@ -101,7 +101,7 @@ Assuming you have |sr| running, here are the recommended steps to add |sr| insta
 
 - In DC B, run Replicator with Kafka in the "master" datacenter (DC A) as the source and Kafka in DC B as the target.
 
-- In the |sr| config files in DC B, set ``kafkastore.connection.url`` and ``schema.registry.zk.namespace`` to match the instances already running, and set ``master.eligibility`` to false.
+- In |sr| config files in DC B, set ``kafkastore.connection.url`` and ``schema.registry.zk.namespace`` to match the instances already running, and set ``master.eligibility`` to false.
 
 - Start your new |sr| instances with these configs.
 
@@ -112,4 +112,4 @@ Let's say you have |sr| running in multiple datacenters, and you have lost your 
 
 - If possible, revive the "master" datacenter by starting Kafka and |sr| as before.
 
-- If you must designate a new datacenter (call it DC B) as "master", update the |sr| config files so that ``kafkastore.connection.url`` points to the local |zk|, and change ``master.eligibility`` to true. The restart your |sr| instances with these new configs in a rolling fashion.
+- If you must designate a new datacenter (call it DC B) as "master", update |sr| config files so that ``kafkastore.connection.url`` points to the local |zk|, and change ``master.eligibility`` to true. The restart your |sr| instances with these new configs in a rolling fashion.

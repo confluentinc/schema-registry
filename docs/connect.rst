@@ -52,7 +52,7 @@ Configuration Options
   * Importance: low
 
 ``key.subject.name.strategy``
-  Determines how to construct the subject name under which the key schema is registered with the |sr|.
+  Determines how to construct the subject name under which the key schema is registered with |sr|.
 
   Any implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` can be
   specified. By default, <topic>-key is used as subject.
@@ -62,7 +62,7 @@ Configuration Options
   * Importance: medium
 
 ``value.subject.name.strategy``
-  Determines how to construct the subject name under which the value schema is registered with the |sr|.
+  Determines how to construct the subject name under which the value schema is registered with |sr|.
 
   Any implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` can be specified. By default, <topic>-value is used as subject.
 

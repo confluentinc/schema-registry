@@ -104,7 +104,7 @@ Schemas
 Subjects
 --------
 
-The subjects resource provides a list of all registered subjects in your |sr|. A subject refers to the name under which the schema is registered. If you are using the |sr| for Kafka, then a subject refers to either a "<topic>-key" or "<topic>-value" depending on whether you are registering the key schema for that topic or the value schema.
+The subjects resource provides a list of all registered subjects in your |sr|. A subject refers to the name under which the schema is registered. If you are using |sr| for Kafka, then a subject refers to either a "<topic>-key" or "<topic>-value" depending on whether you are registering the key schema for that topic or the value schema.
 
 .. http:get:: /subjects
 
