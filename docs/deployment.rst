@@ -116,7 +116,7 @@ Don't Modify These Storage Settings
 .. sourcecode:: bash
 
   # kafkastore.topic=_schemas
-  $ bin/kafka-topics --create --zookeeper localhost:2181 --topic connect-configs --replication-factor 3 --partitions 1 --config cleanup.policy=compact
+    bin/kafka-topics --create --zookeeper localhost:2181 --topic connect-configs --replication-factor 3 --partitions 1 --config cleanup.policy=compact
 
 .. kafkastore.topic include
 

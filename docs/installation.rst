@@ -30,19 +30,19 @@ with Maven. All the standard lifecycle phases work. During development, use
 
 .. sourcecode:: bash
 
-   $ mvn compile
+     mvn compile
 
 to build,
 
 .. sourcecode:: bash
 
-   $ mvn test
+     mvn test
 
 to run the unit and integration tests, and
 
 .. sourcecode:: bash
 
-     $ mvn exec:java
+       mvn exec:java
 
 to run an instance of the |sr| against a local Kafka cluster (using
 the default configuration included with Kafka).
@@ -51,7 +51,7 @@ To create a packaged version, optionally skipping the tests:
 
 .. sourcecode:: bash
 
-    $ mvn package [-DskipTests]
+      mvn package [-DskipTests]
 
 This will produce a version ready for production in
 ``package/target/kafka-schema-registry-package-$VERSION-package`` containing a directory layout
@@ -61,7 +61,7 @@ to the packaged binary versions. You can also produce a standalone fat jar using
 
 .. sourcecode:: bash
 
-    $ mvn package -P standalone [-DskipTests]
+      mvn package -P standalone [-DskipTests]
 
 generating
 ``package/target/kafka-schema-registry-package-$VERSION-standalone.jar``, which includes all the

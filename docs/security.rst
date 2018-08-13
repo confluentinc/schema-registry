@@ -91,7 +91,7 @@ To configure clients to use HTTPS to |sr|:
 
 .. sourcecode:: bash
 
-      $ export KAFKA_OPTS="-Djavax.net.ssl.trustStore=/etc/kafka/secrets/kafka.client.truststore.jks \
+        export KAFKA_OPTS="-Djavax.net.ssl.trustStore=/etc/kafka/secrets/kafka.client.truststore.jks \
                   -Djavax.net.ssl.trustStorePassword=confluent \
                   -Djavax.net.ssl.keyStore=/etc/kafka/secrets/kafka.client.keystore.jks \
                   -Djavax.net.ssl.keyStorePassword=confluent"
@@ -125,11 +125,11 @@ to grant read and write access to this topic to |sr|'s principal.
 
 .. sourcecode:: bash
 
-   $ export KAFKA_OPTS="-Djava.security.auth.login.config=<path to JAAS conf file>"
+     export KAFKA_OPTS="-Djava.security.auth.login.config=<path to JAAS conf file>"
 
-   $ bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal 'User:<sr-principal>' --allow-host '*' --operation Read --topic _schemas
+     bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal 'User:<sr-principal>' --allow-host '*' --operation Read --topic _schemas
 
-   $ bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal 'User:<sr-principal>' --allow-host '*' --operation Write --topic _schemas
+     bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal 'User:<sr-principal>' --allow-host '*' --operation Write --topic _schemas
 
 .. note::
   **Removing world-level permissions:**
