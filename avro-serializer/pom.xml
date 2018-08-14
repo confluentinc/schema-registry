@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>4.1.3-SNAPSHOT</version>
+        <version>4.1.3-beta180814192459</version>
     </parent>
 
     <artifactId>kafka-avro-serializer</artifactId>
