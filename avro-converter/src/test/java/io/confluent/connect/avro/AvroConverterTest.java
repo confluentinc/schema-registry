@@ -248,7 +248,45 @@ public class AvroConverterTest {
 
 
   @Test
-  public void testSameSchemaMultipleTopic() throws IOException, RestClientException {
+  public void testSameSchemaMultipleTopicForValue() throws IOException, RestClientException {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
+    avroConverter.configure(SR_CONFIG, false);
+    assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, false);
+  }
+
+  @Test
+  public void testSameSchemaMultipleTopicForKey() throws IOException, RestClientException {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
+    avroConverter.configure(SR_CONFIG, true);
+    assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, true);
+  }
+
+  @Test
+  public void testSameSchemaMultipleTopicWithDeprecatedSubjectNameStrategyForValue() throws IOException, RestClientException {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
+    Map<String, ?> converterConfig = ImmutableMap.of(
+        AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
+        AbstractKafkaAvroSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
+    avroConverter.configure(converterConfig, false);
+    assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, false);
+  }
+
+
+  @Test
+  public void testSameSchemaMultipleTopicWithDeprecatedSubjectNameStrategyForKey() throws IOException, RestClientException {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
+    Map<String, ?> converterConfig = ImmutableMap.of(
+        AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
+        AbstractKafkaAvroSerDeConfig.KEY_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
+    avroConverter.configure(converterConfig, true);
+    assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, true);
+  }
+
+  private void assertSameSchemaMultipleTopic(AvroConverter converter, SchemaRegistryClient schemaRegistry, boolean isKey) throws IOException, RestClientException {
     org.apache.avro.Schema avroSchema1 = org.apache.avro.SchemaBuilder
         .record("Foo").fields()
         .requiredInt("key")
@@ -264,10 +302,10 @@ public class AvroConverterTest {
         .requiredInt("key")
         .requiredString("value")
         .endRecord();
-
-    schemaRegistry.register("topic1-value", avroSchema2_1);
-    schemaRegistry.register("topic2-value", avroSchema1);
-    schemaRegistry.register("topic2-value", avroSchema2_2);
+    String subjectSuffix = isKey ? "key" : "value";
+    schemaRegistry.register("topic1-" + subjectSuffix, avroSchema2_1);
+    schemaRegistry.register("topic2-" + subjectSuffix, avroSchema1);
+    schemaRegistry.register("topic2-" + subjectSuffix, avroSchema2_2);
 
     org.apache.avro.generic.GenericRecord avroRecord1
         = new org.apache.avro.generic.GenericRecordBuilder(avroSchema2_1).set("key", 15).set
@@ -278,6 +316,7 @@ public class AvroConverterTest {
 
 
     KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry);
+    serializer.configure(SR_CONFIG, isKey);
     byte[] serializedRecord1 = serializer.serialize("topic1", avroRecord1);
     byte[] serializedRecord2 = serializer.serialize("topic2", avroRecord2);
 

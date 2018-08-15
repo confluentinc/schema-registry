@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.serializers.subject;
 
+
+import io.confluent.kafka.serializers.subject.v1.SubjectNameStrategy;
+import org.apache.avro.Schema;
+
 import java.util.Map;
 
 /**
@@ -31,7 +35,7 @@ public class TopicNameStrategy implements SubjectNameStrategy {
   }
 
   @Override
-  public String getSubjectName(String topic, boolean isKey, Object value) {
+  public String getSubjectName(String topic, boolean isKey, Schema schema) {
     return isKey ? topic + "-key" : topic + "-value";
   }
 }

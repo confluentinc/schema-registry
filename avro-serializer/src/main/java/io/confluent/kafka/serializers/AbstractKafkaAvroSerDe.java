@@ -43,8 +43,8 @@ public abstract class AbstractKafkaAvroSerDe {
 
   private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
-  protected SubjectNameStrategy keySubjectNameStrategy = new TopicNameStrategy();
-  protected SubjectNameStrategy valueSubjectNameStrategy = new TopicNameStrategy();
+  protected Object keySubjectNameStrategy = new TopicNameStrategy();
+  protected Object valueSubjectNameStrategy = new TopicNameStrategy();
 
   static {
     Schema.Parser parser = new Schema.Parser();
@@ -62,6 +62,10 @@ public abstract class AbstractKafkaAvroSerDe {
   private static Schema createPrimitiveSchema(Schema.Parser parser, String type) {
     String schemaString = String.format("{\"type\" : \"%s\"}", type);
     return parser.parse(schemaString);
+  }
+
+  protected static Schema copyOf(Schema schema) {
+    return new Schema.Parser().parse(schema.toString());
   }
 
   protected static Map<String, Schema> getPrimitiveSchemas() {
@@ -86,12 +90,28 @@ public abstract class AbstractKafkaAvroSerDe {
   /**
    * Get the subject name for the given topic and value type.
    */
-  protected String getSubjectName(String topic, boolean isKey, Object value) {
-    if (isKey) {
-      return keySubjectNameStrategy.getSubjectName(topic, isKey, value);
+  protected String getSubjectName(String topic, boolean isKey, Object value, Schema schema) {
+    Object subjectNameStrategy = subjectNameStrategy(isKey);
+    if (deprecatedSubjectNameStrategy(subjectNameStrategy)) {
+      return ((SubjectNameStrategy) subjectNameStrategy).getSubjectName(topic, isKey, value);
     } else {
-      return valueSubjectNameStrategy.getSubjectName(topic, isKey, value);
+      return ((io.confluent.kafka.serializers.subject.v1.SubjectNameStrategy) subjectNameStrategy)
+          .getSubjectName(topic, isKey, schema);
     }
+  }
+
+  protected boolean deprecatedSubjectNameStrategy(boolean isKey) {
+    Object subjectNameStrategy = subjectNameStrategy(isKey);
+    return deprecatedSubjectNameStrategy(subjectNameStrategy);
+  }
+
+  private boolean deprecatedSubjectNameStrategy(Object subjectNameStrategy) {
+    return subjectNameStrategy instanceof SubjectNameStrategy;
+  }
+
+
+  private Object subjectNameStrategy(boolean isKey) {
+    return isKey ? keySubjectNameStrategy : valueSubjectNameStrategy;
   }
 
   /**

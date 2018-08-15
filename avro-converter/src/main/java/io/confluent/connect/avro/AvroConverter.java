@@ -113,7 +113,7 @@ public class AvroConverter implements Converter {
     }
 
     public byte[] serialize(String topic, boolean isKey, Object value) {
-      return serializeImpl(getSubjectName(topic, isKey, value), value);
+      return serializeImpl(getSubjectName(topic, isKey, value, getSchema(value)), value);
     }
   }
 

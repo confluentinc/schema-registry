@@ -118,7 +118,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
       Schema schemaFromRegistry = schemaRegistry.getById(id);
-      Schema schema = new Schema.Parser().parse(schemaFromRegistry.toString());
+      String subject = null;
+      Schema schema = schemaFromRegistry;
+      if (includeSchemaAndVersion) {
+        subject = subjectName(topic, isKey, schemaFromRegistry);
+        schema = schemaForDeserialize(id, schemaFromRegistry, subject, isKey);
+      }
+
       int length = buffer.limit() - 1 - idSize;
       final Object result;
       if (schema.getType().equals(Schema.Type.BYTES)) {
@@ -148,9 +154,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         // Converter to let a version provided by a Kafka Connect source take priority over the
         // schema registry's ordering (which is implicit by auto-registration time rather than
         // explicit from the Connector).
-        String subject = getSubjectName(topic, isKey, result);
-        Schema subjectSchema = schemaRegistry.getBySubjectAndId(subject, id);
-        Integer version = schemaRegistry.getVersion(subject, subjectSchema);
+
+        Integer version =
+            schemaVersion(topic, isKey, id, schemaFromRegistry, subject, schema, result);
 
         if (schema.getType() == Schema.Type.UNION) {
           // Can't set additional properties on a union schema since it's just a list, so set it
@@ -180,6 +186,41 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     } catch (RestClientException e) {
       throw new SerializationException("Error retrieving Avro schema for id " + id, e);
     }
+  }
+
+  private Integer schemaVersion(String topic,
+                                Boolean isKey,
+                                int id,
+                                Schema schemaFromRegistry,
+                                String subject,
+                                Schema schema,
+                                Object result) throws IOException, RestClientException {
+    Integer version;
+    if (deprecatedSubjectNameStrategy(isKey)) {
+      subject = getSubjectName(topic, isKey, result, schemaFromRegistry);
+      Schema subjectSchema = schemaRegistry.getBySubjectAndId(subject, id);
+      version = schemaRegistry.getVersion(subject, subjectSchema);
+    } else {
+      //we already got the subject name
+      version = schemaRegistry.getVersion(subject, schema);
+    }
+    return version;
+  }
+
+  private String subjectName(String topic, Boolean isKey, Schema schemaFromRegistry) {
+    return deprecatedSubjectNameStrategy(isKey)
+        ? null
+        : getSubjectName(topic, isKey, null, schemaFromRegistry);
+  }
+
+  private Schema schemaForDeserialize(
+      int id,
+      Schema schemaFromRegistry,
+      String subject,
+      Boolean isKey) throws IOException, RestClientException {
+    return deprecatedSubjectNameStrategy(isKey)
+        ? copyOf(schemaFromRegistry)
+        : schemaRegistry.getBySubjectAndId(subject, id);
   }
 
   /**

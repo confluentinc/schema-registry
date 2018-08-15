@@ -112,11 +112,20 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
     return this.getBoolean(AUTO_REGISTER_SCHEMAS);
   }
 
-  public SubjectNameStrategy keySubjectNameStrategy() {
-    return this.getConfiguredInstance(KEY_SUBJECT_NAME_STRATEGY, SubjectNameStrategy.class);
+  public Object keySubjectNameStrategy() {
+    return subjectNameStrategyInstance(KEY_SUBJECT_NAME_STRATEGY);
   }
 
-  public SubjectNameStrategy valueSubjectNameStrategy() {
-    return this.getConfiguredInstance(VALUE_SUBJECT_NAME_STRATEGY, SubjectNameStrategy.class);
+  public Object valueSubjectNameStrategy() {
+    return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
+  }
+
+  private Object subjectNameStrategyInstance(String config) {
+    Class subjectNameStrategyClass = this.getClass(config);
+    if (SubjectNameStrategy.class.isAssignableFrom(subjectNameStrategyClass)) {
+      return this.getConfiguredInstance(config, SubjectNameStrategy.class);
+    }
+    return this.getConfiguredInstance(
+        config, io.confluent.kafka.serializers.subject.v1.SubjectNameStrategy.class);
   }
 }
