@@ -54,11 +54,13 @@ public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
           );
         }
 
-        Integer version = this.client().register(kvp.getKey(), kvp.getValue());
+        Integer id = this.client().register(kvp.getKey(), kvp.getValue());
+        Integer version = this.client().getVersion(kvp.getKey(), kvp.getValue());
         getLog().info(
             String.format(
-                "Registered subject(%s) with version %s",
+                "Registered subject(%s) with Id %s version %s",
                 kvp.getKey(),
+                id,
                 version
             ));
         this.schemaVersions.put(kvp.getKey(), version);
