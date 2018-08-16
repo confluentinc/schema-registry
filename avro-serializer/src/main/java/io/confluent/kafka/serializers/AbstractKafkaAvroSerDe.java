@@ -95,7 +95,7 @@ public abstract class AbstractKafkaAvroSerDe {
     if (deprecatedSubjectNameStrategy(subjectNameStrategy)) {
       return ((SubjectNameStrategy) subjectNameStrategy).getSubjectName(topic, isKey, value);
     } else {
-      return ((io.confluent.kafka.serializers.subject.v1.SubjectNameStrategy) subjectNameStrategy)
+      return ((io.confluent.kafka.serializers.subject.v2.SubjectNameStrategy) subjectNameStrategy)
           .getSubjectName(topic, isKey, schema);
     }
   }
@@ -108,7 +108,6 @@ public abstract class AbstractKafkaAvroSerDe {
   private boolean deprecatedSubjectNameStrategy(Object subjectNameStrategy) {
     return subjectNameStrategy instanceof SubjectNameStrategy;
   }
-
 
   private Object subjectNameStrategy(boolean isKey) {
     return isKey ? keySubjectNameStrategy : valueSubjectNameStrategy;

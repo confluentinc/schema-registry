@@ -117,12 +117,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     try {
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
-      Schema schemaFromRegistry = schemaRegistry.getById(id);
+      Schema schema = schemaRegistry.getById(id);
       String subject = null;
-      Schema schema = schemaFromRegistry;
       if (includeSchemaAndVersion) {
-        subject = subjectName(topic, isKey, schemaFromRegistry);
-        schema = schemaForDeserialize(id, schemaFromRegistry, subject, isKey);
+        subject = subjectName(topic, isKey, schema);
+        schema = schemaForDeserialize(id, schema, subject, isKey);
       }
 
       int length = buffer.limit() - 1 - idSize;
@@ -156,7 +155,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         // explicit from the Connector).
 
         Integer version =
-            schemaVersion(topic, isKey, id, schemaFromRegistry, subject, schema, result);
+            schemaVersion(topic, isKey, id, subject, schema, result);
 
         if (schema.getType() == Schema.Type.UNION) {
           // Can't set additional properties on a union schema since it's just a list, so set it
@@ -191,13 +190,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   private Integer schemaVersion(String topic,
                                 Boolean isKey,
                                 int id,
-                                Schema schemaFromRegistry,
                                 String subject,
                                 Schema schema,
                                 Object result) throws IOException, RestClientException {
     Integer version;
     if (deprecatedSubjectNameStrategy(isKey)) {
-      subject = getSubjectName(topic, isKey, result, schemaFromRegistry);
+      subject = getSubjectName(topic, isKey, result, schema);
       Schema subjectSchema = schemaRegistry.getBySubjectAndId(subject, id);
       version = schemaRegistry.getVersion(subject, subjectSchema);
     } else {

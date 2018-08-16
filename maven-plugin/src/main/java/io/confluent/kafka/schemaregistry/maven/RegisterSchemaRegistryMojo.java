@@ -58,7 +58,7 @@ public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
         Integer version = this.client().getVersion(kvp.getKey(), kvp.getValue());
         getLog().info(
             String.format(
-                "Registered subject(%s) with Id %s version %s",
+                "Registered subject(%s) with id %s version %s",
                 kvp.getKey(),
                 id,
                 version

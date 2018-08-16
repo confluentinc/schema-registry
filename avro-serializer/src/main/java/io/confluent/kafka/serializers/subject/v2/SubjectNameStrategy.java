@@ -14,7 +14,7 @@
  * limitations under the License.
  **/
 
-package io.confluent.kafka.serializers.subject.v1;
+package io.confluent.kafka.serializers.subject.v2;
 
 import io.confluent.common.Configurable;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;

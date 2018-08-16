@@ -126,6 +126,6 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
       return this.getConfiguredInstance(config, SubjectNameStrategy.class);
     }
     return this.getConfiguredInstance(
-        config, io.confluent.kafka.serializers.subject.v1.SubjectNameStrategy.class);
+        config, io.confluent.kafka.serializers.subject.v2.SubjectNameStrategy.class);
   }
 }
