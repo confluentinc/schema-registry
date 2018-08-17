@@ -1,7 +1,7 @@
 .. _schemaregistry_changelog:
 
-Changelog
-=========
+|sr| Changelog
+==============
 
 Version 4.1.2
 -------------
@@ -62,10 +62,10 @@ In 4.0.0, initial creation or validation of the topic used to store schemas has 
 reimplemented to use native Kafka protocol requests instead of accessing |zk| directly. This
 means that you are no longer required to have direct access to the |zk| cluster backing your
 Kafka cluster. However, note that this also requires appropriate permissions to create topics (on
-first execution of the |sr|) or describe topics and configs (on subsequent executions
+first execution of |sr|) or describe topics and configs (on subsequent executions
 to validate the topic is configured correctly). If you have authentication and authorization enabled
 on your Kafka cluster, you must ensure your principal has the correct permissions before
-upgrading the |sr| cluster. Your principal must have the following permissions:
+upgrading |sr| cluster. Your principal must have the following permissions:
 
 Create Schemas Topic
 
@@ -97,7 +97,7 @@ Version 3.3.0
 * Add Delete Schema support
 * Added avro-serde for Kafka Streams. Pulled from the example project.
 * `#506 <https://github.com/confluentinc/schema-registry/issues/506>`_ - The AvroMessageFormatter passes byte[] to an Avro encoder, but Avro only likes ByteBuffer. So we need to ByteBuffer.wrap() instead.
-* Added optional kafkastore.group.id config to override the one automatically created by the |sr|
+* Added optional kafkastore.group.id config to override the one automatically created by |sr|
 * `PR-476 <https://github.com/confluentinc/schema-registry/pull/476>`_ - Adapt to KAFKA-4636 changes: Per listener security settings overrides (KIP-103)
 
 
