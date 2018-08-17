@@ -1,5 +1,5 @@
-Maven Plugin
-------------
+|sr| Maven Plugin
+-----------------
 
 A Maven plugin is available to help throughout the development process.
 
