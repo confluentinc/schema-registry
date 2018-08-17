@@ -30,7 +30,7 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.serializers.subject.SubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.v2.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
 /**
@@ -92,21 +92,18 @@ public abstract class AbstractKafkaAvroSerDe {
    */
   protected String getSubjectName(String topic, boolean isKey, Object value, Schema schema) {
     Object subjectNameStrategy = subjectNameStrategy(isKey);
-    if (deprecatedSubjectNameStrategy(subjectNameStrategy)) {
-      return ((SubjectNameStrategy) subjectNameStrategy).getSubjectName(topic, isKey, value);
+    if (subjectNameStrategy instanceof SubjectNameStrategy) {
+      return ((SubjectNameStrategy) subjectNameStrategy).getSubjectName(topic, isKey, schema);
     } else {
-      return ((io.confluent.kafka.serializers.subject.v2.SubjectNameStrategy) subjectNameStrategy)
-          .getSubjectName(topic, isKey, schema);
+      return ((io.confluent.kafka.serializers.subject.SubjectNameStrategy) subjectNameStrategy)
+          .getSubjectName(topic, isKey, value);
     }
   }
 
-  protected boolean deprecatedSubjectNameStrategy(boolean isKey) {
+  protected boolean isDeprecatedSubjectNameStrategy(boolean isKey) {
     Object subjectNameStrategy = subjectNameStrategy(isKey);
-    return deprecatedSubjectNameStrategy(subjectNameStrategy);
-  }
-
-  private boolean deprecatedSubjectNameStrategy(Object subjectNameStrategy) {
-    return subjectNameStrategy instanceof SubjectNameStrategy;
+    return subjectNameStrategy
+        instanceof io.confluent.kafka.serializers.subject.SubjectNameStrategy;
   }
 
   private Object subjectNameStrategy(boolean isKey) {

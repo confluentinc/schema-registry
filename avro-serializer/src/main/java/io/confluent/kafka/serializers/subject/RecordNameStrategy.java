@@ -30,7 +30,7 @@ import io.confluent.kafka.serializers.subject.v2.SubjectNameStrategy;
  * Instead, checks compatibility of any occurrences of the same record name
  * across <em>all</em> topics.
  */
-public class RecordNameStrategy implements SubjectNameStrategy {
+public class RecordNameStrategy implements SubjectNameStrategy<Schema> {
 
   @Override
   public void configure(Map<String, ?> config) {
@@ -38,7 +38,7 @@ public class RecordNameStrategy implements SubjectNameStrategy {
 
   @Override
   public String getSubjectName(String topic, boolean isKey, Schema schema) {
-    return getRecordName((Schema) schema, isKey);
+    return getRecordName(schema, isKey);
   }
 
   /**
@@ -46,7 +46,6 @@ public class RecordNameStrategy implements SubjectNameStrategy {
    * Otherwise throws an error.
    */
   protected String getRecordName(Schema schema, boolean isKey) {
-
     if (schema != null && schema.getType() == Schema.Type.RECORD) {
       return schema.getFullName();
     }

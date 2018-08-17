@@ -18,14 +18,13 @@ package io.confluent.kafka.serializers.subject.v2;
 
 import io.confluent.common.Configurable;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
-import org.apache.avro.Schema;
 
 /**
  * A {@link SubjectNameStrategy} is used by the Avro serializer to determine
  * the subject name under which the event record schemas should be registered
  * in the schema registry. The default is {@link TopicNameStrategy}.
  */
-public interface SubjectNameStrategy extends Configurable {
+public interface SubjectNameStrategy<T> extends Configurable {
 
   /**
    * For a given topic and message, returns the subject name under which the
@@ -36,6 +35,6 @@ public interface SubjectNameStrategy extends Configurable {
    * @param schema the schema of the record being serialized/deserialized
    * @return The subject name under which the schema should be registered.
    */
-  String getSubjectName(String topic, boolean isKey, Schema schema);
+  String getSubjectName(String topic, boolean isKey, T schema);
 
 }

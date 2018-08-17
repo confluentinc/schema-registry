@@ -154,8 +154,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         // schema registry's ordering (which is implicit by auto-registration time rather than
         // explicit from the Connector).
 
-        Integer version =
-            schemaVersion(topic, isKey, id, subject, schema, result);
+        Integer version = schemaVersion(topic, isKey, id, subject, schema, result);
 
         if (schema.getType() == Schema.Type.UNION) {
           // Can't set additional properties on a union schema since it's just a list, so set it
@@ -194,7 +193,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
                                 Schema schema,
                                 Object result) throws IOException, RestClientException {
     Integer version;
-    if (deprecatedSubjectNameStrategy(isKey)) {
+    if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, result, schema);
       Schema subjectSchema = schemaRegistry.getBySubjectAndId(subject, id);
       version = schemaRegistry.getVersion(subject, subjectSchema);
@@ -206,17 +205,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   }
 
   private String subjectName(String topic, Boolean isKey, Schema schemaFromRegistry) {
-    return deprecatedSubjectNameStrategy(isKey)
+    return isDeprecatedSubjectNameStrategy(isKey)
         ? null
         : getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
-  private Schema schemaForDeserialize(
-      int id,
-      Schema schemaFromRegistry,
-      String subject,
-      Boolean isKey) throws IOException, RestClientException {
-    return deprecatedSubjectNameStrategy(isKey)
+  private Schema schemaForDeserialize(int id,
+                                      Schema schemaFromRegistry,
+                                      String subject,
+                                      Boolean isKey) throws IOException, RestClientException {
+    return isDeprecatedSubjectNameStrategy(isKey)
         ? copyOf(schemaFromRegistry)
         : schemaRegistry.getBySubjectAndId(subject, id);
   }

@@ -72,10 +72,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       idSchemaMap = new HashMap<Integer, Schema>();
     }
     if (registerRequest) {
-      int id;
-      if (schemaIdCache.containsKey(schema)) {
-        id = schemaIdCache.get(schema);
-      } else {
+      Integer id = schemaIdCache.get(schema);
+      if (id == null) {
         id = ids.incrementAndGet();
         schemaIdCache.put(schema, id);
       }
@@ -140,6 +138,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       int id = getIdFromRegistry(subject, schema, true);
       schemaIdMap.put(schema, id);
       if (!idCache.get(null).containsKey(id)) {
+        // CachedSchema Registry client would have a cached version of schema instance for
+        // each schema. You could also get the schema without using a subject and to cover that we
+        // need to add an entry with null subject
         Schema.Parser parser = new Schema.Parser();
         idCache.get(null).put(id, parser.parse(schema.toString()));
       }

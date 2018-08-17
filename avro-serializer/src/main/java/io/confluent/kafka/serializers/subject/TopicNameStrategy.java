@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.serializers.subject;
 
-
 import io.confluent.kafka.serializers.subject.v2.SubjectNameStrategy;
 import org.apache.avro.Schema;
 
@@ -28,7 +27,7 @@ import java.util.Map;
  * the subject name &lt;topic&gt;-key, and the message value is registered
  * under the subject name &lt;topic&gt;-value.
  */
-public class TopicNameStrategy implements SubjectNameStrategy {
+public class TopicNameStrategy implements SubjectNameStrategy<Schema> {
 
   @Override
   public void configure(Map<String, ?> config) {
