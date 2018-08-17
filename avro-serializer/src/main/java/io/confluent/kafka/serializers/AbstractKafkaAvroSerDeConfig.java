@@ -25,8 +25,8 @@ import io.confluent.common.config.ConfigDef.Importance;
 import io.confluent.common.config.ConfigDef.Type;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialSource;
-import io.confluent.kafka.serializers.subject.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 
 /**
  * Base class for configs for serializers and deserializers, defining a few common configs and
@@ -122,10 +122,10 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
   private Object subjectNameStrategyInstance(String config) {
     Class subjectNameStrategyClass = this.getClass(config);
-    if (SubjectNameStrategy.class.isAssignableFrom(subjectNameStrategyClass)) {
-      return this.getConfiguredInstance(config, SubjectNameStrategy.class);
+    Class deprecatedClass = io.confluent.kafka.serializers.subject.SubjectNameStrategy.class;
+    if (deprecatedClass.isAssignableFrom(subjectNameStrategyClass)) {
+      return this.getConfiguredInstance(config, deprecatedClass);
     }
-    return this.getConfiguredInstance(
-        config, io.confluent.kafka.serializers.subject.v2.SubjectNameStrategy.class);
+    return this.getConfiguredInstance(config, SubjectNameStrategy.class);
   }
 }

@@ -20,7 +20,7 @@ import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.errors.SerializationException;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
-import io.confluent.kafka.serializers.subject.v2.SubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 
 /**
  * For any Avro record type that is published to Kafka, registers the schema

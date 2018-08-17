@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.serializers.subject;
 
-import io.confluent.kafka.serializers.subject.v2.SubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import org.apache.avro.Schema;
 
 import java.util.Map;
