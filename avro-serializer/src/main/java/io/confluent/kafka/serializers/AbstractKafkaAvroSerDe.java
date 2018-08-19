@@ -22,8 +22,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,36 +39,10 @@ public abstract class AbstractKafkaAvroSerDe {
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
 
-  private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
 
-  static {
-    Schema.Parser parser = new Schema.Parser();
-    primitiveSchemas = new HashMap<>();
-    primitiveSchemas.put("Null", createPrimitiveSchema(parser, "null"));
-    primitiveSchemas.put("Boolean", createPrimitiveSchema(parser, "boolean"));
-    primitiveSchemas.put("Integer", createPrimitiveSchema(parser, "int"));
-    primitiveSchemas.put("Long", createPrimitiveSchema(parser, "long"));
-    primitiveSchemas.put("Float", createPrimitiveSchema(parser, "float"));
-    primitiveSchemas.put("Double", createPrimitiveSchema(parser, "double"));
-    primitiveSchemas.put("String", createPrimitiveSchema(parser, "string"));
-    primitiveSchemas.put("Bytes", createPrimitiveSchema(parser, "bytes"));
-  }
-
-  private static Schema createPrimitiveSchema(Schema.Parser parser, String type) {
-    String schemaString = String.format("{\"type\" : \"%s\"}", type);
-    return parser.parse(schemaString);
-  }
-
-  protected static Schema copyOf(Schema schema) {
-    return new Schema.Parser().parse(schema.toString());
-  }
-
-  protected static Map<String, Schema> getPrimitiveSchemas() {
-    return Collections.unmodifiableMap(primitiveSchemas);
-  }
 
   protected void configureClientProperties(AbstractKafkaAvroSerDeConfig config) {
     try {
@@ -93,7 +65,7 @@ public abstract class AbstractKafkaAvroSerDe {
   protected String getSubjectName(String topic, boolean isKey, Object value, Schema schema) {
     Object subjectNameStrategy = subjectNameStrategy(isKey);
     if (subjectNameStrategy instanceof SubjectNameStrategy) {
-      return ((SubjectNameStrategy) subjectNameStrategy).getSubjectName(topic, isKey, schema);
+      return ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
     } else {
       return ((io.confluent.kafka.serializers.subject.SubjectNameStrategy) subjectNameStrategy)
           .getSubjectName(topic, isKey, value);
@@ -119,32 +91,6 @@ public abstract class AbstractKafkaAvroSerDe {
       return ((GenericContainer) value).getSchema().getName() + "-value";
     } else {
       throw new SerializationException("Primitive types are not supported yet");
-    }
-  }
-
-  protected Schema getSchema(Object object) {
-    if (object == null) {
-      return primitiveSchemas.get("Null");
-    } else if (object instanceof Boolean) {
-      return primitiveSchemas.get("Boolean");
-    } else if (object instanceof Integer) {
-      return primitiveSchemas.get("Integer");
-    } else if (object instanceof Long) {
-      return primitiveSchemas.get("Long");
-    } else if (object instanceof Float) {
-      return primitiveSchemas.get("Float");
-    } else if (object instanceof Double) {
-      return primitiveSchemas.get("Double");
-    } else if (object instanceof CharSequence) {
-      return primitiveSchemas.get("String");
-    } else if (object instanceof byte[]) {
-      return primitiveSchemas.get("Bytes");
-    } else if (object instanceof GenericContainer) {
-      return ((GenericContainer) object).getSchema();
-    } else {
-      throw new IllegalArgumentException(
-          "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, "
-          + "Float, Double, String, byte[] and IndexedRecord");
     }
   }
 

@@ -31,7 +31,7 @@ import org.apache.avro.Schema;
 public class TopicRecordNameStrategy extends RecordNameStrategy {
 
   @Override
-  public String getSubjectName(String topic, boolean isKey, Schema schema) {
+  public String subjectName(String topic, boolean isKey, Schema schema) {
     return topic + "-" + getRecordName(schema, isKey);
   }
 }

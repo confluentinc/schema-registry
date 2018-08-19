@@ -144,7 +144,7 @@ This behavior can be modified by using the following configs
   schema registry.
 
   Any implementation of ``io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy`` can be specified. By default, <topic>-key is used as subject.
-  Specifying an implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` is deprecated as of ``4.1.3`` and if used will have some performance degradation.
+  Specifying an implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` is deprecated as of ``4.1.3`` and if used may have some performance degradation.
 
   * Type: class
   * Default: class io.confluent.kafka.serializers.subject.TopicNameStrategy
@@ -154,7 +154,7 @@ This behavior can be modified by using the following configs
   Determines how to construct the subject name under which the value schema is registered with the schema registry.
 
   Any implementation of ``io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy`` can be specified. By default, <topic>-value is used as subject.
-  Specifying an implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` is deprecated as of ``4.1.3`` and if used will have some performance degradation.
+  Specifying an implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` is deprecated as of ``4.1.3`` and if used may have some performance degradation.
 
   * Type: class
   * Default: class io.confluent.kafka.serializers.subject.TopicNameStrategy

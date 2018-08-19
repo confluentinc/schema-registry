@@ -26,7 +26,7 @@ public class DeprecatedTestTopicNameStrategy implements SubjectNameStrategy {
 
   @Override
   public String getSubjectName(String topic, boolean isKey, Object value) {
-    return topicNameStrategy.getSubjectName(topic, isKey, null);
+    return topicNameStrategy.subjectName(topic, isKey, null);
   }
 
   @Override

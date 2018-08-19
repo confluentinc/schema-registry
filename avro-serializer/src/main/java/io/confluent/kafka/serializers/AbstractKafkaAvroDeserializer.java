@@ -215,7 +215,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
                                       String subject,
                                       Boolean isKey) throws IOException, RestClientException {
     return isDeprecatedSubjectNameStrategy(isKey)
-        ? copyOf(schemaFromRegistry)
+        ? AvroSchemaUtils.copyOf(schemaFromRegistry)
         : schemaRegistry.getBySubjectAndId(subject, id);
   }
 
@@ -234,7 +234,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   }
 
   private DatumReader getDatumReader(Schema writerSchema, Schema readerSchema) {
-    boolean writerSchemaIsPrimitive = getPrimitiveSchemas().values().contains(writerSchema);
+    boolean writerSchemaIsPrimitive =
+        AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
     // do not use SpecificDatumReader if writerSchema is a primitive
     if (useSpecificAvroReader && !writerSchemaIsPrimitive) {
       if (readerSchema == null) {

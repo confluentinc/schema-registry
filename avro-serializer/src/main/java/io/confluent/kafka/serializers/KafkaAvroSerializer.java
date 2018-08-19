@@ -50,7 +50,8 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   @Override
   public byte[] serialize(String topic, Object record) {
-    return serializeImpl(getSubjectName(topic, isKey, record, getSchema(record)), record);
+    return serializeImpl(
+        getSubjectName(topic, isKey, record, AvroSchemaUtils.getSchema(record)), record);
   }
 
   @Override

@@ -35,6 +35,6 @@ public interface SubjectNameStrategy<T> extends Configurable {
    * @param schema the schema of the record being serialized/deserialized
    * @return The subject name under which the schema should be registered.
    */
-  String getSubjectName(String topic, boolean isKey, T schema);
+  String subjectName(String topic, boolean isKey, T schema);
 
 }
