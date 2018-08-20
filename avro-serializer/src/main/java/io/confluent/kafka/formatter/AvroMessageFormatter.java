@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.formatter;
 
+import io.confluent.kafka.serializers.AvroSchemaUtils;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -158,7 +159,7 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
 
   private void writeTo(byte[] data, PrintStream output) throws IOException {
     Object object = deserialize(data);
-    Schema schema = getSchema(object);
+    Schema schema = AvroSchemaUtils.getSchema(object);
 
     try {
       JsonEncoder encoder = encoderFactory.jsonEncoder(schema, output);

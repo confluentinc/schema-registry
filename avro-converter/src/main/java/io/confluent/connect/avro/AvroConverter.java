@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
+import io.confluent.kafka.serializers.AvroSchemaUtils;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.NonRecordContainer;
@@ -113,7 +114,8 @@ public class AvroConverter implements Converter {
     }
 
     public byte[] serialize(String topic, boolean isKey, Object value) {
-      return serializeImpl(getSubjectName(topic, isKey, value), value);
+      return serializeImpl(
+          getSubjectName(topic, isKey, value, AvroSchemaUtils.getSchema(value)), value);
     }
   }
 

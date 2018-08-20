@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.serializers.subject;
 
+import org.apache.avro.Schema;
+
 /**
  * For any Avro record type that is published to Kafka topic &lt;topic&gt;,
  * registers the schema in the registry under the subject name
@@ -29,13 +31,7 @@ package io.confluent.kafka.serializers.subject;
 public class TopicRecordNameStrategy extends RecordNameStrategy {
 
   @Override
-  public String getSubjectName(String topic, boolean isKey, Object value) {
-    // Null is passed through unserialized, since it has special meaning in
-    // log-compacted Kafka topics.
-    if (value == null) {
-      return null;
-    }
-
-    return topic + "-" + getRecordName(value, isKey);
+  public String subjectName(String topic, boolean isKey, Schema schema) {
+    return topic + "-" + getRecordName(schema, isKey);
   }
 }
