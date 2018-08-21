@@ -45,7 +45,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   protected boolean useSpecificAvroReader = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<String, Schema>();
 
-
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
    * Useful for testing, where a mock client is injected.
@@ -119,6 +118,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
       Schema schema = schemaRegistry.getById(id);
+      String subject = null;
+      if (includeSchemaAndVersion) {
+        subject = subjectName(topic, isKey, schema);
+        schema = schemaForDeserialize(id, schema, subject, isKey);
+      }
+
       int length = buffer.limit() - 1 - idSize;
       final Object result;
       if (schema.getType().equals(Schema.Type.BYTES)) {
@@ -148,9 +153,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         // Converter to let a version provided by a Kafka Connect source take priority over the
         // schema registry's ordering (which is implicit by auto-registration time rather than
         // explicit from the Connector).
-        String subject = getSubjectName(topic, isKey, result);
-        Schema subjectSchema = schemaRegistry.getBySubjectAndId(subject, id);
-        Integer version = schemaRegistry.getVersion(subject, subjectSchema);
+
+        Integer version = schemaVersion(topic, isKey, id, subject, schema, result);
+
         if (schema.getType() == Schema.Type.UNION) {
           // Can't set additional properties on a union schema since it's just a list, so set it
           // on the first non-null entry
@@ -181,6 +186,39 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     }
   }
 
+  private Integer schemaVersion(String topic,
+                                Boolean isKey,
+                                int id,
+                                String subject,
+                                Schema schema,
+                                Object result) throws IOException, RestClientException {
+    Integer version;
+    if (isDeprecatedSubjectNameStrategy(isKey)) {
+      subject = getSubjectName(topic, isKey, result, schema);
+      Schema subjectSchema = schemaRegistry.getBySubjectAndId(subject, id);
+      version = schemaRegistry.getVersion(subject, subjectSchema);
+    } else {
+      //we already got the subject name
+      version = schemaRegistry.getVersion(subject, schema);
+    }
+    return version;
+  }
+
+  private String subjectName(String topic, Boolean isKey, Schema schemaFromRegistry) {
+    return isDeprecatedSubjectNameStrategy(isKey)
+        ? null
+        : getSubjectName(topic, isKey, null, schemaFromRegistry);
+  }
+
+  private Schema schemaForDeserialize(int id,
+                                      Schema schemaFromRegistry,
+                                      String subject,
+                                      Boolean isKey) throws IOException, RestClientException {
+    return isDeprecatedSubjectNameStrategy(isKey)
+        ? AvroSchemaUtils.copyOf(schemaFromRegistry)
+        : schemaRegistry.getBySubjectAndId(subject, id);
+  }
+
   /**
    * Deserializes the payload and includes schema information, with version information from the
    * schema registry embedded in the schema.
@@ -196,7 +234,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   }
 
   private DatumReader getDatumReader(Schema writerSchema, Schema readerSchema) {
-    boolean writerSchemaIsPrimitive = getPrimitiveSchemas().values().contains(writerSchema);
+    boolean writerSchemaIsPrimitive =
+        AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
     // do not use SpecificDatumReader if writerSchema is a primitive
     if (useSpecificAvroReader && !writerSchemaIsPrimitive) {
       if (readerSchema == null) {

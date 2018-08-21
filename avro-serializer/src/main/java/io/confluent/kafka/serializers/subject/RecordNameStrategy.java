@@ -18,9 +18,10 @@ package io.confluent.kafka.serializers.subject;
 
 import java.util.Map;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.common.errors.SerializationException;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
+import io.confluent.kafka.serializers.AvroSchemaUtils;
 
 /**
  * For any Avro record type that is published to Kafka, registers the schema
@@ -30,44 +31,42 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
  * Instead, checks compatibility of any occurrences of the same record name
  * across <em>all</em> topics.
  */
-public class RecordNameStrategy implements SubjectNameStrategy {
+public class RecordNameStrategy implements SubjectNameStrategy<Schema>,
+    io.confluent.kafka.serializers.subject.SubjectNameStrategy {
 
   @Override
   public void configure(Map<String, ?> config) {
   }
 
   @Override
-  public String getSubjectName(String topic, boolean isKey, Object value) {
-    // Null is passed through unserialized, since it has special meaning in
-    // log-compacted Kafka topics.
-    if (value == null) {
-      return null;
-    }
-
-    return getRecordName(value, isKey);
+  public String subjectName(String topic, boolean isKey, Schema schema) {
+    return getRecordName(schema, isKey);
   }
 
   /**
-   * If the value is an Avro record type, returns its fully-qualified name.
+   * If the schema is an Avro record type, returns its fully-qualified name.
    * Otherwise throws an error.
    */
-  protected String getRecordName(Object value, boolean isKey) {
-    if (value instanceof GenericContainer) {
-      Schema schema = ((GenericContainer) value).getSchema();
-      if (schema.getType() == Schema.Type.RECORD) {
-        return schema.getFullName();
-      }
+  protected String getRecordName(Schema schema, boolean isKey) {
+    if (schema != null && schema.getType() == Schema.Type.RECORD) {
+      return schema.getFullName();
     }
 
     // isKey is only used to produce more helpful error messages
     if (isKey) {
       throw new SerializationException("In configuration "
           + AbstractKafkaAvroSerDeConfig.KEY_SUBJECT_NAME_STRATEGY + " = "
-          + getClass().getName() + ", the message key must only be an Avro record");
+          + getClass().getName() + ", the message key must only be an Avro record schema");
     } else {
       throw new SerializationException("In configuration "
           + AbstractKafkaAvroSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY + " = "
-          + getClass().getName() + ", the message value must only be an Avro record");
+          + getClass().getName() + ", the message value must only be an Avro record schema");
     }
+  }
+
+  @Override
+  @Deprecated
+  public String getSubjectName(String topic, boolean isKey, Object value) {
+    return subjectName(topic, isKey, AvroSchemaUtils.getSchema(value));
   }
 }
