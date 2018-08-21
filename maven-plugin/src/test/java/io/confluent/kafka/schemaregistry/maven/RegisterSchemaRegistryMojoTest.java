@@ -57,9 +57,9 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest{
       writeSchema(keySchemaFile, keySchema);
       writeSchema(valueSchemaFile, valueSchema);
       subjectToFile.put(keySubject, keySchemaFile);
-      expectedVersions.put(keySubject, version++);
+      expectedVersions.put(keySubject, version);
       subjectToFile.put(valueSubject, valueSchemaFile);
-      expectedVersions.put(valueSubject, version++);
+      expectedVersions.put(valueSubject, version);
     }
 
     this.mojo.subjects = subjectToFile;
@@ -86,9 +86,9 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest{
         writeMalformedFile(valueSchemaFile);
       }
       subjectToFile.put(keySubject, keySchemaFile);
-      expectedVersions.put(keySubject, version++);
+      expectedVersions.put(keySubject, version);
       subjectToFile.put(valueSubject, valueSchemaFile);
-      expectedVersions.put(valueSubject, version++);
+      expectedVersions.put(valueSubject, version);
     }
 
     this.mojo.subjects = subjectToFile;
@@ -113,9 +113,9 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest{
         writeSchema(valueSchemaFile, valueSchema);
       }
       subjectToFile.put(keySubject, keySchemaFile);
-      expectedVersions.put(keySubject, version++);
+      expectedVersions.put(keySubject, version);
       subjectToFile.put(valueSubject, valueSchemaFile);
-      expectedVersions.put(valueSubject, version++);
+      expectedVersions.put(valueSubject, version);
     }
 
     this.mojo.subjects = subjectToFile;
