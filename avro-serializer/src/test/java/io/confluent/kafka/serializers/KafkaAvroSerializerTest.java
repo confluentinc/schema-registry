@@ -62,22 +62,39 @@ public class KafkaAvroSerializerTest {
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry);
     avroDecoder = new KafkaAvroDecoder(schemaRegistry, new VerifiableProperties(defaultConfig));
     topic = "test";
+    specificAvroDeserializer = buildSpecificDeserializer(schemaRegistry,false);
+    specificAvroDecoder = buildSpecificDecoder(schemaRegistry, false);
+  }
 
+  private static KafkaAvroDeserializer buildSpecificDeserializer(
+      SchemaRegistryClient schemaRegistry,
+      Boolean unknownAsGeneric) {
     HashMap<String, String> specificDeserializerProps = new HashMap<String, String>();
     // Intentionally invalid schema registry URL to satisfy the config class's requirement that
     // it be set.
     specificDeserializerProps.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    specificDeserializerProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
-    specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificDeserializerProps);
+    specificDeserializerProps.put(
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+        "true");
+    specificDeserializerProps.put(
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_UNKNOWN_AS_GENERIC_CONFIG,
+        unknownAsGeneric.toString());
+    return new KafkaAvroDeserializer(schemaRegistry, specificDeserializerProps);
+  }
 
+  private static KafkaAvroDecoder buildSpecificDecoder(
+      SchemaRegistryClient schemaRegistry,
+      Boolean unknownAsGeneric) {
     Properties specificDecoderProps = new Properties();
     specificDecoderProps.setProperty(
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     specificDecoderProps.setProperty(
         KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
-    specificAvroDecoder = new KafkaAvroDecoder(
+    specificDecoderProps.put(
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_UNKNOWN_AS_GENERIC_CONFIG,
+        unknownAsGeneric.toString());
+    return new KafkaAvroDecoder(
         schemaRegistry, new VerifiableProperties(specificDecoderProps));
-
   }
 
   private IndexedRecord createAvroRecord() {
@@ -359,7 +376,39 @@ public class KafkaAvroSerializerTest {
     } catch (Exception e) {
       fail("Threw the incorrect exception when class for specific avro record does not exist.");
     }
+  }
 
+  @Test
+  public void testKafkaAvroSerializerUnknownAsGeneric_whenNonexistantSpecificRecord() {
+    byte[] bytes;
+    Object obj;
+
+    KafkaAvroDeserializer specificAvroDeserializer = buildSpecificDeserializer(
+        schemaRegistry, true);
+    KafkaAvroDecoder specificAvroDecoder = buildSpecificDecoder(schemaRegistry,
+        true);
+    IndexedRecord avroRecord = createAvroRecord();
+    bytes = avroSerializer.serialize(topic, avroRecord);
+
+    try {
+      obj = specificAvroDecoder.fromBytes(bytes);
+      assertTrue(
+          "Returned object should be a GenericData Record",
+          GenericData.Record.class.isInstance(obj)
+      );
+    } catch (Exception e) {
+      fail("Threw an exception when class for specific avro record does not exist.");
+    }
+
+    try {
+      obj = specificAvroDeserializer.deserialize(topic, bytes);
+      assertTrue(
+          "Returned object should be a GenericData Record",
+          GenericData.Record.class.isInstance(obj)
+      );
+    } catch (Exception e) {
+      fail("Threw an exception when class for specific avro record does not exist.");
+    }
   }
 
   @Test

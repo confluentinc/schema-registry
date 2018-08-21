@@ -29,12 +29,27 @@ public class KafkaAvroDeserializerConfig extends AbstractKafkaAvroSerDeConfig {
   public static final String SPECIFIC_AVRO_READER_DOC =
       "If true, tries to look up the SpecificRecord class ";
 
+  public static final String SPECIFIC_AVRO_READER_UNKNOWN_AS_GENERIC_CONFIG =
+      "specific.avro.reader.unknown.generic";
+  public static final boolean SPECIFIC_AVRO_READER_UNKNOWN_AS_GENERIC_DEFAULT = false;
+  public static final String SPECIFIC_AVRO_READER_UNKNOWN_AS_GENERIC_DOC =
+      "If true, deserialize as GenericRecord when SpecificRecord class not found ";
+
   private static ConfigDef config;
 
   static {
     config = baseConfigDef()
-        .define(SPECIFIC_AVRO_READER_CONFIG, Type.BOOLEAN, SPECIFIC_AVRO_READER_DEFAULT,
-                Importance.LOW, SPECIFIC_AVRO_READER_DOC);
+        .define(
+            SPECIFIC_AVRO_READER_CONFIG,
+            Type.BOOLEAN,
+            SPECIFIC_AVRO_READER_DEFAULT,
+            Importance.LOW,
+            SPECIFIC_AVRO_READER_DOC)
+        .define(SPECIFIC_AVRO_READER_UNKNOWN_AS_GENERIC_CONFIG,
+            Type.BOOLEAN,
+            SPECIFIC_AVRO_READER_UNKNOWN_AS_GENERIC_DEFAULT,
+            Importance.LOW,
+            SPECIFIC_AVRO_READER_UNKNOWN_AS_GENERIC_DOC);
   }
 
   public KafkaAvroDeserializerConfig(Map<?, ?> props) {
