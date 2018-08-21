@@ -245,4 +245,48 @@ public class AvroConverterTest {
     assertEquals(2L, (long) converter.toConnectData(TOPIC, newerSerialized).schema().version());
     assertEquals(1L, (long) converter.toConnectData(TOPIC, olderSerialized).schema().version());
   }
+
+  @Test
+  public void testSameSchemaMultipleTopic() throws IOException, RestClientException {
+    org.apache.avro.Schema avroSchema1 = org.apache.avro.SchemaBuilder
+        .record("Foo").fields()
+        .requiredInt("key")
+        .endRecord();
+
+    org.apache.avro.Schema avroSchema2_1 = org.apache.avro.SchemaBuilder
+        .record("Foo").fields()
+        .requiredInt("key")
+        .requiredString("value")
+        .endRecord();
+    org.apache.avro.Schema avroSchema2_2 = org.apache.avro.SchemaBuilder
+        .record("Foo").fields()
+        .requiredInt("key")
+        .requiredString("value")
+        .endRecord();
+
+    schemaRegistry.register("topic1-value", avroSchema2_1);
+    schemaRegistry.register("topic2-value", avroSchema1);
+    schemaRegistry.register("topic2-value", avroSchema2_2);
+
+    org.apache.avro.generic.GenericRecord avroRecord1
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema2_1).set("key", 15).set
+        ("value", "bar").build();
+    org.apache.avro.generic.GenericRecord avroRecord2
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema2_2).set("key", 15).set
+        ("value", "bar").build();
+
+
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry);
+    byte[] serializedRecord1 = serializer.serialize("topic1", avroRecord1);
+    byte[] serializedRecord2 = serializer.serialize("topic2", avroRecord2);
+
+    SchemaAndValue converted1 = converter.toConnectData("topic1", serializedRecord1);
+    assertEquals(1L, (long) converted1.schema().version());
+
+    SchemaAndValue converted2 = converter.toConnectData("topic2", serializedRecord2);
+    assertEquals(2L, (long) converted2.schema().version());
+
+    converted2 = converter.toConnectData("topic2", serializedRecord2);
+    assertEquals(2L, (long) converted2.schema().version());
+  }
 }

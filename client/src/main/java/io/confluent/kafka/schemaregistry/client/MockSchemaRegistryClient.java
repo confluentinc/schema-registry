@@ -40,6 +40,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private String defaultCompatibility = "BACKWARD";
   private final Map<String, Map<Schema, Integer>> schemaCache;
+  private final Map<Schema, Integer> schemaIdCache;
   private final Map<String, Map<Integer, Schema>> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
   private final Map<String, String> compatibilityCache;
@@ -47,6 +48,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   public MockSchemaRegistryClient() {
     schemaCache = new HashMap<String, Map<Schema, Integer>>();
+    schemaIdCache = new HashMap<>();
     idCache = new HashMap<String, Map<Integer, Schema>>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();
     compatibilityCache = new HashMap<String, String>();
@@ -71,7 +73,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       idSchemaMap = new HashMap<Integer, Schema>();
     }
     if (registerRequest) {
-      int id = ids.incrementAndGet();
+      int id;
+      if(schemaIdCache.containsKey(schema)){
+        id = schemaIdCache.get(schema);
+      } else {
+        id = ids.incrementAndGet();
+        schemaIdCache.put(schema, id);
+      }
       idSchemaMap.put(id, schema);
       idCache.put(subject, idSchemaMap);
       generateVersion(subject, schema);
