@@ -56,7 +56,6 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.MasterElector;
-import io.confluent.kafka.schemaregistry.storage.SchemaIdRange;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryRebalanceListener {
@@ -208,15 +207,6 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
     }
 
     log.debug("Schema registry group member initialized and joined group");
-  }
-
-  @Override
-  public SchemaIdRange nextRange() throws SchemaRegistryStoreException {
-    int nextId = Math.max(
-        KafkaSchemaRegistry.MIN_VERSION,
-        schemaRegistry.getMaxIdInKafkaStore() + 1
-    );
-    return new SchemaIdRange(nextId, nextId);
   }
 
   @Override

@@ -1,5 +1,5 @@
-/**
- * Copyright 2017 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,20 +12,24 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
-package io.confluent.kafka.schemaregistry.storage;
-
-import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
-
-/**
- * Internal interface for schema registry implementations. Used as a restricted interface for
- * MasterElectors to interact with.
  */
-public interface MasterAwareSchemaRegistry {
-  void setMaster(SchemaRegistryIdentity newMaster) throws SchemaRegistryTimeoutException,
-      SchemaRegistryStoreException, IdGenerationException;
+
+package io.confluent.kafka.schemaregistry.id;
+
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
+
+public interface IdGenerator {
+
+  int id(String subject, Schema schema) throws IdGenerationException;
+
+  void configure(SchemaRegistryConfig config);
+
+  void init() throws IdGenerationException;
+
+  void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue);
 
 }

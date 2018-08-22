@@ -16,11 +16,16 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
@@ -28,12 +33,17 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
 /**
  * In-memory store based on maps
  */
-public class InMemoryStore<K, V> implements Store<K, V> {
-
+public class InMemoryStore<K, V> implements LookupStore<K, V> {
   private final ConcurrentSkipListMap<K, V> store;
+  private final Map<Integer, SchemaKey> guidToSchemaKey;
+  private final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
+  private final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
 
   public InMemoryStore() {
     store = new ConcurrentSkipListMap<K, V>();
+    this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
+    this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();
+    this.guidToDeletedSchemaKeys = new HashMap<>();
   }
 
   public void init() throws StoreInitializationException {
@@ -76,5 +86,47 @@ public class InMemoryStore<K, V> implements Store<K, V> {
   @Override
   public void close() {
     store.clear();
+  }
+
+  @Override
+  public SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) {
+    MD5 md5 = MD5.ofString(schema.getSchema());
+    return schemaHashToGuid.get(md5);
+  }
+
+  @Override
+  public boolean containsSchema(Schema schema) {
+    MD5 md5 = MD5.ofString(schema.getSchema());
+    return this.schemaHashToGuid.containsKey(md5);
+  }
+
+  @Override
+  public SchemaKey schemaKeyById(Integer id) {
+    return guidToSchemaKey.get(id);
+  }
+
+  @Override
+  public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue) {
+    guidToSchemaKey.put(schemaValue.getId(), schemaKey);
+    guidToDeletedSchemaKeys
+        .computeIfAbsent(schemaValue.getId(), k -> new ArrayList<>()).add(schemaKey);
+  }
+
+  @Override
+  public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
+    guidToSchemaKey.put(schemaValue.getId(), schemaKey);
+
+    MD5 md5 = MD5.ofString(schemaValue.getSchema());
+    SchemaIdAndSubjects schemaIdAndSubjects = schemaHashToGuid.get(md5);
+    if (schemaIdAndSubjects == null) {
+      schemaIdAndSubjects = new SchemaIdAndSubjects(schemaValue.getId());
+    }
+    schemaIdAndSubjects.addSubjectAndVersion(schemaKey.getSubject(), schemaKey.getVersion());
+    schemaHashToGuid.put(md5, schemaIdAndSubjects);
+  }
+
+  @Override
+  public List<SchemaKey> deletedSchemaKeys(SchemaValue schemaValue) {
+    return guidToDeletedSchemaKeys.getOrDefault(schemaValue.getId(), Collections.emptyList());
   }
 }

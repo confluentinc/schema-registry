@@ -1,5 +1,5 @@
-/**
- * Copyright 2017 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,19 +12,25 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 
-public interface MasterElector {
+import java.util.List;
 
-  void init() throws SchemaRegistryTimeoutException, SchemaRegistryStoreException,
-      SchemaRegistryInitializationException, IdGenerationException;
+public interface LookupStore<K,V> extends Store<K,V> {
 
-  void close();
+  SchemaIdAndSubjects schemaIdAndSubjects(Schema schema);
+
+  boolean containsSchema(Schema schema);
+
+  SchemaKey schemaKeyById(Integer id);
+
+  List<SchemaKey> deletedSchemaKeys(SchemaValue schemaValue);
+
+  void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue);
+
+  void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue);
 }

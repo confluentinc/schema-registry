@@ -14,17 +14,25 @@
  * limitations under the License.
  **/
 
-package io.confluent.kafka.schemaregistry.storage;
+package io.confluent.kafka.schemaregistry.id;
 
-import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+/**
+ * A range of schema IDs, from the first available ID to the inclusive upper bound.
+ */
+public class SchemaIdRange {
+  private final int base;
+  private final int end;
 
-public interface MasterElector {
+  public SchemaIdRange(int base, int end) {
+    this.base = base;
+    this.end = end;
+  }
 
-  void init() throws SchemaRegistryTimeoutException, SchemaRegistryStoreException,
-      SchemaRegistryInitializationException, IdGenerationException;
+  public int base() {
+    return base;
+  }
 
-  void close();
+  public int end() {
+    return end;
+  }
 }
