@@ -156,7 +156,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         this.serializer, lookupStore, new NoopKey());
   }
 
-  protected LookupStore lookupStore(){
+  protected LookupStore lookupStore() {
     return new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>();
   }
 
