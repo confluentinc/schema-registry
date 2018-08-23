@@ -105,13 +105,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private Metrics metrics;
   private Sensor masterNodeSensor;
 
-  // Track the largest id in the kafka store so far (-1 indicates none in the store)
-  // This is automatically updated by the KafkaStoreReaderThread every time a new Schema is added
-  // Used to ensure that any newly allocated batch of ids does not overlap
-  // with any id in the kafkastore. Primarily for bootstrapping the SchemaRegistry when
-  // data is already in the kafkastore.
-  private int maxIdInKafkaStore = -1;
-
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
       throws SchemaRegistryException {
@@ -131,13 +124,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
-    this.lookupStore = new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>();
+    this.lookupStore = lookupStore();
     this.idGenerator = identityGenerator(config);
-    kafkaStore =
-        new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
-            config,
-            new KafkaStoreMessageHandler(this, lookupStore, idGenerator),
-            this.serializer, lookupStore, new NoopKey());
+    this.kafkaStore = kafkaStore(config);
     MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
             .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
@@ -157,6 +146,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                            + " node where all register schema and config update requests are "
                            + "served.", configuredTags);
     this.masterNodeSensor.add(m, new Gauge());
+  }
+
+  protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
+      SchemaRegistryConfig config) throws SchemaRegistryException {
+    return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
+        config,
+        new KafkaStoreMessageHandler(this, lookupStore, idGenerator),
+        this.serializer, lookupStore, new NoopKey());
+  }
+
+  protected LookupStore lookupStore(){
+    return new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>();
   }
 
   protected IdGenerator identityGenerator(SchemaRegistryConfig config) {
