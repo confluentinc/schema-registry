@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>5.0.1-SNAPSHOT</version>
+        <version>5.0.1-beta180824214627</version>
     </parent>
 
     <artifactId>kafka-json-serializer</artifactId>
