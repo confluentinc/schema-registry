@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -36,9 +37,11 @@ import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.UriInfo;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
@@ -53,6 +56,9 @@ import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
+
+import static io.confluent.kafka.schemaregistry.rest.extensions.PrettyQueryExtension.QUERY_PARAM_PRETTY;
+import static io.confluent.kafka.schemaregistry.rest.extensions.PrettyQueryExtension.hasPrettyQueryParam;
 
 @Path("/subjects/{subject}/versions")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -109,8 +115,21 @@ public class SubjectVersionsResource {
   @Path("/{version}/schema")
   @PerformanceMetric("subjects.versions.get-schema.only")
   public String getSchemaOnly(@PathParam("subject") String subject,
-                              @PathParam("version") String version) {
-    return getSchema(subject, version).getSchema();
+                              @PathParam("version") String version,
+                              @Context UriInfo ui) {
+    String schemaString = getSchema(subject, version).getSchema();
+    // Since this URL returns a raw string rather than an object, JAX-RS doesn't know
+    // it should pretty-print it. Therefore, we manually apply the ObjectMapper pretty-printer
+    if (hasPrettyQueryParam(ui)) {
+      try {
+        return new SchemaString(schemaString).schemaStringToJson(true);
+      } catch (IOException e) {
+        log.debug(String.format(
+                "Unable to apply ?%s query resource handler", QUERY_PARAM_PRETTY), e);
+        return schemaString;
+      }
+    }
+    return schemaString;
   }
 
   @GET

@@ -17,7 +17,9 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 
 import java.io.IOException;
 
@@ -47,7 +49,15 @@ public class SchemaString {
     this.schemaString = schemaString;
   }
 
-  public String toJson() throws IOException {
+  public String toJson(boolean pretty) throws IOException {
     return new ObjectMapper().writeValueAsString(this);
+  }
+
+  public String schemaStringToJson(boolean pretty) throws IOException {
+    ObjectMapper om = new ObjectMapper();
+    // Need to parse the schema first before applying indent feature
+    JsonNode json = om.readValue(this.schemaString, JsonNode.class);
+    return om.configure(SerializationFeature.INDENT_OUTPUT, pretty)
+            .writeValueAsString(json);
   }
 }

@@ -24,6 +24,10 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.UriInfo;
+
+import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -32,6 +36,9 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
+
+import static io.confluent.kafka.schemaregistry.rest.extensions.PrettyQueryExtension.QUERY_PARAM_PRETTY;
+import static io.confluent.kafka.schemaregistry.rest.extensions.PrettyQueryExtension.hasPrettyQueryParam;
 
 @Path("/schemas")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -68,5 +75,25 @@ public class SchemasResource {
       throw Errors.schemaNotFoundException();
     }
     return schema;
+  }
+
+  @GET
+  @Path("/ids/{id}/schema")
+  @PerformanceMetric("schemas.ids.get-schema.only")
+  public String getSchemaOnly(@PathParam("id") Integer id, @Context UriInfo ui) {
+    SchemaString schema = getSchema(id);
+
+    // Since this URL returns a raw string rather than an object, JAX-RS doesn't know
+    // it should pretty-print it. Therefore, we manually apply the ObjectMapper pretty-printer
+    if (hasPrettyQueryParam(ui)) {
+      try {
+        return schema.schemaStringToJson(true);
+      } catch (IOException e) {
+        log.debug(String.format(
+                "Unable to apply ?%s query resource handler", QUERY_PARAM_PRETTY), e);
+        return schema.getSchemaString();
+      }
+    }
+    return schema.getSchemaString();
   }
 }

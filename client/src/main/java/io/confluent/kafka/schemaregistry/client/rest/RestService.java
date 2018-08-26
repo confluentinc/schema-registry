@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -284,7 +285,6 @@ public class RestService {
     return lookUpSubjectVersion(DEFAULT_REQUEST_PROPERTIES, request, subject, lookupDeletedSchema);
   }
 
-
   public Schema lookUpSubjectVersion(Map<String, String> requestProperties,
                                      RegisterSchemaRequest registerSchemaRequest,
                                      String subject,
@@ -442,20 +442,43 @@ public class RestService {
 
   public String getVersionSchemaOnly(String subject, int version)
             throws IOException, RestClientException {
-    String path = String.format("/subjects/%s/versions/%d/schema", subject, version);
+    return getVersionSchemaOnly(subject, version, false);
+  }
 
+  public String getVersionSchemaOnly(String subject, int version, boolean pretty)
+          throws IOException, RestClientException {
+    String path = String.format(
+            "/subjects/%s/versions/%d/schema?pretty=%s", subject, version, pretty);
+
+    jsonDeserializer.configure(SerializationFeature.INDENT_OUTPUT, pretty);
     JsonNode response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
             GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
-    return response.toString();
+
+    return jsonDeserializer.writeValueAsString(response);
   }
 
   public String getLatestVersionSchemaOnly(String subject)
             throws IOException, RestClientException {
-    String path = String.format("/subjects/%s/versions/latest/schema", subject);
+    return getLatestVersionSchemaOnly(subject, false);
+  }
 
+  public String getLatestVersionSchemaOnly(String subject, boolean pretty)
+          throws IOException, RestClientException {
+    String path = String.format("/subjects/%s/versions/latest/schema?pretty=%s", subject, pretty);
+
+    jsonDeserializer.configure(SerializationFeature.INDENT_OUTPUT, pretty);
     JsonNode response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
             GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
-    return response.toString();
+    return jsonDeserializer.writeValueAsString(response);
+  }
+
+  public String getIdSchemaOnly(int id, boolean pretty) throws IOException, RestClientException {
+    String path = String.format("/schemas/ids/%d/schema?pretty=%s", id, pretty);
+
+    jsonDeserializer.configure(SerializationFeature.INDENT_OUTPUT, pretty);
+    JsonNode response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
+            GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
+    return jsonDeserializer.writeValueAsString(response);
   }
 
   public List<Integer> getAllVersions(String subject)
