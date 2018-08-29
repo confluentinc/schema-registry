@@ -22,14 +22,41 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 
+/**
+ * Internal interface used for generating id while registering schema.
+ */
 public interface IdGenerator {
 
-  int id(String subject, Schema schema) throws IdGenerationException;
+  /**
+   * Provides the id for the schema.
+   *
+   * @param schema the schema being registered; never {@code null}
+   * @return the identifier for the schema; never {@code null}
+   * @throws IdGenerationException exception when id can't be generated
+   */
+  int id(Schema schema) throws IdGenerationException;
 
+  /**
+   * Configure the underlying generator.
+   *
+   * @param config Schema Registry Configs
+   */
   void configure(SchemaRegistryConfig config);
 
+  /**
+   * Initialize the underlying generator.
+   *
+   * @throws IdGenerationException exception when IdGenerator can't be initialized
+   */
   void init() throws IdGenerationException;
 
+  /**
+   * Callback method that is invoked when a schema is registered.
+   * IdGenerator implementation can optionally use this to update the next possible id.
+   *
+   * @param schemaKey the registered SchemaKey; never {@code null}
+   * @param schemaValue the registered SchemaValue; never {@code null}
+   */
   void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue);
 
 }

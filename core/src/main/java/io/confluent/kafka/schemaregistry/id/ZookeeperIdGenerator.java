@@ -52,7 +52,7 @@ public class ZookeeperIdGenerator implements IdGenerator {
 
 
   @Override
-  public int id(String subject, Schema schema) throws IdGenerationException {
+  public int id(Schema schema) throws IdGenerationException {
     int id = nextAvailableSchemaId;
     nextAvailableSchemaId++;
     if (reachedEndOfIdBatch()) {

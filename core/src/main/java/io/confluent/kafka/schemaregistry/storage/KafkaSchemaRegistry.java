@@ -315,10 +315,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(kafkaStoreTimeoutMs);
 
       // see if the schema to be registered already exists
-      MD5 md5 = MD5.ofString(schema.getSchema());
       int schemaId = -1;
-      if (this.lookupStore.containsSchema(schema)) {
-        SchemaIdAndSubjects schemaIdAndSubjects = this.lookupStore.schemaIdAndSubjects(schema);
+      SchemaIdAndSubjects schemaIdAndSubjects = this.lookupStore.schemaIdAndSubjects(schema);
+      if (schemaIdAndSubjects != null) {
         if (schemaIdAndSubjects.hasSubject(subject)
             && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
           // return only if the schema was previously registered under the input subject
@@ -353,7 +352,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         if (schemaId >= 0) {
           schema.setId(schemaId);
         } else {
-          schema.setId(idGenerator.id(subject, schema));
+          schema.setId(idGenerator.id(schema));
         }
 
         SchemaValue schemaValue = new SchemaValue(schema);
@@ -490,9 +489,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     canonicalizeSchema(schema);
-    if (this.lookupStore.containsSchema(schema)) {
-      SchemaIdAndSubjects schemaIdAndSubjects = this.lookupStore.schemaIdAndSubjects(schema);
-
+    SchemaIdAndSubjects schemaIdAndSubjects = this.lookupStore.schemaIdAndSubjects(schema);
+    if (schemaIdAndSubjects != null) {
       if (schemaIdAndSubjects.hasSubject(subject)
           && (lookupDeletedSchema || !isSubjectVersionDeleted(subject, schemaIdAndSubjects
           .getVersion(subject)))) {

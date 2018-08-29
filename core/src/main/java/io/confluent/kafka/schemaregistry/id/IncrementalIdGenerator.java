@@ -28,7 +28,7 @@ public class IncrementalIdGenerator implements IdGenerator {
   private int maxIdInKafkaStore = -1;
 
   @Override
-  public int id(String subject, Schema schema) throws IdGenerationException {
+  public int id(Schema schema) throws IdGenerationException {
     int nextId = Math.max(
         KafkaSchemaRegistry.MIN_VERSION,
         maxIdInKafkaStore + 1
