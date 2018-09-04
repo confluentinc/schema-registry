@@ -8,7 +8,6 @@ and |cos| bundles.
 
 For installation instructions, see the :ref:`installation`.
 
-
 System Requirements
 -------------------
 

@@ -3,6 +3,10 @@
 Using |sr|
 ==========
 
+.. contents::
+    :local:
+    :depth: 1
+
 Starting |sr|
 -------------
 Start |sr| and its dependent services |zk| and Kafka. Each service reads its configuration from its property files under
@@ -237,3 +241,4 @@ Listing All Subjects
 
       curl -X GET http://localhost:8081/subjects
       ["Kafka-key"]
+
