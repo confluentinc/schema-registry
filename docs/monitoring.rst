@@ -1,7 +1,7 @@
 .. _schemaregistry_monitoring:
 
-Monitoring
-----------
+Monitoring |sr|
+---------------
 
 |sr| reports a variety of metrics through JMX. It can also be configured to report
 stats using additional pluggable stats reporters using the ``metrics.reporters`` configuration
