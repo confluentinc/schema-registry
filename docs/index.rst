@@ -49,8 +49,9 @@ Master election can now optionally happen via Kafka group protocol as well.
          Please make sure not to mix up the election modes amongst the nodes in same cluster.
          This will lead to multiple masters and issues with your operations.
 
+---------------------------------
 Kafka Coordinator Master Election
-+++++++++++++++++++++++++++++++++
+---------------------------------
 
 .. figure:: schema-registry-design-kafka.png
    :align: center
@@ -63,8 +64,9 @@ protocol, chooses one amongst the master eligible nodes ``master.eligibility=tru
 election can be used in cases where |zk| is not available, for example for hosted or cloud
 Kafka environments, or if access to |zk| has been locked down.
 
+--------------------
 |zk| Master Election
-+++++++++++++++++++++++++
+--------------------
 
 .. figure:: schema-registry-design.png
    :align: center
@@ -78,9 +80,12 @@ The current master is maintained as data in the ephemeral node on the ``/<schema
 
 |sr| is also designed for multi-colo configuration. See :ref:`schemaregistry_mirroring` for more details.
 
+
+Documentation
+-------------
+
 .. toctree::
    :maxdepth: 1
-   :hidden:
 
    installation
    config
