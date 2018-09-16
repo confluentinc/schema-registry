@@ -58,6 +58,7 @@
         <confluent.maven.repo>https://packages.confluent.io/maven/</confluent.maven.repo>
         <exec-maven-plugin.version>1.2.1</exec-maven-plugin.version>
         <podam.version>6.0.2.RELEASE</podam.version>
+        <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
     </properties>
 
     <repositories>
