@@ -174,7 +174,7 @@ public class SchemaRegistryKeysTest {
 
   private void testStoreKeyOrder(SchemaRegistryKey[] orderedKeys) {
     int numKeys = orderedKeys.length;
-    InMemoryStore<SchemaRegistryKey, String> store = new InMemoryStore<SchemaRegistryKey, String>();
+    InMemoryCache<SchemaRegistryKey, String> store = new InMemoryCache<SchemaRegistryKey, String>();
     while (--numKeys >= 0) {
       try {
         store.put(orderedKeys[numKeys], orderedKeys[numKeys].toString());

@@ -30,15 +30,15 @@ public class KafkaStoreMessageHandler
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
-  private final LookupStore store;
+  private final LookupCache lookupCache;
   private final ExecutorService tombstoneExecutor;
   private IdGenerator idGenerator;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
-                                  LookupStore store,
+                                  LookupCache lookupCache,
                                   IdGenerator idGenerator) {
     this.schemaRegistry = schemaRegistry;
-    this.store = store;
+    this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
     this.tombstoneExecutor = Executors.newSingleThreadExecutor();
   }
@@ -47,7 +47,7 @@ public class KafkaStoreMessageHandler
    * Invoked on every new schema written to the Kafka store
    *
    * @param key   Key associated with the schema.
-   * @param value Value written to the Kafka store
+   * @param value Value written to the Kafka lookupCache
    */
   @Override
   public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
@@ -60,21 +60,21 @@ public class KafkaStoreMessageHandler
   }
 
   private void handleDeleteSubject(DeleteSubjectValue deleteSubjectValue) {
-    //mark all versions as deleted in the local store
+    //mark all versions as deleted in the local lookupCache
     String subject = deleteSubjectValue.getSubject();
     Integer deleteTillVersion = deleteSubjectValue.getVersion();
     for (int version = 1; version <= deleteTillVersion; version++) {
       try {
 
         SchemaKey schemaKey = new SchemaKey(subject, version);
-        SchemaValue schemaValue = (SchemaValue) this.store.get(schemaKey);
+        SchemaValue schemaValue = (SchemaValue) this.lookupCache.get(schemaKey);
         if (schemaValue != null) {
           schemaValue.setDeleted(true);
-          store.put(schemaKey, schemaValue);
-          store.schemaDeleted(schemaKey, schemaValue);
+          lookupCache.put(schemaKey, schemaValue);
+          lookupCache.schemaDeleted(schemaKey, schemaValue);
         }
       } catch (StoreException e) {
-        log.error("Failed to delete subject in the local store");
+        log.error("Failed to delete subject in the local Cache");
       }
     }
   }
@@ -89,12 +89,12 @@ public class KafkaStoreMessageHandler
       // consumers should be able to access the schemas by id. This is guaranteed when the schema is
       // re-registered again and hence we can tombstone the record.
       if (schemaObj.isDeleted()) {
-        this.store.schemaDeleted(schemaKey, schemaObj);
+        this.lookupCache.schemaDeleted(schemaKey, schemaObj);
       } else {
         // Update the maximum id seen so far
         idGenerator.schemaRegistered(schemaKey,schemaObj);
-        store.schemaRegistered(schemaKey, schemaObj);
-        List<SchemaKey> schemaKeys = store.deletedSchemaKeys(schemaObj);
+        lookupCache.schemaRegistered(schemaKey, schemaObj);
+        List<SchemaKey> schemaKeys = lookupCache.deletedSchemaKeys(schemaObj);
         schemaKeys.stream().filter(v -> v.getSubject().equals(schemaObj.getSubject()))
             .forEach(this::tombstoneSchemaKey);
       }

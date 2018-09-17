@@ -33,13 +33,13 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
 /**
  * In-memory store based on maps
  */
-public class InMemoryStore<K, V> implements LookupStore<K, V> {
+public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final ConcurrentSkipListMap<K, V> store;
   private final Map<Integer, SchemaKey> guidToSchemaKey;
   private final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
   private final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
 
-  public InMemoryStore() {
+  public InMemoryCache() {
     store = new ConcurrentSkipListMap<K, V>();
     this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
     this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();

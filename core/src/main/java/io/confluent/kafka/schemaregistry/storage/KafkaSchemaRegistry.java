@@ -88,7 +88,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
   private final SchemaRegistryConfig config;
-  private final LookupStore lookupStore;
+  private final LookupCache lookupCache;
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
@@ -124,7 +124,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
-    this.lookupStore = lookupStore();
+    this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
     MetricConfig metricConfig =
@@ -152,12 +152,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       SchemaRegistryConfig config) throws SchemaRegistryException {
     return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
         config,
-        new KafkaStoreMessageHandler(this, lookupStore, idGenerator),
-        this.serializer, lookupStore, new NoopKey());
+        new KafkaStoreMessageHandler(this, lookupCache, idGenerator),
+        this.serializer, lookupCache, new NoopKey());
   }
 
-  protected LookupStore lookupStore() {
-    return new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>();
+  protected LookupCache lookupCache() {
+    return new InMemoryCache<SchemaRegistryKey, SchemaRegistryValue>();
   }
 
   protected IdGenerator identityGenerator(SchemaRegistryConfig config) {
@@ -316,7 +316,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
       // see if the schema to be registered already exists
       int schemaId = -1;
-      SchemaIdAndSubjects schemaIdAndSubjects = this.lookupStore.schemaIdAndSubjects(schema);
+      SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
       if (schemaIdAndSubjects != null) {
         if (schemaIdAndSubjects.hasSubject(subject)
             && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
@@ -489,7 +489,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     canonicalizeSchema(schema);
-    SchemaIdAndSubjects schemaIdAndSubjects = this.lookupStore.schemaIdAndSubjects(schema);
+    SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
     if (schemaIdAndSubjects != null) {
       if (schemaIdAndSubjects.hasSubject(subject)
           && (lookupDeletedSchema || !isSubjectVersionDeleted(subject, schemaIdAndSubjects
@@ -641,7 +641,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public SchemaString get(int id) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
-      SchemaKey subjectVersionKey = lookupStore.schemaKeyById(id);
+      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
       if (subjectVersionKey == null) {
         return null;
       }

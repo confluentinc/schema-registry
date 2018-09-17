@@ -22,11 +22,15 @@ import java.util.List;
 
 /**
  * Internal interface that provides various indexed methods that help lookup the underlying schemas.
+ * The interface has also callback methods for various schema lifecycle events like register,
+ * delete, etc. It is important to note that these callbacks block the corresponding API that
+ * lead to the callback. Hence sufficient care must be taken to ensure that the callbacks are
+ * light weight.
  *
  * @param <K> key of the store
  * @param <V> value of the store
  */
-public interface LookupStore<K,V> extends Store<K,V> {
+public interface LookupCache<K,V> extends Store<K,V> {
 
   /**
    * Provides SchemaIdAndSubjects associated with the schema.
