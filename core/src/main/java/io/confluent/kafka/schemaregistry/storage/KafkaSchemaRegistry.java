@@ -26,7 +26,6 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -53,6 +52,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpd
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
+import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
@@ -61,6 +61,9 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForward
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
+import io.confluent.kafka.schemaregistry.id.IdGenerator;
+import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
+import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
 import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
@@ -85,9 +88,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
   private final SchemaRegistryConfig config;
-  final Map<Integer, SchemaKey> guidToSchemaKey;
-  final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
-  final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
+  private final LookupCache lookupCache;
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
@@ -99,21 +100,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private SchemaRegistryIdentity masterIdentity;
   private RestService masterRestService;
   private SslFactory sslFactory;
+  private IdGenerator idGenerator = null;
   private MasterElector masterElector = null;
   private Metrics metrics;
   private Sensor masterNodeSensor;
-
-  // Hand out this id during the next schema registration. Indexed from 1.
-  private int nextAvailableSchemaId;
-  // Tracks the upper bound of the current id batch (inclusive). When nextAvailableSchemaId goes
-  // above this value, it's time to allocate a new batch of ids
-  private int idBatchInclusiveUpperBound;
-  // Track the largest id in the kafka store so far (-1 indicates none in the store)
-  // This is automatically updated by the KafkaStoreReaderThread every time a new Schema is added
-  // Used to ensure that any newly allocated batch of ids does not overlap
-  // with any id in the kafkastore. Primarily for bootstrapping the SchemaRegistry when
-  // data is already in the kafkastore.
-  private int maxIdInKafkaStore = -1;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -134,15 +124,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
-    this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
-    this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();
-    this.guidToDeletedSchemaKeys = new HashMap<>();
-    Store store = new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>();
-    kafkaStore =
-        new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
-            config,
-            new KafkaStoreMessageHandler(this, store),
-            this.serializer, store, new NoopKey());
+    this.lookupCache = lookupCache();
+    this.idGenerator = identityGenerator(config);
+    this.kafkaStore = kafkaStore(config);
     MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
             .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
@@ -162,6 +146,29 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                            + " node where all register schema and config update requests are "
                            + "served.", configuredTags);
     this.masterNodeSensor.add(m, new Gauge());
+  }
+
+  protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
+      SchemaRegistryConfig config) throws SchemaRegistryException {
+    return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
+        config,
+        new KafkaStoreMessageHandler(this, lookupCache, idGenerator),
+        this.serializer, lookupCache, new NoopKey());
+  }
+
+  protected LookupCache lookupCache() {
+    return new InMemoryCache<SchemaRegistryKey, SchemaRegistryValue>();
+  }
+
+  protected IdGenerator identityGenerator(SchemaRegistryConfig config) {
+    IdGenerator idGenerator;
+    if (config.useKafkaCoordination()) {
+      idGenerator = new IncrementalIdGenerator();
+    } else {
+      idGenerator = new ZookeeperIdGenerator();
+    }
+    idGenerator.configure(config);
+    return idGenerator;
   }
 
   /**
@@ -242,7 +249,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
    */
   @Override
   public void setMaster(@Nullable SchemaRegistryIdentity newMaster)
-      throws SchemaRegistryTimeoutException, SchemaRegistryStoreException {
+      throws SchemaRegistryTimeoutException, SchemaRegistryStoreException, IdGenerationException {
     log.debug("Setting the master to " + newMaster);
 
     // Only schema registry instances eligible for master can be set to master
@@ -275,12 +282,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         } catch (StoreException e) {
           throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
         }
-        SchemaIdRange nextRange = masterElector.nextRange();
-        nextAvailableSchemaId = nextRange.base();
-        idBatchInclusiveUpperBound = nextRange.end();
-
+        idGenerator.init();
       }
-
       masterNodeSensor.record(isMaster() ? 1.0 : 0.0);
     }
   }
@@ -312,10 +315,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(kafkaStoreTimeoutMs);
 
       // see if the schema to be registered already exists
-      MD5 md5 = MD5.ofString(schema.getSchema());
       int schemaId = -1;
-      if (this.schemaHashToGuid.containsKey(md5)) {
-        SchemaIdAndSubjects schemaIdAndSubjects = this.schemaHashToGuid.get(md5);
+      SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
+      if (schemaIdAndSubjects != null) {
         if (schemaIdAndSubjects.hasSubject(subject)
             && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
           // return only if the schema was previously registered under the input subject
@@ -350,12 +352,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         if (schemaId >= 0) {
           schema.setId(schemaId);
         } else {
-          schema.setId(nextAvailableSchemaId);
-          nextAvailableSchemaId++;
-        }
-        if (reachedEndOfIdBatch()) {
-          SchemaIdRange nextRange = masterElector.nextRange();
-          idBatchInclusiveUpperBound = nextRange.end();
+          schema.setId(idGenerator.id(schema));
         }
 
         SchemaValue schemaValue = new SchemaValue(schema);
@@ -492,11 +489,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     canonicalizeSchema(schema);
-    // see if the schema to be registered already exists
-    MD5 md5 = MD5.ofString(schema.getSchema());
-    if (this.schemaHashToGuid.containsKey(md5)) {
-      SchemaIdAndSubjects schemaIdAndSubjects = this.schemaHashToGuid.get(md5);
-
+    SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
+    if (schemaIdAndSubjects != null) {
       if (schemaIdAndSubjects.hasSubject(subject)
           && (lookupDeletedSchema || !isSubjectVersionDeleted(subject, schemaIdAndSubjects
           .getVersion(subject)))) {
@@ -647,7 +641,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public SchemaString get(int id) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
-      SchemaKey subjectVersionKey = guidToSchemaKey.get(id);
+      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
       if (subjectVersionKey == null) {
         return null;
       }
@@ -868,24 +862,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           "Error while retrieving schema from the backend Kafka"
           + " store", e);
     }
-  }
-
-  public int getMaxIdInKafkaStore() {
-    return this.maxIdInKafkaStore;
-  }
-
-  /**
-   * This should only be updated by the KafkastoreReaderThread.
-   */
-  void setMaxIdInKafkaStore(int id) {
-    this.maxIdInKafkaStore = id;
-  }
-
-  /**
-   * If true, it's time to allocate a new batch of ids with a call to nextSchemaIdCounterBatch()
-   */
-  private boolean reachedEndOfIdBatch() {
-    return nextAvailableSchemaId > idBatchInclusiveUpperBound;
   }
 
   public static class SchemeAndPort {

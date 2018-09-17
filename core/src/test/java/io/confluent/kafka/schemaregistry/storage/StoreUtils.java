@@ -38,7 +38,7 @@ public class StoreUtils {
    */
   public static KafkaStore<String, String> createAndInitKafkaStoreInstance(String zkConnect)
       throws RestConfigException, StoreInitializationException, SchemaRegistryException {
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
     return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore);
   }
   /**
@@ -67,7 +67,7 @@ public class StoreUtils {
 
     props.put(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG, false);
 
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
     return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
   }
 
@@ -94,7 +94,7 @@ public class StoreUtils {
               ((Password) sslConfigs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)).value());
     }
 
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
     return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
   }
 
