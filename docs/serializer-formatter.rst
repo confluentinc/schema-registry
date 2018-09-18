@@ -219,7 +219,7 @@ receive Avro data in JSON format from the console. Under the hood, they use ``Av
 ``AvroMessageFormatter`` to convert between Avro and JSON.
 
 To run the Kafka console tools, first make sure that |zk|, Kafka and |sr| server
-are all started. In the following examples, we use the default value of the |sr| URL.
+are all started. In the following examples, the default |sr| URL value is used.
 
 You can configure that by supplying
 
