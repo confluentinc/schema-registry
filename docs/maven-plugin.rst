@@ -53,7 +53,7 @@ This plugin is used to download Avro schemas for the requested subjects and writ
             </schemaRegistryUrls>
             <outputDirectory>src/main/avro</outputDirectory>
             <subjectPatterns>
-                <param>^TestSubject000-(Key|Value)$</param>
+                <param>^TestSubject000-(key|value)$</param>
             </subjectPatterns>
         </configuration>
     </plugin>
