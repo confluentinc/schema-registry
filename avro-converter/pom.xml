@@ -99,10 +99,9 @@
                         <configuration>
                             <title>Kafka Connect Avro Converter</title>
                             <documentationUrl>https://docs.confluent.io/current/schema-registry/docs/connect.html</documentationUrl>
-                            <description><![CDATA[
-                                The Kafka Connect Avro Converter integrates with <a href="https://docs.confluent.io/current/schema-registry/docs/intro.html">
-                                to convert data for Kafka Connect to and from Avro format.
-                            ]]></description>
+                            <description>
+                                <![CDATA[The Kafka Connect Avro Converter integrates with <a href="https://docs.confluent.io/current/schema-registry/docs/intro.html">Schema Registry</a> to convert data for Kafka Connect to and from Avro format.]]>
+                            </description>
                             <sourceUrl>https://github.com/confluentinc/schema-registry</sourceUrl>
                             
                             <supportProviderName>Confluent, Inc.</supportProviderName>
