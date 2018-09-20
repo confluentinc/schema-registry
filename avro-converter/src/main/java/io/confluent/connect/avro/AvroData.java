@@ -248,7 +248,7 @@ public class AvroData {
   static final String AVRO_LOGICAL_DECIMAL_SCALE_PROP = "scale";
   static final String AVRO_LOGICAL_DECIMAL_PRECISION_PROP = "precision";
   static final String CONNECT_AVRO_DECIMAL_PRECISION_PROP = "connect.decimal.precision";
-  static final Integer CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT = 64;
+  static final Integer CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT = 38;
 
   private static final HashMap<String, LogicalTypeConverter> TO_AVRO_LOGICAL_CONVERTERS
       = new HashMap<>();
