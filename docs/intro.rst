@@ -222,7 +222,7 @@ dependencies as well.
 Requirements
 ------------
 
-- Kafka: 0.11.0.0-cp1
+- Kafka: 0.11.0.0-hotfix2
 
 Contribute
 ----------
