@@ -42,6 +42,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryRestApplication.class);
   private KafkaSchemaRegistry schemaRegistry = null;
+  @SuppressWarnings("deprecation")
   private List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions = null;
 
   public SchemaRegistryRestApplication(Properties props) throws RestConfigException {
@@ -69,6 +70,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     return kafkaSchemaRegistry;
   }
 
+  @SuppressWarnings("deprecation")
   @Override
   public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
     schemaRegistry = initSchemaRegistry(schemaRegistryConfig);
@@ -97,6 +99,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     }
   }
 
+  @SuppressWarnings("deprecation")
   @Override
   public void onShutdown() {
 

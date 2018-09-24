@@ -105,6 +105,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
     return props;
   }
 
+  @SuppressWarnings("deprecation")
   public static class TestSchemaRegistryExtension implements SchemaRegistryResourceExtension {
 
     @Override

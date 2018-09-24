@@ -24,6 +24,10 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 
+/**
+ * @deprecated Use {@link io.confluent.rest.extension.ResourceExtension}
+ */
+@Deprecated
 public interface SchemaRegistryResourceExtension extends Closeable {
 
   void register(

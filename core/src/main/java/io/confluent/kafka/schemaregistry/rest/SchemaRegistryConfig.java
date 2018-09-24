@@ -151,9 +151,18 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.sasl.kerberos.ticket.renew.jitter";
   public static final String KAFKASTORE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =
       "kafkastore.sasl.kerberos.ticket.renew.window.factor";
+
+  /**
+   * @deprecated Use {@link RestConfig#RESOURCE_EXTENSION_CLASSES_CONFIG}
+   */
   @Deprecated
   public static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG =
       "schema.registry.resource.extension.class";
+
+  /**
+   * @deprecated Use {@link RestConfig#RESOURCE_EXTENSION_CLASSES_CONFIG}
+   */
+  @Deprecated
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
   @Deprecated
@@ -323,6 +332,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
   }
 
+  @SuppressWarnings("deprecation")
   public static ConfigDef baseSchemaRegistryConfigDef() {
 
     return baseConfigDef()
