@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,8 +71,16 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
   @Override
+  public void configureBaseApplication(
+      final Configurable<?> config,
+      final Map<String, String> metricTags) {
+    super.configureBaseApplication(config, metricTags);
+
+    schemaRegistry = initSchemaRegistry(getConfiguration());
+  }
+
+  @Override
   public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
-    schemaRegistry = initSchemaRegistry(schemaRegistryConfig);
     schemaRegistryResourceExtensions =
         schemaRegistryConfig.getConfiguredInstances(
             schemaRegistryConfig.definedResourceExtensionConfigName(),
