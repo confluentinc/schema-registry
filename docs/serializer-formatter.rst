@@ -234,9 +234,11 @@ In the following example, we send Avro records in JSON as the message value (mak
    bin/kafka-avro-console-producer --broker-list localhost:9092 --topic t1 \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
 
-   In the shell, type in the following.
-     {"f1": "value1"}
+In the shell, type in the following.
 
+.. sourcecode:: bash
+
+     {"f1": "value1"}
 
 In the following example, we read the value of the messages in JSON.
 
@@ -245,7 +247,10 @@ In the following example, we read the value of the messages in JSON.
    bin/kafka-avro-console-consumer --topic t1 \
      --zookeeper localhost:2181
 
-   You should see following in the console.
+You should see following in the console.
+
+.. sourcecode:: bash
+
      {"f1": "value1"}
 
 
@@ -259,7 +264,10 @@ message, respectively.
      --property key.schema='{"type":"string"}' \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
 
-   In the shell, type in the following.
+In the shell, type in the following.
+
+.. sourcecode:: bash
+
      "key1" \t {"f1": "value1"}
 
 In the following example, we read both the key and the value of the messages in JSON,
@@ -270,7 +278,10 @@ In the following example, we read both the key and the value of the messages in 
      --zookeeper localhost:2181 \
      --property print.key=true
 
-   You should see following in the console.
+You should see following in the console.
+
+.. sourcecode:: bash
+
       "key1" \t {"f1": "value1"}
 
 
