@@ -36,7 +36,6 @@ import java.util.Properties;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
-import io.confluent.kafka.serializers.AbstractKafkaAvroSerDe;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import kafka.common.MessageFormatter;
 
@@ -98,12 +97,7 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    if (schemaRegistry == null) {
-      schemaRegistry = new CachedSchemaRegistryClient(
-          url,
-          AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT
-      );
-    }
+    schemaRegistry = createSchemaRegistry(url);
 
     if (props.containsKey("print.key")) {
       printKey = props.getProperty("print.key").trim().toLowerCase().equals("true");
@@ -201,5 +195,13 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
       throw new SerializationException("Unknown magic byte!");
     }
     return buffer.getInt();
+  }
+
+  private SchemaRegistryClient createSchemaRegistry(String schemaRegistryUrl) {
+    return schemaRegistry != null ? schemaRegistry : new CachedSchemaRegistryClient(
+        schemaRegistryUrl,
+        AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT
+    );
+
   }
 }
