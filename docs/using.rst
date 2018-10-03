@@ -60,6 +60,8 @@ Common |sr| Usage Examples
 
 These examples use curl commands to interact with the |sr| :ref:`API <schemaregistry_api>`.
 
+If you want to see a playbook of interacting with a |sr| configured with security, please refer to the :ref:`Confluent Platform demo<cp-demo>`
+
 -------------------------------------------------------------------
 Registering a New Version of a Schema Under the Subject "Kafka-key"
 -------------------------------------------------------------------

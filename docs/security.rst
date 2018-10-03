@@ -13,7 +13,7 @@
 
 For more details, check the :ref:`configuration options<schemaregistry_config>`.
 
-If you want to see full configurations for a secured |sr|, please refer to the :ref:`Confluent Platform demo<tutorials>`
+If you want to see full configurations for a secured |sr|, please refer to the :ref:`Confluent Platform demo<cp-demo>`
 
 
 Kafka Store
