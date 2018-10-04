@@ -58,6 +58,8 @@ Start each |cp| service in its own terminal using this order of operations:
 Common |sr| Usage Examples
 --------------------------
 
+.. tip:: For a detailed example that uses |sr| configured with security, see the :ref:`Confluent Platform demo <cp-demo>`.
+
 These examples use curl commands to interact with the |sr| :ref:`API <schemaregistry_api>`.
 
 -------------------------------------------------------------------
