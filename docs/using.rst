@@ -92,7 +92,7 @@ Registering an Existing Schema to a New Subject Name
 ---------------------------------------------------------------------
 
 Use case: there is an existing schema registered to a subject called ``Kafka1``, and this same schema needs to be available to another subjected called ``Kafka2``.
-The following one line command reads the existing schema from ``Kafka1-value`` and registers it to ``Kafka2-value``.
+The following one-line command reads the existing schema from ``Kafka1-value`` and registers it to ``Kafka2-value``.
 It assumes the tool ``jq`` is installed on your machine.
 
 .. sourcecode:: bash
