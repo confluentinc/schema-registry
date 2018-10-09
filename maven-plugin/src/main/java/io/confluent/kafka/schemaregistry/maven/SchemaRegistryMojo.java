@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
@@ -30,11 +31,14 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collections;
 
 public abstract class SchemaRegistryMojo extends AbstractMojo {
 
   @Parameter(required = true)
   List<String> schemaRegistryUrls;
+  @Parameter
+  String basicAuthCredentialsSource;
   private SchemaRegistryClient client;
 
   void client(SchemaRegistryClient client) {
@@ -43,9 +47,15 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
 
   protected SchemaRegistryClient client() {
     if (null == this.client) {
-      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, null);
+      if (basicAuthCredentialsSource != null) {
+        this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, Collections
+            .singletonMap(
+              SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE,
+              basicAuthCredentialsSource));
+      } else {
+        this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, null);
+      }
     }
-
     return this.client;
   }
 
