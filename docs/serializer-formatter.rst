@@ -243,7 +243,7 @@ In the following example, we read the value of the messages in JSON.
 .. sourcecode:: bash
 
    bin/kafka-avro-console-consumer --topic t1 \
-     --zookeeper localhost:2181
+     --bootstrap-server localhost:9092
 
    You should see following in the console.
      {"f1": "value1"}
@@ -267,7 +267,7 @@ In the following example, we read both the key and the value of the messages in 
 .. sourcecode:: bash
 
    bin/kafka-avro-console-consumer --topic t2 \
-     --zookeeper localhost:2181 \
+     --bootstrap-server localhost:9092 \
      --property print.key=true
 
    You should see following in the console.
@@ -280,7 +280,7 @@ deserializer
 .. sourcecode:: bash
 
    bin/kafka-avro-console-consumer --topic t2 \
-     --zookeeper localhost:2181 \
+     --bootstrap-server localhost:9092 \
      --property print.key=true
      --key.deserializer=org.apache.kafka.common.serialization.StringDeserializer
 
