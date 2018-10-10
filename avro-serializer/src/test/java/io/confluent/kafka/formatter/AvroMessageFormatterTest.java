@@ -127,6 +127,33 @@ public class AvroMessageFormatterTest {
     assertEquals("\"" + A_STRING + "\"\t1\n", baos.toString());
   }
 
+  @Test
+  public void testDeserializeRecordWithKeyAndValueAndPrintingSchemaIdsWithDelimiter()
+      throws IOException, RestClientException {
+    props.put("print.key", "false");
+    props.put("print.schema.ids", "true");
+    props.put("schema.id.separator", "___");
+    formatter.init(props);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    formatter.writeTo(recordWithKeyAndValue, ps);
+    assertEquals("\"" + A_STRING + "\"___1\n", baos.toString());
+  }
+
+  @Test
+  public void testDeserializeRecordWithKeyAndValueAndPrintingKeysAndSchemaIdsWithDelimiter()
+      throws IOException, RestClientException {
+    props.put("print.key", "true");
+    props.put("print.schema.ids", "true");
+    props.put("schema.id.separator", "___");
+    formatter.init(props);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    formatter.writeTo(recordWithKeyAndValue, ps);
+    assertEquals("\"" + KEY_STRING + "\"___2\t\"" + A_STRING + "\"___1\n", baos.toString());
+  }
   protected ConsumerRecord<byte[], byte[]> createConsumerRecord(boolean includeKey) {
     byte[] key = new byte[1 + KEY_SCHEMA_ID_BYTES.length + KEY_BYTES.length];
     key[0] = MAGIC_BYTE;
