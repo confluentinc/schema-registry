@@ -31,7 +31,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Collections;
+import java.util.HashMap;
 
 public abstract class SchemaRegistryMojo extends AbstractMojo {
 
@@ -39,6 +39,8 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
   List<String> schemaRegistryUrls;
   @Parameter
   String basicAuthCredentialsSource;
+  @Parameter
+  String userInfoConfig;
   private SchemaRegistryClient client;
 
   void client(SchemaRegistryClient client) {
@@ -47,14 +49,17 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
 
   protected SchemaRegistryClient client() {
     if (null == this.client) {
+      Map<String, String> config = new HashMap<>();
       if (basicAuthCredentialsSource != null) {
-        this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, Collections
-            .singletonMap(
-              SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE,
-              basicAuthCredentialsSource));
-      } else {
-        this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, null);
+        config.put(
+            SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, 
+            basicAuthCredentialsSource
+        );
+      } 
+      if (userInfoConfig != null) {
+        config.put(SchemaRegistryClientConfig.USER_INFO_CONFIG, userInfoConfig);
       }
+      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, config);
     }
     return this.client;
   }
