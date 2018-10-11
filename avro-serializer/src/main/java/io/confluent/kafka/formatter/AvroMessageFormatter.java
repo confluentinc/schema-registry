@@ -131,7 +131,7 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
       }
     }
     if (props.containsKey("schema.id.separator")) {
-      idSeparator = props.getProperty("schema.id.separator").getBytes();
+      idSeparator = props.getProperty("schema.id.separator").getBytes(StandardCharsets.UTF_8);
     }
   }
 
