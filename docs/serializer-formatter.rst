@@ -194,6 +194,22 @@ In the following example, we read both the key and the value of the messages in 
       "key1" \t {"f1": "value1"}
 
 
+The following example prints the key and value of the message in JSON and the schema IDs for the key and value.
+During registration, |sr| assigns an ID for new schemas that is greater than the IDs of the
+existing registered schemas. The IDs from different |sr| instances may be different.
+
+.. sourcecode:: bash
+
+   bin/kafka-avro-console-consumer --topic t2 \
+     --zookeeper localhost:2181 \
+     --property print.key=true \
+     --property print.schema.ids=true \
+     --property schema.id.separator=:
+
+   You should see following in the console.
+      "key1":1\t {"f1": "value1"}:2
+
+
 If the topic contains a  key in a format other than avro, you can specify your own key
 deserializer
 
