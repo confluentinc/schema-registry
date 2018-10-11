@@ -102,6 +102,19 @@ public class AvroMessageFormatterTest {
   }
 
   @Test
+  public void testDeserializeRecordWithKeyAndValueAndPrintingKeyWithoutSchemaId()
+      throws IOException, RestClientException {
+    props.put("print.key", "true");
+    props.put("print.schema.ids", "false");
+    formatter.init(props);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    formatter.writeTo(recordWithKeyAndValue, ps);
+    assertEquals("\"" + KEY_STRING + "\"\t\"" + A_STRING + "\"\n", baos.toString());
+  }
+
+  @Test
   public void testDeserializeRecordWithKeyAndValueAndPrintingKeyAndSchemaIds()
       throws IOException, RestClientException {
     props.put("print.key", "true");

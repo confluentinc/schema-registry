@@ -118,9 +118,11 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     }
     if (props.containsKey("print.schema.ids")) {
       printIds = props.getProperty("print.schema.ids").trim().toLowerCase().equals("true");
-      printValueId = true;
-      if (keyDeserializer == null || keyDeserializer instanceof AbstractKafkaAvroDeserializer) {
-        printKeyId = true;
+      if (printIds) {
+        printValueId = true;
+        if (keyDeserializer == null || keyDeserializer instanceof AbstractKafkaAvroDeserializer) {
+          printKeyId = true;
+        }
       }
     }
     if (props.containsKey("schema.id.separator")) {
