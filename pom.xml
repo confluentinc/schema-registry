@@ -59,6 +59,7 @@
         <exec-maven-plugin.version>1.2.1</exec-maven-plugin.version>
         <podam.version>6.0.2.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
+        <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
     </properties>
 
     <repositories>
@@ -124,6 +125,26 @@
     <build>
         <pluginManagement>
             <plugins>
+                <plugin>
+                    <groupId>io.confluent</groupId>
+                    <artifactId>kafka-connect-maven-plugin</artifactId>
+                    <version>${kafka.connect.maven.plugin.version}</version>
+                    <configuration>
+                        <documentationUrl>https://docs.confluent.io/${project.version}/schema-registry/docs/connect.html</documentationUrl>
+                        <sourceUrl>https://github.com/confluentinc/schema-registry</sourceUrl>
+                        
+                        <supportProviderName>${project.organization.name}</supportProviderName>
+                        <supportSummary>Confluent supports the Avro Converter alongside community members as part of its Confluent Platform open source offering.</supportSummary>
+                        <supportUrl>https://docs.confluent.io/current/</supportUrl>
+                        <supportLogo>logos/confluent.png</supportLogo>
+                        
+                        <ownerUsername>confluentinc</ownerUsername>
+                        <ownerType>organization</ownerType>
+                        <ownerName>${project.organization.name}</ownerName>
+                        <ownerUrl>https://confluent.io/</ownerUrl>
+                        <ownerLogo>logos/confluent.png</ownerLogo>
+                    </configuration>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.avro</groupId>
                     <artifactId>avro-maven-plugin</artifactId>
