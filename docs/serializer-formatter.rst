@@ -194,10 +194,9 @@ In the following example, we read both the key and the value of the messages in 
       "key1" \t {"f1": "value1"}
 
 
-In the following example, we read both the key and the value of the messages in JSON
-but also print the ID of the schema for the key and value. Note that Schema Registry assigns
-an ID for a new schema at registration time that is greater than the IDs of the already registered
-schemas. The IDs from different Schema Registries may be different.
+The following example prints the key and value of the message in JSON and the schema IDs for the key and value.
+During registration, |sr| assigns an ID for new schemas that is greater than the IDs of the
+existing registered schemas. The IDs from different |sr| instances may be different.
 
 .. sourcecode:: bash
 
