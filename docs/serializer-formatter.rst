@@ -311,7 +311,7 @@ deserializer
    bin/kafka-avro-console-consumer --topic t2 \
      --bootstrap-server localhost:9092 \
      --property print.key=true
-     --key.deserializer=org.apache.kafka.common.serialization.StringDeserializer
+     --key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
 
 
 Wire Format
