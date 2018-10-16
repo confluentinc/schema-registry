@@ -282,7 +282,7 @@ deserializer
    bin/kafka-avro-console-consumer --topic t2 \
      --zookeeper localhost:2181 \
      --property print.key=true
-     --key.deserializer=org.apache.kafka.common.serialization.StringDeserializer
+     --key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
 
 
 Wire Format
