@@ -1,6 +1,7 @@
 package io.confluent.kafka.serializers;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.junit.Assert.assertThat;
 
@@ -127,6 +128,10 @@ public class AbstractKafkaAvroDeserializerTest {
     org.apache.avro.Schema avroSchema = deserialized.getSchema();
     assertThat(
         avroSchema.getObjectProp(
+            AbstractKafkaAvroDeserializer.SCHEMA_REGISTRY_SCHEMA_VERSION_PROP),
+        instanceOf(Integer.class));
+    assertThat(
+        (Integer) avroSchema.getObjectProp(
             AbstractKafkaAvroDeserializer.SCHEMA_REGISTRY_SCHEMA_VERSION_PROP),
         equalTo(version));
   }
