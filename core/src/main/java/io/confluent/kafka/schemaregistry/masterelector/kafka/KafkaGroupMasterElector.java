@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
@@ -24,7 +25,6 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.ClientDnsLookup;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -116,7 +116,10 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       );
       List<String> bootstrapServers
           = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
-      List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers);
+      List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+          bootstrapServers,
+          ClientDnsLookup.DEFAULT.toString()
+      );
       this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
       String metricGrpPrefix = "kafka.schema.registry";
 
