@@ -6,10 +6,6 @@
 This section describes the key considerations before going to production with your cluster. However, it is not an
 exhaustive guide to running your |sr| in production.
 
-.. contents::
-   :local:
-   :depth: 1
-
 Hardware
 --------
 
