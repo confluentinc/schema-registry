@@ -367,3 +367,94 @@ To manually register the schema outside of the application, send the schema to |
 
 Schema Evolution and Compatibility
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Up till now, you have seen the benefit of |sr-long| as being centralized schema management that enables client applications to register and retrieve globally unique schema ids.
+The main value, however, is in enabling schema evolution.
+Similar to how APIs evolve and need to be compatible for all applications that rely on old and new versions of the API, schemas also evolve and likewise need to be compatible for all applications that rely on old and new versions of the schema.
+This schema evolution is a natural behavior of how applications and data develop over time.
+
+|sr-long| embraces schema evolution and provides compatibility checks.
+These compatibility checks ensure that the contract between producers and consumers are not broken, especially important in Kafka in which producers and consumers are decoupled.
+Compatibility checks allow producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
+
+The types of compatibility:
+
+* `Forward`: consumers can still read data written by producers using newer schemas
+* `Backward`: upgraded consumers can still read data written by producers using older schemas
+* `Full`: forward and backward compatible
+* `None`: compatibility checks disabled
+
+By default, |sr| is configured for backward compatibility.
+You can change this globally or per subject, but for the remainder of this tutorial, we will leave the default compatibility level to `backward`.
+
+In our example of the `Payment` schema, let's say now some applications are sending additional information for each payment, e.g., a field that represents the region of sale.
+
+.. sourcecode:: json
+
+   [
+   {"namespace": "io.confluent.examples.clients.basicavro",
+    "type": "record",
+    "name": "Payment",
+    "fields": [
+        {"name": "id", "type": "string"},
+        {"name": "amount", "type": "double"}
+        {"name": "region", "type": "string"}
+    ]
+   }
+   ]
+
+Before proceeding, think about whether this schema is backward compatible.
+Specifically ask, can a consumer use this schema to read data written by producers using the older schema without the `region` field?
+
+The answer is no.
+Consumers will fail reading data that do not have the `region` field, so it is not backward compatible.
+You can test this by trying to manually register the above schema.
+
+.. sourcecode:: bash
+
+   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\"}]}"}' http://localhost:8081/subjects/Raleigh-value/versions
+   {"error_code":409,"message":"Schema being registered is incompatible with an earlier schema"}
+
+To keep the contract, the new schema must assume default values for the new fields if they are not provided.
+Change the schema to assume a default value for `region`.
+
+.. sourcecode:: json
+
+   [
+   {"namespace": "io.confluent.examples.clients.basicavro",
+    "type": "record",
+    "name": "Payment",
+    "fields": [
+        {"name": "id", "type": "string"},
+        {"name": "amount", "type": "double"}
+        {"name": "region", "type": "string", "default": ""}
+    ]
+   }
+   ]
+
+Now if you try to manually register this schema, it will succeed:
+
+.. sourcecode:: bash
+
+   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\"}]}"}' http://localhost:8081/subjects/Raleigh-value/versions
+   {"id":2}
+
+View the latest subject for `Raleigh-value` in |sr|:
+
+.. sourcecode:: bash
+
+   $ curl --silent -X GET http://localhost:8081/subjects/Raleigh-value/versions/latest | jq .
+   {
+     "subject": "Raleigh-value",
+     "version": 2,
+     "id": 2,
+     "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\",\"default\":\"\"}]}"
+   }
+
+Notice the changes:
+
+# `version`: changed from `1` to `2`
+# `id`: changed from `1` to `2`
+# `schema`: changed with the new field `region` with the default value
+
+
