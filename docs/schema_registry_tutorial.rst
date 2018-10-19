@@ -41,6 +41,9 @@ The target audience is a developer writing Kafka streaming applications, who wan
 
 This tutorial is not meant to cover the operational aspects of running the |sr| service. For production deployments of |sr-long|, please refer to :ref:`Schema Registry Operations<schemaregistry_operations>`.
 
+Before You Begin
+~~~~~~~~~~~~~~~~
+
 Prerequisites
 ^^^^^^^^^^^^^
 
@@ -87,7 +90,7 @@ Before proceeding with this tutorial
 .. _schema_registry_tutorial_definition:
 
 Terminology Levelset
-~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^
 
 First let us levelset on terminology: what is a `schema` versus a `topic` versus a `subject`.
 
