@@ -114,7 +114,7 @@ The first thing developers need to do is agree on a basic schema for data.
 Client applications are forming a contract that producers will write data in a compatible schema and consumers will be able to read that data.
 Of course, applications can use many schemas for many topics, but in this tutorial we will look at one.
 
-Consider the `first Payment schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc>`__:
+Consider the `original Payment schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc>`__:
 
 .. sourcecode:: json
 
@@ -356,7 +356,7 @@ By default, |sr| is configured for backward compatibility.
 You can change this globally or per subject, but for the remainder of this tutorial, we will leave the default compatibility level to `backward`.
 
 In our example of the Payment schema, let's say now some applications are sending additional information for each payment, e.g., a field `region` that represents the place of sale.
-Consider the `first Payment schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc>`__:
+Consider the `Payment2a schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc>`__:
 
 .. sourcecode:: json
 
@@ -375,22 +375,53 @@ Consider the `first Payment schema<https://github.com/confluentinc/examples/blob
 
 Before proceeding, think about whether this schema is backward compatible.
 Specifically, ask yourself whether a consumer can use this schema to read data written by producers using the older schema without the `region` field?
-
 The answer is no.
 Consumers will fail reading data with the older schema, because the older schema does not have the `region` field, so it is not backward compatible.
-You can test this by trying to manually register the above schema.
+
+Confluent provides a `Schema Registry Maven Plugin<https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`__ with which you can check compatibility in development.
+Our sample `pom.xml<https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml#L84-L99>`__ uses this plugin to enable compatibility checks.
+
+.. sourcecode:: xml
+
+      <plugin>
+          <groupId>io.confluent</groupId>
+          <artifactId>kafka-schema-registry-maven-plugin</artifactId>
+          <version>5.0.0</version>
+          <configuration>
+              <schemaRegistryUrls>
+                  <param>http://localhost:8081</param>
+              </schemaRegistryUrls>
+              <subjects>
+                  <transactions-value>src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc</transactions-value>
+              </subjects>
+          </configuration>
+          <goals>
+              <goal>test-compatibility</goal>
+          </goals>
+      </plugin>
+
+It is currently configured to check compatibility of the new `Payment2a` schema for the `transactions-value` subject in |sr|.
+Run the check and see that it fails:
+
+.. sourcecode:: bash
+
+   $ mvn io.confluent:kafka-schema-registry-maven-plugin:5.0.0:test-compatibility
+   ....
+   [ERROR] Schema /Users/yeva/git/examples/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc is not compatible with subject(transactions-value)
+   ....
+
+There is alternative way to manually try to register the schema to |sr|, which is useful for non-Java clients.
+You can try registering the new schema `Payment2a` directly, but |sr| rejects it, with an error message that it is incompatible.
 
 .. sourcecode:: bash
 
    $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
    {"error_code":409,"message":"Schema being registered is incompatible with an earlier schema"}
 
-|sr| rejects the new schema registration, with an error message that it is incompatible.
-Without |sr| checking compatibility, your applications would break.
-
+As you can see, without |sr| checking compatibility, your applications would break.
 To keep the producer-consumer contract, the new schema must assume default values for the new fields if they are not provided.
 Therefore, there must be a default value for `region` to maintain backward compatibility.
-Consider another `updated Payment schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc>`__:
+Consider an updated `Payment2b schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc>`__:
 
 .. sourcecode:: json
 
@@ -407,7 +438,17 @@ Consider another `updated Payment schema<https://github.com/confluentinc/example
    }
    ]
 
-Now if you try to manually register this schema, it will succeed:
+Update the `pom.xml<https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`__ to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
+Re-run the check and see that it fails:
+
+.. sourcecode:: bash
+
+   $ mvn io.confluent:kafka-schema-registry-maven-plugin:5.0.0:test-compatibility
+   ....
+   [INFO] Schema /Users/yeva/git/examples/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc is compatible with subject(transactions-value)
+   ....
+
+You can try registering the new schema `Payment2b` directly, and it succeeds.
 
 .. sourcecode:: bash
 
