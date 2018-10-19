@@ -84,13 +84,10 @@ Before proceeding with this tutorial
    $ cd examples/clients/avro
 
 
-Schemas
-~~~~~~~
-
 .. _schema_registry_tutorial_definition:
 
-Terminology
-^^^^^^^^^^^
+Terminology Levelset
+~~~~~~~~~~~~~~~~~~~~
 
 First let us levelset on terminology: what is a `schema` versus a `topic` versus a `subject`.
 
@@ -108,9 +105,10 @@ The |sr| subject `transactions-value` has at least one schema called `Payment`.
 The |sr| subject `transactions-value` defines the scope in which schemas for the topic transactions can evolve and |sr| does compatibility checking within this scope.
 If developers evolve the schema `Payment` and produce new messages to the topic `transactions`, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
 
+.. _schema_registry_tutorial_definition:
 
 Schema Definition
-^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~
 
 The first thing developers need to do is agree on a basic schema for data.
 Client applications are forming a contract that producers will write data in a compatible schema and consumers will be able to read that data.
@@ -142,8 +140,8 @@ Let's break down what this schema defines
 ## the second field in this record is called `amount`, and it is of type `double.
 
 
-Writing Applications
-~~~~~~~~~~~~~~~~~~~~
+Client Applications
+~~~~~~~~~~~~~~~~~~~
 
 Generally speaking, Kafka applications using Avro data and |sr-long| need to specify two configuration parameters:
 
@@ -246,11 +244,8 @@ For configurations examples of other Kafka clients interoperating with Avro and 
 * `Non-Java clients based on librdkafka including Confluent Python, Confluent Go, Confluent DotNet<https://docs.confluent.io/current/clients/index.html>`__
 
 
-Schemas and Schema Ids
-~~~~~~~~~~~~~~~~~~~~~~
-
 Schemas in Schema Registry
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 By this point, you have producers serializing Avro data and consuemrs deserializing Avro data, and writing schemas to |sr-long|.
 You can view subjects and associated schemas via the REST endpoint in |sr|.
@@ -301,7 +296,7 @@ YEVA: insert screenshot
 
 
 Schema Ids in Messages
-^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~
 
 Integration with |sr-long| means that Kafka messages do not need to be written with the entire Avro schema.
 Instead, Kafka messages are written with the schema _id_.
@@ -316,7 +311,7 @@ The consumer caches this schema to schema id mapping for subsequent message read
 
 
 Auto Schema Registration
-^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 Additionally, by default, client applications automatically register new schemas.
 If they produce new messages to a new topic, then they will automatically try to register new schemas.
