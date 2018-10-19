@@ -140,8 +140,8 @@ Let's break down what this schema defines
 ## the second field in this record is called `amount`, and it is of type `double.
 
 
-Client Applications
-~~~~~~~~~~~~~~~~~~~
+Client Applications Writing Avro
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Generally speaking, Kafka applications using Avro data and |sr-long| need to specify two configuration parameters:
 
@@ -340,13 +340,16 @@ To manually register the schema outside of the application, send the schema to |
 Schema Evolution and Compatibility
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Changing Schemas
+^^^^^^^^^^^^^^^^
+
 Up till now, you have seen the benefit of |sr-long| as being centralized schema management that enables client applications to register and retrieve globally unique schema ids.
 The main value, however, is in enabling schema evolution.
 Similar to how APIs evolve and need to be compatible for all applications that rely on old and new versions of the API, schemas also evolve and likewise need to be compatible for all applications that rely on old and new versions of the schema.
 This schema evolution is a natural behavior of how applications and data develop over time.
 
-|sr-long| embraces schema evolution and provides compatibility checks.
-These compatibility checks ensure that the contract between producers and consumers are not broken, especially important in Kafka in which producers and consumers are decoupled.
+|sr-long| allows for schema evolution and provides compatibility checks to ensure that the contract between producers and consumers is not broken.
+This is especially important in Kafka in which producers and consumers are decoupled applications, and organizational totally different teams.
 Compatibility checks allow producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
 
 The types of `compatibility<https://docs.confluent.io/current/avro.html#data-serialization-and-evolution>`__:
