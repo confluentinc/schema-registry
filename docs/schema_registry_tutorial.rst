@@ -244,8 +244,11 @@ For configurations examples of other Kafka clients interoperating with Avro and 
 * `Non-Java clients based on librdkafka including Confluent Python, Confluent Go, Confluent DotNet<https://docs.confluent.io/current/clients/index.html>`__
 
 
+Centralized Schema Management
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Schemas in Schema Registry
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 By this point, you have producers serializing Avro data and consuemrs deserializing Avro data, and writing schemas to |sr-long|.
 You can view subjects and associated schemas via the REST endpoint in |sr|.
@@ -279,7 +282,9 @@ Let's break down what this version of the schema defines
 # `id`: the globally unique schema version id, unique across all schemas in all subjects
 # `schema`: the structure that defines the schema format
 
-Based on the schema id, you can also retrieve the associated schema in |sr|:
+The schema is identical to the :ref:`schema file defined for Java client applications<schema_registry_tutorial_definition>`.
+
+Based on the schema id, you can also retrieve the associated schema by querying |sr| REST endpoint:
 
 .. sourcecode:: bash
 
@@ -288,15 +293,14 @@ Based on the schema id, you can also retrieve the associated schema in |sr|:
      "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"
    }
 
-The schema is identical to the :ref:`schema file defined for Java client applications<schema_registry_tutorial_definition>`.
+If you are using |c3|, you can view the topic schema easily from the UI:
 
-If you were using KSQL and had registered the topic as shown earlier, you could `DESCRIBE` the schema of the stream from |c3|.
+![image](images/c3-schema-transactions.png)
 
-YEVA: insert screenshot
 
 
 Schema Ids in Messages
-~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^
 
 Integration with |sr-long| means that Kafka messages do not need to be written with the entire Avro schema.
 Instead, Kafka messages are written with the schema _id_.
@@ -311,7 +315,7 @@ The consumer caches this schema to schema id mapping for subsequent message read
 
 
 Auto Schema Registration
-~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 Additionally, by default, client applications automatically register new schemas.
 If they produce new messages to a new topic, then they will automatically try to register new schemas.
@@ -354,6 +358,10 @@ The types of `compatibility<https://docs.confluent.io/current/avro.html#data-ser
 
 By default, |sr| is configured for backward compatibility.
 You can change this globally or per subject, but for the remainder of this tutorial, we will leave the default compatibility level to `backward`.
+
+
+Failing Compatibility Checks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In our example of the Payment schema, let's say now some applications are sending additional information for each payment, e.g., a field `region` that represents the place of sale.
 Consider the `Payment2a schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc>`__:
@@ -418,9 +426,15 @@ You can try registering the new schema `Payment2a` directly, but |sr| rejects it
    $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
    {"error_code":409,"message":"Schema being registered is incompatible with an earlier schema"}
 
-As you can see, without |sr| checking compatibility, your applications would break.
-To keep the producer-consumer contract, the new schema must assume default values for the new fields if they are not provided.
-Therefore, there must be a default value for `region` to maintain backward compatibility.
+
+Passing Compatibility Checks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+|sr| checks schema compatibility as they evolve to keep the producer-consumer contract.
+Without |sr| checking compatibility, your applications could break on schema changes.
+
+To maintain backward compatibility, a new schema must assume default values for the new fields if they are not provided.
+Therefore, there must be a default value for `region`.
 Consider an updated `Payment2b schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc>`__:
 
 .. sourcecode:: json
