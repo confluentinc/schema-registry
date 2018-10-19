@@ -49,12 +49,13 @@ Prerequisites
 
 Before proceeding with this tutorial
 
-# Verify have installed on your local machine:
+1. Verify have installed on your local machine:
 
 * Java 1.8 to run |cp|
 * Maven to compile the client Java code
+* `jq` tool to make output from SR REST endpoint pretty
 
-# Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have running on your local machine a basic Kafka cluster with |sr-long| and other services.
+2. Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have running on your local machine a basic Kafka cluster with |sr-long| and other services.
 
 .. sourcecode:: bash
 
@@ -79,7 +80,7 @@ Before proceeding with this tutorial
    control-center is [UP]
 
 
-# Clone the |cp| `examples` repo in GitHub and work in the `clients/avro/` subdirectory.
+3. Clone the |cp| `examples` repo in GitHub and work in the `clients/avro/` subdirectory.
 
 .. sourcecode:: bash
 
