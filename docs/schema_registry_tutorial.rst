@@ -413,7 +413,7 @@ Our sample `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/cl
       </plugin>
 
 It is currently configured to check compatibility of the new `Payment2a` schema for the `transactions-value` subject in |sr|.
-Run the check and see that it fails:
+Run the compatibility check and verify that it fails:
 
 .. sourcecode:: bash
 
@@ -457,7 +457,7 @@ Consider an updated `Payment2b schema <https://github.com/confluentinc/examples/
    ]
 
 Update the `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_ to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
-Re-run the check and see that it fails:
+Re-run the compatibility check and verify that it fails:
 
 .. sourcecode:: bash
 
