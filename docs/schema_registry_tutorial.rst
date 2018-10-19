@@ -244,7 +244,7 @@ For configurations examples of other Kafka clients interoperating with Avro and 
 * `Kafka Streams <https://docs.confluent.io/current/streams/developer-guide/datatypes.html#avro>`_
 * `Kafka Connect <https://docs.confluent.io/current/schema-registry/docs/connect.html#using-kafka-connect-with-sr>`_
 * `Confluent REST Proxy <https://docs.confluent.io/current/kafka-rest/docs/api.html#post--topics-(string-topic_name)-partitions-(int-partition_id)>`_
-* `Non-Java clients based on librdkafka including Confluent Python, Confluent Go, Confluent DotNet <https://docs.confluent.io/current/clients/index.html>`_
+* `Non-Java clients based on librdkafka <https://docs.confluent.io/current/clients/index.html>`_ , including Confluent Python, Confluent Go, Confluent DotNet
 
 
 Centralized Schema Management
