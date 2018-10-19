@@ -9,8 +9,4 @@ This section contains |sr| configuration parameters organized by level of import
 - Medium: These parameters can have some impact on performance. Your specific environment will determine how much tuning effort should be focused on these parameters.
 - Low: These parameters have a less general or less significant impact on performance.
 
-.. contents::
-    :local:
-    :depth: 1
-
 .. include:: includes/shared-config.rst
