@@ -21,9 +21,14 @@ It walks through the steps to enable client applications to read and write Avro 
 Benefits
 ^^^^^^^^
 
-Kafka producers write data to Kafka topics that is later consumed by Kafka consumers.
-There is an implicit contract that producers write data with a schema that can be read by consumers, even as producers and consumers evolve their schemas.
-It is useful to think about schemas as APIs, and as such, schema evolution requires compatibility checks to ensure that contract is not broken. 
+Kafka producers write data to Kafka topics and Kafka consumers read data from Kafka topics.
+There is an implicit "contract" that producers write data with a schema that can be read by consumers, even as producers and consumers evolve their schemas.
+
+It is useful to think about schemas as APIs.
+It is critical that applications built on top of those APIs continue to work even if the APIs have changed.
+Similarly, schema evolution requires compatibility checks to ensure that the producer-consumer contract is not broken. 
+This is where |sr-long| helps: it provides centralized schema management and compatibility checks as schemas evolve.
+
 For a more in-depth understanding of the benefits of Avro and |sr|, please refer to the following resources:
 
 * `Why Avro For Kafka Data<https://www.confluent.io/blog/avro-kafka-data/>`__
@@ -32,7 +37,7 @@ For a more in-depth understanding of the benefits of Avro and |sr|, please refer
 Target Audience
 ^^^^^^^^^^^^^^^
 
-The target audience is a developer writing streaming applications and wants compatibility checks and centralized schema management provided by |sr|.
+The target audience is a developer writing Kafka streaming applications, who wants to build a robust application leveraging Avro data and |sr-long|.
 
 This tutorial is not meant to cover the operational aspects of running the |sr| service. For production deployments of |sr-long|, please refer to :ref:`Schema Registry Operations<schemaregistry_operations>`.
 
@@ -41,7 +46,12 @@ Prerequisites
 
 Before proceeding with this tutorial
 
-# Use the :ref:`quickstart` to bring up |cp|.
+# Verify have installed on your local machine:
+
+* Java 1.8 to run |cp|
+* Maven to compile the client Java code
+
+# Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have running on your local machine a basic Kafka cluster with |sr-long| and other services.
 
 .. sourcecode:: bash
 
@@ -66,36 +76,51 @@ Before proceeding with this tutorial
    control-center is [UP]
 
 
-# Clone the |cp| `examples` repo in GitHub.
+# Clone the |cp| `examples` repo in GitHub and work in the `clients/avro/` subdirectory.
 
 .. sourcecode:: bash
 
    $ git clone https://github.com/confluentinc/examples.git
+   $ cd examples/clients/avro
 
-You should have installed on your local machine:
-
-* Java 1.8 to run |cp|
-* Maven to compile the client Java code
-
-.. note::
-
-   The focus of this tutorial is on Java-based clients, including producers and consumers, or embedded producers and consumers in Kafka Streams API, KSQL, or Kafka Connect.  Non-Java clients, including librdkafka, Confluent Python, Confluent Go, Confluent DotNet, also work with Avro and |sr|.  For those clients, please `Kafka Clients documentation<https://docs.confluent.io/current/clients/index.html>`__.
 
 Schemas
 ~~~~~~~
 
 .. _schema_registry_tutorial_definition:
 
+Terminology
+^^^^^^^^^^^
+
+First let us levelset on terminology: what is a `schema` versus a `topic` versus a `subject`.
+
+A Kafka topic contains messages, and each message is a key-value pair.
+Either the message key or the message value, or both, can be independently serialized as Avro.
+The Kafka topic name is independent of the schema name.
+When a producer writes a message to a Kafka topic, it can serialize the message key or message value as Avro (or both).
+By default, the subject that is registered in |sr| is derived from the Kafka topic name.
+
+As a practical example, let's say a retail business is streaming transactions in a Kafka topic called `transactions`.
+A producer is writing data with a schema `Payment` to that Kafka topic.
+If the producer is serializing the message value as Avro, |sr| has a subject called `transactions-value`.
+If the producer is also serializing the message key as Avro, |sr| would have a subject called `transactions-key`, but for simplicity, in this tutorial we consider only about the message value.
+The |sr| subject `transactions-value` has at least one schema called `Payment`.
+The |sr| subject `transactions-value` defines the scope in which schemas for the topic transactions can evolve and |sr| does compatibility checking within this scope.
+If developers evolve the schema `Payment` and produce new messages to the topic `transactions`, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
+
+
 Schema Definition
 ^^^^^^^^^^^^^^^^^
 
-The first thing to do is to agree on a basic schema for your topic data.
+The first thing developers need to do is agree on a basic schema for data.
 Client applications are forming a contract that producers will write data in a compatible schema and consumers will be able to read that data.
-Of course there applications can use many schemas, but for this tutorial, we will look at one.
-Consider the following schema from https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/payment.avsc.
+Of course, applications can use many schemas for many topics, but in this tutorial we will look at one.
+
+Consider the following Payment schema:
 
 .. sourcecode:: json
 
+   $ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc
    [
    {"namespace": "io.confluent.examples.clients.basicavro",
     "type": "record",
@@ -117,25 +142,6 @@ Let's break down what this schema defines
 ## the second field in this record is called `amount`, and it is of type `double.
 
 
-Schema vs Topic vs Subject
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-It is important to understand the terminology, so let's define what is a `schema` versus a `topic` versus a `subject`.
-
-A Kafka topic contains messages, and each message is a key-value pair.
-Either the message key or the message value, or both, can be independently serialized as Avro.
-The Kafka topic name is independent of the schema name.
-When a producer writes a message to a Kafka topic, it can serialize the message key or message value as Avro.
-By default, the subject that is registered in |sr| is derived from the Kafka topic name.
-
-As a practical example, let's say a producer is writing data with a schema `Payment` to a Kafka topic called `transactions`.
-If the producer is serializing the message value as Avro, |sr| has a subject called `transactions-value`.
-If the producer is also serializing the message key as Avro, |sr| has a subject called `transactions-key`, but in this tutorial for simplicity we talk only about the message value.
-The |sr| subject `transactions-value` has at least one schema called `Payment`.
-The |sr| subject `transactions-value` defines the scope in which schemas for the topic transactions can evolve and |sr| does compatibility checking within this scope.
-If developers evolve the schema `Payment`, the |sr| subject `transactions-value` will check that those newly evolved schemas are compatible and add those new schemas to the subject.
-
-
 Writing Applications
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -143,8 +149,6 @@ Generally speaking, Kafka applications using Avro data and |sr-long| need to spe
 
 # Avro serializer or deserializer
 # URL to the |sr-long|
-
-The sections below show how to do it in various clients.
 
 Java Producers
 ^^^^^^^^^^^^^^
@@ -154,7 +158,7 @@ Java applications that have Kafka producers using Avro require `pom.xml` files t
 # Avro dependencies to serialize data as Avro, including `org.apache.avro.avro` and `io.confluent.kafka-avro-serializer`
 # Avro plugin `avro-maven-plugin` to generate Java class files from the source schema
 
-For a full `pom.xml` example, please refer to `sample pom.xml<https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`__.
+For a full `pom.xml` example, please refer to this `pom.xml<https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`__.
 
 Within the application, Java producers that are serializing data as Avro set two main configurations parameters:
 
@@ -235,10 +239,11 @@ The objective of this tutorial is to learn about Avro and |sr| centralized schem
 To keep examples simple, we focus on Java producers and consumers, but other Kafka clients work in similar ways.
 For configurations examples of other Kafka clients interoperating with Avro and |sr|:
 
-* `Kafka Streams<https://docs.confluent.io/current/streams/developer-guide/datatypes.html#avro>`__
 * `KSQL<https://docs.confluent.io/current/ksql/docs/installation/server-config/avro-schema.html#configuring-avro-and-sr-for-ksql>`__
+* `Kafka Streams<https://docs.confluent.io/current/streams/developer-guide/datatypes.html#avro>`__
 * `Kafka Connect<https://docs.confluent.io/current/schema-registry/docs/connect.html#using-kafka-connect-with-sr>`__
 * `Confluent REST Proxy<https://docs.confluent.io/current/kafka-rest/docs/api.html#post--topics-(string-topic_name)-partitions-(int-partition_id)>`__
+* `Non-Java clients based on librdkafka including Confluent Python, Confluent Go, Confluent DotNet<https://docs.confluent.io/current/clients/index.html>`__
 
 
 Schemas and Schema Ids
@@ -355,10 +360,12 @@ The types of compatibility:
 By default, |sr| is configured for backward compatibility.
 You can change this globally or per subject, but for the remainder of this tutorial, we will leave the default compatibility level to `backward`.
 
-In our example of the `Payment` schema, let's say now some applications are sending additional information for each payment, e.g., a field that represents the region of sale.
+In our example of the Payment schema, let's say now some applications are sending additional information for each payment, e.g., a field that represents the region of sale.
+Consider the updated Payment schema in the file `Payment2a.avsc`:
 
 .. sourcecode:: json
 
+   $ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc
    [
    {"namespace": "io.confluent.examples.clients.basicavro",
     "type": "record",
@@ -384,10 +391,12 @@ You can test this by trying to manually register the above schema.
    {"error_code":409,"message":"Schema being registered is incompatible with an earlier schema"}
 
 To keep the contract, the new schema must assume default values for the new fields if they are not provided.
-Change the schema to assume a default value for `region`.
+Therefore, there must be a default value for `region` to maintain backward compatibility.
+Consider the updated Payment schema in the file `Payment2b.avsc`:
 
 .. sourcecode:: json
 
+   $ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc
    [
    {"namespace": "io.confluent.examples.clients.basicavro",
     "type": "record",
