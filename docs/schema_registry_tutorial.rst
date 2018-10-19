@@ -114,7 +114,7 @@ The first thing developers need to do is agree on a basic schema for data.
 Client applications are forming a contract that producers will write data in a compatible schema and consumers will be able to read that data.
 Of course, applications can use many schemas for many topics, but in this tutorial we will look at one.
 
-Consider the following Payment schema:
+Consider the `first Payment schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc>`__:
 
 .. sourcecode:: json
 
@@ -345,7 +345,7 @@ This schema evolution is a natural behavior of how applications and data develop
 These compatibility checks ensure that the contract between producers and consumers are not broken, especially important in Kafka in which producers and consumers are decoupled.
 Compatibility checks allow producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
 
-The types of compatibility:
+The types of `compatibility<https://docs.confluent.io/current/avro.html#data-serialization-and-evolution>`__:
 
 * `Forward`: consumers can still read data written by producers using newer schemas
 * `Backward`: upgraded consumers can still read data written by producers using older schemas
@@ -355,8 +355,8 @@ The types of compatibility:
 By default, |sr| is configured for backward compatibility.
 You can change this globally or per subject, but for the remainder of this tutorial, we will leave the default compatibility level to `backward`.
 
-In our example of the Payment schema, let's say now some applications are sending additional information for each payment, e.g., a field that represents the region of sale.
-Consider the updated Payment schema in the file `Payment2a.avsc`:
+In our example of the Payment schema, let's say now some applications are sending additional information for each payment, e.g., a field `region` that represents the place of sale.
+Consider the `first Payment schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc>`__:
 
 .. sourcecode:: json
 
@@ -374,10 +374,10 @@ Consider the updated Payment schema in the file `Payment2a.avsc`:
    ]
 
 Before proceeding, think about whether this schema is backward compatible.
-Specifically ask, can a consumer use this schema to read data written by producers using the older schema without the `region` field?
+Specifically, ask yourself whether a consumer can use this schema to read data written by producers using the older schema without the `region` field?
 
 The answer is no.
-Consumers will fail reading data that do not have the `region` field, so it is not backward compatible.
+Consumers will fail reading data with the older schema, because the older schema does not have the `region` field, so it is not backward compatible.
 You can test this by trying to manually register the above schema.
 
 .. sourcecode:: bash
@@ -385,9 +385,12 @@ You can test this by trying to manually register the above schema.
    $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
    {"error_code":409,"message":"Schema being registered is incompatible with an earlier schema"}
 
-To keep the contract, the new schema must assume default values for the new fields if they are not provided.
+|sr| rejects the new schema registration, with an error message that it is incompatible.
+Without |sr| checking compatibility, your applications would break.
+
+To keep the producer-consumer contract, the new schema must assume default values for the new fields if they are not provided.
 Therefore, there must be a default value for `region` to maintain backward compatibility.
-Consider the updated Payment schema in the file `Payment2b.avsc`:
+Consider another `updated Payment schema<https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc>`__:
 
 .. sourcecode:: json
 
@@ -430,3 +433,10 @@ Notice the changes:
 # `schema`: changed with the new field `region` with the default value
 
 
+Next Steps
+~~~~~~~~~~
+
+# Adapt your applications to use Avro data
+# Change compatibility modes to suit your application needs
+# Evolve schemas so that they fail compatibility checks
+# Evolve schemas so that they pass compatibility checks
