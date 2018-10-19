@@ -41,7 +41,31 @@ Prerequisites
 
 Before proceeding with this tutorial
 
-# Use the :ref:`quickstart` to bring up the |cp|.
+# Use the :ref:`quickstart` to bring up |cp|.
+
+.. sourcecode:: bash
+
+   $ confluent start
+
+   This CLI is intended for development only, not for production
+   https://docs.confluent.io/current/cli/index.html
+
+   Starting zookeeper
+   zookeeper is [UP]
+   Starting kafka
+   kafka is [UP]
+   Starting schema-registry
+   schema-registry is [UP]
+   Starting kafka-rest
+   kafka-rest is [UP]
+   Starting connect
+   connect is [UP]
+   Starting ksql-server
+   ksql-server is [UP]
+   Starting control-center
+   control-center is [UP]
+
+
 # Clone the |cp| `examples` repo in GitHub.
 
 .. sourcecode:: bash
@@ -104,12 +128,12 @@ The Kafka topic name is independent of the schema name.
 When a producer writes a message to a Kafka topic, it can serialize the message key or message value as Avro.
 By default, the subject that is registered in |sr| is derived from the Kafka topic name.
 
-As a practical example, let's say a producer is writing data with a schema `Payment` to a Kafka topic called `Raleigh`.
-If the producer is serializing the message value as Avro, |sr| has a subject called `Raleigh-value`.
-If the producer is also serializing the message key as Avro, |sr| has a subject called `Raleigh-key`, but in this tutorial for simplicity we talk only about the message value.
-The |sr| subject `Raleigh-value` has at least one schema called `Payment`.
-The |sr| subject `Raleigh-value` defines the scope in which schemas for the topic Raleigh can evolve and |sr| does compatibility checking within this scope.
-If developers evolve the schema `Payment`, the |sr| subject `Raleigh-value` will check that those newly evolved schemas are compatible and add those new schemas to the subject.
+As a practical example, let's say a producer is writing data with a schema `Payment` to a Kafka topic called `transactions`.
+If the producer is serializing the message value as Avro, |sr| has a subject called `transactions-value`.
+If the producer is also serializing the message key as Avro, |sr| has a subject called `transactions-key`, but in this tutorial for simplicity we talk only about the message value.
+The |sr| subject `transactions-value` has at least one schema called `Payment`.
+The |sr| subject `transactions-value` defines the scope in which schemas for the topic transactions can evolve and |sr| does compatibility checking within this scope.
+If developers evolve the schema `Payment`, the |sr| subject `transactions-value` will check that those newly evolved schemas are compatible and add those new schemas to the subject.
 
 
 Writing Applications
@@ -204,74 +228,18 @@ For example:
 For a full Java consumer example, please refer to `the consumer example<https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/java/io/confluent/examples/clients/basicavro/ConsumerExample.java>`__.
 
 
-Kafka Streams
-^^^^^^^^^^^^^
+Other Kafka Clients
+^^^^^^^^^^^^^^^^^^^
 
-Java applications using the Kafka Streams API with Avro require `pom.xml` files to include:
+The objective of this tutorial is to learn about Avro and |sr| centralized schema management and compatibility checks.
+To keep examples simple, we focus on Java producers and consumers, but other Kafka clients work in similar ways.
+For configurations examples of other Kafka clients interoperating with Avro and |sr|:
 
-# Avro dependencies to serialize data as Avro, including `org.apache.avro.avro`, `io.confluent.kafka-avro-serializer`, and `io.confluent.kafka-streams-avro-serde`
-# Avro plugin `avro-maven-plugin` to generate Java class files from the source schema
+* `Kafka Streams<https://docs.confluent.io/current/streams/developer-guide/datatypes.html#avro>`__
+* `KSQL<https://docs.confluent.io/current/ksql/docs/installation/server-config/avro-schema.html#configuring-avro-and-sr-for-ksql>`__
+* `Kafka Connect<https://docs.confluent.io/current/schema-registry/docs/connect.html#using-kafka-connect-with-sr>`__
+* `Confluent REST Proxy<https://docs.confluent.io/current/kafka-rest/docs/api.html#post--topics-(string-topic_name)-partitions-(int-partition_id)>`__
 
-For a full `pom.xml` example, please refer to `sample pom.xml<https://github.com/confluentinc/examples/blob/5.0.0-post/connect-streams-pipeline/pom.xml>`__.
-
-Within the application, the Kafka streams properties require to set two main configurations parameters:
-
-# Avro serializer/deserializer for the Kafka value (or Kafka key)
-# URL to the |sr-long|
-
-Then the streams application can write and read records where the Kafka value is of `Payment` class.
-For example:
-
-.. sourcecode:: java
-
-   import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
-   import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
-
-   ....
-   props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, SpecificAvroSerde.class);
-   props.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl);
-   ....
-
-For a full Java Kafka Streams example, please refer to `the streams example<https://github.com/confluentinc/kafka-streams-examples/blob/5.0.x/src/main/java/io/confluent/examples/streams/WikipediaFeedAvroExample.java`__.
-
-KSQL
-^^^^
-
-KSQL queries with Avro require setting the configuration parameter:
-
-# URL to the |sr-long|
-
-Then KSQL queries can write serialized Avro data to Kafka topics or read from Kafka topics with serialized Avro data.
-For example:
-
-.. sourcecode:: sql
-
-   ksql> set 'ksql.schema.registry.url'='http://localhost:8081';
-   ....
-   ksql> CREATE STREAM raleighStream WITH (KAFKA_TOPIC='Raleigh', VALUE_FORMAT='AVRO');
-   ksql> CREATE STREAM newRaleighStream WITH (VALUE_FORMAT='AVRO') AS SELECT * FROM raleighStream;
-
-For a full KSQLexample, please refer to `the KSQL example<https://github.com/confluentinc/examples/blob/5.0.0-post/pageviews>`__.
-
-
-Kafka Connect
-^^^^^^^^^^^^^
-
-Kafka Connect using Avro require its embedded producers and consumers to be configured as follows:
-
-# Avro Converter for the Kafka value (or Kafka key)
-# URL to the |sr-long|
-
-This enables, by default, the source connectors to serialize Avro data and sink connectors to deserialize Avro data.
-For example:
-
-.. sourcecode:: bash
-
-   value.converter=io.confluent.connect.avro.AvroConverter
-   value.converter.schema.registry.url=http://localhost:8081
-   value.converter.schemas.enable=true
-
-For a full Kafka Connect, please refer to `the connect example<https://github.com/confluentinc/examples/blob/5.0.0-post/connect-streams-pipeline/jdbcspecificavro-connector.properties>`__.
 
 Schemas and Schema Ids
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -288,17 +256,17 @@ First, view all the subjects registered in |sr| (assuming |sr| is running on the
 
    $ curl --silent -X GET http://localhost:8081/subjects/ | jq .  
    [
-     "Raleigh-value"
+     "transactions-value"
    ]
 
-In our example, the Kafka topic `Raleigh` has messages whose value, i.e., payload, is Avro.
-View the associated subject `Raleigh-value` in |sr|:
+In our example, the Kafka topic `transaction` has messages whose value, i.e., payload, is Avro.
+View the associated subject `transactions-value` in |sr|:
 
 .. sourcecode:: bash
 
-   $ curl --silent -X GET http://localhost:8081/subjects/Raleigh-value/versions/latest | jq .
+   $ curl --silent -X GET http://localhost:8081/subjects/transactions-value/versions/latest | jq .
    {
-     "subject": "Raleigh-value",
+     "subject": "transactions-value",
      "version": 1,
      "id": 1,
      "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"
@@ -306,7 +274,7 @@ View the associated subject `Raleigh-value` in |sr|:
 
 Let's break down what this version of the schema defines
 
-# `subject`: the scope in which schemas for the messages in the topic `Raleigh` can evolve
+# `subject`: the scope in which schemas for the messages in the topic `transaction` can evolve
 # `version`: the schema version for this subject, which starts at 1 for each subject
 # `id`: the globally unique schema version id, unique across all schemas in all subjects
 # `schema`: the structure that defines the schema format
@@ -335,7 +303,7 @@ Instead, Kafka messages are written with the schema _id_.
 The producers writing the messages and the consumers reading the messages must be using the same |sr| to get the same understanding of mapping between a schema and schema id.
 
 In this example, a producer sends the new schema for `Payments` to |sr|.
-|sr| registers this schema `Payments` to the subject `Raleigh-value`, and returns the schema id of `1` to the producer.
+|sr| registers this schema `Payments` to the subject `transactions-value`, and returns the schema id of `1` to the producer.
 The producer caches this schema to schema id mapping for subsequent message writes, so it only contacts |sr| on first schema write.
 When a consumer reads this data, it sees the Avro schema id of `1` and sends a schema request to |sr|.
 |sr| retrieves the schema associated to schema id `1`, and returns the schema to the consumer.
@@ -357,11 +325,11 @@ Within the application, disable automatic schema registration by setting the con
 
    props.put(AbstractKafkaAvroSerDeConfig.AUTO_REGISTER_SCHEMAS, false);
 
-To manually register the schema outside of the application, send the schema to |sr| and associate it with a subject, in this case `Raleigh-value`.  It returns a schema id of `1`.
+To manually register the schema outside of the application, send the schema to |sr| and associate it with a subject, in this case `transactions-value`.  It returns a schema id of `1`.
 
 .. sourcecode:: bash
 
-   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"}' http://localhost:8081/subjects/Raleigh-value/versions
+   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
    {"id":1}
 
 
@@ -397,7 +365,7 @@ In our example of the `Payment` schema, let's say now some applications are send
     "name": "Payment",
     "fields": [
         {"name": "id", "type": "string"},
-        {"name": "amount", "type": "double"}
+        {"name": "amount", "type": "double"},
         {"name": "region", "type": "string"}
     ]
    }
@@ -412,7 +380,7 @@ You can test this by trying to manually register the above schema.
 
 .. sourcecode:: bash
 
-   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\"}]}"}' http://localhost:8081/subjects/Raleigh-value/versions
+   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
    {"error_code":409,"message":"Schema being registered is incompatible with an earlier schema"}
 
 To keep the contract, the new schema must assume default values for the new fields if they are not provided.
@@ -426,7 +394,7 @@ Change the schema to assume a default value for `region`.
     "name": "Payment",
     "fields": [
         {"name": "id", "type": "string"},
-        {"name": "amount", "type": "double"}
+        {"name": "amount", "type": "double"},
         {"name": "region", "type": "string", "default": ""}
     ]
    }
@@ -436,16 +404,16 @@ Now if you try to manually register this schema, it will succeed:
 
 .. sourcecode:: bash
 
-   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\"}]}"}' http://localhost:8081/subjects/Raleigh-value/versions
+   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\",\"default\":\"\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
    {"id":2}
 
-View the latest subject for `Raleigh-value` in |sr|:
+View the latest subject for `transactions-value` in |sr|:
 
 .. sourcecode:: bash
 
-   $ curl --silent -X GET http://localhost:8081/subjects/Raleigh-value/versions/latest | jq .
+   $ curl --silent -X GET http://localhost:8081/subjects/transactions-value/versions/latest | jq .
    {
-     "subject": "Raleigh-value",
+     "subject": "transactions-value",
      "version": 2,
      "id": 2,
      "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\",\"default\":\"\"}]}"
