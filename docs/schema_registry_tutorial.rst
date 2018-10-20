@@ -48,7 +48,7 @@ Before proceeding with this tutorial
 
    * Java 1.8 to run |cp|
    * Maven to compile the client Java code
-   * `jq` tool to make output from SR REST endpoint pretty
+   * `jq` tool to nicely format the results from querying the |sr| REST endpoint
 
 #. Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have running on your local machine a basic Kafka cluster with |sr-long| and other services.
 
@@ -88,13 +88,13 @@ Before proceeding with this tutorial
 Terminology Levelset
 ^^^^^^^^^^^^^^^^^^^^
 
-First let us levelset on terminology: what is a `schema` versus a `topic` versus a `subject`.
+First let us levelset on terminology: what is a `topic` versus a `schema` versus a `subject`.
 
-A Kafka topic contains messages, and each message is a key-value pair.
-Either the message key or the message value, or both, can be independently serialized as Avro.
-The Kafka topic name is independent of the schema name.
-When a producer writes a message to a Kafka topic, it can serialize the message key or message value as Avro (or both).
-By default, |sr| defines a scope in which schemas for that Kafka topic can evolve, and that scope is the subject.
+A Kafka `topic` contains messages, and each message is a key-value pair.
+Either the message key or the message value, or both, can be serialized as Avro.
+A `schema` defines the structure of the Avro data format.
+The Kafka topic name can be independent of the schema name.
+By default, |sr| defines a scope in which schemas for that Kafka topic can evolve, and that scope is the `subject`.
 
 As a practical example, let's say a retail business is streaming transactions in a Kafka topic called `transactions`.
 A producer is writing data with a schema `Payment` to that Kafka topic.
@@ -132,9 +132,7 @@ Let's break down what this schema defines
 * ``namespace``: a fully qualified name that avoids schema naming conflicts
 * ``type``: `Avro data type <https://avro.apache.org/docs/1.8.1/spec.html#schemas>`_, one of `record`, `enum, `union`, `array`, `map`, `fixed`
 * ``name``: unique schema name in this namespace
-* ``fields``: one or more simple or complex data types for a `record`
-  * the first field in this record is called `id`, and it is of type `string`.
-  * the second field in this record is called `amount`, and it is of type `double`.
+* ``fields``: one or more simple or complex data types for a `record`. The first field in this record is called `id`, and it is of type `string`. The second field in this record is called `amount`, and it is of type `double`.
 
 
 Client Applications Writing Avro
@@ -150,8 +148,8 @@ Java Producers
 
 Java applications that have Kafka producers using Avro require ``pom.xml`` files to include:
 
-* Avro dependencies to serialize data as Avro, including `org.apache.avro.avro` and `io.confluent.kafka-avro-serializer`
-* Avro plugin `avro-maven-plugin` to generate Java class files from the source schema
+* Avro dependencies to serialize data as Avro, including ``org.apache.avro.avro`` and ``io.confluent.kafka-avro-serializer``
+* Avro plugin ``avro-maven-plugin`` to generate Java class files from the source schema
 
 For a full pom.xml example, refer to this `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_.
 
@@ -176,7 +174,7 @@ For example:
    ...
    KafkaProducer<String, Payment> producer = new KafkaProducer<String, Payment>(props));
    final Payment payment = new Payment(orderId, 1000.00d);
-   final ProducerRecord<String, Payment> record = new ProducerRecord<String, Payment>("payments", payment.getId().toString(), payment);
+   final ProducerRecord<String, Payment> record = new ProducerRecord<String, Payment>(TOPIC, payment.getId().toString(), payment);
    producer.send(record);
    ...
 
@@ -188,8 +186,8 @@ Java Consumers
 
 Java applications that have Kafka consumers using Avro require `pom.xml` files to include:
 
-* Avro dependencies to serialize data as Avro, including `org.apache.avro.avro` and `io.confluent.kafka-avro-serializer`
-* Avro plugin `avro-maven-plugin` to generate Java class files from the source schema
+* Avro dependencies to serialize data as Avro, including ``org.apache.avro.avro`` and ``io.confluent.kafka-avro-serializer``
+* Avro plugin ``avro-maven-plugin`` to generate Java class files from the source schema
 
 For a full `pom.xml` example, refer to `sample pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_.
 
@@ -214,7 +212,7 @@ For example:
 
    ...
    KafkaConsumer<String, Payment> consumer = new KafkaConsumer<>(props));
-   consumer.subscribe(Collections.singletonList("payments"));
+   consumer.subscribe(Collections.singletonList(TOPIC));
    while (true) {
      ConsumerRecords<String, Payment> records = consumer.poll(100);
      for (ConsumerRecord<String, Payment> record : records) {
@@ -232,7 +230,7 @@ Other Kafka Clients
 
 The objective of this tutorial is to learn about Avro and |sr| centralized schema management and compatibility checks.
 To keep examples simple, this tutorial focuses on Java producers and consumers, but other Kafka clients work in similar ways.
-For configurations examples of other Kafka clients interoperating with Avro and |sr|:
+For examples of other Kafka clients interoperating with Avro and |sr|:
 
 * `KSQL <https://docs.confluent.io/current/ksql/docs/installation/server-config/avro-schema.html#configuring-avro-and-sr-for-ksql>`_
 * `Kafka Streams <https://docs.confluent.io/current/streams/developer-guide/datatypes.html#avro>`_
