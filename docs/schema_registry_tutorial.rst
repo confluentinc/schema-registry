@@ -110,7 +110,7 @@ Schema Definition
 ~~~~~~~~~~~~~~~~~
 
 The first thing developers need to do is agree on a basic schema for data.
-Client applications are forming a contract that producers will write data in a compatible schema and consumers will be able to read that data.
+Client applications form a contract: producers will write data in a schema and consumers will be able to read that data.
 Of course, applications can use many schemas for many topics, but in this tutorial you will look at one.
 
 Consider the `original Payment schema <https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc>`_:
