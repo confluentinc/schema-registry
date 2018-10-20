@@ -347,14 +347,14 @@ This schema evolution is a natural behavior of how applications and data develop
 
 |sr-long| allows for schema evolution and provides compatibility checks to ensure that the contract between producers and consumers is not broken.
 This is especially important in Kafka because producers and consumers are decoupled applications that are sometimes developed by different teams.
-Compatibility checks allow producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
+Compatibility checks on schemas allow producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
 
-Thes are the types of `compatibility levels <https://docs.confluent.io/current/avro.html#data-serialization-and-evolution>`_:
+These are the types of `compatibility types <https://docs.confluent.io/current/avro.html#data-serialization-and-evolution>`_:
 
-* ``Forward``: consumers can still read data written by producers using newer schemas
-* ``Backward``: upgraded consumers can still read data written by producers using older schemas
-* ``Full``: forward and backward compatible
-* ``None``: compatibility checks disabled
+* ``FORWARD``: consumers using older schemas can read data written by producers using newer schemas
+* ``BACKWARD``: consumers using newer schemas can read data written by producers using older schemas
+* ``FULL``: forward and backward compatible
+* ``NONE``: schema compatibility checks disabled
 
 By default, |sr| is configured for backward compatibility.
 You can change this globally or per subject, but for the remainder of this tutorial, leave the default compatibility level to `backward`.
