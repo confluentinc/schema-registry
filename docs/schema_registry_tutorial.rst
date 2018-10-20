@@ -118,7 +118,6 @@ Consider the `original Payment schema <https://github.com/confluentinc/examples/
 .. sourcecode:: json
 
    $ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc
-   [
    {"namespace": "io.confluent.examples.clients.basicavro",
     "type": "record",
     "name": "Payment",
@@ -127,7 +126,6 @@ Consider the `original Payment schema <https://github.com/confluentinc/examples/
         {"name": "amount", "type": "double"}
     ]
    }
-   ]
 
 Let's break down what this schema defines
 
@@ -373,7 +371,6 @@ Consider the `Payment2a schema <https://github.com/confluentinc/examples/blob/DE
 .. sourcecode:: json
 
    $ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc
-   [
    {"namespace": "io.confluent.examples.clients.basicavro",
     "type": "record",
     "name": "Payment",
@@ -383,7 +380,6 @@ Consider the `Payment2a schema <https://github.com/confluentinc/examples/blob/DE
         {"name": "region", "type": "string"}
     ]
    }
-   ]
 
 Before proceeding, think about whether this schema is backward compatible.
 Specifically, ask yourself whether a consumer can use this schema to read data written by producers using the older schema without the `region` field?
@@ -444,7 +440,6 @@ Consider an updated `Payment2b schema <https://github.com/confluentinc/examples/
 .. sourcecode:: json
 
    $ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc
-   [
    {"namespace": "io.confluent.examples.clients.basicavro",
     "type": "record",
     "name": "Payment",
@@ -454,7 +449,6 @@ Consider an updated `Payment2b schema <https://github.com/confluentinc/examples/
         {"name": "region", "type": "string", "default": ""}
     ]
    }
-   ]
 
 Update the `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_ to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
 Re-run the compatibility check and verify that it fails:
