@@ -87,9 +87,9 @@ Documentation
 .. toctree::
    :maxdepth: 1
 
-   schema_registry_tutorial
    installation
    config
+   schema_registry_tutorial
    ../../cloud/connect/schema-reg-cloud-config
    using
    monitoring
