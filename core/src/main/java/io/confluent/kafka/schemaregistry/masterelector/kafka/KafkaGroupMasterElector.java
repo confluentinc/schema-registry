@@ -116,10 +116,8 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       );
       List<String> bootstrapServers
           = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
-      List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-          bootstrapServers,
-          ClientDnsLookup.DEFAULT.toString()
-      );
+      List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers,
+          ClientDnsLookup.DEFAULT.name());
       this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
       String metricGrpPrefix = "kafka.schema.registry";
 
