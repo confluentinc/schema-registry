@@ -348,13 +348,17 @@ This schema evolution is a natural behavior of how applications and data develop
 |sr-long| allows for schema evolution and provides compatibility checks to ensure that the contract between producers and consumers is not broken.
 This is especially important in Kafka because producers and consumers are decoupled applications that are sometimes developed by different teams.
 Compatibility checks on schemas allow producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
+|sr| can check compatibility of a new schema against the latest registered schema, or if configured for _transitive_ then against all previously registered schemas.
 
-These are the types of `compatibility types <https://docs.confluent.io/current/avro.html#data-serialization-and-evolution>`_:
+These are the types of `compatibility types <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`_:
 
-* ``FORWARD``: consumers using older schemas can read data written by producers using newer schemas
-* ``BACKWARD``: consumers using newer schemas can read data written by producers using older schemas
-* ``FULL``: forward and backward compatible
-* ``NONE``: schema compatibility checks disabled
+* ``FORWARD``: consumers using the latest registered schema can read data written by producers using the new schema
+* ``FORWARD_TRANSITIVE``: consumers using all previousely registered schemas can read data written by producers using the new schema
+* ``BACKWARD``: consumers using the new schema can read data written by producers using the latest registered schema
+* ``BACKWARD_TRANSITIVE``: consumers using the new schema can read data written by producers using all previously registered schemas
+* ``FULL``: the new schema is forward and backward compatible with the latest registered schema
+* ``FULL_TRANSITIVE``: the new schema is forward and backward compatible with all previously registered schemas
+* ``NONE``: schema compatibility checks are disabled
 
 By default, |sr| is configured for backward compatibility.
 You can change this globally or per subject, but for the remainder of this tutorial, leave the default compatibility level to `backward`.
@@ -449,7 +453,7 @@ Consider an updated `Payment2b schema <https://github.com/confluentinc/examples/
    }
 
 Update the `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_ to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
-Re-run the compatibility check and verify that it fails:
+Re-run the compatibility check and verify that it passes:
 
 .. sourcecode:: bash
 
