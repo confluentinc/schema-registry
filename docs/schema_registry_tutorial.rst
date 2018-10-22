@@ -3,8 +3,6 @@
 Confluent Schema Registry Tutorial
 ==================================
 
-This tutorial provides an example on how to use |sr-long|.
-
 
 Overview
 ~~~~~~~~
@@ -114,7 +112,7 @@ The first thing developers need to do is agree on a basic schema for data.
 Client applications form a contract: producers will write data in a schema and consumers will be able to read that data.
 Of course, applications can use many schemas for many topics, but in this tutorial you will look at one.
 
-Consider the `original Payment schema <https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc>`_:
+Consider the `original Payment schema <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc>`_:
 
 .. sourcecode:: json
 
@@ -410,7 +408,7 @@ Failing Compatibility Checks
 Without |sr| checking compatibility, your applications could break on schema changes.
 
 In the Payment schema example, let's say the business now tracks additional information for each payment, for example, a field ``region`` that represents the place of sale.
-Consider the `Payment2a schema <https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc>`_ which includes this extra field ``region``:
+Consider the `Payment2a schema <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc>`_ which includes this extra field ``region``:
 
 .. sourcecode:: json
 
@@ -475,7 +473,7 @@ Passing Compatibility Checks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To maintain backward compatibility, a new schema must assume default values for the new field if it is not provided.
-Consider an updated `Payment2b schema <https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc>`_ that has a default value for ``region``:
+Consider an updated `Payment2b schema <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc>`_ that has a default value for ``region``:
 
 .. sourcecode:: json
 
