@@ -360,7 +360,7 @@ These are the types of `compatibility types <https://docs.confluent.io/current/s
 * ``FULL_TRANSITIVE``: the new schema is forward and backward compatible with all previously registered schemas
 * ``NONE``: schema compatibility checks are disabled
 
-By default, |sr| is configured for backward compatibility.
+By default, |sr| is configured for ``BACKWARD`` compatibility.
 You can change this globally or per subject, but for the remainder of this tutorial, leave the default compatibility level to `backward`.
 
 
