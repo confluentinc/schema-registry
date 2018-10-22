@@ -17,6 +17,7 @@ Benefits
 
 Kafka producers write data to Kafka topics and Kafka consumers read data from Kafka topics.
 There is an implicit "contract" that producers write data with a schema that can be read by consumers, even as producers and consumers evolve their schemas.
+|sr-long| helps ensure that this contract is met with compatibility checks.
 
 It is useful to think about schemas as APIs.
 Applications depend on APIs and expect any changes made to APIs are still compatible and applications can still run.
@@ -143,6 +144,11 @@ Apache Kafka applications using Avro data and |sr-long| need to specify at least
 * Avro serializer or deserializer
 * URL to the |sr-long|
 
+There are two basic types of Avro records that your application can use: a specific code-generated class or a generic record.
+The examples below demonstrate how to use the specific `Payment` class, because using the specific classes are easier to work with.
+However, in scenarios where you need to work dynamically with data of any type, use `GenericRecord <https://docs.confluent.io/current/streams/developer-guide/datatypes.html#avro>`_.
+
+
 Java Producers
 ^^^^^^^^^^^^^^
 
@@ -159,6 +165,7 @@ Within the application, Java producers that are serializing data as Avro set two
 * URL to the |sr-long|
 
 Then the producer can write records where the Kafka value is of `Payment` class.
+When constructing the producer, configure the message value class to use the application's code-generated `Payment` class.
 For example:
 
 .. sourcecode:: java
@@ -197,6 +204,7 @@ Within the application, Java consumers that are deserializing data as Avro set t
 * URL to the |sr-long|
 
 Then the consumer can read records where the Kafka value is of `Payment` class.
+To ensure that the object is deserialized using the application's code-generated `Payment` class, configure the deserializer to use Avro `SpecificRecord`, i.e., ``SPECIFIC_AVRO_READER_CONFIG`` should be set to _true_.
 For example:
 
 .. sourcecode:: java
@@ -348,7 +356,7 @@ This schema evolution is a natural behavior of how applications and data develop
 |sr-long| allows for schema evolution and provides compatibility checks to ensure that the contract between producers and consumers is not broken.
 This is especially important in Kafka because producers and consumers are decoupled applications that are sometimes developed by different teams.
 Compatibility checks on schemas allow producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
-|sr| can check compatibility of a new schema against the latest registered schema, or if configured for _transitive_ then it checks against all previously registered schemas.
+|sr| can check compatibility of a new schema against just the latest registered schema, or if configured as transitive then it checks against _all_ previously registered schemas, not just the latest one.
 
 These are the types of `compatibility types <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`_:
 
