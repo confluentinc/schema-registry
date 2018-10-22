@@ -23,10 +23,6 @@ Similarly, streaming applications depend on schemas and expect any changes made 
 Schema evolution requires compatibility checks to ensure that the producer-consumer contract is not broken. 
 This is where |sr-long| helps: it provides centralized schema management and compatibility checks as schemas evolve.
 
-For a more in-depth understanding of the benefits of Avro and |sr|, refer to the following resources:
-
-* `Why Avro For Kafka Data <https://www.confluent.io/blog/avro-kafka-data/>`_
-* `Yes, Virginia, You Really Do Need a Schema Registry <https://www.confluent.io/blog/schema-registry-kafka-stream-processing-yes-virginia-you-really-need-one/>`_
 
 Target Audience
 ^^^^^^^^^^^^^^^
@@ -357,7 +353,7 @@ Auto Schema Registration
 By default, client applications automatically register new schemas.
 If they produce new messages to a new topic, then they will automatically try to register new schemas.
 This is very convenient in development environments, but in production environments we recommend that client applications do not automatically register new schemas.
-Users should register schemas outside of the client application to control when schemas are registered with |sr-long| and how they evolve.
+Register schemas outside of the client application to control when schemas are registered with |sr-long| and how they evolve.
 
 Within the application, disable automatic schema registration by setting the configuration parameter `auto.register.schemas=false`, as shown in the examples below.
 
@@ -379,15 +375,15 @@ Schema Evolution and Compatibility
 Changing Schemas
 ^^^^^^^^^^^^^^^^
 
-You have seen the benefit of |sr-long| as being centralized schema management that enables client applications to register and retrieve globally unique schema ids.
-The main value, however, is in enabling schema evolution.
+So far in this tutorial, you have seen the benefit of |sr-long| as being centralized schema management that enables client applications to register and retrieve globally unique schema ids.
+The main value of |sr|, however, is in enabling schema evolution.
 Similar to how APIs evolve and need to be compatible for all applications that rely on old and new versions of the API, schemas also evolve and likewise need to be compatible for all applications that rely on old and new versions of the schema.
 This schema evolution is a natural behavior of how applications and data develop over time.
 
 |sr-long| allows for schema evolution and provides compatibility checks to ensure that the contract between producers and consumers is not broken.
 This is especially important in Kafka because producers and consumers are decoupled applications that are sometimes developed by different teams.
 Compatibility checks on schemas allow producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
-|sr| can check compatibility of a new schema against just the latest registered schema, or if configured as transitive then it checks against _all_ previously registered schemas, not just the latest one.
+|sr| can check compatibility of a new schema against just the latest registered schema, or if configured as transitive then it checks against all previously registered schemas, not just the latest one.
 
 These are the types of `compatibility types <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`_:
 
@@ -406,8 +402,8 @@ You can change this globally or per subject, but for the remainder of this tutor
 Failing Compatibility Checks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-|sr| checks schema compatibility as schemas evolve to keep the producer-consumer contract.
-Without |sr| checking compatibility, your applications could break on schema changes.
+|sr| checks compatibility as schemas evolve to keep the producer-consumer contract.
+Without |sr| checking compatibility, your applications could potentially break on schema changes.
 
 In the Payment schema example, let's say the business now tracks additional information for each payment, for example, a field ``region`` that represents the place of sale.
 Consider the `Payment2a schema <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc>`_ which includes this extra field ``region``:
@@ -428,7 +424,7 @@ Consider the `Payment2a schema <https://github.com/confluentinc/examples/blob/5.
 Before proceeding, think about whether this schema is backward compatible.
 Specifically, ask yourself whether a consumer can use this new schema to read data written by producers using the older schema without the `region` field?
 The answer is no.
-Consumers will fail reading data with the older schema because the data does not have the `region` field, therefore it is not backward compatible.
+Consumers will fail reading data with the older schema because the older data does not have the `region` field, therefore this schema is not backward compatible.
 
 Confluent provides a `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, which you can use to check compatibility in development.
 Our sample `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml#L84-L99>`_ includes this plugin to enable compatibility checks.
@@ -531,5 +527,6 @@ Next Steps
 
 * Adapt your applications to use Avro data
 * Change compatibility modes to suit your application needs
-* Evolve schemas so that they fail compatibility checks
-* Evolve schemas so that they pass compatibility checks
+* Test new schemas so that they pass compatibility checks
+* For a more in-depth understanding of the benefits of Avro, read `Why Avro For Kafka Data <https://www.confluent.io/blog/avro-kafka-data/>`_
+* For a more in-depth understanding of the benefits of |sr-long|, read `Yes, Virginia, You Really Do Need a Schema Registry <https://www.confluent.io/blog/schema-registry-kafka-stream-processing-yes-virginia-you-really-need-one/>`_
