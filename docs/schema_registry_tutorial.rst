@@ -261,6 +261,8 @@ You should see:
    offset = 9, key = id9, value = {"id": "id9", "amount": 1000.0}
    ...
 
+Hit ``Ctrl-C`` to stop.
+
 
 Other Kafka Clients
 ^^^^^^^^^^^^^^^^^^^
