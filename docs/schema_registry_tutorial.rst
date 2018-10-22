@@ -49,7 +49,7 @@ Before proceeding with this tutorial
 
    * Java 1.8 to run |cp|
    * Maven to compile the client Java code
-   * `jq` tool to nicely format the results from querying the |sr| REST endpoint
+   * ``jq`` tool to nicely format the results from querying the |sr| REST endpoint
 
 #. Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have running on your local machine a basic Kafka cluster with |sr-long| and other services.
 
@@ -131,13 +131,27 @@ Consider the `original Payment schema <https://github.com/confluentinc/examples/
 Let's break down what this schema defines
 
 * ``namespace``: a fully qualified name that avoids schema naming conflicts
-* ``type``: `Avro data type <https://avro.apache.org/docs/1.8.1/spec.html#schemas>`_, one of `record`, `enum, `union`, `array`, `map`, `fixed`
+* ``type``: `Avro data type <https://avro.apache.org/docs/1.8.1/spec.html#schemas>`_, one of ``record``, ``enum``, ``union``, ``array``, ``map``, ``fixed``
 * ``name``: unique schema name in this namespace
-* ``fields``: one or more simple or complex data types for a `record`. The first field in this record is called `id`, and it is of type `string`. The second field in this record is called `amount`, and it is of type `double`.
+* ``fields``: one or more simple or complex data types for a ``record``. The first field in this record is called `id`, and it is of type `string`. The second field in this record is called `amount`, and it is of type `double`.
 
 
 Client Applications Writing Avro
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Maven
+^^^^^
+
+This tutorial uses Maven to configure the project and dependencies.
+Java applications that have Kafka producers or consumers using Avro require ``pom.xml`` files to include, among other things:
+
+* Confluent Maven repository and Avro dependencies to serialize data as Avro, including ``org.apache.avro.avro`` and ``io.confluent.kafka-avro-serializer``
+* Confluent Maven plugin repository and Avro plugin ``avro-maven-plugin`` to generate Java class files from the source schema
+
+For a full pom.xml example, refer to this `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_.
+
+Configuring Avro
+^^^^^^^^^^^^^^^^
 
 Apache Kafka applications using Avro data and |sr-long| need to specify at least two configuration parameters:
 
@@ -152,18 +166,7 @@ However, in scenarios where you need to work dynamically with data of any type, 
 Java Producers
 ^^^^^^^^^^^^^^
 
-Java applications that have Kafka producers using Avro require ``pom.xml`` files to include:
-
-* Avro dependencies to serialize data as Avro, including ``org.apache.avro.avro`` and ``io.confluent.kafka-avro-serializer``
-* Avro plugin ``avro-maven-plugin`` to generate Java class files from the source schema
-
-For a full pom.xml example, refer to this `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_.
-
-Within the application, Java producers that are serializing data as Avro set two main configurations parameters:
-
-* Avro serializer for the Kafka value (or Kafka key)
-* URL to the |sr-long|
-
+Within the application, Java producers need to configure the Avro serializer for the Kafka value (or Kafka key) and URL to |sr-long|.
 Then the producer can write records where the Kafka value is of `Payment` class.
 When constructing the producer, configure the message value class to use the application's code-generated `Payment` class.
 For example:
@@ -206,18 +209,7 @@ You should see:
 Java Consumers
 ^^^^^^^^^^^^^^
 
-Java applications that have Kafka consumers using Avro require `pom.xml` files to include:
-
-* Avro dependencies to serialize data as Avro, including ``org.apache.avro.avro`` and ``io.confluent.kafka-avro-serializer``
-* Avro plugin ``avro-maven-plugin`` to generate Java class files from the source schema
-
-For a full `pom.xml` example, refer to `sample pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_.
-
-Within the application, Java consumers that are deserializing data as Avro set two main configurations parameters:
-
-* Avro deserializer for the Kafka value (or Kafka key)
-* URL to the |sr-long|
-
+Within the application, Java consumers need to configure the Avro deserializer for the Kafka value (or Kafka key) and URL to |sr-long|.
 Then the consumer can read records where the Kafka value is of `Payment` class.
 To ensure that the object is deserialized using the application's code-generated `Payment` class, configure the deserializer to use Avro `SpecificRecord`, i.e., ``SPECIFIC_AVRO_READER_CONFIG`` should be set to _true_.
 For example:
