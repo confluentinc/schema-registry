@@ -340,7 +340,7 @@ Schema IDs in Messages
 ^^^^^^^^^^^^^^^^^^^^^^
 
 Integration with |sr-long| means that Kafka messages do not need to be written with the entire Avro schema.
-Instead, Kafka messages are written with the schema _id_.
+Instead, Kafka messages are written with the schema id.
 The producers writing the messages and the consumers reading the messages must be using the same |sr| to get the same mapping between a schema and schema id.
 
 In this example, a producer sends the new schema for `Payments` to |sr|.
