@@ -348,7 +348,7 @@ This schema evolution is a natural behavior of how applications and data develop
 |sr-long| allows for schema evolution and provides compatibility checks to ensure that the contract between producers and consumers is not broken.
 This is especially important in Kafka because producers and consumers are decoupled applications that are sometimes developed by different teams.
 Compatibility checks on schemas allow producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
-|sr| can check compatibility of a new schema against the latest registered schema, or if configured for _transitive_ then against all previously registered schemas.
+|sr| can check compatibility of a new schema against the latest registered schema, or if configured for _transitive_ then it checks against all previously registered schemas.
 
 These are the types of `compatibility types <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`_:
 
