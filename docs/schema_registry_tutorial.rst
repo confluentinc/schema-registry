@@ -39,13 +39,13 @@ Prerequisites
 
 Before proceeding with this tutorial
 
-#. Verify have installed on your local machine:
+#. Verify that you have installed the following on your local machine:
 
    * Java 1.8 to run |cp|
    * Maven to compile the client Java code
    * ``jq`` tool to nicely format the results from querying the |sr| REST endpoint
 
-#. Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have running on your local machine a basic Kafka cluster with |sr-long| and other services.
+#. Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have a basic Kafka cluster with |sr-long| and other services running on your local machine.
 
    .. sourcecode:: bash
 
@@ -70,7 +70,7 @@ Before proceeding with this tutorial
       control-center is [UP]
 
 
-#. Clone the |cp| `examples` repo in GitHub and work in the `clients/avro/` subdirectory.
+#. Clone the |cp| `examples` repo from GitHub and work in the `clients/avro/` subdirectory.
 
    .. sourcecode:: bash
 
@@ -377,7 +377,7 @@ Changing Schemas
 
 So far in this tutorial, you have seen the benefit of |sr-long| as being centralized schema management that enables client applications to register and retrieve globally unique schema ids.
 The main value of |sr|, however, is in enabling schema evolution.
-Similar to how APIs evolve and need to be compatible for all applications that rely on old and new versions of the API, schemas also evolve and likewise need to be compatible for all applications that rely on old and new versions of the schema.
+Similar to how APIs evolve and need to be compatible for all applications that rely on old and new versions of the API, schemas also evolve and likewise need to be compatible for all applications that rely on old and new versions of a schema.
 This schema evolution is a natural behavior of how applications and data develop over time.
 
 |sr-long| allows for schema evolution and provides compatibility checks to ensure that the contract between producers and consumers is not broken.
@@ -388,11 +388,11 @@ Compatibility checks on schemas allow producers and consumers to update independ
 These are the types of `compatibility types <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`_:
 
 * ``FORWARD``: consumers using the latest registered schema can read data written by producers using the new schema
-* ``FORWARD_TRANSITIVE``: consumers using all previousely registered schemas can read data written by producers using the new schema
+* ``FORWARD_TRANSITIVE``: consumers using any previousely registered schema can read data written by producers using the new schema
 * ``BACKWARD``: consumers using the new schema can read data written by producers using the latest registered schema
-* ``BACKWARD_TRANSITIVE``: consumers using the new schema can read data written by producers using all previously registered schemas
+* ``BACKWARD_TRANSITIVE``: consumers using the new schema can read data written by producers using any previously registered schema
 * ``FULL``: the new schema is forward and backward compatible with the latest registered schema
-* ``FULL_TRANSITIVE``: the new schema is forward and backward compatible with all previously registered schemas
+* ``FULL_TRANSITIVE``: the new schema is forward and backward compatible with any previously registered schema
 * ``NONE``: schema compatibility checks are disabled
 
 By default, |sr| is configured for ``BACKWARD`` compatibility.
@@ -402,7 +402,7 @@ You can change this globally or per subject, but for the remainder of this tutor
 Failing Compatibility Checks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-|sr| checks compatibility as schemas evolve to keep the producer-consumer contract.
+|sr| checks compatibility as schemas evolve to uphold the producer-consumer contract.
 Without |sr| checking compatibility, your applications could potentially break on schema changes.
 
 In the Payment schema example, let's say the business now tracks additional information for each payment, for example, a field ``region`` that represents the place of sale.
