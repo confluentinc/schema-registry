@@ -86,8 +86,8 @@ Before proceeding with this tutorial
 
 .. _schema_registry_tutorial_definition:
 
-Terminology Levelset
-^^^^^^^^^^^^^^^^^^^^
+Terminology
+^^^^^^^^^^^
 
 First let us levelset on terminology: what is a `topic` versus a `schema` versus a `subject`.
 
@@ -186,6 +186,21 @@ For example:
    ...
 
 For a full Java producer example, refer to `the producer example <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/java/io/confluent/examples/clients/basicavro/ProducerExample.java>`_.
+Because the `pom.xml` includes ``avro-maven-plugin``, the `Payment` class is automatically generated during compile.
+To run this producer, first compile the project and then run ``ProducerExample``.
+
+.. sourcecode:: bash
+
+   $ mvn clean compile package
+   $ mvn exec:java -Dexec.mainClass=io.confluent.examples.clients.basicavro.ProducerExample
+
+You should see:
+
+.. sourcecode:: bash
+
+   ...
+   Successfully produced 10 messages to a topic called transactions
+   ...
 
 
 Java Consumers
@@ -231,6 +246,30 @@ For example:
    ...
 
 For a full Java consumer example, refer to `the consumer example <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/java/io/confluent/examples/clients/basicavro/ConsumerExample.java>`_.
+Because the `pom.xml` includes ``avro-maven-plugin``, the `Payment` class is automatically generated during compile.
+To run this consumer, first compile the project and then run ``ConsumerExample`` (assuming you already ran the ``ProducerExample`` above).
+
+.. sourcecode:: bash
+
+   $ mvn clean compile package
+   $ mvn exec:java -Dexec.mainClass=io.confluent.examples.clients.basicavro.ConsumerExample
+
+You should see:
+
+.. sourcecode:: bash
+
+   ...
+   offset = 0, key = id0, value = {"id": "id0", "amount": 1000.0}
+   offset = 1, key = id1, value = {"id": "id1", "amount": 1000.0}
+   offset = 2, key = id2, value = {"id": "id2", "amount": 1000.0}
+   offset = 3, key = id3, value = {"id": "id3", "amount": 1000.0}
+   offset = 4, key = id4, value = {"id": "id4", "amount": 1000.0}
+   offset = 5, key = id5, value = {"id": "id5", "amount": 1000.0}
+   offset = 6, key = id6, value = {"id": "id6", "amount": 1000.0}
+   offset = 7, key = id7, value = {"id": "id7", "amount": 1000.0}
+   offset = 8, key = id8, value = {"id": "id8", "amount": 1000.0}
+   offset = 9, key = id9, value = {"id": "id9", "amount": 1000.0}
+   ...
 
 
 Other Kafka Clients
