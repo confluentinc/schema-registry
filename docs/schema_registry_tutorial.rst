@@ -367,8 +367,11 @@ You can change this globally or per subject, but for the remainder of this tutor
 Failing Compatibility Checks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In the Payment schema example, let's say now some applications are writing additional information for each payment, for example, a field ``region`` that represents the place of sale.
-Consider the `Payment2a schema <https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc>`_:
+|sr| checks schema compatibility as schemas evolve to keep the producer-consumer contract.
+Without |sr| checking compatibility, your applications could break on schema changes.
+
+In the Payment schema example, let's say the business now tracks additional information for each payment, for example, a field ``region`` that represents the place of sale.
+Consider the `Payment2a schema <https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc>`_ which includes this extra field ``region``:
 
 .. sourcecode:: json
 
@@ -384,12 +387,12 @@ Consider the `Payment2a schema <https://github.com/confluentinc/examples/blob/DE
    }
 
 Before proceeding, think about whether this schema is backward compatible.
-Specifically, ask yourself whether a consumer can use this schema to read data written by producers using the older schema without the `region` field?
+Specifically, ask yourself whether a consumer can use this new schema to read data written by producers using the older schema without the `region` field?
 The answer is no.
-Consumers will fail reading data with the older schema, because the older schema does not have the `region` field, so it is not backward compatible.
+Consumers will fail reading data with the older schema because the data does not have the `region` field, therefore it is not backward compatible.
 
 Confluent provides a `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, which you can use to check compatibility in development.
-Our sample `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml#L84-L99>`_ uses this plugin to enable compatibility checks.
+Our sample `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml#L84-L99>`_ includes this plugin to enable compatibility checks.
 
 .. sourcecode:: xml
 
@@ -420,8 +423,8 @@ Run the compatibility check and verify that it fails:
    [ERROR] Schema examples/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc is not compatible with subject(transactions-value)
    ...
 
-There is another way to register the schema manually to |sr|, which is useful for non-Java clients.
-You can try registering the new schema `Payment2a` directly, but |sr| rejects it, with an error message that it is incompatible.
+You could have also just tried to register the new schema `Payment2a` manually to |sr|, which is a useful way for non-Java clients to check compatibility.
+As expected, |sr| rejects it with an error message that it is incompatible.
 
 .. sourcecode:: bash
 
@@ -432,12 +435,8 @@ You can try registering the new schema `Payment2a` directly, but |sr| rejects it
 Passing Compatibility Checks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-|sr| checks schema compatibility as they evolve to keep the producer-consumer contract.
-Without |sr| checking compatibility, your applications could break on schema changes.
-
-To maintain backward compatibility, a new schema must assume default values for the new fields if they are not provided.
-Therefore, there must be a default value for `region`.
-Consider an updated `Payment2b schema <https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc>`_:
+To maintain backward compatibility, a new schema must assume default values for the new field if it is not provided.
+Consider an updated `Payment2b schema <https://github.com/confluentinc/examples/blob/DEVX-380/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc>`_ that has a default value for ``region``:
 
 .. sourcecode:: json
 
@@ -485,7 +484,7 @@ Notice the changes:
 
 * `version`: changed from `1` to `2`
 * `id`: changed from `1` to `2`
-* `schema`: changed with the new field `region` with the default value
+* `schema`: updated with the new field `region` that has a default value
 
 
 Next Steps
