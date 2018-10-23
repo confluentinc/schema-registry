@@ -93,13 +93,14 @@ A Kafka `topic` contains messages, and each message is a key-value pair.
 Either the message key or the message value, or both, can be serialized as Avro.
 A `schema` defines the structure of the Avro data format.
 The Kafka topic name can be independent of the schema name.
-By default, |sr| defines a scope in which schemas for that Kafka topic can evolve, and that scope is the `subject`.
+|sr| defines a scope in which schemas can evolve, and that scope is the `subject`.
+By default, the subject name is derived from the topic name, i.e., the `subject name strategy <https://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#subject-name-strategy>`_ is set to ``class io.confluent.kafka.serializers.subject.TopicNameStrategy``.
 
 As a practical example, let's say a retail business is streaming transactions in a Kafka topic called `transactions`.
-A producer is writing data with a schema `Payment` to that Kafka topic.
+A producer is writing data with a schema `Payment` to that Kafka topic `transactions`.
 If the producer is serializing the message value as Avro, |sr| has a subject called `transactions-value`.
-If the producer is also serializing the message key as Avro, |sr| would have a subject called `transactions-key`, but for simplicity, in this tutorial you only consider the message value.
-The |sr| subject `transactions-value` has at least one schema called `Payment`.
+If the producer is also serializing the message key as Avro, |sr| would have a subject called `transactions-key`, but for simplicity, in this tutorial consider only the message value.
+That |sr| subject `transactions-value` has at least one schema called `Payment`.
 The subject `transactions-value` defines the scope in which schemas for the topic transactions can evolve and |sr| does compatibility checking within this scope.
 If developers evolve the schema `Payment` and produce new messages to the topic `transactions`, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
 
@@ -110,7 +111,6 @@ Schema Definition
 
 The first thing developers need to do is agree on a basic schema for data.
 Client applications form a contract: producers will write data in a schema and consumers will be able to read that data.
-Of course, applications can use many schemas for many topics, but in this tutorial you will look at one.
 
 Consider the `original Payment schema <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc>`_:
 
@@ -216,7 +216,8 @@ Java Consumers
 
 Within the application, Java consumers need to configure the Avro deserializer for the Kafka value (or Kafka key) and URL to |sr-long|.
 Then the consumer can read records where the Kafka value is of `Payment` class.
-To ensure that the object is deserialized using the application's code-generated `Payment` class, configure the deserializer to use Avro `SpecificRecord`, i.e., ``SPECIFIC_AVRO_READER_CONFIG`` should be set to _true_.
+By default, each record is deserialized into an Avro `GenericRecord`, but in this tutorial the record should be deserialized using the application's code-generated `Payment` class.
+Therefore, configure the deserializer to use Avro `SpecificRecord`, i.e., ``SPECIFIC_AVRO_READER_CONFIG`` should be set to `true`.
 For example:
 
 .. sourcecode:: java
