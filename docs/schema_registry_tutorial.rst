@@ -27,7 +27,7 @@ This is where |sr-long| helps: it provides centralized schema management and com
 Target Audience
 ^^^^^^^^^^^^^^^
 
-The target audience is a developer writing Kafka streaming applications, who wants to build a robust application leveraging Avro data and |sr-long|.
+The target audience is a developer writing Kafka streaming applications who wants to build a robust application leveraging Avro data and |sr-long|. The principles in this tutorial apply to any Kafka client that interacts with |sr|.
 
 This tutorial is not meant to cover the operational aspects of running the |sr| service. For production deployments of |sr-long|, refer to :ref:`Schema Registry Operations<schemaregistry_operations>`.
 
@@ -69,8 +69,12 @@ Before proceeding with this tutorial
       Starting control-center
       control-center is [UP]
 
+   .. note::
 
-#. Clone the |cp| `examples` repo from GitHub and work in the `clients/avro/` subdirectory.
+      If you only want to start |zk|, Kafka, and |sr|, type `confluent start schema-registry`
+
+
+#. Clone the |cp| `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will compile and run in this tutorial.
 
    .. sourcecode:: bash
 
@@ -139,8 +143,14 @@ Maven
 This tutorial uses Maven to configure the project and dependencies.
 Java applications that have Kafka producers or consumers using Avro require ``pom.xml`` files to include, among other things:
 
-* Confluent Maven repository and Avro dependencies to serialize data as Avro, including ``org.apache.avro.avro`` and ``io.confluent.kafka-avro-serializer``
-* Confluent Maven plugin repository and Avro plugin ``avro-maven-plugin`` to generate Java class files from the source schema
+* Confluent Maven repository
+* Confluent Maven plugin repository
+* Dependencies ``org.apache.avro.avro`` and ``io.confluent.kafka-avro-serializer`` to serialize data as Avro
+* Plugin ``avro-maven-plugin`` to generate Java class files from the source schema
+
+The ``pom.xml`` file may also include:
+
+* Plugin ``kafka-schema-registry-maven-plugin`` to check compatibility of evolving schemas
 
 For a full pom.xml example, refer to this `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_.
 
@@ -153,8 +163,9 @@ Apache Kafka applications using Avro data and |sr-long| need to specify at least
 * URL to the |sr-long|
 
 There are two basic types of Avro records that your application can use: a specific code-generated class or a generic record.
-The examples below demonstrate how to use the specific `Payment` class, because using the specific classes are easier to work with.
-However, in scenarios where you need to work dynamically with data of any type, use `GenericRecord <https://docs.confluent.io/current/streams/developer-guide/datatypes.html#avro>`_.
+The examples in this tutorial demonstrate how to use the specific `Payment` class.
+Using a specific code-generated class requires you to define and compile a Java class for your schema, but it easier to work with in your code.
+However, in other scenarios where you need to work dynamically with data of any type and do not have Java classes for your record types, use `GenericRecord <https://docs.confluent.io/current/streams/developer-guide/datatypes.html#avro>`_.
 
 
 Java Producers
@@ -325,7 +336,7 @@ Based on the schema id, you can also retrieve the associated schema by querying 
      "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"
    }
 
-If you are using |c3|, you can view the topic schema easily from the UI:
+If you are using |c3|, you can view the topic schema easily from the UI, and inspect new data arriving into the topic:
 
 .. figure:: c3-schema-transactions.png
     :align: center
@@ -381,14 +392,19 @@ Similar to how APIs evolve and need to be compatible for all applications that r
 This schema evolution is a natural behavior of how applications and data develop over time.
 
 |sr-long| allows for schema evolution and provides compatibility checks to ensure that the contract between producers and consumers is not broken.
+This allows producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
 This is especially important in Kafka because producers and consumers are decoupled applications that are sometimes developed by different teams.
-Compatibility checks on schemas allow producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
-|sr| can check compatibility of a new schema against just the latest registered schema, or if configured as transitive then it checks against all previously registered schemas, not just the latest one.
+
+|sr| can check compatibility of a new schema against just the latest registered schema for that subject, or if configured as transitive then it checks against all previously registered schemas, not just the latest one.
+If there are three schemas for a subject that change in order `A`, `B`, and `C` then:
+
+* `non-transitive` ensures compatibility between A <==> B and B <==> C
+* `transitive` ensures compatibility between A <==> B and B <==> C and A <==> C
 
 These are the types of `compatibility types <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`_:
 
 * ``FORWARD``: consumers using the latest registered schema can read data written by producers using the new schema
-* ``FORWARD_TRANSITIVE``: consumers using any previousely registered schema can read data written by producers using the new schema
+* ``FORWARD_TRANSITIVE``: consumers using any previously registered schema can read data written by producers using the new schema
 * ``BACKWARD``: consumers using the new schema can read data written by producers using the latest registered schema
 * ``BACKWARD_TRANSITIVE``: consumers using the new schema can read data written by producers using any previously registered schema
 * ``FULL``: the new schema is forward and backward compatible with the latest registered schema
@@ -426,7 +442,7 @@ Specifically, ask yourself whether a consumer can use this new schema to read da
 The answer is no.
 Consumers will fail reading data with the older schema because the older data does not have the `region` field, therefore this schema is not backward compatible.
 
-Confluent provides a `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, which you can use to check compatibility in development.
+Confluent provides a `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, which you can use to check compatibility in development or integrate into your CI/CD pipeline.
 Our sample `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml#L84-L99>`_ includes this plugin to enable compatibility checks.
 
 .. sourcecode:: xml
