@@ -94,15 +94,15 @@ Either the message key or the message value, or both, can be serialized as Avro.
 A `schema` defines the structure of the Avro data format.
 The Kafka topic name can be independent of the schema name.
 |sr| defines a scope in which schemas can evolve, and that scope is the `subject`.
-By default, the subject name is derived from the topic name, i.e., the `subject name strategy <https://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#subject-name-strategy>`_ is set to ``class io.confluent.kafka.serializers.subject.TopicNameStrategy``.
+The name of the subject depends on the configured `subject name strategy <https://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#subject-name-strategy>`_, which by default is set to derive subject name from topic name.
 
 As a practical example, let's say a retail business is streaming transactions in a Kafka topic called `transactions`.
 A producer is writing data with a schema `Payment` to that Kafka topic `transactions`.
-If the producer is serializing the message value as Avro, |sr| has a subject called `transactions-value`.
+If the producer is serializing the message value as Avro, then |sr| has a subject called `transactions-value`.
 If the producer is also serializing the message key as Avro, |sr| would have a subject called `transactions-key`, but for simplicity, in this tutorial consider only the message value.
 That |sr| subject `transactions-value` has at least one schema called `Payment`.
-The subject `transactions-value` defines the scope in which schemas for the topic transactions can evolve and |sr| does compatibility checking within this scope.
-If developers evolve the schema `Payment` and produce new messages to the topic `transactions`, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
+The subject `transactions-value` defines the scope in which schemas for that subject can evolve and |sr| does compatibility checking within this scope.
+In this scenario, if developers evolve the schema `Payment` and produce new messages to the topic `transactions`, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
 
 .. _schema_registry_tutorial_definition:
 
