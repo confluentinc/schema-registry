@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>5.1.0-SNAPSHOT</version>
+        <version>5.2.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-connect-avro-converter</artifactId>
@@ -62,6 +62,42 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>kafka-connect</goal>
+                        </goals>
+                        <configuration>
+                            <title>Kafka Connect Avro Converter</title>
+                            <description>
+                                <![CDATA[The Kafka Connect Avro Converter integrates with <a href="https://docs.confluent.io/current/schema-registry/docs/intro.html">Schema Registry</a> to convert data for Kafka Connect to and from Avro format.]]>
+                            </description>
+
+                            <dockerNamespace>confluentinc</dockerNamespace>
+                            <dockerName>cp-kafka-connect</dockerName>
+                            <dockerTag>${project.version}</dockerTag>
+                            
+                            <componentTypes>
+                                <componentType>converter</componentType>
+                            </componentTypes>
+                            
+                            <tags>
+                                <tag>avro</tag>
+                                <tag>schema registry</tag>
+                            </tags>
+                            
+                            <kafkaConnectApi>false</kafkaConnectApi>
+                            <singleMessageTransforms>false</singleMessageTransforms>
+                            <supportedEncodings>
+                                <supportedEncoding>avro</supportedEncoding>
+                            </supportedEncodings>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro-maven-plugin</artifactId>
