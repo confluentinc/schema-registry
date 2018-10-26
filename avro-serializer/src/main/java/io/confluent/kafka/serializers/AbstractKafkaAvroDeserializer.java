@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import java.util.Objects;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
@@ -167,8 +168,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
             }
           }
         } else {
-          schema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
-                         JsonNodeFactory.instance.numberNode(version));
+          setVersionProp(schema, version);
         }
         if (schema.getType().equals(Schema.Type.RECORD)) {
           return result;
@@ -208,6 +208,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     return isDeprecatedSubjectNameStrategy(isKey)
         ? null
         : getSubjectName(topic, isKey, null, schemaFromRegistry);
+  }
+
+  private void setVersionProp(Schema schema, int version) {
+    // Only set the property if it isn't already set. Setting the property resets
+    // the hashcode, which can lead to an expensive hashcode computation in the caller
+    if (!Objects.equals(schema.getObjectProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP), version)) {
+      schema.addProp(
+          SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
+          JsonNodeFactory.instance.numberNode(version));
+    }
   }
 
   private Schema schemaForDeserialize(int id,
@@ -279,5 +289,4 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     }
     return readerSchema;
   }
-
 }
