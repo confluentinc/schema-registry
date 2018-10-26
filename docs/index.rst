@@ -85,6 +85,7 @@ Documentation
 
    installation
    config
+   schema_registry_tutorial
    ../../cloud/connect/schema-reg-cloud-config
    using
    monitoring
