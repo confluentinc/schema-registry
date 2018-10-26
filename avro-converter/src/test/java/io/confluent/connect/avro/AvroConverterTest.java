@@ -274,7 +274,6 @@ public class AvroConverterTest {
     assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, false);
   }
 
-
   @Test
   public void testSameSchemaMultipleTopicWithDeprecatedSubjectNameStrategyForKey() throws IOException, RestClientException {
     SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
@@ -329,5 +328,4 @@ public class AvroConverterTest {
     converted2 = converter.toConnectData("topic2", serializedRecord2);
     assertEquals(2L, (long) converted2.schema().version());
   }
-
 }
