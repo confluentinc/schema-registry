@@ -121,7 +121,7 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
       String metricGrpPrefix = "kafka.schema.registry";
 
-      ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig);
+      ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig, time);
       long maxIdleMs = clientConfig.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
 
       String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
