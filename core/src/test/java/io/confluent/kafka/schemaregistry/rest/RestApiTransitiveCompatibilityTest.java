@@ -15,7 +15,7 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleAvroSchemaException;
@@ -26,32 +26,26 @@ import static org.junit.Assert.fail;
 
 public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
 
-  String baseSchema = AvroUtils.parseSchema(
-      "{\"type\":\"record\","
+  String baseSchema = AvroUtils.parseSchema("{\"type\":\"record\","
       + "\"name\":\"myrecord\","
       + "\"fields\":"
-      + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
-      .canonicalString;
+      + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
   
-  String baseSchemaWithColumnWithDefault = AvroUtils.parseSchema(
-      "{\"type\":\"record\","
+  String baseSchemaWithColumnWithDefault = AvroUtils.parseSchema("{\"type\":\"record\","
       + "\"name\":\"myrecord\","
       + "\"fields\":"
       + "[{\"type\":\"string\",\"name\":\"f1\"},"
-      + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}"
-      ).canonicalString;
+      + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}").canonicalString();
   
-  String baseSchemaWithColumnNoDefault = AvroUtils.parseSchema(
-      "{\"type\":\"record\","
+  String baseSchemaWithColumnNoDefault = AvroUtils.parseSchema("{\"type\":\"record\","
       + "\"name\":\"myrecord\","
       + "\"fields\":"
       + "[{\"type\":\"string\",\"name\":\"f1\"},"
-      + " {\"type\":\"string\",\"name\":\"f2\"}]}"
-  ).canonicalString;
+      + " {\"type\":\"string\",\"name\":\"f2\"}]}").canonicalString();
   
   
   public RestApiTransitiveCompatibilityTest() {
-    super(1, true, AvroCompatibilityLevel.BACKWARD_TRANSITIVE.name);
+    super(1, true, CompatibilityLevel.BACKWARD_TRANSITIVE.name);
   }
 
   /* Confirm that removing a default in from a column that was added earlier is not compatible. */

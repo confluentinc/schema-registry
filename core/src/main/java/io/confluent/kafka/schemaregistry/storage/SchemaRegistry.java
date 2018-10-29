@@ -48,12 +48,14 @@ public interface SchemaRegistry {
       throws SchemaRegistryException;
 
   boolean isCompatible(String subject,
+                       String schemaType,
                        String inputSchema,
-                       String targetSchema) throws SchemaRegistryException;
+                       Schema targetSchema) throws SchemaRegistryException;
 
   boolean isCompatible(String subject,
+                       String schemaType,
                        String newSchema,
-                       List<String> previousSchemas) throws SchemaRegistryException;
+                       List<Schema> previousSchemas) throws SchemaRegistryException;
 
   void close();
 

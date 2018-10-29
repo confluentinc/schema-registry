@@ -40,6 +40,7 @@ import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -213,6 +214,7 @@ public class SubjectVersionsResource {
         subjectName,
         request.getVersion() != null ? request.getVersion() : 0,
         request.getId() != null ? request.getId() : -1,
+        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.AVRO,
         request.getSchema()
     );
     int id;

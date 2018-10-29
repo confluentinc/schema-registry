@@ -33,7 +33,7 @@ import java.util.Properties;
 import java.util.Set;
 
 import io.confluent.common.config.AbstractConfig;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
@@ -113,6 +113,9 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>host.name</code>
    */
   public static final String HOST_NAME_CONFIG = "host.name";
+
+  public static final String SCHEMA_PROVIDERS_CONFIG = "schema.providers";
+
   /**
    * <code>avro.compatibility.level</code>
    */
@@ -240,6 +243,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + "authentication is "
       + "configured. IMPORTANT: if set to `true`, the SASL principal must be the same as the Kafka"
       + " brokers.";
+  protected static final String SCHEMA_PROVIDERS_DOC =
+      "  A list of classes to use as SchemaProvider. Implementing the interface "
+          + "<code>SchemaProvider</code> allows you to add custom schema types to Schema Registry.";
   protected static final String COMPATIBILITY_DOC =
       "The Avro compatibility type. Valid values are: "
       + "none (new schema can be any valid Avro schema), "
@@ -394,6 +400,9 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC
     )
+    .define(SCHEMA_PROVIDERS_CONFIG, ConfigDef.Type.LIST, "",
+        ConfigDef.Importance.LOW, SCHEMA_PROVIDERS_DOC
+    )
     .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
         ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
     )
@@ -508,7 +517,7 @@ public class SchemaRegistryConfig extends RestConfig {
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
   }
 
-  private final AvroCompatibilityLevel compatibilityType;
+  private final CompatibilityLevel compatibilityType;
 
   public SchemaRegistryConfig(String propsFile) throws RestConfigException {
     this(AbstractConfig.getPropsFromFile(propsFile));
@@ -522,7 +531,7 @@ public class SchemaRegistryConfig extends RestConfig {
     super(configDef, props);
     this.originalProperties = props;
     String compatibilityTypeString = getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG);
-    compatibilityType = AvroCompatibilityLevel.forName(compatibilityTypeString);
+    compatibilityType = CompatibilityLevel.forName(compatibilityTypeString);
     if (compatibilityType == null) {
       throw new RestConfigException("Unknown Avro compatibility level: " + compatibilityTypeString);
     }
@@ -540,7 +549,7 @@ public class SchemaRegistryConfig extends RestConfig {
     return originalProperties;
   }
 
-  public AvroCompatibilityLevel compatibilityType() {
+  public CompatibilityLevel compatibilityType() {
     return compatibilityType;
   }
 

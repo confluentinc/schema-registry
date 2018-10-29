@@ -772,6 +772,8 @@ definitions:
       id:
         type: "integer"
         format: "int32"
+      schemaType:
+        type: "string"
       schema:
         type: "string"
   RegisterSchemaResponse:
@@ -792,6 +794,8 @@ definitions:
         type: "integer"
         format: "int32"
       schema:
+        type: "string"
+      schemaType:
         type: "string"
   SchemaString:
     type: "object"

@@ -14,30 +14,24 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.avro;
+package io.confluent.kafka.schemaregistry;
 
-/**
- * @deprecated  Use {@link io.confluent.kafka.schemaregistry.CompatibilityLevel} instead
- */
-@Deprecated
-public enum AvroCompatibilityLevel {
-  NONE("NONE", AvroCompatibilityChecker.NO_OP_CHECKER),
-  BACKWARD("BACKWARD", AvroCompatibilityChecker.BACKWARD_CHECKER),
-  BACKWARD_TRANSITIVE("BACKWARD_TRANSITIVE", AvroCompatibilityChecker.BACKWARD_TRANSITIVE_CHECKER),
-  FORWARD("FORWARD", AvroCompatibilityChecker.FORWARD_CHECKER),
-  FORWARD_TRANSITIVE("FORWARD_TRANSITIVE", AvroCompatibilityChecker.FORWARD_TRANSITIVE_CHECKER),
-  FULL("FULL", AvroCompatibilityChecker.FULL_CHECKER),
-  FULL_TRANSITIVE("FULL_TRANSITIVE", AvroCompatibilityChecker.FULL_TRANSITIVE_CHECKER);
+public enum CompatibilityLevel {
+  NONE,
+  BACKWARD,
+  BACKWARD_TRANSITIVE,
+  FORWARD,
+  FORWARD_TRANSITIVE,
+  FULL,
+  FULL_TRANSITIVE;
 
   public final String name;
-  public final AvroCompatibilityChecker compatibilityChecker;
 
-  private AvroCompatibilityLevel(String name, AvroCompatibilityChecker compatibilityChecker) {
-    this.name = name;
-    this.compatibilityChecker = compatibilityChecker;
+  private CompatibilityLevel() {
+    this.name = name();
   }
 
-  public static AvroCompatibilityLevel forName(String name) {
+  public static CompatibilityLevel forName(String name) {
     if (name == null) {
       return null;
     }
@@ -61,5 +55,4 @@ public enum AvroCompatibilityLevel {
       return null;
     }
   }
-
 }

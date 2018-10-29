@@ -16,17 +16,24 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+
 public class SchemaMetadata {
 
   private int id;
   private int version;
+  private String schemaType = AvroSchema.AVRO;
   private String schema;
 
   public SchemaMetadata(int id, int version, String schema) {
+    this(id, version, AvroSchema.AVRO, schema);
+  }
+
+  public SchemaMetadata(int id, int version, String schemaType, String schema) {
     this.id = id;
     this.version = version;
+    this.schemaType = schemaType;
     this.schema = schema;
-
   }
 
   public int getId() {
@@ -35,6 +42,10 @@ public class SchemaMetadata {
 
   public int getVersion() {
     return version;
+  }
+
+  public String getSchemaType() {
+    return schemaType;
   }
 
   public String getSchema() {

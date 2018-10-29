@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityChecker;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 
@@ -239,7 +241,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         id = entry.getKey();
       }
     }
-    return new SchemaMetadata(id, version, schemaString);
+    return new SchemaMetadata(id, version, AvroSchema.AVRO, schemaString);
   }
 
   @Override
@@ -267,18 +269,20 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       compatibility = defaultCompatibility;
     }
 
-    AvroCompatibilityLevel compatibilityLevel = AvroCompatibilityLevel.forName(compatibility);
+    CompatibilityLevel compatibilityLevel = CompatibilityLevel.forName(compatibility);
     if (compatibilityLevel == null) {
       return false;
     }
 
-    List<Schema> schemaHistory = new ArrayList<>();
+    List<AvroSchema> schemaHistory = new ArrayList<>();
     for (int version : getAllVersions(subject)) {
       SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
-      schemaHistory.add(getSchemaBySubjectAndIdFromRegistry(subject, schemaMetadata.getId()));
+      schemaHistory.add(new AvroSchema(getSchemaBySubjectAndIdFromRegistry(subject,
+          schemaMetadata.getId())));
     }
 
-    return compatibilityLevel.compatibilityChecker.isCompatible(newSchema, schemaHistory);
+    return CompatibilityChecker.checker(compatibilityLevel).isCompatible(new AvroSchema(newSchema),
+        schemaHistory);
   }
 
   @Override

@@ -30,7 +30,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Callable;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -40,8 +39,8 @@ import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
-import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
-import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
+import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
+import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -112,13 +111,13 @@ public class MasterElectorTest extends ClusterTestHarness {
     // create schema registry instance 1
     final RestApp restApp1 = new RestApp(port1,
                                          zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
-                                         AvroCompatibilityLevel.NONE.name, true, null);
+                                         CompatibilityLevel.NONE.name, true, null);
     restApp1.start();
 
     // create schema registry instance 2
     final RestApp restApp2 = new RestApp(port2,
                                          zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
-                                         AvroCompatibilityLevel.NONE.name, true, null);
+                                         CompatibilityLevel.NONE.name, true, null);
     restApp2.start();
     assertTrue("Schema registry instance 1 should be the master", restApp1.isMaster());
     assertFalse("Schema registry instance 2 shouldn't be the master", restApp2.isMaster());
@@ -169,26 +168,26 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     // update config to master
     restApp1.restClient
-        .updateCompatibility(AvroCompatibilityLevel.FORWARD.name, configSubject);
+        .updateCompatibility(CompatibilityLevel.FORWARD.name, configSubject);
     assertEquals("New compatibility level should be FORWARD on the master",
                  FORWARD.name,
                  restApp1.restClient.getConfig(configSubject).getCompatibilityLevel());
 
     // the new config should be eventually readable on the non-master
     waitUntilCompatibilityLevelSet(restApp2.restClient, configSubject,
-                                   AvroCompatibilityLevel.FORWARD.name,
+                                   CompatibilityLevel.FORWARD.name,
                                    "New compatibility level should be FORWARD on the non-master");
 
     // update config to non-master
     restApp2.restClient
-        .updateCompatibility(AvroCompatibilityLevel.NONE.name, configSubject);
+        .updateCompatibility(CompatibilityLevel.NONE.name, configSubject);
     assertEquals("New compatibility level should be NONE on the master",
                  NONE.name,
                  restApp1.restClient.getConfig(configSubject).getCompatibilityLevel());
 
     // the new config should be eventually readable on the non-master
     waitUntilCompatibilityLevelSet(restApp2.restClient, configSubject,
-                                   AvroCompatibilityLevel.NONE.name,
+                                   CompatibilityLevel.NONE.name,
                                    "New compatibility level should be NONE on the non-master");
 
     // fake an incorrect master and registration should fail
@@ -220,7 +219,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     // update config should fail if master is not available
     int updateConfigStatusCodeFromRestApp1 = 0;
     try {
-      restApp1.restClient.updateCompatibility(AvroCompatibilityLevel.FORWARD.name,
+      restApp1.restClient.updateCompatibility(CompatibilityLevel.FORWARD.name,
               configSubject);
       fail("Update config should fail on the master");
     } catch (RestClientException e) {
@@ -230,7 +229,7 @@ public class MasterElectorTest extends ClusterTestHarness {
 
     int updateConfigStatusCodeFromRestApp2 = 0;
     try {
-      restApp2.restClient.updateCompatibility(AvroCompatibilityLevel.FORWARD.name,
+      restApp2.restClient.updateCompatibility(CompatibilityLevel.FORWARD.name,
               configSubject);
       fail("Update config should fail on the non-master");
     } catch (RestClientException e) {
@@ -316,7 +315,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     for (int i = 0; i < numSlaves; i++) {
       RestApp slave = new RestApp(choosePort(),
                                   zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
-                                  AvroCompatibilityLevel.NONE.name, false, null);
+                                  CompatibilityLevel.NONE.name, false, null);
       slaveApps.add(slave);
       slave.start();
       aSlave = slave;
@@ -344,7 +343,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     for (int i = 0; i < numMasters; i++) {
       RestApp master = new RestApp(choosePort(),
                                    zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
-                                   AvroCompatibilityLevel.NONE.name, true, null);
+                                   CompatibilityLevel.NONE.name, true, null);
       masterApps.add(master);
       master.start();
       waitUntilMasterElectionCompletes(masterApps);
@@ -395,7 +394,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     for (int i = 0; i < numSlaves; i++) {
       RestApp slave = new RestApp(choosePort(),
                                   zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
-                                  AvroCompatibilityLevel.NONE.name, false, null);
+                                  CompatibilityLevel.NONE.name, false, null);
       slaveApps.add(slave);
       slave.start();
       aSlave = slave;
@@ -420,7 +419,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     for (int i = 0; i < numMasters; i++) {
       RestApp master = new RestApp(choosePort(),
                                    zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
-                                   AvroCompatibilityLevel.NONE.name, true, null);
+                                   CompatibilityLevel.NONE.name, true, null);
       masterApps.add(master);
       master.start();
       aMaster = master;
@@ -526,7 +525,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     for (int i = 0; i < numSlaves; i++) {
       RestApp slave = new RestApp(choosePort(),
           zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
-          AvroCompatibilityLevel.NONE.name, false, props);
+          CompatibilityLevel.NONE.name, false, props);
       slaveApps.add(slave);
       slave.start();
       aSlave = slave;
@@ -551,7 +550,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     for (int i = 0; i < numMasters; i++) {
       RestApp master = new RestApp(choosePort(),
           zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
-          AvroCompatibilityLevel.NONE.name, true, props);
+          CompatibilityLevel.NONE.name, true, props);
       masterApps.add(master);
       master.start();
       aMaster = master;

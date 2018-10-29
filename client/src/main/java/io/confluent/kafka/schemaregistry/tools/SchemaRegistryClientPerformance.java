@@ -20,7 +20,7 @@ import java.io.IOException;
 
 import io.confluent.common.utils.AbstractPerformanceTest;
 import io.confluent.common.utils.PerformanceStats;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -69,7 +69,7 @@ public class SchemaRegistryClientPerformance extends AbstractPerformanceTest {
 
     client = new CachedSchemaRegistryClient(restService, Integer.MAX_VALUE);
     // No compatibility verification
-    client.updateCompatibility(null, AvroCompatibilityLevel.NONE.name);
+    client.updateCompatibility(null, CompatibilityLevel.NONE.name);
   }
 
   // sequential schema maker

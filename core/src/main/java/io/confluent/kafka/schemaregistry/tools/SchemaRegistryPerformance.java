@@ -17,7 +17,7 @@ package io.confluent.kafka.schemaregistry.tools;
 
 import io.confluent.common.utils.AbstractPerformanceTest;
 import io.confluent.common.utils.PerformanceStats;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -67,7 +67,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
 
     // No compatibility verification
     ConfigUpdateRequest request = new ConfigUpdateRequest();
-    request.setCompatibilityLevel(AvroCompatibilityLevel.NONE.name);
+    request.setCompatibilityLevel(CompatibilityLevel.NONE.name);
     restService.updateConfig(request, null);
   }
 
@@ -78,7 +78,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
                           + "\"fields\":"
                           + "[{\"type\":\"string\",\"name\":"
                           + "\"f" + num + "\"}]}";
-    return AvroUtils.parseSchema(schemaString).canonicalString;
+    return AvroUtils.parseSchema(schemaString).canonicalString();
   }
 
   @Override

@@ -28,6 +28,7 @@ public class RegisterSchemaRequest {
 
   private Integer version;
   private Integer id;
+  private String schemaType;
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
@@ -54,6 +55,16 @@ public class RegisterSchemaRequest {
     this.id = id;
   }
 
+  @JsonProperty("schemaType")
+  public String getSchemaType() {
+    return this.schemaType;
+  }
+
+  @JsonProperty("schemaType")
+  public void setSchemaType(String schemaType) {
+    this.schemaType = schemaType;
+  }
+
   @JsonProperty("schema")
   public String getSchema() {
     return this.schema;
@@ -75,12 +86,13 @@ public class RegisterSchemaRequest {
     RegisterSchemaRequest that = (RegisterSchemaRequest) o;
     return Objects.equals(version, that.version)
         && Objects.equals(id, that.id)
+        && Objects.equals(schemaType, that.schemaType)
         && Objects.equals(schema, that.schema);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(version, id, schema);
+    return Objects.hash(schemaType, version, id, schema);
   }
 
   @Override
@@ -93,6 +105,7 @@ public class RegisterSchemaRequest {
     if (id != null) {
       buf.append("id=").append(id).append(", ");
     }
+    buf.append("schemaType=" + this.schemaType + ",");
     buf.append("schema=").append(schema).append("}");
     return buf.toString();
   }
