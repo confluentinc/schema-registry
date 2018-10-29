@@ -36,7 +36,7 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -91,8 +91,8 @@ public class ConfigResource {
       throw Errors.schemaRegistryException("Failed to retrieve a list of all subjects"
                                            + " from the registry", e);
     }
-    AvroCompatibilityLevel compatibilityLevel =
-        AvroCompatibilityLevel.forName(request.getCompatibilityLevel());
+    CompatibilityLevel compatibilityLevel =
+        CompatibilityLevel.forName(request.getCompatibilityLevel());
     if (compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
@@ -132,7 +132,7 @@ public class ConfigResource {
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
     Config config = null;
     try {
-      AvroCompatibilityLevel compatibilityLevel =
+      CompatibilityLevel compatibilityLevel =
           defaultToGlobal
           ? schemaRegistry.getCompatibilityLevelInScope(subject)
           : schemaRegistry.getCompatibilityLevel(subject);
@@ -159,8 +159,8 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @ApiParam(value = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
-    AvroCompatibilityLevel compatibilityLevel =
-        AvroCompatibilityLevel.forName(request.getCompatibilityLevel());
+    CompatibilityLevel compatibilityLevel =
+        CompatibilityLevel.forName(request.getCompatibilityLevel());
     if (compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
@@ -190,7 +190,7 @@ public class ConfigResource {
   public Config getTopLevelConfig() {
     Config config = null;
     try {
-      AvroCompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(null);
+      CompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(null);
       config = new Config(compatibilityLevel == null ? null : compatibilityLevel.name);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get compatibility level", e);

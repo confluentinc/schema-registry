@@ -243,8 +243,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
         = restService.getVersion(subject, version);
     int id = response.getId();
+    String schemaType = response.getSchemaType();
     String schema = response.getSchema();
-    return new SchemaMetadata(id, version, schema);
+    return new SchemaMetadata(id, version, schemaType, schema);
   }
 
   @Override
@@ -254,8 +255,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         = restService.getLatestVersion(subject);
     int id = response.getId();
     int version = response.getVersion();
+    String schemaType = response.getSchemaType();
     String schema = response.getSchema();
-    return new SchemaMetadata(id, version, schema);
+    return new SchemaMetadata(id, version, schemaType, schema);
   }
 
   @Override

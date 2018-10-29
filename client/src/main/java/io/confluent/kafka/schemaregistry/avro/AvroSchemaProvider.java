@@ -15,15 +15,24 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
-import org.apache.avro.Schema;
+import org.apache.avro.SchemaParseException;
 
-public class AvroSchema {
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 
-  public final Schema schemaObj;
-  public final String canonicalString;
+public class AvroSchemaProvider implements SchemaProvider {
 
-  public AvroSchema(Schema schemaObj, String canonicalString) {
-    this.schemaObj = schemaObj;
-    this.canonicalString = canonicalString;
+  @Override
+  public String schemaType() {
+    return AvroSchema.AVRO;
+  }
+
+  @Override
+  public ParsedSchema parseSchema(String schemaString) {
+    try {
+      return new AvroSchema(schemaString);
+    } catch (SchemaParseException e) {
+      return null;
+    }
   }
 }

@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Predicate;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -153,9 +153,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   @SuppressWarnings("unchecked")
-  public AvroCompatibilityLevel compatibilityLevel(String subject,
-                                                   boolean returnTopLevelIfNotFound,
-                                                   AvroCompatibilityLevel defaultForTopLevel
+  public CompatibilityLevel compatibilityLevel(String subject,
+                                               boolean returnTopLevelIfNotFound,
+                                               CompatibilityLevel defaultForTopLevel
   ) {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
     ConfigValue config = (ConfigValue) get((K) subjectConfigKey);

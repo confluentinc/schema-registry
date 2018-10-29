@@ -32,6 +32,17 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 
 import static org.easymock.EasyMock.anyBoolean;
+import org.apache.avro.Schema;
+import org.easymock.EasyMock;
+import org.junit.Test;
+
+import java.util.HashMap;
+import java.util.Arrays;
+
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.eq;
@@ -57,7 +68,7 @@ public class CachedSchemaRegistryClientTest {
   private static final int ID_25 = 25;
   private static final io.confluent.kafka.schemaregistry.client.rest.entities.Schema SCHEMA_DETAILS
       = new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
-          SUBJECT_0, 7, ID_25, SCHEMA_STR_0);
+          SUBJECT_0, 7, ID_25, AvroSchema.AVRO, SCHEMA_STR_0);
 
   private RestService restService;
   private CachedSchemaRegistryClient client;
@@ -172,7 +183,7 @@ public class CachedSchemaRegistryClientTest {
     expect(restService.lookUpSubjectVersion(anyString(), eq(SUBJECT_0), eq(true)))
         .andReturn(
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, version,
-                ID_25, SCHEMA_STR_0));
+                ID_25, AvroSchema.AVRO, SCHEMA_STR_0));
 
     replay(restService);
 
@@ -247,6 +258,7 @@ public class CachedSchemaRegistryClientTest {
         .andReturn(new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0,
                                                                                      version,
             ID_25,
+            AvroSchema.AVRO,
             SCHEMA_STR_0));
 
     expect(restService.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,

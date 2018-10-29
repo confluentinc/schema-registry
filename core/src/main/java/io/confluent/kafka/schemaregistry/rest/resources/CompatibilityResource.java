@@ -35,6 +35,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
@@ -124,8 +125,12 @@ public class CompatibilityResource {
       }
     } else {
       try {
-        isCompatible = schemaRegistry
-            .isCompatible(subject, request.getSchema(), schemaForSpecifiedVersion.getSchema());
+        isCompatible = schemaRegistry.isCompatible(
+            subject,
+            request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.AVRO,
+            request.getSchema(),
+            schemaForSpecifiedVersion
+        );
       } catch (InvalidSchemaException e) {
         throw Errors.invalidAvroException("Invalid input schema " + request.getSchema(), e);
       } catch (SchemaRegistryStoreException e) {

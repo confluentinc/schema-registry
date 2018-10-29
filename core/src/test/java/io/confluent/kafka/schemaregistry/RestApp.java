@@ -19,7 +19,6 @@ import org.eclipse.jetty.server.Server;
 
 import java.util.Properties;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
@@ -36,7 +35,7 @@ public class RestApp {
   public String restConnect;
 
   public RestApp(int port, String zkConnect, String kafkaTopic) {
-    this(port, zkConnect, kafkaTopic, AvroCompatibilityLevel.NONE.name, null);
+    this(port, zkConnect, kafkaTopic, CompatibilityLevel.NONE.name, null);
   }
 
   public RestApp(int port, String zkConnect, String kafkaTopic, String compatibilityType, Properties schemaRegistryProps) {

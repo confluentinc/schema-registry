@@ -49,7 +49,7 @@
         <plugins>
             <plugin>
                 <artifactId>maven-plugin-plugin</artifactId>
-                <version>3.3</version>
+                <version>3.6.0</version>
                 <configuration>
                     <goalPrefix>schema-registry</goalPrefix>
                 </configuration>
