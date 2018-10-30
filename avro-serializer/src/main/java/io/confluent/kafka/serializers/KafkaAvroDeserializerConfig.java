@@ -23,7 +23,7 @@ import io.confluent.common.config.ConfigDef.Type;
 
 import java.util.Map;
 
-public class KafkaAvroDeserializerConfig extends AbstractKafkaAvroSerDeConfig {
+public class KafkaAvroDeserializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
   public static final String SPECIFIC_AVRO_READER_CONFIG = "specific.avro.reader";
   public static final boolean SPECIFIC_AVRO_READER_DEFAULT = false;

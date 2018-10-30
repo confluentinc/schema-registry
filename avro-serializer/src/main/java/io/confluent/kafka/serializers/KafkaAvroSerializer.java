@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements Serializer<Object> {
@@ -50,9 +51,13 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
 
   @Override
   public byte[] serialize(String topic, Object record) {
+    if (record == null) {
+      return null;
+    }
     return serializeImpl(
         getSubjectName(topic, isKey, record,
-            AvroSchemaUtils.getSchema(record, useSchemaReflection)), record);
+            new AvroSchema(AvroSchemaUtils.getSchema(record, useSchemaReflection))),
+            record);
   }
 
   @Override

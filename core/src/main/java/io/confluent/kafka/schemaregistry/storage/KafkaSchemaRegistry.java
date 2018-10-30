@@ -647,6 +647,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
     RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
     registerSchemaRequest.setSchema(schema.getSchema());
+    registerSchemaRequest.setSchemaType(schema.getSchemaType());
     registerSchemaRequest.setVersion(schema.getVersion());
     registerSchemaRequest.setId(schema.getId());
     log.debug(String.format("Forwarding registering schema request %s to %s",

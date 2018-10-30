@@ -117,9 +117,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_PROVIDERS_CONFIG = "schema.providers";
 
   /**
-   * <code>avro.compatibility.level</code>
+   * <code>schema.compatibility.level</code>
    */
+  @Deprecated
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
+  public static final String SCHEMA_COMPATIBILITY_CONFIG = "schema.compatibility.level";
 
   public static final String ZOOKEEPER_SET_ACL_CONFIG = "zookeeper.set.acl";
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
@@ -247,8 +249,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "  A list of classes to use as SchemaProvider. Implementing the interface "
           + "<code>SchemaProvider</code> allows you to add custom schema types to Schema Registry.";
   protected static final String COMPATIBILITY_DOC =
-      "The Avro compatibility type. Valid values are: "
-      + "none (new schema can be any valid Avro schema), "
+      "The compatibility type. Valid values are: "
+      + "none (new schema can be any valid schema), "
       + "backward (new schema can read data produced by latest registered schema), "
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema), "
@@ -403,7 +405,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_PROVIDERS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_PROVIDERS_DOC
     )
-    .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
+    .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, "",
+        ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
+    )
+    .define(SCHEMA_COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
         ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
     )
     .define(ZOOKEEPER_SET_ACL_CONFIG, ConfigDef.Type.BOOLEAN, ZOOKEEPER_SET_ACL_DEFAULT,
@@ -530,10 +535,13 @@ public class SchemaRegistryConfig extends RestConfig {
   public SchemaRegistryConfig(ConfigDef configDef, Properties props) throws RestConfigException {
     super(configDef, props);
     this.originalProperties = props;
-    String compatibilityTypeString = getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG);
+    String compatibilityTypeString = getString(COMPATIBILITY_CONFIG);
+    if (compatibilityTypeString == null || compatibilityTypeString.isEmpty()) {
+      compatibilityTypeString = getString(SCHEMA_COMPATIBILITY_CONFIG);
+    }
     compatibilityType = CompatibilityLevel.forName(compatibilityTypeString);
     if (compatibilityType == null) {
-      throw new RestConfigException("Unknown Avro compatibility level: " + compatibilityTypeString);
+      throw new RestConfigException("Unknown compatibility level: " + compatibilityTypeString);
     }
   }
 

@@ -14,6 +14,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+
 public class SchemasWithDependenciesTest extends SchemaRegistryTest {
 
     private final String dependency = "{\n" +
@@ -75,8 +78,8 @@ public class SchemasWithDependenciesTest extends SchemaRegistryTest {
         Map<String,File> schemas = new HashMap<>();
         schemas.put("Pizza", pizzaFile);
 
-        Map<String, Schema> parsedSchemas = schemaRegistryMojo.loadSchemas(schemas);
-        Schema pizza = parsedSchemas.get("Pizza");
+        Map<String, ParsedSchema> parsedSchemas = schemaRegistryMojo.loadSchemas(schemas);
+        Schema pizza = ((AvroSchema) parsedSchemas.get("Pizza")).schemaObj;
 
         Assert.assertNotNull("The schema should've been generated", pizza);
         Assert.assertTrue("The schema should contain fields from the dependency", pizza.toString().contains("currency"));
@@ -110,8 +113,8 @@ public class SchemasWithDependenciesTest extends SchemaRegistryTest {
         Map<String,File> schemas = new HashMap<>();
         schemas.put("Pizza", pizzaFile);
 
-        Map<String, Schema> parsedSchemas = schemaRegistryMojo.loadSchemas(schemas);
-        Schema pizza = parsedSchemas.get("Pizza");
+        Map<String, ParsedSchema> parsedSchemas = schemaRegistryMojo.loadSchemas(schemas);
+        Schema pizza = ((AvroSchema) parsedSchemas.get("Pizza")).schemaObj;
 
         Assert.assertNotNull("The schema should've been generated", pizza);
         Assert.assertTrue("The schema should contain fields from the dependency", pizza.toString().contains("currency"));

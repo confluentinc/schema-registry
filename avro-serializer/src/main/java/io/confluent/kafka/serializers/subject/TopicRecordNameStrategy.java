@@ -16,13 +16,13 @@
 
 package io.confluent.kafka.serializers.subject;
 
-import org.apache.avro.Schema;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 
 /**
- * For any Avro record type that is published to Kafka topic &lt;topic&gt;,
+ * For any record type that is published to Kafka topic &lt;topic&gt;,
  * registers the schema in the registry under the subject name
  * &lt;topic&gt;-&lt;recordName&gt;, where &lt;recordName&gt; is the
- * fully-qualified Avro record name. This strategy allows a topic to contain
+ * fully-qualified record name. This strategy allows a topic to contain
  * a mixture of different record types, since no intra-topic compatibility
  * checking is performed. Moreover, different topics may contain mutually
  * incompatible versions of the same record name, since the compatibility
@@ -31,8 +31,8 @@ import org.apache.avro.Schema;
 public class TopicRecordNameStrategy extends RecordNameStrategy {
 
   @Override
-  public String subjectName(String topic, boolean isKey, Schema schema) {
-    if (schema == null || schema.getType() == Schema.Type.NULL) {
+  public String subjectName(String topic, boolean isKey, ParsedSchema schema) {
+    if (schema == null) {
       return null;
     }
     return topic + "-" + getRecordName(schema, isKey);

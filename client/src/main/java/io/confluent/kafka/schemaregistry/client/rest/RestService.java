@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -340,6 +341,7 @@ public class RestService implements Configurable {
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
 
+  @VisibleForTesting
   public Schema lookUpSubjectVersion(String schemaString, String subject)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
@@ -368,12 +370,25 @@ public class RestService implements Configurable {
     return schema;
   }
 
-
-  public Schema lookUpSubjectVersion(String schemaString, String subject,
+  @VisibleForTesting
+  public Schema lookUpSubjectVersion(String schemaString,
+                                     String subject,
                                      boolean lookupDeletedSchema)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
+    return lookUpSubjectVersion(DEFAULT_REQUEST_PROPERTIES, request, subject, lookupDeletedSchema);
+  }
+
+
+  public Schema lookUpSubjectVersion(String schemaString,
+                                     String schemaType,
+                                     String subject,
+                                     boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    request.setSchemaType(schemaType);
     return lookUpSubjectVersion(DEFAULT_REQUEST_PROPERTIES, request, subject, lookupDeletedSchema);
   }
 
@@ -393,6 +408,7 @@ public class RestService implements Configurable {
     return schema;
   }
 
+  @VisibleForTesting
   public int registerSchema(String schemaString, String subject)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
@@ -400,10 +416,30 @@ public class RestService implements Configurable {
     return registerSchema(request, subject);
   }
 
+  public int registerSchema(String schemaString, String schemaType, String subject)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    request.setSchemaType(schemaType);
+    return registerSchema(request, subject);
+  }
+
+  @VisibleForTesting
   public int registerSchema(String schemaString, String subject, int version, int id)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
+    request.setVersion(version);
+    request.setId(id);
+    return registerSchema(request, subject);
+  }
+
+  public int registerSchema(String schemaString, String schemaType,
+                            String subject, int version, int id)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    request.setSchemaType(schemaType);
     request.setVersion(version);
     request.setId(id);
     return registerSchema(request, subject);
@@ -428,10 +464,22 @@ public class RestService implements Configurable {
     return response.getId();
   }
 
+  @VisibleForTesting
   public boolean testCompatibility(String schemaString, String subject, String version)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
+    return testCompatibility(request, subject, version);
+  }
+
+  public boolean testCompatibility(String schemaString,
+                                   String schemaType,
+                                   String subject,
+                                   String version)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    request.setSchemaType(schemaType);
     return testCompatibility(request, subject, version);
   }
 

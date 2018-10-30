@@ -17,7 +17,9 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import com.google.inject.internal.util.Preconditions;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+
 import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -44,16 +46,16 @@ public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
 
   @Override
   public void execute() throws MojoExecutionException, MojoFailureException {
-    Map<String, Schema> subjectToSchemaLookup = loadSchemas(this.subjects);
+    Map<String, ParsedSchema> subjectToSchemaLookup = loadSchemas(this.subjects);
     this.schemaVersions = new LinkedHashMap<>();
 
     int errors = 0;
-    for (Map.Entry<String, Schema> kvp : subjectToSchemaLookup.entrySet()) {
+    for (Map.Entry<String, ParsedSchema> kvp : subjectToSchemaLookup.entrySet()) {
       try {
         if (getLog().isDebugEnabled()) {
           getLog().debug(
               String.format("Calling register('%s', '%s')", kvp.getKey(),
-                            kvp.getValue().toString(true))
+                            kvp.getValue().toString())
           );
         }
 

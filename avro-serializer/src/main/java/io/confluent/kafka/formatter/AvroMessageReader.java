@@ -37,7 +37,7 @@ import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import kafka.common.KafkaException;
 import kafka.common.MessageReader;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
@@ -131,7 +131,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
       ignoreError = props.getProperty("ignore.error").trim().toLowerCase().equals("true");
     }
     reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
-    String url = props.getProperty(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
+    String url = props.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
@@ -139,7 +139,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     Map<String, Object> originals = getPropertiesMap(props);
 
     schemaRegistry = new CachedSchemaRegistryClient(
-        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, originals);
+        url, AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, originals);
     if (!props.containsKey("value.schema")) {
       throw new ConfigException("Must provide the Avro schema string in value.schema");
     }

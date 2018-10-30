@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
@@ -59,9 +61,9 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
     return this.client;
   }
 
-  protected Map<String, Schema> loadSchemas(Map<String, File> subjects) {
+  protected Map<String, ParsedSchema> loadSchemas(Map<String, File> subjects) {
     int errorCount = 0;
-    Map<String, Schema> results = new LinkedHashMap<>();
+    Map<String, ParsedSchema> results = new LinkedHashMap<>();
 
     for (Map.Entry<String, File> kvp : subjects.entrySet()) {
       Schema.Parser parser = newParser();
@@ -75,7 +77,7 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
 
       try (FileInputStream inputStream = new FileInputStream(kvp.getValue())) {
         Schema schema = parser.parse(inputStream);
-        results.put(kvp.getKey(), schema);
+        results.put(kvp.getKey(), new AvroSchema(schema));
       } catch (IOException ex) {
         getLog().error("Exception thrown while loading " + kvp.getValue(), ex);
         errorCount++;

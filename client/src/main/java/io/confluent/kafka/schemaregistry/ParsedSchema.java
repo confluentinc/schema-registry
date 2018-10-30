@@ -28,6 +28,13 @@ public interface ParsedSchema {
   String schemaType();
 
   /**
+   * Returns a name for the schema.
+   *
+   * @return the name, or null
+   */
+  String name();
+
+  /**
    * Returns a canonical string representation of the schema.
    *
    * @return the canonical representation

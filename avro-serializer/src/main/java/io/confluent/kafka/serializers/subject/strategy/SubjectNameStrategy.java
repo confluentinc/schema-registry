@@ -21,7 +21,7 @@ import org.apache.kafka.common.Configurable;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
 /**
- * A {@link SubjectNameStrategy} is used by the Avro serializer to determine
+ * A {@link SubjectNameStrategy} is used by the serializer to determine
  * the subject name under which the event record schemas should be registered
  * in the schema registry. The default is {@link TopicNameStrategy}.
  */

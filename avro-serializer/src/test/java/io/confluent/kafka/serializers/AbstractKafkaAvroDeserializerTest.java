@@ -6,7 +6,8 @@ import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
-import io.confluent.common.config.ConfigException;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -24,6 +25,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.kafka.common.config.ConfigException;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -62,19 +64,21 @@ public class AbstractKafkaAvroDeserializerTest {
 
   public void assertSchemaNotCopiedWhenDeserializedWithVersion(
       String topic,
-      SubjectNameStrategy<Schema> subjectNameStrategy) throws IOException, RestClientException {
+      SubjectNameStrategy<ParsedSchema> subjectNameStrategy) throws IOException,
+      RestClientException {
     Map configs = ImmutableMap.builder()
         .putAll(defaultConfigs)
         .put(KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS, false)
         .put(
-            AbstractKafkaAvroSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY,
+            AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY,
             subjectNameStrategy.getClass())
         .build();
     IndexedRecord avroRecord = createAvroRecord();
-    String subject = subjectNameStrategy.subjectName(topic, false, avroRecord.getSchema());
+    String subject = subjectNameStrategy.subjectName(topic, false,
+        new AvroSchema(avroRecord.getSchema()));
     avroSerializer.configure(configs, false);
     deserializer.configure(new KafkaAvroDeserializerConfig(configs));
-    schemaRegistry.register(subject, avroRecord.getSchema());
+    schemaRegistry.register(subject, new AvroSchema(avroRecord.getSchema()));
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     IndexedRecord deserialized
         = (IndexedRecord) deserializer.deserializeWithSchemaAndVersion(topic, false, bytes).container();
@@ -123,7 +127,7 @@ public class AbstractKafkaAvroDeserializerTest {
   @Test
   public void testSchemaVersionSet() throws IOException, RestClientException {
     IndexedRecord avroRecord = createAvroRecord();
-    int version = schemaRegistry.register("topic", avroRecord.getSchema());
+    int version = schemaRegistry.register("topic", new AvroSchema(avroRecord.getSchema()));
     byte[] bytes = avroSerializer.serialize("topic", avroRecord);
 
     GenericContainerWithVersion genericContainerWithVersion
@@ -157,7 +161,7 @@ public class AbstractKafkaAvroDeserializerTest {
   public void testMockUrl() {
     final KafkaAvroSerializer kafkaAvroSerializer = new KafkaAvroSerializer();
     kafkaAvroSerializer.configure(
-            singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf"),
+            singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf"),
             false
     );
 
@@ -170,7 +174,7 @@ public class AbstractKafkaAvroDeserializerTest {
     final KafkaAvroSerializer kafkaAvroSerializer = new KafkaAvroSerializer();
     try {
         kafkaAvroSerializer.configure(
-                singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf,mock://qwer"),
+                singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf,mock://qwer"),
                 false
         );
         fail();
@@ -189,7 +193,7 @@ public class AbstractKafkaAvroDeserializerTest {
     final KafkaAvroSerializer kafkaAvroSerializer = new KafkaAvroSerializer();
     try {
         kafkaAvroSerializer.configure(
-                singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf,http://qwer"),
+                singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf,http://qwer"),
                 false
         );
         fail();
@@ -202,7 +206,7 @@ public class AbstractKafkaAvroDeserializerTest {
 
     try {
         kafkaAvroSerializer.configure(
-                singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "http://qwer,mock://asdf"),
+                singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "http://qwer,mock://asdf"),
                 false
         );
         fail();
