@@ -101,8 +101,8 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @return the compatibility level if found, otherwise null
    */
   CompatibilityLevel compatibilityLevel(String subject,
-                                            boolean returnTopLevelIfNotFound,
-                                            CompatibilityLevel defaultForTopLevel);
+                                        boolean returnTopLevelIfNotFound,
+                                        CompatibilityLevel defaultForTopLevel);
 
   /**
    * Retrieves the mode for a subject.

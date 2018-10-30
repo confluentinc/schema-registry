@@ -105,7 +105,7 @@ public class RegisterSchemaRequest {
     if (id != null) {
       buf.append("id=").append(id).append(", ");
     }
-    buf.append("schemaType=" + this.schemaType + ",");
+    buf.append("schemaType=").append(this.schemaType).append(",");
     buf.append("schema=").append(schema).append("}");
     return buf.toString();
   }

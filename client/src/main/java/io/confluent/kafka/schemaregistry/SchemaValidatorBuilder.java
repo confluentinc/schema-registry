@@ -74,8 +74,7 @@ public final class SchemaValidatorBuilder {
     valid();
     return (toValidate, schemasInOrder) -> {
       for (ParsedSchema existing : schemasInOrder) {
-        boolean valid = strategy.validate(toValidate, existing);
-        if (!valid) {
+        if (!strategy.validate(toValidate, existing)) {
           return false;
         }
       }

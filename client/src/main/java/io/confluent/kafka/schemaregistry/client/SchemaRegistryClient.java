@@ -23,24 +23,57 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public interface SchemaRegistryClient {
 
-  public int register(String subject, Schema schema) throws IOException, RestClientException;
+  @Deprecated
+  default int register(String subject, Schema schema) throws IOException,
+      RestClientException {
+    return register(subject, new AvroSchema(schema));
+  }
 
-  public int register(String subject, Schema schema, int version, int id) throws IOException,
+  public int register(String subject, ParsedSchema schema) throws IOException, RestClientException;
+
+  @Deprecated
+  default int register(String subject, Schema schema, int version, int id) throws IOException,
+      RestClientException {
+    return register(subject, new AvroSchema(schema), version, id);
+  }
+
+  public int register(String subject, ParsedSchema schema, int version, int id) throws IOException,
       RestClientException;
 
   @Deprecated
-  public Schema getByID(int id) throws IOException, RestClientException;
-
-  public Schema getById(int id) throws IOException, RestClientException;
+  default Schema getByID(int id) throws IOException, RestClientException {
+    return getById(id);
+  }
 
   @Deprecated
-  public Schema getBySubjectAndID(String subject, int id) throws IOException, RestClientException;
+  default Schema getById(int id) throws IOException, RestClientException {
+    ParsedSchema schema = getSchemaById(id);
+    return schema instanceof AvroSchema ? ((AvroSchema)schema).schemaObj : null;
+  }
 
-  public Schema getBySubjectAndId(String subject, int id) throws IOException, RestClientException;
+  public ParsedSchema getSchemaById(int id) throws IOException, RestClientException;
+
+  @Deprecated
+  default Schema getBySubjectAndID(String subject, int id)
+      throws IOException, RestClientException {
+    return getBySubjectAndId(subject, id);
+  }
+
+  @Deprecated
+  default Schema getBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
+    ParsedSchema schema = getSchemaBySubjectAndId(subject, id);
+    return schema instanceof AvroSchema ? ((AvroSchema)schema).schemaObj : null;
+  }
+
+  public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException;
 
   public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException;
 
@@ -50,11 +83,24 @@ public interface SchemaRegistryClient {
   public SchemaMetadata getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException;
 
-  public int getVersion(String subject, Schema schema) throws IOException, RestClientException;
+  @Deprecated
+  default int getVersion(String subject, Schema schema)
+      throws IOException, RestClientException {
+    return getVersion(subject, new AvroSchema(schema));
+  }
+
+  public int getVersion(String subject, ParsedSchema schema)
+      throws IOException, RestClientException;
 
   public List<Integer> getAllVersions(String subject) throws IOException, RestClientException;
 
-  public boolean testCompatibility(String subject, Schema schema)
+  @Deprecated
+  default boolean testCompatibility(String subject, Schema schema)
+      throws IOException, RestClientException {
+    return testCompatibility(subject, new AvroSchema(schema));
+  }
+
+  public boolean testCompatibility(String subject, ParsedSchema schema)
       throws IOException, RestClientException;
 
   public String updateCompatibility(String subject, String compatibility)
@@ -74,7 +120,12 @@ public interface SchemaRegistryClient {
 
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
 
-  int getId(String subject, Schema schema) throws IOException, RestClientException;
+  @Deprecated
+  default int getId(String subject, Schema schema) throws IOException, RestClientException {
+    return getId(subject, new AvroSchema(schema));
+  }
+
+  int getId(String subject, ParsedSchema schema) throws IOException, RestClientException;
 
   public List<Integer> deleteSubject(String subject) throws IOException, RestClientException;
 

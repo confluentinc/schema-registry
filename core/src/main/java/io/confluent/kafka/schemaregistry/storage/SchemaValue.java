@@ -56,7 +56,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   public SchemaValue(@JsonProperty("subject") String subject,
                      @JsonProperty("version") Integer version,
                      @JsonProperty("id") Integer id,
-                     @JsonProperty("schemaType") @DefaultValue("avro") String schemaType,
+                     @JsonProperty("schemaType") @DefaultValue("AVRO") String schemaType,
                      @JsonProperty("schema") String schema,
                      @JsonProperty("deleted") boolean deleted) {
     this.subject = subject;

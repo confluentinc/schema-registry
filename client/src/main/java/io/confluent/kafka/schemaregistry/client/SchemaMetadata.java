@@ -22,7 +22,7 @@ public class SchemaMetadata {
 
   private int id;
   private int version;
-  private String schemaType = AvroSchema.AVRO;
+  private String schemaType;
   private String schema;
 
   public SchemaMetadata(int id, int version, String schema) {

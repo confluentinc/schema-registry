@@ -20,7 +20,7 @@ import io.confluent.common.config.ConfigDef;
 
 import java.util.Map;
 
-public class KafkaAvroSerializerConfig extends AbstractKafkaAvroSerDeConfig {
+public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
   private static ConfigDef config;
 
