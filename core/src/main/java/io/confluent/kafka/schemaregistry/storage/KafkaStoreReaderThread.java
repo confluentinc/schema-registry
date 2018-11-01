@@ -106,6 +106,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                       config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
     KafkaStore.addSecurityConfigsToClientProperties(config, consumerProps);
 
+    log.info("Kafka store reader thread starting consumer");
     this.consumer = new KafkaConsumer<>(consumerProps);
 
     // Include a few retries since topic creation may take some time to propagate and schema
@@ -141,8 +142,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
     log.info("Initialized last consumed offset to " + offsetInSchemasTopic);
 
-    log.debug("Kafka store reader thread started with consumer properties "
-              + consumerProps.toString());
+    log.debug("Kafka store reader thread started");
   }
 
   @Override
