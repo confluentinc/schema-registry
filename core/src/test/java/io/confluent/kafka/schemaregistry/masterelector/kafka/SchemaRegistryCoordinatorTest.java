@@ -27,10 +27,12 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -89,15 +91,28 @@ public class SchemaRegistryCoordinatorTest {
   @Before
   public void setup() {
     this.time = new MockTime();
-    this.client = new MockClient(time);
     this.metadata = new Metadata(0, Long.MAX_VALUE, true);
-    this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+    this.client = new MockClient(time, new MockClient.MockMetadataUpdater() {
+      @Override
+      public List<Node> fetchNodes() {
+        return cluster.nodes();
+      }
+
+      @Override
+      public boolean isUpdateNeeded() {
+        return false;
+      }
+
+      @Override
+      public void update(Time time, MockClient.MetadataUpdate update) {
+        throw new UnsupportedOperationException();
+      }
+    });
+
     LogContext logContext = new LogContext();
     this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000, Integer.MAX_VALUE);
     this.metrics = new Metrics(time);
     this.rebalanceListener = new MockRebalanceListener();
-
-    client.setNode(node);
 
     this.coordinator = new SchemaRegistryCoordinator(
         logContext,
