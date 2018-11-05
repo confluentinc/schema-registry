@@ -27,43 +27,162 @@ import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.junit.Before;
 import org.junit.Test;
 
 public class AvroMessageFormatterTest {
 
   private static final byte MAGIC_BYTE = 0x0;
+  private static final String KEY_STRING = "These are other bytes.";
   private static final String A_STRING = "These are bytes.";
+  private static final byte[] KEY_BYTES = KEY_STRING.getBytes();
   private static final byte[] SOME_BYTES = A_STRING.getBytes();
-  private static final byte[] SCHEMA_ID = ByteBuffer.allocate(4).putInt(1).array();
-  private static final SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+  private static final int KEY_SCHEMA_ID = 2;
+  private static final int VALUE_SCHEMA_ID = 1;
+  private static final byte[] KEY_SCHEMA_ID_BYTES = ByteBuffer.allocate(4).putInt(KEY_SCHEMA_ID).array();
+  private static final byte[] SCHEMA_ID_BYTES = ByteBuffer.allocate(4).putInt(VALUE_SCHEMA_ID).array();
+
+  private AvroMessageFormatter formatter;
+  private Properties props;
+  private SchemaRegistryClient schemaRegistry;
+  private ConsumerRecord<byte[], byte[]> recordWithValue;
+  private ConsumerRecord<byte[], byte[]> recordWithKeyAndValue;
+
+  @Before
+  public void setup() throws IOException, RestClientException {
+    props = new Properties();
+    props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+
+    schemaRegistry = new MockSchemaRegistryClient();
+    recordWithValue = createConsumerRecord(false);
+    recordWithKeyAndValue = createConsumerRecord(true);
+
+    Schema schema1 = Schema.create(Type.BYTES);
+    Schema schema2 = Schema.create(Type.BYTES);
+    schema2.addProp("foo", "bar"); // must be different than schema1
+    schemaRegistry.register("topicname", schema1);
+    schemaRegistry.register("othertopic", schema2);
+
+    formatter = new AvroMessageFormatter(schemaRegistry, null);
+  }
 
   @Test
   public void testDeserializeBytesIssue506() throws IOException, RestClientException {
-    Map<String,String> properties = new HashMap<String,String>();
-    properties.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    AvroMessageFormatter formatter = new AvroMessageFormatter(schemaRegistry, false, null);
-		
-    byte[] message = new byte[1 + SCHEMA_ID.length + SOME_BYTES.length];
-    message[0] = MAGIC_BYTE;
-    System.arraycopy(SCHEMA_ID, 0, message, 1, SCHEMA_ID.length);
-    System.arraycopy(SOME_BYTES, 0, message, 1 + SCHEMA_ID.length, SOME_BYTES.length);
+		formatter.init(props);
 
-    Schema schema = Schema.create(Type.BYTES);
-    schemaRegistry.register("topicname", schema);
-		
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-      "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 
-	  0, message.length,
-      null, message);
-    formatter.writeTo(crecord, ps);
+    formatter.writeTo(recordWithValue, ps);
     assertEquals("\"" + A_STRING + "\"\n", baos.toString());
   }
 
+  @Test
+  public void testDeserializeRecordWithKeyAndValue() throws IOException, RestClientException {
+    formatter.init(props);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    formatter.writeTo(recordWithKeyAndValue, ps);
+    assertEquals("\"" + A_STRING + "\"\n", baos.toString());
+  }
+
+  @Test
+  public void testDeserializeRecordWithKeyAndValueAndPrintingKey() throws IOException, RestClientException {
+    props.put("print.key", "true");
+    formatter.init(props);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    formatter.writeTo(recordWithKeyAndValue, ps);
+    assertEquals("\"" + KEY_STRING + "\"\t\"" + A_STRING + "\"\n", baos.toString());
+  }
+
+  @Test
+  public void testDeserializeRecordWithKeyAndValueAndPrintingKeyWithoutSchemaId()
+      throws IOException, RestClientException {
+    props.put("print.key", "true");
+    props.put("print.schema.ids", "false");
+    formatter.init(props);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    formatter.writeTo(recordWithKeyAndValue, ps);
+    assertEquals("\"" + KEY_STRING + "\"\t\"" + A_STRING + "\"\n", baos.toString());
+  }
+
+  @Test
+  public void testDeserializeRecordWithKeyAndValueAndPrintingKeyAndSchemaIds()
+      throws IOException, RestClientException {
+    props.put("print.key", "true");
+    props.put("print.schema.ids", "true");
+    formatter.init(props);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    formatter.writeTo(recordWithKeyAndValue, ps);
+    assertEquals("\"" + KEY_STRING + "\"\t2\t\"" + A_STRING + "\"\t1\n", baos.toString());
+  }
+
+  @Test
+  public void testDeserializeRecordWithKeyAndValueAndPrintingSchemaIds()
+      throws IOException, RestClientException {
+    props.put("print.key", "false");
+    props.put("print.schema.ids", "true");
+    formatter.init(props);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    formatter.writeTo(recordWithKeyAndValue, ps);
+    assertEquals("\"" + A_STRING + "\"\t1\n", baos.toString());
+  }
+
+  @Test
+  public void testDeserializeRecordWithKeyAndValueAndPrintingSchemaIdsWithDelimiter()
+      throws IOException, RestClientException {
+    props.put("print.key", "false");
+    props.put("print.schema.ids", "true");
+    props.put("schema.id.separator", "___");
+    formatter.init(props);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    formatter.writeTo(recordWithKeyAndValue, ps);
+    assertEquals("\"" + A_STRING + "\"___1\n", baos.toString());
+  }
+
+  @Test
+  public void testDeserializeRecordWithKeyAndValueAndPrintingKeysAndSchemaIdsWithDelimiter()
+      throws IOException, RestClientException {
+    props.put("print.key", "true");
+    props.put("print.schema.ids", "true");
+    props.put("schema.id.separator", "___");
+    formatter.init(props);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    formatter.writeTo(recordWithKeyAndValue, ps);
+    assertEquals("\"" + KEY_STRING + "\"___2\t\"" + A_STRING + "\"___1\n", baos.toString());
+  }
+  protected ConsumerRecord<byte[], byte[]> createConsumerRecord(boolean includeKey) {
+    byte[] key = new byte[1 + KEY_SCHEMA_ID_BYTES.length + KEY_BYTES.length];
+    key[0] = MAGIC_BYTE;
+    System.arraycopy(KEY_SCHEMA_ID_BYTES, 0, key, 1, KEY_SCHEMA_ID_BYTES.length);
+    System.arraycopy(KEY_BYTES, 0, key, 1 + KEY_SCHEMA_ID_BYTES.length, KEY_BYTES.length);
+
+    byte[] value = new byte[1 + SCHEMA_ID_BYTES.length + SOME_BYTES.length];
+    value[0] = MAGIC_BYTE;
+    System.arraycopy(SCHEMA_ID_BYTES, 0, value, 1, SCHEMA_ID_BYTES.length);
+    System.arraycopy(SOME_BYTES, 0, value, 1 + SCHEMA_ID_BYTES.length, SOME_BYTES.length);
+
+    return new ConsumerRecord<>(
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0,
+        0, value.length,
+        includeKey ? key : null, value);
+  }
 }

@@ -236,18 +236,23 @@ In the following example, we send Avro records in JSON as the message value (mak
    bin/kafka-avro-console-producer --broker-list localhost:9092 --topic t1 \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
 
-   In the shell, type in the following.
-     {"f1": "value1"}
+In the shell, type in the following.
 
+.. sourcecode:: bash
+
+     {"f1": "value1"}
 
 In the following example, we read the value of the messages in JSON.
 
 .. sourcecode:: bash
 
    bin/kafka-avro-console-consumer --topic t1 \
-     --zookeeper localhost:2181
+     --bootstrap-server localhost:9092
 
-   You should see following in the console.
+You should see following in the console.
+
+.. sourcecode:: bash
+
      {"f1": "value1"}
 
 
@@ -261,7 +266,10 @@ message, respectively.
      --property key.schema='{"type":"string"}' \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
 
-   In the shell, type in the following.
+In the shell, type in the following.
+
+.. sourcecode:: bash
+
      "key1" \t {"f1": "value1"}
 
 In the following example, we read both the key and the value of the messages in JSON,
@@ -269,11 +277,30 @@ In the following example, we read both the key and the value of the messages in 
 .. sourcecode:: bash
 
    bin/kafka-avro-console-consumer --topic t2 \
-     --zookeeper localhost:2181 \
+     --bootstrap-server localhost:9092 \
      --property print.key=true
 
-   You should see following in the console.
+You should see following in the console.
+
+.. sourcecode:: bash
+
       "key1" \t {"f1": "value1"}
+
+
+The following example prints the key and value of the message in JSON and the schema IDs for the key and value.
+During registration, |sr| assigns an ID for new schemas that is greater than the IDs of the
+existing registered schemas. The IDs from different |sr| instances may be different.
+
+.. sourcecode:: bash
+
+   bin/kafka-avro-console-consumer --topic t2 \
+     --zookeeper localhost:2181 \
+     --property print.key=true \
+     --property print.schema.ids=true \
+     --property schema.id.separator=:
+
+   You should see following in the console.
+      "key1":1\t {"f1": "value1"}:2
 
 
 If the topic contains a  key in a format other than avro, you can specify your own key
@@ -282,9 +309,9 @@ deserializer
 .. sourcecode:: bash
 
    bin/kafka-avro-console-consumer --topic t2 \
-     --zookeeper localhost:2181 \
+     --bootstrap-server localhost:9092 \
      --property print.key=true
-     --key.deserializer=org.apache.kafka.common.serialization.StringDeserializer
+     --key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
 
 
 Wire Format

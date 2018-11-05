@@ -14,10 +14,6 @@
 .. tip:: To see a working example of |sr|, check out :ref:`Confluent Platform demo <cp-demo>`. The demo shows you how to deploy a
          Kafka streaming ETL, including |sr|, using KSQL for stream processing.
 
-.. contents:: Contents
-    :local:
-    :depth: 1
-
 Schema ID Allocation
 --------------------
 
@@ -89,6 +85,7 @@ Documentation
 
    installation
    config
+   schema_registry_tutorial
    ../../cloud/connect/schema-reg-cloud-config
    using
    monitoring

@@ -17,12 +17,12 @@
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -37,7 +37,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,11 +114,12 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       );
       List<String> bootstrapServers
           = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
-      List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers);
-      this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
+      List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers,
+          ClientDnsLookup.DEFAULT.name());
+      this.metadata.bootstrap(addresses, time.milliseconds());
       String metricGrpPrefix = "kafka.schema.registry";
 
-      ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig);
+      ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig, time);
       long maxIdleMs = clientConfig.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
 
       String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
@@ -135,6 +135,7 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           clientConfig.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
           clientConfig.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
           clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+          ClientDnsLookup.DEFAULT,
           time,
           true,
           new ApiVersions(),
