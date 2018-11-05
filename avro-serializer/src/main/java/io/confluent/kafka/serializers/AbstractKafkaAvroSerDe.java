@@ -74,8 +74,9 @@ public abstract class AbstractKafkaAvroSerDe {
 
   protected boolean isDeprecatedSubjectNameStrategy(boolean isKey) {
     Object subjectNameStrategy = subjectNameStrategy(isKey);
-    return subjectNameStrategy
-        instanceof io.confluent.kafka.serializers.subject.SubjectNameStrategy;
+    return !(
+        subjectNameStrategy
+            instanceof io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy);
   }
 
   private Object subjectNameStrategy(boolean isKey) {
