@@ -31,13 +31,13 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
-import javax.xml.bind.DatatypeConverter;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -97,6 +97,9 @@ public class RestService {
       new TypeReference<List<Integer>>() {
       };
 
+  private static final int HTTP_CONNECT_TIMEOUT_MS = 60000;
+  private static final int HTTP_READ_TIMEOUT_MS = 60000;
+
   private static final int JSON_PARSE_ERROR_CODE = 50005;
   private static ObjectMapper jsonDeserializer = new ObjectMapper();
 
@@ -151,6 +154,9 @@ public class RestService {
     try {
       URL url = new URL(requestUrl);
       connection = (HttpURLConnection) url.openConnection();
+      
+      connection.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
+      connection.setReadTimeout(HTTP_READ_TIMEOUT_MS);
 
       setupSsl(connection);
       connection.setRequestMethod(method);
@@ -526,8 +532,8 @@ public class RestService {
     String userInfo;
     if (basicAuthCredentialProvider != null
         && (userInfo = basicAuthCredentialProvider.getUserInfo(connection.getURL())) != null) {
-      byte[] userInfoBytes = userInfo.getBytes(StandardCharsets.UTF_8);
-      String authHeader = DatatypeConverter.printBase64Binary(userInfoBytes);
+      String authHeader = Base64.getEncoder().encodeToString(
+              userInfo.getBytes(StandardCharsets.UTF_8));
       connection.setRequestProperty("Authorization", "Basic " + authHeader);
     }
   }

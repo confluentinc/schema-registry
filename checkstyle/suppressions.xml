@@ -22,10 +22,10 @@
               files="(Errors|AvroMessageReader).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(AbstractKafkaAvroDeserializer|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo).java"/>
+              files="(AbstractKafkaAvroDeserializer|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AvroData|DownloadSchemaRegistryMojo).java"/>
+              files="(AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter).java"/>
 
     <suppress checks="JavaNCSS"
               files="AvroData.java"/>
@@ -38,5 +38,8 @@
 
     <suppress checks="MethodLength"
               files="SchemaRegistryConfig.java"/>
+
+    <suppress checks="BooleanExpressionComplexity"
+              files="AvroData.java"/>
 
 </suppressions>

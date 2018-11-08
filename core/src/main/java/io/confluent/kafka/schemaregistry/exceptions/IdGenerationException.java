@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,23 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.client.security.basicauth;
+package io.confluent.kafka.schemaregistry.exceptions;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+public class IdGenerationException extends SchemaRegistryException {
 
-public enum BasicAuthCredentialSource {
-  URL, USER_INFO, SASL_INHERIT;
-  public static final List<String> NAMES;
+  public IdGenerationException(String message, Throwable cause) {
+    super(message, cause);
+  }
 
-  static {
-    List<String> names = new ArrayList<>(values().length);
-    for (BasicAuthCredentialSource restAuthType : values()) {
-      names.add(restAuthType.name());
-    }
-    NAMES = Collections.unmodifiableList(names);
+  public IdGenerationException(String message) {
+    super(message);
+  }
+
+  public IdGenerationException(Throwable cause) {
+    super(cause);
+  }
+
+  public IdGenerationException() {
+    super();
   }
 }

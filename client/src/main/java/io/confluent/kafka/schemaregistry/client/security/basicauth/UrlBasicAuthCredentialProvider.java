@@ -26,6 +26,11 @@ public class UrlBasicAuthCredentialProvider implements BasicAuthCredentialProvid
   }
 
   @Override
+  public String alias() {
+    return "URL";
+  }
+
+  @Override
   public String getUserInfo(URL url) {
     return url.getUserInfo();
   }

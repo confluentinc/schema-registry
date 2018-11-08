@@ -1,16 +1,16 @@
-Maven Plugin
-------------
+|sr| Maven Plugin
+-----------------
 
 A Maven plugin is available to help throughout the development process.
 
 schema-registry:download
 ========================
 
-The `download` goal is used to pull down schemas from a Schema Registry server. This goals is used to download Avro
-schemas for the requested subjects and write them to a folder on the local file system.
+The `download` goal is used to pull down schemas from a |sr| server. This goal can be used to
+This plugin is used to download Avro schemas for the requested subjects and write them to a folder on the local file system.
 
 ``schemaRegistryUrls``
-  Schema Registry Urls to connect to.
+  |sr| URLs to connect to.
 
   * Type: String[]
   * Required: true
@@ -46,14 +46,14 @@ schemas for the requested subjects and write them to a folder on the local file 
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.0.0-SNAPSHOT</version>
+        <version>5.2.0-SNAPSHOT</version>
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>
             </schemaRegistryUrls>
             <outputDirectory>src/main/avro</outputDirectory>
             <subjectPatterns>
-                <param>^TestSubject000-(Key|Value)$</param>
+                <param>^TestSubject000-(key|value)$</param>
             </subjectPatterns>
         </configuration>
     </plugin>
@@ -62,11 +62,11 @@ schema-registry:test-compatibility
 ==================================
 
 This goal is used to read schemas from the local file system and test them for compatibility against the
-Schema Registry server(s). This goal can be used in a continuous integration pipeline to ensure that schemas in the
+|sr| server(s). This goal can be used in a continuous integration pipeline to ensure that schemas in the
 project are compatible with the schemas in another environment.
 
 ``schemaRegistryUrls``
-  Schema Registry Urls to connect to.
+  |sr| URLs to connect to.
 
   * Type: String[]
   * Required: true
@@ -82,7 +82,7 @@ project are compatible with the schemas in another environment.
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.0.0-SNAPSHOT</version>
+        <version>5.2.0-SNAPSHOT</version>
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>
@@ -100,11 +100,11 @@ project are compatible with the schemas in another environment.
 schema-registry:register
 ========================
 
-This goal is used to read schemas from the local file system and register them on the target Schema Registry server(s).
+This goal is used to read schemas from the local file system and register them on the target |sr| server(s).
 This goal can be used in a continuous deployment pipeline to push schemas to a new environment.
 
 ``schemaRegistryUrls``
-  Schema Registry Urls to connect to.
+  |sr| URLs to connect to.
 
   * Type: String[]
   * Required: true
@@ -120,7 +120,7 @@ This goal can be used in a continuous deployment pipeline to push schemas to a n
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.0.0-SNAPSHOT</version>
+        <version>5.2.0-SNAPSHOT</version>
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>

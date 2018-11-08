@@ -73,7 +73,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
     String restClientErrorMsg = "";
     try {
       int id;
-      schema = getSchema(object);
+      schema = AvroSchemaUtils.getSchema(object);
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema: ";
         id = schemaRegistry.register(subject, schema);

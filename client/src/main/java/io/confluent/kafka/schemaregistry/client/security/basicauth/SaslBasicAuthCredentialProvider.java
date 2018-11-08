@@ -34,6 +34,11 @@ public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvi
   private String userInfo;
 
   @Override
+  public String alias() {
+    return "SASL_INHERIT";
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
 
     Map<String, Object> updatedConfigs = getConfigsForJaasUtil(configs);

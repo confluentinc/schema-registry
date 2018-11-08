@@ -27,12 +27,25 @@ public class UserInfoCredentialProvider implements BasicAuthCredentialProvider {
   private String userInfo;
 
   @Override
+  public String alias() {
+    return "USER_INFO";
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
+    // If deprecated name is defined, use that
     userInfo = (String) configs.get(SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG);
-    if (userInfo == null || userInfo.isEmpty()) {
-      throw new ConfigException("UserInfo must be provided when basic.auth.credentials.source is "
-                                + "set to USER_INFO");
+    if (userInfo != null && !userInfo.isEmpty()) {
+      return;
     }
+
+    userInfo = (String) configs.get(SchemaRegistryClientConfig.USER_INFO_CONFIG);
+    if (userInfo != null && !userInfo.isEmpty()) {
+      return;
+    }
+
+    throw new ConfigException("UserInfo must be provided when basic.auth.credentials.source is "
+                              + "set to USER_INFO");
   }
 
   @Override

@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.I0Itec.zkclient.ZkClient;
@@ -37,9 +38,9 @@ import static org.junit.Assert.assertTrue;
 // covering all MasterElectors
 public class ZookeeperMasterElectorTest extends ClusterTestHarness {
   private static final int ID_BATCH_SIZE =
-      ZookeeperMasterElector.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
+      ZookeeperIdGenerator.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
   private static final String ZK_ID_COUNTER_PATH =
-      "/schema_registry" + ZookeeperMasterElector.ZOOKEEPER_SCHEMA_ID_COUNTER;
+      "/schema_registry" + ZookeeperIdGenerator.ZOOKEEPER_SCHEMA_ID_COUNTER;
 
   @Test
   /**
