@@ -16,6 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
+import io.confluent.kafka.schemaregistry.client.security.basicauth
+    .BasicAuthCredentialProviderFactory;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -24,15 +33,6 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
-import io.confluent.kafka.schemaregistry.client.rest.Versions;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
-import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 
 public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
@@ -65,33 +65,54 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       String baseUrl,
       int identityMapCapacity,
       Map<String, ?> originals) {
-    this(new RestService(baseUrl), identityMapCapacity, originals);
+    this(baseUrl, identityMapCapacity, originals, null);
   }
 
   public CachedSchemaRegistryClient(
       List<String> baseUrls,
       int identityMapCapacity,
       Map<String, ?> originals) {
-    this(new RestService(baseUrls), identityMapCapacity, originals);
+    this(baseUrls, identityMapCapacity, originals, null);
   }
 
   public CachedSchemaRegistryClient(
       RestService restService,
       int identityMapCapacity,
       Map<String, ?> configs) {
+    this(restService, identityMapCapacity, configs, null);
+  }
+
+  public CachedSchemaRegistryClient(
+      String baseUrl,
+      int identityMapCapacity,
+      Map<String, ?> originals,
+      Map<String, String> httpHeaders) {
+    this(new RestService(baseUrl), identityMapCapacity, originals, httpHeaders);
+  }
+
+  public CachedSchemaRegistryClient(
+      List<String> baseUrls,
+      int identityMapCapacity,
+      Map<String, ?> originals,
+      Map<String, String> httpHeaders) {
+    this(new RestService(baseUrls), identityMapCapacity, originals, httpHeaders);
+  }
+
+  public CachedSchemaRegistryClient(
+      RestService restService,
+      int identityMapCapacity,
+      Map<String, ?> configs,
+      Map<String, String> httpHeaders) {
     this.identityMapCapacity = identityMapCapacity;
     this.schemaCache = new HashMap<String, Map<Schema, Integer>>();
     this.idCache = new HashMap<String, Map<Integer, Schema>>();
     this.versionCache = new HashMap<String, Map<Schema, Integer>>();
     this.restService = restService;
     this.idCache.put(null, new HashMap<Integer, Schema>());
-    configureRestService(configs);
+    configureRestService(configs, httpHeaders);
   }
 
-
-
-
-  private void configureRestService(Map<String, ?> configs) {
+  private void configureRestService(Map<String, ?> configs, Map<String, String> httpHeaders) {
     if (configs != null) {
 
       String credentialSourceConfig =
@@ -105,6 +126,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
                 configs);
 
         restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+        restService.setHttpHeaders(httpHeaders);
       }
     }
   }
