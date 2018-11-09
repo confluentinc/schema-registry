@@ -35,8 +35,8 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
+import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
-import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
 
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
@@ -59,7 +59,7 @@ public class MasterElectorTest extends ClusterTestHarness {
         },
         {
             "zookeeper",
-            ZookeeperMasterElector.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE
+            ZookeeperIdGenerator.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE
         }
     });
   }

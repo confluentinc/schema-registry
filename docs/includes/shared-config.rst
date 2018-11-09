@@ -16,9 +16,9 @@ The effect of this setting depends on whether you specify `kafkastore.connection
 
 If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these bootstrap servers will be used both to coordinate |sr| instances (master election) and store schema data.
 
-If `kafkastore.connection.url` is specified, then this setting is used to control how the |sr| connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, the |sr|'s internal Kafka clients will get their Kafka bootstrap server list from |zk| (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
+If `kafkastore.connection.url` is specified, then this setting is used to control how |sr| connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, |sr|'s internal Kafka clients will get their Kafka bootstrap server list from |zk| (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
 
-By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in |zk|, but the |sr| may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
+By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in |zk|, but |sr| may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
 
 * Type: list
 * Default: []
@@ -29,6 +29,7 @@ By specifiying this configuration, you can control which endpoints are used to c
 listeners
 ^^^^^^^^^
 Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
+
 |sr| identities are stored in |zk| and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
 
 * Type: list
@@ -419,17 +420,33 @@ Name of the SLF4J logger to write the NCSA Common Log Format request log.
 * Default: "io.confluent.rest-utils.requests"
 * Importance: low
 
-schema.registry.inter.instance.protocol
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call.
+inter.instance.protocol
+^^^^^^^^^^^^^^^^^^^^^^^
+The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call. The schema.registry.inter.instance.protocol name is deprecated; prefer using inter.instance.protocol instead.
 
 * Type: string
 * Default: "http"
 * Importance: low
 
+schema.registry.inter.instance.protocol
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call. The schema.registry.inter.instance.protocol name is deprecated; prefer using inter.instance.protocol instead.
+
+* Type: string
+* Default: ""
+* Importance: low
+
+resource.extension.class
+^^^^^^^^^^^^^^^^^^^^^^^^
+Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc. The schema.registry.resource.extension.class name is deprecated; prefer using resource.extension.class instead.
+
+* Type: list
+* Default: []
+* Importance: low
+
 schema.registry.resource.extension.class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc
+Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc. The schema.registry.resource.extension.class name is deprecated; prefer using resource.extension.class instead.
 
 * Type: string
 * Default: ""
@@ -518,7 +535,7 @@ Login thread will sleep until the specified window factor of time from last refr
 kafkastore.group.id
 ^^^^^^^^^^^^^^^^^^^
 Use this setting to override the group.id for the KafkaStore consumer.
-This setting can become important when security is enabled, to ensure stability over the |sr| consumer's group.id
+This setting can become important when security is enabled, to ensure stability over |sr| consumer's group.id
 
 Without this configuration, group.id will be "schema-registry-<host>-<port>"
 

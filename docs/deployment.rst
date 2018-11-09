@@ -1,14 +1,10 @@
 .. _schema-registry-prod:
 
-Production Deployment
-=====================
+|sr| System Requirements
+========================
 
 This section describes the key considerations before going to production with your cluster. However, it is not an
 exhaustive guide to running your |sr| in production.
-
-.. contents::
-   :local:
-   :depth: 1
 
 Hardware
 --------
@@ -70,15 +66,15 @@ Important Configuration Options
 
 The following configurations should be changed for production environments. These options depend on your cluster layout.
 
-Depending on how the |sr| instances coordinate to choose the :ref:`master<schemaregistry_single_master>`, you can deploy |sr| with |zk| (which can be shared with Kafka) or with Kafka itself. You should configure |sr| to use either Kafka-based or |zk|-based master election:
+Depending on how |sr| instances coordinate to choose the :ref:`master<schemaregistry_single_master>`, you can deploy |sr| with |zk| (which can be shared with Kafka) or with Kafka itself. You should configure |sr| to use either Kafka-based or |zk|-based master election:
 
-* Kafka-based master election is available since version 4.0. You can use it in cases where |zk| is not available, for example on hosted or cloud environments, or if access to |zk| has been locked down. To configure the |sr| to use Kafka for master election, configure the ``kafkastore.bootstrap.servers`` setting.
+* Kafka-based master election is available since version 4.0. You can use it in cases where |zk| is not available, for example on hosted or cloud environments, or if access to |zk| has been locked down. To configure |sr| to use Kafka for master election, configure the ``kafkastore.bootstrap.servers`` setting.
 
   .. include:: includes/shared-config.rst
     :start-line: 10
     :end-line: 25
 
-* |zk|-based master election is available in all versions of |sr|, and if you have an existing |sr| deployment you may continue to use it for compatibility. To configure the |sr| to use |zk| for master election, configure the ``kafkastore.connection.url`` setting.
+* |zk|-based master election is available in all versions of |sr|, and if you have an existing |sr| deployment you may continue to use it for compatibility. To configure |sr| to use |zk| for master election, configure the ``kafkastore.connection.url`` setting.
 
   .. include:: includes/shared-config.rst
     :start-line: 2
@@ -111,12 +107,12 @@ The full set of configuration options are documented in :ref:`schemaregistry_con
 Don't Modify These Storage Settings
 -----------------------------------
 
-|sr| stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for the |sr| database and is the source of truth, writes to this store need to be durable. |sr| ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Finally, ``kafkastore.topic`` must be a compacted topic to avoid data loss. Whenever in doubt, leave these settings alone. If you must create the topic manually, this is an example of proper configuration:
+|sr| stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for |sr| database and is the source of truth, writes to this store need to be durable. |sr| ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Finally, ``kafkastore.topic`` must be a compacted topic to avoid data loss. Whenever in doubt, leave these settings alone. If you must create the topic manually, this is an example of proper configuration:
 
 .. sourcecode:: bash
 
   # kafkastore.topic=_schemas
-  $ bin/kafka-topics --create --zookeeper localhost:2181 --topic connect-configs --replication-factor 3 --partitions 1 --config cleanup.policy=compact
+    bin/kafka-topics --create --zookeeper localhost:2181 --topic connect-configs --replication-factor 3 --partitions 1 --config cleanup.policy=compact
 
 .. kafkastore.topic include
 

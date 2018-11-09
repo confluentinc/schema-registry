@@ -1,5 +1,5 @@
-Maven Plugin
-------------
+|sr| Maven Plugin
+-----------------
 
 A Maven plugin is available to help throughout the development process.
 
@@ -46,14 +46,14 @@ This plugin is used to download Avro schemas for the requested subjects and writ
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.0.0-SNAPSHOT</version>
+        <version>5.2.0-SNAPSHOT</version>
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>
             </schemaRegistryUrls>
             <outputDirectory>src/main/avro</outputDirectory>
             <subjectPatterns>
-                <param>^TestSubject000-(Key|Value)$</param>
+                <param>^TestSubject000-(key|value)$</param>
             </subjectPatterns>
         </configuration>
     </plugin>
@@ -82,7 +82,7 @@ project are compatible with the schemas in another environment.
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.0.0-SNAPSHOT</version>
+        <version>5.2.0-SNAPSHOT</version>
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>
@@ -120,7 +120,7 @@ This goal can be used in a continuous deployment pipeline to push schemas to a n
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.0.0-SNAPSHOT</version>
+        <version>5.2.0-SNAPSHOT</version>
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>

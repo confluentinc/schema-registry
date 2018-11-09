@@ -50,26 +50,31 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
     super(config);
-
   }
 
-  @Override
-  public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
+
+  protected KafkaSchemaRegistry initSchemaRegistry(SchemaRegistryConfig config) {
+    KafkaSchemaRegistry kafkaSchemaRegistry = null;
     try {
-      schemaRegistry = new KafkaSchemaRegistry(
-          schemaRegistryConfig,
+      kafkaSchemaRegistry = new KafkaSchemaRegistry(
+          config,
           new SchemaRegistrySerializer()
       );
-      schemaRegistry.init();
+      kafkaSchemaRegistry.init();
     } catch (SchemaRegistryException e) {
       log.error("Error starting the schema registry", e);
       onShutdown();
       System.exit(1);
     }
+    return kafkaSchemaRegistry;
+  }
 
+  @Override
+  public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
+    schemaRegistry = initSchemaRegistry(schemaRegistryConfig);
     schemaRegistryResourceExtensions =
         schemaRegistryConfig.getConfiguredInstances(
-            SchemaRegistryConfig.SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG,
+            schemaRegistryConfig.definedResourceExtensionConfigName(),
             SchemaRegistryResourceExtension.class);
 
     config.register(RootResource.class);

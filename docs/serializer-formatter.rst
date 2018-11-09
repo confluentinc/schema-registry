@@ -1,19 +1,19 @@
 .. _serializer_and_formatter:
 
-Serializer and Formatter
-========================
+|sr| Serializer and Formatter
+=============================
 
-In this document, we describe how to use Avro with the Kafka Java client and console tools.
+This document describes how to use Avro with the Kafka Java client and console tools.
 
 
-Assuming that you have the |sr| source code checked out at ``/tmp/schema-registry``, the
-following is how you can obtain all needed jars.
+Assuming that you have |sr| source code checked out at ``/tmp/schema-registry``, the
+following is how you can obtain all needed JARs.
 
 .. sourcecode:: bash
 
    mvn package
 
-The jars can be found in
+The JARs can be found in
 
 .. sourcecode:: bash
 
@@ -31,8 +31,8 @@ to ``KafkaAvroSerializer`` will
 cause a ``SerializationException``. Typically, ``IndexedRecord`` will be used for the value of the Kafka
 message. If used, the key of the Kafka message is often of one of the primitive types. When sending
 a message to a topic *t*, the Avro schema for the key and the value will be automatically registered
-in the |sr| under the subject *t-key* and *t-value*, respectively, if the compatibility
-test passes. The only exception is that the ``null`` type is never registered in the |sr|.
+in |sr| under the subject *t-key* and *t-value*, respectively, if the compatibility
+test passes. The only exception is that the ``null`` type is never registered in |sr|.
 
 In the following example, we send a message with key of type string and value of type Avro record
 to Kafka. A ``SerializationException`` may occur during the send call, if the data is not well formed.
@@ -71,6 +71,12 @@ to Kafka. A ``SerializationException`` may occur during the send call, if the da
     } catch(SerializationException e) {
       // may need to do something with it
     }
+    // When you're finished producing records, you can flush the producer to ensure it has all been written to Kafka and
+    // then close the producer to free its resources.
+    finally {
+      producer.flush();
+      producer.close();
+    }
 
 You can plug in ``KafkaAvroDeserializer`` to ``KafkaConsumer`` to receive messages of any Avro type from Kafka.
 In the following example, we receive messages with key of type ``string`` and value of type Avro record
@@ -98,7 +104,7 @@ not well formed.
 
     Properties props = new Properties();
 
-    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2181");
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
     props.put(ConsumerConfig.GROUP_ID_CONFIG, "group1");
 
 
@@ -135,18 +141,20 @@ This behavior can be modified by using the following configs
 
 ``key.subject.name.strategy``
   Determines how to construct the subject name under which the key schema is registered with the
-  schema registry.
+  |sr|.
 
-  Any implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` can be specified. By default, <topic>-key is used as subject.
+  Any implementation of ``io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy`` can be specified. By default, <topic>-key is used as subject.
+  Specifying an implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` is deprecated as of ``4.1.3`` and if used may have some performance degradation.
 
   * Type: class
   * Default: class io.confluent.kafka.serializers.subject.TopicNameStrategy
   * Importance: medium
 
 ``value.subject.name.strategy``
-  Determines how to construct the subject name under which the value schema is registered with the schema registry.
+  Determines how to construct the subject name under which the value schema is registered with |sr|.
 
-  Any implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` can be specified. By default, <topic>-value is used as subject.
+  Any implementation of ``io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy`` can be specified. By default, <topic>-value is used as subject.
+  Specifying an implementation of ``io.confluent.kafka.serializers.subject.SubjectNameStrategy`` is deprecated as of ``4.1.3`` and if used may have some performance degradation.
 
   * Type: class
   * Default: class io.confluent.kafka.serializers.subject.TopicNameStrategy
@@ -177,7 +185,7 @@ The other available options that can be configured out of the box include
 Basic Auth Security
 ^^^^^^^^^^^^^^^^^^^
 
-Schema Registry supports ability to authenticate requests using Basic Auth headers. You can send
+|sr| supports ability to authenticate requests using Basic Auth headers. You can send
 the Basic Auth headers by setting the following configuration in your producer or consumer example
 
 ``basic.auth.credentials.source``
@@ -193,7 +201,7 @@ the Basic Auth headers by setting the following configuration in your producer o
 form of ``http://<username>:<password>@sr-host:<sr-port>``
 
 **USER_INFO** - The user info is configured using the below configuration.
-``schema.registry.basic.auth.user.info``
+``basic.auth.user.info``
   Specify the user info for Basic Auth in the form of {username}:{password}
 
   * Type: password
@@ -210,8 +218,8 @@ You can use ``kafka-avro-console-producer`` and ``kafka-avro-console-consumer`` 
 receive Avro data in JSON format from the console. Under the hood, they use ``AvroMessageReader`` and
 ``AvroMessageFormatter`` to convert between Avro and JSON.
 
-To run the Kafka console tools, first make sure that |zk|, Kafka and the |sr| server
-are all started. In the following examples, we use the default value of the |sr| URL.
+To run the Kafka console tools, first make sure that |zk|, Kafka and |sr| server
+are all started. In the following examples, the default |sr| URL value is used.
 
 You can configure that by supplying
 
@@ -228,18 +236,23 @@ In the following example, we send Avro records in JSON as the message value (mak
    bin/kafka-avro-console-producer --broker-list localhost:9092 --topic t1 \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
 
-   In the shell, type in the following.
-     {"f1": "value1"}
+In the shell, type in the following.
 
+.. sourcecode:: bash
+
+     {"f1": "value1"}
 
 In the following example, we read the value of the messages in JSON.
 
 .. sourcecode:: bash
 
    bin/kafka-avro-console-consumer --topic t1 \
-     --zookeeper localhost:2181
+     --bootstrap-server localhost:9092
 
-   You should see following in the console.
+You should see following in the console.
+
+.. sourcecode:: bash
+
      {"f1": "value1"}
 
 
@@ -253,7 +266,10 @@ message, respectively.
      --property key.schema='{"type":"string"}' \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
 
-   In the shell, type in the following.
+In the shell, type in the following.
+
+.. sourcecode:: bash
+
      "key1" \t {"f1": "value1"}
 
 In the following example, we read both the key and the value of the messages in JSON,
@@ -261,11 +277,30 @@ In the following example, we read both the key and the value of the messages in 
 .. sourcecode:: bash
 
    bin/kafka-avro-console-consumer --topic t2 \
-     --zookeeper localhost:2181 \
+     --bootstrap-server localhost:9092 \
      --property print.key=true
 
-   You should see following in the console.
+You should see following in the console.
+
+.. sourcecode:: bash
+
       "key1" \t {"f1": "value1"}
+
+
+The following example prints the key and value of the message in JSON and the schema IDs for the key and value.
+During registration, |sr| assigns an ID for new schemas that is greater than the IDs of the
+existing registered schemas. The IDs from different |sr| instances may be different.
+
+.. sourcecode:: bash
+
+   bin/kafka-avro-console-consumer --topic t2 \
+     --zookeeper localhost:2181 \
+     --property print.key=true \
+     --property print.schema.ids=true \
+     --property schema.id.separator=:
+
+   You should see following in the console.
+      "key1":1\t {"f1": "value1"}:2
 
 
 If the topic contains a  key in a format other than avro, you can specify your own key
@@ -274,9 +309,9 @@ deserializer
 .. sourcecode:: bash
 
    bin/kafka-avro-console-consumer --topic t2 \
-     --zookeeper localhost:2181 \
+     --bootstrap-server localhost:9092 \
      --property print.key=true
-     --key.deserializer=org.apache.kafka.common.serialization.StringDeserializer
+     --key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
 
 
 Wire Format
@@ -292,7 +327,7 @@ The wire format currently has only a couple of components:
 Bytes  Area       Description
 =====  ========== ===========
 0      Magic Byte Confluent serialization format version number; currently always ``0``.
-1-4    Schema ID  4-byte schema ID as returned by the |sr|
+1-4    Schema ID  4-byte schema ID as returned by |sr|
 5-...  Data       Avro serialized data in `Avro's binary encoding
                   <https://avro.apache.org/docs/1.8.1/spec.html#binary_encoding>`_. The only exception is raw bytes, which
                   will be written directly without any special Avro encoding.

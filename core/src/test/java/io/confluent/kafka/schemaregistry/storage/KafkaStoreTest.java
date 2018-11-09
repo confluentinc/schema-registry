@@ -113,7 +113,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testSimpleGetAfterFailure() throws Exception {
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(
         zkConnect,
         inMemoryStore
@@ -188,7 +188,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testDeleteAfterRestart() throws Exception {
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(
         zkConnect,
         inMemoryStore
@@ -241,7 +241,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testCustomGroupIdConfig() throws Exception {
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
     String groupId = "test-group-id";
     Properties props = new Properties();
     props.put(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG, groupId);
@@ -253,7 +253,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testDefaultGroupIdConfig() throws Exception {
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
     Properties props = new Properties();
     KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
 
@@ -268,7 +268,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
     AdminUtils.createTopic(zkUtils, SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 1, 1, topicProps, RackAwareMode.Enforced$.MODULE$);
 
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
 
     KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, kafkaProps);
   }
@@ -282,7 +282,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     AdminUtils.createTopic(zkUtils, SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 3, 1,
                            topicProps, RackAwareMode.Enforced$.MODULE$);
 
-    Store<String, String> inMemoryStore = new InMemoryStore<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
 
     StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, kafkaProps);
   }

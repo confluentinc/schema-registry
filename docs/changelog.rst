@@ -1,7 +1,42 @@
 .. _schemaregistry_changelog:
 
-Changelog
-=========
+|sr| Changelog
+==============
+
+Version 5.0.0
+-------------
+
+* `PR-837 <https://github.com/confluentinc/schema-registry/pull/837>`_ - CC-2185: Deprecate schema.registry. prefixes on commonly modified configs and allow unprefixed versions
+* `PR-834 <https://github.com/confluentinc/schema-registry/pull/834>`_ - DOCS-381 - Rename quick start and improve navigation
+* `PR-813 <https://github.com/confluentinc/schema-registry/pull/813>`_ - Update maven-plugin-plugin to fix out of bounds error in build
+* `PR-811 <https://github.com/confluentinc/schema-registry/pull/811>`_ - Fix SchemaRegistryCoordinator for upstream changes
+* `PR-810 <https://github.com/confluentinc/schema-registry/pull/810>`_ - Remove KafkaJsonEncoder since Scala producers have been removed from Kafka
+* `PR-809 <https://github.com/confluentinc/schema-registry/pull/809>`_ - Remove KafkaAvroEncoder since the Scala producers have been removed from Kafka
+* `PR-808 <https://github.com/confluentinc/schema-registry/pull/808>`_ - Use java.util.Base64 instead of javax.xml.bind.DatatypeConverter
+* `PR-807 <https://github.com/confluentinc/schema-registry/pull/807>`_ - Fix usage of internal Jersey utilities that no longer exist
+* `PR-806 <https://github.com/confluentinc/schema-registry/pull/806>`_ - Inherit maven compiler plugin definition from common
+* `PR-804 <https://github.com/confluentinc/schema-registry/pull/804>`_ - Ability to plugin an implementation of BasicAuthCredentialProvider
+* `PR-803 <https://github.com/confluentinc/schema-registry/pull/803>`_ - CC-1958: Verify configs if createTopic fails because topic already exists
+* `PR-792 <https://github.com/confluentinc/schema-registry/pull/792>`_ - Improve GC options
+* `PR-784 <https://github.com/confluentinc/schema-registry/pull/784>`_ - Docs for Subject Name Strategy and Basic Auth
+* `PR-774 <https://github.com/confluentinc/schema-registry/pull/774>`_ - Revert "Remove |zk| from title"
+* `PR-773 <https://github.com/confluentinc/schema-registry/pull/773>`_ - Remove |zk| from title
+* `PR-756 <https://github.com/confluentinc/schema-registry/pull/756>`_ - CLIENTS-986 Forward Auth headers
+* `PR-748 <https://github.com/confluentinc/schema-registry/pull/748>`_ - confluent.maven.repo: use 'https'
+* `PR-731 <https://github.com/confluentinc/schema-registry/pull/731>`_ - Issue #704 - Make Serde constructors public
+
+Version 4.1.2
+-------------
+
+* `PR-840 <https://github.com/confluentinc/schema-registry/pull/840>`_ - CC-2201: Handle NPE exception when tombstone messages are encountered
+* `PR-839 <https://github.com/confluentinc/schema-registry/pull/839>`_ - CC-2024 : Fix schema not found issue
+* `PR-801 <https://github.com/confluentinc/schema-registry/pull/801>`_ - CC-1902 : pass all configs to underlying Serializer/deserializer
+
+Version 4.1.1
+-------------
+
+* `PR-792 <https://github.com/confluentinc/schema-registry/pull/792>`_ - Improve GC options
+* `PR-787 <https://github.com/confluentinc/schema-registry/pull/787>`_ - Docs for Subject Name Strategy and Basic Auth
 
 Version 4.1.0
 -------------
@@ -42,17 +77,18 @@ Version 4.0.0
 * `PR-686 <https://github.com/confluentinc/schema-registry/pull/686>` - Added REST endpoint to return the unescaped Avro schema
   for a specific subject and version. 
 
+-------------
 Upgrade Notes
-^^^^^^^^^^^^^
+-------------
 
 In 4.0.0, initial creation or validation of the topic used to store schemas has been
 reimplemented to use native Kafka protocol requests instead of accessing |zk| directly. This
 means that you are no longer required to have direct access to the |zk| cluster backing your
 Kafka cluster. However, note that this also requires appropriate permissions to create topics (on
-first execution of the |sr|) or describe topics and configs (on subsequent executions
+first execution of |sr|) or describe topics and configs (on subsequent executions
 to validate the topic is configured correctly). If you have authentication and authorization enabled
 on your Kafka cluster, you must ensure your principal has the correct permissions before
-upgrading the |sr| cluster. Your principal must have the following permissions:
+upgrading |sr| cluster. Your principal must have the following permissions:
 
 Create Schemas Topic
 
@@ -84,7 +120,7 @@ Version 3.3.0
 * Add Delete Schema support
 * Added avro-serde for Kafka Streams. Pulled from the example project.
 * `#506 <https://github.com/confluentinc/schema-registry/issues/506>`_ - The AvroMessageFormatter passes byte[] to an Avro encoder, but Avro only likes ByteBuffer. So we need to ByteBuffer.wrap() instead.
-* Added optional kafkastore.group.id config to override the one automatically created by the |sr|
+* Added optional kafkastore.group.id config to override the one automatically created by |sr|
 * `PR-476 <https://github.com/confluentinc/schema-registry/pull/476>`_ - Adapt to KAFKA-4636 changes: Per listener security settings overrides (KIP-103)
 
 
@@ -125,8 +161,9 @@ No changes
 Version 3.1.0
 -------------
 
+----
 |sr|
-~~~~~~~~~~~~~~~
+----
 
 * `PR-429 <https://github.com/confluentinc/schema-registry/pull/429>`_ - Moving licenses and notices to a new format, generated by an internal script.
 * `PR-415 <https://github.com/confluentinc/schema-registry/pull/415>`_ - Option to apply fully transitive schema compatibility checking
@@ -138,8 +175,9 @@ Version 3.1.0
 * `PR-364 <https://github.com/confluentinc/schema-registry/pull/364>`_ - Increase testing timeouts from 5000ms to 15000ms
 * `PR-346 <https://github.com/confluentinc/schema-registry/pull/346>`_ - configured log4j to write to log file
 
+---------------------------------------
 Serializers, Formatters, and Converters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------
 
 * `PR-403 <https://github.com/confluentinc/schema-registry/pull/403>`_ - CLIENTS-101: Document wire format for Avro.
 * `PR-379 <https://github.com/confluentinc/schema-registry/pull/379>`_ - Maven plugin
@@ -149,16 +187,18 @@ Serializers, Formatters, and Converters
 Version 3.0.1
 -------------
 
+----
 |sr|
-~~~~~~~~~~~~~~~
+----
 
 * `PR-369 <https://github.com/confluentinc/schema-registry/pull/369>`_ - Introducing a new config: kafkastore.bootstrap.servers
 * `PR-371 <https://github.com/confluentinc/schema-registry/pull/371>`_ - Fixing a bug where the listener port wasn't used in |zk|
 * `PR-390 <https://github.com/confluentinc/schema-registry/pull/390>`_ - Include cURL output in quickstart
 * `PR-392 <https://github.com/confluentinc/schema-registry/pull/392>`_ - Fix schemes used for listeners
 
+---------------------------------------
 Serializers, Formatters, and Converters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------
 
 * `PR-363 <https://github.com/confluentinc/schema-registry/pull/363>`_ - 3.0.x duplicate schema support
 * `PR-365 <https://github.com/confluentinc/schema-registry/pull/365>`_ - Fix API compatibility regression from #363
@@ -167,8 +207,9 @@ Serializers, Formatters, and Converters
 Version 3.0.0
 -------------
 
+----
 |sr|
-~~~~~~~~~~~~~~~
+----
 
 * `PR-212 <https://github.com/confluentinc/schema-registry/pull/212>`_ - change the documentation on port to have a high
   priority and list it higher up in the docs
@@ -183,8 +224,9 @@ Version 3.0.0
   supported. 'int' is supported.
 * `PR-329 <https://github.com/confluentinc/schema-registry/pull/329>`_ - https support.
 
+---------------------------------------
 Serializers, Formatters, and Converters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------
 
 * `PR-264 <https://github.com/confluentinc/schema-registry/pull/264>`_ - Add null checks to json serializer/deserializer
 * `PR-274 <https://github.com/confluentinc/schema-registry/pull/274>`_ - Add support for Avro projections in decoders
@@ -205,16 +247,18 @@ Serializers, Formatters, and Converters
 Version 2.0.1
 -------------
 
+----
 |sr|
-~~~~~~~~~~~~~~~
+----
 
 * `PR-286 <https://github.com/confluentinc/schema-registry/pull/286>`_ - Update Kafka version to 0.9.0.1-cp1.
 
 Version 2.0.0
 -------------
 
+----
 |sr|
-~~~~~~~~~~~~~~~
+----
 
 * `PR-141 <https://github.com/confluentinc/schema-registry/pull/141>`_ - Incorrect path to log4j.properties file for simple zip file layout
 * `PR-143 <https://github.com/confluentinc/schema-registry/pull/143>`_ - schema-registry-start does not work with -daemon argument
@@ -246,8 +290,9 @@ Version 2.0.0
 * `PR-257 <https://github.com/confluentinc/schema-registry/pull/257>`_ - Updated classpath in schema-registry-run-class to reflect changes in pom.xml
 * `PR-258 <https://github.com/confluentinc/schema-registry/pull/258>`_ - CC-53: Add worker configs for Avro Kafka Connect that integrates with |sr|.
 
+---------------------------------------
 Serializers, Formatters, and Converters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------
 
 * `PR-146 <https://github.com/confluentinc/schema-registry/pull/146>`_ - Added decoder to return a specific Avro record from bytes.
 * `PR-162 <https://github.com/confluentinc/schema-registry/pull/162>`_ - Add implementation of new Deserializer interface.

@@ -1,14 +1,14 @@
 .. _schemaregistry_monitoring:
 
-Monitoring
-----------
+Monitoring |sr|
+---------------
 
-The |sr| reports a variety of metrics through JMX. It can also be configured to report
+|sr| reports a variety of metrics through JMX. It can also be configured to report
 stats using additional pluggable stats reporters using the ``metrics.reporters`` configuration
 option. The easiest way to view the available metrics is to use jconsole to
 browse JMX MBeans.
 
-The |sr| has two types of metrics. Global metrics help you monitor the overall health of
+|sr| has two types of metrics. Global metrics help you monitor the overall health of
 the service. Per-endpoint metrics monitor each API endpoint request method and are
 prefixed by a name of the endpoint (e.g. ``subjects.get-schema``). These help you
 understand how the proxy is being used and track down specific performance problems.

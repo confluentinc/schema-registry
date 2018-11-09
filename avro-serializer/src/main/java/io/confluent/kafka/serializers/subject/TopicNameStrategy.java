@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.serializers.subject;
 
+import io.confluent.kafka.serializers.AvroSchemaUtils;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
+import org.apache.avro.Schema;
+
 import java.util.Map;
 
 /**
@@ -24,14 +28,21 @@ import java.util.Map;
  * the subject name &lt;topic&gt;-key, and the message value is registered
  * under the subject name &lt;topic&gt;-value.
  */
-public class TopicNameStrategy implements SubjectNameStrategy {
+public class TopicNameStrategy implements SubjectNameStrategy<Schema>,
+    io.confluent.kafka.serializers.subject.SubjectNameStrategy {
 
   @Override
   public void configure(Map<String, ?> config) {
   }
 
   @Override
-  public String getSubjectName(String topic, boolean isKey, Object value) {
+  public String subjectName(String topic, boolean isKey, Schema schema) {
     return isKey ? topic + "-key" : topic + "-value";
+  }
+
+  @Override
+  @Deprecated
+  public String getSubjectName(String topic, boolean isKey, Object value) {
+    return subjectName(topic, isKey, AvroSchemaUtils.getSchema(value));
   }
 }

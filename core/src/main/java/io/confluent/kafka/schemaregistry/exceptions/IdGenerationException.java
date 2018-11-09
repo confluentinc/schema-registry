@@ -1,5 +1,5 @@
-/**
- * Copyright 2017 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,27 +12,25 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
-package io.confluent.kafka.schemaregistry.storage;
-
-/**
- * A range of schema IDs, from the first available ID to the inclusive upper bound.
  */
-public class SchemaIdRange {
-  private final int base;
-  private final int end;
 
-  public SchemaIdRange(int base, int end) {
-    this.base = base;
-    this.end = end;
+package io.confluent.kafka.schemaregistry.exceptions;
+
+public class IdGenerationException extends SchemaRegistryException {
+
+  public IdGenerationException(String message, Throwable cause) {
+    super(message, cause);
   }
 
-  public int base() {
-    return base;
+  public IdGenerationException(String message) {
+    super(message);
   }
 
-  public int end() {
-    return end;
+  public IdGenerationException(Throwable cause) {
+    super(cause);
+  }
+
+  public IdGenerationException() {
+    super();
   }
 }

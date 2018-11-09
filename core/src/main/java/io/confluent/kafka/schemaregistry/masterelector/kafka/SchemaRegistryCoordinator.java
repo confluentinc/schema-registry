@@ -22,6 +22,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,7 +95,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
 
     do {
       if (coordinatorUnknown()) {
-        ensureCoordinatorReady(Long.MAX_VALUE);
+        ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
         now = time.milliseconds();
       }
 
@@ -110,7 +111,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
 
       // Note that because the network client is shared with the background heartbeat thread,
       // we do not want to block in poll longer than the time to the next heartbeat.
-      client.poll(Math.min(Math.max(0, remaining), timeToNextHeartbeat(now)));
+      client.poll(time.timer(Math.min(Math.max(0, remaining), timeToNextHeartbeat(now))));
 
       now = time.milliseconds();
       elapsed = now - start;
@@ -203,8 +204,8 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   }
 
   @Override
-  protected synchronized boolean ensureCoordinatorReady(long timeoutMs) {
-    return super.ensureCoordinatorReady(timeoutMs);
+  protected synchronized boolean ensureCoordinatorReady(Timer timer) {
+    return super.ensureCoordinatorReady(timer);
   }
 
   @Override
