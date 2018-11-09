@@ -63,6 +63,8 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_RECORD_DOC_PROP;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.*;
 
 public class AvroDataTest {
@@ -299,6 +301,20 @@ public class AvroDataTest {
         .build();
 
     assertEquals(avroRecord, convertedRecord);
+  }
+
+  @Test
+  public void testFromConnectOptionalAnonymousStruct() {
+    Schema schema = SchemaBuilder.struct().optional()
+        .field("int32", Schema.INT32_SCHEMA)
+        .build();
+
+    Struct struct = new Struct(schema).put("int32", 12);
+
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
+
+    assertThat(convertedRecord, instanceOf(GenericRecord.class));
+    assertThat(((GenericRecord)convertedRecord).get("int32"), equalTo(12));
   }
 
   @Test
