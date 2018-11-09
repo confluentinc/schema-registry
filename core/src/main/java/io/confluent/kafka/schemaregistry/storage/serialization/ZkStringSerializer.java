@@ -19,11 +19,13 @@ package io.confluent.kafka.schemaregistry.storage.serialization;
 import org.I0Itec.zkclient.exception.ZkMarshallingError;
 import org.I0Itec.zkclient.serialize.ZkSerializer;
 
+import java.nio.charset.StandardCharsets;
+
 public class ZkStringSerializer implements ZkSerializer {
 
   @Override
   public byte[] serialize(Object o) throws ZkMarshallingError {
-    return ((String) o).getBytes();
+    return ((String) o).getBytes(StandardCharsets.UTF_8);
   }
 
   @Override
@@ -31,6 +33,6 @@ public class ZkStringSerializer implements ZkSerializer {
     if (bytes == null) {
       return null;
     }
-    return new String(bytes);
+    return new String(bytes, StandardCharsets.UTF_8);
   }
 }

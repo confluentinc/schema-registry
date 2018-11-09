@@ -85,7 +85,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     int port = KafkaSchemaRegistry.getSchemeAndPortForIdentity(
         config.getInt(SchemaRegistryConfig.PORT_CONFIG),
         config.getList(RestConfig.LISTENERS_CONFIG),
-        config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG)
+        config.interInstanceProtocol()
     ).port;
     this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG).isEmpty()
                    ? String.format("schema-registry-%s-%d",
@@ -214,7 +214,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
           .get(initTimeout, TimeUnit.MILLISECONDS);
     } catch (ExecutionException e) {
       if (e.getCause() instanceof TopicExistsException) {
-        // This is ok.
+        // If topic already exists, ensure that it is configured correctly.
+        verifySchemaTopic(admin);
       } else {
         throw e;
       }
@@ -363,10 +364,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   @Override
   public void close() {
-    kafkaTopicReader.shutdown();
-    log.debug("Kafka store reader thread shut down");
-    producer.close();
-    log.debug("Kafka store producer shut down");
+    if (kafkaTopicReader != null) {
+      kafkaTopicReader.shutdown();
+      log.debug("Kafka store reader thread shut down");
+    }
+    if (producer != null) {
+      producer.close();
+      log.debug("Kafka store producer shut down");
+    }
     localStore.close();
     log.debug("Kafka store shut down complete");
   }

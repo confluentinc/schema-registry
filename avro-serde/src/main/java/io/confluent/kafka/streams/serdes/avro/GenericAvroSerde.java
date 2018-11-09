@@ -83,7 +83,7 @@ public class GenericAvroSerde implements Serde<GenericRecord> {
   /**
    * For testing purposes only.
    */
-  GenericAvroSerde(final SchemaRegistryClient client) {
+  public GenericAvroSerde(final SchemaRegistryClient client) {
     if (client == null) {
       throw new IllegalArgumentException("schema registry client must not be null");
     }

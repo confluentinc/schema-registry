@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.formatter;
 
+import io.confluent.kafka.serializers.AvroSchemaUtils;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -31,6 +32,8 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
@@ -63,8 +66,12 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   private static final byte[] NULL_BYTES = "null".getBytes(StandardCharsets.UTF_8);
   private boolean printKey = false;
-  private byte[] keySeparator = "\t".getBytes();
-  private byte[] lineSeparator = "\n".getBytes();
+  private boolean printIds = false;
+  private boolean printKeyId = false;
+  private boolean printValueId = false;
+  private byte[] keySeparator = "\t".getBytes(StandardCharsets.UTF_8);
+  private byte[] lineSeparator = "\n".getBytes(StandardCharsets.UTF_8);
+  private byte[] idSeparator = "\t".getBytes(StandardCharsets.UTF_8);
   private Deserializer keyDeserializer;
 
   /**
@@ -78,11 +85,9 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
    */
   AvroMessageFormatter(
       SchemaRegistryClient schemaRegistryClient,
-      boolean printKey,
       Deserializer keyDeserializer
   ) {
     this.schemaRegistry = schemaRegistryClient;
-    this.printKey = printKey;
     this.keyDeserializer = keyDeserializer;
   }
 
@@ -95,17 +100,18 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    schemaRegistry = new CachedSchemaRegistryClient(
-        url, AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT);
+
+    Map<String, Object> originals = getPropertiesMap(props);
+    schemaRegistry = createSchemaRegistry(url, originals);
 
     if (props.containsKey("print.key")) {
       printKey = props.getProperty("print.key").trim().toLowerCase().equals("true");
     }
     if (props.containsKey("key.separator")) {
-      keySeparator = props.getProperty("key.separator").getBytes();
+      keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8);
     }
     if (props.containsKey("line.separator")) {
-      lineSeparator = props.getProperty("line.separator").getBytes();
+      lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8);
     }
     if (props.containsKey("key.deserializer")) {
       try {
@@ -115,6 +121,26 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
         throw new ConfigException("Error initializing Key deserializer", e);
       }
     }
+    if (props.containsKey("print.schema.ids")) {
+      printIds = props.getProperty("print.schema.ids").trim().toLowerCase().equals("true");
+      if (printIds) {
+        printValueId = true;
+        if (keyDeserializer == null || keyDeserializer instanceof AbstractKafkaAvroDeserializer) {
+          printKeyId = true;
+        }
+      }
+    }
+    if (props.containsKey("schema.id.separator")) {
+      idSeparator = props.getProperty("schema.id.separator").getBytes(StandardCharsets.UTF_8);
+    }
+  }
+
+  private Map<String, Object> getPropertiesMap(Properties props) {
+    Map<String,Object> originals = new HashMap<>();
+    for (final String name: props.stringPropertyNames()) {
+      originals.put(name, props.getProperty(name));
+    }
+    return originals;
   }
 
   @Override
@@ -131,6 +157,11 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
         } else {
           writeTo(consumerRecord.key(), output);
         }
+        if (printKeyId) {
+          output.write(idSeparator);
+          int schemaId = schemaIdFor(consumerRecord.key());
+          output.print(schemaId);
+        }
         output.write(keySeparator);
       } catch (IOException ioe) {
         throw new SerializationException("Error while formatting the key", ioe);
@@ -138,6 +169,11 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     }
     try {
       writeTo(consumerRecord.value(), output);
+      if (printValueId) {
+        output.write(idSeparator);
+        int schemaId = schemaIdFor(consumerRecord.value());
+        output.print(schemaId);
+      }
       output.write(lineSeparator);
     } catch (IOException ioe) {
       throw new SerializationException("Error while formatting the value", ioe);
@@ -146,7 +182,7 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
 
   private void writeTo(byte[] data, PrintStream output) throws IOException {
     Object object = deserialize(data);
-    Schema schema = getSchema(object);
+    Schema schema = AvroSchemaUtils.getSchema(object);
 
     try {
       JsonEncoder encoder = encoderFactory.jsonEncoder(schema, output);
@@ -166,5 +202,24 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
   @Override
   public void close() {
     // nothing to do
+  }
+
+  private int schemaIdFor(byte[] payload) {
+    ByteBuffer buffer = ByteBuffer.wrap(payload);
+    if (buffer.get() != MAGIC_BYTE) {
+      throw new SerializationException("Unknown magic byte!");
+    }
+    return buffer.getInt();
+  }
+
+  private SchemaRegistryClient createSchemaRegistry(
+      String schemaRegistryUrl,
+      Map<String, Object> originals
+  ) {
+    return schemaRegistry != null ? schemaRegistry : new CachedSchemaRegistryClient(
+        schemaRegistryUrl,
+        AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
+        originals
+    );
   }
 }

@@ -22,14 +22,14 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -39,38 +39,21 @@ public abstract class AbstractKafkaAvroSerDe {
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
 
-  private static final Map<String, Schema> primitiveSchemas;
   protected SchemaRegistryClient schemaRegistry;
+  protected Object keySubjectNameStrategy = new TopicNameStrategy();
+  protected Object valueSubjectNameStrategy = new TopicNameStrategy();
 
-  static {
-    Schema.Parser parser = new Schema.Parser();
-    primitiveSchemas = new HashMap<>();
-    primitiveSchemas.put("Null", createPrimitiveSchema(parser, "null"));
-    primitiveSchemas.put("Boolean", createPrimitiveSchema(parser, "boolean"));
-    primitiveSchemas.put("Integer", createPrimitiveSchema(parser, "int"));
-    primitiveSchemas.put("Long", createPrimitiveSchema(parser, "long"));
-    primitiveSchemas.put("Float", createPrimitiveSchema(parser, "float"));
-    primitiveSchemas.put("Double", createPrimitiveSchema(parser, "double"));
-    primitiveSchemas.put("String", createPrimitiveSchema(parser, "string"));
-    primitiveSchemas.put("Bytes", createPrimitiveSchema(parser, "bytes"));
-  }
-
-  private static Schema createPrimitiveSchema(Schema.Parser parser, String type) {
-    String schemaString = String.format("{\"type\" : \"%s\"}", type);
-    return parser.parse(schemaString);
-  }
-
-  protected static Map<String, Schema> getPrimitiveSchemas() {
-    return Collections.unmodifiableMap(primitiveSchemas);
-  }
 
   protected void configureClientProperties(AbstractKafkaAvroSerDeConfig config) {
     try {
       List<String> urls = config.getSchemaRegistryUrls();
       int maxSchemaObject = config.getMaxSchemasPerSubject();
+      Map<String, Object> originals = config.originalsWithPrefix("");
       if (null == schemaRegistry) {
-        schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject);
+        schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject, originals);
       }
+      keySubjectNameStrategy = config.keySubjectNameStrategy();
+      valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     } catch (io.confluent.common.config.ConfigException e) {
       throw new ConfigException(e.getMessage());
     }
@@ -79,49 +62,36 @@ public abstract class AbstractKafkaAvroSerDe {
   /**
    * Get the subject name for the given topic and value type.
    */
-  protected static String getSubjectName(String topic, boolean isKey) {
-    if (isKey) {
-      return topic + "-key";
+  protected String getSubjectName(String topic, boolean isKey, Object value, Schema schema) {
+    Object subjectNameStrategy = subjectNameStrategy(isKey);
+    if (subjectNameStrategy instanceof SubjectNameStrategy) {
+      return ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
     } else {
-      return topic + "-value";
+      return ((io.confluent.kafka.serializers.subject.SubjectNameStrategy) subjectNameStrategy)
+          .getSubjectName(topic, isKey, value);
     }
+  }
+
+  protected boolean isDeprecatedSubjectNameStrategy(boolean isKey) {
+    Object subjectNameStrategy = subjectNameStrategy(isKey);
+    return !(
+        subjectNameStrategy
+            instanceof io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy);
+  }
+
+  private Object subjectNameStrategy(boolean isKey) {
+    return isKey ? keySubjectNameStrategy : valueSubjectNameStrategy;
   }
 
   /**
    * Get the subject name used by the old Encoder interface, which relies only on the value type
    * rather than the topic.
    */
-  protected static String getOldSubjectName(Object value) {
+  protected String getOldSubjectName(Object value) {
     if (value instanceof GenericContainer) {
       return ((GenericContainer) value).getSchema().getName() + "-value";
     } else {
       throw new SerializationException("Primitive types are not supported yet");
-    }
-  }
-
-  protected Schema getSchema(Object object) {
-    if (object == null) {
-      return primitiveSchemas.get("Null");
-    } else if (object instanceof Boolean) {
-      return primitiveSchemas.get("Boolean");
-    } else if (object instanceof Integer) {
-      return primitiveSchemas.get("Integer");
-    } else if (object instanceof Long) {
-      return primitiveSchemas.get("Long");
-    } else if (object instanceof Float) {
-      return primitiveSchemas.get("Float");
-    } else if (object instanceof Double) {
-      return primitiveSchemas.get("Double");
-    } else if (object instanceof CharSequence) {
-      return primitiveSchemas.get("String");
-    } else if (object instanceof byte[]) {
-      return primitiveSchemas.get("Bytes");
-    } else if (object instanceof GenericContainer) {
-      return ((GenericContainer) object).getSchema();
-    } else {
-      throw new IllegalArgumentException(
-          "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, "
-          + "Float, Double, String, byte[] and IndexedRecord");
     }
   }
 

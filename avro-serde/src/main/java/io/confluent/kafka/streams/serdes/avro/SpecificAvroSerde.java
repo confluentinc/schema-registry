@@ -83,7 +83,7 @@ public class SpecificAvroSerde<T extends org.apache.avro.specific.SpecificRecord
   /**
    * For testing purposes only.
    */
-  SpecificAvroSerde(final SchemaRegistryClient client) {
+  public SpecificAvroSerde(final SchemaRegistryClient client) {
     if (client == null) {
       throw new IllegalArgumentException("schema registry client must not be null");
     }

@@ -20,8 +20,10 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
+import io.confluent.kafka.serializers.AvroSchemaUtils;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
+import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.NonRecordContainer;
-
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.errors.SerializationException;
@@ -55,17 +57,16 @@ public class AvroConverter implements Converter {
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
-
     AvroConverterConfig avroConverterConfig = new AvroConverterConfig(configs);
 
     if (schemaRegistry == null) {
       schemaRegistry =
           new CachedSchemaRegistryClient(avroConverterConfig.getSchemaRegistryUrls(),
-                                         avroConverterConfig.getMaxSchemasPerSubject());
+                                         avroConverterConfig.getMaxSchemasPerSubject(), configs);
     }
 
-    serializer = new Serializer(schemaRegistry, avroConverterConfig.autoRegisterSchema());
-    deserializer = new Deserializer(schemaRegistry);
+    serializer = new Serializer(configs, schemaRegistry);
+    deserializer = new Deserializer(configs, schemaRegistry);
     avroData = new AvroData(new AvroDataConfig(configs));
   }
 
@@ -106,8 +107,15 @@ public class AvroConverter implements Converter {
       this.autoRegisterSchema = autoRegisterSchema;
     }
 
+    public Serializer(Map<String, ?> configs, SchemaRegistryClient client) {
+
+      this(client, false);
+      configure(new KafkaAvroSerializerConfig(configs));
+    }
+
     public byte[] serialize(String topic, boolean isKey, Object value) {
-      return serializeImpl(getSubjectName(topic, isKey), value);
+      return serializeImpl(
+          getSubjectName(topic, isKey, value, AvroSchemaUtils.getSchema(value)), value);
     }
   }
 
@@ -115,6 +123,11 @@ public class AvroConverter implements Converter {
 
     public Deserializer(SchemaRegistryClient client) {
       schemaRegistry = client;
+    }
+
+    public Deserializer(Map<String, ?> configs, SchemaRegistryClient client) {
+      this(client);
+      configure(new KafkaAvroDeserializerConfig(configs));
     }
 
     public GenericContainer deserialize(String topic, boolean isKey, byte[] payload) {

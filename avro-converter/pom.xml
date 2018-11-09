@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>4.0.1-SNAPSHOT</version>
+        <version>5.2.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-connect-avro-converter</artifactId>
@@ -52,10 +52,52 @@
             <artifactId>podam</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <!-- fix for Java 10: podam depends on java.xml.ws module -->
+            <groupId>javax.xml.ws</groupId>
+            <artifactId>jaxws-api</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>kafka-connect</goal>
+                        </goals>
+                        <configuration>
+                            <title>Kafka Connect Avro Converter</title>
+                            <description>
+                                <![CDATA[The Kafka Connect Avro Converter integrates with <a href="https://docs.confluent.io/current/schema-registry/docs/intro.html">Schema Registry</a> to convert data for Kafka Connect to and from Avro format.]]>
+                            </description>
+
+                            <dockerNamespace>confluentinc</dockerNamespace>
+                            <dockerName>cp-kafka-connect</dockerName>
+                            <dockerTag>${project.version}</dockerTag>
+                            
+                            <componentTypes>
+                                <componentType>converter</componentType>
+                            </componentTypes>
+                            
+                            <tags>
+                                <tag>avro</tag>
+                                <tag>schema registry</tag>
+                            </tags>
+                            
+                            <kafkaConnectApi>false</kafkaConnectApi>
+                            <singleMessageTransforms>false</singleMessageTransforms>
+                            <supportedEncodings>
+                                <supportedEncoding>avro</supportedEncoding>
+                            </supportedEncodings>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro-maven-plugin</artifactId>
@@ -79,6 +121,57 @@
                     <detail>true</detail>
                     <stringType>String</stringType>
                 </configuration>
+            </plugin>
+            
+            <plugin>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-maven-plugin</artifactId>
+                <version>0.11.0</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>kafka-connect</goal>
+                        </goals>
+                        <configuration>
+                            <title>Kafka Connect Avro Converter</title>
+                            <documentationUrl>https://docs.confluent.io/current/schema-registry/docs/connect.html</documentationUrl>
+                            <description>
+                                <![CDATA[The Kafka Connect Avro Converter integrates with <a href="https://docs.confluent.io/current/schema-registry/docs/intro.html">Schema Registry</a> to convert data for Kafka Connect to and from Avro format.]]>
+                            </description>
+                            <sourceUrl>https://github.com/confluentinc/schema-registry</sourceUrl>
+                            
+                            <supportProviderName>Confluent, Inc.</supportProviderName>
+                            <supportSummary>Confluent supports the Avro Converter alongside community members as part of its Confluent Platform open source offering.</supportSummary>
+                            <supportUrl>https://docs.confluent.io/current/</supportUrl>
+                            <supportLogo>logos/confluent.png</supportLogo>
+                            
+                            <ownerUsername>confluentinc</ownerUsername>
+                            <ownerType>organization</ownerType>
+                            <ownerName>Confluent, Inc.</ownerName>
+                            <ownerUrl>https://confluent.io/</ownerUrl>
+                            <ownerLogo>logos/confluent.png</ownerLogo>
+                            
+                            <dockerNamespace>confluentinc</dockerNamespace>
+                            <dockerName>cp-kafka-connect</dockerName>
+                            <dockerTag>${project.version}</dockerTag>
+                            
+                            <componentTypes>
+                                <componentType>converter</componentType>
+                            </componentTypes>
+                            
+                            <tags>
+                                <tag>avro</tag>
+                                <tag>schema registry</tag>
+                            </tags>
+                            
+                            <kafkaConnectApi>false</kafkaConnectApi>
+                            <singleMessageTransforms>false</singleMessageTransforms>
+                            <supportedEncodings>
+                                <supportedEncoding>avro</supportedEncoding>
+                            </supportedEncodings>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

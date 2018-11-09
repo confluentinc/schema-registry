@@ -1,14 +1,14 @@
 .. _schemaregistry_monitoring:
 
-Monitoring
-----------
+Monitoring |sr|
+---------------
 
-The Schema Registry reports a variety of metrics through JMX. It can also be configured to report
+|sr| reports a variety of metrics through JMX. It can also be configured to report
 stats using additional pluggable stats reporters using the ``metrics.reporters`` configuration
 option. The easiest way to view the available metrics is to use jconsole to
 browse JMX MBeans.
 
-The Schema Registry has two types of metrics. Global metrics help you monitor the overall health of
+|sr| has two types of metrics. Global metrics help you monitor the overall health of
 the service. Per-endpoint metrics monitor each API endpoint request method and are
 prefixed by a name of the endpoint (e.g. ``subjects.get-schema``). These help you
 understand how the proxy is being used and track down specific performance problems.
@@ -35,7 +35,7 @@ Global Metrics
 **MBean: kafka.schema.registry:type=master-slave-role**
 
   ``master-slave-role``
-    The current role of this Schema Registry instance. A value of 1 indicates this instance is
+    The current role of this |sr| instance. A value of 1 indicates this instance is
     the master, 0 indicates it is a slave.
 
 
@@ -97,6 +97,7 @@ endpoint name ``brokers.list`` with the metric name ``request-rate`` to get
   ``subjects.get-schema``                    ``POST /subjects/{subject}``
   ``subjects.list``                          ``GET /subjects``
   ``subjects.versions.get-schema``           ``GET /subjects/{subject}/versions/{version}``
+  ``subjects.versions.get-schema.only``      ``GET /subjects/{subject}/versions/{version}/schema``
   ``subjects.versions.list``                 ``GET /subjects/{subject}/versions``
   ``subjects.versions.register``             ``POST /subjects/{subject}/versions``
   ========================================== =======================================================

@@ -16,11 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-
-import jersey.repackaged.com.google.common.base.Preconditions;
 
 /**
  * Simple wrapper for 16 byte MD5 hash.
@@ -30,9 +29,14 @@ public class MD5 {
   private final byte[] md5;
 
   public MD5(byte[] md5) {
-    Preconditions.checkNotNull(md5, "Tried to instantiate MD5 object with null byte array.");
-    Preconditions.checkArgument(
-        md5.length == 16, "Tried to instantiate MD5 object with invalid byte array.");
+    if (md5 == null) {
+      throw new IllegalArgumentException("Tried to instantiate MD5 object with null byte array.");
+    }
+    if (md5.length != 16) {
+      throw new IllegalArgumentException(
+          "Tried to instantiate MD5 object with invalid byte array."
+      );
+    }
 
     this.md5 = md5;
   }
@@ -43,7 +47,7 @@ public class MD5 {
   public static MD5 ofString(String str) {
     try {
       MessageDigest md = MessageDigest.getInstance("MD5");
-      md.update(str.getBytes());
+      md.update(str.getBytes(StandardCharsets.UTF_8));
       return new MD5(md.digest());
     } catch (NoSuchAlgorithmException e) {
       throw new RuntimeException(e);

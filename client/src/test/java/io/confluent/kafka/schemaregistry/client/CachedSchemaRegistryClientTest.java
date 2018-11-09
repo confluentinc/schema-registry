@@ -15,10 +15,15 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import org.apache.avro.Schema;
+import org.easymock.EasyMock;
+import org.junit.Test;
+
+import java.util.HashMap;
+import java.util.Arrays;
+
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import org.apache.avro.Schema;
-import org.junit.Test;
 
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.createMock;
@@ -34,7 +39,8 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testRegisterSchemaCache() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20, new
+        HashMap<String, Object>());
 
     String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema = new Schema.Parser().parse(schema);
@@ -42,6 +48,7 @@ public class CachedSchemaRegistryClientTest {
     String subject = "foo";
     int id = 25;
 
+    EasyMock.reset(restService);
     // Expect one call to register schema
     expect(restService.registerSchema(anyString(), eq(subject)))
             .andReturn(id);
@@ -57,7 +64,9 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testRegisterOverCapacity() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 1); // capacity is just one
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 1,  new
+        HashMap<String, Object>()); //
+    // capacity is just one
 
     String schema1 = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema1 = new Schema.Parser().parse(schema1);
@@ -72,6 +81,7 @@ public class CachedSchemaRegistryClientTest {
     String subject = "foo";
     int id = 25;
 
+    EasyMock.reset(restService);
     // Expect one call to register schema (the second one will fail)
     expect(restService.registerSchema(anyString(), eq(subject)))
             .andReturn(id);
@@ -92,13 +102,16 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testIdCache() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
+        HashMap<String, Object>());
 
     String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema = new Schema.Parser().parse(schema);
 
     String subject = "foo";
     int id = 25;
+
+    EasyMock.reset(restService);
 
     expect(restService.registerSchema(anyString(), eq(subject)))
             .andReturn(id);
@@ -119,7 +132,8 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testVersionCache() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
+        HashMap<String, Object>());
 
     String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema = new Schema.Parser().parse(schema);
@@ -127,6 +141,8 @@ public class CachedSchemaRegistryClientTest {
     String subject = "foo";
     int id = 25;
     int version = 7;
+
+    EasyMock.reset(restService);
 
     expect(restService.registerSchema(anyString(), eq(subject)))
             .andReturn(id);
@@ -147,7 +163,8 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testIdenticalSchemas() throws Exception {
     RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20);
+    CachedSchemaRegistryClient client =
+        new CachedSchemaRegistryClient(restService, 20, new HashMap<String, Object>());
 
     String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
     Schema avroSchema = new Schema.Parser().parse(schema);
@@ -158,6 +175,7 @@ public class CachedSchemaRegistryClientTest {
     String subjectTwo = "subjectTwo";
     int id = 25;
 
+    EasyMock.reset(restService);
     expect(restService.registerSchema(anyString(), eq(subjectOne)))
             .andReturn(id);
     expect(restService.registerSchema(anyString(), eq(subjectTwo)))
@@ -183,4 +201,74 @@ public class CachedSchemaRegistryClientTest {
     verify(restService);
   }
 
+  @Test
+  public void testDeleteSchemaCache() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20, new
+        HashMap<String, Object>());
+
+    String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
+    Schema avroSchema = new Schema.Parser().parse(schema);
+
+    String subject = "foo";
+    int id = 25;
+
+    EasyMock.reset(restService);
+    // Expect one call to register schema
+    expect(restService.registerSchema(anyString(), eq(subject)))
+        .andReturn(id);
+
+    expect(restService.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject))
+        .andReturn(Arrays.asList(0));
+
+    replay(restService);
+
+    assertEquals(id, client.register(subject, avroSchema));
+    assertEquals(id, client.register(subject, avroSchema)); // hit the cache
+
+    assertEquals(Arrays.asList(0), client.deleteSubject(subject));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testDeleteVersionCache() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
+        HashMap<String, Object>());
+
+    String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
+    Schema avroSchema = new Schema.Parser().parse(schema);
+
+    String subject = "foo";
+    int id = 25;
+    int version = 7;
+
+    EasyMock.reset(restService);
+
+    expect(restService.registerSchema(anyString(), eq(subject)))
+        .andReturn(id);
+
+    // Expect only one call to lookup the subject (the rest should hit the cache)
+    expect(restService.lookUpSubjectVersion(anyString(), eq(subject), eq(true)))
+        .andReturn(new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(subject,
+                                                                                     version,
+                                                                                     id,
+                                                                                     schema));
+
+    expect(restService.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+                                           subject,
+                                           String.valueOf(version)))
+        .andReturn(0);
+
+    replay(restService);
+
+    assertEquals(id, client.register(subject, avroSchema));
+    assertEquals(version, client.getVersion(subject, avroSchema));
+    assertEquals(version, client.getVersion(subject, avroSchema)); // hit the cache
+
+    assertEquals(Integer.valueOf(0), client.deleteSchemaVersion(subject, String.valueOf(version)));
+
+    verify(restService);
+  }
 }

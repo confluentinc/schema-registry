@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 
@@ -25,7 +26,6 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
  */
 public interface MasterAwareSchemaRegistry {
   void setMaster(SchemaRegistryIdentity newMaster) throws SchemaRegistryTimeoutException,
-                                                          SchemaRegistryStoreException;
+      SchemaRegistryStoreException, IdGenerationException;
 
-  int getMaxIdInKafkaStore();
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2017 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,27 +12,17 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
-package io.confluent.kafka.schemaregistry.storage;
-
-/**
- * A range of schema IDs, from the first available ID to the inclusive upper bound.
  */
-public class SchemaIdRange {
-  private final int base;
-  private final int end;
 
-  public SchemaIdRange(int base, int end) {
-    this.base = base;
-    this.end = end;
-  }
+package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
-  public int base() {
-    return base;
-  }
+import java.net.URL;
 
-  public int end() {
-    return end;
-  }
+import io.confluent.common.Configurable;
+
+public interface BasicAuthCredentialProvider extends Configurable {
+
+  String alias();
+
+  String getUserInfo(URL url);
 }

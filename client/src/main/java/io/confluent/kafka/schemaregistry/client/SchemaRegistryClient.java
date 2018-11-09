@@ -20,6 +20,8 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
@@ -45,6 +47,8 @@ public interface SchemaRegistryClient {
 
   public int getVersion(String subject, Schema schema) throws IOException, RestClientException;
 
+  public List<Integer> getAllVersions(String subject) throws IOException, RestClientException;
+
   public boolean testCompatibility(String subject, Schema schema)
       throws IOException, RestClientException;
 
@@ -56,4 +60,18 @@ public interface SchemaRegistryClient {
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
 
   int getId(String subject, Schema schema) throws IOException, RestClientException;
+
+  public List<Integer> deleteSubject(String subject) throws IOException, RestClientException;
+
+  public List<Integer> deleteSubject(Map<String, String> requestProperties, String subject)
+      throws IOException, RestClientException;
+
+  public Integer deleteSchemaVersion(String subject, String version)
+      throws IOException, RestClientException;
+
+  public Integer deleteSchemaVersion(
+      Map<String, String> requestProperties,
+      String subject,
+      String version)
+      throws IOException, RestClientException;
 }

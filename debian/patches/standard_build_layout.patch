@@ -1,0 +1,14 @@
+diff --git a/Makefile b/Makefile
+new file mode 100644
+index 0000000..3f83b80
+--- /dev/null
++++ b/Makefile
+@@ -0,0 +1,8 @@
++clean:
++
++distclean:
++
++%:
++	cp debian/Makefile Makefile.debian
++	$(MAKE) -f Makefile.debian $@
++	rm -f Makefile.debian

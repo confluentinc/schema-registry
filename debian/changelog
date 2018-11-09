@@ -1,0 +1,5 @@
+confluent-schema-registry (0.1~SNAPSHOT-1) unstable; urgency=low
+
+  * Initial release.
+
+ -- Confluent Packaging <packages@confluent.io>  Tue, 03 Feb 2015 15:42:52 +0000

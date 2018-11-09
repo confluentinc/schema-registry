@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>4.0.1-SNAPSHOT</version>
+        <version>5.2.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
@@ -55,9 +55,11 @@
     <properties>
         <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
         <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
-        <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
+        <confluent.maven.repo>https://packages.confluent.io/maven/</confluent.maven.repo>
         <exec-maven-plugin.version>1.2.1</exec-maven-plugin.version>
         <podam.version>6.0.2.RELEASE</podam.version>
+        <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
+        <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
     </properties>
 
     <repositories>
@@ -107,12 +109,42 @@
                 <artifactId>kafka-schema-registry</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-streams-avro-serde</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>javax.xml.ws</groupId>
+                <artifactId>jaxws-api</artifactId>
+                <version>2.3.0</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
     <build>
         <pluginManagement>
             <plugins>
+                <plugin>
+                    <groupId>io.confluent</groupId>
+                    <artifactId>kafka-connect-maven-plugin</artifactId>
+                    <version>${kafka.connect.maven.plugin.version}</version>
+                    <configuration>
+                        <documentationUrl>https://docs.confluent.io/${project.version}/schema-registry/docs/connect.html</documentationUrl>
+                        <sourceUrl>https://github.com/confluentinc/schema-registry</sourceUrl>
+                        
+                        <supportProviderName>${project.organization.name}</supportProviderName>
+                        <supportSummary>Confluent supports the Avro Converter alongside community members as part of its Confluent Platform open source offering.</supportSummary>
+                        <supportUrl>https://docs.confluent.io/current/</supportUrl>
+                        <supportLogo>logos/confluent.png</supportLogo>
+                        
+                        <ownerUsername>confluentinc</ownerUsername>
+                        <ownerType>organization</ownerType>
+                        <ownerName>${project.organization.name}</ownerName>
+                        <ownerUrl>https://confluent.io/</ownerUrl>
+                        <ownerLogo>logos/confluent.png</ownerLogo>
+                    </configuration>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.avro</groupId>
                     <artifactId>avro-maven-plugin</artifactId>
@@ -126,15 +158,6 @@
             </plugins>
         </pluginManagement>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <inherited>true</inherited>
-                <configuration>
-                    <source>1.7</source>
-                    <target>1.7</target>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
