@@ -39,6 +39,9 @@
     <suppress checks="MethodLength"
               files="SchemaRegistryConfig.java"/>
 
+    <suppress checks=".*"
+              files="SchemaNormalizationWithDefault.java"/>
+
     <suppress checks="BooleanExpressionComplexity"
               files="AvroData.java"/>
 
