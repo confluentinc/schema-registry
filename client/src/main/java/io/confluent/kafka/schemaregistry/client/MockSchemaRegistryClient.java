@@ -297,6 +297,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String subject)
       throws IOException, RestClientException {
     schemaCache.remove(subject);
+    idCache.remove(subject);
     versionCache.remove(subject);
     compatibilityCache.remove(subject);
     return Arrays.asList(0);
