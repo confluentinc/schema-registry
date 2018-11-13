@@ -214,7 +214,7 @@ Getting the Top Level Config
 .. sourcecode:: bash
 
       curl -X GET http://localhost:8081/config
-      {"compatibilityLevel":"BACKWARD"}
+      {"compatibility":"BACKWARD"}
 
 --------------------------------------------
 Updating Compatibility Requirements Globally
