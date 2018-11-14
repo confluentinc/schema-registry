@@ -171,11 +171,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
           "Timed out trying to create or validate schema topic configuration",
           e
       );
-    } catch (InterruptedException | ExecutionException e) {
+    } catch (InterruptedException e) {
       throw new StoreInitializationException(
           "Failed trying to create or validate schema topic configuration",
           e
       );
+    } catch (ExecutionException e) {
+      log.warn("Failed trying to create or validate schema topic configuration", e);
     }
   }
 
