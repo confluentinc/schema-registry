@@ -38,5 +38,6 @@
 
     <suppress checks="MethodLength"
               files="SchemaRegistryConfig.java"/>
-
+    <suppress checks=".*"
+              files="SchemaNormalizationWithDefault.java"/>
 </suppressions>
