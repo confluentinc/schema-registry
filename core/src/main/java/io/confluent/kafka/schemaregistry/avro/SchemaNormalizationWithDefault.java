@@ -31,19 +31,19 @@ import java.util.Map;
  */
 public class SchemaNormalizationWithDefault {
 
-    private SchemaNormalizationWithDefault() {}
+  private SchemaNormalizationWithDefault() {}
 
-    /** Returns "Parsing Canonical Form" of a schema as defined by Avro
-     * spec, with the addition of 'default' field attributes. */
-    public static String toCanonicalForm(Schema s) {
-        try {
-            Map<String,String> env = new HashMap<String,String>();
-            return build(env, s, new StringBuilder()).toString();
-        } catch (IOException e) {
-            // Shouldn't happen, b/c StringBuilder can't throw IOException
-            throw new RuntimeException(e);
-        }
+  /** Returns "Parsing Canonical Form" of a schema as defined by Avro
+    * spec, with the addition of 'default' field attributes. */
+  public static String toCanonicalForm(Schema s) {
+    try {
+      Map<String,String> env = new HashMap<String,String>();
+      return build(env, s, new StringBuilder()).toString();
+    } catch (IOException e) {
+      // Shouldn't happen, b/c StringBuilder can't throw IOException
+      throw new RuntimeException(e);
     }
+  }
 
     private static Appendable build(Map<String,String> env, Schema s,
                                     Appendable o) throws IOException {
