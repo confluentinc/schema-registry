@@ -1,6 +1,7 @@
 Schema Registry
 ================
 
+
 Schema Registry provides a serving layer for your metadata. It provides a
 RESTful interface for storing and retrieving Avro schemas. It stores a versioned
 history of all schemas, provides multiple compatibility settings and allows
