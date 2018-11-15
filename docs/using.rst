@@ -216,17 +216,6 @@ Updating Compatibility Requirements Globally
         http://localhost:8081/config
       {"compatibility":"NONE"}
 
--------------------------------------------------------------------
-Updating Compatibility Requirements Under the Subject "Kafka-value"
--------------------------------------------------------------------
-
-.. sourcecode:: bash
-
-      curl -X PUT -H "Content-Type: application/vnd.schemaregistry.v1+json" \
-        --data '{"compatibility": "BACKWARD"}' \
-        http://localhost:8081/config/Kafka-value
-      {"compatibility":"BACKWARD"}
-
 -----------------------------------------------------------------------
 Deleting All Schema Versions Registered Under the Subject "Kafka-value"
 -----------------------------------------------------------------------
