@@ -161,6 +161,8 @@ No changes
 Version 3.1.0
 -------------
 
+.. _3-1-schema-registry:
+
 ----
 |sr|
 ----
@@ -175,6 +177,8 @@ Version 3.1.0
 * `PR-364 <https://github.com/confluentinc/schema-registry/pull/364>`_ - Increase testing timeouts from 5000ms to 15000ms
 * `PR-346 <https://github.com/confluentinc/schema-registry/pull/346>`_ - configured log4j to write to log file
 
+.. _3-1-serializers-formatters-converters:
+
 ---------------------------------------
 Serializers, Formatters, and Converters
 ---------------------------------------
@@ -187,6 +191,8 @@ Serializers, Formatters, and Converters
 Version 3.0.1
 -------------
 
+.. _3-0-1-schema-registry:
+
 ----
 |sr|
 ----
@@ -195,6 +201,8 @@ Version 3.0.1
 * `PR-371 <https://github.com/confluentinc/schema-registry/pull/371>`_ - Fixing a bug where the listener port wasn't used in |zk|
 * `PR-390 <https://github.com/confluentinc/schema-registry/pull/390>`_ - Include cURL output in quickstart
 * `PR-392 <https://github.com/confluentinc/schema-registry/pull/392>`_ - Fix schemes used for listeners
+
+.. _3-0-1-serializers-formatters-converters:
 
 ---------------------------------------
 Serializers, Formatters, and Converters
@@ -206,6 +214,8 @@ Serializers, Formatters, and Converters
 
 Version 3.0.0
 -------------
+
+.. _3-0-schema-registry:
 
 ----
 |sr|
@@ -223,6 +233,8 @@ Version 3.0.0
 * `PR-320 <https://github.com/confluentinc/schema-registry/pull/320>`_ - API reference uses 'integer' Avro type which isn't
   supported. 'int' is supported.
 * `PR-329 <https://github.com/confluentinc/schema-registry/pull/329>`_ - https support.
+
+.. _3-0-serializers-formatters-converters:
 
 ---------------------------------------
 Serializers, Formatters, and Converters
@@ -247,6 +259,8 @@ Serializers, Formatters, and Converters
 Version 2.0.1
 -------------
 
+.. _2-0-1-schema-registry:
+
 ----
 |sr|
 ----
@@ -255,6 +269,8 @@ Version 2.0.1
 
 Version 2.0.0
 -------------
+
+.. _2-0-schema-registry:
 
 ----
 |sr|
@@ -289,6 +305,8 @@ Version 2.0.0
 * `PR-252 <https://github.com/confluentinc/schema-registry/pull/252>`_ - Use Kafka compiled with Scala 2.11
 * `PR-257 <https://github.com/confluentinc/schema-registry/pull/257>`_ - Updated classpath in schema-registry-run-class to reflect changes in pom.xml
 * `PR-258 <https://github.com/confluentinc/schema-registry/pull/258>`_ - CC-53: Add worker configs for Avro Kafka Connect that integrates with |sr|.
+
+.. _2-0-serializers-formatters-converters:
 
 ---------------------------------------
 Serializers, Formatters, and Converters
