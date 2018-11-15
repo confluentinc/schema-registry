@@ -434,8 +434,6 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
 
       1
 
-.. _comp
-
 Compatibility
 -------------
 
