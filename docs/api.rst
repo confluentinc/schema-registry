@@ -6,6 +6,8 @@
 Overview
 --------
 
+.. _overview-compatibility:
+
 Compatibility
 ^^^^^^^^^^^^^
 
