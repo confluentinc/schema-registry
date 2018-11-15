@@ -64,6 +64,8 @@ Let's say you have |sr| running in multiple datacenters, and you have lost your 
 |zk| Election
 ------------------
 
+.. _zookeeper-deployment:
+
 Recommended Deployment
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -80,6 +82,8 @@ Note that |sr| instances in DC B have ``master.eligibility`` set to false, meani
 
 To protect against complete loss of DC A, Kafka cluster A (the source) is replicated to Kafka cluster B (the target). This is achieved by running the :ref:`Replicator` <connect_replicator>` local to the target cluster.
 
+.. _zookeeper-settings:
+
 Important Settings
 ^^^^^^^^^^^^^^^^^^
 
@@ -91,6 +95,8 @@ Namespace under which |sr| related metadata is stored in |zk|. This setting shou
 
 ``master.eligibility``
 A |sr| server with ``master.eligibility`` set to false is guaranteed to remain a slave during any master election. |sr| instances in a "slave" data center should have this set to false, and |sr| instances local to the shared Kafka cluster should have this set to true.
+
+.. _zookeeper-setup:
 
 Setup
 ^^^^^
@@ -104,6 +110,8 @@ Assuming you have |sr| running, here are the recommended steps to add |sr| insta
 - In |sr| config files in DC B, set ``kafkastore.connection.url`` and ``schema.registry.zk.namespace`` to match the instances already running, and set ``master.eligibility`` to false.
 
 - Start your new |sr| instances with these configs.
+
+.. _zookeeper-run-book:
 
 Run Book
 ^^^^^^^^

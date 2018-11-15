@@ -6,6 +6,8 @@
 Overview
 --------
 
+.. _overview-compatibility:
+
 Compatibility
 ^^^^^^^^^^^^^
 
@@ -431,6 +433,8 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
       Content-Type: application/vnd.schemaregistry.v1+json
 
       1
+
+.. _comp
 
 Compatibility
 -------------
