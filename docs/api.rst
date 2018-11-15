@@ -3,10 +3,12 @@
 |sr| API Reference
 ==================
 
+.. _heading2-1:
+
 Overview
 --------
 
-.. _overview-compatibility:
+.. _heading3-1:
 
 Compatibility
 ^^^^^^^^^^^^^
@@ -31,6 +33,8 @@ We recommend keeping the default backward compatibility since it's common to hav
 
    More details on Avro schema resolution can be found `here <http://avro.apache.org/docs/1.7.7/spec.html#Schema+Resolution>`_.
 
+.. _heading3-2:
+
 Content Types
 ^^^^^^^^^^^^^
 
@@ -50,6 +54,8 @@ The server also supports content negotiation, so you may include multiple, weigh
 which can be useful when, for example, a new version of the API is preferred but
 you cannot be certain it is available yet.
 
+.. _heading3-3:
+
 Errors
 ^^^^^^
 
@@ -67,9 +73,10 @@ All API endpoints use a standard error message format for any requests that retu
 
 Although it is good practice to check the status code, you may safely parse the response of any non-DELETE API calls and check for the presence of an ``error_code`` field to detect errors.
 
+.. _heading2-2:
 
 Schemas
-----------
+-------
 
 .. http:get:: /schemas/ids/{int: id}
 
@@ -102,6 +109,8 @@ Schemas
       {
         "schema": "{\"type\": \"string\"}"
       }
+
+.. _heading2-3:
 
 Subjects
 --------
@@ -434,6 +443,8 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
 
       1
 
+.. _heading2-4:
+
 Compatibility
 -------------
 
@@ -494,6 +505,9 @@ The compatibility resource allows the user to test schemas for compatibility aga
       {
         "is_compatible": true
       }
+
+
+.. _heading2-5:
 
 Config
 ------
