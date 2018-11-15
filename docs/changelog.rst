@@ -3,11 +3,15 @@
 |sr| Changelog
 ==============
 
+.. _4-1-1-schema-registry:
+
 Version 4.1.1
 -------------
 
 * `PR-792 <https://github.com/confluentinc/schema-registry/pull/792>`_ - Improve GC options
 * `PR-787 <https://github.com/confluentinc/schema-registry/pull/787>`_ - Docs for Subject Name Strategy and Basic Auth
+
+.. _4-1-0-schema-registry:
 
 Version 4.1.0
 -------------
@@ -34,6 +38,8 @@ Version 4.1.0
 * `PR-571 <https://github.com/confluentinc/schema-registry/pull/571>`_ - Support basic auth credentials embedded in the schema.registry.url
 * `PR-657 <https://github.com/confluentinc/schema-registry/pull/657>`_ - Add maxPollTimeout parameter to ConsumerNetworkClient constructor
 
+.. _4-0-1-schema-registry:
+
 Version 4.0.1
 -------------
 
@@ -41,6 +47,8 @@ This release upgrades Jackson 2.5.4 to 2.9.4, and fixes handling of Avro enums.
 
 * `PR-753 <https://github.com/confluentinc/schema-registry/pull/753>`_ - Bump Jackson version
 * `PR-692 <https://github.com/confluentinc/schema-registry/pull/692>`_ - MINOR: Backport enum fixes to 4.0.x
+
+.. _4-0-schema-registry:
 
 Version 4.0.0
 -------------
@@ -78,6 +86,8 @@ Describe         Topic: ``kafkastore.topic``  Check existence of topic
 DescribeConfigs  Topic: ``kafkastore.topic``  Validate correct compaction policy on topic
 ===============  ===========================  =============================================
 
+.. _3-3-schema-registry:
+
 Version 3.3.0
 -------------
 
@@ -94,6 +104,8 @@ Version 3.3.0
 * `PR-476 <https://github.com/confluentinc/schema-registry/pull/476>`_ - Adapt to KAFKA-4636 changes: Per listener security settings overrides (KIP-103)
 
 
+.. _3-2-1-schema-registry:
+
 Version 3.2.1
 -------------
 
@@ -103,6 +115,8 @@ Version 3.2.1
 * `PR-493 <https://github.com/confluentinc/schema-registry/pull/493>`_ - Fixes for CLIENTS-257
 * `PR-494 <https://github.com/confluentinc/schema-registry/pull/494>`_ - MINOR: Add compact schemas topic doc
 * `PR-458 <https://github.com/confluentinc/schema-registry/pull/458>`_ - CLIENTS-104: Add a few retries during startup to allow for slow metadata propagation after creating the _schemas topic.
+
+.. _3-2-schema-registry:
 
 Version 3.2.0
 -------------
@@ -124,12 +138,16 @@ Version 3.2.0
 * `PR-488 <https://github.com/confluentinc/schema-registry/pull/488>`_ - Don't re-invoke SchemaBuilder.version() and SchemaBuilder.name() if the value has already been set.
 * `PR-494 <https://github.com/confluentinc/schema-registry/pull/494>`_ - MINOR: Add compact schemas topic doc
 
+.. _3-1-1-schema-registry:
+
 Version 3.1.1
 -------------
 No changes
 
 Version 3.1.0
 -------------
+
+.. _3-1-schema-registry:
 
 |sr|
 ~~~~~~~~~~~~~~~
@@ -144,6 +162,8 @@ Version 3.1.0
 * `PR-364 <https://github.com/confluentinc/schema-registry/pull/364>`_ - Increase testing timeouts from 5000ms to 15000ms
 * `PR-346 <https://github.com/confluentinc/schema-registry/pull/346>`_ - configured log4j to write to log file
 
+.. _3-1-serializers-formatters-converters:
+
 Serializers, Formatters, and Converters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -151,6 +171,8 @@ Serializers, Formatters, and Converters
 * `PR-379 <https://github.com/confluentinc/schema-registry/pull/379>`_ - Maven plugin
 * `PR-355 <https://github.com/confluentinc/schema-registry/pull/355>`_ - Adding support for Fixed data types
 * `PR-352 <https://github.com/confluentinc/schema-registry/pull/352>`_ - Fix schemas.cache.config can't be overrided
+
+.. _3-0-1-schema-registry:
 
 Version 3.0.1
 -------------
@@ -163,6 +185,8 @@ Version 3.0.1
 * `PR-390 <https://github.com/confluentinc/schema-registry/pull/390>`_ - Include cURL output in quickstart
 * `PR-392 <https://github.com/confluentinc/schema-registry/pull/392>`_ - Fix schemes used for listeners
 
+.. _3-0-1-serializers-formatters-converters:
+
 Serializers, Formatters, and Converters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -172,6 +196,8 @@ Serializers, Formatters, and Converters
 
 Version 3.0.0
 -------------
+
+.. _3-0-schema-registry:
 
 |sr|
 ~~~~~~~~~~~~~~~
@@ -188,6 +214,8 @@ Version 3.0.0
 * `PR-320 <https://github.com/confluentinc/schema-registry/pull/320>`_ - API reference uses 'integer' Avro type which isn't
   supported. 'int' is supported.
 * `PR-329 <https://github.com/confluentinc/schema-registry/pull/329>`_ - https support.
+
+.. _3-0-serializers-formatters-converters:
 
 Serializers, Formatters, and Converters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -211,6 +239,8 @@ Serializers, Formatters, and Converters
 Version 2.0.1
 -------------
 
+.. _2-0-1-schema-registry:
+
 |sr|
 ~~~~~~~~~~~~~~~
 
@@ -218,6 +248,8 @@ Version 2.0.1
 
 Version 2.0.0
 -------------
+
+.. _2-0-schema-registry:
 
 |sr|
 ~~~~~~~~~~~~~~~
@@ -251,6 +283,8 @@ Version 2.0.0
 * `PR-252 <https://github.com/confluentinc/schema-registry/pull/252>`_ - Use Kafka compiled with Scala 2.11
 * `PR-257 <https://github.com/confluentinc/schema-registry/pull/257>`_ - Updated classpath in schema-registry-run-class to reflect changes in pom.xml
 * `PR-258 <https://github.com/confluentinc/schema-registry/pull/258>`_ - CC-53: Add worker configs for Avro Kafka Connect that integrates with |sr|.
+
+.. _2-0-serializers-formatters-converters:
 
 Serializers, Formatters, and Converters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
