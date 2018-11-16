@@ -359,6 +359,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   @Override
   public Iterator<K> getAllKeys() throws StoreException {
+    assertInitialized();
     return localStore.getAllKeys();
   }
 
