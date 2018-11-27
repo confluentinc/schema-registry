@@ -162,8 +162,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
           // on the first non-null entry
           for (Schema memberSchema : schema.getTypes()) {
             if (memberSchema.getType() != Schema.Type.NULL) {
-              memberSchema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
-                                   JsonNodeFactory.instance.numberNode(version));
+              setVersionProp(memberSchema, version);
               break;
             }
           }
