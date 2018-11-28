@@ -49,7 +49,7 @@ RUN rm -f /opt/src/common/package/target/common-package-$CP_PACKAGE_VERSION-pack
 ###############
 
 # We need a glibc-based Alpine build since RocksDB's JNI libs depend on glibc.
-FROM anapsix/alpine-java:8u172b11_server-jre_unlimited
+FROM anapsix/alpine-java:8u192b12_jdk_unlimited
 
 ENV CP_PACKAGE_VERSION=5.0.1
 
