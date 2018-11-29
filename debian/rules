@@ -8,3 +8,7 @@ override_dh_systemd_enable:
 
 override_dh_systemd_start:
 	dh_systemd_start --no-start
+
+override_jh_manifest:
+	# Disable jh_manifest target, which is unnecessary and fails against Scala 2.12.
+	# See https://manpages.debian.org/testing/debhelper/dh.1.en.html#OVERRIDE_TARGETS
