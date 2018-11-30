@@ -214,7 +214,8 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
    :param string subject: Name of the subject
    :param versionId version: Version of the schema to be returned. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" returns the last registered schema under the specified subject. Note that there may be a new latest schema that gets registered right after this request is served.  
 
-   :>json string name: Name of the subject that this schema is registered under
+   :>json string subject: Name of the subject that this schema is registered under
+   :>json int id: Globally unique identifier of the schema
    :>json int version: Version of the returned schema
    :>json string schema: The Avro schema string
 
