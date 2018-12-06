@@ -267,7 +267,7 @@ public class CachedSchemaRegistryClientTest {
             client.deleteSchemaVersion(SUBJECT_0, String.valueOf(version));
             client.deleteSubject(SUBJECT_0);
           } catch (final IOException | RestClientException e) {
-            //
+            throw new RuntimeException(e);
           }
         });
   }
