@@ -45,6 +45,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -62,6 +64,12 @@ public class RestService {
       };
   private static final TypeReference<Config> GET_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
+      };
+  private static final TypeReference<List<ModeGetResponse>> GET_MODES_RESPONSE_TYPE =
+      new TypeReference<List<ModeGetResponse>>() {
+      };
+  private static final TypeReference<ModeGetResponse> GET_MODE_RESPONSE_TYPE =
+      new TypeReference<ModeGetResponse>() {
       };
   private static final TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
       new TypeReference<SchemaString>() {
@@ -90,11 +98,18 @@ public class RestService {
       UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE =
       new TypeReference<ConfigUpdateRequest>() {
       };
+  private static final TypeReference<ModeUpdateRequest>
+      UPDATE_MODE_RESPONSE_TYPE_REFERENCE =
+      new TypeReference<ModeUpdateRequest>() {
+      };
   private static final TypeReference<Integer> DELETE_SUBJECT_VERSION_RESPONSE_TYPE =
       new TypeReference<Integer>() {
       };
   private static final TypeReference<? extends List<Integer>> DELETE_SUBJECT_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
+      };
+  private static final TypeReference<String> DELETE_MODE_RESPONSE_TYPE =
+      new TypeReference<String>() {
       };
 
   private static final int HTTP_CONNECT_TIMEOUT_MS = 60000;
@@ -313,6 +328,14 @@ public class RestService {
     return registerSchema(request, subject);
   }
 
+  public int registerSchema(String schemaString, String subject, int id)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    request.setId(id);
+    return registerSchema(request, subject);
+  }
+
   public int registerSchema(RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException, RestClientException {
     return registerSchema(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject);
@@ -402,6 +425,68 @@ public class RestService {
     Config config =
         httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
     return config;
+  }
+
+  public ModeUpdateRequest setMode(String mode, String subject, boolean prefix)
+      throws IOException, RestClientException {
+    ModeUpdateRequest request = new ModeUpdateRequest();
+    request.setMode(mode);
+    return setMode(request, subject, prefix);
+  }
+
+  public ModeUpdateRequest setMode(ModeUpdateRequest modeUpdateRequest,
+                                   String subject,
+                                   boolean prefix)
+      throws IOException, RestClientException {
+    return setMode(DEFAULT_REQUEST_PROPERTIES, modeUpdateRequest, subject, prefix);
+  }
+
+  /**
+   * On success, this api simply echoes the request in the response.
+   */
+  public ModeUpdateRequest setMode(Map<String, String> requestProperties,
+                                   ModeUpdateRequest modeUpdateRequest,
+                                   String subject,
+                                   boolean prefix)
+      throws IOException, RestClientException {
+    // TODO check for null subject
+    String path = String.format("/modes/%s?%s", subject, prefix);
+
+    ModeUpdateRequest response =
+        httpRequest(path, "PUT", modeUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
+            requestProperties, UPDATE_MODE_RESPONSE_TYPE_REFERENCE);
+    return response;
+  }
+
+  public List<ModeGetResponse> getModes()
+      throws IOException, RestClientException {
+    String path = "/modes";
+
+    List<ModeGetResponse> modes =
+        httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODES_RESPONSE_TYPE);
+    return modes;
+  }
+
+  public ModeGetResponse getMode(String subject)
+      throws IOException, RestClientException {
+    String path = String.format("/modes/%s", subject);
+
+    ModeGetResponse mode =
+        httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
+    return mode;
+  }
+
+  public String deleteMode(
+      Map<String, String> requestProperties,
+      String subject,
+      boolean prefix
+  ) throws IOException,
+      RestClientException {
+    String path = String.format("/modes/%s?prefix=%s", subject, prefix);
+
+    String mode = httpRequest(path, "DELETE", null, requestProperties,
+        DELETE_MODE_RESPONSE_TYPE);
+    return mode;
   }
 
   public SchemaString getId(int id) throws IOException, RestClientException {

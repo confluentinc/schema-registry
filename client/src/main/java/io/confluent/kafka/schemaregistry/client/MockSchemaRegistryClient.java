@@ -29,6 +29,8 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -43,6 +45,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Integer, Schema>> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
   private final Map<String, String> compatibilityCache;
+  private final Map<ModeKey, String> modes;
   private final AtomicInteger ids;
 
   public MockSchemaRegistryClient() {
@@ -51,6 +54,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     idCache = new HashMap<String, Map<Integer, Schema>>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();
     compatibilityCache = new HashMap<String, String>();
+    modes = new TreeMap<>(
+        (k1, k2) -> k2.getSubject().length() - k1.getSubject().length()
+    );
     ids = new AtomicInteger(0);
     idCache.put(null, new HashMap<Integer, Schema>());
   }
@@ -124,6 +130,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized int register(String subject, Schema schema)
       throws IOException, RestClientException {
+    return register(subject, schema, -1);
+  }
+
+  @Override
+  public synchronized int register(String subject, Schema schema, int id)
+      throws IOException, RestClientException {
     Map<Schema, Integer> schemaIdMap;
     if (schemaCache.containsKey(subject)) {
       schemaIdMap = schemaCache.get(subject);
@@ -133,9 +145,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     if (schemaIdMap.containsKey(schema)) {
-      return schemaIdMap.get(schema);
+      int schemaId = schemaIdMap.get(schema);
+      if (id >= 0 && id != schemaId) {
+        throw new IllegalStateException("Schema already registered with id "
+            + schemaId + " instead of input id " + id);
+      }
+      return schemaId;
     } else {
-      int id = getIdFromRegistry(subject, schema, true);
+      id = getIdFromRegistry(subject, schema, true);
       schemaIdMap.put(schema, id);
       if (!idCache.get(null).containsKey(id)) {
         // CachedSchema Registry client would have a cached version of schema instance for
@@ -274,6 +291,41 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public String setMode(String subject, boolean prefix, String mode)
+      throws IOException, RestClientException {
+    modes.put(new ModeKey(subject, prefix), mode);
+    return mode;
+  }
+
+  @Override
+  public String getMode(String subject) throws IOException, RestClientException {
+    // The modes are traversed in order of descending length of the subjects,
+    // so for prefixes, the longer prefixes will be checked first.
+    for (Map.Entry<ModeKey, String> entry : modes.entrySet()) {
+      ModeKey modeKey = entry.getKey();
+      String modeValue = entry.getValue();
+      if (!modeKey.isPrefix()) {
+        // Check for exact match
+        if (subject.equals(modeKey.getSubject())) {
+          return modeValue;
+        }
+      } else {
+        // Check for prefix match
+        if (subject.startsWith(modeKey.getSubject())) {
+          return modeValue;
+        }
+      }
+    }
+    // Return the empty prefix and the default mode of READWRITE.
+    return "READWRITE";
+  }
+
+  @Override
+  public String deleteMode(String subject, boolean prefix) throws IOException, RestClientException {
+    return modes.remove(new ModeKey(subject, prefix));
+  }
+
+  @Override
   public Collection<String> getAllSubjects() throws IOException, RestClientException {
     List<String> results = new ArrayList<>();
     results.addAll(this.schemaCache.keySet());
@@ -320,5 +372,49 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       return 0;
     }
     return -1;
+  }
+
+  private static class ModeKey {
+
+    private String subject;
+    private boolean prefix;
+
+    public ModeKey(String subject, boolean prefix) {
+      this.subject = subject;
+      this.prefix = prefix;
+    }
+
+    public String getSubject() {
+      return this.subject;
+    }
+
+    public boolean isPrefix() {
+      return this.prefix;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      if (!super.equals(o)) {
+        return false;
+      }
+      ModeKey modeKey = (ModeKey) o;
+      return prefix == modeKey.prefix && Objects.equals(subject, modeKey.subject);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(super.hashCode(), subject, prefix);
+    }
+
+    @Override
+    public String toString() {
+      return "ModeKey{" + "subject='" + subject + '\'' + ", prefix=" + prefix + '}';
+    }
   }
 }

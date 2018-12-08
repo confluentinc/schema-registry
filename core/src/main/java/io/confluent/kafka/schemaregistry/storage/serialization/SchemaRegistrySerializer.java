@@ -26,6 +26,8 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.storage.ConfigValue;
 import io.confluent.kafka.schemaregistry.storage.DeleteSubjectKey;
 import io.confluent.kafka.schemaregistry.storage.DeleteSubjectValue;
+import io.confluent.kafka.schemaregistry.storage.ModeKey;
+import io.confluent.kafka.schemaregistry.storage.ModeValue;
 import io.confluent.kafka.schemaregistry.storage.NoopKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.confluent.kafka.schemaregistry.storage.ConfigKey;
@@ -83,6 +85,8 @@ public class SchemaRegistrySerializer
         keyType = SchemaRegistryKeyType.forName((String) keyObj.get("keytype"));
         if (keyType == SchemaRegistryKeyType.CONFIG) {
           schemaKey = new ObjectMapper().readValue(key, ConfigKey.class);
+        } else if (keyType == SchemaRegistryKeyType.MODE) {
+          schemaKey = new ObjectMapper().readValue(key, ModeKey.class);
         } else if (keyType == SchemaRegistryKeyType.NOOP) {
           schemaKey = new ObjectMapper().readValue(key, NoopKey.class);
         } else if (keyType == SchemaRegistryKeyType.DELETE_SUBJECT) {
@@ -124,6 +128,12 @@ public class SchemaRegistrySerializer
         schemaRegistryValue = new ObjectMapper().readValue(value, ConfigValue.class);
       } catch (IOException e) {
         throw new SerializationException("Error while deserializing config", e);
+      }
+    } else if (key.getKeyType().equals(SchemaRegistryKeyType.MODE)) {
+      try {
+        schemaRegistryValue = new ObjectMapper().readValue(value, ModeValue.class);
+      } catch (IOException e) {
+        throw new SerializationException("Error while deserializing schema", e);
       }
     } else if (key.getKeyType().equals(SchemaRegistryKeyType.SCHEMA)) {
       try {

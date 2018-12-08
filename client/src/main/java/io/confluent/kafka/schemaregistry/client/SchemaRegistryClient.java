@@ -29,6 +29,9 @@ public interface SchemaRegistryClient {
 
   public int register(String subject, Schema schema) throws IOException, RestClientException;
 
+  public int register(String subject, Schema schema, int id) throws IOException,
+      RestClientException;
+
   @Deprecated
   public Schema getByID(int id) throws IOException, RestClientException;
 
@@ -56,6 +59,13 @@ public interface SchemaRegistryClient {
       throws IOException, RestClientException;
 
   public String getCompatibility(String subject) throws IOException, RestClientException;
+
+  public String setMode(String subject, boolean prefix, String mode)
+      throws IOException, RestClientException;
+
+  public String getMode(String subject) throws IOException, RestClientException;
+
+  public String deleteMode(String subject, boolean prefix) throws IOException, RestClientException;
 
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
 

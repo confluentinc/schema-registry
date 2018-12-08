@@ -38,6 +38,8 @@ public class Errors {
   public static final int INVALID_SCHEMA_ERROR_CODE = 42201;
   public static final int INVALID_VERSION_ERROR_CODE = 42202;
   public static final int INVALID_COMPATIBILITY_LEVEL_ERROR_CODE = 42203;
+  public static final int INVALID_MODE_ERROR_CODE = 42204;
+  public static final int OPERATION_NOT_PERMITTED_ERROR_CODE = 42205;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -87,6 +89,10 @@ public class Errors {
 
   public static RestException requestForwardingFailedException(String message, Throwable cause) {
     return new RestRequestForwardingException(message, cause);
+  }
+
+  public static RestException operationNotPermittedException(String message, Throwable cause) {
+    return new RestOperationNotPermittedException(message, cause);
   }
 
   public static RestException unknownMasterException(String message, Throwable cause) {

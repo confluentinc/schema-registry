@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -31,14 +32,17 @@ public class KafkaStoreMessageHandler
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final LookupCache lookupCache;
+  private final Map<ModeKey, ModeValue> modes;
   private final ExecutorService tombstoneExecutor;
   private IdGenerator idGenerator;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
                                   LookupCache lookupCache,
+                                  Map<ModeKey, ModeValue> modes,
                                   IdGenerator idGenerator) {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
+    this.modes = modes;
     this.idGenerator = idGenerator;
     this.tombstoneExecutor = Executors.newSingleThreadExecutor();
   }
@@ -56,7 +60,13 @@ public class KafkaStoreMessageHandler
                          (SchemaValue) value);
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
+    } else if (key.getKeyType() == SchemaRegistryKeyType.MODE) {
+      handleMode((ModeKey) key, (ModeValue) value);
     }
+  }
+
+  private void handleMode(ModeKey modeKey, ModeValue modeValue) {
+    modes.put(modeKey, modeValue);
   }
 
   private void handleDeleteSubject(DeleteSubjectValue deleteSubjectValue) {
@@ -92,7 +102,7 @@ public class KafkaStoreMessageHandler
         this.lookupCache.schemaDeleted(schemaKey, schemaObj);
       } else {
         // Update the maximum id seen so far
-        idGenerator.schemaRegistered(schemaKey,schemaObj);
+        idGenerator.schemaRegistered(schemaKey, schemaObj);
         lookupCache.schemaRegistered(schemaKey, schemaObj);
         List<SchemaKey> schemaKeys = lookupCache.deletedSchemaKeys(schemaObj);
         schemaKeys.stream().filter(v -> v.getSubject().equals(schemaObj.getSubject()))

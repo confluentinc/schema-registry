@@ -157,7 +157,7 @@ public class SubjectVersionsResource {
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
 
-    Schema schema = new Schema(subjectName, 0, 0, request.getSchema());
+    Schema schema = new Schema(subjectName, 0, request.getId(), request.getSchema());
     int id = 0;
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);

@@ -30,6 +30,8 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
@@ -114,6 +116,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return restService.registerSchema(schema.toString(), subject);
   }
 
+  private int registerAndGetId(String subject, Schema schema, int id)
+      throws IOException, RestClientException {
+    return restService.registerSchema(schema.toString(), subject, id);
+  }
+
   private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
     SchemaString restSchema = restService.getId(id);
     return new Schema.Parser().parse(restSchema.getSchemaString());
@@ -136,6 +143,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized int register(String subject, Schema schema)
       throws IOException, RestClientException {
+    return register(subject, schema, -1);
+  }
+
+  @Override
+  public synchronized int register(String subject, Schema schema, int id)
+      throws IOException, RestClientException {
     Map<Schema, Integer> schemaIdMap;
     if (schemaCache.containsKey(subject)) {
       schemaIdMap = schemaCache.get(subject);
@@ -145,12 +158,17 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     if (schemaIdMap.containsKey(schema)) {
-      return schemaIdMap.get(schema);
+      int schemaId = schemaIdMap.get(schema);
+      if (id >= 0 && id != schemaId) {
+        throw new IllegalStateException("Schema already registered with id "
+            + schemaId + " instead of input id " + id);
+      }
+      return schemaId;
     } else {
       if (schemaIdMap.size() >= identityMapCapacity) {
         throw new IllegalStateException("Too many schema objects created for " + subject + "!");
       }
-      int id = registerAndGetId(subject, schema);
+      id = id >= 0 ? registerAndGetId(subject, schema, id) : registerAndGetId(subject, schema);
       schemaIdMap.put(schema, id);
       idCache.get(null).put(id, schema);
       return id;
@@ -315,6 +333,25 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public String getCompatibility(String subject) throws IOException, RestClientException {
     Config response = restService.getConfig(subject);
     return response.getCompatibilityLevel();
+  }
+
+  @Override
+  public String setMode(String subject, boolean prefix, String mode)
+      throws IOException, RestClientException {
+    ModeUpdateRequest response = restService.setMode(mode, subject, prefix);
+    return response.getMode();
+  }
+
+  @Override
+  public String getMode(String subject) throws IOException, RestClientException {
+    ModeGetResponse response = restService.getMode(subject);
+    return response.getMode();
+  }
+
+  @Override
+  public String deleteMode(String subject, boolean prefix) throws IOException, RestClientException {
+    String mode = restService.deleteMode(RestService.DEFAULT_REQUEST_PROPERTIES, subject, prefix);
+    return mode;
   }
 
   @Override

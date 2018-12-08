@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright 2014 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,28 +14,19 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.storage;
+package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-public enum SchemaRegistryKeyType {
-  CONFIG("CONFIG"),
-  SCHEMA("SCHEMA"),
-  MODE("MODE"),
-  NOOP("NOOP"),
-  DELETE_SUBJECT("DELETE_SUBJECT");
+import io.confluent.rest.exceptions.RestConstraintViolationException;
 
-  public final String keyType;
+public class RestInvalidModeException extends RestConstraintViolationException {
 
-  private SchemaRegistryKeyType(String keyType) {
-    this.keyType = keyType;
+  public static final int ERROR_CODE = Errors.INVALID_MODE_ERROR_CODE;
+
+  public RestInvalidModeException() {
+    this("Invalid mode. Valid values are READWRITE, READONLY, and IMPORT.");
   }
 
-  public static SchemaRegistryKeyType forName(String keyType) {
-    for (SchemaRegistryKeyType type : values()) {
-      if (type.keyType.equals(keyType)) {
-        return type;
-      }
-    }
-    throw new IllegalArgumentException("Unknown schema registry key type : " + keyType);
+  public RestInvalidModeException(String message) {
+    super(message, ERROR_CODE);
   }
 }
-

@@ -23,10 +23,21 @@ import java.io.IOException;
 
 public class RegisterSchemaRequest {
 
+  private int id = -1;
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, RegisterSchemaRequest.class);
+  }
+
+  @JsonProperty("id")
+  public int getId() {
+    return this.id;
+  }
+
+  @JsonProperty("id")
+  public void setId(int id) {
+    this.id = id;
   }
 
   @JsonProperty("schema")
