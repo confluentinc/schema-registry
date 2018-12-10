@@ -113,6 +113,7 @@ public class RestService {
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
+  private Map<String, String> httpHeaders;
 
   public RestService(UrlList baseUrls) {
     this.baseUrls = baseUrls;
@@ -161,6 +162,7 @@ public class RestService {
       setupSsl(connection);
       connection.setRequestMethod(method);
       setBasicAuthRequestHeader(connection);
+      setCustomHeaders(connection);
       // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
       // On the other hand, leaving this out breaks nothing.
       connection.setDoInput(true);
@@ -538,8 +540,19 @@ public class RestService {
     }
   }
 
+  private void setCustomHeaders(HttpURLConnection connection) {
+    if (httpHeaders != null) {
+      httpHeaders.forEach((k, v) -> connection.setRequestProperty(k, v));
+    }
+  }
+
   public void setBasicAuthCredentialProvider(
       BasicAuthCredentialProvider basicAuthCredentialProvider) {
     this.basicAuthCredentialProvider = basicAuthCredentialProvider;
   }
+
+  public void setHttpHeaders(Map<String, String> httpHeaders) {
+    this.httpHeaders = httpHeaders;
+  }
+
 }
