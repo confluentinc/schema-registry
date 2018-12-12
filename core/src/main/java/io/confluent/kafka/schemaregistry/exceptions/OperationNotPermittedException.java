@@ -17,8 +17,7 @@
 package io.confluent.kafka.schemaregistry.exceptions;
 
 /**
- * Indicates that the version is not a valid version id. Allowed values are between [1,
- * 2^31-1] and the string "latest"
+ * Schema registry is in a mode that does not permit the requested operation.
  */
 public class OperationNotPermittedException extends SchemaRegistryException {
 

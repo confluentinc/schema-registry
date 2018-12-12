@@ -80,10 +80,10 @@ public class ModeResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
       schemaRegistry.setModeOrForward(subject, prefix, mode, headerProperties);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update mode", e);
-    } catch (OperationNotPermittedException e) {
-      throw Errors.unknownMasterException("Failed to update mode", e);
     } catch (UnknownMasterException e) {
       throw Errors.unknownMasterException("Failed to update mode", e);
     } catch (SchemaRegistryRequestForwardingException e) {

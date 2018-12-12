@@ -21,10 +21,14 @@ import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Arrays;
+import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 
+import static io.confluent.kafka.schemaregistry.client.rest.RestService.DEFAULT_REQUEST_PROPERTIES;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.eq;
@@ -57,6 +61,31 @@ public class CachedSchemaRegistryClientTest {
 
     assertEquals(id, client.register(subject, avroSchema));
     assertEquals(id, client.register(subject, avroSchema)); // hit the cache
+
+    verify(restService);
+  }
+
+  @Test
+  public void testRegisterSchemaCacheWithId() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20, new
+        HashMap<String, Object>());
+
+    String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
+    Schema avroSchema = new Schema.Parser().parse(schema);
+
+    String subject = "foo";
+    int id = 25;
+
+    EasyMock.reset(restService);
+    // Expect one call to register schema
+    expect(restService.registerSchema(anyString(), eq(subject), eq(25)))
+        .andReturn(id);
+
+    replay(restService);
+
+    assertEquals(id, client.register(subject, avroSchema, id));
+    assertEquals(id, client.register(subject, avroSchema, id)); // hit the cache
 
     verify(restService);
   }
@@ -218,7 +247,7 @@ public class CachedSchemaRegistryClientTest {
     expect(restService.registerSchema(anyString(), eq(subject)))
         .andReturn(id);
 
-    expect(restService.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject))
+    expect(restService.deleteSubject(DEFAULT_REQUEST_PROPERTIES, subject))
         .andReturn(Arrays.asList(0));
 
     replay(restService);
@@ -256,7 +285,8 @@ public class CachedSchemaRegistryClientTest {
                                                                                      id,
                                                                                      schema));
 
-    expect(restService.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+    expect(restService.deleteSchemaVersion(
+        DEFAULT_REQUEST_PROPERTIES,
                                            subject,
                                            String.valueOf(version)))
         .andReturn(0);
@@ -268,6 +298,72 @@ public class CachedSchemaRegistryClientTest {
     assertEquals(version, client.getVersion(subject, avroSchema)); // hit the cache
 
     assertEquals(Integer.valueOf(0), client.deleteSchemaVersion(subject, String.valueOf(version)));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testSetMode() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
+        HashMap<String, Object>());
+
+    String subject = "foo";
+    String mode = "READONLY";
+
+    EasyMock.reset(restService);
+
+    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
+    modeUpdateRequest.setMode(mode);
+    expect(restService.setMode(eq(mode), eq(subject), eq(false)))
+        .andReturn(modeUpdateRequest);
+
+    replay(restService);
+
+    assertEquals(mode, client.setMode(subject, false, mode));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGetMode() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
+        HashMap<String, Object>());
+
+    String subject = "foo";
+    String mode = "READONLY";
+
+    EasyMock.reset(restService);
+
+    ModeGetResponse modeGetResponse = new ModeGetResponse(subject, false, mode);
+    expect(restService.getMode(eq(subject)))
+        .andReturn(modeGetResponse);
+
+    replay(restService);
+
+    assertEquals(mode, client.getMode(subject));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testDeleteMode() throws Exception {
+    RestService restService = createMock(RestService.class);
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
+        HashMap<String, Object>());
+
+    String subject = "foo";
+    String mode = "READONLY";
+
+    EasyMock.reset(restService);
+
+    expect(restService.deleteMode(eq(DEFAULT_REQUEST_PROPERTIES), eq(subject), eq(false)))
+        .andReturn(mode);
+
+    replay(restService);
+
+    assertEquals(mode, client.deleteMode(subject, false));
 
     verify(restService);
   }

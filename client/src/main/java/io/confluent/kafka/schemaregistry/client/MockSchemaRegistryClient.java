@@ -55,6 +55,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     versionCache = new HashMap<String, Map<Schema, Integer>>();
     compatibilityCache = new HashMap<String, String>();
     modes = new TreeMap<>(
+        // Use length of subject in descending order
         (k1, k2) -> k2.getSubject().length() - k1.getSubject().length()
     );
     ids = new AtomicInteger(0);

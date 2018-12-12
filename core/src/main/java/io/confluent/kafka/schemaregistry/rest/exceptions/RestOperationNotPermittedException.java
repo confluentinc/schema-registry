@@ -21,17 +21,13 @@ package io.confluent.kafka.schemaregistry.rest.exceptions;
  * is not aware of the master node to forward the request to
  */
 
-import io.confluent.rest.exceptions.RestServerErrorException;
+import io.confluent.rest.exceptions.RestConstraintViolationException;
 
-public class RestOperationNotPermittedException extends RestServerErrorException {
+public class RestOperationNotPermittedException extends RestConstraintViolationException {
 
   private static final int ERROR_CODE = Errors.OPERATION_NOT_PERMITTED_ERROR_CODE;
 
   public RestOperationNotPermittedException(String message) {
     super(message, ERROR_CODE);
-  }
-
-  public RestOperationNotPermittedException(String message, Throwable cause) {
-    super(message, ERROR_CODE, cause);
   }
 }

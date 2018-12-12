@@ -87,12 +87,12 @@ public class Errors {
     return new RestSchemaRegistryTimeoutException(message, cause);
   }
 
-  public static RestException requestForwardingFailedException(String message, Throwable cause) {
-    return new RestRequestForwardingException(message, cause);
+  public static RestOperationNotPermittedException operationNotPermittedException(String message) {
+    return new RestOperationNotPermittedException(message);
   }
 
-  public static RestException operationNotPermittedException(String message, Throwable cause) {
-    return new RestOperationNotPermittedException(message, cause);
+  public static RestException requestForwardingFailedException(String message, Throwable cause) {
+    return new RestRequestForwardingException(message, cause);
   }
 
   public static RestException unknownMasterException(String message, Throwable cause) {

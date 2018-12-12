@@ -44,6 +44,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
@@ -163,6 +164,8 @@ public class SubjectVersionsResource {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidAvroException("Input schema is an invalid Avro schema", e);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Register operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
