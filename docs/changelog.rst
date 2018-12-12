@@ -3,6 +3,22 @@
 |sr| Changelog
 ==============
 
+.. _5-1-0-schema-registry:
+
+Version 5.1.0
+-------------
+
+* `PR-933 <https://github.com/confluentinc/schema-registry/pull/933>`_ - DOCS-989 - Fix legacy SR doc issues
+* `PR-936 <https://github.com/confluentinc/schema-registry/pull/936>`_ - DOCS-929 - Fix confusing anchor links
+* `PR-938 <https://github.com/confluentinc/schema-registry/pull/938>`_ - Duplicate Heading Update (#937)
+* `PR-921 <https://github.com/confluentinc/schema-registry/pull/921>`_ - Pass ClientDnsLookup to NetworkClient and parseAndValidateAddresses
+* `PR-873 <https://github.com/confluentinc/schema-registry/pull/873>`_ - Refactor SR to pull lookup datastructure to its own interface and Id Generation to its own interface
+* `PR-888 <https://github.com/confluentinc/schema-registry/pull/888>`_ - CC-2674: Point to the right checkstyle suppression file
+* `PR-846 <https://github.com/confluentinc/schema-registry/pull/846>`_ - CC-2367 : Tombstone deleted schemakey if the same schema is registered again in the subject
+* `PR-853 <https://github.com/confluentinc/schema-registry/pull/853>`_ - CC-2441 : Add Cyclic schema support
+* `PR-861 <https://github.com/confluentinc/schema-registry/pull/861>`_ - MINOR: Add Timer class. Change from Kafka (commit fc5f6b0e46ff81302b3e445fed0cdf454c942792)
+* `PR-857 <https://github.com/confluentinc/schema-registry/pull/857>`_ - Fix checkstyle to pass on 8.5 after upgrade from 6.19
+
 .. _5-0-0-schema-registry:
 
 Version 5.0.0
