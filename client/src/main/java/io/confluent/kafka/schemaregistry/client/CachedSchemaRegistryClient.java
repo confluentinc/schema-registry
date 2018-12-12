@@ -70,30 +70,54 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       String baseUrl,
       int identityMapCapacity,
       Map<String, ?> originals) {
-    this(new RestService(baseUrl), identityMapCapacity, originals);
+    this(baseUrl, identityMapCapacity, originals, null);
   }
 
   public CachedSchemaRegistryClient(
       List<String> baseUrls,
       int identityMapCapacity,
       Map<String, ?> originals) {
-    this(new RestService(baseUrls), identityMapCapacity, originals);
+    this(baseUrls, identityMapCapacity, originals, null);
   }
 
   public CachedSchemaRegistryClient(
       RestService restService,
       int identityMapCapacity,
       Map<String, ?> configs) {
+    this(restService, identityMapCapacity, configs, null);
+  }
+
+  public CachedSchemaRegistryClient(
+      String baseUrl,
+      int identityMapCapacity,
+      Map<String, ?> originals,
+      Map<String, String> httpHeaders) {
+    this(new RestService(baseUrl), identityMapCapacity, originals, httpHeaders);
+  }
+
+  public CachedSchemaRegistryClient(
+      List<String> baseUrls,
+      int identityMapCapacity,
+      Map<String, ?> originals,
+      Map<String, String> httpHeaders) {
+    this(new RestService(baseUrls), identityMapCapacity, originals, httpHeaders);
+  }
+
+  public CachedSchemaRegistryClient(
+      RestService restService,
+      int identityMapCapacity,
+      Map<String, ?> configs,
+      Map<String, String> httpHeaders) {
     this.identityMapCapacity = identityMapCapacity;
     this.schemaCache = new HashMap<String, Map<Schema, Integer>>();
     this.idCache = new HashMap<String, Map<Integer, Schema>>();
     this.versionCache = new HashMap<String, Map<Schema, Integer>>();
     this.restService = restService;
     this.idCache.put(null, new HashMap<Integer, Schema>());
-    configureRestService(configs);
+    configureRestService(configs, httpHeaders);
   }
 
-  private void configureRestService(Map<String, ?> configs) {
+  private void configureRestService(Map<String, ?> configs, Map<String, String> httpHeaders) {
     if (configs != null) {
 
       String credentialSourceConfig =
@@ -107,6 +131,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
                 configs);
 
         restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+        restService.setHttpHeaders(httpHeaders);
       }
     }
   }
