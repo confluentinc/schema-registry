@@ -66,7 +66,7 @@ public class ModeResource {
     this.schemaRegistry = schemaRegistry;
   }
 
-  @Path("/{subject}")
+  @Path("/subjects/{subject}")
   @PUT
   public ModeUpdateRequest updateMode(
       @PathParam("subject") String subject,
@@ -101,7 +101,7 @@ public class ModeResource {
         .collect(Collectors.toList());
   }
 
-  @Path("/{subject}")
+  @Path("/subjects/{subject}")
   @GET
   public ModeGetResponse getMode(@PathParam("subject") String subject) {
     ModeKeyAndValue modeKeyAndValue = schemaRegistry.getModeKeyAndValue(subject);
@@ -111,7 +111,7 @@ public class ModeResource {
         modeKeyAndValue.getMode().name());
   }
 
-  @Path("/{subject}")
+  @Path("/subjects/{subject}")
   @DELETE
   public String deleteMode(
       @PathParam("subject") String subject,

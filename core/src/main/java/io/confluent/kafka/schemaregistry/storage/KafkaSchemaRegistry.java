@@ -131,10 +131,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.lookupCache = lookupCache();
-    // Keep modes sorted by subject length in descending order
-    this.modes = new ConcurrentSkipListMap<>(
-        (k1, k2) -> k2.getSubject().length() - k1.getSubject().length()
-    );
+    this.modes = new ConcurrentSkipListMap<>();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
     MetricConfig metricConfig =

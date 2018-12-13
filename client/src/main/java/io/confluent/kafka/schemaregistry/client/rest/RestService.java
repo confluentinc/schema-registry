@@ -450,7 +450,7 @@ public class RestService {
                                    boolean prefix)
       throws IOException, RestClientException {
     // TODO check for null subject
-    String path = String.format("/modes/%s?%s", subject, prefix);
+    String path = String.format("/modes/subjects/%s?%s", subject, prefix);
 
     ModeUpdateRequest response =
         httpRequest(path, "PUT", modeUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
@@ -469,7 +469,7 @@ public class RestService {
 
   public ModeGetResponse getMode(String subject)
       throws IOException, RestClientException {
-    String path = String.format("/modes/%s", subject);
+    String path = String.format("/modes/subjects/%s", subject);
 
     ModeGetResponse mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
@@ -482,7 +482,7 @@ public class RestService {
       boolean prefix
   ) throws IOException,
       RestClientException {
-    String path = String.format("/modes/%s?prefix=%s", subject, prefix);
+    String path = String.format("/modes/subjects/%s?prefix=%s", subject, prefix);
 
     String mode = httpRequest(path, "DELETE", null, requestProperties,
         DELETE_MODE_RESPONSE_TYPE);

@@ -92,19 +92,20 @@ public class ModeKey extends SchemaRegistryKey {
     if (compare == 0) {
       ModeKey otherKey = (ModeKey) that;
 
-      if (this.subject.compareTo(otherKey.subject) < 0) {
-        return -1;
-      } else if (this.subject.compareTo(otherKey.subject) > 0) {
-        return 1;
-      }
-
+      // All non-prefixes come before prefixes
       if (!this.prefix && otherKey.prefix) {
         return -1;
       } else if (this.prefix && !otherKey.prefix) {
         return 1;
       }
 
-      return 0;
+      // Sort by length of subject in descending order
+      int len = otherKey.subject.length() - this.subject.length();
+      if (len != 0) {
+        return len;
+      }
+
+      return this.subject.compareTo(otherKey.subject);
     } else {
       return compare;
     }
