@@ -62,7 +62,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     idCache.put(null, new HashMap<Integer, Schema>());
   }
 
-  private int getIdFromRegistry(String subject, Schema schema, boolean registerRequest)
+  private int getIdFromRegistry(String subject, Schema schema, boolean registerRequest, int id)
       throws IOException, RestClientException {
     Map<Integer, Schema> idSchemaMap;
     if (idCache.containsKey(subject)) {
@@ -70,6 +70,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       for (Map.Entry<Integer, Schema> entry : idSchemaMap.entrySet()) {
         if (entry.getValue().toString().equals(schema.toString())) {
           if (registerRequest) {
+            if (id >= 0 && id != entry.getKey()) {
+              throw new IllegalStateException("Schema already registered with id "
+                  + entry.getKey() + " instead of input id " + id);
+            }
             generateVersion(subject, schema);
           }
           return entry.getKey();
@@ -79,10 +83,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       idSchemaMap = new HashMap<Integer, Schema>();
     }
     if (registerRequest) {
-      Integer id = schemaIdCache.get(schema);
-      if (id == null) {
-        id = ids.incrementAndGet();
+      Integer schemaId = schemaIdCache.get(schema);
+      if (schemaId == null) {
+        id = id >= 0 ? id : ids.incrementAndGet();
         schemaIdCache.put(schema, id);
+      } else if (id >= 0 && id != schemaId) {
+        throw new IllegalStateException("Schema already registered with id "
+            + schemaId + " instead of input id " + id);
       }
       idSchemaMap.put(id, schema);
       idCache.put(subject, idSchemaMap);
@@ -153,7 +160,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       }
       return schemaId;
     } else {
-      id = getIdFromRegistry(subject, schema, true);
+      id = getIdFromRegistry(subject, schema, true, id);
       schemaIdMap.put(schema, id);
       if (!idCache.get(null).containsKey(id)) {
         // CachedSchema Registry client would have a cached version of schema instance for
@@ -336,7 +343,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public int getId(String subject, Schema schema) throws IOException, RestClientException {
-    return getIdFromRegistry(subject, schema, false);
+    return getIdFromRegistry(subject, schema, false, -1);
   }
 
   @Override
