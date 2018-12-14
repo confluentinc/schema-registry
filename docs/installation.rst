@@ -3,8 +3,7 @@
 Installing and Configuring |sr|
 ===============================
 
-|sr| is included in |cpe| and |cos|. The binaries are located at https://www.confluent.io/download/ as a part of the |cpe|
-and |cos| bundles.
+|sr| is included in |cp|. The binaries are located at https://www.confluent.io/download/.
 
 For installation instructions, see the :ref:`installation`.
 
