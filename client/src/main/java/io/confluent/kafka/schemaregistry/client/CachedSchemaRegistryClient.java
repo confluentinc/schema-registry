@@ -36,6 +36,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetRe
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
+
 /**
  * Thread-safe Schema Registry Client with client side caching.
  */

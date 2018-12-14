@@ -1,12 +1,12 @@
 /*
  * Copyright 2018 Confluent Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,17 +29,22 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 
+import java.util.List;
+import java.util.Map;
+
 /**
  * Base class for configs for serializers and deserializers, defining a few common configs and
  * defaults.
  */
 public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
+  private static final String CLIENT_NAMESPACE = "schema.registry";
+
   /**
    * Configurations beginning with this prefix can be used to specify headers to include in requests
    * made to Schema Registry. For example, to include an {@code Authorization} header with a value
    * of {@code Bearer NjksNDIw}, use the following configuration:
-   * 
+   *
    * <p>{@code request.header.Authorization=Bearer NjksNDIw}
    */
   public static final String REQUEST_HEADER_PREFIX = "request.header.";
@@ -48,7 +53,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String
       SCHEMA_REGISTRY_URL_DOC =
       "Comma-separated list of URLs for schema registry instances that can be used to register "
-      + "or look up schemas. "
+          + "or look up schemas. "
       + "If you wish to get a connection to a mocked schema registry for testing, "
       + "you can specify a scope using the 'mock://' pseudo-protocol. For example, "
       + "'mock://my-scope-name' corresponds to "
@@ -69,7 +74,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DOC =
       "Specify how to pick the credentials for Basic Auth header. "
-      + "The supported values are URL, USER_INFO and SASL_INHERIT";
+          + "The supported values are URL, USER_INFO and SASL_INHERIT";
 
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
           .BEARER_AUTH_CREDENTIALS_SOURCE;
@@ -99,41 +104,110 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
       TopicNameStrategy.class.getName();
   public static final String KEY_SUBJECT_NAME_STRATEGY_DOC =
       "Determines how to construct the subject name under which the key schema is registered "
-      + "with the schema registry. By default, <topic>-key is used as subject.";
+          + "with the schema registry. By default, <topic>-key is used as subject.";
 
   public static final String VALUE_SUBJECT_NAME_STRATEGY = "value.subject.name.strategy";
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DEFAULT =
       TopicNameStrategy.class.getName();
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DOC =
       "Determines how to construct the subject name under which the value schema is registered "
-      + "with the schema registry. By default, <topic>-value is used as subject.";
+          + "with the schema registry. By default, <topic>-value is used as subject.";
+
+
+  public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
+    super(config, props);
+  }
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
         .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
-                Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
+            Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
-                Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
+            Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
         .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
-                Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
+            Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
             Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BEARER_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(SCHEMA_REGISTRY_USER_INFO_CONFIG, Type.PASSWORD, SCHEMA_REGISTRY_USER_INFO_DEFAULT,
-                Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
+            Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
         .define(USER_INFO_CONFIG, Type.PASSWORD, USER_INFO_DEFAULT,
-                Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
+            Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
         .define(BEARER_AUTH_TOKEN_CONFIG, Type.PASSWORD, BEARER_AUTH_TOKEN_DEFAULT,
                 Importance.MEDIUM, BEARER_AUTH_TOKEN_DOC)
         .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
-                Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
+            Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
         .define(VALUE_SUBJECT_NAME_STRATEGY, Type.CLASS, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
-                Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC);
-  }
-
-  public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
-    super(config, props);
+            Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC)
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_KEYSTORE_LOCATION_CONFIG,
+            Type.STRING,
+            SchemaRegistryClientConfig.SSL_KEYSTORE_LOCATION_DEFAULT,
+            Importance.HIGH,
+            SchemaRegistryClientConfig.SSL_KEYSTORE_LOCATION_DOC
+        )
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_KEYSTORE_PASSWORD_CONFIG,
+            Type.PASSWORD,
+            SchemaRegistryClientConfig.SSL_KEYSTORE_PASSWORD_DEFAULT,
+            Importance.HIGH,
+            SchemaRegistryClientConfig.SSL_KEYSTORE_PASSWORD_DOC
+        )
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_KEY_PASSWORD_CONFIG,
+            Type.PASSWORD,
+            SchemaRegistryClientConfig.SSL_KEY_PASSWORD_DEFAULT,
+            Importance.HIGH,
+            SchemaRegistryClientConfig.SSL_KEY_PASSWORD_DOC)
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_KEYSTORE_TYPE_CONFIG,
+            Type.STRING,
+            SchemaRegistryClientConfig.SSL_KEYSTORE_TYPE_DEFAULT,
+            Importance.MEDIUM,
+            SchemaRegistryClientConfig.SSL_KEYSTORE_TYPE_DOC)
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_KEYMANAGER_ALGORITHM_CONFIG,
+            Type.STRING,
+            SchemaRegistryClientConfig.SSL_KEYMANAGER_ALGORITHM_DEFAULT,
+            Importance.LOW,
+            SchemaRegistryClientConfig.SSL_KEYMANAGER_ALGORITHM_DOC)
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_TRUSTSTORE_LOCATION_CONFIG,
+            Type.STRING,
+            SchemaRegistryClientConfig.SSL_TRUSTSTORE_LOCATION_DEFAULT,
+            Importance.HIGH,
+            SchemaRegistryClientConfig.SSL_TRUSTSTORE_LOCATION_DOC)
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+            Type.PASSWORD,
+            SchemaRegistryClientConfig.SSL_TRUSTSTORE_PASSWORD_DEFAULT,
+            Importance.HIGH,
+            SchemaRegistryClientConfig.SSL_TRUSTSTORE_PASSWORD_DOC)
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_TRUSTSTORE_TYPE_CONFIG,
+            Type.STRING,
+            SchemaRegistryClientConfig.SSL_TRUSTSTORE_TYPE_DEFAULT,
+            Importance.MEDIUM,
+            SchemaRegistryClientConfig.SSL_TRUSTSTORE_TYPE_DOC)
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
+            Type.STRING,
+            SchemaRegistryClientConfig.SSL_TRUSTMANAGER_ALGORITHM_DEFAULT,
+            Importance.LOW,
+            SchemaRegistryClientConfig.SSL_TRUSTMANAGER_ALGORITHM_DOC)
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_PROTOCOL_CONFIG,
+            Type.STRING,
+            SchemaRegistryClientConfig.SSL_PROTOCOL_DEFAULT,
+            Importance.MEDIUM,
+            SchemaRegistryClientConfig.SSL_PROTOCOL_DOC)
+        .define(
+            CLIENT_NAMESPACE + SchemaRegistryClientConfig.SSL_PROVIDER_CONFIG,
+            Type.STRING,
+            SchemaRegistryClientConfig.SSL_PROVIDER_DEFAULT,
+            Importance.MEDIUM,
+            SchemaRegistryClientConfig.SSL_PROVIDER_DOC);
   }
 
   public int getMaxSchemasPerSubject() {
@@ -155,7 +229,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public Object valueSubjectNameStrategy() {
     return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
   }
-  
+
   public Map<String, String> requestHeaders() {
     return originalsWithPrefix(REQUEST_HEADER_PREFIX).entrySet().stream()
         .collect(Collectors.toMap(Map.Entry::getKey, entry -> Objects.toString(entry.getValue())));
