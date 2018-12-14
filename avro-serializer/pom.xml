@@ -10,6 +10,14 @@
         <version>5.1.0-SNAPSHOT</version>
     </parent>
 
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <artifactId>kafka-avro-serializer</artifactId>
     <packaging>jar</packaging>
     <name>kafka-avro-serializer</name>

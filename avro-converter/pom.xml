@@ -11,7 +11,7 @@
     </parent>
 
     <licenses>
-            <license>
+        <license>
             <name>Apache License 2.0</name>
             <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
             <distribution>repo</distribution>
