@@ -3,7 +3,8 @@ Name: confluent-schema-registry
 Version: ##RPMVERSION##
 Release: ##RPMRELEASE##
 Group: Applications/Internet
-License: Apache (v2)
+# The project is licensed under the Confluent Community License, except for client libs, which is under the Apache 2.0 license.
+License: Confluent Community License and Apache 2.0
 Source0: confluent-schema-registry-%{version}.tar.gz
 URL: http://confluent.io
 BuildRoot: %{_tmppath}/%{name}-%{version}-root

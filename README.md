@@ -118,4 +118,6 @@ Contribute
 License
 -------
 
-The project is licensed under the Apache 2 license.
+The project is licensed under the [Confluent Community License](LICENSE-ConfluentCommunity), except for client libs,
+which is under the [Apache 2.0 license](LICENSE-Apache).
+See LICENSE file in each subfolder for detailed license agreement.
