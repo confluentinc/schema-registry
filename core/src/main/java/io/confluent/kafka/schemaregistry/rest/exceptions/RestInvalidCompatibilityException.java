@@ -21,8 +21,8 @@ public class RestInvalidCompatibilityException extends RestConstraintViolationEx
   public static final int ERROR_CODE = Errors.INVALID_COMPATIBILITY_LEVEL_ERROR_CODE;
 
   public RestInvalidCompatibilityException() {
-    this("Invalid compatibility level. Valid values are none, backward, forward and full, " +
-            "backward_transitive, forward_transitive, full_transitive");
+    this("Invalid compatibility level. Valid values are none, backward, forward and full, "
+            + "backward_transitive, forward_transitive, full_transitive");
   }
 
   public RestInvalidCompatibilityException(String message) {
