@@ -19,7 +19,6 @@
                 <include>README*</include>
                 <include>LICENSE</include>
                 <include>LICENSE-ConfluentCommunity</include>
-                <include>LICENSE.gz</include>
                 <include>NOTICE*</include>
                 <include>licenses/</include>
                 <include>notices/</include>
