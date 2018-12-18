@@ -53,7 +53,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
       .BASIC_AUTH_CREDENTIALS_SOURCE;
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DOC =
-      "Specify how to pick the credentials for Basic uth header. "
+      "Specify how to pick the credentials for Basic Auth header. "
       + "The supported values are URL, USER_INFO and SASL_INHERIT";
 
   @Deprecated
