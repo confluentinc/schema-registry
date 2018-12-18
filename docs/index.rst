@@ -86,7 +86,6 @@ Documentation
    installation
    config
    schema_registry_tutorial
-   avro
    ../../cloud/connect/schema-reg-cloud-config
    using
    monitoring
