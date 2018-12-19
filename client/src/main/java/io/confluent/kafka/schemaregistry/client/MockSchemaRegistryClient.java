@@ -27,7 +27,6 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -350,49 +349,5 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       return 0;
     }
     return -1;
-  }
-
-  private static class ModeKey {
-
-    private String subject;
-    private boolean prefix;
-
-    public ModeKey(String subject, boolean prefix) {
-      this.subject = subject;
-      this.prefix = prefix;
-    }
-
-    public String getSubject() {
-      return this.subject;
-    }
-
-    public boolean isPrefix() {
-      return this.prefix;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      if (!super.equals(o)) {
-        return false;
-      }
-      ModeKey modeKey = (ModeKey) o;
-      return prefix == modeKey.prefix && Objects.equals(subject, modeKey.subject);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(super.hashCode(), subject, prefix);
-    }
-
-    @Override
-    public String toString() {
-      return "ModeKey{" + "subject='" + subject + '\'' + ", prefix=" + prefix + '}';
-    }
   }
 }
