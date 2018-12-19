@@ -132,6 +132,9 @@ Transitive
 
 .. include:: includes/transitive.rst
 
+Transitive compatibility checking is important once you have more than two versions for a given subject.
+Refer to an `example of schema changes <https://github.com/confluentinc/schema-registry/issues/209>`__ which are incrementally compatible, but not transitively so.
+
 
 Summary Compatibility Types
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
