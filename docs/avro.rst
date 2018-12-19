@@ -6,7 +6,7 @@ Schema Evolution and Compatibility
 Schema Evolution
 ----------------
 
-An important aspect of data management is **schema evolution**.  After the initial schema is defined, applications may
+An important aspect of data management is schema evolution.  After the initial schema is defined, applications may
 need to evolve it over time. When this happens, it's critical for the downstream consumers to be able to handle data
 encoded with both the old and the new schema seamlessly. This is an area that tends to be overlooked in practice until
 you run into your first production issues.  Without thinking through data management and schema evolution carefully,
