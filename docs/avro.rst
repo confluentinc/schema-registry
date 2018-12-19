@@ -168,7 +168,7 @@ Examples
 ^^^^^^^^
 
 Each of the sections above has an example of the compatibility type.
-An additional reference is the `Avro compatibility test suite <https://github.com/confluentinc/schema-registry/blob/8831bbd73ea720fcd279032a5fffabbdb1a1f2b1/core/src/test/java/io/confluent/kafka/schemaregistry/avro/AvroCompatibilityTest.java>`__, which presents multiple test cases with two schemas and the respective result of the compatibility test between them.
+An additional reference is the `Avro compatibility test suite <https://github.com/confluentinc/schema-registry/blob/master/core/src/test/java/io/confluent/kafka/schemaregistry/avro/AvroCompatibilityTest.java>`__, which presents multiple test cases with two schemas and the respective result of the compatibility test between them.
 
 
 Using Compatibility Types
