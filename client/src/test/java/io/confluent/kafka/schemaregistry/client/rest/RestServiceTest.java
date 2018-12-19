@@ -1,17 +1,15 @@
-/**
- * Copyright 2015 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package io.confluent.kafka.schemaregistry.client.rest;
 
@@ -31,6 +29,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
+import avro.shaded.com.google.common.collect.ImmutableMap;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.annotation.Mock;
@@ -121,6 +120,56 @@ public class RestServiceTest {
     replay(URL.class, url);
     replay(HttpURLConnection.class, httpURLConnection);
     replay(basicAuthCredentialProvider);
+    replay(InputStream.class, inputStream);
+
+    restService.getAllSubjects();
+
+    verify(httpURLConnection);
+  }
+
+
+  /*
+ * Test setHttpHeaders (private method) indirectly through getAllSubjects.
+ */
+  @Test
+  public void testSetHttpHeaders() throws Exception {
+    RestService restService = new RestService("http://localhost:8081");
+
+    BasicAuthCredentialProvider basicAuthCredentialProvider = createMock(BasicAuthCredentialProvider.class);
+    restService.setHttpHeaders(
+        ImmutableMap.of("api-key", "test-api-key","source-app", "foo"));
+
+    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
+    InputStream inputStream = createNiceMock(InputStream.class);
+
+    expectNew(URL.class, anyString()).andReturn(url);
+    expect(url.openConnection()).andReturn(httpURLConnection);
+    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
+
+    // Make sure that the Authorization header is set with the correct value for "user:password"
+    httpURLConnection.setRequestProperty("api-key", "test-api-key");
+    httpURLConnection.setRequestProperty("source-app", "foo");
+    expectLastCall().once();
+
+    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
+
+    expect(inputStream.read((byte[]) anyObject(), anyInt(), anyInt()))
+        .andDelegateTo(new InputStream() {
+          @Override
+          public int read() {
+            return 0;
+          }
+
+          @Override
+          public int read(byte[] b, int off, int len) {
+            byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
+            System.arraycopy(json, 0, b, 0, json.length);
+            return json.length;
+          }
+        }).anyTimes();
+
+    replay(URL.class, url);
+    replay(HttpURLConnection.class, httpURLConnection);
     replay(InputStream.class, inputStream);
 
     restService.getAllSubjects();
