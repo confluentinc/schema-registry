@@ -15,11 +15,9 @@ people often pay a much higher cost later on.
 When using Avro, one of the most important things is to manage its schemas and consider how those
 schemas should evolve. :ref:`Confluent Schema Registry <schemaregistry_intro>` is built for exactly that purpose.
 Schema compatibility checking is implemented in |sr| by versioning every single schema.
-When a schema is first created for a subject, it gets a unique id and version number, i.e., version 1.
-When the schema is updated, it gets a new unique id and an incremented version number, i.e., version 2, etc.
 The compatibility type determines how |sr| compares the new schema with previous versions of a schema, for a given subject.
-You can find out the details on how to use it to store Avro schemas and enforce certain compatibility rules during
-schema evolution by looking at the :ref:`schemaregistry_api`.
+When a schema is first created for a subject, it gets a unique id and it gets a version number, i.e., version 1.
+When the schema is updated (if it passes compatibility checks), it gets a new unique id and it gets an incremented version number, i.e., version 2.
 
 These are the compatibility types:
 
@@ -184,6 +182,9 @@ An additional reference is the `Avro compatibility test suite <https://github.co
 Using Compatibility Types
 -------------------------
 
+You can find out the details on how to use |sr| to store Avro schemas and enforce certain compatibility rules during schema evolution by looking at the :ref:`schemaregistry_api`.
+Here are some tips to get you started.
+
 To check the currently configured compatibility type, view the configured setting:
 
 #.  `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#getting-the-top-level-config>`__.
@@ -199,3 +200,4 @@ To validate the compatibility of a given schema, you may test it one of two ways
 #. `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#testing-compatibility-of-a-schema-with-the-latest-schema-under-subject-kafka-value>`__
 
 Refer to the |sr-long| Tutorial which has an example of :ref:`checking schema compatibility <schema_registry_tutorial>`.
+
