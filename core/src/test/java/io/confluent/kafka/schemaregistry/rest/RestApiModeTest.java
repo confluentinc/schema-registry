@@ -42,7 +42,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     // set mode to read only
     assertEquals(
         mode,
-        restApp.restClient.setMode(mode, subject, false).getMode());
+        restApp.restClient.setMode(mode).getMode());
 
     // register a valid avro
     String schemaString1 = AvroUtils.parseSchema(
@@ -70,7 +70,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     // set mode to read write
     assertEquals(
         mode,
-        restApp.restClient.setMode(mode, subject, false).getMode());
+        restApp.restClient.setMode(mode).getMode());
 
     // register a valid avro
     String schemaString1 = AvroUtils.parseSchema(
@@ -103,7 +103,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     // set mode to import
     assertEquals(
         mode,
-        restApp.restClient.setMode(mode, subject, false).getMode());
+        restApp.restClient.setMode(mode).getMode());
 
     // register a valid avro
     String schemaString1 = AvroUtils.parseSchema(
@@ -136,7 +136,7 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.registerSchema(schemaString1, subject));
 
     try {
-      restApp.restClient.setMode(mode, subject, false).getMode();
+      restApp.restClient.setMode(mode).getMode();
       fail("Setting import mode should fail");
     } catch (RestClientException e) {
       // this is expected.

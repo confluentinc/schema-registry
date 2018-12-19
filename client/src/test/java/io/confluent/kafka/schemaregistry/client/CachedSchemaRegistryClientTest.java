@@ -308,19 +308,17 @@ public class CachedSchemaRegistryClientTest {
     CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
         HashMap<String, Object>());
 
-    String subject = "foo";
     String mode = "READONLY";
 
     EasyMock.reset(restService);
 
     ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
     modeUpdateRequest.setMode(mode);
-    expect(restService.setMode(eq(mode), eq(subject), eq(false)))
-        .andReturn(modeUpdateRequest);
+    expect(restService.setMode(eq(mode))).andReturn(modeUpdateRequest);
 
     replay(restService);
 
-    assertEquals(mode, client.setMode(subject, false, mode));
+    assertEquals(mode, client.setMode(mode));
 
     verify(restService);
   }
@@ -331,39 +329,16 @@ public class CachedSchemaRegistryClientTest {
     CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
         HashMap<String, Object>());
 
-    String subject = "foo";
     String mode = "READONLY";
 
     EasyMock.reset(restService);
 
-    ModeGetResponse modeGetResponse = new ModeGetResponse(subject, false, mode);
-    expect(restService.getMode(eq(subject)))
-        .andReturn(modeGetResponse);
+    ModeGetResponse modeGetResponse = new ModeGetResponse(mode);
+    expect(restService.getMode()).andReturn(modeGetResponse);
 
     replay(restService);
 
-    assertEquals(mode, client.getMode(subject));
-
-    verify(restService);
-  }
-
-  @Test
-  public void testDeleteMode() throws Exception {
-    RestService restService = createMock(RestService.class);
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
-        HashMap<String, Object>());
-
-    String subject = "foo";
-    String mode = "READONLY";
-
-    EasyMock.reset(restService);
-
-    expect(restService.deleteMode(eq(DEFAULT_REQUEST_PROPERTIES), eq(subject), eq(false)))
-        .andReturn(mode);
-
-    replay(restService);
-
-    assertEquals(mode, client.deleteMode(subject, false));
+    assertEquals(mode, client.getMode());
 
     verify(restService);
   }

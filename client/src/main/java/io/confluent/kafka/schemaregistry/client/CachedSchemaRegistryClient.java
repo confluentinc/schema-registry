@@ -336,22 +336,16 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public String setMode(String subject, boolean prefix, String mode)
+  public String setMode(String mode)
       throws IOException, RestClientException {
-    ModeUpdateRequest response = restService.setMode(mode, subject, prefix);
+    ModeUpdateRequest response = restService.setMode(mode);
     return response.getMode();
   }
 
   @Override
-  public String getMode(String subject) throws IOException, RestClientException {
-    ModeGetResponse response = restService.getMode(subject);
+  public String getMode() throws IOException, RestClientException {
+    ModeGetResponse response = restService.getMode();
     return response.getMode();
-  }
-
-  @Override
-  public String deleteMode(String subject, boolean prefix) throws IOException, RestClientException {
-    String mode = restService.deleteMode(RestService.DEFAULT_REQUEST_PROPERTIES, subject, prefix);
-    return mode;
   }
 
   @Override

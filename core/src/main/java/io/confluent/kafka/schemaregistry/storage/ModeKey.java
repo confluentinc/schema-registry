@@ -21,38 +21,25 @@ import org.codehaus.jackson.annotate.JsonPropertyOrder;
 
 import java.util.Objects;
 
-@JsonPropertyOrder(value = {"keytype", "subject", "prefix", "magic"})
+@JsonPropertyOrder(value = {"keytype", "prefix", "magic"})
 public class ModeKey extends SchemaRegistryKey {
 
   private static final int MAGIC_BYTE = 0;
-  private String subject;
-  private boolean prefix;
+  private String prefix;
 
-  public ModeKey(@JsonProperty("subject") String subject,
-                 @JsonProperty("prefix") boolean prefix) {
+  public ModeKey(@JsonProperty("prefix") String prefix) {
     super(SchemaRegistryKeyType.MODE);
-    this.subject = subject;
     this.prefix = prefix;
     this.magicByte = MAGIC_BYTE;
   }
 
-  @JsonProperty("subject")
-  public String getSubject() {
-    return this.subject;
-  }
-
-  @JsonProperty("subject")
-  public void setSubject(String subject) {
-    this.subject = subject;
-  }
-
   @JsonProperty("prefix")
-  public boolean isPrefix() {
+  public String getPrefix() {
     return this.prefix;
   }
 
   @JsonProperty("prefix")
-  public void setPrefix(boolean prefix) {
+  public void setPrefix(String prefix) {
     this.prefix = prefix;
   }
 
@@ -68,12 +55,12 @@ public class ModeKey extends SchemaRegistryKey {
       return false;
     }
     ModeKey modeKey = (ModeKey) o;
-    return prefix == modeKey.prefix && Objects.equals(subject, modeKey.subject);
+    return Objects.equals(prefix, modeKey.prefix);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), subject, prefix);
+    return Objects.hash(super.hashCode(), prefix);
   }
 
   @Override
@@ -81,7 +68,6 @@ public class ModeKey extends SchemaRegistryKey {
     StringBuilder sb = new StringBuilder();
     sb.append("{magic=" + this.magicByte + ",");
     sb.append("keytype=" + this.keyType.keyType + ",");
-    sb.append("subject=" + this.subject + ",");
     sb.append("prefix=" + this.prefix + "}");
     return sb.toString();
   }
@@ -92,20 +78,8 @@ public class ModeKey extends SchemaRegistryKey {
     if (compare == 0) {
       ModeKey otherKey = (ModeKey) that;
 
-      // All non-prefixes come before prefixes
-      if (!this.prefix && otherKey.prefix) {
-        return -1;
-      } else if (this.prefix && !otherKey.prefix) {
-        return 1;
-      }
-
-      // Sort by length of subject in descending order
-      int len = otherKey.subject.length() - this.subject.length();
-      if (len != 0) {
-        return len;
-      }
-
-      return this.subject.compareTo(otherKey.subject);
+      // Sort by length of prefix in descending order
+      return otherKey.prefix.length() - this.prefix.length();
     } else {
       return compare;
     }

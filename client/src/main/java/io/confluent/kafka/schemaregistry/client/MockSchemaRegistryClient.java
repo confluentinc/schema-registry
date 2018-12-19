@@ -30,7 +30,6 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -45,7 +44,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<Integer, Schema>> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
   private final Map<String, String> compatibilityCache;
-  private final Map<ModeKey, String> modes;
+  private String mode = "READWRITE";
   private final AtomicInteger ids;
 
   public MockSchemaRegistryClient() {
@@ -54,10 +53,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     idCache = new HashMap<String, Map<Integer, Schema>>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();
     compatibilityCache = new HashMap<String, String>();
-    modes = new TreeMap<>(
-        // Use length of subject in descending order
-        (k1, k2) -> k2.getSubject().length() - k1.getSubject().length()
-    );
     ids = new AtomicInteger(0);
     idCache.put(null, new HashMap<Integer, Schema>());
   }
@@ -299,38 +294,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public String setMode(String subject, boolean prefix, String mode)
+  public String setMode(String mode)
       throws IOException, RestClientException {
-    modes.put(new ModeKey(subject, prefix), mode);
+    this.mode = mode;
     return mode;
   }
 
   @Override
-  public String getMode(String subject) throws IOException, RestClientException {
-    // The modes are traversed in order of descending length of the subjects,
-    // so for prefixes, the longer prefixes will be checked first.
-    for (Map.Entry<ModeKey, String> entry : modes.entrySet()) {
-      ModeKey modeKey = entry.getKey();
-      String modeValue = entry.getValue();
-      if (!modeKey.isPrefix()) {
-        // Check for exact match
-        if (subject.equals(modeKey.getSubject())) {
-          return modeValue;
-        }
-      } else {
-        // Check for prefix match
-        if (subject.startsWith(modeKey.getSubject())) {
-          return modeValue;
-        }
-      }
-    }
-    // Return the empty prefix and the default mode of READWRITE.
-    return "READWRITE";
-  }
-
-  @Override
-  public String deleteMode(String subject, boolean prefix) throws IOException, RestClientException {
-    return modes.remove(new ModeKey(subject, prefix));
+  public String getMode() throws IOException, RestClientException {
+    return this.mode;
   }
 
   @Override

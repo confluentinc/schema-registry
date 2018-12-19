@@ -427,18 +427,11 @@ public class RestService {
     return config;
   }
 
-  public ModeUpdateRequest setMode(String mode, String subject, boolean prefix)
+  public ModeUpdateRequest setMode(String mode)
       throws IOException, RestClientException {
     ModeUpdateRequest request = new ModeUpdateRequest();
     request.setMode(mode);
-    return setMode(request, subject, prefix);
-  }
-
-  public ModeUpdateRequest setMode(ModeUpdateRequest modeUpdateRequest,
-                                   String subject,
-                                   boolean prefix)
-      throws IOException, RestClientException {
-    return setMode(DEFAULT_REQUEST_PROPERTIES, modeUpdateRequest, subject, prefix);
+    return setMode(DEFAULT_REQUEST_PROPERTIES, request, null);
   }
 
   /**
@@ -446,11 +439,9 @@ public class RestService {
    */
   public ModeUpdateRequest setMode(Map<String, String> requestProperties,
                                    ModeUpdateRequest modeUpdateRequest,
-                                   String subject,
-                                   boolean prefix)
+                                   String prefix)
       throws IOException, RestClientException {
-    // TODO check for null subject
-    String path = String.format("/modes/subjects/%s?%s", subject, prefix);
+    String path = prefix != null ? String.format("/mode?prefix=%s", prefix) : "/mode";
 
     ModeUpdateRequest response =
         httpRequest(path, "PUT", modeUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
@@ -458,34 +449,17 @@ public class RestService {
     return response;
   }
 
-  public List<ModeGetResponse> getModes()
+  public ModeGetResponse getMode()
       throws IOException, RestClientException {
-    String path = "/modes";
-
-    List<ModeGetResponse> modes =
-        httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODES_RESPONSE_TYPE);
-    return modes;
+    return getMode(null);
   }
 
-  public ModeGetResponse getMode(String subject)
+  public ModeGetResponse getMode(String prefix)
       throws IOException, RestClientException {
-    String path = String.format("/modes/subjects/%s", subject);
+    String path = prefix != null ? String.format("/mode?prefix=%s", prefix) : "/mode";
 
     ModeGetResponse mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
-    return mode;
-  }
-
-  public String deleteMode(
-      Map<String, String> requestProperties,
-      String subject,
-      boolean prefix
-  ) throws IOException,
-      RestClientException {
-    String path = String.format("/modes/subjects/%s?prefix=%s", subject, prefix);
-
-    String mode = httpRequest(path, "DELETE", null, requestProperties,
-        DELETE_MODE_RESPONSE_TYPE);
     return mode;
   }
 

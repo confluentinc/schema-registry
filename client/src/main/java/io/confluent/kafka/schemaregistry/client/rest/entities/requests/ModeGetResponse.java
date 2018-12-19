@@ -23,40 +23,14 @@ import java.io.IOException;
 
 public class ModeGetResponse {
 
-  private String subject;
-  private boolean prefix;
   private String mode;
 
   public static ModeGetResponse fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, ModeGetResponse.class);
   }
 
-  public ModeGetResponse(@JsonProperty("subject") String subject,
-                         @JsonProperty("prefix") boolean prefix,
-                         @JsonProperty("mode") String mode) {
-    this.subject = subject;
-    this.prefix = prefix;
+  public ModeGetResponse(@JsonProperty("mode") String mode) {
     this.mode = mode;
-  }
-
-  @JsonProperty("subject")
-  public String getSubject() {
-    return this.subject;
-  }
-
-  @JsonProperty("subject")
-  public void setSubject(String subject) {
-    this.subject = subject;
-  }
-
-  @JsonProperty("prefix")
-  public boolean isPrefix() {
-    return this.prefix;
-  }
-
-  @JsonProperty("prefix")
-  public void setPrefix(boolean prefix) {
-    this.prefix = prefix;
   }
 
   @JsonProperty("mode")
