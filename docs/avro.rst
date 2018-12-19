@@ -12,7 +12,9 @@ encoded with both the old and the new schema seamlessly. This is an area that te
 you run into your first production issues.  Without thinking through data management and schema evolution carefully,
 people often pay a much higher cost later on.
 
-Note: when using Avro, one of the most important things is to manage its schemas and reason about how those
+ .. note::
+ 
+     When using Avro, one of the most important things is to manage its schemas and reason about how those
 schemas should evolve. :ref:`Confluent Schema Registry <schemaregistry_intro>` is built for exactly that purpose.
 You can find out the details on how to use it to store Avro schemas and enforce certain compatibility rules during
 schema evolution by looking at the :ref:`schemaregistry_api`.
