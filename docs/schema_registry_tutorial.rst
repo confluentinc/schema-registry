@@ -402,7 +402,8 @@ These are the compatibility types:
 
 .. include:: includes/compatibility_list.rst
 
-You can change this globally or per subject, but for the remainder of this tutorial, leave the default compatibility level to `backward`.
+You can change this globally or per subject, but for the remainder of this tutorial, leave the default compatibility type to `backward`.
+Refer to :ref:`schema_evolution_and_compatibility` for a more in-depth explanation on the compatibility types.
 
 
 Failing Compatibility Checks
