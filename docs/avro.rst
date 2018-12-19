@@ -48,8 +48,10 @@ Compatibility Types
 Backward Compatibility
 ^^^^^^^^^^^^^^^^^^^^^^
 
-``BACKWARD`` compatibility means that data produced with an older schema can be read by consumers written to use a newer schema.
+``BACKWARD`` compatibility means that data produced with an older schema can be read by consumers written with a newer schema.
 For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``BACKWARD`` compatibility ensures that consumers using the newest schema `X` can process data written by producers using schema `X` or `X-1`, but not necessarily `X-2`.
+If the compatibility is set to ``BACKWARD_TRANSITIVE`` (not just ``BACKWARD``), then it means that consumers using the new schema can read data written by producers using all previously registered schemas (not just the last two schemas).
+For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``BACKWARD_TRANSITIVE`` compatibility ensures that consumers using the newest schema `X` can process data written by producers using schema `X`, `X-1`, or `X-2`.
 
 An example of a backward compatible change is a removal of a field. A consumer that was developed to process events without this field will be able to process events written with the old schema and contain the field – the consumer will just ignore that field.
 
@@ -89,17 +91,16 @@ field, which is missing in the old data.
     in the Apache Avro project to understand how, for data that was encoded with an older schema, Avro decodes that
     data with a newer, backward-compatible schema.
 
-If the compatibility is set to ``BACKWARD_TRANSITIVE`` (not just ``BACKWARD``), then it means that consumers using the new schema can read data written by producers using all previously registered schemas (not just the latest schema).
-For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``BACKWARD_TRANSITIVE`` compatibility ensures that consumers using the newest schema `X` can process data written by producers using schema `X`, `X-1`, or `X-2`.
-
 
 .. _avro-forward_compatibility:
 
 Forward Compatibility
 ^^^^^^^^^^^^^^^^^^^^^
 
-``FORWARD`` compatibility means that data produced with a newer schema can be read by consumers written to use an older schema, even though they may not be able to use the full capabilities of the new schema.
+``FORWARD`` compatibility means that data produced with a newer schema can be read by consumers written with an older schema, even though they may not be able to use the full capabilities of the new schema.
 For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FORWARD`` compatibility ensures that data written by producers using the newer schema `X` can be processed by consumers using schema `X` or `X-1`, but not necessarily `X-2`.
+If the compatibility is set to ``FORWARD_TRANSITIVE`` (not just ``FORWARD``), then it means that consumers using all previousely registered schemas (not just the last two schemas) can read data written by producers using the new schema.
+For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FORWARD_TRANSITIVE`` compatibility ensures that data written by producers using the newer schema `X` can be processed by consumers using schema `X`, `X-1`, or `X-2`.
 
 An example of a forward compatible schema modification is adding a new field. In most data formats, consumers that were written to process events without the new field will be able to continue doing so even when they receive new events that contain the new field.
 
@@ -113,9 +114,6 @@ simply dropped.  Had the new schema dropped the original field ``favorite_number
 forward compatible with the original user schema since we wouldn't know how to fill in the value for ``favorite_number``
 for the new data because the original schema did not specify a default value for that field.
 
-If the compatibility is set to ``FORWARD_TRANSITIVE`` (not just ``FORWARD``), then it means that consumers using all previousely registered schemas (not just the latest schema) can read data written by producers using the new schema.
-For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FORWARD_TRANSITIVE`` compatibility ensures that data written by producers using the newer schema `X` can be processed by consumers using schema `X`, `X-1`, or `X-2`.
-
 
 .. _avro-full_compatibility:
 
@@ -125,11 +123,10 @@ Full Compatibility
 ``FULL`` compatibility means schemas are both backward **and** forward compatible.
 Schemas evolve in a fully compatible way: old data can be read with the new schema, and new data can also be read with the old schema.
 For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FULL`` compatibility ensures that consumers using the newest schema `X` can process data written by producers using schema `X` or `X-1`, but not necessarily `X-2`, and that data written by producers using the newer schema `X` can be processed by consumers using schema `X` or `X-1`, but not necessarily `X-2`.
+If the compatibility is set to ``FULL_TRANSITIVE`` (not just ``FULL``), then it means that the new schema is forward and backward compatible with all previously registered schemas (not just the two last schemas).
+For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FULL_TRANSITIVE`` compatibility ensures that consumers using the newest schema `X` can process data written by producers using schema `X`, `X-1`, or `X-2`, and that data written by producers using the newer schema `X` can be processed by consumers using schema `X`, `X-1`, or `X-2`.
 
 In some data formats, such as JSON, there are no full-compatible changes. Every modification is either only forward or only backward compatible. But in other data formats, like Avro, you can define fields with default values. In that case adding or removing a field with a default value is a fully compatible change.
-
-If the compatibility is set to ``FULL_TRANSITIVE`` (not just ``FULL``), then it means that the new schema is forward and backward compatible with all previously registered schemas (not just the latest schema).
-For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FULL_TRANSITIVE`` compatibility ensures that consumers using the newest schema `X` can process data written by producers using schema `X`, `X-1`, or `X-2`, and that data written by producers using the newer schema `X` can be processed by consumers using schema `X`, `X-1`, or `X-2`.
 
 
 .. _avro-none_compatibility:
@@ -152,23 +149,23 @@ Here is a summary of the types of schema changes allowed for the different compa
 +------------------------------------+-------------------------------------+-------------------------------------+
 | Compatibility Type                 | Changes allowed                     | Check against which schemas         |
 +====================================+=====================================+=====================================+
-| ``BACKWARD``                       | - Delete fields                     | Latest                              |
+| ``BACKWARD``                       | - Delete fields                     | Last version                        |
 |                                    | - Add optional fields               |                                     |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``BACKWARD_TRANSITIVE``            | - Delete fields                     | All previous                        |
+| ``BACKWARD_TRANSITIVE``            | - Delete fields                     | All previous versions               |
 |                                    | - Add optional fields               |                                     |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``FORWARD``                        | - Add fields                        | Latest                              |
+| ``FORWARD``                        | - Add fields                        | Last version                        |
 |                                    | - Delete optional fields            |                                     |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``FORWARD_TRANSITIVE``             | - Add fields                        | All previous                        |
+| ``FORWARD_TRANSITIVE``             | - Add fields                        | All previous versions               |
 |                                    | - Delete optional fields            |                                     |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``FULL``                           | - Modify optional fields            | Latest                              |
+| ``FULL``                           | - Modify optional fields            | Last version                        |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``FULL_TRANSITIVE``                | - Modify optional fields            | All previous                        |
+| ``FULL_TRANSITIVE``                | - Modify optional fields            | All previous versions               |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``NONE``                           | - All changes are accepted          | Checking disabled                   |
+| ``NONE``                           | - All changes are accepted          | Compatibility checking disabled     |
 +------------------------------------+-------------------------------------+-------------------------------------+
 
 
