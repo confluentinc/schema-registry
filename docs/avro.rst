@@ -14,7 +14,7 @@ people often pay a much higher cost later on.
 
 When using Avro, one of the most important things is to manage its schemas and consider how those
 schemas should evolve. :ref:`Confluent Schema Registry <schemaregistry_intro>` is built for exactly that purpose.
-Schema compatibility checking is implemented in Schema Registry by versioning every single schema.
+Schema compatibility checking is implemented in |sr| by versioning every single schema.
 When a schema is first created for a subject, it gets a unique id and version number, i.e., version 1.
 When the schema is updated, it gets a new unique id and an incremented version number, i.e., version 2, etc.
 The compatibility type determines how |sr| compares the new schema with previous versions of a schema, for a given subject.
