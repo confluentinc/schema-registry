@@ -23,10 +23,10 @@ These are the compatibility types:
 
 The compatibility types can be grouped into the following four common patterns of schema evolution:
 
-1. :ref:`backward compatibility <avro-backward_compatibility>`
-2. :ref:`forward compatibility <avro-forward_compatibility>`
-3. :ref:`full compatibility <avro-full_compatibility>`
-4. :ref:`none compatibility <avro-none_compatibility>`
+1. :ref:`BACKWARD compatibility <avro-backward_compatibility>`
+2. :ref:`FORWARD compatibility <avro-forward_compatibility>`
+3. :ref:`FULL compatibility <avro-full_compatibility>`
+4. :ref:`NONE compatibility <avro-none_compatibility>`
 
 
 Compatibility Types
@@ -130,8 +130,6 @@ In this case, you will either need to upgrade all producers and consumers to the
 Transitive
 ^^^^^^^^^^
 
-It is worth an explicit reminder about what "transitive" means for compatibility checking.
-
 .. include:: includes/transitive.rst
 
 
@@ -143,41 +141,48 @@ Here is a summary of the types of schema changes allowed for the different compa
 +------------------------------------+-------------------------------------+-------------------------------------+
 | Compatibility Type                 | Changes allowed                     | Check against which schemas         |
 +====================================+=====================================+=====================================+
-| ``BACKWARD``                       | Delete fields                       | Latest                              |
-|                                    | Add optional fields                 |                                     |
+| ``BACKWARD``                       | - Delete fields                     | Latest                              |
+|                                    | - Add optional fields               |                                     |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``BACKWARD_TRANSITIVE``            | Delete fields                       | All previous                        |
-|                                    | Add optional fields                 |                                     |
+| ``BACKWARD_TRANSITIVE``            | - Delete fields                     | All previous                        |
+|                                    | - Add optional fields               |                                     |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``FORWARD``                        | Add fields                          | Latest                              |
-|                                    | Delete optional fields              |                                     |
+| ``FORWARD``                        | - Add fields                        | Latest                              |
+|                                    | - Delete optional fields            |                                     |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``FORWARD_TRANSITIVE``             | Add fields                          | All previous                        |
-|                                    | Delete optional fields              |                                     |
+| ``FORWARD_TRANSITIVE``             | - Add fields                        | All previous                        |
+|                                    | - Delete optional fields            |                                     |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``FULL``                           | Modify optional fields              | Latest                              |
+| ``FULL``                           | - Modify optional fields            | Latest                              |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``FULL_TRANSITIVE``                | Modify optional fields              | All previous                        |
+| ``FULL_TRANSITIVE``                | - Modify optional fields            | All previous                        |
 +------------------------------------+-------------------------------------+-------------------------------------+
-| ``NONE``                           | All changes are accepted            | Checking disabled                   |
+| ``NONE``                           | - All changes are accepted          | Checking disabled                   |
 +------------------------------------+-------------------------------------+-------------------------------------+
 
 
-An additional reference for examples of different compatibility types is the `Avro compatibility test suite <https://github.com/confluentinc/schema-registry/blob/8831bbd73ea720fcd279032a5fffabbdb1a1f2b1/core/src/test/java/io/confluent/kafka/schemaregistry/avro/AvroCompatibilityTest.java>`__.
-It presents multiple test cases with two schemas and then results of compatibility tests between them.
+Examples
+^^^^^^^^
+
+Each of the sections above has an example of the compatibility type.
+An additional reference is the `Avro compatibility test suite <https://github.com/confluentinc/schema-registry/blob/8831bbd73ea720fcd279032a5fffabbdb1a1f2b1/core/src/test/java/io/confluent/kafka/schemaregistry/avro/AvroCompatibilityTest.java>`__, which presents multiple test cases with two schemas and then results of compatibility tests between them.
 
 
-Using Compatibility Settings
-----------------------------
+Using Compatibility Types
+-------------------------
 
-To check the current compatibility type, use the |sr| REST API to `view the current type <https://docs.confluent.io/current/schema-registry/docs/using.html#getting-the-top-level-config>`__.
+To check the currently configured compatibility type, view the configured setting:
+
+#.  `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#getting-the-top-level-config>`__.
 
 To set the compatibility level, you may configure it in one of two ways:
 
-#. `Configure it in your client application <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`__
-#. `Use the |sr| REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#updating-compatibility-requirements-globally>`__
+#. `In your client application <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`__
+#. `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#updating-compatibility-requirements-globally>`__
 
 To validate the compatibility of a given schema, you may test it one of two ways:
 
-#. `Use the Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#schema-registry-test-compatibility>`__
-#. `Use the |sr| REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#testing-compatibility-of-a-schema-with-the-latest-schema-under-subject-kafka-value>`__
+#. `Using the Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#schema-registry-test-compatibility>`__
+#. `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#testing-compatibility-of-a-schema-with-the-latest-schema-under-subject-kafka-value>`__
+
+Refer to the |sr-long| Tutorial which has an example of :ref:`checking schema compatibility <schema_registry_tutorial>`.
