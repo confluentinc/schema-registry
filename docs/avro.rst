@@ -15,7 +15,7 @@ people often pay a much higher cost later on.
  .. note::
  
      When using Avro, one of the most important things is to manage its schemas and reason about how those
-schemas should evolve. :ref:`Confluent Schema Registry <schemaregistry_intro>` is built for exactly that purpose.
+    schemas should evolve. :ref:`Confluent Schema Registry <schemaregistry_intro>` is built for exactly that purpose.
 You can find out the details on how to use it to store Avro schemas and enforce certain compatibility rules during
 schema evolution by looking at the :ref:`schemaregistry_api`.
 
