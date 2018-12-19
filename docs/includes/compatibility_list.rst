@@ -1,6 +1,6 @@
 .. compatibility list
 
-* ``BACKWARD`` (default): consumers using the new schema can read data written by producers using the latest registered schema
+* ``BACKWARD``: (*default*) consumers using the new schema can read data written by producers using the latest registered schema
 * ``BACKWARD_TRANSITIVE``: consumers using the new schema can read data written by producers using all previously registered schemas
 * ``FORWARD``: consumers using the latest registered schema can read data written by producers using the new schema
 * ``FORWARD_TRANSITIVE``: consumers using all previousely registered schemas can read data written by producers using the new schema

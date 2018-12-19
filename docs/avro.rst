@@ -17,11 +17,11 @@ schemas should evolve. :ref:`Confluent Schema Registry <schemaregistry_intro>` i
 You can find out the details on how to use it to store Avro schemas and enforce certain compatibility rules during
 schema evolution by looking at the :ref:`schemaregistry_api`.
 
-Here is the full list of configurable compatibility types:
+These are the types of compatibility types:
 
 .. include:: includes/compatibility_list.rst
 
-They can be grouped into the following four common patterns of schema evolution:
+The compatibility types can be grouped into the following four common patterns of schema evolution:
 
 1. :ref:`backward compatibility <avro-backward_compatibility>`
 2. :ref:`forward compatibility <avro-forward_compatibility>`
@@ -29,16 +29,19 @@ They can be grouped into the following four common patterns of schema evolution:
 4. :ref:`none compatibility <avro-none_compatibility>`
 
 
+Compatibility Types
+-------------------
+
 .. _avro-backward_compatibility:
 
 Backward Compatibility
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^
 
 Backward compatibility means that data encoded with an older schema can be read with a newer schema.
 When the new schema is backward compatible with the old schema, it means that new consumers that were written to use the new schema can also process events written with the old schema. An example of a backward compatible change is a removal of a field. A consumer that was developed to process events without this field will be able to process events written with the old schema and contain the field – the consumer will just ignore that field.
 
 Consider the case where all the data in Kafka is also loaded into HDFS, and we want to run SQL queries (e.g., using
-Apache Hive) over all the data. Here, it is important that the same SQl queries continue to work even as the data is
+Apache Hive) over all the data. Here, it is important that the same SQL queries continue to work even as the data is
 undergoing changes over time.  To support this kind of use case, we can evolve the schemas in a backward compatible way.
 Avro has a set of `rules <http://avro.apache.org/docs/1.7.7/spec.html#Schema+Resolution>`_ on what changes are allowed
 in the new schema for it to be backward compatible. If all schemas are evolved in a backward compatible way, we can
@@ -62,7 +65,7 @@ For example, an application can evolve the
 
 Note that the new field ``favorite_color`` has the default value "green". This allows data encoded with the old schema
 to be read with the new one. The default value specified in the new schema will be used for the missing field when
-deserializing the data encoded with the old schema.  Had the default value been ommitted in the new field, the new
+deserializing the data encoded with the old schema.  Had the default value been omitted in the new field, the new
 schema would not be backward compatible with the old one since it's not clear what value should be assigned to the new
 field, which is missing in the old data.
 
@@ -79,12 +82,11 @@ If the compatibility is set to ``BACKWARD_TRANSITIVE`` (not just ``BACKWARD``), 
 .. _avro-forward_compatibility:
 
 Forward Compatibility
----------------------
+^^^^^^^^^^^^^^^^^^^^^
 
 Forward compatibility means that data encoded with a newer schema can be read with an older schema.
 When the new schema is forward compatible with the old schema, it means that consumers that were written before the schema changed and are only aware of the old schema will be able to continue processing events, even though they may not be able to use the full capabilities of the new schema.
 An example of a forward compatible schema modification is adding a new field. In most data formats, consumers that were written to process events without the new field will be able to continue doing so even when they receive new events that contain the new field.
-
 
 Consider a use case where a consumer has application logic tied to a particular version of the schema. When the schema
 evolves, the application logic may not be updated immediately. Therefore, we need to be able to project data with newer
@@ -102,7 +104,7 @@ If the compatibility is set to ``FORWARD_TRANSITIVE`` (not just ``FORWARD``), th
 .. _avro-full_compatibility:
 
 Full Compatibility
-------------------
+^^^^^^^^^^^^^^^^^^
 
 Full compatibility means schemas are backward **and** forward compatible.
 This is when the change to the schema is both forward compatible and backward compatible. In some data formats, such as JSON, there are no full-compatible changes. Every modification is either only forward or only backward compatible. But in other data formats, like Avro, you can define fields with default values. In that case adding or removing a field with a default value is a fully compatible change.
@@ -116,7 +118,7 @@ If the compatibility is set to ``FULL_TRANSITIVE`` (not just ``FULL``), then it 
 .. _avro-none_compatibility:
 
 None Compatibility
-------------------
+^^^^^^^^^^^^^^^^^^
 
 None compatibility means schema compatibility checks are disabled.
 
@@ -126,8 +128,56 @@ In this case, you will either need to upgrade all producers and consumers to the
 
 
 Transitive
-----------
+^^^^^^^^^^
 
-Although described above, it is worth an explicit reminder about what transitive means.
-Whether compatibility is transitive or not affects whether compatibility checks are against all previously registered schemas (transitive) or just the latest schema (not transitive).
-Note that the default compatibility level in |sr| is ``BACKWARD``, not ``BACKWARD_TRANSITIVE``.
+It is worth an explicit reminder about what "transitive" means for compatibility checking.
+
+.. include:: includes/transitive.rst
+
+
+Summary Compatibility Types
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Here is a summary of the types of schema changes allowed for the different compatibility types, for a given subject.
+
++------------------------------------+-------------------------------------+-------------------------------------+
+| Compatibility Type                 | Changes allowed                     | Check against which schemas         |
++====================================+=====================================+=====================================+
+| ``BACKWARD``                       | Delete fields                       | Latest                              |
+|                                    | Add optional fields                 |                                     |
++------------------------------------+-------------------------------------+-------------------------------------+
+| ``BACKWARD_TRANSITIVE``            | Delete fields                       | All previous                        |
+|                                    | Add optional fields                 |                                     |
++------------------------------------+-------------------------------------+-------------------------------------+
+| ``FORWARD``                        | Add fields                          | Latest                              |
+|                                    | Delete optional fields              |                                     |
++------------------------------------+-------------------------------------+-------------------------------------+
+| ``FORWARD_TRANSITIVE``             | Add fields                          | All previous                        |
+|                                    | Delete optional fields              |                                     |
++------------------------------------+-------------------------------------+-------------------------------------+
+| ``FULL``                           | Modify optional fields              | Latest                              |
++------------------------------------+-------------------------------------+-------------------------------------+
+| ``FULL_TRANSITIVE``                | Modify optional fields              | All previous                        |
++------------------------------------+-------------------------------------+-------------------------------------+
+| ``NONE``                           | All changes are accepted            | Checking disabled                   |
++------------------------------------+-------------------------------------+-------------------------------------+
+
+
+An additional reference for examples of different compatibility types is the `Avro compatibility test suite <https://github.com/confluentinc/schema-registry/blob/8831bbd73ea720fcd279032a5fffabbdb1a1f2b1/core/src/test/java/io/confluent/kafka/schemaregistry/avro/AvroCompatibilityTest.java>`__.
+It presents multiple test cases with two schemas and then results of compatibility tests between them.
+
+
+Using Compatibility Settings
+----------------------------
+
+To check the current compatibility type, use the |sr| REST API to `view the current type <https://docs.confluent.io/current/schema-registry/docs/using.html#getting-the-top-level-config>`__.
+
+To set the compatibility level, you may configure it in one of two ways:
+
+#. `Configure it in your client application <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`__
+#. `Use the |sr| REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#updating-compatibility-requirements-globally>`__
+
+To check the compatibility of a given schema, you may test it one of two ways:
+
+#. `Use the Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#schema-registry-test-compatibility>`__
+#. `Use the |sr| REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#testing-compatibility-of-a-schema-with-the-latest-schema-under-subject-kafka-value>`__
