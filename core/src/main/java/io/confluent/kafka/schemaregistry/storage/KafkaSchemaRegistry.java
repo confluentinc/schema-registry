@@ -820,7 +820,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   public void updateCompatibilityLevel(String subject, AvroCompatibilityLevel newCompatibilityLevel)
-      throws SchemaRegistryStoreException, UnknownMasterException {
+      throws SchemaRegistryStoreException, UnknownMasterException, OperationNotPermittedException {
+    if (getModeForSubject(subject) == Mode.READONLY) {
+      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+    }
     ConfigKey configKey = new ConfigKey(subject);
     try {
       kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
@@ -835,7 +838,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public void updateConfigOrForward(String subject, AvroCompatibilityLevel newCompatibilityLevel,
                                     Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
-             UnknownMasterException {
+             UnknownMasterException, OperationNotPermittedException {
     synchronized (masterLock) {
       if (isMaster()) {
         updateCompatibilityLevel(subject, newCompatibilityLevel);
