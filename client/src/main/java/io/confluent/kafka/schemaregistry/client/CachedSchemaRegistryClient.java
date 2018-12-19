@@ -312,7 +312,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       String subject,
       String version)
       throws IOException, RestClientException {
-    versionCache.get(subject).values().remove(Integer.valueOf(version));
+    Map<Schema, Integer> versions = versionCache.get(subject);
+    if (versions != null) {
+      versions.values().remove(Integer.valueOf(version));
+    }
     return restService.deleteSchemaVersion(requestProperties, subject, version);
   }
 
