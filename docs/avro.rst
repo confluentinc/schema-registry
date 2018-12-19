@@ -17,7 +17,7 @@ schemas should evolve. :ref:`Confluent Schema Registry <schemaregistry_intro>` i
 You can find out the details on how to use it to store Avro schemas and enforce certain compatibility rules during
 schema evolution by looking at the :ref:`schemaregistry_api`.
 
-These are the types of compatibility types:
+These are the compatibility types:
 
 .. include:: includes/compatibility_list.rst
 
@@ -177,7 +177,7 @@ To set the compatibility level, you may configure it in one of two ways:
 #. `Configure it in your client application <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`__
 #. `Use the |sr| REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#updating-compatibility-requirements-globally>`__
 
-To check the compatibility of a given schema, you may test it one of two ways:
+To validate the compatibility of a given schema, you may test it one of two ways:
 
 #. `Use the Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#schema-registry-test-compatibility>`__
 #. `Use the |sr| REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#testing-compatibility-of-a-schema-with-the-latest-schema-under-subject-kafka-value>`__
