@@ -53,6 +53,9 @@ For example, if there are three schemas for a subject that change in order `X-2`
 If the consumer using the new schema needs to be able to process data written by all registered schemas, not just the last two schemas, then use ``BACKWARD_TRANSITIVE`` instead of ``BACKWARD``.
 For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``BACKWARD_TRANSITIVE`` compatibility ensures that consumers using the new schema `X` can process data written by producers using schema `X`, `X-1`, or `X-2`.
 
+* ``BACKWARD``: consumer using schema `X` can process data produced with schema `X` or `X-1`
+* ``BACKWARD_TRANSITIVE``: consumer using schema `X` can process data produced with schema `X`, `X-1`, or `X-2`
+
 An example of a backward compatible change is a removal of a field. A consumer that was developed to process events without this field will be able to process events written with the old schema and contain the field – the consumer will just ignore that field.
 
 Consider the case where all the data in Kafka is also loaded into HDFS, and we want to run SQL queries (e.g., using
@@ -102,6 +105,9 @@ For example, if there are three schemas for a subject that change in order `X-2`
 If data produced with a new schema needs to be read by consumers using all registered schemas, not just the last two schemas, then use ``FORWARD_TRANSITIVE`` instead of ``FORWARD``.
 For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FORWARD_TRANSITIVE`` compatibility ensures that data written by producers using the new schema `X` can be processed by consumers using schema `X`, `X-1`, or `X-2`.
 
+* ``FORWARD``: data produced using schema `X` can be ready by consumers with schema `X` or `X-1`
+* ``FORWARD_TRANSITIVE``: data produced using schema `X` can be ready by consumers with schema `X`, `X-1`, or `X`
+
 An example of a forward compatible schema modification is adding a new field. In most data formats, consumers that were written to process events without the new field will be able to continue doing so even when they receive new events that contain the new field.
 
 Consider a use case where a consumer has application logic tied to a particular version of the schema. When the schema
@@ -125,6 +131,9 @@ Schemas evolve in a fully compatible way: old data can be read with the new sche
 For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FULL`` compatibility ensures that consumers using the new schema `X` can process data written by producers using schema `X` or `X-1`, but not necessarily `X-2`, and that data written by producers using the new schema `X` can be processed by consumers using schema `X` or `X-1`, but not necessarily `X-2`.
 If the new schema needs to be forward and backward compatible with all registered schemas, not just the last two schemas, then use ``FULL_TRANSITIVE`` instead of ``FULL``.
 For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FULL_TRANSITIVE`` compatibility ensures that consumers using the new schema `X` can process data written by producers using schema `X`, `X-1`, or `X-2`, and that data written by producers using the new schema `X` can be processed by consumers using schema `X`, `X-1`, or `X-2`.
+
+* ``FULL``: backward and forward compatibile between schemas `X` and `X-1`
+* ``FULL_TRANSITIVE``: backward and forward compatibile between schemas `X`, `X-1`, and `X-2`
 
 In some data formats, such as JSON, there are no full-compatible changes. Every modification is either only forward or only backward compatible. But in other data formats, like Avro, you can define fields with default values. In that case adding or removing a field with a default value is a fully compatible change.
 
