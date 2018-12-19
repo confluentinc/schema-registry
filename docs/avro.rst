@@ -26,7 +26,7 @@ The compatibility types can be grouped into the following four common patterns o
 1. :ref:`BACKWARD compatibility <avro-backward_compatibility>`
 2. :ref:`FORWARD compatibility <avro-forward_compatibility>`
 3. :ref:`FULL compatibility <avro-full_compatibility>`
-4. :ref:`NONE compatibility <avro-none_compatibility>`
+4. :ref:`no compatibility checking <avro-none_compatibility>`
 
 
 Compatibility Types
@@ -37,7 +37,7 @@ Compatibility Types
 Backward Compatibility
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Backward compatibility means that data encoded with an older schema can be read with a newer schema.
+``BACKWARD`` compatibility means that data encoded with an older schema can be read with a newer schema.
 When the new schema is backward compatible with the old schema, it means that new consumers that were written to use the new schema can also process events written with the old schema. An example of a backward compatible change is a removal of a field. A consumer that was developed to process events without this field will be able to process events written with the old schema and contain the field – the consumer will just ignore that field.
 
 Consider the case where all the data in Kafka is also loaded into HDFS, and we want to run SQL queries (e.g., using
@@ -84,7 +84,7 @@ If the compatibility is set to ``BACKWARD_TRANSITIVE`` (not just ``BACKWARD``), 
 Forward Compatibility
 ^^^^^^^^^^^^^^^^^^^^^
 
-Forward compatibility means that data encoded with a newer schema can be read with an older schema.
+``FORWARD`` compatibility means that data encoded with a newer schema can be read with an older schema.
 When the new schema is forward compatible with the old schema, it means that consumers that were written before the schema changed and are only aware of the old schema will be able to continue processing events, even though they may not be able to use the full capabilities of the new schema.
 An example of a forward compatible schema modification is adding a new field. In most data formats, consumers that were written to process events without the new field will be able to continue doing so even when they receive new events that contain the new field.
 
@@ -106,7 +106,7 @@ If the compatibility is set to ``FORWARD_TRANSITIVE`` (not just ``FORWARD``), th
 Full Compatibility
 ^^^^^^^^^^^^^^^^^^
 
-Full compatibility means schemas are backward **and** forward compatible.
+``FULL`` compatibility means schemas are backward **and** forward compatible.
 This is when the change to the schema is both forward compatible and backward compatible. In some data formats, such as JSON, there are no full-compatible changes. Every modification is either only forward or only backward compatible. But in other data formats, like Avro, you can define fields with default values. In that case adding or removing a field with a default value is a fully compatible change.
 
 To support both previous use cases on the same data, we can evolve the schemas in a fully compatible way: old data can
@@ -117,10 +117,10 @@ If the compatibility is set to ``FULL_TRANSITIVE`` (not just ``FULL``), then it 
 
 .. _avro-none_compatibility:
 
-None Compatibility
-^^^^^^^^^^^^^^^^^^
+No Compatibility Checking
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
-None compatibility means schema compatibility checks are disabled.
+``NONE`` compatibility type means schema compatibility checks are disabled.
 
 Sometimes we make incompatible changes.
 For example, modifying a field type from ``Number`` to ``String``.
