@@ -100,6 +100,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
   private final boolean isEligibleForMasterElector;
+  private final boolean allowModeChanges;
   private SchemaRegistryIdentity masterIdentity;
   private RestService masterRestService;
   private SslFactory sslFactory;
@@ -119,6 +120,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         config.interInstanceProtocol()
     );
     this.isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
+    this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
         isEligibleForMasterElector, schemeAndPort.scheme);
     this.sslFactory = new SslFactory(config);
@@ -950,6 +952,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   public void setMode(String prefix, Mode mode)
       throws SchemaRegistryStoreException, OperationNotPermittedException {
+    if (!allowModeChanges) {
+      throw new OperationNotPermittedException("Mode changes are not allowed");
+    }
     if (prefix == null) {
       prefix = "";
     }
