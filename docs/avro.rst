@@ -150,6 +150,18 @@ For example, modifying a field type from ``Number`` to ``String``.
 In this case, you will either need to upgrade all producers and consumers to the new schema version at the same time, or more likely – create a brand-new topic and start migrating applications to use the new topic and new schema, avoiding the need to handle two incompatible versions in the same topic.
 
 
+Order of Upgrading Clients
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The configured compatibility type has an implication on the order for upgrading client applications, i.e., the producers using schemas to write events to Kafka and the consumers using schemas to read events from Kafka.
+Depending on the compatibility type:
+
+* ``BACKWARD`` or ``BACKWARD_TRANSITIVE``: there is no assurance that consumers using older schemas can read data produced using the new schema. Therefore, upgrade all consumers before you start producing new events.
+* ``FORWARD`` or ``FORWARD_TRANSITIVE``: there is no assurance that consumers using the new schema can read data produced using older schemas. Therefore, upgrade all producers to using the new schema and make sure the data already produced using the older schemas are not available to consumers.
+* ``FULL`` or ``FULL_TRANSITIVE``: there are assurances that consumers using older schemas can read data produced using the new schema and that consumers using the new schema can read data produced using older schemas. Therefore, you can upgrade the producers and consumers independently.
+* ``NONE``: compatibility checks are disabled. Therefore, you need to be cautious about when to upgrade clients.
+
+
 Summary Compatibility Types
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
