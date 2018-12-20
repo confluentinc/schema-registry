@@ -194,7 +194,7 @@ Here are some tips to get you started.
 
 To check the currently configured compatibility type, view the configured setting:
 
-#.  `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#getting-the-top-level-config>`__.
+#.  `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#getting-the-top-level-config>`__
 
 To set the compatibility level, you may configure it in one of two ways:
 
