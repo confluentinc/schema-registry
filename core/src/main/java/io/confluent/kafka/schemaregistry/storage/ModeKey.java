@@ -79,7 +79,8 @@ public class ModeKey extends SchemaRegistryKey {
       ModeKey otherKey = (ModeKey) that;
 
       // Sort by length of prefix in descending order
-      return otherKey.prefix.length() - this.prefix.length();
+      int lenComp = otherKey.prefix.length() - this.prefix.length();
+      return lenComp == 0 ? prefix.compareTo(otherKey.prefix) : lenComp;
     } else {
       return compare;
     }
