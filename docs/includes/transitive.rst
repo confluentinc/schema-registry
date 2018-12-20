@@ -1,6 +1,6 @@
 .. transitive
 
-Transitive compatibility checking is important once you have more than two versions for a given subject.
+Transitive compatibility checking is important once you have more than two versions of a schema for a given subject.
 If compatibility is configured as transitive, then it checks compatibility of a new schema against all previously registered schemas; otherwise, it checks compatibility of a new schema only against the latest schema.
 
 For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then:
