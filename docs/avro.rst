@@ -167,27 +167,27 @@ Summary Compatibility Types
 
 Here is a summary of the types of schema changes allowed for the different compatibility types, for a given subject.
 
-+------------------------------------+-------------------------------------+-------------------------------------+
-| Compatibility Type                 | Changes allowed                     | Check against which schemas         |
-+====================================+=====================================+=====================================+
-| ``BACKWARD``                       | - Delete fields                     | Last version                        |
-|                                    | - Add optional fields               |                                     |
-+------------------------------------+-------------------------------------+-------------------------------------+
-| ``BACKWARD_TRANSITIVE``            | - Delete fields                     | All previous versions               |
-|                                    | - Add optional fields               |                                     |
-+------------------------------------+-------------------------------------+-------------------------------------+
-| ``FORWARD``                        | - Add fields                        | Last version                        |
-|                                    | - Delete optional fields            |                                     |
-+------------------------------------+-------------------------------------+-------------------------------------+
-| ``FORWARD_TRANSITIVE``             | - Add fields                        | All previous versions               |
-|                                    | - Delete optional fields            |                                     |
-+------------------------------------+-------------------------------------+-------------------------------------+
-| ``FULL``                           | - Modify optional fields            | Last version                        |
-+------------------------------------+-------------------------------------+-------------------------------------+
-| ``FULL_TRANSITIVE``                | - Modify optional fields            | All previous versions               |
-+------------------------------------+-------------------------------------+-------------------------------------+
-| ``NONE``                           | - All changes are accepted          | Compatibility checking disabled     |
-+------------------------------------+-------------------------------------+-------------------------------------+
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| Compatibility Type       | Changes allowed             | Check against which schemas      | Upgrade first     |
++==========================+=============================+==================================+===================+
+| ``BACKWARD``             | - Delete fields             | Last version                     | Consumers         |
+|                          | - Add optional fields       |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``BACKWARD_TRANSITIVE``  | - Delete fields             | All previous versions            | Consumers         |
+|                          | - Add optional fields       |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FORWARD``              | - Add fields                | Last version                     | Producers         |
+|                          | - Delete optional fields    |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FORWARD_TRANSITIVE``   | - Add fields                | All previous versions            | Producers         |
+|                          | - Delete optional fields    |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FULL``                 | - Modify optional fields    | Last version                     | Any order         |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FULL_TRANSITIVE``      | - Modify optional fields    | All previous versions            | Any order         |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``NONE``                 | - All changes are accepted  | Compatibility checking disabled  | Depends           |
++--------------------------+-----------------------------+----------------------------------+-------------------+
 
 
 Examples
