@@ -157,7 +157,7 @@ The configured compatibility type has an implication on the order for upgrading 
 Depending on the compatibility type:
 
 * ``BACKWARD`` or ``BACKWARD_TRANSITIVE``: there is no assurance that consumers using older schemas can read data produced using the new schema. Therefore, upgrade all consumers before you start producing new events.
-* ``FORWARD`` or ``FORWARD_TRANSITIVE``: there is no assurance that consumers using the new schema can read data produced using older schemas. Therefore, upgrade all producers to using the new schema and make sure the data already produced using the older schemas are not available to consumers.
+* ``FORWARD`` or ``FORWARD_TRANSITIVE``: there is no assurance that consumers using the new schema can read data produced using older schemas. Therefore, first upgrade all producers to using the new schema and make sure the data already produced using the older schemas are not available to consumers, then upgrade the consumers.
 * ``FULL`` or ``FULL_TRANSITIVE``: there are assurances that consumers using older schemas can read data produced using the new schema and that consumers using the new schema can read data produced using older schemas. Therefore, you can upgrade the producers and consumers independently.
 * ``NONE``: compatibility checks are disabled. Therefore, you need to be cautious about when to upgrade clients.
 
