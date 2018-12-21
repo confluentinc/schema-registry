@@ -13,15 +13,10 @@ Overview
 Compatibility
 ^^^^^^^^^^^^^
 
-The |sr| server can enforce certain compatibility rules when new schemas are registered in a subject. Currently, we support the following compatibility rules.
+The |sr| server can enforce certain compatibility rules when new schemas are registered in a subject.
+These are the compatibility types:
 
-* Backward compatibility (default): A new schema is backwards compatible if it can be used to read the data written in the latest registered schema.
-* Transitive backward compatibility: A new schema is transitively backwards compatible if it can be used to read the data written in all previously registered schemas. Backward compatibility is useful for loading data into systems like Hadoop since one can always query data of all versions using the latest schema.
-* Forward compatibility: A new schema is forward compatible if the latest registered schema can read data written in this schema.
-* Transitive forward compatibility: A new schema is transitively forward compatible if all previous schemas can read data written in this schema. Forward compatibility is useful for consumer applications that can only deal with data in a particular version that may not always be the latest version.
-* Full compatibility: A new schema is fully compatible if it’s both backward and forward compatible with the latest registered schema.
-* Transitive full compatibility: A new schema is transitively full compatible if it’s both backward and forward compatible with all previously registered schemas.
-* No compatibility: A new schema can be any schema as long as it’s a valid Avro.
+.. include:: includes/compatibility_list.rst
 
 We recommend keeping the default backward compatibility since it's common to have all data loaded into Hadoop.
 
@@ -521,7 +516,7 @@ The config resource allows you to inspect the cluster-level configuration values
 
    When there are multiple instances of |sr| running in the same cluster, the update request will be forwarded to one of the instances designated as the master. If the master is not available, the client will get an error code indicating that the forwarding has failed.
 
-   :<json string compatibility: New global compatibility level. Must be one of NONE, FULL, FORWARD, BACKWARD
+   :<json string compatibility: New global compatibility level. Must be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE
 
    :statuscode 422: 
       * Error code 42203 -- Invalid compatibility level
@@ -554,7 +549,7 @@ The config resource allows you to inspect the cluster-level configuration values
 
    Get global compatibility level.
 
-   :>json string compatibility: New global compatibility level. Will be one of NONE, FULL, FORWARD, BACKWARD
+   :<json string compatibility: New global compatibility level. Will be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE
 
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
@@ -583,7 +578,7 @@ The config resource allows you to inspect the cluster-level configuration values
    Update compatibility level for the specified subject.
 
    :param string subject: Name of the subject
-   :<json string compatibility: New global compatibility level. Must be one of NONE, FULL, FORWARD, BACKWARD
+   :<json string compatibility: New global compatibility level. Must be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE
 
    :statuscode 422: 
       * Error code 42203 -- Invalid compatibility level
@@ -619,7 +614,7 @@ The config resource allows you to inspect the cluster-level configuration values
    Get compatibility level for a subject.
 
    :param string subject: Name of the subject
-   :>json string compatibility: New global compatibility level. Will be one of NONE, FULL, FORWARD, BACKWARD
+   :<json string compatibility: New global compatibility level. Will be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE
   
    :statuscode 404: Subject not found
    :statuscode 500:
