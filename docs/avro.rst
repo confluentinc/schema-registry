@@ -19,7 +19,7 @@ The compatibility type determines how |sr| compares the new schema with previous
 When a schema is first created for a subject, it gets a unique id and it gets a version number, i.e., version 1.
 When the schema is updated (if it passes compatibility checks), it gets a new unique id and it gets an incremented version number, i.e., version 2.
 
-These are the compatibility types and their descriptions:
+Here are descriptions of the compatibility types:
 
 .. include:: includes/compatibility_list.rst
 
