@@ -19,24 +19,41 @@ The compatibility type determines how |sr| compares the new schema with previous
 When a schema is first created for a subject, it gets a unique id and it gets a version number, i.e., version 1.
 When the schema is updated (if it passes compatibility checks), it gets a new unique id and it gets an incremented version number, i.e., version 2.
 
-These are the compatibility types:
+Here are descriptions of the compatibility types:
 
 .. include:: includes/compatibility_list.rst
-
-The compatibility types can be grouped into the following four common patterns of schema evolution:
-
-1. :ref:`BACKWARD compatibility <avro-backward_compatibility>`
-2. :ref:`FORWARD compatibility <avro-forward_compatibility>`
-3. :ref:`FULL compatibility <avro-full_compatibility>`
-4. :ref:`no compatibility checking <avro-none_compatibility>`
 
 Transitive
 ^^^^^^^^^^
 
 .. include:: includes/transitive.rst
 
-Transitive compatibility checking is important once you have more than two versions for a given subject.
-Refer to an `example of schema changes <https://github.com/confluentinc/schema-registry/issues/209>`__ which are incrementally compatible, but not transitively so.
+Summary
+^^^^^^^
+
+The following table presents a summary of the types of schema changes allowed for the different compatibility types, for a given subject.
+
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| Compatibility Type       | Changes allowed             | Check against which schemas      | Upgrade first     |
++==========================+=============================+==================================+===================+
+| ``BACKWARD``             | - Delete fields             | Last version                     | Consumers         |
+|                          | - Add optional fields       |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``BACKWARD_TRANSITIVE``  | - Delete fields             | All previous versions            | Consumers         |
+|                          | - Add optional fields       |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FORWARD``              | - Add fields                | Last version                     | Producers         |
+|                          | - Delete optional fields    |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FORWARD_TRANSITIVE``   | - Add fields                | All previous versions            | Producers         |
+|                          | - Delete optional fields    |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FULL``                 | - Modify optional fields    | Last version                     | Any order         |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FULL_TRANSITIVE``      | - Modify optional fields    | All previous versions            | Any order         |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``NONE``                 | - All changes are accepted  | Compatibility checking disabled  | Depends           |
++--------------------------+-----------------------------+----------------------------------+-------------------+
 
 
 
@@ -162,34 +179,6 @@ Depending on the compatibility type:
 * ``NONE``: compatibility checks are disabled. Therefore, you need to be cautious about when to upgrade clients.
 
 
-Summary Compatibility Types
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Here is a summary of the types of schema changes allowed for the different compatibility types, for a given subject.
-
-+--------------------------+-----------------------------+----------------------------------+-------------------+
-| Compatibility Type       | Changes allowed             | Check against which schemas      | Upgrade first     |
-+==========================+=============================+==================================+===================+
-| ``BACKWARD``             | - Delete fields             | Last version                     | Consumers         |
-|                          | - Add optional fields       |                                  |                   |
-+--------------------------+-----------------------------+----------------------------------+-------------------+
-| ``BACKWARD_TRANSITIVE``  | - Delete fields             | All previous versions            | Consumers         |
-|                          | - Add optional fields       |                                  |                   |
-+--------------------------+-----------------------------+----------------------------------+-------------------+
-| ``FORWARD``              | - Add fields                | Last version                     | Producers         |
-|                          | - Delete optional fields    |                                  |                   |
-+--------------------------+-----------------------------+----------------------------------+-------------------+
-| ``FORWARD_TRANSITIVE``   | - Add fields                | All previous versions            | Producers         |
-|                          | - Delete optional fields    |                                  |                   |
-+--------------------------+-----------------------------+----------------------------------+-------------------+
-| ``FULL``                 | - Modify optional fields    | Last version                     | Any order         |
-+--------------------------+-----------------------------+----------------------------------+-------------------+
-| ``FULL_TRANSITIVE``      | - Modify optional fields    | All previous versions            | Any order         |
-+--------------------------+-----------------------------+----------------------------------+-------------------+
-| ``NONE``                 | - All changes are accepted  | Compatibility checking disabled  | Depends           |
-+--------------------------+-----------------------------+----------------------------------+-------------------+
-
-
 Examples
 ^^^^^^^^
 
@@ -205,7 +194,7 @@ Here are some tips to get you started.
 
 To check the currently configured compatibility type, view the configured setting:
 
-#.  `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#getting-the-top-level-config>`__.
+#.  `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#getting-the-top-level-config>`__
 
 To set the compatibility level, you may configure it in one of two ways:
 
