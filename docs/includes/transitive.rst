@@ -10,6 +10,6 @@ For example, if there are three schemas for a subject that change in order `X-2`
 
 Refer to an `example of schema changes <https://github.com/confluentinc/schema-registry/issues/209>`__ which are incrementally compatible, but not transitively so.
 
-Note that |sr-long| default compatibility type ``BACKWARD`` is the non-transitive type (i.e., it is not ``BACKWARD_TRANSITIVE``).
+ The |sr-long| default compatibility type ``BACKWARD`` is non-transitive, which means that it's not ``BACKWARD_TRANSITIVE``.
 As a result, new schemas are checked for compatibility only against the latest schema.
 
