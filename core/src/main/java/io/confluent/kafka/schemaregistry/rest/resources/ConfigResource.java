@@ -106,11 +106,19 @@ public class ConfigResource {
   @Path("/{subject}")
   @GET
   public Config getSubjectLevelConfig(@PathParam("subject") String subject) {
+    try {
+      if (!schemaRegistry.listSubjects().contains(subject)) {
+        throw Errors.subjectNotFoundException();
+      }
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Failed to retrieve a list of all subjects"
+              + " from the registry", e);
+    }
     Config config = null;
     try {
       AvroCompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(subject);
       if (compatibilityLevel == null) {
-        throw Errors.subjectNotFoundException();
+        compatibilityLevel = schemaRegistry.getCompatibilityLevel(null);
       }
       config = new Config(compatibilityLevel.name);
     } catch (SchemaRegistryStoreException e) {
