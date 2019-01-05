@@ -19,19 +19,16 @@ The compatibility type determines how |sr| compares the new schema with previous
 When a schema is first created for a subject, it gets a unique id and it gets a version number, i.e., version 1.
 When the schema is updated (if it passes compatibility checks), it gets a new unique id and it gets an incremented version number, i.e., version 2.
 
-Here are descriptions of the compatibility types:
 
-.. include:: includes/compatibility_list.rst
-
-Transitive
-^^^^^^^^^^
-
-.. include:: includes/transitive.rst
+Compatibility Types
+-------------------
 
 Summary
 ^^^^^^^
 
 The following table presents a summary of the types of schema changes allowed for the different compatibility types, for a given subject.
+The |sr-long| default compatibility type is ``BACKWARD``.
+All the compatibility types are described in more detail in the sections below.
 
 +--------------------------+-----------------------------+----------------------------------+-------------------+
 | Compatibility Type       | Changes allowed             | Check against which schemas      | Upgrade first     |
@@ -55,11 +52,6 @@ The following table presents a summary of the types of schema changes allowed fo
 | ``NONE``                 | - All changes are accepted  | Compatibility checking disabled  | Depends           |
 +--------------------------+-----------------------------+----------------------------------+-------------------+
 
-
-
-Compatibility Types
--------------------
-
 .. _avro-backward_compatibility:
 
 Backward Compatibility
@@ -72,6 +64,12 @@ For example, if there are three schemas for a subject that change in order `X-2`
 
 * ``BACKWARD``: consumer using schema `X` can process data produced with schema `X` or `X-1`
 * ``BACKWARD_TRANSITIVE``: consumer using schema `X` can process data produced with schema `X`, `X-1`, or `X-2`
+
+
+.. note::
+
+   The |sr-long| default compatibility type is ``BACKWARD``, not ``BACKWARD_TRANSITIVE``.
+
 
 An example of a backward compatible change is a removal of a field. A consumer that was developed to process events without this field will be able to process events written with the old schema and contain the field – the consumer will just ignore that field.
 
@@ -167,8 +165,14 @@ For example, modifying a field type from ``Number`` to ``String``.
 In this case, you will either need to upgrade all producers and consumers to the new schema version at the same time, or more likely – create a brand-new topic and start migrating applications to use the new topic and new schema, avoiding the need to handle two incompatible versions in the same topic.
 
 
+Transitive Property
+-------------------
+
+.. include:: includes/transitive.rst
+
+
 Order of Upgrading Clients
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------
 
 The configured compatibility type has an implication on the order for upgrading client applications, i.e., the producers using schemas to write events to Kafka and the consumers using schemas to read events from Kafka.
 Depending on the compatibility type:
@@ -180,7 +184,7 @@ Depending on the compatibility type:
 
 
 Examples
-^^^^^^^^
+--------
 
 Each of the sections above has an example of the compatibility type.
 An additional reference is the `Avro compatibility test suite <https://github.com/confluentinc/schema-registry/blob/master/core/src/test/java/io/confluent/kafka/schemaregistry/avro/AvroCompatibilityTest.java>`__, which presents multiple test cases with two schemas and the respective result of the compatibility test between them.
