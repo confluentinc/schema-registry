@@ -954,6 +954,10 @@ public class AvroData {
       defaultVal = fieldSchema.defaultValue();
       if (defaultVal instanceof Byte) {
         defaultVal = ((Byte) defaultVal).intValue();
+      } else if (defaultVal instanceof Short) {
+        defaultVal = ((Short) defaultVal).intValue();
+      } else if (defaultVal instanceof ByteBuffer) {
+        defaultVal = ((ByteBuffer) defaultVal).array();
       }
     } else if (fieldSchema.isOptional()) {
       defaultVal = JsonProperties.NULL_VALUE;
