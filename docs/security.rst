@@ -9,16 +9,20 @@ Features
 |sr| currently supports all Kafka security features, including:
 
 * Encryption
-  ** :ref:`SSL encryption <encryption-ssl-schema-registry>` with a secure Kafka cluster
-  ** :ref:`End-user REST API calls over HTTPS<schema_registry_http_https>`
+
+  * :ref:`SSL encryption <encryption-ssl-schema-registry>` with a secure Kafka cluster
+  * :ref:`End-user REST API calls over HTTPS<schema_registry_http_https>`
 
 * Authentication
-  ** :ref:`SSL authentication<authentication-ssl-schema-registry>` with a secure Kafka Cluster
-  ** :ref:`SASL authentication<kafka_sasl_auth>` with a secure Kafka Cluster 
-  ** :ref:`Authentication with ZooKeeper over SASL<schema_registry_zk_sasl_auth>`
+
+  * :ref:`SSL authentication<authentication-ssl-schema-registry>` with a secure Kafka Cluster
+  * :ref:`SASL authentication<kafka_sasl_auth>` with a secure Kafka Cluster 
+  * :ref:`Authentication with ZooKeeper over SASL<schema_registry_zk_sasl_auth>`
 
 * Authorization
-  ** :ref:`Authorization for Schema Registry operations <confluentsecurityplugins_schema_registry_authorization>`
+
+  * :ref:`Authorization for Schema Registry operations <confluentsecurityplugins_schema_registry_authorization>`
+
 
 For configuration details, check the :ref:`configuration options<schemaregistry_config>`.
 
