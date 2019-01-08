@@ -68,7 +68,7 @@ Clients to Schema Registry
 Configuring the REST API for HTTP or HTTPS
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-By default |sr| allows you to make REST API calls over HTTP. You may configure |sr| to allow either HTTP or HTTPS or both at the same time.
+By default |sr| allows clients to make REST API calls over HTTP. You may configure |sr| to allow either HTTP or HTTPS or both at the same time.
 
 The following configuration determines the protocol used by |sr|:
 
@@ -141,10 +141,10 @@ This process enables HTTPS, but still defaults to HTTP so |sr| instances can sti
 Governance
 ~~~~~~~~~~
 
-To ensure governance over the |sr-long|, take the following three steps:
+To provide data governence with the |sr-long| :
 
 #. disable auto schema registration
-#. restrict access to the ``_schemas`` topic
+#. restrict access to the `_schemas` topic
 #. restrict access to |sr| operations
 
 
@@ -153,8 +153,8 @@ Disabling Auto Schema Registration
 
 .. include:: includes/auto-schema-registration.rst
 
-When a client application disables automatic schema registration, it will no longer be able to dynamically register new schemas from within the application, which is generally a good governance model.
-However, it will still be able to retrieve existing schema information, assuming proper authorization.
+Once a client application disables automatic schema registration, it will no longer be able to dynamically register new schemas from within the application.
+However, it will still be able to retrieve existing schemas from the |sr|, assuming proper authorization.
 
 
 Authorizing Access to the Schemas Topic
@@ -172,9 +172,13 @@ This ensures that only authorized users can make changes to the schemas topic.
 
      export KAFKA_OPTS="-Djava.security.auth.login.config=<path to JAAS conf file>"
 
-     bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal 'User:<sr-principal>' --allow-host '*' --operation Read --topic _schemas
+     bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add \
+                    --allow-principal 'User:<sr-principal>' --allow-host '*' \
+                    --operation Read --topic _schemas
 
-     bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal 'User:<sr-principal>' --allow-host '*' --operation Write --topic _schemas
+     bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add \
+                    --allow-principal 'User:<sr-principal>' --allow-host '*' \
+                    --operation Write --topic _schemas
 
 .. note::
   **Removing world-level permissions:**
