@@ -6,7 +6,7 @@
 Features
 ~~~~~~~~
 
-|sr| currently supports all Kafka security features, including:
+|sr-long| currently supports all Kafka security features, including:
 
 * Encryption
 
