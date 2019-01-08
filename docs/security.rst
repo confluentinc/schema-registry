@@ -139,9 +139,18 @@ Governance
 
 To ensure governance over the |sr-long|, take the following three steps:
 
+#. disable auto schema registration
 #. restrict access to the ``_schemas`` topic
 #. restrict access to |sr| operations
-#. disable auto schema registration
+
+
+Disabling Auto Schema Registration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: includes/auto-schema-registration.rst
+
+When a client application disables automatic schema registration, it will no longer be able to dynamically register new schemas from within the application, which is generally a good governance model.
+However, it will still be able to retrieve existing schema information, assuming proper authorization.
 
 
 Authorizing Access to the Schemas Topic
@@ -172,10 +181,3 @@ Authorizing Schema Registry Operations
 
 The :ref:`Schema Registry security plugin <confluentsecurityplugins_schema_registry_security_quickstart>` provides authorization for various Schema Registry operations.
 Use the plugin to ensure that only authorized users can make changes to |sr|, including registering and evolving new schemas.
-
-Disabling Auto Schema Registration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. include:: includes/auto-schema-registration.rst
-
-
