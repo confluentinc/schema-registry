@@ -121,15 +121,16 @@ Authorizing Access to the Schemas Topic
 Relatively few services need access to |sr|, and they are likely internal, so you can restrict access via firewall rules and/or network segmentation.
 
 Note that if you have enabled :ref:`Kafka authorization <kafka_authorization>`, you will need
-to grant read and write access to this topic to |sr|'s principal.
+to grant Create, Describe, DescribeConfigs, Read and Write access to this topic to |sr|'s principal.
 
 .. sourcecode:: bash
 
      export KAFKA_OPTS="-Djava.security.auth.login.config=<path to JAAS conf file>"
 
-     bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal 'User:<sr-principal>' --allow-host '*' --operation Read --topic _schemas
-
-     bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal 'User:<sr-principal>' --allow-host '*' --operation Write --topic _schemas
+     bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add \
+       --allow-principal 'User:<sr-principal>' --allow-host '*' \
+       --operation Create --operation Describe --operation DescribeConfigs --operation Read --operation Write \
+       --topic _schemas
 
 .. note::
   **Removing world-level permissions:**
