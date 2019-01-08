@@ -162,6 +162,7 @@ Relatively few services need access to |sr|, and they are likely internal, so yo
 
 Note that if you have enabled :ref:`Kafka authorization <kafka_authorization>`, you will need
 to grant read and write access to this topic to |sr|'s principal.
+This ensures that only authorized users can make changes to the schemas topic.
 
 .. sourcecode:: bash
 
@@ -180,4 +181,5 @@ Authorizing Schema Registry Operations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The :ref:`Schema Registry security plugin <confluentsecurityplugins_schema_registry_security_quickstart>` provides authorization for various Schema Registry operations.
-Use the plugin to ensure that only authorized users can make changes to |sr|, including registering and evolving new schemas.
+It authenticates the incoming requests and authorizes them via the configured authorizer.
+This allows schema evolution management to be restricted to administrative users, with application users provided with read-only access only.
