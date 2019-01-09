@@ -129,7 +129,8 @@ to grant Create, Describe, DescribeConfigs, Read and Write access to this topic 
 
      bin/kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add \
        --allow-principal 'User:<sr-principal>' --allow-host '*' \
-       --operation Create --operation Describe --operation DescribeConfigs --operation Read --operation Write \
+       --operation Create --operation Describe --operation DescribeConfigs \
+       --operation Read --operation Write \
        --topic _schemas
 
 .. note::
