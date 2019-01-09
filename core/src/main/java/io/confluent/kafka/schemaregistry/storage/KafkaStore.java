@@ -376,6 +376,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
     log.debug("Kafka store shut down complete");
   }
 
+  public boolean isInitialized() {
+    return initialized.get();
+  }
+
   /**
    * For testing.
    */

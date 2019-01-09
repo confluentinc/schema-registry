@@ -53,7 +53,7 @@ public class KafkaStoreMessageHandler
   public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
-                         (SchemaValue) value);
+          (SchemaValue) value);
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
     }
@@ -92,7 +92,7 @@ public class KafkaStoreMessageHandler
         this.lookupCache.schemaDeleted(schemaKey, schemaObj);
       } else {
         // Update the maximum id seen so far
-        idGenerator.schemaRegistered(schemaKey,schemaObj);
+        idGenerator.schemaRegistered(schemaKey, schemaObj);
         lookupCache.schemaRegistered(schemaKey, schemaObj);
         List<SchemaKey> schemaKeys = lookupCache.deletedSchemaKeys(schemaObj);
         schemaKeys.stream().filter(v -> v.getSubject().equals(schemaObj.getSubject()))
@@ -104,8 +104,13 @@ public class KafkaStoreMessageHandler
   private void tombstoneSchemaKey(SchemaKey schemaKey) {
     tombstoneExecutor.execute(() -> {
           try {
+            while (!schemaRegistry.getKafkaStore().isInitialized()) {
+              Thread.sleep(1000);
+            }
             schemaRegistry.getKafkaStore().put(schemaKey, null);
             log.debug("Tombstoned {}", schemaKey);
+          } catch (InterruptedException e) {
+            log.error("Interrupted while waiting for the tombstone thread to be initialized ", e);
           } catch (StoreException e) {
             log.error("Failed to tombstone {}", schemaKey, e);
           }
