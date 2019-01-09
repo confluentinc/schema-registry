@@ -22,8 +22,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class KafkaStoreMessageHandler
     implements StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> {
@@ -104,9 +106,7 @@ public class KafkaStoreMessageHandler
   private void tombstoneSchemaKey(SchemaKey schemaKey) {
     tombstoneExecutor.execute(() -> {
           try {
-            while (!schemaRegistry.getKafkaStore().isInitialized()) {
-              Thread.sleep(1000);
-            }
+            schemaRegistry.getKafkaStore().waitForInit();
             schemaRegistry.getKafkaStore().put(schemaKey, null);
             log.debug("Tombstoned {}", schemaKey);
           } catch (InterruptedException e) {
