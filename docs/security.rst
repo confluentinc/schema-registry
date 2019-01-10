@@ -35,7 +35,11 @@ Schema Registry to Kafka Cluster
 Kafka Store
 ^^^^^^^^^^^
 
-|sr| uses Kafka to persist schemas, and all Kafka security features are supported by |sr|.
+.. include:: includes/backend.rst
+
+All Kafka security features are supported by |sr|.
+
+Relatively few services need access to |sr|, and they are likely internal, so you can restrict access to the |sr| itself via firewall rules and/or network segmentation.
 
 .. _schema_registry_zk_sasl_auth:
 
@@ -160,13 +164,8 @@ However, it will still be able to retrieve existing schemas from the |sr|, assum
 Authorizing Access to the Schemas Topic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. include:: includes/backend.rst
-
-Relatively few services need access to |sr|, and they are likely internal, so you can restrict access via firewall rules and/or network segmentation.
-
-Note that if you have enabled :ref:`Kafka authorization <kafka_authorization>`, you will need
-to grant read and write access to this topic to |sr|'s principal.
-This ensures that only authorized users can make changes to the schemas topic.
+If you have enabled :ref:`Kafka authorization <kafka_authorization>`, you will need to grant the |sr|'s principal read and write access to the schemas topic.
+This ensures that only authorized users can make changes to the topic.
 
 .. sourcecode:: bash
 
