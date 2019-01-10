@@ -145,7 +145,7 @@ This process enables HTTPS, but still defaults to HTTP so |sr| instances can sti
 Governance
 ~~~~~~~~~~
 
-To provide data governence with the |sr-long| :
+To provide data governance with the |sr-long| :
 
 #. disable auto schema registration
 #. restrict access to the `_schemas` topic

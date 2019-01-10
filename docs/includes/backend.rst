@@ -1,7 +1,7 @@
 .. backend
 
 Kafka is used as |sr| storage backend.
-The special Kafka topic ``<kafkastore.topic>`` (default `_schemas`), with a single partition, is used as a highly available write ahead log.
+The special Kafka topic ``<kafkastore.topic>`` (default ``_schemas``), with a single partition, is used as a highly available write ahead log.
 All schemas, subject/version and ID metadata, and compatibility settings are appended as messages to this log.
 A |sr| instance therefore both produces and consumes messages under the ``_schemas`` topic.
 It produces messages to the log when, for example, new schemas are registered under a subject, or when updates to compatibility settings are registered.
