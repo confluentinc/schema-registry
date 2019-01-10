@@ -199,8 +199,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public boolean testCompatibility(String subject, Schema newSchema) throws IOException,
-      RestClientException {
+  public synchronized boolean testCompatibility(String subject, Schema newSchema)
+      throws IOException, RestClientException {
     String compatibility = compatibilityCache.get(subject);
     if (compatibility == null) {
       compatibility = defaultCompatibility;
@@ -221,8 +221,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public String updateCompatibility(String subject, String compatibility) throws IOException,
-      RestClientException {
+  public synchronized String updateCompatibility(String subject, String compatibility)
+      throws IOException, RestClientException {
     if (subject == null) {
       defaultCompatibility = compatibility;
       return compatibility;
@@ -232,7 +232,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public String getCompatibility(String subject) throws IOException, RestClientException {
+  public synchronized String getCompatibility(String subject)
+      throws IOException, RestClientException {
     String compatibility = compatibilityCache.get(subject);
     if (compatibility == null) {
       compatibility = defaultCompatibility;
@@ -241,7 +242,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public Collection<String> getAllSubjects() throws IOException, RestClientException {
+  public synchronized Collection<String> getAllSubjects()
+      throws IOException, RestClientException {
     List<String> results = new ArrayList<>();
     results.addAll(this.schemaCache.keySet());
     Collections.sort(results, String.CASE_INSENSITIVE_ORDER);
