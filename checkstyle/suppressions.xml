@@ -42,4 +42,7 @@
     <suppress checks="BooleanExpressionComplexity"
               files="AvroData.java"/>
 
+    <suppress checks=".*"
+              files="SchemaNormalizationWithDefault.java"/>
+
 </suppressions>

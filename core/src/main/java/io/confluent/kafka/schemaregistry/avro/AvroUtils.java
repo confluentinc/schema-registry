@@ -29,8 +29,8 @@ public class AvroUtils {
     try {
       Schema.Parser parser1 = new Schema.Parser();
       Schema schema = parser1.parse(schemaString);
-      //TODO: schema.toString() is not canonical (issue-28)
-      return new AvroSchema(schema, schema.toString());
+      String canonicalString = SchemaNormalizationWithDefault.toCanonicalForm(schema);
+      return new AvroSchema(schema, canonicalString);
     } catch (SchemaParseException e) {
       return null;
     }
