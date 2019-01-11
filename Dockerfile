@@ -51,7 +51,7 @@ RUN rm -f /opt/src/common/package/target/common-package-$CP_PACKAGE_VERSION-pack
 # We need a glibc-based Alpine build since RocksDB's JNI libs depend on glibc.
 FROM anapsix/alpine-java:8u192b12_jdk_unlimited
 
-ENV CP_PACKAGE_VERSION=5.0.1
+ENV CP_PACKAGE_VERSION=5.1.0
 
 RUN mkdir -p /usr/local/share/java
 RUN mkdir -p /etc/kafka
