@@ -70,8 +70,10 @@ public class ModeResource {
       @Context HttpHeaders headers,
       @NotNull ModeUpdateRequest request
   ) {
-    Mode mode = Enum.valueOf(Mode.class, request.getMode().toUpperCase(Locale.ROOT));
-    if (mode == null) {
+    Mode mode;
+    try {
+      mode = Enum.valueOf(Mode.class, request.getMode().toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
     try {
