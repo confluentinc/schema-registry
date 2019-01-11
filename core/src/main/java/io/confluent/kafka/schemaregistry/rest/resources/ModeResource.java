@@ -113,7 +113,7 @@ public class ModeResource {
   }
 
   @GET
-  public ModeGetResponse getTopLevelConfig() {
+  public ModeGetResponse getTopLevelMode() {
     return getMode(ModeKey.SUBJECT_WILDCARD);
   }
 }
