@@ -439,9 +439,9 @@ public class RestService {
    */
   public ModeUpdateRequest setMode(Map<String, String> requestProperties,
                                    ModeUpdateRequest modeUpdateRequest,
-                                   String prefix)
+                                   String subject)
       throws IOException, RestClientException {
-    String path = prefix != null ? String.format("/mode?prefix=%s", prefix) : "/mode";
+    String path = subject != null ? String.format("/mode/%s", subject) : "/mode";
 
     ModeUpdateRequest response =
         httpRequest(path, "PUT", modeUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
@@ -454,9 +454,9 @@ public class RestService {
     return getMode(null);
   }
 
-  public ModeGetResponse getMode(String prefix)
+  public ModeGetResponse getMode(String subject)
       throws IOException, RestClientException {
-    String path = prefix != null ? String.format("/mode?prefix=%s", prefix) : "/mode";
+    String path = subject != null ? String.format("/mode/%s", subject) : "/mode";
 
     ModeGetResponse mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);

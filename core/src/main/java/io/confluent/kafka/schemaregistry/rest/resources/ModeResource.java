@@ -24,8 +24,8 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import java.util.Locale;
@@ -43,6 +43,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.Mode;
+import io.confluent.kafka.schemaregistry.storage.ModeKey;
 
 @Path("/mode")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -62,9 +63,10 @@ public class ModeResource {
     this.schemaRegistry = schemaRegistry;
   }
 
+  @Path("/{subject}")
   @PUT
   public ModeUpdateRequest updateMode(
-      @QueryParam("prefix") String prefix,
+      @PathParam("subject") String subject,
       @Context HttpHeaders headers,
       @NotNull ModeUpdateRequest request
   ) {
@@ -74,7 +76,7 @@ public class ModeResource {
     }
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
-      schemaRegistry.setModeOrForward(prefix, mode, headerProperties);
+      schemaRegistry.setModeOrForward(subject, mode, headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -89,13 +91,29 @@ public class ModeResource {
     return request;
   }
 
+  @Path("/{subject}")
   @GET
-  public ModeGetResponse getMode(@QueryParam("prefix") String prefix) {
+  public ModeGetResponse getMode(@PathParam("subject") String subject) {
     try {
-      Mode mode = schemaRegistry.getMode(prefix);
+      Mode mode = schemaRegistry.getMode(subject);
+      if (mode == null) {
+        throw Errors.subjectNotFoundException();
+      }
       return new ModeGetResponse(mode.name());
     } catch (SchemaRegistryException e) {
       throw Errors.storeException("Failed to get mode", e);
     }
+  }
+
+  @PUT
+  public ModeUpdateRequest updateTopLevelMode(
+      @Context HttpHeaders headers,
+      @NotNull ModeUpdateRequest request) {
+    return updateMode(ModeKey.SUBJECT_WILDCARD, headers, request);
+  }
+
+  @GET
+  public ModeGetResponse getTopLevelConfig() {
+    return getMode(ModeKey.SUBJECT_WILDCARD);
   }
 }

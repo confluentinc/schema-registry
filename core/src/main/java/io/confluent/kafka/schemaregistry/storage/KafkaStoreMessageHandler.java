@@ -30,17 +30,17 @@ public class KafkaStoreMessageHandler
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final LookupCache lookupCache;
-  private final Map<ModeKey, ModeValue> modes;
+  private final Map<ModeKey, ModeValue> modePrefixes;
   private final ExecutorService tombstoneExecutor;
   private IdGenerator idGenerator;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
                                   LookupCache lookupCache,
-                                  Map<ModeKey, ModeValue> modes,
+                                  Map<ModeKey, ModeValue> modePrefixes,
                                   IdGenerator idGenerator) {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
-    this.modes = modes;
+    this.modePrefixes = modePrefixes;
     this.idGenerator = idGenerator;
     this.tombstoneExecutor = Executors.newSingleThreadExecutor();
   }
@@ -64,7 +64,9 @@ public class KafkaStoreMessageHandler
   }
 
   private void handleMode(ModeKey modeKey, ModeValue modeValue) {
-    modes.put(modeKey, modeValue);
+    if (modeKey.getSubject().endsWith(ModeKey.SUBJECT_WILDCARD)) {
+      modePrefixes.put(modeKey, modeValue);
+    }
   }
 
   private void handleDeleteSubject(DeleteSubjectValue deleteSubjectValue) {

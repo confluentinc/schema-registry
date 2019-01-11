@@ -21,26 +21,28 @@ import org.codehaus.jackson.annotate.JsonPropertyOrder;
 
 import java.util.Objects;
 
-@JsonPropertyOrder(value = {"keytype", "prefix", "magic"})
+@JsonPropertyOrder(value = {"keytype", "subject", "magic"})
 public class ModeKey extends SchemaRegistryKey {
 
-  private static final int MAGIC_BYTE = 0;
-  private String prefix;
+  public static final String SUBJECT_WILDCARD = "*";
 
-  public ModeKey(@JsonProperty("prefix") String prefix) {
+  private static final int MAGIC_BYTE = 0;
+  private String subject;
+
+  public ModeKey(@JsonProperty("subject") String subject) {
     super(SchemaRegistryKeyType.MODE);
-    this.prefix = prefix;
+    this.subject = subject;
     this.magicByte = MAGIC_BYTE;
   }
 
-  @JsonProperty("prefix")
-  public String getPrefix() {
-    return this.prefix;
+  @JsonProperty("subject")
+  public String getSubject() {
+    return this.subject;
   }
 
-  @JsonProperty("prefix")
-  public void setPrefix(String prefix) {
-    this.prefix = prefix;
+  @JsonProperty("subject")
+  public void setSubject(String subject) {
+    this.subject = subject;
   }
 
   @Override
@@ -55,12 +57,12 @@ public class ModeKey extends SchemaRegistryKey {
       return false;
     }
     ModeKey modeKey = (ModeKey) o;
-    return Objects.equals(prefix, modeKey.prefix);
+    return Objects.equals(subject, modeKey.subject);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), prefix);
+    return Objects.hash(super.hashCode(), subject);
   }
 
   @Override
@@ -68,7 +70,7 @@ public class ModeKey extends SchemaRegistryKey {
     StringBuilder sb = new StringBuilder();
     sb.append("{magic=" + this.magicByte + ",");
     sb.append("keytype=" + this.keyType.keyType + ",");
-    sb.append("prefix=" + this.prefix + "}");
+    sb.append("subject=" + this.subject + "}");
     return sb.toString();
   }
 
@@ -78,9 +80,9 @@ public class ModeKey extends SchemaRegistryKey {
     if (compare == 0) {
       ModeKey otherKey = (ModeKey) that;
 
-      // Sort by length of prefix in descending order
-      int lenComp = otherKey.prefix.length() - this.prefix.length();
-      return lenComp == 0 ? prefix.compareTo(otherKey.prefix) : lenComp;
+      // Sort by length of subject (or prefix) in descending order
+      int lenComp = otherKey.subject.length() - this.subject.length();
+      return lenComp == 0 ? subject.compareTo(otherKey.subject) : lenComp;
     } else {
       return compare;
     }

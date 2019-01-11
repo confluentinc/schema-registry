@@ -91,7 +91,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   private final SchemaRegistryConfig config;
   private final LookupCache lookupCache;
-  private final Map<ModeKey, ModeValue> modes;
+  private final Map<ModeKey, ModeValue> modePrefixes;
   private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
@@ -130,7 +130,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.lookupCache = lookupCache();
-    this.modes = new ConcurrentSkipListMap<>();
+    this.modePrefixes = new ConcurrentSkipListMap<>();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
     MetricConfig metricConfig =
@@ -158,7 +158,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       SchemaRegistryConfig config) throws SchemaRegistryException {
     return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
         config,
-        new KafkaStoreMessageHandler(this, lookupCache, modes, idGenerator),
+        new KafkaStoreMessageHandler(this, lookupCache, modePrefixes, idGenerator),
         this.serializer, lookupCache, new NoopKey());
   }
 
@@ -384,17 +384,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   private void checkRegisterMode(
       String subject, int schemaId
-  ) throws OperationNotPermittedException {
-    if (getModeForSubject(subject) == Mode.READONLY) {
+  ) throws OperationNotPermittedException, SchemaRegistryStoreException {
+    if (getModeInScope(subject) == Mode.READONLY) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
 
     if (schemaId >= 0) {
-      if (getModeForSubject(subject) != Mode.IMPORT) {
+      if (getModeInScope(subject) != Mode.IMPORT) {
         throw new OperationNotPermittedException("Subject " + subject + " is not in import mode");
       }
     } else {
-      if (getModeForSubject(subject) != Mode.READWRITE) {
+      if (getModeInScope(subject) != Mode.READWRITE) {
         throw new OperationNotPermittedException(
             "Subject " + subject + " is not in read-write mode"
         );
@@ -435,7 +435,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                                   Schema schema)
       throws SchemaRegistryException {
     try {
-      if (getModeForSubject(subject) == Mode.READONLY) {
+      if (getModeInScope(subject) == Mode.READONLY) {
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       // Ensure cache is up-to-date before any potential writes
@@ -478,7 +478,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public List<Integer> deleteSubject(String subject) throws SchemaRegistryException {
     // Ensure cache is up-to-date before any potential writes
     try {
-      if (getModeForSubject(subject) == Mode.READONLY) {
+      if (getModeInScope(subject) == Mode.READONLY) {
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(kafkaStoreTimeoutMs);
@@ -635,7 +635,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private void forwardSetModeRequestToMaster(
-      String prefix, Mode mode,
+      String subject, Mode mode,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = masterRestService.getBaseUrls();
@@ -645,7 +645,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     log.debug(String.format("Forwarding update mode request %s to %s",
         modeUpdateRequest, baseUrl));
     try {
-      masterRestService.setMode(headerProperties, modeUpdateRequest, prefix);
+      masterRestService.setMode(headerProperties, modeUpdateRequest, subject);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the update mode request %s to %s",
@@ -733,11 +733,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  public Set<String> listSubjects(String prefix)
+  public Set<String> listSubjects(String subjectOrPrefix)
       throws SchemaRegistryStoreException {
     try {
       Iterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys();
-      return extractUniqueSubjects(allKeys, prefix);
+      return extractUniqueSubjects(allKeys, subjectOrPrefix);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
@@ -760,7 +760,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return subjects;
   }
 
-  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys, String prefix)
+  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys,
+                                            String subjectOrPrefix)
       throws StoreException {
     Set<String> subjects = new HashSet<String>();
     while (allKeys.hasNext()) {
@@ -770,8 +771,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         SchemaValue value = (SchemaValue) kafkaStore.get(key);
         if (value != null && !value.isDeleted()) {
           String subject = key.getSubject();
-          // Check for prefix match
-          if (subject.startsWith(prefix)) {
+          if (subjectOrPrefix.endsWith(ModeKey.SUBJECT_WILDCARD)) {
+            // Check for prefix match
+            String prefix = subjectOrPrefix.substring(0, subjectOrPrefix.length() - 1);
+            if (subject.startsWith(prefix)) {
+              subjects.add(subject);
+            }
+          } else if (subject.equals(subjectOrPrefix)) {
             subjects.add(subject);
           }
         }
@@ -823,7 +829,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   public void updateCompatibilityLevel(String subject, AvroCompatibilityLevel newCompatibilityLevel)
       throws SchemaRegistryStoreException, UnknownMasterException, OperationNotPermittedException {
-    if (getModeForSubject(subject) == Mode.READONLY) {
+    if (getModeInScope(subject) == Mode.READONLY) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
     ConfigKey configKey = new ConfigKey(subject);
@@ -924,48 +930,56 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.kafkaStore.delete(configKey);
   }
 
-  public Mode getMode(String prefix) throws SchemaRegistryStoreException {
+  public Mode getMode(String subject) throws SchemaRegistryStoreException {
     try {
-      if (prefix == null) {
-        prefix = "";
+      if (subject == null) {
+        subject = ModeKey.SUBJECT_WILDCARD;
       }
-      ModeKey modeKey = new ModeKey(prefix);
+      ModeKey modeKey = new ModeKey(subject);
       ModeValue modeValue = (ModeValue) kafkaStore.get(modeKey);
-      return modeValue != null ? modeValue.getMode() : Mode.READWRITE;
+      return modeValue != null ? modeValue.getMode() : null;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to read mode from the kafka store", e);
     }
   }
 
-  public Mode getModeForSubject(String subject) {
-    // The modes are traversed in order of descending length of the prefixes.
-    for (Map.Entry<ModeKey, ModeValue> entry : modes.entrySet()) {
+  public Mode getModeInScope(String subject) throws SchemaRegistryStoreException {
+    Mode mode = getMode(subject);
+    if (mode != null) {
+      return mode;
+    }
+    // The mode prefixes are traversed in order of descending length of the prefixes.
+    for (Map.Entry<ModeKey, ModeValue> entry : modePrefixes.entrySet()) {
       ModeKey modeKey = entry.getKey();
       ModeValue modeValue = entry.getValue();
-      // Check for prefix match
-      if (subject.startsWith(modeKey.getPrefix())) {
+      // Check for subject match
+      String prefix = modeKey.getSubject();
+      if (prefix.startsWith(ModeKey.SUBJECT_WILDCARD)) {
+        prefix = prefix.substring(0, prefix.length() - 1);
+      }
+      if (subject.startsWith(prefix)) {
         return modeValue.getMode();
       }
     }
     return Mode.READWRITE;
   }
 
-  public void setMode(String prefix, Mode mode)
+  public void setMode(String subject, Mode mode)
       throws SchemaRegistryStoreException, OperationNotPermittedException {
     if (!allowModeChanges) {
       throw new OperationNotPermittedException("Mode changes are not allowed");
     }
-    if (prefix == null) {
-      prefix = "";
+    if (subject == null) {
+      subject = ModeKey.SUBJECT_WILDCARD;
     }
     if (mode == Mode.IMPORT) {
       // Import mode requires that no schemas exist with matching subjects.
-      Set<String> matchingSubjects = listSubjects(prefix);
+      Set<String> matchingSubjects = listSubjects(subject);
       if (!matchingSubjects.isEmpty()) {
         throw new OperationNotPermittedException("Cannot import since found existing schemas");
       }
     }
-    ModeKey modeKey = new ModeKey(prefix);
+    ModeKey modeKey = new ModeKey(subject);
     try {
       kafkaStore.put(modeKey, new ModeValue(mode));
       log.debug("Wrote new mode: " + mode.name() + " to the"
@@ -975,16 +989,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  public void setModeOrForward(String prefix, Mode mode, Map<String, String> headerProperties)
+  public void setModeOrForward(String subject, Mode mode, Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownMasterException {
     synchronized (masterLock) {
       if (isMaster()) {
-        setMode(prefix, mode);
+        setMode(subject, mode);
       } else {
         // forward update mode request to the master
         if (masterIdentity != null) {
-          forwardSetModeRequestToMaster(prefix, mode, headerProperties);
+          forwardSetModeRequestToMaster(subject, mode, headerProperties);
         } else {
           throw new UnknownMasterException("Update mode request failed since master is "
               + "unknown");
