@@ -937,6 +937,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       }
       ModeKey modeKey = new ModeKey(subject);
       ModeValue modeValue = (ModeValue) kafkaStore.get(modeKey);
+      if (modeValue == null && subject.endsWith(ModeKey.SUBJECT_WILDCARD)) {
+        // default global mode
+        return Mode.READWRITE;
+      }
       return modeValue != null ? modeValue.getMode() : null;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to read mode from the kafka store", e);
@@ -954,7 +958,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       ModeValue modeValue = entry.getValue();
       // Check for subject match
       String prefix = modeKey.getSubject();
-      if (prefix.startsWith(ModeKey.SUBJECT_WILDCARD)) {
+      if (prefix.endsWith(ModeKey.SUBJECT_WILDCARD)) {
         prefix = prefix.substring(0, prefix.length() - 1);
       }
       if (subject.startsWith(prefix)) {
