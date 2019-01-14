@@ -14,6 +14,8 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import org.eclipse.jetty.util.resource.Resource;
+import org.eclipse.jetty.util.resource.ResourceCollection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,6 +94,19 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
         log.error("Error starting the schema registry", e);
         System.exit(1);
       }
+    }
+  }
+
+  @Override
+  protected ResourceCollection getStaticResources() {
+    List<String> locations = config.getStaticLocations();
+    if (locations != null && !locations.isEmpty()) {
+      Resource[] resources = locations.stream()
+          .map(Resource::newClassPathResource)
+          .toArray(Resource[]::new);
+      return new ResourceCollection(resources);
+    } else {
+      return super.getStaticResources();
     }
   }
 
