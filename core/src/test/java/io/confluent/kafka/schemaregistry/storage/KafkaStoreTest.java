@@ -17,6 +17,11 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import kafka.admin.AdminUtils;
 import kafka.admin.RackAwareMode;
 import kafka.log.LogConfig;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.config.ConfigResource;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -27,9 +32,14 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
 
@@ -283,6 +293,32 @@ public class KafkaStoreTest extends ClusterTestHarness {
     Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
 
     StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, kafkaProps);
+  }
+
+  @Test
+  public void testTopicAdditionalConfigs() throws Exception {
+    Properties kafkaProps = new Properties();
+    kafkaProps.put("kafkastore.topic.config.delete.retention.ms", "10000");
+    kafkaProps.put("kafkastore.topic.config.segment.ms", "10000");
+    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    StoreUtils.createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, kafkaProps);
+
+    Properties props = new Properties();
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+
+    AdminClient admin = AdminClient.create(props);
+    ConfigResource configResource = new ConfigResource(
+            ConfigResource.Type.TOPIC,
+            SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC );
+    Map<org.apache.kafka.common.config.ConfigResource, Config> topicConfigs =
+        admin.describeConfigs(Collections.singleton(configResource)).all()
+            .get(60000, TimeUnit.MILLISECONDS);
+
+    Config config = topicConfigs.get(configResource);
+    assertNotNull(config.get("delete.retention.ms"));
+    assertEquals("10000",config.get("delete.retention.ms").value());
+    assertNotNull(config.get("segment.ms"));
+    assertEquals("10000",config.get("segment.ms").value());
   }
 
 }
