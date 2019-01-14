@@ -101,12 +101,12 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   protected ResourceCollection getStaticResources() {
     List<String> locations = config.getStaticLocations();
     if (locations != null && !locations.isEmpty()) {
-      Resource[] resources = config.getStaticLocations().stream()
+      Resource[] resources = locations.stream()
           .map(Resource::newClassPathResource)
           .toArray(Resource[]::new);
       return new ResourceCollection(resources);
     } else {
-      return null;
+      return super.getStaticResources();
     }
   }
 
