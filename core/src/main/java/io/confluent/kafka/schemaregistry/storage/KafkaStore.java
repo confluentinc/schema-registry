@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
@@ -204,12 +205,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
 
     NewTopic schemaTopicRequest = new NewTopic(topic, 1, (short) schemaTopicReplicationFactor);
-    schemaTopicRequest.configs(
-        Collections.singletonMap(
-            TopicConfig.CLEANUP_POLICY_CONFIG,
-            TopicConfig.CLEANUP_POLICY_COMPACT
-        )
+    Map topicConfigs = new HashMap(config.originalsWithPrefix("kafkastore.topic.config."));
+    topicConfigs.put(
+        TopicConfig.CLEANUP_POLICY_CONFIG,
+        TopicConfig.CLEANUP_POLICY_COMPACT
     );
+    schemaTopicRequest.configs(topicConfigs);
     try {
       admin.createTopics(Collections.singleton(schemaTopicRequest)).all()
           .get(initTimeout, TimeUnit.MILLISECONDS);
