@@ -28,8 +28,9 @@ public class AvroUtils {
    */
   public static AvroSchema parseSchema(String schemaString) {
     try {
-      if ( schemaString == null || schemaString.isEmpty())
+      if (schemaString == null || schemaString.isEmpty()) {
         throw new RestInvalidSchemaException("Input Avro schema is an Empty/null.");
+      }
       Schema.Parser parser1 = new Schema.Parser();
       Schema schema = parser1.parse(schemaString);
       String canonicalString = SchemaNormalizationWithDefault.toCanonicalForm(schema);
