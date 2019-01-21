@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>5.2.0</version>
+        <version>5.2.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
@@ -71,7 +71,7 @@
         <repository>
             <id>confluent</id>
             <name>Confluent</name>
-            <url>http://packages.confluent.io/maven/</url>
+            <url>${confluent.maven.repo}</url>
         </repository>
     </repositories>
 
@@ -137,12 +137,12 @@
                     <configuration>
                         <documentationUrl>https://docs.confluent.io/${project.version}/schema-registry/docs/connect.html</documentationUrl>
                         <sourceUrl>https://github.com/confluentinc/schema-registry</sourceUrl>
-
+                        
                         <supportProviderName>${project.organization.name}</supportProviderName>
                         <supportSummary>Confluent supports the Avro Converter alongside community members as part of its Confluent Platform offering.</supportSummary>
                         <supportUrl>https://docs.confluent.io/current/</supportUrl>
                         <supportLogo>logos/confluent.png</supportLogo>
-
+                        
                         <ownerUsername>confluentinc</ownerUsername>
                         <ownerType>organization</ownerType>
                         <ownerName>${project.organization.name}</ownerName>
