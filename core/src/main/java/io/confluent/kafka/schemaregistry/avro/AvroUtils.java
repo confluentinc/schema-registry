@@ -14,7 +14,7 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
 
@@ -28,11 +28,12 @@ public class AvroUtils {
    */
   public static AvroSchema parseSchema(String schemaString) {
     try {
+      if ( schemaString == null || schemaString.isEmpty())
+        throw new RestInvalidSchemaException("Input Avro schema is an Empty/null.");
       Schema.Parser parser1 = new Schema.Parser();
       Schema schema = parser1.parse(schemaString);
-      return new AvroSchema(schema, schema.toString());
-    } catch (NullPointerException e) {
-      throw Errors.invalidAvroException("Input Avro schema is an Empty/null.", e);
+      String canonicalString = SchemaNormalizationWithDefault.toCanonicalForm(schema);
+      return new AvroSchema(schema, canonicalString);
     } catch (SchemaParseException e) {
       return null;
     }
