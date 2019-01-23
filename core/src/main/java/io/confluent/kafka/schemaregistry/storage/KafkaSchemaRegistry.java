@@ -408,7 +408,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throws SchemaRegistryException {
     Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, false);
     if (existingSchema != null) {
-      if (schema.getId() >= 0 && schema.getId() != existingSchema.getId()) {
+      if (schema.getId() != null
+          && schema.getId() >= 0
+          && !schema.getId().equals(existingSchema.getId())
+      ) {
         throw new IdDoesNotMatchException("Schema already registered with id "
             + existingSchema.getId() + " instead of input id " + schema.getId());
       }
