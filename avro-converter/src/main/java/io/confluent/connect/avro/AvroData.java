@@ -958,8 +958,20 @@ public class AvroData {
     Object defaultVal = null;
     if (fieldSchema.defaultValue() != null) {
       defaultVal = fieldSchema.defaultValue();
+      // Avro doesn't handle a few types that Connect uses, so convert those explicitly here
       if (defaultVal instanceof Byte) {
+        // byte are mapped to integers in Avro
         defaultVal = ((Byte) defaultVal).intValue();
+      } else if (defaultVal instanceof Short) {
+        // Shorts are mapped to integers in Avro
+        defaultVal = ((Short) defaultVal).intValue();
+      } else if (defaultVal instanceof ByteBuffer) {
+        // Avro doesn't handle ByteBuffer directly, but does handle 'byte[]'
+        // Copy the contents of the byte buffer without side effects on the buffer
+        ByteBuffer buffer = (ByteBuffer)defaultVal;
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.duplicate().get(bytes);
+        defaultVal = bytes;
       }
     } else if (fieldSchema.isOptional()) {
       defaultVal = JsonProperties.NULL_VALUE;
