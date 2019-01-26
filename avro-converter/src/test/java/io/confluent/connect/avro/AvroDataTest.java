@@ -1501,6 +1501,48 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testAvroWithAndWithoutMetaData() {
+    String s1 = "{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"ListingStateChangedEventKeyRecord\",\n"
+        + "  \"namespace\": \"com.homeaway.property\",\n"
+        + "  \"doc\": \"Listing State Changed Event Key\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"listingUuid\",\n"
+        + "      \"type\": {\n"
+        + "        \"type\": \"string\",\n"
+        + "        \"avro.java.string\": \"String\"\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+    String s2 = "{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"ListingStateChangedEventKeyRecord\",\n"
+        + "  \"namespace\": \"com.homeaway.property\",\n"
+        + "  \"doc\": \"Another listing State Changed Event Key\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"listingUuid\",\n"
+        + "      \"type\": \"string\"\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    org.apache.avro.Schema avroSchema1 = new org.apache.avro.Schema.Parser().parse(s1);
+    org.apache.avro.Schema avroSchema2 = new org.apache.avro.Schema.Parser().parse(s2);
+
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData avroData = new AvroData(avroDataConfig);
+    Schema schema1 = avroData.toConnectSchema(avroSchema1);
+    Schema schema2 = avroData.toConnectSchema(avroSchema2);
+    assertEquals(schema1.parameters(), schema2.parameters());
+  }
+
+  @Test
   public void testArrayOfRecordWithNullNamespace() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.array().items()
             .record("item").fields()
