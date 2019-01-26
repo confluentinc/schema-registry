@@ -348,8 +348,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         if (schemaId >= 0) {
           schema.setId(schemaId);
         } else {
-          while (guidToSchemaKey.containsKey(nextAvailableSchemaId)) {
-            nextAvailableSchemaId++;
+          if (guidToSchemaKey.containsKey(nextAvailableSchemaId)) {
+            throw new SchemaRegistryStoreException("Error while registering the schema due "
+                + "to generating an ID that is already in use.");
           }
           schema.setId(nextAvailableSchemaId);
           nextAvailableSchemaId++;
