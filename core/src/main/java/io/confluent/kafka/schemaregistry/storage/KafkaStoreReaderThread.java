@@ -199,7 +199,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                     new ProducerRecord<byte[], byte[]>(topic, 0, record.key(), null);
                 producer.send(producerRecord);
               } catch (KafkaException ke) {
-                log.warn("Attempt to tombstone duplicate failed", ke);
+                log.warn("Failed to tombstone schema with duplicate ID", ke);
               }
             }
             try {
