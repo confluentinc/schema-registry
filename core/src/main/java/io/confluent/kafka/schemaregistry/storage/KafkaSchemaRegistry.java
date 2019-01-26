@@ -26,13 +26,13 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.common.metrics.JmxReporter;
@@ -133,8 +133,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
-    this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
-    this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();
+    this.guidToSchemaKey = new ConcurrentHashMap<>();
+    this.schemaHashToGuid = new ConcurrentHashMap<>();
     Store store = new InMemoryStore<SchemaRegistryKey, SchemaRegistryValue>();
     kafkaStore =
         new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(

@@ -45,7 +45,14 @@ public class KafkaStoreMessageHandler
       SchemaValue schemaObj = (SchemaValue) value;
       if (schemaObj != null) {
         SchemaKey oldKey = schemaRegistry.guidToSchemaKey.get(schemaObj.getId());
-        if (!key.equals(oldKey)) {
+        SchemaValue oldSchema;
+        try {
+          oldSchema = (SchemaValue) store.get(oldKey);
+        } catch (StoreException e) {
+          log.error("Error while retrieving schema", e);
+          return false;
+        }
+        if (oldSchema != null && !oldSchema.equals(schemaObj.getSchema())) {
           log.error("Found a schema with duplicate ID {}", schemaObj.getId());
           return false;
         }
