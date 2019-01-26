@@ -19,6 +19,14 @@ package io.confluent.kafka.schemaregistry.storage;
 public interface StoreUpdateHandler<K, V> {
 
   /**
+   * Invoked before every new K,V pair written to the store
+   *
+   * @param key   Key associated with the data
+   * @param value Data written to the store
+   */
+  public boolean validateUpdate(K key, V value);
+
+  /**
    * Invoked on every new K,V pair written to the store
    *
    * @param key   Key associated with the data
