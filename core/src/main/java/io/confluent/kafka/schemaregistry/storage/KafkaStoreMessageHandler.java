@@ -35,13 +35,32 @@ public class KafkaStoreMessageHandler
   }
 
   /**
+   * Invoked before every new K,V pair written to the store
+   *
+   * @param key   Key associated with the data
+   * @param value Data written to the store
+   */
+  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
+    if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
+      SchemaValue schemaObj = (SchemaValue) value;
+      if (schemaObj != null) {
+        if (schemaRegistry.guidToSchemaKey.containsKey(schemaObj.getId())) {
+          log.error("Found a schema with duplicate ID {}", schemaObj.getId());
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
    * Invoked on every new schema written to the Kafka store
    *
    * @param key   Key associated with the schema.
    * @param value Value written to the Kafka store
    */
   @Override
-  public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) throws StoreException {
+  public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
                          (SchemaValue) value);
@@ -69,15 +88,9 @@ public class KafkaStoreMessageHandler
     }
   }
 
-  private void handleSchemaUpdate(SchemaKey schemaKey, SchemaValue schemaObj)
-      throws StoreException {
+  private void handleSchemaUpdate(SchemaKey schemaKey, SchemaValue schemaObj) {
     if (schemaObj != null) {
-      if (schemaRegistry.guidToSchemaKey.containsKey(schemaObj.getId())) {
-        log.error("Found a schema with duplicate ID {}", schemaObj.getId());
-        throw new StoreException("Found schema with duplicate ID " + schemaObj.getId());
-      } else {
-        schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
-      }
+      schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
 
       // Update the maximum id seen so far
       if (schemaRegistry.getMaxIdInKafkaStore() < schemaObj.getId()) {

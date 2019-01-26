@@ -179,12 +179,15 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                       + ","
                       + message
                       + ") to the local store");
-            if (message == null) {
-              localStore.delete(messageKey);
-            } else {
-              localStore.put(messageKey, message);
+            boolean valid = this.storeUpdateHandler.validateUpdate(messageKey, message);
+            if (valid) {
+              if (message == null) {
+                localStore.delete(messageKey);
+              } else {
+                localStore.put(messageKey, message);
+              }
+              this.storeUpdateHandler.handleUpdate(messageKey, message);
             }
-            this.storeUpdateHandler.handleUpdate(messageKey, message);
             try {
               offsetUpdateLock.lock();
               offsetInSchemasTopic = record.offset();
