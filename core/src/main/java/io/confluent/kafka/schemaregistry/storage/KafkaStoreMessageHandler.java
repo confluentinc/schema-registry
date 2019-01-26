@@ -53,7 +53,7 @@ public class KafkaStoreMessageHandler
             log.error("Error while retrieving schema", e);
             return false;
           }
-          if (oldSchema != null && !oldSchema.equals(schemaObj.getSchema())) {
+          if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
             log.error("Found a schema with duplicate ID {}", schemaObj.getId());
             return false;
           }
