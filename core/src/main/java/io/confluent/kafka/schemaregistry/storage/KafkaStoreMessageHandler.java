@@ -41,7 +41,7 @@ public class KafkaStoreMessageHandler
    * @param value Value written to the Kafka store
    */
   @Override
-  public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
+  public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) throws StoreException {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
                          (SchemaValue) value);
@@ -69,9 +69,15 @@ public class KafkaStoreMessageHandler
     }
   }
 
-  private void handleSchemaUpdate(SchemaKey schemaKey, SchemaValue schemaObj) {
+  private void handleSchemaUpdate(SchemaKey schemaKey, SchemaValue schemaObj)
+      throws StoreException {
     if (schemaObj != null) {
-      schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
+      if (schemaRegistry.guidToSchemaKey.containsKey(schemaObj.getId())) {
+        log.error("Found a schema with duplicate ID {}", schemaObj.getId());
+        throw new StoreException("Found schema with duplicate ID " + schemaObj.getId());
+      } else {
+        schemaRegistry.guidToSchemaKey.put(schemaObj.getId(), schemaKey);
+      }
 
       // Update the maximum id seen so far
       if (schemaRegistry.getMaxIdInKafkaStore() < schemaObj.getId()) {

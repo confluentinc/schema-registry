@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+
 public interface StoreUpdateHandler<K, V> {
 
   /**
@@ -24,6 +26,6 @@ public interface StoreUpdateHandler<K, V> {
    * @param key   Key associated with the data
    * @param value Data written to the store
    */
-  public void handleUpdate(K key, V value);
+  public void handleUpdate(K key, V value) throws StoreException;
 
 }
