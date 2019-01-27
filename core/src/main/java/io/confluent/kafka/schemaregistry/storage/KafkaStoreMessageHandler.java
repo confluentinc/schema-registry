@@ -55,7 +55,7 @@ public class KafkaStoreMessageHandler
         if (oldKey != null) {
           SchemaValue oldSchema;
           try {
-            oldSchema = (SchemaValue) schemaRegistry.kafkaStore.get(oldKey);
+            oldSchema = (SchemaValue) lookupCache.get(oldKey);
           } catch (StoreException e) {
             log.error("Error while retrieving schema", e);
             return false;
