@@ -40,6 +40,9 @@ public class RecordNameStrategy implements SubjectNameStrategy<Schema>,
 
   @Override
   public String subjectName(String topic, boolean isKey, Schema schema) {
+    if (schema == null || schema.getType() == Schema.Type.NULL) {
+      return null;
+    }
     return getRecordName(schema, isKey);
   }
 
