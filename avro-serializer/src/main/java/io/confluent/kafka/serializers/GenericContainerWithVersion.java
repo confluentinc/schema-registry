@@ -33,11 +33,11 @@ public class GenericContainerWithVersion {
     this.version = version;
   }
 
-  public GenericContainer getContainer() {
+  public GenericContainer container() {
     return container;
   }
 
-  public Integer getVersion() {
+  public Integer version() {
     return version;
   }
 

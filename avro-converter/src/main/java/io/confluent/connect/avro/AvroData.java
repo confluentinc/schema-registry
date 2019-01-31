@@ -312,11 +312,11 @@ public class AvroData {
       this.version = version;
     }
 
-    public org.apache.avro.Schema getSchema() {
+    public org.apache.avro.Schema schema() {
       return schema;
     }
 
-    public Integer getVersion() {
+    public Integer version() {
       return version;
     }
 

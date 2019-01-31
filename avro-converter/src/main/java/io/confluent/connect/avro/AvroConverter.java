@@ -88,8 +88,8 @@ public class AvroConverter implements Converter {
       if (containerWithVersion == null) {
         return SchemaAndValue.NULL;
       }
-      GenericContainer deserialized = containerWithVersion.getContainer();
-      Integer version = containerWithVersion.getVersion();
+      GenericContainer deserialized = containerWithVersion.container();
+      Integer version = containerWithVersion.version();
       if (deserialized instanceof IndexedRecord) {
         return avroData.toConnectData(deserialized.getSchema(), deserialized, version);
       } else if (deserialized instanceof NonRecordContainer) {

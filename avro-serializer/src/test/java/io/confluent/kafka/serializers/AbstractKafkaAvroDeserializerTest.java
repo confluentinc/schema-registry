@@ -1,7 +1,6 @@
 package io.confluent.kafka.serializers;
 
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.junit.Assert.assertThat;
 
@@ -72,7 +71,7 @@ public class AbstractKafkaAvroDeserializerTest {
     schemaRegistry.register(subject, avroRecord.getSchema());
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     IndexedRecord deserialized
-        = (IndexedRecord) deserializer.deserializeWithSchemaAndVersion(topic, false, bytes).getContainer();
+        = (IndexedRecord) deserializer.deserializeWithSchemaAndVersion(topic, false, bytes).container();
 
     assertThat(deserialized.getSchema(), sameInstance(avroRecord.getSchema()));
   }
@@ -125,8 +124,8 @@ public class AbstractKafkaAvroDeserializerTest {
         = (GenericContainerWithVersion) deserializer.deserializeWithSchemaAndVersion(
             "topic", false, bytes);
 
-    org.apache.avro.Schema avroSchema = genericContainerWithVersion.getContainer().getSchema();
-    Integer schemaVersion = genericContainerWithVersion.getVersion();
+    org.apache.avro.Schema avroSchema = genericContainerWithVersion.container().getSchema();
+    Integer schemaVersion = genericContainerWithVersion.version();
     assertThat(schemaVersion, equalTo(version));
   }
 
@@ -136,12 +135,12 @@ public class AbstractKafkaAvroDeserializerTest {
     byte[] bytes = avroSerializer.serialize("topic", avroRecord);
     IndexedRecord deserialized1
         = (IndexedRecord) deserializer.deserializeWithSchemaAndVersion(
-            "topic", false, bytes).getContainer();
+            "topic", false, bytes).container();
     int hashCode = deserialized1.getSchema().hashCode();
 
     IndexedRecord deserialized2
         = (IndexedRecord) deserializer.deserializeWithSchemaAndVersion(
-        "topic", false, bytes).getContainer();
+        "topic", false, bytes).container();
 
     assertThat(deserialized1.getSchema(), sameInstance(deserialized2.getSchema()));
     org.apache.avro.Schema avroSchema = deserialized2.getSchema();
