@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.serializers;
 
-import java.util.Objects;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
@@ -27,7 +26,6 @@ import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
-import org.codehaus.jackson.node.JsonNodeFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -38,9 +36,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import kafka.utils.VerifiableProperties;
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSerDe {
-
-  public static final String SCHEMA_REGISTRY_SCHEMA_VERSION_PROP =
-      "schema.registry.schema.version";
 
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
@@ -157,23 +152,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
 
         Integer version = schemaVersion(topic, isKey, id, subject, schema, result);
 
-        if (schema.getType() == Schema.Type.UNION) {
-          // Can't set additional properties on a union schema since it's just a list, so set it
-          // on the first non-null entry
-          for (Schema memberSchema : schema.getTypes()) {
-            if (memberSchema.getType() != Schema.Type.NULL) {
-              memberSchema.addProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
-                                   JsonNodeFactory.instance.numberNode(version));
-              break;
-            }
-          }
-        } else {
-          setVersionProp(schema, version);
-        }
         if (schema.getType().equals(Schema.Type.RECORD)) {
-          return result;
+          return new GenericContainerWithVersion((GenericContainer) result, version);
         } else {
-          return new NonRecordContainer(schema, result);
+          return new GenericContainerWithVersion(new NonRecordContainer(schema, result), version);
         }
       } else {
         return result;
@@ -210,16 +192,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         : getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
-  private void setVersionProp(Schema schema, int version) {
-    // Only set the property if it isn't already set. Setting the property resets
-    // the hashcode, which can lead to an expensive hashcode computation in the caller
-    if (!Objects.equals(schema.getObjectProp(SCHEMA_REGISTRY_SCHEMA_VERSION_PROP), version)) {
-      schema.addProp(
-          SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
-          JsonNodeFactory.instance.numberNode(version));
-    }
-  }
-
   private Schema schemaForDeserialize(int id,
                                       Schema schemaFromRegistry,
                                       String subject,
@@ -237,10 +209,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
    * @return a GenericContainer with the schema and data, either as a {@link NonRecordContainer},
    * {@link org.apache.avro.generic.GenericRecord}, or {@link SpecificRecord}
    */
-  protected GenericContainer deserializeWithSchemaAndVersion(String topic, boolean isKey,
+  protected GenericContainerWithVersion deserializeWithSchemaAndVersion(String topic, boolean isKey,
                                                              byte[] payload)
       throws SerializationException {
-    return (GenericContainer) deserialize(true, topic, isKey, payload, null);
+    return (GenericContainerWithVersion) deserialize(true, topic, isKey, payload, null);
   }
 
   private DatumReader getDatumReader(Schema writerSchema, Schema readerSchema) {

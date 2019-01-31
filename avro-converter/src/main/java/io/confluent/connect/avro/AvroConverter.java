@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 import io.confluent.kafka.serializers.AvroSchemaUtils;
+import io.confluent.kafka.serializers.GenericContainerWithVersion;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.NonRecordContainer;
@@ -82,14 +83,18 @@ public class AvroConverter implements Converter {
   @Override
   public SchemaAndValue toConnectData(String topic, byte[] value) {
     try {
-      GenericContainer deserialized = deserializer.deserialize(topic, isKey, value);
-      if (deserialized == null) {
+      GenericContainerWithVersion containerWithVersion =
+          deserializer.deserialize(topic, isKey, value);
+      if (containerWithVersion == null) {
         return SchemaAndValue.NULL;
-      } else if (deserialized instanceof IndexedRecord) {
-        return avroData.toConnectData(deserialized.getSchema(), deserialized);
+      }
+      GenericContainer deserialized = containerWithVersion.getContainer();
+      Integer version = containerWithVersion.getVersion();
+      if (deserialized instanceof IndexedRecord) {
+        return avroData.toConnectData(deserialized.getSchema(), deserialized, version);
       } else if (deserialized instanceof NonRecordContainer) {
-        return avroData.toConnectData(deserialized.getSchema(), ((NonRecordContainer) deserialized)
-            .getValue());
+        return avroData.toConnectData(
+            deserialized.getSchema(), ((NonRecordContainer) deserialized).getValue(), version);
       }
       throw new DataException("Unsupported type returned during deserialization of topic %s "
                                   .format(topic));
@@ -130,7 +135,7 @@ public class AvroConverter implements Converter {
       configure(new KafkaAvroDeserializerConfig(configs));
     }
 
-    public GenericContainer deserialize(String topic, boolean isKey, byte[] payload) {
+    public GenericContainerWithVersion deserialize(String topic, boolean isKey, byte[] payload) {
       return deserializeWithSchemaAndVersion(topic, isKey, payload);
     }
   }

@@ -59,7 +59,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 
@@ -300,9 +299,45 @@ public class AvroData {
   }
 
   private Cache<Schema, org.apache.avro.Schema> fromConnectSchemaCache;
-  private Cache<org.apache.avro.Schema, Schema> toConnectSchemaCache;
+  private Cache<AvroSchemaAndVersion, Schema> toConnectSchemaCache;
   private boolean connectMetaData;
   private boolean enhancedSchemaSupport;
+
+  private static class AvroSchemaAndVersion {
+    private org.apache.avro.Schema schema;
+    private Integer version;
+
+    public AvroSchemaAndVersion(org.apache.avro.Schema schema, Integer version) {
+      this.schema = schema;
+      this.version = version;
+    }
+
+    public org.apache.avro.Schema getSchema() {
+      return schema;
+    }
+
+    public Integer getVersion() {
+      return version;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      AvroSchemaAndVersion that = (AvroSchemaAndVersion) o;
+      return Objects.equals(schema, that.schema) && Objects.equals(version, that.version);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(schema, version);
+    }
+  }
+
 
   public AvroData(int cacheSize) {
     this(new AvroDataConfig.Builder()
@@ -312,10 +347,10 @@ public class AvroData {
 
   public AvroData(AvroDataConfig avroDataConfig) {
     fromConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<Schema, org.apache.avro.Schema>(
+        new SynchronizedCache<>(new LRUCache<>(
             avroDataConfig.getSchemasCacheSize()));
     toConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<org.apache.avro.Schema, Schema>(
+        new SynchronizedCache<>(new LRUCache<>(
             avroDataConfig.getSchemasCacheSize()));
     this.connectMetaData = avroDataConfig.isConnectMetaData();
     this.enhancedSchemaSupport = avroDataConfig.isEnhancedAvroSchemaSupport();
@@ -1083,13 +1118,18 @@ public class AvroData {
    * Convert the given object, in Avro format, into an Connect data object.
    */
   public SchemaAndValue toConnectData(org.apache.avro.Schema avroSchema, Object value) {
+    return toConnectData(avroSchema, value, null);
+  }
+
+  public SchemaAndValue toConnectData(org.apache.avro.Schema avroSchema, Object value,
+                                      Integer version) {
     if (value == null) {
       return null;
     }
     ToConnectContext toConnectContext = new ToConnectContext();
     Schema schema = (avroSchema.equals(ANYTHING_SCHEMA))
-        ? null
-        : toConnectSchema(avroSchema, toConnectContext);
+                    ? null
+                    : toConnectSchema(avroSchema, version, toConnectContext);
     return new SchemaAndValue(schema, toConnectData(schema, value, toConnectContext));
   }
 
@@ -1336,8 +1376,8 @@ public class AvroData {
             Struct result = new Struct(schema);
             for (Field field : schema.fields()) {
               int avroFieldIndex = original.getSchema().getField(field.name()).pos();
-              Object convertedFieldValue
-                  = toConnectData(field.schema(), original.get(avroFieldIndex), toConnectContext);
+              Object convertedFieldValue =
+                  toConnectData(field.schema(), original.get(avroFieldIndex), toConnectContext);
               result.put(field, convertedFieldValue);
             }
             converted = result;
@@ -1362,23 +1402,26 @@ public class AvroData {
   }
 
   public Schema toConnectSchema(org.apache.avro.Schema schema) {
-    return toConnectSchema(schema, new ToConnectContext());
+    return toConnectSchema(schema, null, new ToConnectContext());
   }
 
 
-  private Schema toConnectSchema(org.apache.avro.Schema schema, ToConnectContext toConnectContext) {
+  private Schema toConnectSchema(org.apache.avro.Schema schema,
+                                 Integer version,
+                                 ToConnectContext toConnectContext) {
 
     // We perform caching only at this top level. While it might be helpful to cache some more of
     // the internal conversions, this is the safest place to add caching since some of the internal
     // conversions take extra flags (like forceOptional) which means the resulting schema might not
     // exactly match the Avro schema.
-    Schema cachedSchema = toConnectSchemaCache.get(schema);
+    AvroSchemaAndVersion schemaAndVersion = new AvroSchemaAndVersion(schema, version);
+    Schema cachedSchema = toConnectSchemaCache.get(schemaAndVersion);
     if (cachedSchema != null) {
       return cachedSchema;
     }
 
-    Schema resultSchema = toConnectSchema(schema, false, null, null, toConnectContext);
-    toConnectSchemaCache.put(schema, resultSchema);
+    Schema resultSchema = toConnectSchema(schema, false, null, null, version, toConnectContext);
+    toConnectSchemaCache.put(schemaAndVersion, resultSchema);
     return resultSchema;
   }
 
@@ -1399,6 +1442,17 @@ public class AvroData {
                                  boolean forceOptional,
                                  Object fieldDefaultVal,
                                  String docDefaultVal,
+                                 ToConnectContext toConnectContext) {
+    return toConnectSchema(
+        schema, forceOptional, fieldDefaultVal, docDefaultVal, null, toConnectContext);
+
+  }
+
+  private Schema toConnectSchema(org.apache.avro.Schema schema,
+                                 boolean forceOptional,
+                                 Object fieldDefaultVal,
+                                 String docDefaultVal,
+                                 Integer version,
                                  ToConnectContext toConnectContext) {
 
     String type = schema.getProp(CONNECT_TYPE_PROP);
@@ -1580,23 +1634,24 @@ public class AvroData {
     }
 
     // Included Kafka Connect version takes priority, fall back to schema registry version
-    JsonNode version = schema.getJsonProp(CONNECT_VERSION_PROP);
-    if (version == null) {
-      version = schema.getJsonProp(
-          AbstractKafkaAvroDeserializer.SCHEMA_REGISTRY_SCHEMA_VERSION_PROP);
-    }
-    if (version != null) {
-      if (!version.isIntegralNumber()) {
-        throw new DataException("Invalid Connect version found: " + version.toString());
+    int versionInt = -1;
+    JsonNode versionNode = schema.getJsonProp(CONNECT_VERSION_PROP);
+    if (versionNode != null) {
+      if (!versionNode.isIntegralNumber()) {
+        throw new DataException("Invalid Connect version found: " + versionNode.toString());
       }
-      final int versionInt = version.asInt();
+      versionInt = versionNode.asInt();
+    } else if (version != null) {
+      versionInt = version.intValue();
+    }
+    if (versionInt >= 0) {
       if (builder.version() != null) {
         if (versionInt != builder.version()) {
           throw new DataException("Mismatched versions: version already added to SchemaBuilder "
                                   + "("
                                   + builder.version()
                                   + ") differs from version in source schema ("
-                                  + version.toString()
+                                  + versionInt
                                   + ")");
         }
       } else {

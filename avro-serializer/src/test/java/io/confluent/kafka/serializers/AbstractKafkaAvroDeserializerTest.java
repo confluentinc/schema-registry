@@ -72,7 +72,7 @@ public class AbstractKafkaAvroDeserializerTest {
     schemaRegistry.register(subject, avroRecord.getSchema());
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     IndexedRecord deserialized
-        = (IndexedRecord) deserializer.deserializeWithSchemaAndVersion(topic, false, bytes);
+        = (IndexedRecord) deserializer.deserializeWithSchemaAndVersion(topic, false, bytes).getContainer();
 
     assertThat(deserialized.getSchema(), sameInstance(avroRecord.getSchema()));
   }
@@ -121,19 +121,13 @@ public class AbstractKafkaAvroDeserializerTest {
     int version = schemaRegistry.register("topic", avroRecord.getSchema());
     byte[] bytes = avroSerializer.serialize("topic", avroRecord);
 
-    IndexedRecord deserialized
-        = (IndexedRecord) deserializer.deserializeWithSchemaAndVersion(
+    GenericContainerWithVersion genericContainerWithVersion
+        = (GenericContainerWithVersion) deserializer.deserializeWithSchemaAndVersion(
             "topic", false, bytes);
 
-    org.apache.avro.Schema avroSchema = deserialized.getSchema();
-    assertThat(
-        avroSchema.getObjectProp(
-            AbstractKafkaAvroDeserializer.SCHEMA_REGISTRY_SCHEMA_VERSION_PROP),
-        instanceOf(Integer.class));
-    assertThat(
-        (Integer) avroSchema.getObjectProp(
-            AbstractKafkaAvroDeserializer.SCHEMA_REGISTRY_SCHEMA_VERSION_PROP),
-        equalTo(version));
+    org.apache.avro.Schema avroSchema = genericContainerWithVersion.getContainer().getSchema();
+    Integer schemaVersion = genericContainerWithVersion.getVersion();
+    assertThat(schemaVersion, equalTo(version));
   }
 
   @Test
@@ -142,12 +136,12 @@ public class AbstractKafkaAvroDeserializerTest {
     byte[] bytes = avroSerializer.serialize("topic", avroRecord);
     IndexedRecord deserialized1
         = (IndexedRecord) deserializer.deserializeWithSchemaAndVersion(
-            "topic", false, bytes);
+            "topic", false, bytes).getContainer();
     int hashCode = deserialized1.getSchema().hashCode();
 
     IndexedRecord deserialized2
         = (IndexedRecord) deserializer.deserializeWithSchemaAndVersion(
-        "topic", false, bytes);
+        "topic", false, bytes).getContainer();
 
     assertThat(deserialized1.getSchema(), sameInstance(deserialized2.getSchema()));
     org.apache.avro.Schema avroSchema = deserialized2.getSchema();
