@@ -21,7 +21,7 @@ import org.apache.avro.generic.GenericContainer;
 import java.util.Objects;
 
 /**
- * Wrapper for all non-record types that includes the schema for the data.
+ * Wrapper for GenericContainer along with a version number.
  */
 public class GenericContainerWithVersion {
 
