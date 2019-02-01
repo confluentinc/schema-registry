@@ -43,7 +43,7 @@ public class KafkaStoreMessageHandler
   public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
-      if (schemaObj != null) {
+      if (schemaObj != null && !schemaObj.isDeleted()) {
         SchemaKey oldKey = schemaRegistry.guidToSchemaKey.get(schemaObj.getId());
         if (oldKey != null) {
           SchemaValue oldSchema;
