@@ -1729,7 +1729,12 @@ public class AvroData {
       case BYTES:
       case FIXED:
         try {
-          return jsonValue.getBinaryValue();
+          Object  result = jsonValue.getBinaryValue();
+          LogicalTypeConverter logicalConverter = TO_CONNECT_LOGICAL_CONVERTERS.get(schema.name());
+          if (logicalConverter != null) {
+            result = logicalConverter.convert(schema, result);
+          }
+          return result;
         } catch (IOException e) {
           throw new DataException("Invalid binary data in default value");
         }
