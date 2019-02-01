@@ -19,8 +19,8 @@ You can use the Confluent CLI to start |sr| and its dependent services with this
      confluent start schema-registry
 
 .. include:: ../../includes/cli.rst
-      :start-after: cli_limitations_start
-      :end-before: cli_limitations_end
+      :start-line: 2
+      :end-line: 5
 
 ----------------------
 Production Environment
