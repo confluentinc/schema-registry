@@ -16,10 +16,10 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -39,9 +39,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   public InMemoryCache() {
     store = new ConcurrentSkipListMap<K, V>();
-    this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
-    this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();
-    this.guidToDeletedSchemaKeys = new HashMap<>();
+    this.guidToSchemaKey = new ConcurrentHashMap<>();
+    this.schemaHashToGuid = new ConcurrentHashMap<>();
+    this.guidToDeletedSchemaKeys = new ConcurrentHashMap<>();
   }
 
   public void init() throws StoreInitializationException {

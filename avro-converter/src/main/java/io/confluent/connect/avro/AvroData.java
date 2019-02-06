@@ -1,15 +1,17 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Confluent Community License; you may not use this file
- * except in compliance with the License.  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * http://www.confluent.io/confluent-community-license
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.confluent.connect.avro;
@@ -956,8 +958,20 @@ public class AvroData {
     Object defaultVal = null;
     if (fieldSchema.defaultValue() != null) {
       defaultVal = fieldSchema.defaultValue();
+      // Avro doesn't handle a few types that Connect uses, so convert those explicitly here
       if (defaultVal instanceof Byte) {
+        // byte are mapped to integers in Avro
         defaultVal = ((Byte) defaultVal).intValue();
+      } else if (defaultVal instanceof Short) {
+        // Shorts are mapped to integers in Avro
+        defaultVal = ((Short) defaultVal).intValue();
+      } else if (defaultVal instanceof ByteBuffer) {
+        // Avro doesn't handle ByteBuffer directly, but does handle 'byte[]'
+        // Copy the contents of the byte buffer without side effects on the buffer
+        ByteBuffer buffer = (ByteBuffer)defaultVal;
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.duplicate().get(bytes);
+        defaultVal = bytes;
       }
     } else if (fieldSchema.isOptional()) {
       defaultVal = JsonProperties.NULL_VALUE;
@@ -1416,14 +1430,16 @@ public class AvroData {
           if (null != precisionNode) {
             if (!precisionNode.isNumber()) {
               throw new DataException(AVRO_LOGICAL_DECIMAL_PRECISION_PROP
-                                      + " property must be a JSON Integer."
-                                      + " https://avro.apache.org/docs/1.7.7/spec.html#Decimal");
+                  + " property must be a JSON Integer."
+                  + " https://avro.apache.org/docs/1.7.7/spec.html#Decimal");
             }
             Integer precision = precisionNode.asInt();
             builder.parameter(CONNECT_AVRO_DECIMAL_PRECISION_PROP, precision.toString());
           } else {
-            builder.parameter(CONNECT_AVRO_DECIMAL_PRECISION_PROP,
-                              CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT.toString());
+            builder.parameter(
+                CONNECT_AVRO_DECIMAL_PRECISION_PROP,
+                CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT.toString()
+            );
           }
         } else {
           builder = SchemaBuilder.bytes();
@@ -1511,7 +1527,7 @@ public class AvroData {
       case ENUM:
         // enums are unwrapped to strings and the original enum is not preserved
         builder = SchemaBuilder.string();
-        if (schema.getDoc() != null) {
+        if (connectMetaData && schema.getDoc() != null) {
           builder.parameter(CONNECT_ENUM_DOC_PROP, schema.getDoc());
         }
         builder.parameter(AVRO_TYPE_ENUM, schema.getFullName());
@@ -1567,7 +1583,7 @@ public class AvroData {
     if (docVal != null) {
       builder.doc(docVal);
     }
-    if (schema.getDoc() != null) {
+    if (connectMetaData && schema.getDoc() != null) {
       builder.parameter(CONNECT_RECORD_DOC_PROP, schema.getDoc());
     }
 
@@ -1597,7 +1613,7 @@ public class AvroData {
     }
 
     JsonNode parameters = schema.getJsonProp(CONNECT_PARAMETERS_PROP);
-    if (parameters != null) {
+    if (connectMetaData && parameters != null) {
       if (!parameters.isObject()) {
         throw new DataException("Expected JSON object for schema parameters but found: "
             + parameters);

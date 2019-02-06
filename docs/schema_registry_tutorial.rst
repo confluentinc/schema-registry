@@ -362,16 +362,7 @@ The consumer caches this mapping between the schema and schema id for subsequent
 Auto Schema Registration
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-By default, client applications automatically register new schemas.
-If they produce new messages to a new topic, then they will automatically try to register new schemas.
-This is very convenient in development environments, but in production environments we recommend that client applications do not automatically register new schemas.
-Register schemas outside of the client application to control when schemas are registered with |sr-long| and how they evolve.
-
-Within the application, disable automatic schema registration by setting the configuration parameter `auto.register.schemas=false`, as shown in the examples below.
-
-.. sourcecode:: java
-
-   props.put(AbstractKafkaAvroSerDeConfig.AUTO_REGISTER_SCHEMAS, false);
+.. include:: includes/auto-schema-registration.rst
 
 To manually register the schema outside of the application, send the schema to |sr| and associate it with a subject, in this case `transactions-value`.  It returns a schema id of `1`.
 
@@ -396,24 +387,14 @@ This schema evolution is a natural behavior of how applications and data develop
 This allows producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data.
 This is especially important in Kafka because producers and consumers are decoupled applications that are sometimes developed by different teams.
 
-|sr| can check compatibility of a new schema against just the latest registered schema for that subject, or if configured as transitive then it checks against all previously registered schemas, not just the latest one.
-If there are three schemas for a subject that change in order `A`, `B`, and `C` then:
+.. include:: includes/transitive.rst
 
-* `non-transitive` ensures compatibility between A <==> B and B <==> C
-* `transitive` ensures compatibility between A <==> B and B <==> C and A <==> C
+These are the compatibility types:
 
-These are the types of `compatibility types <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`_:
+.. include:: includes/compatibility_list.rst
 
-* ``FORWARD``: consumers using the latest registered schema can read data written by producers using the new schema
-* ``FORWARD_TRANSITIVE``: consumers using any previously registered schema can read data written by producers using the new schema
-* ``BACKWARD``: consumers using the new schema can read data written by producers using the latest registered schema
-* ``BACKWARD_TRANSITIVE``: consumers using the new schema can read data written by producers using any previously registered schema
-* ``FULL``: the new schema is forward and backward compatible with the latest registered schema
-* ``FULL_TRANSITIVE``: the new schema is forward and backward compatible with any previously registered schema
-* ``NONE``: schema compatibility checks are disabled
-
-By default, |sr| is configured for ``BACKWARD`` compatibility.
-You can change this globally or per subject, but for the remainder of this tutorial, leave the default compatibility level to `backward`.
+You can change this globally or per subject, but for the remainder of this tutorial, leave the default compatibility type to `backward`.
+Refer to :ref:`schema_evolution_and_compatibility` for a more in-depth explanation on the compatibility types.
 
 
 Failing Compatibility Checks

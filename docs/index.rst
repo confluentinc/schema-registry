@@ -14,6 +14,62 @@
 .. tip:: To see a working example of |sr|, check out :ref:`Confluent Platform demo <cp-demo>`. The demo shows you how to deploy a
          Kafka streaming ETL, including |sr|, using KSQL for stream processing.
 
+
+Avro Background
+---------------
+
+When sending data over the network or storing it in a file, we need a
+way to encode the data into bytes. The area of data serialization has
+a long history, but has evolved quite a bit over the last few
+years. People started with programming language specific serialization
+such as Java serialization, which makes consuming the data in other
+languages inconvenient. People then moved to language agnostic formats
+such as JSON.
+
+However, formats like JSON lack a strictly defined format, which has two significant drawbacks:
+
+1. **Data consumers may not understand data producers:** The lack of structure makes consuming data in these formats
+   more challenging because fields can be arbitrarily added or removed, and data can even be corrupted.  This drawback
+   becomes more severe the more applications or teams across an organization begin consuming a data feed: if an
+   upstream team can make arbitrary changes to the data format at their discretion, then it becomes very difficult to
+   ensure that all downstream consumers will (continue to) be able to interpret the data.  What's missing is a
+   "contract" (cf. schema below) for data between the producers and the consumers, similar to the contract of an API.
+2. **Overhead and verbosity:** They are verbose because field names and type information have to be explicitly
+   represented in the serialized format, despite the fact that are identical across all messages.
+
+A few cross-language serialization libraries have emerged that require the data structure to be formally defined by
+some sort of schemas. These libraries include `Avro <http://avro.apache.org>`_,
+`Thrift <http://thrift.apache.org>`_, and `Protocol Buffers <https://github.com/google/protobuf>`_.  The advantage of
+having a schema is that it clearly specifies the structure, the type and the meaning (through documentation) of the
+data.  With a schema, data can also be encoded more efficiently.
+In particular, we recommend Avro which is supported in |cp|.
+
+An Avro schema defines the data structure in a JSON format.
+
+The following is an example Avro schema that specifies a user record with two fields: ``name`` and ``favorite_number``
+of type ``string`` and ``int``, respectively.
+
+.. sourcecode:: json
+
+    {"namespace": "example.avro",
+     "type": "record",
+     "name": "user",
+     "fields": [
+         {"name": "name", "type": "string"},
+         {"name": "favorite_number",  "type": "int"}
+     ]
+    }
+
+You can then use this Avro schema, for example, to serialize a Java object (POJO) into bytes, and deserialize these
+bytes back into the Java object.
+
+One of the interesting things about Avro is that it not only requires
+a schema during data serialization, but also during data
+deserialization. Because the schema is provided at decoding time,
+metadata such as the field names don't have to be explicitly encoded
+in the data. This makes the binary encoding of Avro data very compact.
+
+
 Schema ID Allocation
 --------------------
 
@@ -30,7 +86,9 @@ path stores the upper bound on the current ID batch, and new batch allocation is
 
 Kafka Backend
 -------------
-Kafka is used as |sr| storage backend. The special Kafka topic ``<kafkastore.topic>`` (default ``_schemas``), with a single partition, is used as a highly available write ahead log. All schemas, subject/version and ID metadata, and compatibility settings are appended as messages to this log. A |sr| instance therefore both produces and consumes messages under the ``_schemas`` topic. It produces messages to the log when, for example, new schemas are registered under a subject, or when updates to compatibility settings are registered. |sr| consumes from the ``_schemas`` log in a background thread, and updates its local caches on consumption of each new ``_schemas`` message to reflect the newly added schema or compatibility setting. Updating local state from the Kafka log in this manner ensures durability, ordering, and easy recoverability.
+
+.. include:: includes/backend.rst
+
 
 .. _schemaregistry_single_master:
 

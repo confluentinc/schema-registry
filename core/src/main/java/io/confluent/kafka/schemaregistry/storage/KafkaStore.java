@@ -31,10 +31,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -61,6 +63,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final Serializer<K, V> serializer;
   private final Store<K, V> localStore;
   private final AtomicBoolean initialized = new AtomicBoolean(false);
+  private final CountDownLatch initLatch = new CountDownLatch(1);
   private final int initTimeout;
   private final int timeout;
   private final String bootstrapBrokers;
@@ -129,7 +132,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
                                      this.storeUpdateHandler, serializer, this.localStore,
-                                     this.noopKey, this.config);
+                                     this.producer, this.noopKey, this.config);
     this.kafkaTopicReader.start();
 
     try {
@@ -143,6 +146,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
     }
+    initLatch.countDown();
   }
 
   public static void addSchemaRegistryConfigsToClientProperties(SchemaRegistryConfig config,
@@ -202,12 +206,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
 
     NewTopic schemaTopicRequest = new NewTopic(topic, 1, (short) schemaTopicReplicationFactor);
-    schemaTopicRequest.configs(
-        Collections.singletonMap(
-            TopicConfig.CLEANUP_POLICY_CONFIG,
-            TopicConfig.CLEANUP_POLICY_COMPACT
-        )
+    Map topicConfigs = new HashMap(config.originalsWithPrefix("kafkastore.topic.config."));
+    topicConfigs.put(
+        TopicConfig.CLEANUP_POLICY_CONFIG,
+        TopicConfig.CLEANUP_POLICY_COMPACT
     );
+    schemaTopicRequest.configs(topicConfigs);
     try {
       admin.createTopics(Collections.singleton(schemaTopicRequest)).all()
           .get(initTimeout, TimeUnit.MILLISECONDS);
@@ -374,6 +378,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
     localStore.close();
     log.debug("Kafka store shut down complete");
+  }
+
+  public void waitForInit() throws InterruptedException {
+    if (initLatch.getCount() > 0) {
+      initLatch.await();
+    }
   }
 
   /**

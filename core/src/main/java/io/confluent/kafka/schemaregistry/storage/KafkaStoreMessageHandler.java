@@ -46,6 +46,36 @@ public class KafkaStoreMessageHandler
   }
 
   /**
+   * Invoked before every new K,V pair written to the store
+   *
+   * @param key   Key associated with the data
+   * @param value Data written to the store
+   */
+  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
+    if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
+      SchemaValue schemaObj = (SchemaValue) value;
+      if (schemaObj != null && !schemaObj.isDeleted()) {
+        SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
+        if (oldKey != null) {
+          SchemaValue oldSchema;
+          try {
+            oldSchema = (SchemaValue) lookupCache.get(oldKey);
+          } catch (StoreException e) {
+            log.error("Error while retrieving schema", e);
+            return false;
+          }
+          // Check the old schema even if it may be deleted, as the schema may still be in use.
+          if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
+            log.error("Found a schema with duplicate ID {}", schemaObj.getId());
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
    * Invoked on every new schema written to the Kafka store
    *
    * @param key   Key associated with the schema.
@@ -55,7 +85,7 @@ public class KafkaStoreMessageHandler
   public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
-                         (SchemaValue) value);
+          (SchemaValue) value);
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
     } else if (key.getKeyType() == SchemaRegistryKeyType.MODE) {
@@ -114,8 +144,11 @@ public class KafkaStoreMessageHandler
   private void tombstoneSchemaKey(SchemaKey schemaKey) {
     tombstoneExecutor.execute(() -> {
           try {
+            schemaRegistry.getKafkaStore().waitForInit();
             schemaRegistry.getKafkaStore().put(schemaKey, null);
             log.debug("Tombstoned {}", schemaKey);
+          } catch (InterruptedException e) {
+            log.error("Interrupted while waiting for the tombstone thread to be initialized ", e);
           } catch (StoreException e) {
             log.error("Failed to tombstone {}", schemaKey, e);
           }

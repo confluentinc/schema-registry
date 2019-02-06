@@ -25,7 +25,7 @@
               files="(AbstractKafkaAvroDeserializer|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter|MockSchemaRegistryClient).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter).java"/>
+              files="(AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter|KafkaSchemaRegistry).java"/>
 
     <suppress checks="JavaNCSS"
               files="AvroData.java"/>

@@ -92,7 +92,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private final SchemaRegistryConfig config;
   private final LookupCache lookupCache;
   private final Map<ModeKey, ModeValue> modePrefixes;
-  private final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
+  // visible for testing
+  final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
@@ -364,7 +365,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         if (schemaId >= 0) {
           schema.setId(schemaId);
         } else {
-          schema.setId(idGenerator.id(schema));
+          int newId = idGenerator.id(schema);
+          if (lookupCache.schemaKeyById(newId) != null) {
+            throw new SchemaRegistryStoreException("Error while registering the schema due "
+                + "to generating an ID that is already in use.");
+          }
+          schema.setId(newId);
         }
 
         SchemaValue schemaValue = new SchemaValue(schema);

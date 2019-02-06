@@ -1,98 +1,80 @@
-.. _serialization_and_evolution:
+.. _schema_evolution_and_compatibility:
 
-Data Serialization and Evolution
-================================
-
-When sending data over the network or storing it in a file, we need a
-way to encode the data into bytes. The area of data serialization has
-a long history, but has evolved quite a bit over the last few
-years. People started with programming language specific serialization
-such as Java serialization, which makes consuming the data in other
-languages inconvenient. People then moved to language agnostic formats
-such as JSON.
-
-However, formats like JSON lack a strictly defined format, which has two significant drawbacks:
-
-1. **Data consumers may not understand data producers:** The lack of structure makes consuming data in these formats
-   more challenging because fields can be arbitrarily added or removed, and data can even be corrupted.  This drawback
-   becomes more severe the more applications or teams across an organization begin consuming a data feed: if an
-   upstream team can make arbitrary changes to the data format at their discretion, then it becomes very difficult to
-   ensure that all downstream consumers will (continue to) be able to interpret the data.  What's missing is a
-   "contract" (cf. schema below) for data between the producers and the consumers, similar to the contract of an API.
-2. **Overhead and verbosity:** They are verbose because field names and type information have to be explicitly
-   represented in the serialized format, despite the fact that are identical across all messages.
-
-A few cross-language serialization libraries have emerged that require the data structure to be formally defined by
-some sort of schemas. These libraries include `Avro <http://avro.apache.org>`_,
-`Thrift <http://thrift.apache.org>`_, and `Protocol Buffers <https://github.com/google/protobuf>`_.  The advantage of
-having a schema is that it clearly specifies the structure, the type and the meaning (through documentation) of the
-data.  With a schema, data can also be encoded more efficiently.
-
-If you don't know where to start, then we particularly recommend :ref:`Avro <serialization_and_evolution-avro>`, which
-is also supported in the Confluent Platform.  In the next section we briefly introduce Avro, and how it can be used to
-support typical schema evolution.
-
-
-.. _serialization_and_evolution-avro:
-
-Avro
-----
-
-
-Defining an Avro Schema
-^^^^^^^^^^^^^^^^^^^^^^^
-
-An Avro schema defines the data structure in a JSON format.
-
-The following is an example Avro schema that specifies a user record with two fields: ``name`` and ``favorite_number``
-of type ``string`` and ``int``, respectively.
-
-.. sourcecode:: json
-
-    {"namespace": "example.avro",
-     "type": "record",
-     "name": "user",
-     "fields": [
-         {"name": "name", "type": "string"},
-         {"name": "favorite_number",  "type": "int"}
-     ]
-    }
-
-You can then use this Avro schema, for example, to serialize a Java object (POJO) into bytes, and deserialize these
-bytes back into the Java object.
-
-One of the interesting things about Avro is that it not only requires
-a schema during data serialization, but also during data
-deserialization. Because the schema is provided at decoding time,
-metadata such as the field names don't have to be explicitly encoded
-in the data. This makes the binary encoding of Avro data very compact.
-
+Schema Evolution and Compatibility
+==================================
 
 Schema Evolution
-^^^^^^^^^^^^^^^^
+----------------
 
-An important aspect of data management is **schema evolution**.  After the initial schema is defined, applications may
+An important aspect of data management is schema evolution.  After the initial schema is defined, applications may
 need to evolve it over time. When this happens, it's critical for the downstream consumers to be able to handle data
 encoded with both the old and the new schema seamlessly. This is an area that tends to be overlooked in practice until
 you run into your first production issues.  Without thinking through data management and schema evolution carefully,
 people often pay a much higher cost later on.
 
-There are three common patterns of schema evolution:
+When using Avro, one of the most important things is to manage its schemas and consider how those
+schemas should evolve. :ref:`Confluent Schema Registry <schemaregistry_intro>` is built for exactly that purpose.
+Schema compatibility checking is implemented in |sr| by versioning every single schema.
+The compatibility type determines how |sr| compares the new schema with previous versions of a schema, for a given subject.
+When a schema is first created for a subject, it gets a unique id and it gets a version number, i.e., version 1.
+When the schema is updated (if it passes compatibility checks), it gets a new unique id and it gets an incremented version number, i.e., version 2.
 
-1. :ref:`backward compatibility <avro-backward_compatibility>`
-2. :ref:`forward compatibility <avro-forward_compatibility>`
-3. :ref:`full compatibility <avro-full_compatibility>`
 
+Compatibility Types
+-------------------
+
+Summary
+^^^^^^^
+
+The following table presents a summary of the types of schema changes allowed for the different compatibility types, for a given subject.
+The |sr-long| default compatibility type is ``BACKWARD``.
+All the compatibility types are described in more detail in the sections below.
+
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| Compatibility Type       | Changes allowed             | Check against which schemas      | Upgrade first     |
++==========================+=============================+==================================+===================+
+| ``BACKWARD``             | - Delete fields             | Last version                     | Consumers         |
+|                          | - Add optional fields       |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``BACKWARD_TRANSITIVE``  | - Delete fields             | All previous versions            | Consumers         |
+|                          | - Add optional fields       |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FORWARD``              | - Add fields                | Last version                     | Producers         |
+|                          | - Delete optional fields    |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FORWARD_TRANSITIVE``   | - Add fields                | All previous versions            | Producers         |
+|                          | - Delete optional fields    |                                  |                   |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FULL``                 | - Modify optional fields    | Last version                     | Any order         |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``FULL_TRANSITIVE``      | - Modify optional fields    | All previous versions            | Any order         |
++--------------------------+-----------------------------+----------------------------------+-------------------+
+| ``NONE``                 | - All changes are accepted  | Compatibility checking disabled  | Depends           |
++--------------------------+-----------------------------+----------------------------------+-------------------+
 
 .. _avro-backward_compatibility:
 
 Backward Compatibility
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Backward compatibility means that data encoded with an older schema can be read with a newer schema.
+``BACKWARD`` compatibility means that consumers using the new schema can read data produced with the last schema.
+For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``BACKWARD`` compatibility ensures that consumers using the new schema `X` can process data written by producers using schema `X` or `X-1`, but not necessarily `X-2`.
+If the consumer using the new schema needs to be able to process data written by all registered schemas, not just the last two schemas, then use ``BACKWARD_TRANSITIVE`` instead of ``BACKWARD``.
+For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``BACKWARD_TRANSITIVE`` compatibility ensures that consumers using the new schema `X` can process data written by producers using schema `X`, `X-1`, or `X-2`.
+
+* ``BACKWARD``: consumer using schema `X` can process data produced with schema `X` or `X-1`
+* ``BACKWARD_TRANSITIVE``: consumer using schema `X` can process data produced with schema `X`, `X-1`, or `X-2`
+
+
+.. note::
+
+   The |sr-long| default compatibility type is ``BACKWARD``, not ``BACKWARD_TRANSITIVE``.
+
+
+An example of a backward compatible change is a removal of a field. A consumer that was developed to process events without this field will be able to process events written with the old schema and contain the field – the consumer will just ignore that field.
 
 Consider the case where all the data in Kafka is also loaded into HDFS, and we want to run SQL queries (e.g., using
-Apache Hive) over all the data. Here, it is important that the same SQl queries continue to work even as the data is
+Apache Hive) over all the data. Here, it is important that the same SQL queries continue to work even as the data is
 undergoing changes over time.  To support this kind of use case, we can evolve the schemas in a backward compatible way.
 Avro has a set of `rules <http://avro.apache.org/docs/1.7.7/spec.html#Schema+Resolution>`_ on what changes are allowed
 in the new schema for it to be backward compatible. If all schemas are evolved in a backward compatible way, we can
@@ -116,7 +98,7 @@ For example, an application can evolve the
 
 Note that the new field ``favorite_color`` has the default value "green". This allows data encoded with the old schema
 to be read with the new one. The default value specified in the new schema will be used for the missing field when
-deserializing the data encoded with the old schema.  Had the default value been ommitted in the new field, the new
+deserializing the data encoded with the old schema.  Had the default value been omitted in the new field, the new
 schema would not be backward compatible with the old one since it's not clear what value should be assigned to the new
 field, which is missing in the old data.
 
@@ -133,7 +115,15 @@ field, which is missing in the old data.
 Forward Compatibility
 ^^^^^^^^^^^^^^^^^^^^^
 
-Forward compatibility means that data encoded with a newer schema can be read with an older schema.
+``FORWARD`` compatibility means that data produced with a new schema can be read by consumers using the last schema, even though they may not be able to use the full capabilities of the new schema.
+For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FORWARD`` compatibility ensures that data written by producers using the new schema `X` can be processed by consumers using schema `X` or `X-1`, but not necessarily `X-2`.
+If data produced with a new schema needs to be read by consumers using all registered schemas, not just the last two schemas, then use ``FORWARD_TRANSITIVE`` instead of ``FORWARD``.
+For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FORWARD_TRANSITIVE`` compatibility ensures that data written by producers using the new schema `X` can be processed by consumers using schema `X`, `X-1`, or `X-2`.
+
+* ``FORWARD``: data produced using schema `X` can be ready by consumers with schema `X` or `X-1`
+* ``FORWARD_TRANSITIVE``: data produced using schema `X` can be ready by consumers with schema `X`, `X-1`, or `X`
+
+An example of a forward compatible schema modification is adding a new field. In most data formats, consumers that were written to process events without the new field will be able to continue doing so even when they receive new events that contain the new field.
 
 Consider a use case where a consumer has application logic tied to a particular version of the schema. When the schema
 evolves, the application logic may not be updated immediately. Therefore, we need to be able to project data with newer
@@ -151,16 +141,74 @@ for the new data because the original schema did not specify a default value for
 Full Compatibility
 ^^^^^^^^^^^^^^^^^^
 
-Full compatibility means schemas are backward **and** forward compatible.
+``FULL`` compatibility means schemas are both backward **and** forward compatible.
+Schemas evolve in a fully compatible way: old data can be read with the new schema, and new data can also be read with the last schema.
+For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FULL`` compatibility ensures that consumers using the new schema `X` can process data written by producers using schema `X` or `X-1`, but not necessarily `X-2`, and that data written by producers using the new schema `X` can be processed by consumers using schema `X` or `X-1`, but not necessarily `X-2`.
+If the new schema needs to be forward and backward compatible with all registered schemas, not just the last two schemas, then use ``FULL_TRANSITIVE`` instead of ``FULL``.
+For example, if there are three schemas for a subject that change in order `X-2`, `X-1`, and `X` then ``FULL_TRANSITIVE`` compatibility ensures that consumers using the new schema `X` can process data written by producers using schema `X`, `X-1`, or `X-2`, and that data written by producers using the new schema `X` can be processed by consumers using schema `X`, `X-1`, or `X-2`.
 
-To support both previous use cases on the same data, we can evolve the schemas in a fully compatible way: old data can
-be read with the new schema, and new data can also be read with the old schema.
+* ``FULL``: backward and forward compatibile between schemas `X` and `X-1`
+* ``FULL_TRANSITIVE``: backward and forward compatibile between schemas `X`, `X-1`, and `X-2`
+
+In some data formats, such as JSON, there are no full-compatible changes. Every modification is either only forward or only backward compatible. But in other data formats, like Avro, you can define fields with default values. In that case adding or removing a field with a default value is a fully compatible change.
 
 
-|sr-long|
-^^^^^^^^^
+.. _avro-none_compatibility:
 
-As you can see, when using Avro, one of the most important things is to manage its schemas and reason about how those
-schemas should evolve. :ref:`Confluent Schema Registry <schemaregistry_intro>` is built for exactly that purpose.
-You can find out the details on how to use it to store Avro schemas and enforce certain compatibility rules during
-schema evolution by looking at the :ref:`schemaregistry_api`.
+No Compatibility Checking
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``NONE`` compatibility type means schema compatibility checks are disabled.
+
+Sometimes we make incompatible changes.
+For example, modifying a field type from ``Number`` to ``String``.
+In this case, you will either need to upgrade all producers and consumers to the new schema version at the same time, or more likely – create a brand-new topic and start migrating applications to use the new topic and new schema, avoiding the need to handle two incompatible versions in the same topic.
+
+
+Transitive Property
+-------------------
+
+.. include:: includes/transitive.rst
+
+
+Order of Upgrading Clients
+--------------------------
+
+The configured compatibility type has an implication on the order for upgrading client applications, i.e., the producers using schemas to write events to Kafka and the consumers using schemas to read events from Kafka.
+Depending on the compatibility type:
+
+* ``BACKWARD`` or ``BACKWARD_TRANSITIVE``: there is no assurance that consumers using older schemas can read data produced using the new schema. Therefore, upgrade all consumers before you start producing new events.
+* ``FORWARD`` or ``FORWARD_TRANSITIVE``: there is no assurance that consumers using the new schema can read data produced using older schemas. Therefore, first upgrade all producers to using the new schema and make sure the data already produced using the older schemas are not available to consumers, then upgrade the consumers.
+* ``FULL`` or ``FULL_TRANSITIVE``: there are assurances that consumers using older schemas can read data produced using the new schema and that consumers using the new schema can read data produced using older schemas. Therefore, you can upgrade the producers and consumers independently.
+* ``NONE``: compatibility checks are disabled. Therefore, you need to be cautious about when to upgrade clients.
+
+
+Examples
+--------
+
+Each of the sections above has an example of the compatibility type.
+An additional reference is the `Avro compatibility test suite <https://github.com/confluentinc/schema-registry/blob/master/core/src/test/java/io/confluent/kafka/schemaregistry/avro/AvroCompatibilityTest.java>`__, which presents multiple test cases with two schemas and the respective result of the compatibility test between them.
+
+
+Using Compatibility Types
+-------------------------
+
+You can find out the details on how to use |sr| to store Avro schemas and enforce certain compatibility rules during schema evolution by looking at the :ref:`schemaregistry_api`.
+Here are some tips to get you started.
+
+To check the currently configured compatibility type, view the configured setting:
+
+#.  `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#getting-the-top-level-config>`__
+
+To set the compatibility level, you may configure it in one of two ways:
+
+#. `In your client application <https://docs.confluent.io/current/schema-registry/docs/config.html#avro-compatibility-level>`__
+#. `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#updating-compatibility-requirements-globally>`__
+
+To validate the compatibility of a given schema, you may test it one of two ways:
+
+#. `Using the Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#schema-registry-test-compatibility>`__
+#. `Using the Schema Registry REST API <https://docs.confluent.io/current/schema-registry/docs/using.html#testing-compatibility-of-a-schema-with-the-latest-schema-under-subject-kafka-value>`__
+
+Refer to the |sr-long| Tutorial which has an example of :ref:`checking schema compatibility <schema_registry_tutorial>`.
+

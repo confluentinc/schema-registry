@@ -159,6 +159,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "schema.registry.resource.extension.class";
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
+  public static final String RESOURCE_STATIC_LOCATIONS_CONFIG =
+      "resource.static.locations";
   @Deprecated
   public static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG =
       "schema.registry.inter.instance.protocol";
@@ -300,6 +302,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + " like filters to Schema Registry. Typically used to add custom capability like logging, "
       + " security, etc. The schema.registry.resource.extension.class name is deprecated; "
       + "prefer using resource.extension.class instead.";
+  protected static final String RESOURCE_STATIC_LOCATIONS_DOC =
+      "  A list of classpath resources containing static resources to serve using the default "
+          + "servlet.";
   protected static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC =
       "The protocol used while making calls between the instances of schema registry. The slave "
       + "to master node calls for writes and deletes will use the specified protocol. The default "
@@ -495,6 +500,9 @@ public class SchemaRegistryConfig extends RestConfig {
         .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
                 ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
         )
+        .define(RESOURCE_STATIC_LOCATIONS_CONFIG, ConfigDef.Type.LIST, "",
+            ConfigDef.Importance.LOW, RESOURCE_STATIC_LOCATIONS_DOC
+        )
         .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, "",
                 ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
         .define(INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,
@@ -659,6 +667,10 @@ public class SchemaRegistryConfig extends RestConfig {
       return SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG;
     }
     return RESOURCE_EXTENSION_CONFIG;
+  }
+
+  public List<String> getStaticLocations() {
+    return getList(RESOURCE_STATIC_LOCATIONS_CONFIG);
   }
 
   /**
