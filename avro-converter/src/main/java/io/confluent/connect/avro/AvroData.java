@@ -1115,12 +1115,23 @@ public class AvroData {
   }
 
   /**
-   * Convert the given object, in Avro format, into an Connect data object.
+   * Convert the given object, in Avro format, into a Connect data object.
+   * @param avroSchema the Avro schema
+   * @param value the value to convert into a Connect data object
+   * @return the Connect schema and value
    */
   public SchemaAndValue toConnectData(org.apache.avro.Schema avroSchema, Object value) {
     return toConnectData(avroSchema, value, null);
   }
 
+  /**
+   * Convert the given object, in Avro format, into a Connect data object.
+   * @param avroSchema the Avro schema
+   * @param value the value to convert into a Connect data object
+   * @param version the version to set on the Connect schema if the avroSchema does not have a
+   *     property named "connect.version", may be null
+   * @return the Connect schema and value
+   */
   public SchemaAndValue toConnectData(org.apache.avro.Schema avroSchema, Object value,
                                       Integer version) {
     if (value == null) {
@@ -1634,7 +1645,7 @@ public class AvroData {
     }
 
     // Included Kafka Connect version takes priority, fall back to schema registry version
-    int versionInt = -1;
+    int versionInt = -1;  // A valid version must be a positive integer (assumed throughout SR)
     JsonNode versionNode = schema.getJsonProp(CONNECT_VERSION_PROP);
     if (versionNode != null) {
       if (!versionNode.isIntegralNumber()) {

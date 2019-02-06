@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2019 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,12 @@ import org.apache.avro.generic.GenericContainer;
 import java.util.Objects;
 
 /**
- * Wrapper for GenericContainer along with a version number.
+ * Wrapper for GenericContainer along with a version number, which may be null.
+ *
+ * <p>The version is typically the version of the Avro schema of the GenericContainer in the context
+ * of a subject.  The version is used to set the version on the Connect Schema that is
+ * derived from the Avro schema, but only if the Avro schema does not have a property named
+ * "connect.version", which takes precedence over the version here.
  */
 public class GenericContainerWithVersion {
 
