@@ -10,6 +10,7 @@
 * :ref:`SASL authentication<kafka_sasl_auth>`  with a secure Kafka Cluster 
 * Authentication with |zk| over SASL
 * :ref:`End-user REST API calls over HTTPS<schema_registry_http_https>`
+* :ref:`confluentsecurityplugins_Introduction`
 
 For more details, check the :ref:`configuration options<schemaregistry_config>`.
 

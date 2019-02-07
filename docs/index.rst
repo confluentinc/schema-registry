@@ -92,6 +92,7 @@ Documentation
    operations
    multidc
    security
+   ../../confluent-security-plugins/schema-registry/introduction
    serializer-formatter
    schema-deletion-guidelines
    maven-plugin
