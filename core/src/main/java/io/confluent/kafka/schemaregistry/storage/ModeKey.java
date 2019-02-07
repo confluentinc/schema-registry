@@ -45,6 +45,25 @@ public class ModeKey extends SchemaRegistryKey {
     this.subject = subject;
   }
 
+  public boolean isPrefix() {
+    return getPrefix() != null;
+  }
+
+  /**
+   * Get the prefix for this ModeKey, or null if is not a prefix.
+   * @return the prefix, or null
+   */
+  public String getPrefix() {
+    return getPrefix(subject);
+  }
+
+  public static String getPrefix(String subject) {
+    if (subject != null && subject.endsWith(SUBJECT_WILDCARD)) {
+      return subject.substring(0, subject.length() - 1);
+    }
+    return null;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -77,14 +96,14 @@ public class ModeKey extends SchemaRegistryKey {
   @Override
   public int compareTo(SchemaRegistryKey that) {
     int compare = super.compareTo(that);
-    if (compare == 0) {
-      ModeKey otherKey = (ModeKey) that;
-
-      // Sort by length of subject (or prefix) in descending order
-      int lenComp = otherKey.subject.length() - this.subject.length();
-      return lenComp == 0 ? subject.compareTo(otherKey.subject) : lenComp;
-    } else {
+    if (compare != 0) {
       return compare;
     }
+
+    ModeKey otherKey = (ModeKey) that;
+
+    // Sort by length of subject (or prefix) in descending order
+    int lenComp = otherKey.subject.length() - this.subject.length();
+    return lenComp == 0 ? subject.compareTo(otherKey.subject) : lenComp;
   }
 }

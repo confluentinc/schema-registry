@@ -244,7 +244,7 @@ public class SchemaRegistryConfig extends RestConfig {
       "If true, this node can participate in master election. In a multi-colo setup, turn this off "
       + "for clusters in the slave data center.";
   protected static final String MODE_MUTABILITY_DOC =
-      "If true, the mode of this node can be changed.";
+      "If true, the mode of this schema registry cluster can be changed.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";

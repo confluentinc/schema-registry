@@ -89,24 +89,15 @@ public class CachedSchemaRegistryClientTest {
 
   @Test
   public void testRegisterSchemaCacheWithId() throws Exception {
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20, new
-        HashMap<String, Object>());
-
-    String schema = "{\"type\": \"record\", \"name\": \"Blah\", \"fields\": [{ \"name\": \"name\", \"type\": \"string\" }]}";
-    Schema avroSchema = new Schema.Parser().parse(schema);
-
-    String subject = "foo";
-    int id = 25;
-
-    EasyMock.reset(restService);
     // Expect one call to register schema
-    expect(restService.registerSchema(anyString(), eq(subject), eq(25)))
-        .andReturn(id);
+    expect(restService.registerSchema(anyString(), eq(SUBJECT_0), eq(ID_25)))
+        .andReturn(ID_25)
+        .once();
 
     replay(restService);
 
-    assertEquals(id, client.register(subject, avroSchema, id));
-    assertEquals(id, client.register(subject, avroSchema, id)); // hit the cache
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, ID_25));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, ID_25)); // hit the cache
 
     verify(restService);
   }
@@ -262,10 +253,7 @@ public class CachedSchemaRegistryClientTest {
 
   @Test
   public void testSetMode() throws Exception {
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
-        HashMap<String, Object>());
-
-    String mode = "READONLY";
+    final String mode = "READONLY";
 
     EasyMock.reset(restService);
 
@@ -282,10 +270,7 @@ public class CachedSchemaRegistryClientTest {
 
   @Test
   public void testGetMode() throws Exception {
-    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(restService, 20,  new
-        HashMap<String, Object>());
-
-    String mode = "READONLY";
+    final String mode = "READONLY";
 
     EasyMock.reset(restService);
 

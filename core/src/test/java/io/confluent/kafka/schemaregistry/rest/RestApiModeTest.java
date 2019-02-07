@@ -30,6 +30,13 @@ import static org.junit.Assert.fail;
 
 public class RestApiModeTest extends ClusterTestHarness {
 
+  private static String SCHEMA_STRING = AvroUtils.parseSchema(
+      "{\"type\":\"record\","
+          + "\"name\":\"myrecord\","
+          + "\"fields\":"
+          + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
+      .canonicalString;
+
   public RestApiModeTest() {
     super(1, true, AvroCompatibilityLevel.BACKWARD.name);
   }
@@ -44,15 +51,9 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    // register a valid avro
-    String schemaString1 = AvroUtils.parseSchema(
-        "{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
-        + "\"fields\":"
-        + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
-        .canonicalString;
+    // register a valid avro schema
     try {
-      restApp.restClient.registerSchema(schemaString1, subject);
+      restApp.restClient.registerSchema(SCHEMA_STRING, subject);
       fail("Registering during read-only mode should fail");
     } catch (RestClientException e) {
       // this is expected.
@@ -72,15 +73,9 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    // register a valid avro
-    String schemaString1 = AvroUtils.parseSchema(
-        "{\"type\":\"record\","
-            + "\"name\":\"myrecord\","
-            + "\"fields\":"
-            + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
-        .canonicalString;
+    // register a valid avro schema
     try {
-      restApp.restClient.registerSchema(schemaString1, subject, 1);
+      restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1);
       fail("Registering an incompatible schema should fail");
     } catch (RestClientException e) {
       // this is expected.
@@ -92,7 +87,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering without id should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(schemaString1, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
   }
 
   @Test
@@ -105,17 +100,11 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    // register a valid avro
-    String schemaString1 = AvroUtils.parseSchema(
-        "{\"type\":\"record\","
-            + "\"name\":\"myrecord\","
-            + "\"fields\":"
-            + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
-        .canonicalString;
+    // register a valid avro schema
     int expectedIdSchema1 = 1;
     assertEquals("Registering without id should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(schemaString1, subject, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, expectedIdSchema1));
   }
 
   @Test
@@ -123,17 +112,11 @@ public class RestApiModeTest extends ClusterTestHarness {
     String subject = "testSubject";
     String mode = "IMPORT";
 
-    // register a valid avro
-    String schemaString1 = AvroUtils.parseSchema(
-        "{\"type\":\"record\","
-            + "\"name\":\"myrecord\","
-            + "\"fields\":"
-            + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
-        .canonicalString;
+    // register a valid avro schema
     int expectedIdSchema1 = 1;
     assertEquals("Registering without id should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(schemaString1, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
 
     try {
       restApp.restClient.setMode(mode).getMode();

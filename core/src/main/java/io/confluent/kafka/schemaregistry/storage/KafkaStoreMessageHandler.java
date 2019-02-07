@@ -94,7 +94,7 @@ public class KafkaStoreMessageHandler
   }
 
   private void handleMode(ModeKey modeKey, ModeValue modeValue) {
-    if (modeKey.getSubject().endsWith(ModeKey.SUBJECT_WILDCARD)) {
+    if (modeKey.isPrefix()) {
       modePrefixes.put(modeKey, modeValue);
     }
   }

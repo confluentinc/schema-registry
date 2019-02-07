@@ -63,7 +63,12 @@ public interface SchemaRegistryClient {
   public String setMode(String mode)
       throws IOException, RestClientException;
 
+  public String setMode(String mode, String subject)
+      throws IOException, RestClientException;
+
   public String getMode() throws IOException, RestClientException;
+
+  public String getMode(String subject) throws IOException, RestClientException;
 
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
 

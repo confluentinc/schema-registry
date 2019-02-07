@@ -21,6 +21,10 @@ package io.confluent.kafka.schemaregistry.exceptions;
  */
 public class IdDoesNotMatchException extends SchemaRegistryException {
 
+  public IdDoesNotMatchException(int registeredId, int inputId) {
+    super("Schema already registered with id " + registeredId + " instead of input id " + inputId);
+  }
+
   public IdDoesNotMatchException(String message, Throwable cause) {
     super(message, cause);
   }

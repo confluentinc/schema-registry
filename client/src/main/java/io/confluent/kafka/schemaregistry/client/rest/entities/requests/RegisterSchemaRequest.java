@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.util.Objects;
 
 public class RegisterSchemaRequest {
 
@@ -58,31 +59,18 @@ public class RegisterSchemaRequest {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    if (!super.equals(o)) {
-      return false;
-    }
-
     RegisterSchemaRequest that = (RegisterSchemaRequest) o;
-
-    if (schema != null ? !schema.equals(that.schema) : that.schema != null) {
-      return false;
-    }
-
-    return true;
+    return id == that.id && Objects.equals(schema, that.schema);
   }
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
-    result = 31 * result + (schema != null ? schema.hashCode() : 0);
-    return result;
+    return Objects.hash(id, schema);
   }
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{schema=" + this.schema + "}");
-    return sb.toString();
+    return id >= 0 ? "{id=" + id + ", schema=" + schema + "}" : "{schema=" + schema + "}";
   }
 
   public String toJson() throws IOException {

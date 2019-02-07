@@ -37,13 +37,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
+  private static final String WILDCARD = "*";
+
   private String defaultCompatibility = "BACKWARD";
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Schema, Integer> schemaIdCache;
   private final Map<String, Map<Integer, Schema>> idCache;
   private final Map<String, Map<Schema, Integer>> versionCache;
   private final Map<String, String> compatibilityCache;
-  private String mode = "READWRITE";
+  private final Map<String, String> modes;
   private final AtomicInteger ids;
 
   public MockSchemaRegistryClient() {
@@ -52,6 +54,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     idCache = new HashMap<String, Map<Integer, Schema>>();
     versionCache = new HashMap<String, Map<Schema, Integer>>();
     compatibilityCache = new HashMap<String, String>();
+    modes = new HashMap<String, String>();
     ids = new AtomicInteger(0);
     idCache.put(null, new HashMap<Integer, Schema>());
   }
@@ -295,13 +298,25 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public String setMode(String mode)
       throws IOException, RestClientException {
-    this.mode = mode;
+    modes.put(WILDCARD, mode);
+    return mode;
+  }
+
+  @Override
+  public String setMode(String mode, String subject)
+      throws IOException, RestClientException {
+    modes.put(subject, mode);
     return mode;
   }
 
   @Override
   public String getMode() throws IOException, RestClientException {
-    return this.mode;
+    return modes.getOrDefault(WILDCARD, "READWRITE");
+  }
+
+  @Override
+  public String getMode(String subject) throws IOException, RestClientException {
+    return modes.getOrDefault(subject, "READWRITE");
   }
 
   @Override

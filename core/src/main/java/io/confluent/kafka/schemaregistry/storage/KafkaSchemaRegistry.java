@@ -328,8 +328,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
       if (schemaIdAndSubjects != null) {
         if (schemaId >= 0 && schemaId != schemaIdAndSubjects.getSchemaId()) {
-          throw new IdDoesNotMatchException("Schema already registered with id "
-              + schemaIdAndSubjects.getSchemaId() + " instead of input id " + schema.getId());
+          throw new IdDoesNotMatchException(schemaIdAndSubjects.getSchemaId(), schema.getId());
         }
         if (schemaIdAndSubjects.hasSubject(subject)
             && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
@@ -418,8 +417,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           && schema.getId() >= 0
           && !schema.getId().equals(existingSchema.getId())
       ) {
-        throw new IdDoesNotMatchException("Schema already registered with id "
-            + existingSchema.getId() + " instead of input id " + schema.getId());
+        throw new IdDoesNotMatchException(existingSchema.getId(), schema.getId());
       }
       return existingSchema.getId();
     }
@@ -780,9 +778,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         SchemaValue value = (SchemaValue) kafkaStore.get(key);
         if (value != null && !value.isDeleted()) {
           String subject = key.getSubject();
-          if (subjectOrPrefix.endsWith(ModeKey.SUBJECT_WILDCARD)) {
+          String prefix = ModeKey.getPrefix(subjectOrPrefix);
+          if (prefix != null) {
             // Check for prefix match
-            String prefix = subjectOrPrefix.substring(0, subjectOrPrefix.length() - 1);
             if (subject.startsWith(prefix)) {
               subjects.add(subject);
             }
@@ -946,7 +944,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       }
       ModeKey modeKey = new ModeKey(subject);
       ModeValue modeValue = (ModeValue) kafkaStore.get(modeKey);
-      if (modeValue == null && subject.endsWith(ModeKey.SUBJECT_WILDCARD)) {
+      if (modeValue == null && modeKey.isPrefix()) {
         // default global mode
         return Mode.READWRITE;
       }
@@ -966,11 +964,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       ModeKey modeKey = entry.getKey();
       ModeValue modeValue = entry.getValue();
       // Check for subject match
-      String prefix = modeKey.getSubject();
-      if (prefix.endsWith(ModeKey.SUBJECT_WILDCARD)) {
-        prefix = prefix.substring(0, prefix.length() - 1);
-      }
-      if (subject.startsWith(prefix)) {
+      String prefix = modeKey.getPrefix();
+      if (prefix != null && subject.startsWith(prefix)) {
         return modeValue.getMode();
       }
     }
