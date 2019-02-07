@@ -431,7 +431,7 @@ public class RestService {
 
   public ModeUpdateRequest setMode(String mode)
       throws IOException, RestClientException {
-    return setMode(null);
+    return setMode(mode, null);
   }
 
   public ModeUpdateRequest setMode(String mode, String subject)
