@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.codehaus.jackson.annotate.JsonPropertyOrder;
 
@@ -45,6 +46,7 @@ public class ModeKey extends SchemaRegistryKey {
     this.subject = subject;
   }
 
+  @JsonIgnore
   public boolean isPrefix() {
     return getPrefix() != null;
   }
@@ -53,6 +55,7 @@ public class ModeKey extends SchemaRegistryKey {
    * Get the prefix for this ModeKey, or null if is not a prefix.
    * @return the prefix, or null
    */
+  @JsonIgnore
   public String getPrefix() {
     return getPrefix(subject);
   }
