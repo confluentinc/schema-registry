@@ -3,7 +3,7 @@
 |sr| System Requirements
 ========================
 
-This section describes the key considerations before going to production with your cluster. However, it is not an
+This topic describes the key considerations before going to production with your cluster. However, it is not an
 exhaustive guide to running your |sr| in production.
 
 Hardware
@@ -132,15 +132,15 @@ Don't Modify These Storage Settings
     :start-line: 230
     :end-line: 237
 
-Kafka & ZooKeeper
------------------
+Kafka and |zk|
+--------------
 
 For recommendations on operationalizing Kafka and |zk|, see :ref:`schemaregistry_operations`.
 
 .. _schemaregistry_zk_migration:
 
-Migration from ZooKeeper master election to Kafka master election
------------------------------------------------------------------
+Migration from |zk| master election to Kafka master election
+------------------------------------------------------------
 
 It is not required to migrate from |zk|-based election to Kafka-based master election.
 
