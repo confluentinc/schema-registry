@@ -34,6 +34,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
+import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.node.ArrayNode;
 import org.codehaus.jackson.node.IntNode;
 import org.codehaus.jackson.node.JsonNodeFactory;
@@ -282,6 +283,15 @@ public class AvroDataTest {
   
   @Test
   public void testFromConnectComplexWithDefaults() {
+    int dateDefVal = 100;
+    int timeDefVal = 1000 * 60 * 60 * 2;
+    long tsDefVal = 1000 * 60 * 60 * 24 * 365 + 100;
+    java.util.Date dateDef = Date.toLogical(Date.SCHEMA, dateDefVal);
+    java.util.Date timeDef = Time.toLogical(Time.SCHEMA, timeDefVal);
+    java.util.Date tsDef = Timestamp.toLogical(Timestamp.SCHEMA, tsDefVal);
+    BigDecimal decimalDef = new BigDecimal(BigInteger.valueOf(314159L), 5);
+    byte[] decimalDefVal = decimalDef.unscaledValue().toByteArray();
+
     Schema schema = SchemaBuilder.struct()
                                  .field("int8", SchemaBuilder.int8().defaultValue((byte) 2).doc("int8 field").build())
                                  .field("int16", SchemaBuilder.int16().defaultValue((short)12).doc("int16 field").build())
@@ -294,6 +304,10 @@ public class AvroDataTest {
                                  .field("bytes", SchemaBuilder.bytes().defaultValue(ByteBuffer.wrap("foo".getBytes())).doc("bytes field").build())
                                  .field("array", SchemaBuilder.array(Schema.STRING_SCHEMA).defaultValue(Arrays.asList("a", "b", "c")).build())
                                  .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).defaultValue(Collections.singletonMap("field", 1)).build())
+                                 .field("date", Date.builder().defaultValue(dateDef).doc("date field").build())
+                                 .field("time", Time.builder().defaultValue(timeDef).doc("time field").build())
+                                 .field("ts", Timestamp.builder().defaultValue(tsDef).doc("ts field").build())
+                                 .field("decimal", Decimal.builder(5).defaultValue(decimalDef).doc("decimal field").build())
                                  .build();
     // leave the struct empty so that only defaults are used
     Struct struct = new Struct(schema)
@@ -308,6 +322,10 @@ public class AvroDataTest {
         .put("bytes", ByteBuffer.wrap("foo".getBytes()))
         .put("array", Arrays.asList("a", "b", "c"))
         .put("map", Collections.singletonMap("field", 1))
+        .put("date", dateDef)
+        .put("time", timeDef)
+        .put("ts", tsDef)
+        .put("decimal", decimalDef);
 
     // Define the expected Avro schema
     org.apache.avro.Schema complexMapElementSchema =
@@ -347,6 +365,37 @@ public class AvroDataTest {
     bytesSchema.addProp("connect.doc", "bytes field");
     bytesSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode("foo".getBytes()));
 
+    org.apache.avro.Schema dateSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    dateSchema.addProp("connect.doc", "date field");
+    dateSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(dateDefVal));
+    dateSchema.addProp(AvroData.CONNECT_NAME_PROP, Date.LOGICAL_NAME);
+    dateSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    dateSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DATE);
+
+    org.apache.avro.Schema timeSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    timeSchema.addProp("connect.doc", "time field");
+    timeSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(timeDefVal));
+    timeSchema.addProp(AvroData.CONNECT_NAME_PROP, Time.LOGICAL_NAME);
+    timeSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    timeSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MILLIS);
+
+    org.apache.avro.Schema tsSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    tsSchema.addProp("connect.doc", "ts field");
+    tsSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(tsDefVal));
+    tsSchema.addProp(AvroData.CONNECT_NAME_PROP, Timestamp.LOGICAL_NAME);
+    tsSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    tsSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MILLIS);
+
+    org.apache.avro.Schema decimalSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
+    decimalSchema.addProp("scale", 5);
+    decimalSchema.addProp("precision", 64);
+    decimalSchema.addProp("connect.doc", "decimal field");
+    decimalSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    decimalSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode(decimalDefVal));
+    decimalSchema.addProp("connect.parameters", parameters("scale", "5"));
+    decimalSchema.addProp(AvroData.CONNECT_NAME_PROP, Decimal.LOGICAL_NAME);
+    decimalSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
+
     org.apache.avro.Schema arraySchema = org.apache.avro.SchemaBuilder.builder().array().items().stringType();
     ArrayNode arrayNode = JsonNodeFactory.instance.arrayNode();
     arrayNode.add("a");
@@ -382,6 +431,10 @@ public class AvroDataTest {
         .name("bytes").doc("bytes field").type(bytesSchema).withDefault(ByteBuffer.wrap("foo".getBytes()))
         .name("array").type(arraySchema).withDefault(Arrays.asList("a", "b", "c"))
         .name("map").type(mapSchema).withDefault(Collections.singletonMap("field", 1))
+        .name("date").doc("date field").type(dateSchema).withDefault(dateDefVal)
+        .name("time").doc("time field").type(timeSchema).withDefault(timeDefVal)
+        .name("ts").doc("ts field").type(tsSchema).withDefault(tsDefVal)
+        .name("decimal").doc("decimal field").type(decimalSchema).withDefault(ByteBuffer.wrap(decimalDefVal))
         .endRecord();
     org.apache.avro.generic.GenericRecord avroRecord
         = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
@@ -396,6 +449,10 @@ public class AvroDataTest {
         .set("bytes", ByteBuffer.wrap("foo".getBytes()))
         .set("array", Arrays.asList("a", "b", "c"))
         .set("map", Collections.singletonMap("field", 1))
+        .set("date", dateDefVal)
+        .set("time", timeDefVal)
+        .set("ts", tsDefVal)
+        .set("decimal", decimalDefVal)
         .build();
 
     SchemaAndValue schemaAndValue = new SchemaAndValue(schema, struct);
@@ -2034,4 +2091,17 @@ public class AvroDataTest {
     }
     assertEquals(expected, actual);
   }
+
+  private JsonNode parameters(String key1, String v1) {
+    return parametersFromConnect(Collections.singletonMap(key1, v1));
+  }
+
+  private JsonNode parametersFromConnect(Map<String, String> params) {
+    ObjectNode result = JsonNodeFactory.instance.objectNode();
+    for (Map.Entry<String, String> entry : params.entrySet()) {
+      result.put(entry.getKey(), entry.getValue());
+    }
+    return result;
+  }
+
 }

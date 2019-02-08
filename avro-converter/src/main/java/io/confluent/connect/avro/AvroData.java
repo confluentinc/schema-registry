@@ -988,6 +988,10 @@ public class AvroData {
     Object defaultVal = null;
     if (fieldSchema.defaultValue() != null) {
       defaultVal = fieldSchema.defaultValue();
+
+      // If this is a logical, convert to the primitive form for the Avro default value
+      defaultVal = fromLogical(fieldSchema, defaultVal);
+
       // Avro doesn't handle a few types that Connect uses, so convert those explicitly here
       if (defaultVal instanceof Byte) {
         // byte are mapped to integers in Avro
@@ -1014,6 +1018,26 @@ public class AvroData {
     fields.add(field);
   }
 
+  private static Object fromLogical(Schema schema, Object value) {
+    if (schema != null && schema.name() != null) {
+      LogicalTypeConverter logicalConverter = TO_AVRO_LOGICAL_CONVERTERS.get(schema.name());
+      if (logicalConverter != null && value != null) {
+        return logicalConverter.convert(schema, value);
+      }
+    }
+    return value;
+  }
+
+  private static Object toLogical(Schema schema, Object value) {
+    if (schema != null && schema.name() != null) {
+      LogicalTypeConverter logicalConverter = TO_CONNECT_LOGICAL_CONVERTERS.get(schema.name());
+      if (logicalConverter != null && value != null) {
+        return logicalConverter.convert(schema, value);
+      }
+    }
+    return value;
+  }
+
   // Convert default values from Connect data format to Avro's format, which is an
   // org.codehaus.jackson.JsonNode. The default value is provided as an argument because even
   // though you can get a default value from the schema, default values for complex structures need
@@ -1023,13 +1047,7 @@ public class AvroData {
     try {
       // If this is a logical type, convert it from the convenient Java type to the underlying
       // serializeable format
-      Object defaultVal = value;
-      if (schema != null && schema.name() != null) {
-        LogicalTypeConverter logicalConverter = TO_AVRO_LOGICAL_CONVERTERS.get(schema.name());
-        if (logicalConverter != null && value != null) {
-          defaultVal = logicalConverter.convert(schema, value);
-        }
-      }
+      Object defaultVal = fromLogical(schema, value);
 
       switch (schema.type()) {
         case INT8:
@@ -1493,13 +1511,11 @@ public class AvroData {
                   + " property must be a JSON Integer."
                   + " https://avro.apache.org/docs/1.7.7/spec.html#Decimal");
             }
+            // Capture the precision as a parameter only if it is not the default
             Integer precision = precisionNode.asInt();
-            builder.parameter(CONNECT_AVRO_DECIMAL_PRECISION_PROP, precision.toString());
-          } else {
-            builder.parameter(
-                CONNECT_AVRO_DECIMAL_PRECISION_PROP,
-                CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT.toString()
-            );
+            if (precision != CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT) {
+              builder.parameter(CONNECT_AVRO_DECIMAL_PRECISION_PROP, precision.toString());
+            }
           }
         } else {
           builder = SchemaBuilder.bytes();
@@ -1766,6 +1782,15 @@ public class AvroData {
   }
 
   private Object defaultValueFromAvro(Schema schema,
+      org.apache.avro.Schema avroSchema,
+      Object value,
+      ToConnectContext toConnectContext) {
+    Object result = defaultValueFromAvroWithoutLogical(schema, avroSchema, value, toConnectContext);
+    // If the schema is a logical type, convert the primitive Avro default into the logical form
+    return toLogical(schema, result);
+  }
+
+  private Object defaultValueFromAvroWithoutLogical(Schema schema,
                                       org.apache.avro.Schema avroSchema,
                                       Object value,
                                       ToConnectContext toConnectContext) {
