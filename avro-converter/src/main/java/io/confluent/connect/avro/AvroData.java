@@ -47,6 +47,7 @@ import org.codehaus.jackson.node.ObjectNode;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1809,9 +1810,17 @@ public class AvroData {
       case BYTES:
       case FIXED:
         try {
-          return jsonValue.getBinaryValue();
+          byte[] bytes;
+          if (jsonValue.isTextual()) {
+            // Avro's JSON form may be a quoted string, so decode the binary value
+            String encoded = jsonValue.getTextValue();
+            bytes = encoded.getBytes(StandardCharsets.ISO_8859_1);
+          } else {
+            bytes = jsonValue.getBinaryValue();
+          }
+          return bytes == null ? null : ByteBuffer.wrap(bytes);
         } catch (IOException e) {
-          throw new DataException("Invalid binary data in default value");
+          throw new DataException("Invalid binary data in default value", e);
         }
 
       case ARRAY: {
@@ -1835,7 +1844,7 @@ public class AvroData {
         while (fieldIt.hasNext()) {
           Map.Entry<String, JsonNode> field = fieldIt.next();
           Object converted = defaultValueFromAvro(
-              schema, avroSchema.getElementType(), field.getValue(), toConnectContext);
+              schema.valueSchema(), avroSchema.getValueType(), field.getValue(), toConnectContext);
           result.put(field.getKey(), converted);
         }
         return result;

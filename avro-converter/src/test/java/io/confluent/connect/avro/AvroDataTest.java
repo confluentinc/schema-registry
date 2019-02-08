@@ -296,10 +296,20 @@ public class AvroDataTest {
                                  .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).defaultValue(Collections.singletonMap("field", 1)).build())
                                  .build();
     // leave the struct empty so that only defaults are used
-    Struct struct = new Struct(schema);
+    Struct struct = new Struct(schema)
+        .put("int8", (byte) 2)
+        .put("int16", (short) 12)
+        .put("int32", 12)
+        .put("int64", 12L)
+        .put("float32", 12.2f)
+        .put("float64", 12.2)
+        .put("boolean", true)
+        .put("string", "foo")
+        .put("bytes", ByteBuffer.wrap("foo".getBytes()))
+        .put("array", Arrays.asList("a", "b", "c"))
+        .put("map", Collections.singletonMap("field", 1))
 
-    Object convertedRecord = avroData.fromConnectData(schema, struct);
-
+    // Define the expected Avro schema
     org.apache.avro.Schema complexMapElementSchema =
         org.apache.avro.SchemaBuilder
             .record("MapEntry").namespace("io.confluent.connect.avro").fields()
@@ -388,19 +398,44 @@ public class AvroDataTest {
         .set("map", Collections.singletonMap("field", 1))
         .build();
 
-    org.apache.avro.generic.GenericRecord convertedAvroRecord = (org.apache.avro.generic
-        .GenericRecord) convertedRecord;
-    assertSchemaEquals(avroSchema, convertedAvroRecord.getSchema());
-    assertSchemaEquals(avroRecord.getSchema(), convertedAvroRecord.getSchema());
+    SchemaAndValue schemaAndValue = new SchemaAndValue(schema, struct);
+    schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
+    schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
+    schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
+    assertNotNull(schemaAndValue);
+  }
+
+  protected SchemaAndValue convertToConnect(
+      org.apache.avro.Schema expectedAvroSchema,
+      org.apache.avro.generic.GenericRecord expectedAvroRecord,
+      SchemaAndValue connectSchemaAndValue
+  ) {
+    Object convertedRecord = avroData.fromConnectData(
+        connectSchemaAndValue.schema(),
+        connectSchemaAndValue.value()
+    );
+
+    org.apache.avro.generic.GenericRecord convertedAvroRecord =
+        (org.apache.avro.generic.GenericRecord) convertedRecord;
+    assertSchemaEquals(expectedAvroSchema, convertedAvroRecord.getSchema());
+    assertSchemaEquals(expectedAvroRecord.getSchema(), convertedAvroRecord.getSchema());
 
     // This doesn't work because the long field's default value is an integer
     //assertEquals(avroRecord, convertedRecord);
     // We've already checked the schemas, so we just need to check the record field values
-    for (org.apache.avro.Schema.Field field : avroSchema.getFields()) {
+    for (org.apache.avro.Schema.Field field : expectedAvroSchema.getFields()) {
       Object actual = convertedAvroRecord.get(field.name());
-      Object expected = avroRecord.get(field.name());
-      assertEquals(expected, actual);
+      Object expected = expectedAvroRecord.get(field.name());
+      assertValueEquals(expected, actual);
     }
+
+    SchemaAndValue schemaAndValue = avroData.toConnectData(
+        convertedAvroRecord.getSchema(),
+        convertedRecord
+    );
+    assertEquals(connectSchemaAndValue.schema(), schemaAndValue.schema());
+    assertEquals(connectSchemaAndValue.value(), schemaAndValue.value());
+    return schemaAndValue;
   }
 
   @Test
@@ -1985,11 +2020,18 @@ public class AvroDataTest {
         assertEquals(msg, expectedDouble, actualDouble, expectedDouble / 100.0d);
         break;
       default:
-        if (!expectedDef.equals(actualDef)) {
-          int x = 0;
-        }
         assertEquals(msg, expectedDef, actualDef);
         break;
     }
+  }
+
+  protected void assertValueEquals(Object expected, Object actual) {
+    if (actual instanceof byte[]) {
+      actual = ByteBuffer.wrap((byte[]) actual);
+    }
+    if (expected instanceof byte[]) {
+      expected = ByteBuffer.wrap((byte[]) expected);
+    }
+    assertEquals(expected, actual);
   }
 }
