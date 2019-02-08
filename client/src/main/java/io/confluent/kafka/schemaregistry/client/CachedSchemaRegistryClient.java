@@ -23,7 +23,6 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -177,7 +176,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public synchronized int register(String subject, Schema schema, int id)
       throws IOException, RestClientException {
     final Map<Schema, Integer> schemaIdMap =
-        schemaCache.computeIfAbsent(subject, k -> new IdentityHashMap<>());
+        schemaCache.computeIfAbsent(subject, k -> new HashMap<>());
 
     final Integer cachedId = schemaIdMap.get(schema);
     if (cachedId != null) {
@@ -258,7 +257,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public synchronized int getVersion(String subject, Schema schema)
       throws IOException, RestClientException {
     final Map<Schema, Integer> schemaVersionMap =
-        versionCache.computeIfAbsent(subject, k -> new IdentityHashMap<>());
+        versionCache.computeIfAbsent(subject, k -> new HashMap<>());
 
     final Integer cachedVersion = schemaVersionMap.get(schema);
     if (cachedVersion != null) {
@@ -284,7 +283,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public synchronized int getId(String subject, Schema schema)
       throws IOException, RestClientException {
     final Map<Schema, Integer> schemaIdMap =
-        schemaCache.computeIfAbsent(subject, k -> new IdentityHashMap<>());
+        schemaCache.computeIfAbsent(subject, k -> new HashMap<>());
 
     final Integer cachedId = schemaIdMap.get(schema);
     if (cachedId != null) {

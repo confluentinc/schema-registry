@@ -26,7 +26,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -102,7 +101,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     Map<Schema, Integer> schemaVersionMap;
     int currentVersion;
     if (versions.isEmpty()) {
-      schemaVersionMap = new IdentityHashMap<Schema, Integer>();
+      schemaVersionMap = new HashMap<Schema, Integer>();
       currentVersion = 1;
     } else {
       schemaVersionMap = versionCache.get(subject);
@@ -145,7 +144,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (schemaCache.containsKey(subject)) {
       schemaIdMap = schemaCache.get(subject);
     } else {
-      schemaIdMap = new IdentityHashMap<Schema, Integer>();
+      schemaIdMap = new HashMap<Schema, Integer>();
       schemaCache.put(subject, schemaIdMap);
     }
 
