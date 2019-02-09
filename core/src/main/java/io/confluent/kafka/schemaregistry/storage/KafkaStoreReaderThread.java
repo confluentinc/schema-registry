@@ -194,12 +194,18 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
               }
               this.storeUpdateHandler.handleUpdate(messageKey, message);
             } else {
-              try {
-                ProducerRecord<byte[], byte[]> producerRecord =
-                    new ProducerRecord<byte[], byte[]>(topic, 0, record.key(), null);
-                producer.send(producerRecord);
-              } catch (KafkaException ke) {
-                log.warn("Failed to tombstone schema with duplicate ID", ke);
+              if (localStore.get(messageKey) == null) {
+                try {
+                  ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                      topic,
+                      0,
+                      record.key(),
+                      null
+                  );
+                  producer.send(producerRecord);
+                } catch (KafkaException ke) {
+                  log.warn("Failed to tombstone schema with duplicate ID", ke);
+                }
               }
             }
             try {
