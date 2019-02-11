@@ -55,7 +55,9 @@ public class KafkaStoreMessageHandler
           }
           // Check the old schema even if it may be deleted, as the schema may still be in use.
           if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
-            log.error("Found a schema with duplicate ID {}", schemaObj.getId());
+            log.error("Found a schema with duplicate ID {}.  This schema will not be "
+                    + "registered since a schema already exists with this ID.",
+                schemaObj.getId());
             return false;
           }
         }
