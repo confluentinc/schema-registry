@@ -91,6 +91,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   private final SchemaRegistryConfig config;
   private final LookupCache lookupCache;
+  private final Map<ConfigKey, ConfigValue> configPrefixes;
   private final Map<ModeKey, ModeValue> modePrefixes;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
@@ -131,6 +132,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.lookupCache = lookupCache();
+    this.configPrefixes = new ConcurrentSkipListMap<>();
     this.modePrefixes = new ConcurrentSkipListMap<>();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
@@ -159,7 +161,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       SchemaRegistryConfig config) throws SchemaRegistryException {
     return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
         config,
-        new KafkaStoreMessageHandler(this, lookupCache, modePrefixes, idGenerator),
+        new KafkaStoreMessageHandler(this, lookupCache, configPrefixes, modePrefixes, idGenerator),
         this.serializer, lookupCache, new NoopKey());
   }
 
@@ -924,12 +926,28 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       previousAvroSchemas.add(previousAvroSchema.schemaObj);
     }
 
-    AvroCompatibilityLevel compatibility = getCompatibilityLevel(subject);
-    if (compatibility == null) {
-      compatibility = getCompatibilityLevel(null);
-    }
+    AvroCompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
     return compatibility.compatibilityChecker
         .isCompatible(AvroUtils.parseSchema(newSchemaObj).schemaObj, previousAvroSchemas);
+  }
+
+  private AvroCompatibilityLevel getCompatibilityLevelInScope(String subject)
+      throws SchemaRegistryStoreException {
+    AvroCompatibilityLevel compatibilityLevel = getCompatibilityLevel(subject);
+    if (compatibilityLevel != null) {
+      return compatibilityLevel;
+    }
+    // The mode prefixes are traversed in order of descending length of the prefixes.
+    for (Map.Entry<ConfigKey, ConfigValue> entry : configPrefixes.entrySet()) {
+      ConfigKey configKey = entry.getKey();
+      ConfigValue configValue = entry.getValue();
+      // Check for subject match
+      String prefix = configKey.getPrefix();
+      if (prefix != null && subject.startsWith(prefix)) {
+        return configValue.getCompatibilityLevel();
+      }
+    }
+    return getCompatibilityLevel(null);
   }
 
   private void deleteSubjectCompatibility(String subject) throws StoreException {
@@ -940,7 +958,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public Mode getMode(String subject) throws SchemaRegistryStoreException {
     try {
       if (subject == null) {
-        subject = ModeKey.SUBJECT_WILDCARD;
+        subject = SchemaRegistryKey.SUBJECT_WILDCARD;
       }
       ModeKey modeKey = new ModeKey(subject);
       ModeValue modeValue = (ModeValue) kafkaStore.get(modeKey);
@@ -978,7 +996,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throw new OperationNotPermittedException("Mode changes are not allowed");
     }
     if (subject == null) {
-      subject = ModeKey.SUBJECT_WILDCARD;
+      subject = SchemaRegistryKey.SUBJECT_WILDCARD;
     }
     if (mode == Mode.IMPORT) {
       // Import mode requires that no schemas exist with matching subjects.

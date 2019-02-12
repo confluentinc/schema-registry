@@ -25,8 +25,6 @@ import java.util.Objects;
 @JsonPropertyOrder(value = {"keytype", "subject", "magic"})
 public class ModeKey extends SchemaRegistryKey {
 
-  public static final String SUBJECT_WILDCARD = "*";
-
   private static final int MAGIC_BYTE = 0;
   private String subject;
 
@@ -58,13 +56,6 @@ public class ModeKey extends SchemaRegistryKey {
   @JsonIgnore
   public String getPrefix() {
     return getPrefix(subject);
-  }
-
-  public static String getPrefix(String subject) {
-    if (subject != null && subject.endsWith(SUBJECT_WILDCARD)) {
-      return subject.substring(0, subject.length() - 1);
-    }
-    return null;
   }
 
   @Override
