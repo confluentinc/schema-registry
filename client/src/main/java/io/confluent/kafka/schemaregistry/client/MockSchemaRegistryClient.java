@@ -366,4 +366,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
     return -1;
   }
+
+  @Override
+  public void reset() {
+  }
 }

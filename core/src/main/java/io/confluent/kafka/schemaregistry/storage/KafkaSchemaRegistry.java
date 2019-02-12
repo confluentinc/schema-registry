@@ -984,7 +984,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       // Import mode requires that no schemas exist with matching subjects.
       Set<String> matchingSubjects = listSubjects(subject);
       if (!matchingSubjects.isEmpty()) {
-        throw new OperationNotPermittedException("Cannot import since found existing schemas");
+        throw new OperationNotPermittedException("Cannot import since found existing subjects");
       }
     }
     ModeKey modeKey = new ModeKey(subject);

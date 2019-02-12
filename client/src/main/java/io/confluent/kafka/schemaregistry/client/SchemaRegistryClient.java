@@ -87,4 +87,6 @@ public interface SchemaRegistryClient {
       String subject,
       String version)
       throws IOException, RestClientException;
+
+  public void reset();
 }

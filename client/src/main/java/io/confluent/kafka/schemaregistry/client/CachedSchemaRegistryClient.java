@@ -385,4 +385,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return restService.getAllSubjects();
   }
 
+  @Override
+  public void reset() {
+    schemaCache.clear();
+    idCache.clear();
+    versionCache.clear();
+  }
 }
