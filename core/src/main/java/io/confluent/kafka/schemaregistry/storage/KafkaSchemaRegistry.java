@@ -89,7 +89,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
   private final SchemaRegistryConfig config;
-  private final LookupCache lookupCache;
+  private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
@@ -160,7 +160,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         this.serializer, lookupCache, new NoopKey());
   }
 
-  protected LookupCache lookupCache() {
+  protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache() {
     return new InMemoryCache<SchemaRegistryKey, SchemaRegistryValue>();
   }
 
