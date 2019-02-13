@@ -24,11 +24,22 @@ import java.util.Objects;
 
 public class RegisterSchemaRequest {
 
+  private int version = 0;
   private int id = -1;
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, RegisterSchemaRequest.class);
+  }
+
+  @JsonProperty("version")
+  public int getVersion() {
+    return this.version;
+  }
+
+  @JsonProperty("version")
+  public void setVersion(int version) {
+    this.version = version;
   }
 
   @JsonProperty("id")
@@ -60,17 +71,26 @@ public class RegisterSchemaRequest {
       return false;
     }
     RegisterSchemaRequest that = (RegisterSchemaRequest) o;
-    return id == that.id && Objects.equals(schema, that.schema);
+    return version == that.version && id == that.id && Objects.equals(schema, that.schema);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, schema);
+    return Objects.hash(version, id, schema);
   }
 
   @Override
   public String toString() {
-    return id >= 0 ? "{id=" + id + ", schema=" + schema + "}" : "{schema=" + schema + "}";
+    StringBuilder buf = new StringBuilder();
+    buf.append("{");
+    if (version > 0) {
+      buf.append("version=").append(version).append(", ");
+    }
+    if (id >= 0) {
+      buf.append("id=").append(id).append(", ");
+    }
+    buf.append("schema=").append(schema).append("}");
+    return buf.toString();
   }
 
   public String toJson() throws IOException {

@@ -147,7 +147,9 @@ public class KafkaStoreMessageHandler
         idGenerator.schemaRegistered(schemaKey, schemaObj);
         lookupCache.schemaRegistered(schemaKey, schemaObj);
         List<SchemaKey> schemaKeys = lookupCache.deletedSchemaKeys(schemaObj);
-        schemaKeys.stream().filter(v -> v.getSubject().equals(schemaObj.getSubject()))
+        schemaKeys.stream().filter(v ->
+            v.getSubject().equals(schemaObj.getSubject())
+                && v.getVersion() != schemaObj.getVersion())
             .forEach(this::tombstoneSchemaKey);
       }
     }

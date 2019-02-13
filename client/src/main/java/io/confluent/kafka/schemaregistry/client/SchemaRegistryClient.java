@@ -29,7 +29,7 @@ public interface SchemaRegistryClient {
 
   public int register(String subject, Schema schema) throws IOException, RestClientException;
 
-  public int register(String subject, Schema schema, int id) throws IOException,
+  public int register(String subject, Schema schema, int version, int id) throws IOException,
       RestClientException;
 
   @Deprecated

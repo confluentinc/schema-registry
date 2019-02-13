@@ -330,10 +330,11 @@ public class RestService {
     return registerSchema(request, subject);
   }
 
-  public int registerSchema(String schemaString, String subject, int id)
+  public int registerSchema(String schemaString, String subject, int version, int id)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
+    request.setVersion(version);
     request.setId(id);
     return registerSchema(request, subject);
   }

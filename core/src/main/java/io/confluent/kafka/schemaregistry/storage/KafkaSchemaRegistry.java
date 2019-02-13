@@ -346,6 +346,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       Iterator<Schema> allVersions = getAllVersions(subject, true);
       Iterator<Schema> undeletedVersions = getAllVersions(subject, false);
 
+
       List<String> undeletedSchemasList = new ArrayList<>();
       Schema latestSchema = null;
       int newVersion = MIN_VERSION;
@@ -361,7 +362,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       // assign a guid and put the schema in the kafka store
       if (latestSchema == null || isCompatible(subject, avroSchema.canonicalString,
                                                undeletedSchemasList)) {
-        schema.setVersion(newVersion);
+        if (schema.getVersion() <= 0) {
+          schema.setVersion(newVersion);
+        }
 
         if (schemaId >= 0) {
           schema.setId(schemaId);
@@ -375,7 +378,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
 
         SchemaValue schemaValue = new SchemaValue(schema);
-        kafkaStore.put(new SchemaKey(subject, newVersion), schemaValue);
+        kafkaStore.put(new SchemaKey(subject, schema.getVersion()), schemaValue);
         return schema.getId();
       } else {
         throw new IncompatibleSchemaException(
@@ -780,7 +783,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         SchemaValue value = (SchemaValue) kafkaStore.get(key);
         if (value != null && !value.isDeleted()) {
           String subject = key.getSubject();
-          String prefix = ModeKey.getPrefix(subjectOrPrefix);
+          String prefix = SchemaRegistryKey.getPrefix(subjectOrPrefix);
           if (prefix != null) {
             // Check for prefix match
             if (subject.startsWith(prefix)) {

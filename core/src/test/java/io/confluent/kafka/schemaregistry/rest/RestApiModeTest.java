@@ -75,7 +75,7 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // register a valid avro schema
     try {
-      restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1);
+      restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, 1);
       fail("Registering an incompatible schema should fail");
     } catch (RestClientException e) {
       // this is expected.
@@ -104,7 +104,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     int expectedIdSchema1 = 1;
     assertEquals("Registering without id should succeed",
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
   }
 
   @Test

@@ -142,9 +142,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return restService.registerSchema(schema.toString(), subject);
   }
 
-  private int registerAndGetId(String subject, Schema schema, int id)
+  private int registerAndGetId(String subject, Schema schema, int version, int id)
       throws IOException, RestClientException {
-    return restService.registerSchema(schema.toString(), subject, id);
+    return restService.registerSchema(schema.toString(), subject, version, id);
   }
 
   private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
@@ -169,11 +169,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized int register(String subject, Schema schema)
       throws IOException, RestClientException {
-    return register(subject, schema, -1);
+    return register(subject, schema, 0, -1);
   }
 
   @Override
-  public synchronized int register(String subject, Schema schema, int id)
+  public synchronized int register(String subject, Schema schema, int version, int id)
       throws IOException, RestClientException {
     final Map<Schema, Integer> schemaIdMap =
         schemaCache.computeIfAbsent(subject, k -> new HashMap<>());
@@ -192,7 +192,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     final int retrievedId = id >= 0
-                            ? registerAndGetId(subject, schema, id)
+                            ? registerAndGetId(subject, schema, version, id)
                             : registerAndGetId(subject, schema);
     schemaIdMap.put(schema, retrievedId);
     idCache.get(null).put(retrievedId, schema);

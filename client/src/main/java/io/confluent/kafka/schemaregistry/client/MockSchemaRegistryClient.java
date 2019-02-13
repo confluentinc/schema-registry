@@ -134,11 +134,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized int register(String subject, Schema schema)
       throws IOException, RestClientException {
-    return register(subject, schema, -1);
+    return register(subject, schema, 0, -1);
   }
 
   @Override
-  public synchronized int register(String subject, Schema schema, int id)
+  public synchronized int register(String subject, Schema schema, int version, int id)
       throws IOException, RestClientException {
     Map<Schema, Integer> schemaIdMap;
     if (schemaCache.containsKey(subject)) {

@@ -57,6 +57,7 @@ public class CachedSchemaRegistryClientTest {
   private static final String SCHEMA_STR_0 = avroSchemaString(0);
   private static final Schema AVRO_SCHEMA_0 = avroSchema(0);
   private static final String SUBJECT_0 = "foo";
+  private static final int VERSION_1 = 1;
   private static final int ID_25 = 25;
   private static final io.confluent.kafka.schemaregistry.client.rest.entities.Schema SCHEMA_DETAILS
       = new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
@@ -88,16 +89,16 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
-  public void testRegisterSchemaCacheWithId() throws Exception {
+  public void testRegisterSchemaCacheWithVersionAndId() throws Exception {
     // Expect one call to register schema
-    expect(restService.registerSchema(anyString(), eq(SUBJECT_0), eq(ID_25)))
+    expect(restService.registerSchema(anyString(), eq(SUBJECT_0), eq(VERSION_1), eq(ID_25)))
         .andReturn(ID_25)
         .once();
 
     replay(restService);
 
-    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, ID_25));
-    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, ID_25)); // hit the cache
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25)); // hit the cache
 
     verify(restService);
   }
