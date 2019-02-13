@@ -16,6 +16,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -146,19 +147,20 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   private Set<String> findSubject(Iterator<K> allKeys, String subject) {
+    Set<String> subjects = new HashSet<String>();
     while (allKeys.hasNext()) {
       K k = allKeys.next();
       if (k instanceof SchemaKey) {
         SchemaKey key = (SchemaKey) k;
         SchemaValue value = (SchemaValue) get(k);
         if (value != null && !value.isDeleted()) {
-          if (key.getSubject().equals(subject)) {
-            return Collections.singleton(subject);
+          if (subject == null || key.getSubject().equals(subject)) {
+            subjects.add(subject);
           }
         }
       }
     }
-    return Collections.emptySet();
+    return subjects;
   }
 
 }

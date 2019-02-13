@@ -942,7 +942,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     if (modeValue != null) {
       return modeValue.getMode();
     }
-    return Mode.READWRITE;
+    return getMode(null);
   }
 
   public void setMode(String subject, Mode mode)
