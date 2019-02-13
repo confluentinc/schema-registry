@@ -320,7 +320,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                       Schema schema)
       throws SchemaRegistryException {
     try {
-      checkRegisterMode(subject, schema.getId());
+      checkRegisterMode(subject, schema);
 
       // Ensure cache is up-to-date before any potential writes
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(kafkaStoreTimeoutMs);
@@ -345,7 +345,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       // determine the latest version of the schema in the subject
       Iterator<Schema> allVersions = getAllVersions(subject, true);
       Iterator<Schema> undeletedVersions = getAllVersions(subject, false);
-
 
       List<String> undeletedSchemasList = new ArrayList<>();
       Schema latestSchema = null;
@@ -393,13 +392,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private void checkRegisterMode(
-      String subject, int schemaId
+      String subject, Schema schema
   ) throws OperationNotPermittedException, SchemaRegistryStoreException {
     if (getModeInScope(subject) == Mode.READONLY) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
 
-    if (schemaId >= 0) {
+    if (schema.getId() >= 0 || schema.getVersion() > 0) {
       if (getModeInScope(subject) != Mode.IMPORT) {
         throw new OperationNotPermittedException("Subject " + subject + " is not in import mode");
       }
