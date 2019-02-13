@@ -22,8 +22,6 @@ import javax.validation.constraints.Min;
 
 public abstract class SchemaRegistryKey implements Comparable<SchemaRegistryKey> {
 
-  public static final String SUBJECT_WILDCARD = "*";
-
   @Min(0)
   protected int magicByte;
   @NotEmpty
@@ -83,12 +81,5 @@ public abstract class SchemaRegistryKey implements Comparable<SchemaRegistryKey>
   @Override
   public int compareTo(SchemaRegistryKey otherKey) {
     return this.keyType.compareTo(otherKey.keyType);
-  }
-
-  public static String getPrefix(String subject) {
-    if (subject != null && subject.endsWith(SUBJECT_WILDCARD)) {
-      return subject.substring(0, subject.length() - 1);
-    }
-    return null;
   }
 }

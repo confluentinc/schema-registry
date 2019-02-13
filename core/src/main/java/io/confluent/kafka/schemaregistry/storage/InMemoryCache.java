@@ -19,6 +19,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -127,4 +128,37 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public List<SchemaKey> deletedSchemaKeys(SchemaValue schemaValue) {
     return guidToDeletedSchemaKeys.getOrDefault(schemaValue.getId(), Collections.emptyList());
   }
+
+  @Override
+  public ConfigValue configInScope(String subject) {
+    return null;
+  }
+
+  @Override
+  public ModeValue modeInScope(String subject) {
+    return null;
+  }
+
+  @Override
+  public Set<String> subjectsInNamespace(String namespace) throws StoreException {
+    Iterator<K> allKeys = getAllKeys();
+    return findSubject(allKeys, namespace);
+  }
+
+  private Set<String> findSubject(Iterator<K> allKeys, String subject) {
+    while (allKeys.hasNext()) {
+      K k = allKeys.next();
+      if (k instanceof SchemaKey) {
+        SchemaKey key = (SchemaKey) k;
+        SchemaValue value = (SchemaValue) get(k);
+        if (value != null && !value.isDeleted()) {
+          if (key.getSubject().equals(subject)) {
+            return Collections.singleton(subject);
+          }
+        }
+      }
+    }
+    return Collections.emptySet();
+  }
+
 }

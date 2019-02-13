@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 
 import io.confluent.common.metrics.JmxReporter;
@@ -91,8 +90,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   private final SchemaRegistryConfig config;
   private final LookupCache lookupCache;
-  private final Map<ConfigKey, ConfigValue> configPrefixes;
-  private final Map<ModeKey, ModeValue> modePrefixes;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
@@ -132,8 +129,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.lookupCache = lookupCache();
-    this.configPrefixes = new ConcurrentSkipListMap<>();
-    this.modePrefixes = new ConcurrentSkipListMap<>();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
     MetricConfig metricConfig =
@@ -161,7 +156,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       SchemaRegistryConfig config) throws SchemaRegistryException {
     return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
         config,
-        new KafkaStoreMessageHandler(this, lookupCache, configPrefixes, modePrefixes, idGenerator),
+        new KafkaStoreMessageHandler(this, lookupCache, idGenerator),
         this.serializer, lookupCache, new NoopKey());
   }
 
@@ -744,17 +739,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  public Set<String> listSubjects(String subjectOrPrefix)
-      throws SchemaRegistryStoreException {
-    try {
-      Iterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys();
-      return extractUniqueSubjects(allKeys, subjectOrPrefix);
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException(
-          "Error from the backend Kafka store", e);
-    }
-  }
-
   private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys)
       throws StoreException {
     Set<String> subjects = new HashSet<String>();
@@ -771,30 +755,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return subjects;
   }
 
-  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys,
-                                            String subjectOrPrefix)
-      throws StoreException {
-    Set<String> subjects = new HashSet<String>();
-    while (allKeys.hasNext()) {
-      SchemaRegistryKey k = allKeys.next();
-      if (k instanceof SchemaKey) {
-        SchemaKey key = (SchemaKey) k;
-        SchemaValue value = (SchemaValue) kafkaStore.get(key);
-        if (value != null && !value.isDeleted()) {
-          String subject = key.getSubject();
-          String prefix = SchemaRegistryKey.getPrefix(subjectOrPrefix);
-          if (prefix != null) {
-            // Check for prefix match
-            if (subject.startsWith(prefix)) {
-              subjects.add(subject);
-            }
-          } else if (subject.equals(subjectOrPrefix)) {
-            subjects.add(subject);
-          }
-        }
-      }
+  public Set<String> listSubjects(String subject)
+      throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.subjectsInNamespace(subject);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error from the backend Kafka store", e);
     }
-    return subjects;
   }
 
   @Override
@@ -939,15 +907,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     if (compatibilityLevel != null) {
       return compatibilityLevel;
     }
-    // The mode prefixes are traversed in order of descending length of the prefixes.
-    for (Map.Entry<ConfigKey, ConfigValue> entry : configPrefixes.entrySet()) {
-      ConfigKey configKey = entry.getKey();
-      ConfigValue configValue = entry.getValue();
-      // Check for subject match
-      String prefix = configKey.getPrefix();
-      if (prefix != null && subject.startsWith(prefix)) {
-        return configValue.getCompatibilityLevel();
-      }
+    ConfigValue configValue = lookupCache.configInScope(subject);
+    if (configValue != null) {
+      return configValue.getCompatibilityLevel();
     }
     return getCompatibilityLevel(null);
   }
@@ -959,12 +921,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   public Mode getMode(String subject) throws SchemaRegistryStoreException {
     try {
-      if (subject == null) {
-        subject = SchemaRegistryKey.SUBJECT_WILDCARD;
-      }
       ModeKey modeKey = new ModeKey(subject);
       ModeValue modeValue = (ModeValue) kafkaStore.get(modeKey);
-      if (modeValue == null && modeKey.isPrefix()) {
+      if (modeValue == null && subject == null) {
         // default global mode
         return Mode.READWRITE;
       }
@@ -979,15 +938,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     if (mode != null) {
       return mode;
     }
-    // The mode prefixes are traversed in order of descending length of the prefixes.
-    for (Map.Entry<ModeKey, ModeValue> entry : modePrefixes.entrySet()) {
-      ModeKey modeKey = entry.getKey();
-      ModeValue modeValue = entry.getValue();
-      // Check for subject match
-      String prefix = modeKey.getPrefix();
-      if (prefix != null && subject.startsWith(prefix)) {
-        return modeValue.getMode();
-      }
+    ModeValue modeValue = lookupCache.modeInScope(subject);
+    if (modeValue != null) {
+      return modeValue.getMode();
     }
     return Mode.READWRITE;
   }
@@ -996,9 +949,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throws SchemaRegistryStoreException, OperationNotPermittedException {
     if (!allowModeChanges) {
       throw new OperationNotPermittedException("Mode changes are not allowed");
-    }
-    if (subject == null) {
-      subject = SchemaRegistryKey.SUBJECT_WILDCARD;
     }
     if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT) {
       // Changing to import mode requires that no schemas exist with matching subjects.

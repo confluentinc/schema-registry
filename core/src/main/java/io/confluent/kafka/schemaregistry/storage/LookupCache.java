@@ -15,8 +15,10 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Internal interface that provides various indexed methods that help lookup the underlying schemas.
@@ -81,4 +83,29 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param schemaValue the deleted SchemaValue; never {@code null}
    */
   void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue);
+
+  /**
+   * Retrieves the config that is in scope for a subject.
+   *
+   * @param subject the subject
+   * @return the {@link ConfigValue} if found, otherwise null.
+   */
+  ConfigValue configInScope(String subject);
+
+  /**
+   * Retrieves the mode that is in scope for a subject.
+   *
+   * @param subject the subject
+   * @return the {@link ModeValue} if found, otherwise null.
+   */
+  ModeValue modeInScope(String subject);
+
+  /**
+   * Retrieves the set of subjects in the given namespace.
+   *
+   * @param namespace the namespace
+   * @return the subjects
+   */
+  Set<String> subjectsInNamespace(String namespace) throws StoreException;
+
 }

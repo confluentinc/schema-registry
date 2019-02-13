@@ -14,7 +14,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.codehaus.jackson.annotate.JsonPropertyOrder;
@@ -39,20 +38,6 @@ public class ConfigKey extends SchemaRegistryKey {
   @JsonProperty("subject")
   public void setSubject(String subject) {
     this.subject = subject;
-  }
-
-  @JsonIgnore
-  public boolean isPrefix() {
-    return getPrefix() != null;
-  }
-
-  /**
-   * Get the prefix for this ConfigKey, or null if is not a prefix.
-   * @return the prefix, or null
-   */
-  @JsonIgnore
-  public String getPrefix() {
-    return getPrefix(subject);
   }
 
   @Override
@@ -106,9 +91,7 @@ public class ConfigKey extends SchemaRegistryKey {
         if (otherKey.subject == null) {
           return 1;
         }
-        // Sort by length of subject (or prefix) in descending order
-        int lenComp = otherKey.subject.length() - this.subject.length();
-        return lenComp == 0 ? subject.compareTo(otherKey.subject) : lenComp;
+        return this.subject.compareTo(otherKey.subject);
       }
     } else {
       return compare;

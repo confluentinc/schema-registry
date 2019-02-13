@@ -20,7 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -30,20 +29,14 @@ public class KafkaStoreMessageHandler
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final LookupCache lookupCache;
-  private final Map<ConfigKey, ConfigValue> configPrefixes;
-  private final Map<ModeKey, ModeValue> modePrefixes;
   private final ExecutorService tombstoneExecutor;
   private IdGenerator idGenerator;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
                                   LookupCache lookupCache,
-                                  Map<ConfigKey, ConfigValue> configPrefixes,
-                                  Map<ModeKey, ModeValue> modePrefixes,
                                   IdGenerator idGenerator) {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
-    this.configPrefixes = configPrefixes;
-    this.modePrefixes = modePrefixes;
     this.idGenerator = idGenerator;
     this.tombstoneExecutor = Executors.newSingleThreadExecutor();
   }
@@ -94,22 +87,6 @@ public class KafkaStoreMessageHandler
           (SchemaValue) value);
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
-    } else if (key.getKeyType() == SchemaRegistryKeyType.CONFIG) {
-      handleConfig((ConfigKey) key, (ConfigValue) value);
-    } else if (key.getKeyType() == SchemaRegistryKeyType.MODE) {
-      handleMode((ModeKey) key, (ModeValue) value);
-    }
-  }
-
-  private void handleConfig(ConfigKey configKey, ConfigValue configValue) {
-    if (configKey.isPrefix()) {
-      configPrefixes.put(configKey, configValue);
-    }
-  }
-
-  private void handleMode(ModeKey modeKey, ModeValue modeValue) {
-    if (modeKey.isPrefix()) {
-      modePrefixes.put(modeKey, modeValue);
     }
   }
 

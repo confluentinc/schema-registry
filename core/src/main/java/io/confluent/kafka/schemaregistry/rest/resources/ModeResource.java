@@ -43,7 +43,6 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.Mode;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryKey;
 
 @Path("/mode")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -111,11 +110,11 @@ public class ModeResource {
   public ModeUpdateRequest updateTopLevelMode(
       @Context HttpHeaders headers,
       @NotNull ModeUpdateRequest request) {
-    return updateMode(SchemaRegistryKey.SUBJECT_WILDCARD, headers, request);
+    return updateMode(null, headers, request);
   }
 
   @GET
   public ModeGetResponse getTopLevelMode() {
-    return getMode(SchemaRegistryKey.SUBJECT_WILDCARD);
+    return getMode(null);
   }
 }
