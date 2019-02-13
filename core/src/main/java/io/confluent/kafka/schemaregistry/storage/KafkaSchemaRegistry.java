@@ -739,6 +739,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
+  public Set<String> listSubjects(String subject)
+      throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.subjectsInNamespace(subject);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error from the backend Kafka store", e);
+    }
+  }
+
   private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys)
       throws StoreException {
     Set<String> subjects = new HashSet<String>();
@@ -753,16 +763,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       }
     }
     return subjects;
-  }
-
-  public Set<String> listSubjects(String subject)
-      throws SchemaRegistryStoreException {
-    try {
-      return lookupCache.subjectsInNamespace(subject);
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException(
-          "Error from the backend Kafka store", e);
-    }
   }
 
   @Override
