@@ -161,7 +161,7 @@ public class KafkaStoreMessageHandler
     tombstoneExecutor.execute(() -> {
           try {
             schemaRegistry.getKafkaStore().waitForInit();
-            schemaRegistry.getKafkaStore().put(schemaKey, null);
+            schemaRegistry.getKafkaStore().delete(schemaKey);
             log.debug("Tombstoned {}", schemaKey);
           } catch (InterruptedException e) {
             log.error("Interrupted while waiting for the tombstone thread to be initialized ", e);
