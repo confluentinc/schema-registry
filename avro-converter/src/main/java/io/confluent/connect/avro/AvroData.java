@@ -990,7 +990,7 @@ public class AvroData {
       defaultVal = fieldSchema.defaultValue();
 
       // If this is a logical, convert to the primitive form for the Avro default value
-      defaultVal = fromLogical(fieldSchema, defaultVal);
+      defaultVal = toAvroLogical(fieldSchema, defaultVal);
 
       // Avro doesn't handle a few types that Connect uses, so convert those explicitly here
       if (defaultVal instanceof Byte) {
@@ -1018,7 +1018,7 @@ public class AvroData {
     fields.add(field);
   }
 
-  private static Object fromLogical(Schema schema, Object value) {
+  private static Object toAvroLogical(Schema schema, Object value) {
     if (schema != null && schema.name() != null) {
       LogicalTypeConverter logicalConverter = TO_AVRO_LOGICAL_CONVERTERS.get(schema.name());
       if (logicalConverter != null && value != null) {
@@ -1028,7 +1028,7 @@ public class AvroData {
     return value;
   }
 
-  private static Object toLogical(Schema schema, Object value) {
+  private static Object toConnectLogical(Schema schema, Object value) {
     if (schema != null && schema.name() != null) {
       LogicalTypeConverter logicalConverter = TO_CONNECT_LOGICAL_CONVERTERS.get(schema.name());
       if (logicalConverter != null && value != null) {
@@ -1047,7 +1047,7 @@ public class AvroData {
     try {
       // If this is a logical type, convert it from the convenient Java type to the underlying
       // serializeable format
-      Object defaultVal = fromLogical(schema, value);
+      Object defaultVal = toAvroLogical(schema, value);
 
       switch (schema.type()) {
         case INT8:
@@ -1787,7 +1787,7 @@ public class AvroData {
       ToConnectContext toConnectContext) {
     Object result = defaultValueFromAvroWithoutLogical(schema, avroSchema, value, toConnectContext);
     // If the schema is a logical type, convert the primitive Avro default into the logical form
-    return toLogical(schema, result);
+    return toConnectLogical(schema, result);
   }
 
   private Object defaultValueFromAvroWithoutLogical(Schema schema,
