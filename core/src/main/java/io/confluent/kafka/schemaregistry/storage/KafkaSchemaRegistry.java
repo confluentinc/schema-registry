@@ -449,8 +449,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       SchemaValue schemaValue = new SchemaValue(schema);
       schemaValue.setDeleted(true);
       kafkaStore.put(new SchemaKey(subject, schema.getVersion()), schemaValue);
-      if (!getAllVersions(subject, false).hasNext() && getCompatibilityLevel(subject) != null) {
-        deleteSubjectCompatibility(subject);
+      if (!getAllVersions(subject, false).hasNext()) {
+        if (getMode(subject) != null) {
+          deleteMode(subject);
+        }
+        if (getCompatibilityLevel(subject) != null) {
+          deleteSubjectCompatibility(subject);
+        }
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
@@ -498,6 +503,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       DeleteSubjectKey key = new DeleteSubjectKey(subject);
       DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
       kafkaStore.put(key, value);
+      if (getMode(subject) != null) {
+        deleteMode(subject);
+      }
       if (getCompatibilityLevel(subject) != null) {
         deleteSubjectCompatibility(subject);
       }
@@ -912,6 +920,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       return configValue.getCompatibilityLevel();
     }
     return getCompatibilityLevel(null);
+  }
+
+  private void deleteMode(String subject) throws StoreException {
+    ModeKey modeKey = new ModeKey(subject);
+    this.kafkaStore.delete(modeKey);
   }
 
   private void deleteSubjectCompatibility(String subject) throws StoreException {

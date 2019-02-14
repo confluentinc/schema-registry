@@ -390,5 +390,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     schemaCache.clear();
     idCache.clear();
     versionCache.clear();
+    idCache.put(null, new HashMap<Integer, Schema>());
   }
 }
