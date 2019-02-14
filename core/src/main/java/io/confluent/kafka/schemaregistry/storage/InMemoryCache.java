@@ -16,7 +16,6 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +23,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -174,26 +176,53 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public Set<String> subjects(String namespace) throws StoreException {
-    Iterator<K> allKeys = getAllKeys();
-    return findSubject(allKeys, namespace);
+  public Set<String> subjects(String subject) throws StoreException {
+    return subjects(matchingPredicate(subject));
   }
 
-  private Set<String> findSubject(Iterator<K> allKeys, String subject) {
-    Set<String> subjects = new HashSet<String>();
-    while (allKeys.hasNext()) {
-      K k = allKeys.next();
+  @Override
+  public Set<String> subjects(Predicate<String> match) throws StoreException {
+    return store.entrySet().stream()
+        .flatMap(e -> {
+          K k = e.getKey();
+          V v = e.getValue();
+          if (k instanceof SchemaKey) {
+            SchemaKey key = (SchemaKey) k;
+            SchemaValue value = (SchemaValue) v;
+            if (value != null && !value.isDeleted()) {
+              if (match.test(key.getSubject())) {
+                return Stream.of(key.getSubject());
+              }
+            }
+          }
+          return Stream.empty();
+        })
+        .collect(Collectors.toSet());
+  }
+
+  @Override
+  public void clearSubjects(String subject) throws StoreException {
+    clearSubjects(matchingPredicate(subject));
+  }
+
+  @Override
+  public void clearSubjects(Predicate<String> match) throws StoreException {
+    store.entrySet().removeIf(e -> {
+      K k = e.getKey();
       if (k instanceof SchemaKey) {
         SchemaKey key = (SchemaKey) k;
-        SchemaValue value = (SchemaValue) get(k);
-        if (value != null && !value.isDeleted()) {
-          if (subject == null || key.getSubject().equals(subject)) {
-            subjects.add(subject);
-          }
-        }
+        return match.test(key.getSubject());
       }
-    }
-    return subjects;
+      return false;
+    });
+    guidToSchemaKey.entrySet().removeIf(e -> match.test(e.getValue().getSubject()));
+    schemaHashToGuid.values().forEach(v -> v.removeIf(match));
+    guidToDeletedSchemaKeys.values().forEach(
+        v -> v.removeIf(k -> match.test(k.getSubject())));
+  }
+
+  private Predicate<String> matchingPredicate(String subject) {
+    return s -> subject == null || subject.equals(s);
   }
 
 }

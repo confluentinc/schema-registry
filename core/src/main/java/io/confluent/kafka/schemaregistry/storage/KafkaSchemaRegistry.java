@@ -749,8 +749,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  public Set<String> listSubjects(String subject)
-      throws SchemaRegistryStoreException {
+  public Set<String> listSubjects(String subject) throws SchemaRegistryStoreException {
     try {
       return lookupCache.subjects(subject);
     } catch (StoreException e) {
@@ -823,6 +822,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     ConfigKey configKey = new ConfigKey(subject);
     try {
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
       kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
       log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
                 + " Kafka data store with key " + configKey.toString());
@@ -926,15 +926,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     if (!allowModeChanges) {
       throw new OperationNotPermittedException("Mode changes are not allowed");
     }
-    if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT) {
-      // Changing to import mode requires that no schemas exist with matching subjects.
-      Set<String> matchingSubjects = listSubjects(subject);
-      if (!matchingSubjects.isEmpty()) {
-        throw new OperationNotPermittedException("Cannot import since found existing subjects");
-      }
-    }
+    ClearSubjectKey clearSubjectKey = new ClearSubjectKey(subject);
     ModeKey modeKey = new ModeKey(subject);
     try {
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
+      if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT) {
+        // Changing to import mode requires that no schemas exist with matching subjects.
+        Set<String> matchingSubjects = listSubjects(subject);
+        if (!matchingSubjects.isEmpty()) {
+          throw new OperationNotPermittedException("Cannot import since found existing subjects");
+        }
+        // At this point no schemas should exist with matching subjects.
+        // Write an event to clear deleted schemas from the caches.
+        kafkaStore.put(clearSubjectKey, new ClearSubjectValue(subject));
+      }
       kafkaStore.put(modeKey, new ModeValue(mode));
       log.debug("Wrote new mode: " + mode.name() + " to the"
           + " Kafka data store with key " + modeKey.toString());

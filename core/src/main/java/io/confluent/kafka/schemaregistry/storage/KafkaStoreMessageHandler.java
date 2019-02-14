@@ -50,8 +50,7 @@ public class KafkaStoreMessageHandler
   public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
-      if (schemaObj != null
-          && lookupCache.mode(schemaObj.getSubject(), true, Mode.READWRITE) != Mode.IMPORT) {
+      if (schemaObj != null) {
         SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
         if (oldKey != null) {
           SchemaValue oldSchema;
@@ -86,6 +85,8 @@ public class KafkaStoreMessageHandler
           (SchemaValue) value);
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
+    } else if (key.getKeyType() == SchemaRegistryKeyType.CLEAR_SUBJECT) {
+      handleClearSubject((ClearSubjectValue) value);
     }
   }
 
@@ -104,8 +105,17 @@ public class KafkaStoreMessageHandler
           lookupCache.schemaDeleted(schemaKey, schemaValue);
         }
       } catch (StoreException e) {
-        log.error("Failed to delete subject in the local Cache");
+        log.error("Failed to delete subject {} in the local cache", subject);
       }
+    }
+  }
+
+  private void handleClearSubject(ClearSubjectValue clearSubjectValue) {
+    String subject = clearSubjectValue.getSubject();
+    try {
+      lookupCache.clearSubjects(subject);
+    } catch (StoreException e) {
+      log.error("Failed to clear subject {} in the local cache", subject);
     }
   }
 

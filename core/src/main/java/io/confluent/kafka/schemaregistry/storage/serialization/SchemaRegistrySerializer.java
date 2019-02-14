@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.storage.ClearSubjectKey;
+import io.confluent.kafka.schemaregistry.storage.ClearSubjectValue;
 import io.confluent.kafka.schemaregistry.storage.ConfigValue;
 import io.confluent.kafka.schemaregistry.storage.DeleteSubjectKey;
 import io.confluent.kafka.schemaregistry.storage.DeleteSubjectValue;
@@ -89,6 +91,8 @@ public class SchemaRegistrySerializer
           schemaKey = new ObjectMapper().readValue(key, NoopKey.class);
         } else if (keyType == SchemaRegistryKeyType.DELETE_SUBJECT) {
           schemaKey = new ObjectMapper().readValue(key, DeleteSubjectKey.class);
+        } else if (keyType == SchemaRegistryKeyType.CLEAR_SUBJECT) {
+          schemaKey = new ObjectMapper().readValue(key, ClearSubjectKey.class);
         } else if (keyType == SchemaRegistryKeyType.SCHEMA) {
           schemaKey = new ObjectMapper().readValue(key, SchemaKey.class);
           validateMagicByte((SchemaKey) schemaKey);
@@ -114,8 +118,10 @@ public class SchemaRegistrySerializer
    * @param value Bytes of the serialized value
    * @return Typed deserialized value. Must be one of
    *     {@link io.confluent.kafka.schemaregistry.storage.ConfigValue}
+   *     or {@link io.confluent.kafka.schemaregistry.storage.ModeValue}
    *     or {@link io.confluent.kafka.schemaregistry.storage.SchemaValue}
    *     or {@link io.confluent.kafka.schemaregistry.storage.DeleteSubjectValue}
+   *     or {@link io.confluent.kafka.schemaregistry.storage.ClearSubjectValue}
    */
   @Override
   public SchemaRegistryValue deserializeValue(SchemaRegistryKey key, byte[] value)
@@ -145,6 +151,12 @@ public class SchemaRegistrySerializer
         schemaRegistryValue = new ObjectMapper().readValue(value, DeleteSubjectValue.class);
       } catch (IOException e) {
         throw new SerializationException("Error while deserializing Delete Subject message", e);
+      }
+    } else if (key.getKeyType().equals(SchemaRegistryKeyType.CLEAR_SUBJECT)) {
+      try {
+        schemaRegistryValue = new ObjectMapper().readValue(value, ClearSubjectValue.class);
+      } catch (IOException e) {
+        throw new SerializationException("Error while deserializing Clear Subject message", e);
       }
     } else {
       throw new SerializationException("Unrecognized key type. Must be one of schema or config");

@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Internal interface that provides various indexed methods that help lookup the underlying schemas.
@@ -112,9 +113,33 @@ public interface LookupCache<K,V> extends Store<K,V> {
   /**
    * Retrieves the set of subjects that match the given subject.
    *
-   * @param subject the subject
+   * @param subject the subject, or null for all subjects
    * @return the matching subjects
    */
   Set<String> subjects(String subject) throws StoreException;
+
+  /**
+   * Retrieves the set of subjects that match the given subject.
+   *
+   * @param match the matching predicate
+   * @return the matching subjects
+   */
+  Set<String> subjects(Predicate<String> match) throws StoreException;
+
+  /**
+   * Clears the cache of schemas that match the given subject.
+   * Typically used when all schemas that match the given subject have been deleted.
+   *
+   * @param subject the subject, or null for all subjects
+   */
+  void clearSubjects(String subject) throws StoreException;
+
+  /**
+   * Clears the cache of schemas that match the given subject.
+   * Typically used when all schemas that match the given subject have been deleted.
+   *
+   * @param match the matching predicate
+   */
+  void clearSubjects(Predicate<String> match) throws StoreException;
 
 }

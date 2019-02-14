@@ -19,7 +19,8 @@ public enum SchemaRegistryKeyType {
   SCHEMA("SCHEMA"),
   MODE("MODE"),
   NOOP("NOOP"),
-  DELETE_SUBJECT("DELETE_SUBJECT");
+  DELETE_SUBJECT("DELETE_SUBJECT"),
+  CLEAR_SUBJECT("CLEAR_SUBJECT");
 
   public final String keyType;
 
