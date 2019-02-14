@@ -132,40 +132,42 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public ConfigValue config(String subject,
-                     boolean returnTopLevelIfNotFound,
-                     AvroCompatibilityLevel defaultForTopLevel
+  @SuppressWarnings("unchecked")
+  public AvroCompatibilityLevel compatibilityLevel(String subject,
+                                                   boolean returnTopLevelIfNotFound,
+                                                   AvroCompatibilityLevel defaultForTopLevel
   ) {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
     ConfigValue config = (ConfigValue) get((K) subjectConfigKey);
     if (config == null && subject == null) {
-      return new ConfigValue(defaultForTopLevel);
+      return defaultForTopLevel;
     }
     if (config != null) {
-      return config;
+      return config.getCompatibilityLevel();
     } else if (returnTopLevelIfNotFound) {
-      config = (ConfigValue) get(null);
-      return config != null ? config : new ConfigValue(defaultForTopLevel);
+      config = (ConfigValue) get((K) new ConfigKey(null));
+      return config != null ? config.getCompatibilityLevel() : defaultForTopLevel;
     } else {
       return null;
     }
   }
 
   @Override
-  public ModeValue mode(String subject,
-                        boolean returnTopLevelIfNotFound,
-                        Mode defaultForTopLevel
+  @SuppressWarnings("unchecked")
+  public Mode mode(String subject,
+                   boolean returnTopLevelIfNotFound,
+                   Mode defaultForTopLevel
   ) {
     ModeKey modeKey = new ModeKey(subject);
     ModeValue modeValue = (ModeValue) get((K) modeKey);
     if (modeValue == null && subject == null) {
-      return new ModeValue(defaultForTopLevel);
+      return defaultForTopLevel;
     }
     if (modeValue != null) {
-      return modeValue;
+      return modeValue.getMode();
     } else if (returnTopLevelIfNotFound) {
-      modeValue = (ModeValue) get(null);
-      return modeValue != null ? modeValue : new ModeValue(defaultForTopLevel);
+      modeValue = (ModeValue) get((K) new ModeKey(null));
+      return modeValue != null ? modeValue.getMode() : defaultForTopLevel;
     } else {
       return null;
     }

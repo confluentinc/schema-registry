@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 Confluent Inc.
+ * Copyright 2019 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,9 +102,31 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // register a valid avro schema
     int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    assertEquals("Registering with id should succeed",
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+  }
+
+  @Test
+  public void testImportModeWithoutId() throws Exception {
+    String subject = "testSubject";
+    String mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    // register a schema without id
+    try {
+      restApp.restClient.registerSchema(SCHEMA_STRING, subject);
+      fail("Registering a schema without ID should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals("Should get a constraint violation",
+          RestConstraintViolationException.DEFAULT_ERROR_CODE,
+          e.getStatus());
+    }
   }
 
   @Test

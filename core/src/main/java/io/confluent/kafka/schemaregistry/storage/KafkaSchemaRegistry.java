@@ -854,14 +854,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   public AvroCompatibilityLevel getCompatibilityLevel(String subject)
       throws SchemaRegistryStoreException {
-    ConfigValue configValue = lookupCache.config(subject, false, defaultCompatibilityLevel);
-    return configValue != null ? configValue.getCompatibilityLevel() : null;
+    return lookupCache.compatibilityLevel(subject, false, defaultCompatibilityLevel);
   }
 
   private AvroCompatibilityLevel getCompatibilityLevelInScope(String subject)
       throws SchemaRegistryStoreException {
-    ConfigValue configValue = lookupCache.config(subject, true, defaultCompatibilityLevel);
-    return configValue != null ? configValue.getCompatibilityLevel() : null;
+    return lookupCache.compatibilityLevel(subject, true, defaultCompatibilityLevel);
   }
 
   @Override
@@ -916,13 +914,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   public Mode getMode(String subject) throws SchemaRegistryStoreException {
-    ModeValue modeValue = lookupCache.mode(subject, false, defaultMode);
-    return modeValue != null ? modeValue.getMode() : null;
+    return lookupCache.mode(subject, false, defaultMode);
   }
 
   private Mode getModeInScope(String subject) throws SchemaRegistryStoreException {
-    ModeValue modeValue = lookupCache.mode(subject, true, defaultMode);
-    return modeValue != null ? modeValue.getMode() : null;
+    return lookupCache.mode(subject, true, defaultMode);
   }
 
   public void setMode(String subject, Mode mode)

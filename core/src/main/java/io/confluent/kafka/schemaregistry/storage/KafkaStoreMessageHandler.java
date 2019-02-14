@@ -50,7 +50,8 @@ public class KafkaStoreMessageHandler
   public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
-      if (schemaObj != null) {
+      if (schemaObj != null
+          && lookupCache.mode(schemaObj.getSubject(), true, Mode.READWRITE) != Mode.IMPORT) {
         SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
         if (oldKey != null) {
           SchemaValue oldSchema;
@@ -60,9 +61,7 @@ public class KafkaStoreMessageHandler
             log.error("Error while retrieving schema", e);
             return false;
           }
-          if (oldSchema != null
-              && !oldSchema.isDeleted()
-              && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
+          if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
             log.error("Found a schema with duplicate ID {}.  This schema will not be "
                     + "registered since a schema already exists with this ID.",
                 schemaObj.getId());

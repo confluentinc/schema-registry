@@ -93,9 +93,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param defaultForTopLevel default value for the top level scope
    * @return the {@link ConfigValue} if found, otherwise null.
    */
-  ConfigValue config(String subject,
-                     boolean returnTopLevelIfNotFound,
-                     AvroCompatibilityLevel defaultForTopLevel);
+  AvroCompatibilityLevel compatibilityLevel(String subject,
+                                            boolean returnTopLevelIfNotFound,
+                                            AvroCompatibilityLevel defaultForTopLevel);
 
   /**
    * Retrieves the mode for a subject.
@@ -105,9 +105,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param defaultForTopLevel default value for the top level scope
    * @return the {@link ModeValue} if found, otherwise null.
    */
-  ModeValue mode(String subject,
-                 boolean returnTopLevelIfNotFound,
-                 Mode defaultForTopLevel);
+  Mode mode(String subject,
+            boolean returnTopLevelIfNotFound,
+            Mode defaultForTopLevel);
 
   /**
    * Retrieves the set of subjects that match the given subject.
