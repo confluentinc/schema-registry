@@ -19,13 +19,10 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -176,28 +173,24 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public Set<String> subjects(String subject) throws StoreException {
-    return subjects(matchingPredicate(subject));
+  public boolean hasSubjects(String subject) throws StoreException {
+    return hasSubjects(matchingPredicate(subject));
   }
 
-  @Override
-  public Set<String> subjects(Predicate<String> match) throws StoreException {
+  public boolean hasSubjects(Predicate<String> match) throws StoreException {
     return store.entrySet().stream()
-        .flatMap(e -> {
+        .anyMatch(e -> {
           K k = e.getKey();
           V v = e.getValue();
           if (k instanceof SchemaKey) {
             SchemaKey key = (SchemaKey) k;
             SchemaValue value = (SchemaValue) v;
             if (value != null && !value.isDeleted()) {
-              if (match.test(key.getSubject())) {
-                return Stream.of(key.getSubject());
-              }
+              return match.test(key.getSubject());
             }
           }
-          return Stream.empty();
-        })
-        .collect(Collectors.toSet());
+          return false;
+        });
   }
 
   @Override
@@ -205,7 +198,6 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     clearSubjects(matchingPredicate(subject));
   }
 
-  @Override
   public void clearSubjects(Predicate<String> match) throws StoreException {
     store.entrySet().removeIf(e -> {
       K k = e.getKey();

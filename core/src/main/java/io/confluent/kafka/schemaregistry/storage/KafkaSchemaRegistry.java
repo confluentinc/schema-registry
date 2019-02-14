@@ -749,15 +749,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  public Set<String> listSubjects(String subject) throws SchemaRegistryStoreException {
-    try {
-      return lookupCache.subjects(subject);
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException(
-          "Error from the backend Kafka store", e);
-    }
-  }
-
   private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys)
       throws StoreException {
     Set<String> subjects = new HashSet<String>();
@@ -772,6 +763,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       }
     }
     return subjects;
+  }
+
+  public boolean hasSubjects(String subject) throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.hasSubjects(subject);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error from the backend Kafka store", e);
+    }
   }
 
   @Override
@@ -932,8 +932,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
       if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT) {
         // Changing to import mode requires that no schemas exist with matching subjects.
-        Set<String> matchingSubjects = listSubjects(subject);
-        if (!matchingSubjects.isEmpty()) {
+        if (hasSubjects(subject)) {
           throw new OperationNotPermittedException("Cannot import since found existing subjects");
         }
         // At this point no schemas should exist with matching subjects.
