@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -131,17 +132,47 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public ConfigValue configInScope(String subject) {
-    return null;
+  public ConfigValue config(String subject,
+                     boolean returnTopLevelIfNotFound,
+                     AvroCompatibilityLevel defaultForTopLevel
+  ) {
+    ConfigKey subjectConfigKey = new ConfigKey(subject);
+    ConfigValue config = (ConfigValue) get((K) subjectConfigKey);
+    if (config == null && subject == null) {
+      return new ConfigValue(defaultForTopLevel);
+    }
+    if (config != null) {
+      return config;
+    } else if (returnTopLevelIfNotFound) {
+      config = (ConfigValue) get(null);
+      return config != null ? config : new ConfigValue(defaultForTopLevel);
+    } else {
+      return null;
+    }
   }
 
   @Override
-  public ModeValue modeInScope(String subject) {
-    return null;
+  public ModeValue mode(String subject,
+                        boolean returnTopLevelIfNotFound,
+                        Mode defaultForTopLevel
+  ) {
+    ModeKey modeKey = new ModeKey(subject);
+    ModeValue modeValue = (ModeValue) get((K) modeKey);
+    if (modeValue == null && subject == null) {
+      return new ModeValue(defaultForTopLevel);
+    }
+    if (modeValue != null) {
+      return modeValue;
+    } else if (returnTopLevelIfNotFound) {
+      modeValue = (ModeValue) get(null);
+      return modeValue != null ? modeValue : new ModeValue(defaultForTopLevel);
+    } else {
+      return null;
+    }
   }
 
   @Override
-  public Set<String> subjectsInNamespace(String namespace) throws StoreException {
+  public Set<String> subjects(String namespace) throws StoreException {
     Iterator<K> allKeys = getAllKeys();
     return findSubject(allKeys, namespace);
   }

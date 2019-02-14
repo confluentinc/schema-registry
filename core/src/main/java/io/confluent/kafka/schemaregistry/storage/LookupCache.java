@@ -14,6 +14,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
@@ -85,27 +86,35 @@ public interface LookupCache<K,V> extends Store<K,V> {
   void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue);
 
   /**
-   * Retrieves the config that is in scope for a subject.
+   * Retrieves the config for a subject.
    *
    * @param subject the subject
+   * @param returnTopLevelIfNotFound whether to return the top level scope if not found
+   * @param defaultForTopLevel default value for the top level scope
    * @return the {@link ConfigValue} if found, otherwise null.
    */
-  ConfigValue configInScope(String subject);
+  ConfigValue config(String subject,
+                     boolean returnTopLevelIfNotFound,
+                     AvroCompatibilityLevel defaultForTopLevel);
 
   /**
-   * Retrieves the mode that is in scope for a subject.
+   * Retrieves the mode for a subject.
    *
    * @param subject the subject
+   * @param returnTopLevelIfNotFound whether to return the top level scope if not found
+   * @param defaultForTopLevel default value for the top level scope
    * @return the {@link ModeValue} if found, otherwise null.
    */
-  ModeValue modeInScope(String subject);
+  ModeValue mode(String subject,
+                 boolean returnTopLevelIfNotFound,
+                 Mode defaultForTopLevel);
 
   /**
-   * Retrieves the set of subjects in the given namespace.
+   * Retrieves the set of subjects that match the given subject.
    *
-   * @param namespace the namespace
-   * @return the subjects
+   * @param subject the subject
+   * @return the matching subjects
    */
-  Set<String> subjectsInNamespace(String namespace) throws StoreException;
+  Set<String> subjects(String subject) throws StoreException;
 
 }

@@ -96,6 +96,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private final SchemaRegistryIdentity myIdentity;
   private final Object masterLock = new Object();
   private final AvroCompatibilityLevel defaultCompatibilityLevel;
+  private final Mode defaultMode;
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
   private final boolean isEligibleForMasterElector;
@@ -128,6 +129,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
+    this.defaultMode = Mode.READWRITE;
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
@@ -750,7 +752,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public Set<String> listSubjects(String subject)
       throws SchemaRegistryStoreException {
     try {
-      return lookupCache.subjectsInNamespace(subject);
+      return lookupCache.subjects(subject);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
@@ -852,20 +854,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   public AvroCompatibilityLevel getCompatibilityLevel(String subject)
       throws SchemaRegistryStoreException {
-    ConfigKey subjectConfigKey = new ConfigKey(subject);
-    ConfigValue config;
-    try {
-      config = (ConfigValue) kafkaStore.get(subjectConfigKey);
-      if (config == null && subject == null) {
-        // if top level config was never updated, send the configured value for this instance
-        config = new ConfigValue(this.defaultCompatibilityLevel);
-      } else if (config == null) {
-        config = new ConfigValue();
-      }
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to read config from the kafka store", e);
-    }
-    return config.getCompatibilityLevel();
+    ConfigValue configValue = lookupCache.config(subject, false, defaultCompatibilityLevel);
+    return configValue != null ? configValue.getCompatibilityLevel() : null;
+  }
+
+  private AvroCompatibilityLevel getCompatibilityLevelInScope(String subject)
+      throws SchemaRegistryStoreException {
+    ConfigValue configValue = lookupCache.config(subject, true, defaultCompatibilityLevel);
+    return configValue != null ? configValue.getCompatibilityLevel() : null;
   }
 
   @Override
@@ -909,19 +905,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         .isCompatible(AvroUtils.parseSchema(newSchemaObj).schemaObj, previousAvroSchemas);
   }
 
-  private AvroCompatibilityLevel getCompatibilityLevelInScope(String subject)
-      throws SchemaRegistryStoreException {
-    AvroCompatibilityLevel compatibilityLevel = getCompatibilityLevel(subject);
-    if (compatibilityLevel != null) {
-      return compatibilityLevel;
-    }
-    ConfigValue configValue = lookupCache.configInScope(subject);
-    if (configValue != null) {
-      return configValue.getCompatibilityLevel();
-    }
-    return getCompatibilityLevel(null);
-  }
-
   private void deleteMode(String subject) throws StoreException {
     ModeKey modeKey = new ModeKey(subject);
     this.kafkaStore.delete(modeKey);
@@ -933,29 +916,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   public Mode getMode(String subject) throws SchemaRegistryStoreException {
-    try {
-      ModeKey modeKey = new ModeKey(subject);
-      ModeValue modeValue = (ModeValue) kafkaStore.get(modeKey);
-      if (modeValue == null && subject == null) {
-        // default global mode
-        return Mode.READWRITE;
-      }
-      return modeValue != null ? modeValue.getMode() : null;
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to read mode from the kafka store", e);
-    }
+    ModeValue modeValue = lookupCache.mode(subject, false, defaultMode);
+    return modeValue != null ? modeValue.getMode() : null;
   }
 
-  public Mode getModeInScope(String subject) throws SchemaRegistryStoreException {
-    Mode mode = getMode(subject);
-    if (mode != null) {
-      return mode;
-    }
-    ModeValue modeValue = lookupCache.modeInScope(subject);
-    if (modeValue != null) {
-      return modeValue.getMode();
-    }
-    return getMode(null);
+  private Mode getModeInScope(String subject) throws SchemaRegistryStoreException {
+    ModeValue modeValue = lookupCache.mode(subject, true, defaultMode);
+    return modeValue != null ? modeValue.getMode() : null;
   }
 
   public void setMode(String subject, Mode mode)
