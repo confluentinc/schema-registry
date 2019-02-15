@@ -31,6 +31,8 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
@@ -140,6 +142,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return restService.registerSchema(schema.toString(), subject);
   }
 
+  private int registerAndGetId(String subject, Schema schema, int version, int id)
+      throws IOException, RestClientException {
+    return restService.registerSchema(schema.toString(), subject, version, id);
+  }
+
   private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
     SchemaString restSchema = restService.getId(id);
     return new Schema.Parser().parse(restSchema.getSchemaString());
@@ -162,11 +169,21 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized int register(String subject, Schema schema)
       throws IOException, RestClientException {
+    return register(subject, schema, 0, -1);
+  }
+
+  @Override
+  public synchronized int register(String subject, Schema schema, int version, int id)
+      throws IOException, RestClientException {
     final Map<Schema, Integer> schemaIdMap =
         schemaCache.computeIfAbsent(subject, k -> new HashMap<>());
 
     final Integer cachedId = schemaIdMap.get(schema);
     if (cachedId != null) {
+      if (id >= 0 && id != cachedId) {
+        throw new IllegalStateException("Schema already registered with id "
+            + cachedId + " instead of input id " + id);
+      }
       return cachedId;
     }
 
@@ -174,7 +191,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throw new IllegalStateException("Too many schema objects created for " + subject + "!");
     }
 
-    final int retrievedId = registerAndGetId(subject, schema);
+    final int retrievedId = id >= 0
+                            ? registerAndGetId(subject, schema, version, id)
+                            : registerAndGetId(subject, schema);
     schemaIdMap.put(schema, retrievedId);
     idCache.get(null).put(retrievedId, schema);
     return retrievedId;
@@ -313,7 +332,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         .getOrDefault(subject, Collections.emptyMap())
         .values()
         .remove(Integer.valueOf(version));
-
     return restService.deleteSchemaVersion(requestProperties, subject, version);
   }
 
@@ -337,8 +355,41 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public String setMode(String mode)
+      throws IOException, RestClientException {
+    ModeUpdateRequest response = restService.setMode(mode);
+    return response.getMode();
+  }
+
+  @Override
+  public String setMode(String mode, String subject)
+      throws IOException, RestClientException {
+    ModeUpdateRequest response = restService.setMode(mode, subject);
+    return response.getMode();
+  }
+
+  @Override
+  public String getMode() throws IOException, RestClientException {
+    ModeGetResponse response = restService.getMode();
+    return response.getMode();
+  }
+
+  @Override
+  public String getMode(String subject) throws IOException, RestClientException {
+    ModeGetResponse response = restService.getMode(subject);
+    return response.getMode();
+  }
+
+  @Override
   public Collection<String> getAllSubjects() throws IOException, RestClientException {
     return restService.getAllSubjects();
   }
 
+  @Override
+  public void reset() {
+    schemaCache.clear();
+    idCache.clear();
+    versionCache.clear();
+    idCache.put(null, new HashMap<Integer, Schema>());
+  }
 }

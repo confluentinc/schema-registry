@@ -93,6 +93,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String MASTER_ELIGIBILITY = "master.eligibility";
   public static final boolean DEFAULT_MASTER_ELIGIBILITY = true;
   /**
+   * <code>mode.mutability</code>*
+   */
+  public static final String MODE_MUTABILITY = "mode.mutability";
+  public static final boolean DEFAULT_MODE_MUTABILITY = false;
+  /**
    * <code>schema.registry.zk.name</code>*
    */
   public static final String SCHEMAREGISTRY_ZK_NAMESPACE = "schema.registry.zk.namespace";
@@ -238,6 +243,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String MASTER_ELIGIBILITY_DOC =
       "If true, this node can participate in master election. In a multi-colo setup, turn this off "
       + "for clusters in the slave data center.";
+  protected static final String MODE_MUTABILITY_DOC =
+      "If true, this node will allow mode changes if it is the master.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
@@ -392,6 +399,9 @@ public class SchemaRegistryConfig extends RestConfig {
         )
         .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY,
             ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC
+        )
+        .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
+            ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
         )
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
             METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,

@@ -28,12 +28,12 @@ public class KafkaStoreMessageHandler
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
-  private final LookupCache lookupCache;
+  private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   private final ExecutorService tombstoneExecutor;
   private IdGenerator idGenerator;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
-                                  LookupCache lookupCache,
+                                  LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
                                   IdGenerator idGenerator) {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
@@ -60,7 +60,6 @@ public class KafkaStoreMessageHandler
             log.error("Error while retrieving schema", e);
             return false;
           }
-          // Check the old schema even if it may be deleted, as the schema may still be in use.
           if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
             log.error("Found a schema with duplicate ID {}.  This schema will not be "
                     + "registered since a schema already exists with this ID.",
@@ -86,6 +85,8 @@ public class KafkaStoreMessageHandler
           (SchemaValue) value);
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
+    } else if (key.getKeyType() == SchemaRegistryKeyType.CLEAR_SUBJECT) {
+      handleClearSubject((ClearSubjectValue) value);
     }
   }
 
@@ -104,8 +105,17 @@ public class KafkaStoreMessageHandler
           lookupCache.schemaDeleted(schemaKey, schemaValue);
         }
       } catch (StoreException e) {
-        log.error("Failed to delete subject in the local Cache");
+        log.error("Failed to delete subject {} in the local cache", subject);
       }
+    }
+  }
+
+  private void handleClearSubject(ClearSubjectValue clearSubjectValue) {
+    String subject = clearSubjectValue.getSubject();
+    try {
+      lookupCache.clearSubjects(subject);
+    } catch (StoreException e) {
+      log.error("Failed to clear subject {} in the local cache", subject);
     }
   }
 
@@ -125,7 +135,9 @@ public class KafkaStoreMessageHandler
         idGenerator.schemaRegistered(schemaKey, schemaObj);
         lookupCache.schemaRegistered(schemaKey, schemaObj);
         List<SchemaKey> schemaKeys = lookupCache.deletedSchemaKeys(schemaObj);
-        schemaKeys.stream().filter(v -> v.getSubject().equals(schemaObj.getSubject()))
+        schemaKeys.stream().filter(v ->
+            v.getSubject().equals(schemaObj.getSubject())
+                && v.getVersion() != schemaObj.getVersion())
             .forEach(this::tombstoneSchemaKey);
       }
     }
@@ -135,7 +147,7 @@ public class KafkaStoreMessageHandler
     tombstoneExecutor.execute(() -> {
           try {
             schemaRegistry.getKafkaStore().waitForInit();
-            schemaRegistry.getKafkaStore().put(schemaKey, null);
+            schemaRegistry.getKafkaStore().delete(schemaKey);
             log.debug("Tombstoned {}", schemaKey);
           } catch (InterruptedException e) {
             log.error("Interrupted while waiting for the tombstone thread to be initialized ", e);

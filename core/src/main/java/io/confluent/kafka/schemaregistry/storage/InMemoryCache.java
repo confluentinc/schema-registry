@@ -22,7 +22,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Predicate;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -127,4 +129,102 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public List<SchemaKey> deletedSchemaKeys(SchemaValue schemaValue) {
     return guidToDeletedSchemaKeys.getOrDefault(schemaValue.getId(), Collections.emptyList());
   }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public AvroCompatibilityLevel compatibilityLevel(String subject,
+                                                   boolean returnTopLevelIfNotFound,
+                                                   AvroCompatibilityLevel defaultForTopLevel
+  ) {
+    ConfigKey subjectConfigKey = new ConfigKey(subject);
+    ConfigValue config = (ConfigValue) get((K) subjectConfigKey);
+    if (config == null && subject == null) {
+      return defaultForTopLevel;
+    }
+    if (config != null) {
+      return config.getCompatibilityLevel();
+    } else if (returnTopLevelIfNotFound) {
+      config = (ConfigValue) get((K) new ConfigKey(null));
+      return config != null ? config.getCompatibilityLevel() : defaultForTopLevel;
+    } else {
+      return null;
+    }
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public Mode mode(String subject,
+                   boolean returnTopLevelIfNotFound,
+                   Mode defaultForTopLevel
+  ) {
+    ModeKey modeKey = new ModeKey(subject);
+    ModeValue modeValue = (ModeValue) get((K) modeKey);
+    if (modeValue == null && subject == null) {
+      return defaultForTopLevel;
+    }
+    if (modeValue != null) {
+      return modeValue.getMode();
+    } else if (returnTopLevelIfNotFound) {
+      modeValue = (ModeValue) get((K) new ModeKey(null));
+      return modeValue != null ? modeValue.getMode() : defaultForTopLevel;
+    } else {
+      return null;
+    }
+  }
+
+  @Override
+  public boolean hasSubjects(String subject) throws StoreException {
+    return hasSubjects(matchingPredicate(subject));
+  }
+
+  public boolean hasSubjects(Predicate<String> match) throws StoreException {
+    return store.entrySet().stream()
+        .anyMatch(e -> {
+          K k = e.getKey();
+          V v = e.getValue();
+          if (k instanceof SchemaKey) {
+            SchemaKey key = (SchemaKey) k;
+            SchemaValue value = (SchemaValue) v;
+            if (value != null && !value.isDeleted()) {
+              return match.test(key.getSubject());
+            }
+          }
+          return false;
+        });
+  }
+
+  @Override
+  public void clearSubjects(String subject) throws StoreException {
+    clearSubjects(matchingPredicate(subject));
+  }
+
+  public void clearSubjects(Predicate<String> match) throws StoreException {
+    Predicate<SchemaValue> matchDeleted = value -> {
+      if (value != null && value.isDeleted()) {
+        return match.test(value.getSubject());
+      }
+      return false;
+    };
+
+    // Delete from non-store structures first as they rely on the store
+    guidToSchemaKey.entrySet().removeIf(
+        e -> matchDeleted.test((SchemaValue) store.get(e.getValue())));
+    schemaHashToGuid.values().forEach(
+        v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
+    guidToDeletedSchemaKeys.values().forEach(
+        v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
+
+    // Delete from store later as the previous deletions rely on the store
+    store.entrySet().removeIf(e -> {
+      if (e.getKey() instanceof SchemaKey) {
+        return matchDeleted.test((SchemaValue) e.getValue());
+      }
+      return false;
+    });
+  }
+
+  private Predicate<String> matchingPredicate(String subject) {
+    return s -> subject == null || subject.equals(s);
+  }
+
 }
