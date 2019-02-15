@@ -199,18 +199,28 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   public void clearSubjects(Predicate<String> match) throws StoreException {
+    Predicate<SchemaValue> matchDeleted = value -> {
+      if (value != null && value.isDeleted()) {
+        return match.test(value.getSubject());
+      }
+      return false;
+    };
+
+    // Delete from non-store structures first as they rely on the store
+    guidToSchemaKey.entrySet().removeIf(
+        e -> matchDeleted.test((SchemaValue) store.get(e.getValue())));
+    schemaHashToGuid.values().forEach(
+        v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
+    guidToDeletedSchemaKeys.values().forEach(
+        v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
+
+    // Delete from store later as the previous deletions rely on the store
     store.entrySet().removeIf(e -> {
-      K k = e.getKey();
-      if (k instanceof SchemaKey) {
-        SchemaKey key = (SchemaKey) k;
-        return match.test(key.getSubject());
+      if (e.getKey() instanceof SchemaKey) {
+        return matchDeleted.test((SchemaValue) e.getValue());
       }
       return false;
     });
-    guidToSchemaKey.entrySet().removeIf(e -> match.test(e.getValue().getSubject()));
-    schemaHashToGuid.values().forEach(v -> v.removeIf(match));
-    guidToDeletedSchemaKeys.values().forEach(
-        v -> v.removeIf(k -> match.test(k.getSubject())));
   }
 
   private Predicate<String> matchingPredicate(String subject) {

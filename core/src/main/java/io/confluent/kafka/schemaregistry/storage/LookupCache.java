@@ -104,12 +104,10 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param defaultForTopLevel default value for the top level scope
    * @return the {@link ModeValue} if found, otherwise null.
    */
-  Mode mode(String subject,
-            boolean returnTopLevelIfNotFound,
-            Mode defaultForTopLevel);
+  Mode mode(String subject, boolean returnTopLevelIfNotFound, Mode defaultForTopLevel);
 
   /**
-   * Retrieves whether there exist schemas (that are not deleted) that match the given subject.
+   * Returns whether there exist schemas (that are not deleted) that match the given subject.
    *
    * @param subject the subject, or null for all subjects
    * @return whether there exist matching schemas

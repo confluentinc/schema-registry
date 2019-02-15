@@ -926,7 +926,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     if (!allowModeChanges) {
       throw new OperationNotPermittedException("Mode changes are not allowed");
     }
-    ClearSubjectKey clearSubjectKey = new ClearSubjectKey(subject);
     ModeKey modeKey = new ModeKey(subject);
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
@@ -937,7 +936,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
         // At this point no schemas should exist with matching subjects.
         // Write an event to clear deleted schemas from the caches.
-        kafkaStore.put(clearSubjectKey, new ClearSubjectValue(subject));
+        kafkaStore.put(new ClearSubjectKey(subject), new ClearSubjectValue(subject));
       }
       kafkaStore.put(modeKey, new ModeValue(mode));
       log.debug("Wrote new mode: " + mode.name() + " to the"

@@ -52,8 +52,9 @@ public class SchemaIdAndSubjects {
     return this.id;
   }
 
-  public void removeIf(Predicate<String> filter) {
-    subjectsAndVersions.keySet().removeIf(filter);
+  public void removeIf(Predicate<SchemaKey> filter) {
+    subjectsAndVersions.entrySet().removeIf(e ->
+        filter.test(new SchemaKey(e.getKey(), e.getValue())));
   }
 
   @Override
