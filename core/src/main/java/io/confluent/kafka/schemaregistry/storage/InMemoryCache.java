@@ -40,7 +40,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
 
   public InMemoryCache() {
-    store = new ConcurrentSkipListMap<K, V>();
+    this.store = new ConcurrentSkipListMap<>();
     this.guidToSchemaKey = new ConcurrentHashMap<>();
     this.schemaHashToGuid = new ConcurrentHashMap<>();
     this.guidToDeletedSchemaKeys = new ConcurrentHashMap<>();
@@ -206,6 +206,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       return false;
     };
 
+    // First replace deleted entries in guidToSchemaKey with entries that are not deleted
+    replaceMatchingDeletedWithNotDeleted(match);
+
     // Delete from non-store structures first as they rely on the store
     guidToSchemaKey.entrySet().removeIf(
         e -> matchDeleted.test((SchemaValue) store.get(e.getValue())));
@@ -221,6 +224,33 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       }
       return false;
     });
+  }
+
+  // Visible for testing
+  protected void replaceMatchingDeletedWithNotDeleted(Predicate<String> match) {
+    Predicate<SchemaValue> matchDeleted = value -> {
+      if (value != null && value.isDeleted()) {
+        return match.test(value.getSubject());
+      }
+      return false;
+    };
+
+    for (Map.Entry<Integer, SchemaKey> entry : guidToSchemaKey.entrySet()) {
+      SchemaKey schemaKey = entry.getValue();
+      SchemaValue schemaValue = (SchemaValue) store.get(schemaKey);
+      if (matchDeleted.test(schemaValue)) {
+        SchemaKey newSchemaKey = getNonDeletedSchemaKey(schemaValue.getSchema());
+        if (newSchemaKey != null) {
+          entry.setValue(newSchemaKey);
+        }
+      }
+    }
+  }
+
+  private SchemaKey getNonDeletedSchemaKey(String schema) {
+    MD5 md5 = MD5.ofString(schema);
+    SchemaIdAndSubjects keys = schemaHashToGuid.get(md5);
+    return keys.findAny(key -> !((SchemaValue) store.get(key)).isDeleted());
   }
 
   private Predicate<String> matchingPredicate(String subject) {

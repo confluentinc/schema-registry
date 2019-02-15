@@ -40,6 +40,7 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
@@ -378,5 +379,34 @@ public class KafkaStoreTest extends ClusterTestHarness {
       iter.next();
     }
     assertEquals(2, size);
+  }
+
+  @Test
+  public void testReplaceDeletedWithNonDeleted() throws Exception {
+    InMemoryCache<SchemaKey, SchemaValue> inMemoryStore = new InMemoryCache<>();
+
+    int id = 100;
+    SchemaKey schemaKey = new SchemaKey("subject", 1);
+    SchemaValue schemaValue = new SchemaValue("subject", 1, id, "schemaString", false);
+
+    SchemaKey schemaKey2 = new SchemaKey("subject2", 1);
+    SchemaValue schemaValue2 = new SchemaValue("subject2", 1, id, "schemaString", false);
+
+    inMemoryStore.put(schemaKey, schemaValue);
+    inMemoryStore.schemaRegistered(schemaKey, schemaValue);
+
+    inMemoryStore.put(schemaKey2, schemaValue2);
+    inMemoryStore.schemaRegistered(schemaKey2, schemaValue2);
+
+    schemaValue2.setDeleted(true);
+    inMemoryStore.schemaDeleted(schemaKey2, schemaValue2);
+
+    assertTrue(inMemoryStore.get(inMemoryStore.schemaKeyById(id)).isDeleted());
+
+    inMemoryStore.replaceMatchingDeletedWithNotDeleted(s -> s.equals("subject2"));
+
+    SchemaValue newValue = inMemoryStore.get(inMemoryStore.schemaKeyById(id));
+    assertEquals("subject", newValue.getSubject());
+    assertFalse(newValue.isDeleted());
   }
 }

@@ -52,6 +52,14 @@ public class SchemaIdAndSubjects {
     return this.id;
   }
 
+  public SchemaKey findAny(Predicate<SchemaKey> filter) {
+    return subjectsAndVersions.entrySet().stream()
+        .map(e -> new SchemaKey(e.getKey(), e.getValue()))
+        .filter(key -> filter.test(key))
+        .findAny()
+        .orElse(null);
+  }
+
   public void removeIf(Predicate<SchemaKey> filter) {
     subjectsAndVersions.entrySet().removeIf(e ->
         filter.test(new SchemaKey(e.getKey(), e.getValue())));
