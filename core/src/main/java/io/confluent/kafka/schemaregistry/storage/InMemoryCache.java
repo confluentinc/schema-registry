@@ -206,12 +206,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       return false;
     };
 
-    // First replace deleted entries in guidToSchemaKey with entries that are not deleted
-    replaceMatchingDeletedWithNotDeleted(match);
+    // Try to replace deleted schemas with non-deleted, otherwise remove
+    replaceMatchingDeletedWithNonDeletedOrRemove(match);
 
     // Delete from non-store structures first as they rely on the store
-    guidToSchemaKey.entrySet().removeIf(
-        e -> matchDeleted.test((SchemaValue) store.get(e.getValue())));
     schemaHashToGuid.values().forEach(
         v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
     guidToDeletedSchemaKeys.values().forEach(
@@ -227,7 +225,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   // Visible for testing
-  protected void replaceMatchingDeletedWithNotDeleted(Predicate<String> match) {
+  protected void replaceMatchingDeletedWithNonDeletedOrRemove(Predicate<String> match) {
     Predicate<SchemaValue> matchDeleted = value -> {
       if (value != null && value.isDeleted()) {
         return match.test(value.getSubject());
@@ -235,13 +233,17 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       return false;
     };
 
-    for (Map.Entry<Integer, SchemaKey> entry : guidToSchemaKey.entrySet()) {
+    Iterator<Map.Entry<Integer, SchemaKey>> it = guidToSchemaKey.entrySet().iterator();
+    while (it.hasNext()) {
+      Map.Entry<Integer, SchemaKey> entry = it.next();
       SchemaKey schemaKey = entry.getValue();
       SchemaValue schemaValue = (SchemaValue) store.get(schemaKey);
       if (matchDeleted.test(schemaValue)) {
         SchemaKey newSchemaKey = getNonDeletedSchemaKey(schemaValue.getSchema());
         if (newSchemaKey != null) {
           entry.setValue(newSchemaKey);
+        } else {
+          it.remove();
         }
       }
     }

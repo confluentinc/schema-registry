@@ -37,6 +37,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Iterator;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
@@ -403,7 +404,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
     assertTrue(inMemoryStore.get(inMemoryStore.schemaKeyById(id)).isDeleted());
 
-    inMemoryStore.replaceMatchingDeletedWithNotDeleted(s -> s.equals("subject2"));
+    inMemoryStore.replaceMatchingDeletedWithNonDeletedOrRemove(s -> s.equals("subject2"));
 
     SchemaValue newValue = inMemoryStore.get(inMemoryStore.schemaKeyById(id));
     assertEquals("subject", newValue.getSubject());
