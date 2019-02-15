@@ -90,7 +90,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param subject the subject
    * @param returnTopLevelIfNotFound whether to return the top level scope if not found
    * @param defaultForTopLevel default value for the top level scope
-   * @return the {@link ConfigValue} if found, otherwise null.
+   * @return the compatibility level if found, otherwise null
    */
   AvroCompatibilityLevel compatibilityLevel(String subject,
                                             boolean returnTopLevelIfNotFound,
@@ -102,7 +102,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param subject the subject
    * @param returnTopLevelIfNotFound whether to return the top level scope if not found
    * @param defaultForTopLevel default value for the top level scope
-   * @return the {@link ModeValue} if found, otherwise null.
+   * @return the mode if found, otherwise null.
    */
   Mode mode(String subject, boolean returnTopLevelIfNotFound, Mode defaultForTopLevel);
 
@@ -115,8 +115,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
   boolean hasSubjects(String subject) throws StoreException;
 
   /**
-   * Clears the cache of schemas that match the given subject.
-   * Typically used when all schemas that match the given subject have been deleted.
+   * Clears the cache of deleted schemas that match the given subject.
    *
    * @param subject the subject, or null for all subjects
    */
