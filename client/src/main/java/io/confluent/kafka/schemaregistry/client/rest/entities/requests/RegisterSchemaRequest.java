@@ -20,13 +20,36 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.util.Objects;
 
 public class RegisterSchemaRequest {
 
+  private int version = 0;
+  private int id = -1;
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, RegisterSchemaRequest.class);
+  }
+
+  @JsonProperty("version")
+  public int getVersion() {
+    return this.version;
+  }
+
+  @JsonProperty("version")
+  public void setVersion(int version) {
+    this.version = version;
+  }
+
+  @JsonProperty("id")
+  public int getId() {
+    return this.id;
+  }
+
+  @JsonProperty("id")
+  public void setId(int id) {
+    this.id = id;
   }
 
   @JsonProperty("schema")
@@ -47,31 +70,27 @@ public class RegisterSchemaRequest {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    if (!super.equals(o)) {
-      return false;
-    }
-
     RegisterSchemaRequest that = (RegisterSchemaRequest) o;
-
-    if (schema != null ? !schema.equals(that.schema) : that.schema != null) {
-      return false;
-    }
-
-    return true;
+    return version == that.version && id == that.id && Objects.equals(schema, that.schema);
   }
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
-    result = 31 * result + (schema != null ? schema.hashCode() : 0);
-    return result;
+    return Objects.hash(version, id, schema);
   }
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{schema=" + this.schema + "}");
-    return sb.toString();
+    StringBuilder buf = new StringBuilder();
+    buf.append("{");
+    if (version > 0) {
+      buf.append("version=").append(version).append(", ");
+    }
+    if (id >= 0) {
+      buf.append("id=").append(id).append(", ");
+    }
+    buf.append("schema=").append(schema).append("}");
+    return buf.toString();
   }
 
   public String toJson() throws IOException {

@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ConfigResource;
+import io.confluent.kafka.schemaregistry.rest.resources.ModeResource;
 import io.confluent.kafka.schemaregistry.rest.resources.RootResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemasResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource;
@@ -83,6 +84,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new SchemasResource(schemaRegistry));
     config.register(new SubjectVersionsResource(schemaRegistry));
     config.register(new CompatibilityResource(schemaRegistry));
+    config.register(new ModeResource(schemaRegistry));
 
     if (schemaRegistryResourceExtensions != null) {
       try {

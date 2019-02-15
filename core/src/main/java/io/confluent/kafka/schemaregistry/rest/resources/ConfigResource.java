@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
@@ -84,6 +85,8 @@ public class ConfigResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
       schemaRegistry.updateConfigOrForward(subject, compatibilityLevel, headerProperties);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update compatibility level", e);
     } catch (UnknownMasterException e) {
@@ -133,6 +136,8 @@ public class ConfigResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
       schemaRegistry.updateConfigOrForward(null, compatibilityLevel, headerProperties);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update compatibility level", e);
     } catch (UnknownMasterException e) {

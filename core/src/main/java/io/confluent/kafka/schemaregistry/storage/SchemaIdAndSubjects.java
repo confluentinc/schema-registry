@@ -16,6 +16,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * Kafka schema registry maintains a few in memory indices to facilitate schema lookups. One such
@@ -49,6 +50,11 @@ public class SchemaIdAndSubjects {
 
   public int getSchemaId() {
     return this.id;
+  }
+
+  public void removeIf(Predicate<SchemaKey> filter) {
+    subjectsAndVersions.entrySet().removeIf(e ->
+        filter.test(new SchemaKey(e.getKey(), e.getValue())));
   }
 
   @Override
