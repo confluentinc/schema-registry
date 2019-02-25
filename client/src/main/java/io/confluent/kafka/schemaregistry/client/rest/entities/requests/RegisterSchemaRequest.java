@@ -16,12 +16,20 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import com.fasterxml.jackson.annotation.JsonFilter;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.ser.FilterProvider;
+import com.fasterxml.jackson.databind.ser.PropertyWriter;
+import com.fasterxml.jackson.databind.ser.impl.SimpleBeanPropertyFilter;
+import com.fasterxml.jackson.databind.ser.impl.SimpleFilterProvider;
 
 import java.io.IOException;
 import java.util.Objects;
 
+@JsonFilter("registerFilter")
 public class RegisterSchemaRequest {
 
   private int version = 0;
@@ -94,7 +102,33 @@ public class RegisterSchemaRequest {
   }
 
   public String toJson() throws IOException {
-    return new ObjectMapper().writeValueAsString(this);
+    FilterProvider filters = new SimpleFilterProvider()
+        .addFilter("registerFilter", new RegisterFilter());
+    return new ObjectMapper().writer(filters).writeValueAsString(this);
+  }
+
+  private static class RegisterFilter extends SimpleBeanPropertyFilter {
+    @Override
+    public void serializeAsField(
+        Object pojo,
+        JsonGenerator jgen,
+        SerializerProvider provider,
+        PropertyWriter writer
+    ) throws Exception {
+      if (writer.getName().equals("version")) {
+        int version = ((RegisterSchemaRequest) pojo).getVersion();
+        if (version >= 1) {
+          writer.serializeAsField(pojo, jgen, provider);
+        }
+      } else if (writer.getName().equals("id")) {
+        int id = ((RegisterSchemaRequest) pojo).getId();
+        if (id >= 0) {
+          writer.serializeAsField(pojo, jgen, provider);
+        }
+      } else {
+        writer.serializeAsField(pojo, jgen, provider);
+      }
+    }
   }
 
 }
