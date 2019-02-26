@@ -1080,8 +1080,10 @@ public class AvroData {
           }
         case ARRAY: {
           ArrayNode array = JsonNodeFactory.instance.arrayNode();
-          for (Object elem : (Collection<Object>) defaultVal) {
-            array.add(defaultValueFromConnect(schema.valueSchema(), elem));
+          if (defaultVal != null) {
+            for (Object elem : (Collection<Object>) defaultVal) {
+              array.add(defaultValueFromConnect(schema.valueSchema(), elem));
+            }
           }
           return array;
         }
