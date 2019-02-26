@@ -16,24 +16,18 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
-import com.fasterxml.jackson.annotation.JsonFilter;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.ser.FilterProvider;
-import com.fasterxml.jackson.databind.ser.PropertyWriter;
-import com.fasterxml.jackson.databind.ser.impl.SimpleBeanPropertyFilter;
-import com.fasterxml.jackson.databind.ser.impl.SimpleFilterProvider;
 
 import java.io.IOException;
 import java.util.Objects;
 
-@JsonFilter("registerFilter")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class RegisterSchemaRequest {
 
-  private int version = 0;
-  private int id = -1;
+  private Integer version;
+  private Integer id;
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
@@ -41,22 +35,22 @@ public class RegisterSchemaRequest {
   }
 
   @JsonProperty("version")
-  public int getVersion() {
+  public Integer getVersion() {
     return this.version;
   }
 
   @JsonProperty("version")
-  public void setVersion(int version) {
+  public void setVersion(Integer version) {
     this.version = version;
   }
 
   @JsonProperty("id")
-  public int getId() {
+  public Integer getId() {
     return this.id;
   }
 
   @JsonProperty("id")
-  public void setId(int id) {
+  public void setId(Integer id) {
     this.id = id;
   }
 
@@ -79,7 +73,9 @@ public class RegisterSchemaRequest {
       return false;
     }
     RegisterSchemaRequest that = (RegisterSchemaRequest) o;
-    return version == that.version && id == that.id && Objects.equals(schema, that.schema);
+    return Objects.equals(version, that.version)
+        && Objects.equals(id, that.id)
+        && Objects.equals(schema, that.schema);
   }
 
   @Override
@@ -91,10 +87,10 @@ public class RegisterSchemaRequest {
   public String toString() {
     StringBuilder buf = new StringBuilder();
     buf.append("{");
-    if (version > 0) {
+    if (version != null) {
       buf.append("version=").append(version).append(", ");
     }
-    if (id >= 0) {
+    if (id != null) {
       buf.append("id=").append(id).append(", ");
     }
     buf.append("schema=").append(schema).append("}");
@@ -102,33 +98,7 @@ public class RegisterSchemaRequest {
   }
 
   public String toJson() throws IOException {
-    FilterProvider filters = new SimpleFilterProvider()
-        .addFilter("registerFilter", new RegisterFilter());
-    return new ObjectMapper().writer(filters).writeValueAsString(this);
-  }
-
-  private static class RegisterFilter extends SimpleBeanPropertyFilter {
-    @Override
-    public void serializeAsField(
-        Object pojo,
-        JsonGenerator jgen,
-        SerializerProvider provider,
-        PropertyWriter writer
-    ) throws Exception {
-      if (writer.getName().equals("version")) {
-        int version = ((RegisterSchemaRequest) pojo).getVersion();
-        if (version >= 1) {
-          writer.serializeAsField(pojo, jgen, provider);
-        }
-      } else if (writer.getName().equals("id")) {
-        int id = ((RegisterSchemaRequest) pojo).getId();
-        if (id >= 0) {
-          writer.serializeAsField(pojo, jgen, provider);
-        }
-      } else {
-        writer.serializeAsField(pojo, jgen, provider);
-      }
-    }
+    return new ObjectMapper().writeValueAsString(this);
   }
 
 }
