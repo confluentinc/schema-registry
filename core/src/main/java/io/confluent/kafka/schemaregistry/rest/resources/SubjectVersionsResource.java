@@ -159,8 +159,8 @@ public class SubjectVersionsResource {
 
     Schema schema = new Schema(
         subjectName,
-        request.getVersion(),
-        request.getId(),
+        request.getVersion() != null ? request.getVersion() : 0,
+        request.getId() != null ? request.getId() : -1,
         request.getSchema()
     );
     int id;
