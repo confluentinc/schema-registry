@@ -72,7 +72,7 @@ public class SubjectsResource {
                                            lookupDeletedSchema,
                                        @NotNull RegisterSchemaRequest request) {
     // returns version if the schema exists. Otherwise returns 404
-    Schema schema = new Schema(subject, 0, 0, request.getSchema());
+    Schema schema = new Schema(subject, 0, -1, request.getSchema());
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
     try {
       if (!schemaRegistry.listSubjects().contains(subject)) {
