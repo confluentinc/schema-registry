@@ -16,16 +16,18 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.util.Objects;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class RegisterSchemaRequest {
 
-  private int version = 0;
-  private int id = -1;
+  private Integer version;
+  private Integer id;
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
@@ -33,22 +35,22 @@ public class RegisterSchemaRequest {
   }
 
   @JsonProperty("version")
-  public int getVersion() {
+  public Integer getVersion() {
     return this.version;
   }
 
   @JsonProperty("version")
-  public void setVersion(int version) {
+  public void setVersion(Integer version) {
     this.version = version;
   }
 
   @JsonProperty("id")
-  public int getId() {
+  public Integer getId() {
     return this.id;
   }
 
   @JsonProperty("id")
-  public void setId(int id) {
+  public void setId(Integer id) {
     this.id = id;
   }
 
@@ -71,7 +73,9 @@ public class RegisterSchemaRequest {
       return false;
     }
     RegisterSchemaRequest that = (RegisterSchemaRequest) o;
-    return version == that.version && id == that.id && Objects.equals(schema, that.schema);
+    return Objects.equals(version, that.version)
+        && Objects.equals(id, that.id)
+        && Objects.equals(schema, that.schema);
   }
 
   @Override
@@ -83,10 +87,10 @@ public class RegisterSchemaRequest {
   public String toString() {
     StringBuilder buf = new StringBuilder();
     buf.append("{");
-    if (version > 0) {
+    if (version != null) {
       buf.append("version=").append(version).append(", ");
     }
-    if (id >= 0) {
+    if (id != null) {
       buf.append("id=").append(id).append(", ");
     }
     buf.append("schema=").append(schema).append("}");
