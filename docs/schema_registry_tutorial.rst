@@ -76,9 +76,10 @@ Before proceeding with this tutorial
 
 #. Clone the |cp| `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will compile and run in this tutorial.
 
-   .. sourcecode:: bash
+   .. codewithvars:: bash
 
       $ git clone https://github.com/confluentinc/examples.git
+      $ git checkout |release|-post
       $ cd examples/clients/avro
    
 
@@ -112,7 +113,7 @@ Schema Definition
 The first thing developers need to do is agree on a basic schema for data.
 Client applications form a contract: producers will write data in a schema and consumers will be able to read that data.
 
-Consider the `original Payment schema <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc>`_:
+Consider the :devx-examples:`original Payment schema|clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc`:
 
 .. sourcecode:: json
 
@@ -152,7 +153,7 @@ The ``pom.xml`` file may also include:
 
 * Plugin ``kafka-schema-registry-maven-plugin`` to check compatibility of evolving schemas
 
-For a full pom.xml example, refer to this `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_.
+For a full pom.xml example, refer to this :devx-examples:`pom.xml|clients/avro/pom.xml`.
 
 Configuring Avro
 ^^^^^^^^^^^^^^^^
@@ -193,7 +194,7 @@ For example:
    producer.send(record);
    ...
 
-For a full Java producer example, refer to `the producer example <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/java/io/confluent/examples/clients/basicavro/ProducerExample.java>`_.
+For a full Java producer example, refer to :devx-examples:`the producer example|clients/avro/src/main/java/io/confluent/examples/clients/basicavro/ProducerExample.java`.
 Because the `pom.xml` includes ``avro-maven-plugin``, the `Payment` class is automatically generated during compile.
 To run this producer, first compile the project and then run ``ProducerExample``.
 
@@ -243,7 +244,7 @@ For example:
    }
    ...
 
-For a full Java consumer example, refer to `the consumer example <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/java/io/confluent/examples/clients/basicavro/ConsumerExample.java>`_.
+For a full Java consumer example, refer to :devx-examples:`the consumer example|clients/avro/src/main/java/io/confluent/examples/clients/basicavro/ConsumerExample.java`.
 Because the `pom.xml` includes ``avro-maven-plugin``, the `Payment` class is automatically generated during compile.
 To run this consumer, first compile the project and then run ``ConsumerExample`` (assuming you already ran the ``ProducerExample`` above).
 
@@ -404,7 +405,7 @@ Failing Compatibility Checks
 Without |sr| checking compatibility, your applications could potentially break on schema changes.
 
 In the Payment schema example, let's say the business now tracks additional information for each payment, for example, a field ``region`` that represents the place of sale.
-Consider the `Payment2a schema <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc>`_ which includes this extra field ``region``:
+Consider the :devx-examples:`Payment2a schema|clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc` which includes this extra field ``region``:
 
 .. sourcecode:: json
 
@@ -425,7 +426,7 @@ The answer is no.
 Consumers will fail reading data with the older schema because the older data does not have the `region` field, therefore this schema is not backward compatible.
 
 Confluent provides a `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, which you can use to check compatibility in development or integrate into your CI/CD pipeline.
-Our sample `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml#L84-L99>`_ includes this plugin to enable compatibility checks.
+Our sample :devx-examples:`pom.xml|clients/avro/pom.xml#L84-L99` includes this plugin to enable compatibility checks.
 
 .. sourcecode:: xml
 
@@ -469,7 +470,7 @@ Passing Compatibility Checks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To maintain backward compatibility, a new schema must assume default values for the new field if it is not provided.
-Consider an updated `Payment2b schema <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc>`_ that has a default value for ``region``:
+Consider an updated :devx-examples:`Payment2b schema|clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc` that has a default value for ``region``:
 
 .. sourcecode:: json
 
@@ -484,7 +485,7 @@ Consider an updated `Payment2b schema <https://github.com/confluentinc/examples/
     ]
    }
 
-Update the `pom.xml <https://github.com/confluentinc/examples/blob/5.0.0-post/clients/avro/pom.xml>`_ to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
+Update the :devx-examples:`pom.xml|clients/avro/pom.xml` to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
 Re-run the compatibility check and verify that it passes:
 
 .. sourcecode:: bash
