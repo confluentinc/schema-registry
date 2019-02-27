@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import org.codehaus.jackson.annotate.JsonPropertyOrder;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /**
  *

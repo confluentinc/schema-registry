@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import org.codehaus.jackson.annotate.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class ModeValue implements SchemaRegistryValue {
 
