@@ -116,7 +116,7 @@ Don't Modify These Storage Settings
 .. sourcecode:: bash
 
   # kafkastore.topic=_schemas
-  $ bin/kafka-topics ^^create ^^zookeeper localhost:2181 ^^topic connect-configs ^^replication-factor 3 ^^partitions 1 ^^config cleanup.policy=compact
+  $ bin/kafka-topics --create --zookeeper localhost:2181 --topic connect-configs --replication-factor 3 --partitions 1 --config cleanup.policy=compact
 
 .. kafkastore.topic include
 
@@ -188,10 +188,10 @@ To backup the topic, use the ``kafka-console-consumer`` to capture messages from
 
 .. sourcecode:: bash
 
-   bin/kafka-console-consumer ^^bootstrap-server localhost:9092 ^^topic _schemas ^^from-beginning ^^property print.key=true ^^timeout-ms 1000 1> schemas.log
+   bin/kafka-console-consumer --bootstrap-server localhost:9092 --topic _schemas --from-beginning --property print.key=true --timeout-ms 1000 1> schemas.log
 
 To restore the topic, use the ``kafka-console-producer`` to write the contents of file "schemas.log" to a new schemas topic. This examples uses a new schemas topic name "_schemas_restore". If you use a new topic name or use the old one (i.e. "_schemas"), make sure to set ``<kafkastore.topic>`` accordingly.
 
 .. sourcecode:: bash
 
-   bin/kafka-console-producer ^^broker-list localhost:9092 ^^topic _schemas_restore ^^property parse.key=true < schemas.log
+   bin/kafka-console-producer --broker-list localhost:9092 --topic _schemas_restore --property parse.key=true < schemas.log
