@@ -1412,14 +1412,16 @@ public class AvroData {
           if (null != precisionNode) {
             if (!precisionNode.isNumber()) {
               throw new DataException(AVRO_LOGICAL_DECIMAL_PRECISION_PROP
-                                      + " property must be a JSON Integer."
-                                      + " https://avro.apache.org/docs/1.7.7/spec.html#Decimal");
+                  + " property must be a JSON Integer."
+                  + " https://avro.apache.org/docs/1.7.7/spec.html#Decimal");
             }
             Integer precision = precisionNode.asInt();
             builder.parameter(CONNECT_AVRO_DECIMAL_PRECISION_PROP, precision.toString());
           } else {
-            builder.parameter(CONNECT_AVRO_DECIMAL_PRECISION_PROP,
-                              CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT.toString());
+            builder.parameter(
+                CONNECT_AVRO_DECIMAL_PRECISION_PROP,
+                CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT.toString()
+            );
           }
         } else {
           builder = SchemaBuilder.bytes();
@@ -1507,7 +1509,7 @@ public class AvroData {
       case ENUM:
         // enums are unwrapped to strings and the original enum is not preserved
         builder = SchemaBuilder.string();
-        if (schema.getDoc() != null) {
+        if (connectMetaData && schema.getDoc() != null) {
           builder.parameter(CONNECT_ENUM_DOC_PROP, schema.getDoc());
         }
         builder.parameter(AVRO_TYPE_ENUM, schema.getFullName());
@@ -1563,7 +1565,7 @@ public class AvroData {
     if (docVal != null) {
       builder.doc(docVal);
     }
-    if (schema.getDoc() != null) {
+    if (connectMetaData && schema.getDoc() != null) {
       builder.parameter(CONNECT_RECORD_DOC_PROP, schema.getDoc());
     }
 
@@ -1593,7 +1595,7 @@ public class AvroData {
     }
 
     JsonNode parameters = schema.getJsonProp(CONNECT_PARAMETERS_PROP);
-    if (parameters != null) {
+    if (connectMetaData && parameters != null) {
       if (!parameters.isObject()) {
         throw new DataException("Expected JSON object for schema parameters but found: "
             + parameters);

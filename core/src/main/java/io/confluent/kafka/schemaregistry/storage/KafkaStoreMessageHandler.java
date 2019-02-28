@@ -42,6 +42,38 @@ public class KafkaStoreMessageHandler
   }
 
   /**
+   * Invoked before every new K,V pair written to the store
+   *
+   * @param key   Key associated with the data
+   * @param value Data written to the store
+   */
+  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
+    if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
+      SchemaValue schemaObj = (SchemaValue) value;
+      if (schemaObj != null) {
+        SchemaKey oldKey = schemaRegistry.guidToSchemaKey.get(schemaObj.getId());
+        if (oldKey != null) {
+          SchemaValue oldSchema;
+          try {
+            oldSchema = (SchemaValue) store.get(oldKey);
+          } catch (StoreException e) {
+            log.error("Error while retrieving schema", e);
+            return false;
+          }
+          // Check the old schema even if it may be deleted, as the schema may still be in use.
+          if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
+            log.error("Found a schema with duplicate ID {}.  This schema will not be "
+                    + "registered since a schema already exists with this ID.",
+                schemaObj.getId());
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
    * Invoked on every new schema written to the Kafka store
    *
    * @param key   Key associated with the schema.

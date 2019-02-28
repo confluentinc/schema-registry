@@ -21,6 +21,9 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -63,6 +66,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private final ReentrantLock offsetUpdateLock;
   private final Condition offsetReachedThreshold;
   private Consumer<byte[], byte[]> consumer;
+  private final Producer<byte[], byte[]> producer;
   private long offsetInSchemasTopic = -1L;
   // Noop key is only used to help reliably determine last offset; reader thread ignores 
   // messages with this key
@@ -76,6 +80,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 StoreUpdateHandler<K, V> storeUpdateHandler,
                                 Serializer<K, V> serializer,
                                 Store<K, V> localStore,
+                                Producer<byte[], byte[]> producer,
                                 K noopKey,
                                 SchemaRegistryConfig config) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
@@ -86,6 +91,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.storeUpdateHandler = storeUpdateHandler;
     this.serializer = serializer;
     this.localStore = localStore;
+    this.producer = producer;
     this.noopKey = noopKey;
 
     KafkaStore.addSchemaRegistryConfigsToClientProperties(config, consumerProps);
@@ -177,12 +183,29 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                       + ","
                       + message
                       + ") to the local store");
-            if (message == null) {
-              localStore.delete(messageKey);
+            boolean valid = this.storeUpdateHandler.validateUpdate(messageKey, message);
+            if (valid) {
+              if (message == null) {
+                localStore.delete(messageKey);
+              } else {
+                localStore.put(messageKey, message);
+              }
+              this.storeUpdateHandler.handleUpdate(messageKey, message);
             } else {
-              localStore.put(messageKey, message);
+              if (localStore.get(messageKey) == null) {
+                try {
+                  ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                      topic,
+                      0,
+                      record.key(),
+                      null
+                  );
+                  producer.send(producerRecord);
+                } catch (KafkaException ke) {
+                  log.warn("Failed to tombstone schema with duplicate ID", ke);
+                }
+              }
             }
-            this.storeUpdateHandler.handleUpdate(messageKey, message);
             try {
               offsetUpdateLock.lock();
               offsetInSchemasTopic = record.offset();

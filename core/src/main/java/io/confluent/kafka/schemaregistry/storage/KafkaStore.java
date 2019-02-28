@@ -128,7 +128,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.kafkaTopicReader =
         new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
                                      this.storeUpdateHandler, serializer, this.localStore,
-                                     this.noopKey, this.config);
+                                     this.producer, this.noopKey, this.config);
     this.kafkaTopicReader.start();
 
     try {
