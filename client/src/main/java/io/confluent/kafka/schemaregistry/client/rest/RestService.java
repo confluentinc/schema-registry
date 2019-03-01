@@ -190,18 +190,12 @@ public class RestService {
 
       if (requestBodyData != null) {
         connection.setDoOutput(true);
-        OutputStream os = null;
-        try {
-          os = connection.getOutputStream();
+        try (OutputStream os = connection.getOutputStream()) {
           os.write(requestBodyData);
           os.flush();
         } catch (IOException e) {
           log.error("Failed to send HTTP request to endpoint: " + url, e);
           throw e;
-        } finally {
-          if (os != null) {
-            os.close();
-          }
         }
       }
 
@@ -214,14 +208,12 @@ public class RestService {
       } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
         return null;
       } else {
-        InputStream es = connection.getErrorStream();
         ErrorMessage errorMessage;
-        try {
+        try (InputStream es = connection.getErrorStream()) {
           errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
         } catch (JsonProcessingException e) {
           errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, e.getMessage());
         }
-        es.close();
         throw new RestClientException(errorMessage.getMessage(), responseCode,
                                       errorMessage.getErrorCode());
       }
