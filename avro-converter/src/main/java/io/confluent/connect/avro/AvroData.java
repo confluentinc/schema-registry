@@ -85,8 +85,7 @@ public class AvroData {
   public static final String CONNECT_VERSION_PROP = "connect.version";
   public static final String CONNECT_DEFAULT_VALUE_PROP = "connect.default";
   public static final String CONNECT_PARAMETERS_PROP = "connect.parameters";
-  public static final String CONNECT_NAMED_MAP_PROP = "connect.named.map";
-  public static final String CONNECT_NAMED_MAP_PROP_TRUE = Boolean.toString(true);
+  public static final String CONNECT_INTERNAL_TYPE_NAME = "connect.internal.type";
 
   public static final String CONNECT_TYPE_PROP = "connect.type";
 
@@ -854,7 +853,7 @@ public class AvroData {
             );
           } else {
             mapSchema = org.apache.avro.Schema.createRecord(name, null, namespace, false);
-            mapSchema.addProp(CONNECT_NAMED_MAP_PROP, CONNECT_NAMED_MAP_PROP_TRUE);
+            mapSchema.addProp(CONNECT_INTERNAL_TYPE_NAME, MAP_ENTRY_TYPE_NAME);
           }
           addAvroRecordField(
               fields,
@@ -1159,7 +1158,7 @@ public class AvroData {
         && MAP_ENTRY_TYPE_NAME.equals(elemSchema.getName())) {
       return true;
     }
-    if (Objects.equals(elemSchema.getProp(CONNECT_NAMED_MAP_PROP), CONNECT_NAMED_MAP_PROP_TRUE)) {
+    if (Objects.equals(elemSchema.getProp(CONNECT_INTERNAL_TYPE_NAME), CONNECT_INTERNAL_TYPE_NAME)) {
       return true;
     }
     return false;

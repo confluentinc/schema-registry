@@ -66,8 +66,8 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
-import static io.confluent.connect.avro.AvroData.CONNECT_NAMED_MAP_PROP;
-import static io.confluent.connect.avro.AvroData.CONNECT_NAMED_MAP_PROP_TRUE;
+import static io.confluent.connect.avro.AvroData.CONNECT_INTERNAL_TYPE_NAME;
+import static io.confluent.connect.avro.AvroData.MAP_ENTRY_TYPE_NAME;
 import static io.confluent.connect.avro.AvroData.CONNECT_NAME_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_RECORD_DOC_PROP;
 import static io.confluent.connect.avro.AvroData.KEY_FIELD;
@@ -108,7 +108,7 @@ public class AvroDataTest {
           .prop(CONNECT_NAME_PROP, "foo.bar")
           .items(
               org.apache.avro.SchemaBuilder.record("foo.bar")
-                  .prop(CONNECT_NAMED_MAP_PROP, CONNECT_NAMED_MAP_PROP_TRUE)
+                  .prop(CONNECT_INTERNAL_TYPE_NAME, MAP_ENTRY_TYPE_NAME)
                   .fields()
                   .optionalString(KEY_FIELD)
                   .requiredInt(VALUE_FIELD)
