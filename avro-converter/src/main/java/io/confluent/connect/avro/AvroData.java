@@ -1158,7 +1158,7 @@ public class AvroData {
         && MAP_ENTRY_TYPE_NAME.equals(elemSchema.getName())) {
       return true;
     }
-    if (Objects.equals(elemSchema.getProp(CONNECT_INTERNAL_TYPE_NAME), CONNECT_INTERNAL_TYPE_NAME)) {
+    if (Objects.equals(elemSchema.getProp(CONNECT_INTERNAL_TYPE_NAME), MAP_ENTRY_TYPE_NAME)) {
       return true;
     }
     return false;
