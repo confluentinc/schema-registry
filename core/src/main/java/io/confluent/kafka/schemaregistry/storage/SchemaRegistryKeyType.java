@@ -1,8 +1,9 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Confluent Community License; you may not use this file
- * except in compliance with the License.  You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
  * http://www.confluent.io/confluent-community-license
  *
@@ -17,8 +18,10 @@ package io.confluent.kafka.schemaregistry.storage;
 public enum SchemaRegistryKeyType {
   CONFIG("CONFIG"),
   SCHEMA("SCHEMA"),
+  MODE("MODE"),
   NOOP("NOOP"),
-  DELETE_SUBJECT("DELETE_SUBJECT");
+  DELETE_SUBJECT("DELETE_SUBJECT"),
+  CLEAR_SUBJECT("CLEAR_SUBJECT");
 
   public final String keyType;
 

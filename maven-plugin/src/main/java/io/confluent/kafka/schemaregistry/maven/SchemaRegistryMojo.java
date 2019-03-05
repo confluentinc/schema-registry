@@ -1,5 +1,5 @@
-/**
- * Copyright 2016 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,12 +12,13 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 
 package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
@@ -30,11 +31,14 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 public abstract class SchemaRegistryMojo extends AbstractMojo {
 
   @Parameter(required = true)
   List<String> schemaRegistryUrls;
+  @Parameter
+  String userInfoConfig;
   private SchemaRegistryClient client;
 
   void client(SchemaRegistryClient client) {
@@ -43,9 +47,15 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
 
   protected SchemaRegistryClient client() {
     if (null == this.client) {
-      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, null);
+      Map<String, String> config = new HashMap<>();
+      if (userInfoConfig != null) {
+        // Note that BASIC_AUTH_CREDENTIALS_SOURCE is not configurable as the plugin only supports
+        // a single schema registry URL, so there is no additional utility of the URL source.
+        config.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
+        config.put(SchemaRegistryClientConfig.USER_INFO_CONFIG, userInfoConfig);
+      }
+      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, config);
     }
-
     return this.client;
   }
 

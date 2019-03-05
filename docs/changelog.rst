@@ -231,6 +231,8 @@ Serializers, Formatters, and Converters
 Version 3.0.1
 -------------
 
+.. _3-0-1-schema-registry:
+
 ----
 |sr|
 ----

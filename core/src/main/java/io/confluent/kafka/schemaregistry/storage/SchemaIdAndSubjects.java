@@ -1,8 +1,9 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Confluent Community License; you may not use this file
- * except in compliance with the License.  You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
  * http://www.confluent.io/confluent-community-license
  *
@@ -16,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * Kafka schema registry maintains a few in memory indices to facilitate schema lookups. One such
@@ -49,6 +51,19 @@ public class SchemaIdAndSubjects {
 
   public int getSchemaId() {
     return this.id;
+  }
+
+  public SchemaKey findAny(Predicate<SchemaKey> filter) {
+    return subjectsAndVersions.entrySet().stream()
+        .map(e -> new SchemaKey(e.getKey(), e.getValue()))
+        .filter(key -> filter.test(key))
+        .findAny()
+        .orElse(null);
+  }
+
+  public void removeIf(Predicate<SchemaKey> filter) {
+    subjectsAndVersions.entrySet().removeIf(e ->
+        filter.test(new SchemaKey(e.getKey(), e.getValue())));
   }
 
   @Override

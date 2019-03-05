@@ -3,7 +3,7 @@
 Installing and Configuring |sr|
 ===============================
 
-|sr| is a component of |cp|. The binaries are located at https://www.confluent.io/download/ as a part of the |cp| bundle.
+|sr| is included in |cp|. The binaries are located at https://www.confluent.io/download/.
 
 For installation instructions, see the :ref:`installation`.
 

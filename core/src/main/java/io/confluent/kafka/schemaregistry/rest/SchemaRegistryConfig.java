@@ -1,8 +1,9 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Confluent Community License; you may not use this file
- * except in compliance with the License.  You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
  * http://www.confluent.io/confluent-community-license
  *
@@ -93,6 +94,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String MASTER_ELIGIBILITY = "master.eligibility";
   public static final boolean DEFAULT_MASTER_ELIGIBILITY = true;
   /**
+   * <code>mode.mutability</code>*
+   */
+  public static final String MODE_MUTABILITY = "mode.mutability";
+  public static final boolean DEFAULT_MODE_MUTABILITY = false;
+  /**
    * <code>schema.registry.zk.name</code>*
    */
   public static final String SCHEMAREGISTRY_ZK_NAMESPACE = "schema.registry.zk.namespace";
@@ -154,6 +160,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "schema.registry.resource.extension.class";
   public static final String RESOURCE_EXTENSION_CONFIG =
       "resource.extension.class";
+  public static final String RESOURCE_STATIC_LOCATIONS_CONFIG =
+      "resource.static.locations";
   @Deprecated
   public static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG =
       "schema.registry.inter.instance.protocol";
@@ -236,6 +244,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String MASTER_ELIGIBILITY_DOC =
       "If true, this node can participate in master election. In a multi-colo setup, turn this off "
       + "for clusters in the slave data center.";
+  protected static final String MODE_MUTABILITY_DOC =
+      "If true, this node will allow mode changes if it is the master.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
@@ -293,6 +303,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + " like filters to Schema Registry. Typically used to add custom capability like logging, "
       + " security, etc. The schema.registry.resource.extension.class name is deprecated; "
       + "prefer using resource.extension.class instead.";
+  protected static final String RESOURCE_STATIC_LOCATIONS_DOC =
+      "  A list of classpath resources containing static resources to serve using the default "
+          + "servlet.";
   protected static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC =
       "The protocol used while making calls between the instances of schema registry. The slave "
       + "to master node calls for writes and deletes will use the specified protocol. The default "
@@ -387,6 +400,9 @@ public class SchemaRegistryConfig extends RestConfig {
         )
         .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY,
             ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC
+        )
+        .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
+            ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
         )
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
             METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
@@ -484,6 +500,9 @@ public class SchemaRegistryConfig extends RestConfig {
         )
         .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
                 ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
+        )
+        .define(RESOURCE_STATIC_LOCATIONS_CONFIG, ConfigDef.Type.LIST, "",
+            ConfigDef.Importance.LOW, RESOURCE_STATIC_LOCATIONS_DOC
         )
         .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, "",
                 ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
@@ -649,6 +668,10 @@ public class SchemaRegistryConfig extends RestConfig {
       return SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG;
     }
     return RESOURCE_EXTENSION_CONFIG;
+  }
+
+  public List<String> getStaticLocations() {
+    return getList(RESOURCE_STATIC_LOCATIONS_CONFIG);
   }
 
   /**

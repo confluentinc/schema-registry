@@ -1,8 +1,9 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Confluent Community License; you may not use this file
- * except in compliance with the License.  You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
  * http://www.confluent.io/confluent-community-license
  *
@@ -36,6 +37,8 @@ public class Errors {
   public static final int INVALID_SCHEMA_ERROR_CODE = 42201;
   public static final int INVALID_VERSION_ERROR_CODE = 42202;
   public static final int INVALID_COMPATIBILITY_LEVEL_ERROR_CODE = 42203;
+  public static final int INVALID_MODE_ERROR_CODE = 42204;
+  public static final int OPERATION_NOT_PERMITTED_ERROR_CODE = 42205;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -81,6 +84,10 @@ public class Errors {
 
   public static RestException operationTimeoutException(String message, Throwable cause) {
     return new RestSchemaRegistryTimeoutException(message, cause);
+  }
+
+  public static RestOperationNotPermittedException operationNotPermittedException(String message) {
+    return new RestOperationNotPermittedException(message);
   }
 
   public static RestException requestForwardingFailedException(String message, Throwable cause) {

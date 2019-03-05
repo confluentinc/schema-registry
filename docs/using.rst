@@ -19,8 +19,8 @@ You can use the Confluent CLI to start |sr| and its dependent services with this
      confluent start schema-registry
 
 .. include:: ../../includes/cli.rst
-      :start-line: 2
-      :end-line: 5
+      :start-after: cli_limitations_start
+      :end-before: cli_limitations_end
 
 ----------------------
 Production Environment
@@ -235,4 +235,3 @@ Listing All Subjects
 
       curl -X GET http://localhost:8081/subjects
       ["Kafka-key"]
-

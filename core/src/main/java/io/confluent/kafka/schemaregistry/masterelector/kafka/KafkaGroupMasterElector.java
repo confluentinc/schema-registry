@@ -1,8 +1,9 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Confluent Community License; you may not use this file
- * except in compliance with the License.  You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
  * http://www.confluent.io/confluent-community-license
  *
@@ -21,7 +22,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -36,7 +36,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -116,10 +115,10 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
       List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers,
           ClientDnsLookup.DEFAULT.name());
-      this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
+      this.metadata.bootstrap(addresses, time.milliseconds());
       String metricGrpPrefix = "kafka.schema.registry";
 
-      ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig);
+      ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig, time);
       long maxIdleMs = clientConfig.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
 
       String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);

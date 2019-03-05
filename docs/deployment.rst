@@ -3,23 +3,23 @@
 |sr| System Requirements
 ========================
 
-This section describes the key considerations before going to production with your cluster. However, it is not an
+This topic describes the key considerations before going to production with your cluster. However, it is not an
 exhaustive guide to running your |sr| in production.
 
 Hardware
---------
+^^^^^^^^
 
 If you’ve been following the normal development path, you’ve probably been playing with |sr|
 on your laptop or on a small cluster of machines laying around. But when it comes time to deploying
 |sr| to production, there are a few recommendations that you should consider. Nothing is a hard-and-fast rule.
 
 Memory
-------
+^^^^^^
 
 |sr| uses Kafka as a commit log to store all registered schemas durably, and maintains a few in-memory indices to make schema lookups faster. A conservative upper bound on the number of unique schemas registered in a large data-oriented company like LinkedIn is around 10,000. Assuming roughly 1000 bytes heap overhead per schema on average, heap size of 1GB would be more than sufficient.
 
 CPUs
-----
+^^^^
 
 CPU usage in |sr| is light. The most computationally intensive task is checking compatibility of two schemas, an infrequent operation which occurs primarily when new schemas versions are registered under a subject.
 
@@ -27,12 +27,12 @@ If you need to choose between faster CPUs or more cores, choose more cores. The 
 cores offers will far outweigh a slightly faster clock speed.
 
 Disks
------
+^^^^^
 
 |sr| does not have any disk resident data. It currently uses Kafka as a commit log to store all schemas durably and holds in-memory indices of all schemas. Therefore, the only disk usage comes from storing the log4j logs.
 
 Network
--------
+^^^^^^^
 
 A fast and reliable network is obviously important to performance in a distributed system. Low latency helps ensure that nodes can communicate easily, while high bandwidth helps shard movement and recovery. Modern data-center networking (1 GbE, 10 GbE) is sufficient for the vast majority of clusters.
 
@@ -43,7 +43,7 @@ Larger latencies tend to exacerbate problems in distributed systems and make deb
 Often, people might assume the pipe between multiple data centers is robust or low latency. But this is usually not true and network failures might happen at some point. Please refer to our recommended :ref:`schemaregistry_mirroring`.
 
 JVM
----
+^^^
 
 We recommend running the latest version of JDK 1.8 with the G1 collector (older freely available versions have disclosed security vulnerabilities).
 
@@ -62,7 +62,7 @@ Our recommended GC tuning looks like this:
 .. _schema-reg-config:
 
 Important Configuration Options
--------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The following configurations should be changed for production environments. These options depend on your cluster layout.
 
@@ -103,9 +103,9 @@ Additionally, there are some configurations that may commonly need to be set in 
 
 The full set of configuration options are documented in :ref:`schemaregistry_config`.
 
------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Don't Modify These Storage Settings
------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 |sr| stores all schemas in a Kafka topic defined by ``kafkastore.topic``. Since this Kafka topic acts as the commit log for |sr| database and is the source of truth, writes to this store need to be durable. |sr| ships with very good defaults for all settings that affect the durability of writes to the Kafka based commit log. Finally, ``kafkastore.topic`` must be a compacted topic to avoid data loss. Whenever in doubt, leave these settings alone. If you must create the topic manually, this is an example of proper configuration:
 
@@ -132,15 +132,15 @@ Don't Modify These Storage Settings
     :start-line: 230
     :end-line: 237
 
-Kafka & ZooKeeper
------------------
+Kafka and |zk|
+^^^^^^^^^^^^^^
 
 For recommendations on operationalizing Kafka and |zk|, see :ref:`schemaregistry_operations`.
 
 .. _schemaregistry_zk_migration:
 
-Migration from ZooKeeper master election to Kafka master election
------------------------------------------------------------------
+Migration from |zk| master election to Kafka master election
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 It is not required to migrate from |zk|-based election to Kafka-based master election.
 
@@ -172,7 +172,7 @@ If you want to keep things simple, you can take a temporary downtime for |sr| an
 the migration. To do so, simply shutdown all the nodes and start them again with the new configs.
 
 Backup and Restore
-------------------
+^^^^^^^^^^^^^^^^^^
 
 As discussed in :ref:`schemaregistry_design`, all schemas, subject/version and ID metadata, and compatibility settings are appended as messages to a special Kafka topic ``<kafkastore.topic>`` (default ``_schemas``). This topic is a common source of truth for schema IDs, and you should back it up. In case of some unexpected event that makes the topic inaccessible, you can restore this schemas topic from the backup, enabling consumers to continue to read Kafka messages that were sent in the Avro format.
 

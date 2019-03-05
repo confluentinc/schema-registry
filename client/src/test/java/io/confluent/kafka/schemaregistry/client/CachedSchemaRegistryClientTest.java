@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,20 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import org.apache.avro.Schema;
+import org.easymock.EasyMock;
+import org.junit.Test;
+
+import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Map;
+
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
+
+import static io.confluent.kafka.schemaregistry.client.rest.RestService.DEFAULT_REQUEST_PROPERTIES;
 import static org.easymock.EasyMock.anyBoolean;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.createNiceMock;
@@ -43,6 +57,7 @@ public class CachedSchemaRegistryClientTest {
   private static final String SCHEMA_STR_0 = avroSchemaString(0);
   private static final Schema AVRO_SCHEMA_0 = avroSchema(0);
   private static final String SUBJECT_0 = "foo";
+  private static final int VERSION_1 = 1;
   private static final int ID_25 = 25;
   private static final io.confluent.kafka.schemaregistry.client.rest.entities.Schema SCHEMA_DETAILS
       = new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
@@ -69,6 +84,21 @@ public class CachedSchemaRegistryClientTest {
 
     assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
     assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0)); // hit the cache
+
+    verify(restService);
+  }
+
+  @Test
+  public void testRegisterSchemaCacheWithVersionAndId() throws Exception {
+    // Expect one call to register schema
+    expect(restService.registerSchema(anyString(), eq(SUBJECT_0), eq(VERSION_1), eq(ID_25)))
+        .andReturn(ID_25)
+        .once();
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25)); // hit the cache
 
     verify(restService);
   }
@@ -223,6 +253,38 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testSetMode() throws Exception {
+    final String mode = "READONLY";
+
+    EasyMock.reset(restService);
+
+    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
+    modeUpdateRequest.setMode(mode);
+    expect(restService.setMode(eq(mode))).andReturn(modeUpdateRequest);
+
+    replay(restService);
+
+    assertEquals(mode, client.setMode(mode));
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGetMode() throws Exception {
+    final String mode = "READONLY";
+
+    EasyMock.reset(restService);
+
+    ModeGetResponse modeGetResponse = new ModeGetResponse(mode);
+    expect(restService.getMode()).andReturn(modeGetResponse);
+
+    replay(restService);
+
+    assertEquals(mode, client.getMode());
+
+    verify(restService);
+  }
+
   public void testDeleteVersionNotInVersionCache() throws Exception {
     expect(client.deleteSchemaVersion(Collections.emptyMap(), SUBJECT_0, "0"))
         .andReturn(10);

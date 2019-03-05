@@ -46,7 +46,11 @@ This plugin is used to download Avro schemas for the requested subjects and writ
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.1.0</version>
+<<<<<<< HEAD
+        <version>5.3.0-SNAPSHOT</version>
+=======
+        <version>5.3.0-SNAPSHOT</version>
+>>>>>>> 5.1.x
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>
@@ -82,7 +86,11 @@ project are compatible with the schemas in another environment.
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.1.0</version>
+<<<<<<< HEAD
+        <version>5.3.0-SNAPSHOT</version>
+=======
+        <version>5.3.0-SNAPSHOT</version>
+>>>>>>> 5.1.x
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>
@@ -120,7 +128,11 @@ This goal can be used in a continuous deployment pipeline to push schemas to a n
     <plugin>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-maven-plugin</artifactId>
-        <version>5.1.0</version>
+<<<<<<< HEAD
+        <version>5.3.0-SNAPSHOT</version>
+=======
+        <version>5.3.0-SNAPSHOT</version>
+>>>>>>> 5.1.x
         <configuration>
             <schemaRegistryUrls>
                 <param>http://192.168.99.100:8081</param>

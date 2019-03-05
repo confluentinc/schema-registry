@@ -1,8 +1,9 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Confluent Community License; you may not use this file
- * except in compliance with the License.  You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
  * http://www.confluent.io/confluent-community-license
  *
@@ -16,13 +17,15 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Predicate;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -38,10 +41,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
 
   public InMemoryCache() {
-    store = new ConcurrentSkipListMap<K, V>();
-    this.guidToSchemaKey = new HashMap<Integer, SchemaKey>();
-    this.schemaHashToGuid = new HashMap<MD5, SchemaIdAndSubjects>();
-    this.guidToDeletedSchemaKeys = new HashMap<>();
+    this.store = new ConcurrentSkipListMap<>();
+    this.guidToSchemaKey = new ConcurrentHashMap<>();
+    this.schemaHashToGuid = new ConcurrentHashMap<>();
+    this.guidToDeletedSchemaKeys = new ConcurrentHashMap<>();
   }
 
   public void init() throws StoreInitializationException {
@@ -127,4 +130,134 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public List<SchemaKey> deletedSchemaKeys(SchemaValue schemaValue) {
     return guidToDeletedSchemaKeys.getOrDefault(schemaValue.getId(), Collections.emptyList());
   }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public AvroCompatibilityLevel compatibilityLevel(String subject,
+                                                   boolean returnTopLevelIfNotFound,
+                                                   AvroCompatibilityLevel defaultForTopLevel
+  ) {
+    ConfigKey subjectConfigKey = new ConfigKey(subject);
+    ConfigValue config = (ConfigValue) get((K) subjectConfigKey);
+    if (config == null && subject == null) {
+      return defaultForTopLevel;
+    }
+    if (config != null) {
+      return config.getCompatibilityLevel();
+    } else if (returnTopLevelIfNotFound) {
+      config = (ConfigValue) get((K) new ConfigKey(null));
+      return config != null ? config.getCompatibilityLevel() : defaultForTopLevel;
+    } else {
+      return null;
+    }
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public Mode mode(String subject,
+                   boolean returnTopLevelIfNotFound,
+                   Mode defaultForTopLevel
+  ) {
+    ModeKey modeKey = new ModeKey(subject);
+    ModeValue modeValue = (ModeValue) get((K) modeKey);
+    if (modeValue == null && subject == null) {
+      return defaultForTopLevel;
+    }
+    if (modeValue != null) {
+      return modeValue.getMode();
+    } else if (returnTopLevelIfNotFound) {
+      modeValue = (ModeValue) get((K) new ModeKey(null));
+      return modeValue != null ? modeValue.getMode() : defaultForTopLevel;
+    } else {
+      return null;
+    }
+  }
+
+  @Override
+  public boolean hasSubjects(String subject) throws StoreException {
+    return hasSubjects(matchingPredicate(subject));
+  }
+
+  public boolean hasSubjects(Predicate<String> match) throws StoreException {
+    return store.entrySet().stream()
+        .anyMatch(e -> {
+          K k = e.getKey();
+          V v = e.getValue();
+          if (k instanceof SchemaKey) {
+            SchemaKey key = (SchemaKey) k;
+            SchemaValue value = (SchemaValue) v;
+            if (value != null && !value.isDeleted()) {
+              return match.test(key.getSubject());
+            }
+          }
+          return false;
+        });
+  }
+
+  @Override
+  public void clearSubjects(String subject) throws StoreException {
+    clearSubjects(matchingPredicate(subject));
+  }
+
+  public void clearSubjects(Predicate<String> match) throws StoreException {
+    Predicate<SchemaValue> matchDeleted = value -> {
+      if (value != null && value.isDeleted()) {
+        return match.test(value.getSubject());
+      }
+      return false;
+    };
+
+    // Try to replace deleted schemas with non-deleted, otherwise remove
+    replaceMatchingDeletedWithNonDeletedOrRemove(match);
+
+    // Delete from non-store structures first as they rely on the store
+    schemaHashToGuid.values().forEach(
+        v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
+    guidToDeletedSchemaKeys.values().forEach(
+        v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
+
+    // Delete from store later as the previous deletions rely on the store
+    store.entrySet().removeIf(e -> {
+      if (e.getKey() instanceof SchemaKey) {
+        return matchDeleted.test((SchemaValue) e.getValue());
+      }
+      return false;
+    });
+  }
+
+  // Visible for testing
+  protected void replaceMatchingDeletedWithNonDeletedOrRemove(Predicate<String> match) {
+    Predicate<SchemaValue> matchDeleted = value -> {
+      if (value != null && value.isDeleted()) {
+        return match.test(value.getSubject());
+      }
+      return false;
+    };
+
+    Iterator<Map.Entry<Integer, SchemaKey>> it = guidToSchemaKey.entrySet().iterator();
+    while (it.hasNext()) {
+      Map.Entry<Integer, SchemaKey> entry = it.next();
+      SchemaKey schemaKey = entry.getValue();
+      SchemaValue schemaValue = (SchemaValue) store.get(schemaKey);
+      if (matchDeleted.test(schemaValue)) {
+        SchemaKey newSchemaKey = getNonDeletedSchemaKey(schemaValue.getSchema());
+        if (newSchemaKey != null) {
+          entry.setValue(newSchemaKey);
+        } else {
+          it.remove();
+        }
+      }
+    }
+  }
+
+  private SchemaKey getNonDeletedSchemaKey(String schema) {
+    MD5 md5 = MD5.ofString(schema);
+    SchemaIdAndSubjects keys = schemaHashToGuid.get(md5);
+    return keys.findAny(key -> !((SchemaValue) store.get(key)).isDeleted());
+  }
+
+  private Predicate<String> matchingPredicate(String subject) {
+    return s -> subject == null || subject.equals(s);
+  }
+
 }

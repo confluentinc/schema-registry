@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,42 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.util.Objects;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class RegisterSchemaRequest {
 
+  private Integer version;
+  private Integer id;
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, RegisterSchemaRequest.class);
+  }
+
+  @JsonProperty("version")
+  public Integer getVersion() {
+    return this.version;
+  }
+
+  @JsonProperty("version")
+  public void setVersion(Integer version) {
+    this.version = version;
+  }
+
+  @JsonProperty("id")
+  public Integer getId() {
+    return this.id;
+  }
+
+  @JsonProperty("id")
+  public void setId(Integer id) {
+    this.id = id;
   }
 
   @JsonProperty("schema")
@@ -47,31 +72,29 @@ public class RegisterSchemaRequest {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    if (!super.equals(o)) {
-      return false;
-    }
-
     RegisterSchemaRequest that = (RegisterSchemaRequest) o;
-
-    if (schema != null ? !schema.equals(that.schema) : that.schema != null) {
-      return false;
-    }
-
-    return true;
+    return Objects.equals(version, that.version)
+        && Objects.equals(id, that.id)
+        && Objects.equals(schema, that.schema);
   }
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
-    result = 31 * result + (schema != null ? schema.hashCode() : 0);
-    return result;
+    return Objects.hash(version, id, schema);
   }
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{schema=" + this.schema + "}");
-    return sb.toString();
+    StringBuilder buf = new StringBuilder();
+    buf.append("{");
+    if (version != null) {
+      buf.append("version=").append(version).append(", ");
+    }
+    if (id != null) {
+      buf.append("id=").append(id).append(", ");
+    }
+    buf.append("schema=").append(schema).append("}");
+    return buf.toString();
   }
 
   public String toJson() throws IOException {

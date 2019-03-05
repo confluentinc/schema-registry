@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright 2014 Confluent Inc.
+# Copyright 2018 Confluent Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
 
 if [ $# -lt 1 ];
 then
@@ -117,7 +118,7 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     -loggc)
-      if [ -z "$KAFKA_GC_LOG_OPTS" ]; then
+      if [ -z "$SCHEMA_REGISTRY_GC_LOG_OPTS" ]; then
         GC_LOG_ENABLED="true"
       fi
       shift
@@ -170,5 +171,5 @@ if [ "x$DAEMON_MODE" = "xtrue" ]; then
   CONSOLE_OUTPUT_FILE=${CONSOLE_OUTPUT_FILE:-${LOG_DIR}/schema-registry-console.out}
   nohup $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_GC_LOG_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@" > "${CONSOLE_OUTPUT_FILE}" 2>&1 < /dev/null &
 else
-  exec $JAVA $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_GC_LOG_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@"
+  exec "$JAVA" $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_GC_LOG_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@"
 fi

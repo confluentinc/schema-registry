@@ -1,8 +1,9 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Confluent Community License; you may not use this file
- * except in compliance with the License.  You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
  * http://www.confluent.io/confluent-community-license
  *
@@ -28,17 +29,48 @@ public class KafkaStoreMessageHandler
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
-  private final LookupCache lookupCache;
+  private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   private final ExecutorService tombstoneExecutor;
   private IdGenerator idGenerator;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
-                                  LookupCache lookupCache,
+                                  LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
                                   IdGenerator idGenerator) {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
     this.tombstoneExecutor = Executors.newSingleThreadExecutor();
+  }
+
+  /**
+   * Invoked before every new K,V pair written to the store
+   *
+   * @param key   Key associated with the data
+   * @param value Data written to the store
+   */
+  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
+    if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
+      SchemaValue schemaObj = (SchemaValue) value;
+      if (schemaObj != null) {
+        SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
+        if (oldKey != null) {
+          SchemaValue oldSchema;
+          try {
+            oldSchema = (SchemaValue) lookupCache.get(oldKey);
+          } catch (StoreException e) {
+            log.error("Error while retrieving schema", e);
+            return false;
+          }
+          if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
+            log.error("Found a schema with duplicate ID {}.  This schema will not be "
+                    + "registered since a schema already exists with this ID.",
+                schemaObj.getId());
+            return false;
+          }
+        }
+      }
+    }
+    return true;
   }
 
   /**
@@ -51,9 +83,11 @@ public class KafkaStoreMessageHandler
   public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
-                         (SchemaValue) value);
+          (SchemaValue) value);
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
+    } else if (key.getKeyType() == SchemaRegistryKeyType.CLEAR_SUBJECT) {
+      handleClearSubject((ClearSubjectValue) value);
     }
   }
 
@@ -72,8 +106,17 @@ public class KafkaStoreMessageHandler
           lookupCache.schemaDeleted(schemaKey, schemaValue);
         }
       } catch (StoreException e) {
-        log.error("Failed to delete subject in the local Cache");
+        log.error("Failed to delete subject {} in the local cache", subject);
       }
+    }
+  }
+
+  private void handleClearSubject(ClearSubjectValue clearSubjectValue) {
+    String subject = clearSubjectValue.getSubject();
+    try {
+      lookupCache.clearSubjects(subject);
+    } catch (StoreException e) {
+      log.error("Failed to clear subject {} in the local cache", subject);
     }
   }
 
@@ -90,10 +133,12 @@ public class KafkaStoreMessageHandler
         this.lookupCache.schemaDeleted(schemaKey, schemaObj);
       } else {
         // Update the maximum id seen so far
-        idGenerator.schemaRegistered(schemaKey,schemaObj);
+        idGenerator.schemaRegistered(schemaKey, schemaObj);
         lookupCache.schemaRegistered(schemaKey, schemaObj);
         List<SchemaKey> schemaKeys = lookupCache.deletedSchemaKeys(schemaObj);
-        schemaKeys.stream().filter(v -> v.getSubject().equals(schemaObj.getSubject()))
+        schemaKeys.stream().filter(v ->
+            v.getSubject().equals(schemaObj.getSubject())
+                && v.getVersion() != schemaObj.getVersion())
             .forEach(this::tombstoneSchemaKey);
       }
     }
@@ -102,8 +147,11 @@ public class KafkaStoreMessageHandler
   private void tombstoneSchemaKey(SchemaKey schemaKey) {
     tombstoneExecutor.execute(() -> {
           try {
-            schemaRegistry.getKafkaStore().put(schemaKey, null);
+            schemaRegistry.getKafkaStore().waitForInit();
+            schemaRegistry.getKafkaStore().delete(schemaKey);
             log.debug("Tombstoned {}", schemaKey);
+          } catch (InterruptedException e) {
+            log.error("Interrupted while waiting for the tombstone thread to be initialized ", e);
           } catch (StoreException e) {
             log.error("Failed to tombstone {}", schemaKey, e);
           }

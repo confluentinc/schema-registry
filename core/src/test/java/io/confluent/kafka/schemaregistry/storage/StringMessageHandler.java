@@ -1,8 +1,9 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Confluent Community License; you may not use this file
- * except in compliance with the License.  You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
  * http://www.confluent.io/confluent-community-license
  *
@@ -15,6 +16,16 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 public class StringMessageHandler implements StoreUpdateHandler<String, String> {
+
+  /**
+   * Invoked before every new K,V pair written to the store
+   *
+   * @param key   Key associated with the data
+   * @param value Data written to the store
+   */
+  public boolean validateUpdate(String key, String value) {
+    return true;
+  }
 
   /**
    * Invoked on every new K,V pair written to the store

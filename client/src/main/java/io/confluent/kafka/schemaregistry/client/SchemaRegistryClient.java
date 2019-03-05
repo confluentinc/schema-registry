@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,9 @@ public interface SchemaRegistryClient {
 
   public int register(String subject, Schema schema) throws IOException, RestClientException;
 
+  public int register(String subject, Schema schema, int version, int id) throws IOException,
+      RestClientException;
+
   @Deprecated
   public Schema getByID(int id) throws IOException, RestClientException;
 
@@ -57,6 +60,16 @@ public interface SchemaRegistryClient {
 
   public String getCompatibility(String subject) throws IOException, RestClientException;
 
+  public String setMode(String mode)
+      throws IOException, RestClientException;
+
+  public String setMode(String mode, String subject)
+      throws IOException, RestClientException;
+
+  public String getMode() throws IOException, RestClientException;
+
+  public String getMode(String subject) throws IOException, RestClientException;
+
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
 
   int getId(String subject, Schema schema) throws IOException, RestClientException;
@@ -74,4 +87,6 @@ public interface SchemaRegistryClient {
       String subject,
       String version)
       throws IOException, RestClientException;
+
+  public void reset();
 }
