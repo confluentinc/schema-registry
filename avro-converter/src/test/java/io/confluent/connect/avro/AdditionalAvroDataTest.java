@@ -52,6 +52,95 @@ public class AdditionalAvroDataTest
     }
 
     @Test
+    public void testFieldRecordEnumDocumentationSchema() throws IOException
+    {
+        AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+          .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 1)
+          .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, true)
+          .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+          .build();
+
+        avroData = new AvroData(avroDataConfig);
+
+        Schema avroSchema =
+            new Parser().parse(new File("src/test/avro/RepeatedTypeWithDoc.avsc"));
+
+        Assert.assertEquals(avroSchema.getField("enumField").schema(),
+          avroSchema.getField("anotherEnumField").schema());
+
+        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
+
+        Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
+
+        Assert.assertEquals("record's doc", outputAvroSchema.getDoc());
+        Assert.assertEquals("field's doc",
+            outputAvroSchema.getField("stringField").doc());
+        Assert.assertNull(outputAvroSchema.getField("stringField").schema().getDoc());
+        Assert.assertNull(outputAvroSchema.getField("anotherStringField").doc());
+        Assert.assertNull(
+            outputAvroSchema.getField("anotherStringField").schema().getDoc());
+
+        Assert.assertEquals("record field's doc",
+            outputAvroSchema.getField("recordField").doc());
+        Assert.assertEquals("nested record's doc",
+            outputAvroSchema.getField("recordField").schema().getDoc());
+        Assert.assertEquals("nested record field's doc",
+            outputAvroSchema.getField("recordField").schema()
+                .getField("nestedRecordField").doc());
+        Assert.assertNull(outputAvroSchema.getField("recordField").schema()
+            .getField("nestedRecordField").schema().getDoc());
+        Assert.assertNull(outputAvroSchema.getField("recordField").schema()
+                .getField("anotherNestedRecordField").doc());
+        Assert.assertNull(outputAvroSchema.getField("recordField").schema()
+            .getField("anotherNestedRecordField").schema().getDoc());
+
+        Assert.assertEquals("another record field's doc",
+            outputAvroSchema.getField("anotherRecordField").doc());
+        Assert.assertEquals("nested record's doc",
+            outputAvroSchema.getField("anotherRecordField").schema().getDoc());
+        Assert.assertEquals("nested record field's doc",
+            outputAvroSchema.getField("anotherRecordField").schema()
+                .getField("nestedRecordField").doc());
+        Assert.assertNull(outputAvroSchema.getField("anotherRecordField").schema()
+            .getField("nestedRecordField").schema().getDoc());
+        Assert.assertNull(outputAvroSchema.getField("anotherRecordField").schema()
+                .getField("anotherNestedRecordField").doc());
+        Assert.assertNull(outputAvroSchema.getField("anotherRecordField").schema()
+            .getField("anotherNestedRecordField").schema().getDoc());
+
+        Assert.assertNull(outputAvroSchema.getField("recordFieldWithoutDoc").doc());
+
+        Assert.assertNull(outputAvroSchema.getField("doclessRecordField").doc());
+        Assert.assertNull(outputAvroSchema.getField("doclessRecordField").schema().getDoc());
+        Assert.assertEquals("docless record field's doc",
+            outputAvroSchema.getField("doclessRecordFieldWithDoc").doc());
+        Assert.assertNull(outputAvroSchema.getField("doclessRecordFieldWithDoc").schema().getDoc());
+
+        Assert.assertEquals("enum field's doc", outputAvroSchema.getField("enumField").doc());
+        Assert.assertEquals("enum's doc", outputAvroSchema.getField("enumField").schema().getDoc());
+        Assert.assertEquals("another enum field's doc",
+            outputAvroSchema.getField("anotherEnumField").doc());
+        Assert.assertEquals("enum's doc",
+            outputAvroSchema.getField("anotherEnumField").schema().getDoc());
+
+        Assert.assertNull(outputAvroSchema.getField("doclessEnumField").doc());
+
+        // Schema equality is mandatory (see issue #1042)
+        Assert.assertEquals(outputAvroSchema.getField("stringField").schema(),
+          outputAvroSchema.getField("anotherStringField").schema());
+        Assert.assertEquals(outputAvroSchema.getField("recordField").schema(),
+            outputAvroSchema.getField("anotherRecordField").schema());
+        Assert.assertEquals(outputAvroSchema.getField("recordField").schema(),
+            outputAvroSchema.getField("recordFieldWithoutDoc").schema());
+        Assert.assertEquals(outputAvroSchema.getField("doclessRecordField").schema(),
+            outputAvroSchema.getField("doclessRecordFieldWithDoc").schema());
+        Assert.assertEquals(outputAvroSchema.getField("enumField").schema(),
+            outputAvroSchema.getField("anotherEnumField").schema());
+        Assert.assertEquals(outputAvroSchema.getField("enumField").schema(),
+            outputAvroSchema.getField("doclessEnumField").schema());
+    }
+
+    @Test
     public void testDocumentationPreservedData() throws IOException
     {
         PodamFactory factory = new PodamFactoryImpl();
