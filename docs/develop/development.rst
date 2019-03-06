@@ -1,19 +1,7 @@
-.. _schema-registry-quickstart:
+.. _sr-development:
 
-Installing and Configuring |sr|
-===============================
-
-|sr| is a component of |cp|. The binaries are located at https://www.confluent.io/download/ as a part of the |cp| bundle.
-
-For installation instructions, see the :ref:`installation`.
-
-System Requirements
--------------------
-
-Review the :ref:`system requirements <schema-registry-prod>` before installing |sr|.
-
-Development
------------
+|sr| Development
+================
 
 To build a development version, you may need a development versions of
 `common <https://github.com/confluentinc/common>`_ and
