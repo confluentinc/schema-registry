@@ -114,6 +114,14 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public void schemaTombstoned(SchemaKey schemaKey) {
+    // Don't need to update guidToSchemaKey since the tombstone action was initiated by
+    // a newer schema being registered to guidToSchemaKey
+    schemaHashToGuid.values().forEach(v -> v.removeIf(k -> k.equals(schemaKey)));
+    guidToDeletedSchemaKeys.values().forEach(v -> v.removeIf(k -> k.equals(schemaKey)));
+  }
+
+  @Override
   public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
     guidToSchemaKey.put(schemaValue.getId(), schemaKey);
 
@@ -200,26 +208,21 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   public void clearSubjects(Predicate<String> match) throws StoreException {
-    Predicate<SchemaValue> matchDeleted = value -> {
-      if (value != null && value.isDeleted()) {
-        return match.test(value.getSubject());
-      }
-      return false;
-    };
+    Predicate<SchemaKey> matchDeleted = matchDeleted(match);
 
     // Try to replace deleted schemas with non-deleted, otherwise remove
     replaceMatchingDeletedWithNonDeletedOrRemove(match);
 
     // Delete from non-store structures first as they rely on the store
-    schemaHashToGuid.values().forEach(
-        v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
-    guidToDeletedSchemaKeys.values().forEach(
-        v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
+    schemaHashToGuid.values().forEach(v -> v.removeIf(matchDeleted));
+    guidToDeletedSchemaKeys.values().forEach(v -> v.removeIf(matchDeleted));
 
     // Delete from store later as the previous deletions rely on the store
     store.entrySet().removeIf(e -> {
       if (e.getKey() instanceof SchemaKey) {
-        return matchDeleted.test((SchemaValue) e.getValue());
+        SchemaKey key = (SchemaKey) e.getKey();
+        SchemaValue value = (SchemaValue) e.getValue();
+        return match.test(key.getSubject()) && value.isDeleted();
       }
       return false;
     });
@@ -227,20 +230,17 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   // Visible for testing
   protected void replaceMatchingDeletedWithNonDeletedOrRemove(Predicate<String> match) {
-    Predicate<SchemaValue> matchDeleted = value -> {
-      if (value != null && value.isDeleted()) {
-        return match.test(value.getSubject());
-      }
-      return false;
-    };
+    Predicate<SchemaKey> matchDeleted = matchDeleted(match);
 
     Iterator<Map.Entry<Integer, SchemaKey>> it = guidToSchemaKey.entrySet().iterator();
     while (it.hasNext()) {
       Map.Entry<Integer, SchemaKey> entry = it.next();
       SchemaKey schemaKey = entry.getValue();
-      SchemaValue schemaValue = (SchemaValue) store.get(schemaKey);
-      if (matchDeleted.test(schemaValue)) {
-        SchemaKey newSchemaKey = getNonDeletedSchemaKey(schemaValue.getSchema());
+      if (matchDeleted.test(schemaKey)) {
+        SchemaValue schemaValue = (SchemaValue) store.get(schemaKey);
+        SchemaKey newSchemaKey = schemaValue != null
+                                 ? getNonDeletedSchemaKey(schemaValue.getSchema())
+                                 : null;
         if (newSchemaKey != null) {
           entry.setValue(newSchemaKey);
         } else {
@@ -253,11 +253,23 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private SchemaKey getNonDeletedSchemaKey(String schema) {
     MD5 md5 = MD5.ofString(schema);
     SchemaIdAndSubjects keys = schemaHashToGuid.get(md5);
-    return keys.findAny(key -> !((SchemaValue) store.get(key)).isDeleted());
+    return keys.findAny(key -> {
+      SchemaValue value = (SchemaValue) store.get(key);
+      return value != null && !value.isDeleted();
+    });
   }
 
   private Predicate<String> matchingPredicate(String subject) {
     return s -> subject == null || subject.equals(s);
   }
 
+  private Predicate<SchemaKey> matchDeleted(Predicate<String> match) {
+    return key -> {
+      if (match.test(key.getSubject())) {
+        SchemaValue value = (SchemaValue) store.get(key);
+        return value == null || value.isDeleted();
+      }
+      return false;
+    };
+  }
 }
