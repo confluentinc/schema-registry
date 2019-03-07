@@ -114,11 +114,11 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
 
 .. http:get:: /subjects
 
-   Get a list of registered subjects. 
+   Get a list of registered subjects.
 
    :>jsonarr string name: Subject
 
-   :statuscode 500: 
+   :statuscode 500:
       * Error code 50001 -- Error in the backend datastore
 
    **Example request**:
@@ -207,7 +207,7 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
    Get a specific version of the schema registered under this subject
 
    :param string subject: Name of the subject
-   :param versionId version: Version of the schema to be returned. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" returns the last registered schema under the specified subject. Note that there may be a new latest schema that gets registered right after this request is served.  
+   :param versionId version: Version of the schema to be returned. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" returns the last registered schema under the specified subject. Note that there may be a new latest schema that gets registered right after this request is served.
 
    :>json string subject: Name of the subject that this schema is registered under
    :>json int id: Globally unique identifier of the schema
@@ -217,7 +217,7 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
    :statuscode 404:
       * Error code 40401 -- Subject not found
       * Error code 40402 -- Version not found
-   :statuscode 422: 
+   :statuscode 422:
       * Error code 42202 -- Invalid version
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
@@ -290,7 +290,7 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
    :reqjson schema: The Avro schema string
 
    :statuscode 409: Incompatible Avro schema
-   :statuscode 422: 
+   :statuscode 422:
       * Error code 42201 -- Invalid Avro schema
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
@@ -335,15 +335,15 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
 
 .. http:post:: /subjects/(string: subject)
 
-   Check if a schema has already been registered under the specified subject. If so, this returns the schema string along with its globally unique identifier, its version under this subject and the subject name.  
+   Check if a schema has already been registered under the specified subject. If so, this returns the schema string along with its globally unique identifier, its version under this subject and the subject name.
 
    :param string subject: Subject under which the schema will be registered
-	
+
    :>json string subject: Name of the subject that this schema is registered under
    :>json int id: Globally unique identifier of the schema
    :>json int version: Version of the returned schema
    :>json string schema: The Avro schema string
-	
+
    :statuscode 404:
       * Error code 40401 -- Subject not found
       * Error code 40403 -- Schema not found
@@ -382,17 +382,17 @@ The subjects resource provides a list of all registered subjects in your |sr|. A
 
       HTTP/1.1 200 OK
       Content-Type: application/vnd.schemaregistry.v1+json
-           
+
       {
 	    "subject": "test",
 	    "id": 1
 	    "version": 3
-	    "schema":           
+	    "schema":
 	       "{
 		      \"type\": \"record\",
 		      \"name\": \"test\",
 		      \"fields\":
-		        [ 
+		        [
 		          {
 		            \"type\": \"string\",
 		            \"name\": \"field1\"
@@ -452,13 +452,13 @@ The compatibility resource allows the user to test schemas for compatibility aga
 
    :param string subject: Subject of the schema version against which compatibility is to be tested
    :param versionId version: Version of the subject's schema against which compatibility is to be tested. Valid values for versionId are between [1,2^31-1] or the string "latest". "latest" checks compatibility of the input schema with the last registered schema under the specified subject
-    	
+
    :>json boolean is_compatible: True, if compatible. False otherwise
-	
+
    :statuscode 404:
       * Error code 40401 -- Subject not found
       * Error code 40402 -- Version not found
-   :statuscode 422: 
+   :statuscode 422:
       * Error code 42201 -- Invalid Avro schema
       * Error code 42202 -- Invalid version
    :statuscode 500:
@@ -472,7 +472,7 @@ The compatibility resource allows the user to test schemas for compatibility aga
       Host: schemaregistry.example.com
       Accept: application/vnd.schemaregistry.v1+json, application/vnd.schemaregistry+json, application/json
 
-      { 
+      {
         "schema":
           "{
              \"type\": \"record\",
@@ -508,7 +508,7 @@ The compatibility resource allows the user to test schemas for compatibility aga
 Config
 ------
 
-The config resource allows you to inspect the cluster-level configuration values as well as subject overrides. 
+The config resource allows you to inspect the cluster-level configuration values as well as subject overrides.
 
 .. http:put:: /config
 
@@ -518,7 +518,7 @@ The config resource allows you to inspect the cluster-level configuration values
 
    :<json string compatibility: New global compatibility level. Must be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE
 
-   :statuscode 422: 
+   :statuscode 422:
       * Error code 42203 -- Invalid compatibility level
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
@@ -570,7 +570,7 @@ The config resource allows you to inspect the cluster-level configuration values
       Content-Type: application/vnd.schemaregistry.v1+json
 
       {
-        "compatibility": "FULL"
+        "compatibilityLevel": "FULL"
       }
 
 .. http:put:: /config/(string: subject)
@@ -580,7 +580,7 @@ The config resource allows you to inspect the cluster-level configuration values
    :param string subject: Name of the subject
    :<json string compatibility: New global compatibility level. Must be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE
 
-   :statuscode 422: 
+   :statuscode 422:
       * Error code 42203 -- Invalid compatibility level
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
@@ -615,7 +615,7 @@ The config resource allows you to inspect the cluster-level configuration values
 
    :param string subject: Name of the subject
    :<json string compatibility: New global compatibility level. Will be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE
-  
+
    :statuscode 404: Subject not found
    :statuscode 500:
       * Error code 50001 -- Error in the backend data store
@@ -636,5 +636,5 @@ The config resource allows you to inspect the cluster-level configuration values
 	  Content-Type: application/vnd.schemaregistry.v1+json
 
 	  {
-	     "compatibility": "FULL"
+	     "compatibilityLevel": "FULL"
 	  }
