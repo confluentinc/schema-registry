@@ -42,10 +42,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
 
   public InMemoryCache() {
-    this.store = new ConcurrentSkipListMap<>();
-    this.guidToSchemaKey = new ConcurrentHashMap<>();
-    this.schemaHashToGuid = new ConcurrentHashMap<>();
-    this.guidToDeletedSchemaKeys = new ConcurrentHashMap<>();
+    this(new ConcurrentSkipListMap<>());
   }
 
   public InMemoryCache(ConcurrentNavigableMap<K, V> store) {
