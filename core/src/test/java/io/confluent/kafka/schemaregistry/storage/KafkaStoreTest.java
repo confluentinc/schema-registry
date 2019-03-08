@@ -405,8 +405,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
     assertTrue(inMemoryStore.get(inMemoryStore.schemaKeyById(id)).isDeleted());
 
-    inMemoryStore.replaceMatchingDeletedWithNonDeletedOrRemove(
-        inMemoryStore.store, s -> s.equals("subject2"));
+    inMemoryStore.replaceMatchingDeletedWithNonDeletedOrRemove(s -> s.equals("subject2"));
 
     SchemaValue newValue = inMemoryStore.get(inMemoryStore.schemaKeyById(id));
     assertEquals("subject", newValue.getSubject());

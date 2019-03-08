@@ -36,13 +36,20 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
  */
 public class InMemoryCache<K, V> implements LookupCache<K, V> {
   // visible for subclasses
-  protected final ConcurrentSkipListMap<K, V> store;
+  protected final ConcurrentNavigableMap<K, V> store;
   private final Map<Integer, SchemaKey> guidToSchemaKey;
   private final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
   private final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
 
   public InMemoryCache() {
     this.store = new ConcurrentSkipListMap<>();
+    this.guidToSchemaKey = new ConcurrentHashMap<>();
+    this.schemaHashToGuid = new ConcurrentHashMap<>();
+    this.guidToDeletedSchemaKeys = new ConcurrentHashMap<>();
+  }
+
+  public InMemoryCache(ConcurrentNavigableMap<K, V> store) {
+    this.store = store;
     this.guidToSchemaKey = new ConcurrentHashMap<>();
     this.schemaHashToGuid = new ConcurrentHashMap<>();
     this.guidToDeletedSchemaKeys = new ConcurrentHashMap<>();
@@ -204,16 +211,15 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public void clearSubjects(String subject) {
-    clearSubjects((Map<SchemaKey, SchemaValue>) store, matchingPredicate(subject));
+    clearSubjects(matchingPredicate(subject));
   }
 
-  public void clearSubjects(Map<SchemaKey, SchemaValue> store, Predicate<String> match) {
-    Predicate<SchemaKey> matchDeleted = matchDeleted(store, match);
+  public void clearSubjects(Predicate<String> match) {
+    Predicate<SchemaKey> matchDeleted = matchDeleted(match);
 
     // Try to replace deleted schemas with non-deleted, otherwise remove
-    replaceMatchingDeletedWithNonDeletedOrRemove(store, match);
+    replaceMatchingDeletedWithNonDeletedOrRemove(match);
 
     // Delete from non-store structures first as they rely on the store
     schemaHashToGuid.values().forEach(v -> v.removeIf(matchDeleted));
@@ -222,8 +228,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     // Delete from store later as the previous deletions rely on the store
     store.entrySet().removeIf(e -> {
       if (e.getKey() instanceof SchemaKey) {
-        SchemaKey key = e.getKey();
-        SchemaValue value = e.getValue();
+        SchemaKey key = (SchemaKey) e.getKey();
+        SchemaValue value = (SchemaValue) e.getValue();
         return match.test(key.getSubject()) && value.isDeleted();
       }
       return false;
@@ -235,18 +241,17 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   // Visible for testing
-  protected void replaceMatchingDeletedWithNonDeletedOrRemove(
-      Map<SchemaKey, SchemaValue> store, Predicate<String> match) {
-    Predicate<SchemaKey> matchDeleted = matchDeleted(store, match);
+  protected void replaceMatchingDeletedWithNonDeletedOrRemove(Predicate<String> match) {
+    Predicate<SchemaKey> matchDeleted = matchDeleted(match);
 
     Iterator<Map.Entry<Integer, SchemaKey>> it = guidToSchemaKey.entrySet().iterator();
     while (it.hasNext()) {
       Map.Entry<Integer, SchemaKey> entry = it.next();
       SchemaKey schemaKey = entry.getValue();
       if (matchDeleted.test(schemaKey)) {
-        SchemaValue schemaValue = store.get(schemaKey);
+        SchemaValue schemaValue = (SchemaValue) store.get(schemaKey);
         SchemaKey newSchemaKey = schemaValue != null
-                                 ? getNonDeletedSchemaKey(store, schemaValue.getSchema())
+                                 ? getNonDeletedSchemaKey(schemaValue.getSchema())
                                  : null;
         if (newSchemaKey != null) {
           entry.setValue(newSchemaKey);
@@ -257,20 +262,19 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     }
   }
 
-  private SchemaKey getNonDeletedSchemaKey(Map<SchemaKey, SchemaValue> store, String schema) {
+  private SchemaKey getNonDeletedSchemaKey(String schema) {
     MD5 md5 = MD5.ofString(schema);
     SchemaIdAndSubjects keys = schemaHashToGuid.get(md5);
     return keys.findAny(key -> {
-      SchemaValue value = store.get(key);
+      SchemaValue value = (SchemaValue) store.get(key);
       return value != null && !value.isDeleted();
     });
   }
 
-  private Predicate<SchemaKey> matchDeleted(
-      Map<SchemaKey, SchemaValue> store, Predicate<String> match) {
+  private Predicate<SchemaKey> matchDeleted(Predicate<String> match) {
     return key -> {
       if (match.test(key.getSubject())) {
-        SchemaValue value = store.get(key);
+        SchemaValue value = (SchemaValue) store.get(key);
         return value == null || value.isDeleted();
       }
       return false;
