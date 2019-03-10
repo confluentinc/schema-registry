@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -89,8 +90,10 @@ public class SchemaRegistryCoordinatorTest {
 
   @Before
   public void setup() {
+    LogContext logContext = new LogContext();
     this.time = new MockTime();
-    this.metadata = new Metadata(0, Long.MAX_VALUE, true);
+    ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
+    this.metadata = new Metadata(0, Long.MAX_VALUE, logContext, clusterResourceListeners);
     this.client = new MockClient(time, new MockClient.MockMetadataUpdater() {
       @Override
       public List<Node> fetchNodes() {
@@ -108,7 +111,6 @@ public class SchemaRegistryCoordinatorTest {
       }
     });
 
-    LogContext logContext = new LogContext();
     this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000, Integer.MAX_VALUE);
     this.metrics = new Metrics(time);
     this.rebalanceListener = new MockRebalanceListener();

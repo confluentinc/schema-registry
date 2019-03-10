@@ -32,6 +32,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -104,12 +105,18 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       ClientConfig clientConfig = new ClientConfig(config.originalsWithPrefix("kafkastore."),
           false);
 
+      String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
+      LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
+                                             + groupId + "] ");
+
       this.metrics = new Metrics(metricConfig, reporters, time);
       this.retryBackoffMs = clientConfig.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
+      ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
       this.metadata = new Metadata(
           retryBackoffMs,
           clientConfig.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),
-          true
+          logContext,
+          clusterResourceListeners
       );
       List<String> bootstrapServers
           = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
@@ -121,9 +128,6 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig, time);
       long maxIdleMs = clientConfig.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
 
-      String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
-      LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
-                                             + groupId + "] ");
       NetworkClient netClient = new NetworkClient(
           new Selector(maxIdleMs, metrics, time, metricGrpPrefix, channelBuilder, logContext),
           this.metadata,
