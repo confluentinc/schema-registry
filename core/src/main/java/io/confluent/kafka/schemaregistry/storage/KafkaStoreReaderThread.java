@@ -202,8 +202,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                       null
                   );
                   producer.send(producerRecord);
+                  log.debug("Tombstoned invalid key {}", messageKey);
                 } catch (KafkaException ke) {
-                  log.warn("Failed to tombstone schema with duplicate ID", ke);
+                  log.warn("Failed to tombstone invalid key {}", messageKey, ke);
                 }
               }
             }
