@@ -241,12 +241,17 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   protected void replaceMatchingDeletedWithNonDeletedOrRemove(Predicate<String> match) {
     Predicate<SchemaKey> matchDeleted = matchDeleted(match);
 
+    // Iterate through the entries, and for each entry that matches and is soft deleted,
+    // see if there is a replacement entry (that is not soft deleted) that has the same
+    // schema string.  If so, replace, else remove the entry.
     Iterator<Map.Entry<Integer, SchemaKey>> it = guidToSchemaKey.entrySet().iterator();
     while (it.hasNext()) {
       Map.Entry<Integer, SchemaKey> entry = it.next();
       SchemaKey schemaKey = entry.getValue();
       if (matchDeleted.test(schemaKey)) {
         SchemaValue schemaValue = (SchemaValue) store.get(schemaKey);
+        // The value returned from the store should not be null since we clean up caches
+        // after tombstoning, but we still check defensively
         SchemaKey newSchemaKey = schemaValue != null
                                  ? getNonDeletedSchemaKey(schemaValue.getSchema())
                                  : null;
@@ -264,6 +269,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     SchemaIdAndSubjects keys = schemaHashToGuid.get(md5);
     return keys.findAny(key -> {
       SchemaValue value = (SchemaValue) store.get(key);
+      // The value returned from the store should not be null since we clean up caches
+      // after tombstoning, but we still check defensively
       return value != null && !value.isDeleted();
     });
   }
@@ -272,6 +279,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return key -> {
       if (match.test(key.getSubject())) {
         SchemaValue value = (SchemaValue) store.get(key);
+        // The value returned from the store should not be null since we clean up caches
+        // after tombstoning, but we still check defensively
         return value == null || value.isDeleted();
       }
       return false;
