@@ -16,7 +16,8 @@
 
 package io.confluent.kafka.serializers.subject.strategy;
 
-import io.confluent.common.Configurable;
+import org.apache.kafka.common.Configurable;
+
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
 /**
