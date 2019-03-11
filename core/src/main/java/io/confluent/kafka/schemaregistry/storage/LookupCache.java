@@ -86,6 +86,13 @@ public interface LookupCache<K,V> extends Store<K,V> {
   void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue);
 
   /**
+   * Callback that is invoked when a schema is tombstoned.
+   *
+   * @param schemaKey   the tombstoned SchemaKey; never {@code null}
+   */
+  void schemaTombstoned(SchemaKey schemaKey);
+
+  /**
    * Retrieves the config for a subject.
    *
    * @param subject the subject

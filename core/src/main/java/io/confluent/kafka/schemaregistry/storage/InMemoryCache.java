@@ -35,13 +35,18 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
  * In-memory store based on maps
  */
 public class InMemoryCache<K, V> implements LookupCache<K, V> {
-  private final ConcurrentSkipListMap<K, V> store;
+  // visible for subclasses
+  protected final ConcurrentNavigableMap<K, V> store;
   private final Map<Integer, SchemaKey> guidToSchemaKey;
   private final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
   private final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
 
   public InMemoryCache() {
-    this.store = new ConcurrentSkipListMap<>();
+    this(new ConcurrentSkipListMap<>());
+  }
+
+  public InMemoryCache(ConcurrentNavigableMap<K, V> store) {
+    this.store = store;
     this.guidToSchemaKey = new ConcurrentHashMap<>();
     this.schemaHashToGuid = new ConcurrentHashMap<>();
     this.guidToDeletedSchemaKeys = new ConcurrentHashMap<>();
@@ -114,6 +119,14 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public void schemaTombstoned(SchemaKey schemaKey) {
+    // Don't need to update guidToSchemaKey since the tombstone action was initiated by
+    // a newer schema being registered to guidToSchemaKey
+    schemaHashToGuid.values().forEach(v -> v.removeIf(k -> k.equals(schemaKey)));
+    guidToDeletedSchemaKeys.values().forEach(v -> v.removeIf(k -> k.equals(schemaKey)));
+  }
+
+  @Override
   public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
     guidToSchemaKey.put(schemaValue.getId(), schemaKey);
 
@@ -174,11 +187,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public boolean hasSubjects(String subject) throws StoreException {
+  public boolean hasSubjects(String subject) {
     return hasSubjects(matchingPredicate(subject));
   }
 
-  public boolean hasSubjects(Predicate<String> match) throws StoreException {
+  public boolean hasSubjects(Predicate<String> match) {
     return store.entrySet().stream()
         .anyMatch(e -> {
           K k = e.getKey();
@@ -195,52 +208,53 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void clearSubjects(String subject) throws StoreException {
+  public void clearSubjects(String subject) {
     clearSubjects(matchingPredicate(subject));
   }
 
-  public void clearSubjects(Predicate<String> match) throws StoreException {
-    Predicate<SchemaValue> matchDeleted = value -> {
-      if (value != null && value.isDeleted()) {
-        return match.test(value.getSubject());
-      }
-      return false;
-    };
+  public void clearSubjects(Predicate<String> match) {
+    Predicate<SchemaKey> matchDeleted = matchDeleted(match);
 
     // Try to replace deleted schemas with non-deleted, otherwise remove
     replaceMatchingDeletedWithNonDeletedOrRemove(match);
 
     // Delete from non-store structures first as they rely on the store
-    schemaHashToGuid.values().forEach(
-        v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
-    guidToDeletedSchemaKeys.values().forEach(
-        v -> v.removeIf(k -> matchDeleted.test((SchemaValue) store.get(k))));
+    schemaHashToGuid.values().forEach(v -> v.removeIf(matchDeleted));
+    guidToDeletedSchemaKeys.values().forEach(v -> v.removeIf(matchDeleted));
 
     // Delete from store later as the previous deletions rely on the store
     store.entrySet().removeIf(e -> {
       if (e.getKey() instanceof SchemaKey) {
-        return matchDeleted.test((SchemaValue) e.getValue());
+        SchemaKey key = (SchemaKey) e.getKey();
+        SchemaValue value = (SchemaValue) e.getValue();
+        return match.test(key.getSubject()) && value.isDeleted();
       }
       return false;
     });
   }
 
+  private Predicate<String> matchingPredicate(String subject) {
+    return s -> subject == null || subject.equals(s);
+  }
+
   // Visible for testing
   protected void replaceMatchingDeletedWithNonDeletedOrRemove(Predicate<String> match) {
-    Predicate<SchemaValue> matchDeleted = value -> {
-      if (value != null && value.isDeleted()) {
-        return match.test(value.getSubject());
-      }
-      return false;
-    };
+    Predicate<SchemaKey> matchDeleted = matchDeleted(match);
 
+    // Iterate through the entries, and for each entry that matches and is soft deleted,
+    // see if there is a replacement entry (that is not soft deleted) that has the same
+    // schema string.  If so, replace, else remove the entry.
     Iterator<Map.Entry<Integer, SchemaKey>> it = guidToSchemaKey.entrySet().iterator();
     while (it.hasNext()) {
       Map.Entry<Integer, SchemaKey> entry = it.next();
       SchemaKey schemaKey = entry.getValue();
-      SchemaValue schemaValue = (SchemaValue) store.get(schemaKey);
-      if (matchDeleted.test(schemaValue)) {
-        SchemaKey newSchemaKey = getNonDeletedSchemaKey(schemaValue.getSchema());
+      if (matchDeleted.test(schemaKey)) {
+        SchemaValue schemaValue = (SchemaValue) store.get(schemaKey);
+        // The value returned from the store should not be null since we clean up caches
+        // after tombstoning, but we still check defensively
+        SchemaKey newSchemaKey = schemaValue != null
+                                 ? getNonDeletedSchemaKey(schemaValue.getSchema())
+                                 : null;
         if (newSchemaKey != null) {
           entry.setValue(newSchemaKey);
         } else {
@@ -253,11 +267,23 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private SchemaKey getNonDeletedSchemaKey(String schema) {
     MD5 md5 = MD5.ofString(schema);
     SchemaIdAndSubjects keys = schemaHashToGuid.get(md5);
-    return keys.findAny(key -> !((SchemaValue) store.get(key)).isDeleted());
+    return keys.findAny(key -> {
+      SchemaValue value = (SchemaValue) store.get(key);
+      // The value returned from the store should not be null since we clean up caches
+      // after tombstoning, but we still check defensively
+      return value != null && !value.isDeleted();
+    });
   }
 
-  private Predicate<String> matchingPredicate(String subject) {
-    return s -> subject == null || subject.equals(s);
+  private Predicate<SchemaKey> matchDeleted(Predicate<String> match) {
+    return key -> {
+      if (match.test(key.getSubject())) {
+        SchemaValue value = (SchemaValue) store.get(key);
+        // The value returned from the store should not be null since we clean up caches
+        // after tombstoning, but we still check defensively
+        return value == null || value.isDeleted();
+      }
+      return false;
+    };
   }
-
 }
