@@ -85,6 +85,7 @@ public class AvroData {
   public static final String CONNECT_VERSION_PROP = "connect.version";
   public static final String CONNECT_DEFAULT_VALUE_PROP = "connect.default";
   public static final String CONNECT_PARAMETERS_PROP = "connect.parameters";
+  public static final String CONNECT_INTERNAL_TYPE_NAME = "connect.internal.type";
 
   public static final String CONNECT_TYPE_PROP = "connect.type";
 
@@ -842,8 +843,18 @@ public class AvroData {
         } else {
           // Special record name indicates format
           List<org.apache.avro.Schema.Field> fields = new ArrayList<>();
-          final org.apache.avro.Schema mapSchema = org.apache.avro.Schema.createRecord(
-              MAP_ENTRY_TYPE_NAME, null, namespace, false);
+          final org.apache.avro.Schema mapSchema;
+          if (schema.name() == null) {
+            mapSchema = org.apache.avro.Schema.createRecord(
+                MAP_ENTRY_TYPE_NAME,
+                null,
+                namespace,
+                false
+            );
+          } else {
+            mapSchema = org.apache.avro.Schema.createRecord(name, null, namespace, false);
+            mapSchema.addProp(CONNECT_INTERNAL_TYPE_NAME, MAP_ENTRY_TYPE_NAME);
+          }
           addAvroRecordField(
               fields,
               KEY_FIELD,
@@ -1139,6 +1150,20 @@ public class AvroData {
     }
   }
 
+  private boolean isMapEntry(final org.apache.avro.Schema elemSchema) {
+    if (!elemSchema.getType().equals(org.apache.avro.Schema.Type.RECORD)) {
+      return false;
+    }
+    if (NAMESPACE.equals(elemSchema.getNamespace())
+        && MAP_ENTRY_TYPE_NAME.equals(elemSchema.getName())) {
+      return true;
+    }
+    if (Objects.equals(elemSchema.getProp(CONNECT_INTERNAL_TYPE_NAME), MAP_ENTRY_TYPE_NAME)) {
+      return true;
+    }
+    return false;
+  }
+
   /**
    * Convert the given object, in Avro format, into a Connect data object.
    * @param avroSchema the Avro schema
@@ -1357,7 +1382,7 @@ public class AvroData {
           Schema valueSchema = schema.valueSchema();
           if (keySchema != null && keySchema.type() == Schema.Type.STRING && !keySchema
               .isOptional()) {
-            // String keys
+            // Non-optional string keys
             Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
             Map<CharSequence, Object> result = new HashMap<>(original.size());
             for (Map.Entry<CharSequence, Object> entry : original.entrySet()) {
@@ -1567,9 +1592,7 @@ public class AvroData {
       case ARRAY:
         org.apache.avro.Schema elemSchema = schema.getElementType();
         // Special case for custom encoding of non-string maps as list of key-value records
-        if (elemSchema.getType().equals(org.apache.avro.Schema.Type.RECORD)
-            && NAMESPACE.equals(elemSchema.getNamespace())
-            && MAP_ENTRY_TYPE_NAME.equals(elemSchema.getName())) {
+        if (isMapEntry(elemSchema)) {
           if (elemSchema.getFields().size() != 2
               || elemSchema.getField(KEY_FIELD) == null
               || elemSchema.getField(VALUE_FIELD) == null) {
