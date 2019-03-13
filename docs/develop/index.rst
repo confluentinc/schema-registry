@@ -4,3 +4,9 @@
 ====================
 
 These topics show how to develop |sr| applications for |cp|.
+
+.. toctree::
+
+    development
+    maven-plugin
+    api
