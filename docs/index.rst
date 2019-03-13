@@ -150,10 +150,9 @@ Documentation
    multidc
    security
    ../../confluent-security-plugins/schema-registry/introduction
+   develop/index
    serializer-formatter
    schema-deletion-guidelines
-   maven-plugin
    connect
-   api
    changelog
 
