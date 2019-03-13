@@ -29,7 +29,7 @@ Target Audience
 
 The target audience is a developer writing Kafka streaming applications who wants to build a robust application leveraging Avro data and |sr-long|. The principles in this tutorial apply to any Kafka client that interacts with |sr|.
 
-This tutorial is not meant to cover the operational aspects of running the |sr| service. For production deployments of |sr-long|, refer to :ref:`Schema Registry Operations<schemaregistry_operations>`.
+This tutorial is not meant to cover the operational aspects of running the |sr| service. For production deployments of |sr-long|, refer to :ref:`schema-registry-prod`.
 
 Before You Begin
 ~~~~~~~~~~~~~~~~

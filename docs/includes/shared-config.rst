@@ -1,7 +1,7 @@
 .. shared configuration parameters
 
 kafkastore.connection.url
-^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------
 |zk| URL for the Kafka cluster
 
 * Type: string
@@ -9,7 +9,7 @@ kafkastore.connection.url
 * Importance: high
 
 kafkastore.bootstrap.servers
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------
 A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
 
 The effect of this setting depends on whether you specify `kafkastore.connection.url`.
@@ -18,7 +18,7 @@ If `kafkastore.connection.url` is not specified, then the Kafka cluster containi
 
 If `kafkastore.connection.url` is specified, then this setting is used to control how |sr| connects to Kafka to store schema data and is particularly important when Kafka security is enabled. When this configuration is not specified, |sr|'s internal Kafka clients will get their Kafka bootstrap server list from |zk| (configured with `kafkastore.connection.url`). In that case, all available listeners matching the `kafkastore.security.protocol` setting will be used.
 
-By specifiying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in |zk|, but |sr| may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
+By specifying this configuration, you can control which endpoints are used to connect to Kafka. Kafka may expose multiple endpoints that all will be stored in |zk|, but |sr| may need to be configured with just one of those endpoints, for example to control which security protocol it uses.
 
 * Type: list
 * Default: []
@@ -27,7 +27,7 @@ By specifiying this configuration, you can control which endpoints are used to c
 .. _sr-listeners:
 
 listeners
-^^^^^^^^^
+---------
 Comma-separated list of listeners that listen for API requests over either HTTP or HTTPS. If a listener uses HTTPS, the appropriate SSL configuration parameters need to be set as well.
 
 |sr| identities are stored in |zk| and are made up of a hostname and port. If multiple listeners are configured, the first listener's port is used for its identity.
@@ -37,7 +37,7 @@ Comma-separated list of listeners that listen for API requests over either HTTP 
 * Importance: high
 
 avro.compatibility.level
-^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------
 The Avro compatibility type. Valid values are: none (new schema can be any valid Avro schema), backward (new schema can read data produced by latest registered schema), backward_transitive (new schema can read data produced by all previously registered schemas), forward (latest registered schema can read data produced by the new schema), forward_transitive (all previously registered schemas can read data produced by the new schema), full (new schema is backward and forward compatible with latest registered schema), full_transitive (new schema is backward and forward compatible with all previously registered schemas)
 
 * Type: string
@@ -45,7 +45,7 @@ The Avro compatibility type. Valid values are: none (new schema can be any valid
 * Importance: high
 
 host.name
-^^^^^^^^^
+---------
 The host name advertised in |zk|. Make sure to set this if running |sr| with multiple nodes.
 
 * Type: string
@@ -53,7 +53,7 @@ The host name advertised in |zk|. Make sure to set this if running |sr| with mul
 * Importance: high
 
 kafkastore.ssl.key.password
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------
 The password of the key contained in the keystore.
 
 * Type: string
@@ -61,7 +61,7 @@ The password of the key contained in the keystore.
 * Importance: high
 
 kafkastore.ssl.keystore.location
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------
 The location of the SSL keystore file.
 
 * Type: string
@@ -69,7 +69,7 @@ The location of the SSL keystore file.
 * Importance: high
 
 kafkastore.ssl.keystore.password
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------
 The password to access the keystore.
 
 * Type: string
@@ -77,7 +77,7 @@ The password to access the keystore.
 * Importance: high
 
 kafkastore.ssl.truststore.location
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------
 The location of the SSL trust store file.
 
 * Type: string
@@ -85,7 +85,7 @@ The location of the SSL trust store file.
 * Importance: high
 
 kafkastore.ssl.truststore.password
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------
 The password to access the trust store.
 
 * Type: string
@@ -93,7 +93,7 @@ The password to access the trust store.
 * Importance: high
 
 kafkastore.topic
-^^^^^^^^^^^^^^^^
+----------------
 The durable single partition topic that acts as the durable log for the data. This topic must be compacted to avoid losing data due to retention policy.
 
 * Type: string
@@ -101,7 +101,7 @@ The durable single partition topic that acts as the durable log for the data. Th
 * Importance: high
 
 kafkastore.topic.replication.factor
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------------------
 The desired replication factor of the schema topic. The actual replication factor will be the smaller of this value and the number of live Kafka brokers.
 
 * Type: int
@@ -109,7 +109,7 @@ The desired replication factor of the schema topic. The actual replication facto
 * Importance: high
 
 response.mediatype.default
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------
 The default response media type that should be used if no specify types are requested in an Accept header.
 
 * Type: string
@@ -117,7 +117,7 @@ The default response media type that should be used if no specify types are requ
 * Importance: high
 
 ssl.keystore.location
-^^^^^^^^^^^^^^^^^^^^^
+---------------------
 Used for HTTPS. Location of the keystore file to use for SSL. IMPORTANT: Jetty requires that the key's CN, stored in the keystore, must match the FQDN.
 
 * Type: string
@@ -125,7 +125,7 @@ Used for HTTPS. Location of the keystore file to use for SSL. IMPORTANT: Jetty r
 * Importance: high
 
 ssl.keystore.password
-^^^^^^^^^^^^^^^^^^^^^
+---------------------
 Used for HTTPS. The store password for the keystore file.
 
 * Type: password
@@ -133,7 +133,7 @@ Used for HTTPS. The store password for the keystore file.
 * Importance: high
 
 ssl.key.password
-^^^^^^^^^^^^^^^^
+----------------
 Used for HTTPS. The password of the private key in the keystore file.
 
 * Type: password
@@ -141,7 +141,7 @@ Used for HTTPS. The password of the private key in the keystore file.
 * Importance: high
 
 ssl.truststore.location
-^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------
 Used for HTTPS. Location of the trust store. Required only to authenticate HTTPS clients.
 
 * Type: string
@@ -149,7 +149,7 @@ Used for HTTPS. Location of the trust store. Required only to authenticate HTTPS
 * Importance: high
 
 ssl.truststore.password
-^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------
 Used for HTTPS. The store password for the trust store file.
 
 * Type: password
@@ -157,7 +157,7 @@ Used for HTTPS. The store password for the trust store file.
 * Importance: high
 
 response.mediatype.preferred
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------
 An ordered list of the server's preferred media types used for responses, from most preferred to least.
 
 * Type: list
@@ -165,7 +165,7 @@ An ordered list of the server's preferred media types used for responses, from m
 * Importance: high
 
 zookeeper.set.acl
-^^^^^^^^^^^^^^^^^
+-----------------
 Whether or not to set an ACL in |zk| when znodes are created and |zk| SASL authentication is configured. IMPORTANT: if set to `true`, the |zk| SASL principal must be the same as the Kafka brokers.
 
 * Type: boolean
@@ -173,7 +173,7 @@ Whether or not to set an ACL in |zk| when znodes are created and |zk| SASL authe
 * Importance: high
 
 kafkastore.init.timeout.ms
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------
 The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
 
 * Type: int
@@ -181,7 +181,7 @@ The timeout for initialization of the Kafka store, including creation of the Kaf
 * Importance: medium
 
 kafkastore.security.protocol
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------
 The security protocol to use when connecting with Kafka, the underlying persistent storage. Values can be `PLAINTEXT`, `SASL_PLAINTEXT`, `SSL` or `SASL_SSL`.
 
 * Type: string
@@ -189,7 +189,7 @@ The security protocol to use when connecting with Kafka, the underlying persiste
 * Importance: medium
 
 kafkastore.ssl.enabled.protocols
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------
 Protocols enabled for SSL connections.
 
 * Type: string
@@ -197,7 +197,7 @@ Protocols enabled for SSL connections.
 * Importance: medium
 
 kafkastore.ssl.keystore.type
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------
 The file format of the keystore.
 
 * Type: string
@@ -205,7 +205,7 @@ The file format of the keystore.
 * Importance: medium
 
 kafkastore.ssl.protocol
-^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------
 The SSL protocol used.
 
 * Type: string
@@ -213,7 +213,7 @@ The SSL protocol used.
 * Importance: medium
 
 kafkastore.ssl.provider
-^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------
 The name of the security provider used for SSL.
 
 * Type: string
@@ -221,7 +221,7 @@ The name of the security provider used for SSL.
 * Importance: medium
 
 kafkastore.ssl.truststore.type
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------
 The file format of the trust store.
 
 * Type: string
@@ -229,7 +229,7 @@ The file format of the trust store.
 * Importance: medium
 
 kafkastore.timeout.ms
-^^^^^^^^^^^^^^^^^^^^^
+---------------------
 The timeout for an operation on the Kafka store
 
 * Type: int
@@ -237,7 +237,7 @@ The timeout for an operation on the Kafka store
 * Importance: medium
 
 master.eligibility
-^^^^^^^^^^^^^^^^^^
+------------------
 If true, this node can participate in master election. In a multi-colo setup, turn this off for clusters in the slave data center.
 
 * Type: boolean
@@ -245,7 +245,7 @@ If true, this node can participate in master election. In a multi-colo setup, tu
 * Importance: medium
 
 kafkastore.sasl.kerberos.service.name
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------------------
 The Kerberos principal name that the Kafka client runs as. This can be defined either in the JAAS config file or here.
 
 * Type: string
@@ -253,7 +253,7 @@ The Kerberos principal name that the Kafka client runs as. This can be defined e
 * Importance: medium
 
 kafkastore.sasl.mechanism
-^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------
 The SASL mechanism used for Kafka connections. GSSAPI is the default.
 
 * Type: string
@@ -261,7 +261,7 @@ The SASL mechanism used for Kafka connections. GSSAPI is the default.
 * Importance: medium
 
 access.control.allow.methods
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------
 Set value to Jetty Access-Control-Allow-Origin header for specified methods
 
 * Type: string
@@ -269,7 +269,7 @@ Set value to Jetty Access-Control-Allow-Origin header for specified methods
 * Importance: low
 
 ssl.keystore.type
-^^^^^^^^^^^^^^^^^
+-----------------
 Used for HTTPS. The type of keystore file.
 
 * Type: string
@@ -277,7 +277,7 @@ Used for HTTPS. The type of keystore file.
 * Importance: medium
 
 ssl.truststore.type
-^^^^^^^^^^^^^^^^^^^
+-------------------
 Used for HTTPS. The type of trust store file.
 
 * Type: string
@@ -285,7 +285,7 @@ Used for HTTPS. The type of trust store file.
 * Importance: medium
 
 ssl.protocol
-^^^^^^^^^^^^
+------------
 Used for HTTPS. The SSL protocol used to generate the SslContextFactory.
 
 * Type: string
@@ -293,7 +293,7 @@ Used for HTTPS. The SSL protocol used to generate the SslContextFactory.
 * Importance: medium
 
 ssl.provider
-^^^^^^^^^^^^
+------------
 Used for HTTPS. The SSL security provider name. Leave blank to use Jetty's default.
 
 * Type: string
@@ -301,7 +301,7 @@ Used for HTTPS. The SSL security provider name. Leave blank to use Jetty's defau
 * Importance: medium
 
 ssl.client.auth
-^^^^^^^^^^^^^^^
+---------------
 Used for HTTPS. Whether or not to require the HTTPS client to authenticate via the server's trust store.
 
 * Type: boolean
@@ -309,7 +309,7 @@ Used for HTTPS. Whether or not to require the HTTPS client to authenticate via t
 * Importance: medium
 
 ssl.enabled.protocols
-^^^^^^^^^^^^^^^^^^^^^
+---------------------
 Used for HTTPS. The list of protocols enabled for SSL connections. Comma-separated list. Leave blank to use Jetty's defaults.
 
 * Type: list
@@ -317,7 +317,7 @@ Used for HTTPS. The list of protocols enabled for SSL connections. Comma-separat
 * Importance: medium
 
 access.control.allow.origin
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------
 Set value for Jetty Access-Control-Allow-Origin header
 
 * Type: string
@@ -325,7 +325,7 @@ Set value for Jetty Access-Control-Allow-Origin header
 * Importance: low
 
 debug
-^^^^^
+-----
 Boolean indicating whether extra debugging information is generated in some error response entities.
 
 * Type: boolean
@@ -333,7 +333,7 @@ Boolean indicating whether extra debugging information is generated in some erro
 * Importance: low
 
 kafkastore.ssl.cipher.suites
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------
 A list of cipher suites used for SSL.
 
 * Type: string
@@ -341,7 +341,7 @@ A list of cipher suites used for SSL.
 * Importance: low
 
 kafkastore.ssl.endpoint.identification.algorithm
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------------------------
 The endpoint identification algorithm to validate the server hostname using the server certificate.
 
 * Type: string
@@ -349,7 +349,7 @@ The endpoint identification algorithm to validate the server hostname using the 
 * Importance: low
 
 kafkastore.ssl.keymanager.algorithm
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------------------
 The algorithm used by key manager factory for SSL connections.
 
 * Type: string
@@ -357,7 +357,7 @@ The algorithm used by key manager factory for SSL connections.
 * Importance: low
 
 kafkastore.ssl.trustmanager.algorithm
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------------------
 The algorithm used by the trust manager factory for SSL connections.
 
 * Type: string
@@ -365,7 +365,7 @@ The algorithm used by the trust manager factory for SSL connections.
 * Importance: low
 
 kafkastore.zk.session.timeout.ms
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------
 |zk| session timeout
 
 * Type: int
@@ -373,7 +373,7 @@ kafkastore.zk.session.timeout.ms
 * Importance: low
 
 metric.reporters
-^^^^^^^^^^^^^^^^
+----------------
 A list of classes to use as metrics reporters. Implementing the <code>MetricReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.
 
 * Type: list
@@ -381,7 +381,7 @@ A list of classes to use as metrics reporters. Implementing the <code>MetricRepo
 * Importance: low
 
 metrics.jmx.prefix
-^^^^^^^^^^^^^^^^^^
+------------------
 Prefix to apply to metric names for the default JMX reporter.
 
 * Type: string
@@ -389,7 +389,7 @@ Prefix to apply to metric names for the default JMX reporter.
 * Importance: low
 
 metrics.num.samples
-^^^^^^^^^^^^^^^^^^^
+-------------------
 The number of samples maintained to compute metrics.
 
 * Type: int
@@ -397,7 +397,7 @@ The number of samples maintained to compute metrics.
 * Importance: low
 
 metrics.sample.window.ms
-^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------
 The metrics system maintains a configurable number of samples over a fixed window size. This configuration controls the size of the window. For example we might maintain two samples each measured over a 30 second period. When a window expires we erase and overwrite the oldest window.
 
 * Type: long
@@ -405,7 +405,7 @@ The metrics system maintains a configurable number of samples over a fixed windo
 * Importance: low
 
 port
-^^^^
+----
 DEPRECATED: port to listen on for new connections. Use :ref:`sr-listeners` instead.
 
 * Type: int
@@ -413,7 +413,7 @@ DEPRECATED: port to listen on for new connections. Use :ref:`sr-listeners` inste
 * Importance: low
 
 request.logger.name
-^^^^^^^^^^^^^^^^^^^
+-------------------
 Name of the SLF4J logger to write the NCSA Common Log Format request log.
 
 * Type: string
@@ -421,7 +421,7 @@ Name of the SLF4J logger to write the NCSA Common Log Format request log.
 * Importance: low
 
 inter.instance.protocol
-^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------
 The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call. The schema.registry.inter.instance.protocol name is deprecated; prefer using inter.instance.protocol instead.
 
 * Type: string
@@ -429,7 +429,7 @@ The protocol used while making calls between the instances of |sr|. The slave to
 * Importance: low
 
 schema.registry.inter.instance.protocol
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------------
 The protocol used while making calls between the instances of |sr|. The slave to master node calls for writes and deletes will use the specified protocol. The default value would be `http`. When `https` is set, `ssl.keystore.` and `ssl.truststore.` configs are used while making the call. The schema.registry.inter.instance.protocol name is deprecated; prefer using inter.instance.protocol instead.
 
 * Type: string
@@ -437,7 +437,7 @@ The protocol used while making calls between the instances of |sr|. The slave to
 * Importance: low
 
 resource.extension.class
-^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------
 Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc. The schema.registry.resource.extension.class name is deprecated; prefer using resource.extension.class instead.
 
 * Type: list
@@ -445,7 +445,7 @@ Fully qualified class name of a valid implementation of the interface SchemaRegi
 * Importance: low
 
 schema.registry.resource.extension.class
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------------
 Fully qualified class name of a valid implementation of the interface SchemaRegistryResourceExtension. This can be used to inject user defined resources like filters. Typically used to add custom capability like logging, security, etc. The schema.registry.resource.extension.class name is deprecated; prefer using resource.extension.class instead.
 
 * Type: string
@@ -453,7 +453,7 @@ Fully qualified class name of a valid implementation of the interface SchemaRegi
 * Importance: low
 
 schema.registry.zk.namespace
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------
 The string that is used as the |zk| namespace for storing |sr| metadata. |sr| instances which are part of the same |sr| service should have the same |zk| namespace.
 
 * Type: string
@@ -461,7 +461,7 @@ The string that is used as the |zk| namespace for storing |sr| metadata. |sr| in
 * Importance: low
 
 shutdown.graceful.ms
-^^^^^^^^^^^^^^^^^^^^
+--------------------
 Amount of time to wait after a shutdown request for outstanding requests to complete.
 
 * Type: int
@@ -469,7 +469,7 @@ Amount of time to wait after a shutdown request for outstanding requests to comp
 * Importance: low
 
 ssl.keymanager.algorithm
-^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------
 Used for HTTPS. The algorithm used by the key manager factory for SSL connections. Leave blank to use Jetty's default.
 
 * Type: string
@@ -477,7 +477,7 @@ Used for HTTPS. The algorithm used by the key manager factory for SSL connection
 * Importance: low
 
 ssl.trustmanager.algorithm
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------
 Used for HTTPS. The algorithm used by the trust manager factory for SSL connections. Leave blank to use Jetty's default.
 
 * Type: string
@@ -485,7 +485,7 @@ Used for HTTPS. The algorithm used by the trust manager factory for SSL connecti
 * Importance: low
 
 ssl.cipher.suites
-^^^^^^^^^^^^^^^^^
+-----------------
 Used for HTTPS. A list of SSL cipher suites. Comma-separated list. Leave blank to use Jetty's defaults.
 
 * Type: list
@@ -493,7 +493,7 @@ Used for HTTPS. A list of SSL cipher suites. Comma-separated list. Leave blank t
 * Importance: low
 
 ssl.endpoint.identification.algorithm
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------------------
 Used for HTTPS. The endpoint identification algorithm to validate the server hostname using the server certificate. Leave blank to use Jetty's default.
 
 * Type: string
@@ -501,7 +501,7 @@ Used for HTTPS. The endpoint identification algorithm to validate the server hos
 * Importance: low
 
 kafkastore.sasl.kerberos.kinit.cmd
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------
 The Kerberos kinit command path.
 
 * Type: string
@@ -509,7 +509,7 @@ The Kerberos kinit command path.
 * Importance: low
 
 kafkastore.sasl.kerberos.min.time.before.relogin
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------------------------
 The login time between refresh attempts.
 
 * Type: long
@@ -517,7 +517,7 @@ The login time between refresh attempts.
 * Importance: low
 
 kafkastore.sasl.kerberos.ticket.renew.jitter
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------------
 The percentage of random jitter added to the renewal time.
 
 * Type: double
@@ -525,7 +525,7 @@ The percentage of random jitter added to the renewal time.
 * Importance: low
 
 kafkastore.sasl.kerberos.ticket.renew.window.factor
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------------------------
 Login thread will sleep until the specified window factor of time from last refresh to ticket's expiry has been reached, at which time it will try to renew the ticket.
 
 * Type: double
@@ -533,7 +533,7 @@ Login thread will sleep until the specified window factor of time from last refr
 * Importance: low
 
 kafkastore.group.id
-^^^^^^^^^^^^^^^^^^^
+-------------------
 Use this setting to override the group.id for the KafkaStore consumer.
 This setting can become important when security is enabled, to ensure stability over |sr| consumer's group.id
 
