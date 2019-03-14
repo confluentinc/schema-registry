@@ -518,8 +518,8 @@ public class MasterElectorTest extends ClusterTestHarness {
     List<Integer> ids = new ArrayList<Integer>();
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.MODE_MUTABILITY, "true");
-    int newId = 1;
-    int newVersion = 1;
+    int newId = 100000;
+    int newVersion = 100;
 
     Set<RestApp> slaveApps = new HashSet<RestApp>();
     RestApp aSlave = null;
@@ -571,7 +571,8 @@ public class MasterElectorTest extends ClusterTestHarness {
         ids.add(aMaster.restClient.registerSchema(schema, subject, newVersion++, newId++));
       }
     } catch (RestClientException e) {
-      fail("It should be possible to register schemas when a master cluster is present.");
+      fail("It should be possible to register schemas when a master cluster is present. "
+          + "Error: " + e.getMessage());
     }
 
     // Try to register to a slave cluster node - should succeed
