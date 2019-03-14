@@ -430,7 +430,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
-          return forwardRegisterRequestToMaster(subject, schema.getSchema(), headerProperties);
+          return forwardRegisterRequestToMaster(subject, schema, headerProperties);
         } else {
           throw new UnknownMasterException("Register schema request failed since master is "
                                            + "unknown");
@@ -568,13 +568,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private int forwardRegisterRequestToMaster(String subject, String schemaString,
+  private int forwardRegisterRequestToMaster(String subject, Schema schema,
                                              Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
-    UrlList baseUrl = masterRestService.getBaseUrls();
+    final UrlList baseUrl = masterRestService.getBaseUrls();
 
     RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
-    registerSchemaRequest.setSchema(schemaString);
+    registerSchemaRequest.setSchema(schema.getSchema());
+    registerSchemaRequest.setVersion(schema.getVersion());
+    registerSchemaRequest.setId(schema.getId());
     log.debug(String.format("Forwarding registering schema request %s to %s",
                             registerSchemaRequest, baseUrl));
     try {
