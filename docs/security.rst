@@ -164,10 +164,10 @@ However, it will still be able to retrieve existing schemas from the |sr|, assum
 Authorizing Access to the Schemas Topic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you have enabled :ref:`Kafka authorization <kafka_authorization>`, you will
-need to grant the |sr|'s principal read and write access to the schemas topic,
-along with describe configuration access to verify that the topic exists.
-This ensures that only authorized users can make changes to the topic.
+If you have enabled :ref:`Kafka authorization <kafka_authorization>`, you must
+grant the |sr|'s principal read and write access to the schemas topic, along
+with describe configuration access to verify that the topic exists. This ensures
+that only authorized users can make changes to the topic.
 
 .. sourcecode:: bash
 
