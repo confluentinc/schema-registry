@@ -273,10 +273,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private SchemaKey getNonDeletedSchemaKey(String schema) {
     MD5 md5 = MD5.ofString(schema);
     SchemaIdAndSubjects keys = schemaHashToGuid.get(md5);
-    if (keys == null) {
-      return null;
-    }
-    return keys.findAny(key -> {
+    return keys == null ? null : keys.findAny(key -> {
       SchemaValue value = (SchemaValue) store.get(key);
       // The value returned from the store should not be null since we clean up caches
       // after tombstoning, but we still check defensively
