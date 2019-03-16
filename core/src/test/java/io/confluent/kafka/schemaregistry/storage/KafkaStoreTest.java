@@ -411,4 +411,19 @@ public class KafkaStoreTest extends ClusterTestHarness {
     assertEquals("subject", newValue.getSubject());
     assertFalse(newValue.isDeleted());
   }
+
+  @Test
+  public void testReplaceDeletedWithNonDeletedAfterCompaction() throws Exception {
+    InMemoryCache<SchemaKey, SchemaValue> inMemoryStore = new InMemoryCache<>();
+
+    int id = 100;
+    SchemaKey schemaKey = new SchemaKey("subject", 1);
+    SchemaValue schemaValue = new SchemaValue("subject", 1, id, "schemaString", true);
+
+    // After a compaction, the schema will not be registered but only deleted
+    inMemoryStore.put(schemaKey, schemaValue);
+    inMemoryStore.schemaDeleted(schemaKey, schemaValue);
+
+    inMemoryStore.replaceMatchingDeletedWithNonDeletedOrRemove(s -> s.equals("subject"));
+  }
 }

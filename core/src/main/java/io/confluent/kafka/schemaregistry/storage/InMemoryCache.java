@@ -114,6 +114,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   @Override
   public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue) {
     guidToSchemaKey.put(schemaValue.getId(), schemaKey);
+    // We ensure the schema is registered by its hash; this is necessary in case of a
+    // compaction when the previous non-deleted schemaValue will not get registered
+    addToSchemaHashToGuid(schemaKey, schemaValue);
     guidToDeletedSchemaKeys
         .computeIfAbsent(schemaValue.getId(), k -> new ArrayList<>()).add(schemaKey);
   }
@@ -129,7 +132,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   @Override
   public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
     guidToSchemaKey.put(schemaValue.getId(), schemaKey);
+    addToSchemaHashToGuid(schemaKey, schemaValue);
+  }
 
+  private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
     MD5 md5 = MD5.ofString(schemaValue.getSchema());
     SchemaIdAndSubjects schemaIdAndSubjects = schemaHashToGuid.get(md5);
     if (schemaIdAndSubjects == null) {
@@ -267,7 +273,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private SchemaKey getNonDeletedSchemaKey(String schema) {
     MD5 md5 = MD5.ofString(schema);
     SchemaIdAndSubjects keys = schemaHashToGuid.get(md5);
-    return keys.findAny(key -> {
+    return keys == null ? null : keys.findAny(key -> {
       SchemaValue value = (SchemaValue) store.get(key);
       // The value returned from the store should not be null since we clean up caches
       // after tombstoning, but we still check defensively
