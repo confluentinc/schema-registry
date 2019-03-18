@@ -52,7 +52,32 @@ public class AdditionalAvroDataTest
     }
 
     @Test
-    public void testFieldRecordEnumDocumentationSchema() throws IOException
+    public void testRepeatedTypeWithDefault() throws IOException {
+        AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+            .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 1)
+            .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, true)
+            .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+            .build();
+
+        avroData = new AvroData(avroDataConfig);
+
+        Schema avroSchema =
+            new Parser().parse(new File("src/test/avro/RepeatedTypeWithDefault.avsc"));
+
+        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
+
+        Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
+
+        Assert.assertEquals("field's default",
+            outputAvroSchema.getField("stringField").defaultVal());
+        Assert.assertEquals(null,
+            outputAvroSchema.getField("anotherStringField").defaultVal());
+        Assert.assertEquals(outputAvroSchema.getField("stringField").schema(),
+            outputAvroSchema.getField("anotherStringField").schema());
+    }
+
+    @Test
+    public void testRepeatedFieldWithDocumentation() throws IOException
     {
         AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
           .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 1)
@@ -64,9 +89,6 @@ public class AdditionalAvroDataTest
 
         Schema avroSchema =
             new Parser().parse(new File("src/test/avro/RepeatedTypeWithDoc.avsc"));
-
-        Assert.assertEquals(avroSchema.getField("enumField").schema(),
-          avroSchema.getField("anotherEnumField").schema());
 
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
 
