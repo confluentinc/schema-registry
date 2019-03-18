@@ -18,6 +18,8 @@ package io.confluent.kafka.serializers;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import io.confluent.common.config.AbstractConfig;
 import io.confluent.common.config.ConfigDef;
@@ -32,6 +34,15 @@ import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
  * defaults.
  */
 public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
+
+  /**
+   * Configurations beginning with this prefix can be used to specify headers to include in requests
+   * made to Schema Registry. For example, to include an {@code Authorization} header with a value
+   * of {@code Bearer NjksNDIw}, use the following configuration:
+   * 
+   * <p>{@code request.header.Authorization=Bearer NjksNDIw}
+   */
+  public static final String REQUEST_HEADER_PREFIX = "request.header.";
 
   public static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
   public static final String
@@ -123,6 +134,11 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
   public Object valueSubjectNameStrategy() {
     return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
+  }
+  
+  public Map<String, String> requestHeaders() {
+    return originalsWithPrefix(REQUEST_HEADER_PREFIX).entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, entry -> Objects.toString(entry.getValue())));
   }
 
   private Object subjectNameStrategyInstance(String config) {
