@@ -16,6 +16,8 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import org.junit.Test;
 
+import java.util.Collections;
+
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
@@ -148,5 +150,37 @@ public class RestApiModeTest extends ClusterTestHarness {
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
           e.getStatus());
     }
+  }
+
+  @Test
+  public void testRegisterSchemaWithDifferentIdAfterImport() throws Exception {
+    String subject = "testSubject";
+    String mode = "READWRITE";
+
+    // set mode to read write
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering without id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+
+    // delete subject so we can switch to import mode
+    restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
+
+    mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    // register same schema with different id
+    expectedIdSchema1 = 2;
+    assertEquals("Registering with id should succeed",
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
   }
 }

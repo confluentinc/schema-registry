@@ -226,7 +226,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
     // Delete from non-store structures first as they rely on the store
     schemaHashToGuid.values().forEach(v -> v.removeIf(matchDeleted));
+    schemaHashToGuid.entrySet().removeIf(e -> e.getValue().isEmpty());
     guidToDeletedSchemaKeys.values().forEach(v -> v.removeIf(matchDeleted));
+    guidToDeletedSchemaKeys.entrySet().removeIf(e -> e.getValue().isEmpty());
 
     // Delete from store later as the previous deletions rely on the store
     store.entrySet().removeIf(e -> {
