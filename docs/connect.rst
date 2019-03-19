@@ -84,3 +84,10 @@ Configuration Options
   * Type: password
   * Default: ""
   * Importance: medium
+  
+Additional headers can be specified by using a prefix of ``request.header.``. For example, to specify ``Authorization`` and ``From`` headers with respective values of ``Bearer NjksNDIw`` and ``jsmith@confluent.io``, use the following configuration:
+
+.. sourcecode:: bash
+
+    request.header.Authorization=Bearer NjksNDIw
+    request.header.From=jsmith@confluent.io
