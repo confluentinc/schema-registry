@@ -53,6 +53,10 @@ public class SchemaIdAndSubjects {
     return this.id;
   }
 
+  public boolean isEmpty() {
+    return subjectsAndVersions.isEmpty();
+  }
+
   public SchemaKey findAny(Predicate<SchemaKey> filter) {
     return subjectsAndVersions.entrySet().stream()
         .map(e -> new SchemaKey(e.getKey(), e.getValue()))
