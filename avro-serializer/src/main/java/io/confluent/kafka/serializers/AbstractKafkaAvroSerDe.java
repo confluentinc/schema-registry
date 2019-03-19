@@ -50,7 +50,12 @@ public abstract class AbstractKafkaAvroSerDe {
       int maxSchemaObject = config.getMaxSchemasPerSubject();
       Map<String, Object> originals = config.originalsWithPrefix("");
       if (null == schemaRegistry) {
-        schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject, originals);
+        schemaRegistry = new CachedSchemaRegistryClient(
+            urls,
+            maxSchemaObject,
+            originals,
+            config.requestHeaders()
+        );
       }
       keySubjectNameStrategy = config.keySubjectNameStrategy();
       valueSubjectNameStrategy = config.valueSubjectNameStrategy();
