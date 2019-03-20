@@ -68,6 +68,9 @@ Before proceeding with this tutorial, verify that you have installed the followi
    * ``jq`` tool to nicely format the results from querying the |sr| REST endpoint
 
 
+.. note:: This tutorial is intended to run on a local install of |cp|. If you have a |ccloud| cluster, you may also use the tutorial with that cluster (in which case, be sure enable |ccloud| |sr| for your environment and set the `appropriate properties <https://docs.confluent.io/current/quickstart/cloud-quickstart.html#step-3-configure-sr-ccloud>`__ in your client applications).
+
+
 Environment
 ^^^^^^^^^^^
 
