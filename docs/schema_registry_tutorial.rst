@@ -432,7 +432,7 @@ If you were to define the same schema as used earlier, you would enter the follo
    }
 
 
-If you prefer to connect directly to the REST endpoint in |sr| to define a schema for a new subject for the topic ``test``, you could run the following.
+If you prefer to connect directly to the REST endpoint in |sr|, then to define a schema for a new subject for the topic ``test``, run the command below.
 In this sample output, it creates a schema with id of `1`.:
 
 .. sourcecode:: bash
@@ -506,11 +506,7 @@ You should see an error message that says the new schema is incompatible with th
     :width: 600px
 
 
-
-Schema Registry Maven Plugin: Fail Compatibility
-------------------------------------------------
-
-Confluent provides a `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, which you can use to check compatibility in development or integrate into your CI/CD pipeline.
+Confluent also provides a `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, which you can use to check compatibility in development or integrate into your CI/CD pipeline.
 Our sample :devx-examples:`pom.xml|clients/avro/pom.xml#L84-L99` includes this plugin to enable compatibility checks.
 
 .. sourcecode:: xml
@@ -593,12 +589,7 @@ In |c3-short|, click on "Version history" and select "Turn on version diff" to c
     :width: 600px
 
 
-
-
-Schema Registry Maven Plugin: Pass Compatibility
-------------------------------------------------
-
-Update the :devx-examples:`pom.xml|clients/avro/pom.xml` to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
+Going back to the `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, update the :devx-examples:`pom.xml|clients/avro/pom.xml` to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
 Re-run the compatibility check and verify that it passes:
 
 .. sourcecode:: bash
@@ -608,7 +599,8 @@ Re-run the compatibility check and verify that it passes:
    [INFO] Schema examples/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc is compatible with subject(transactions-value)
    ...
 
-You can try registering the new schema `Payment2b` directly, and it succeeds.
+If you prefer to connect directly to the REST endpoint in |sr|, then to register the new schema `Payment2b`, run the command below.
+It should succeed.
 
 .. sourcecode:: bash
 
@@ -632,7 +624,6 @@ Notice the changes:
 * `version`: changed from `1` to `2`
 * `id`: changed from `1` to `2`
 * `schema`: updated with the new field `region` that has a default value
-
 
 
 Next Steps
