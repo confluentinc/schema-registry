@@ -500,7 +500,8 @@ Click on "Edit Schema".
 .. image:: images/c3-edit-schema.png
     :width: 600px
 
-Add the additional field for `region` and click "Save changes".  You should see an error message that says the new schema is incompatible with the original schema.
+Add the additional field for `region` and click "Save changes".
+You should see an error message that says the new schema is incompatible with the original schema.
 
 .. image:: images/c3-edit-schema-fail.png
     :width: 600px
@@ -577,9 +578,21 @@ Click on "Edit Schema".
     :width: 600px
 
 Add the default value for the new field `region` and click "Save changes".
+You should see it accepted.
 
 .. image:: images/c3-edit-schema-pass.png
     :width: 600px
+
+Now this |sr-short| subject for the topic ``transactions`` has two schemas:
+
+* version 1 is `Payment.avsc`
+* version 2 is `Payment2b.avsc` that has the additional field for `region` with a default empty value.
+
+In |c3-short|, click on "Version history" and select "Turn on version diff" to compare the two versions:
+
+.. image:: images/c3-schema-compare.png
+    :width: 600px
+
 
 
 
