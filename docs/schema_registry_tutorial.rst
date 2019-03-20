@@ -48,6 +48,14 @@ Before proceeding with this tutorial
    * Maven to compile the client Java code
    * ``jq`` tool to nicely format the results from querying the |sr| REST endpoint
 
+#. Clone the |cp| `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will compile and run in this tutorial.
+
+   .. codewithvars:: bash
+
+      $ git clone https://github.com/confluentinc/examples.git
+      $ git checkout |release|-post
+      $ cd examples/clients/avro
+
 #. Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have a basic Kafka cluster with |sr-long|, |c3|, and other services running on your local machine.
 
    .. sourcecode:: bash
@@ -72,32 +80,25 @@ Before proceeding with this tutorial
       Starting control-center
       control-center is [UP]
 
-#. For the exercises in this tutorial, you will be producing to and consuming from a topic called ``transactions``. Create this topic in |c3|.
+#. For the exercises in this tutorial, you will be producing to and consuming from a topic called ``transactions``. Create this topic in |c3-short|.
 
-    *  Navigate to the |c3-short| web interface at `http://localhost:9021/ <http://localhost:9021/>`_.
+*  Navigate to the |c3-short| web interface at `http://localhost:9021/ <http://localhost:9021/>`_.
 
-        .. important:: It may take a minute or two for |c3-short| to come online.
+   .. important:: It may take a minute or two for |c3-short| to come online.
 
-        .. image:: images/c3-landing-page.png
-            :width: 600px
+   .. image:: images/c3-landing-page.png
+       :width: 600px
 
-    *  Select **Management -> Topics** and click **Create topic**.
+*  Select **Management -> Topics** and click **Create topic**.
     
-        .. image:: images/c3-create-topic.png
-            :width: 600px
+   .. image:: images/c3-create-topic.png
+       :width: 600px
     
-    *  Name the topic ``transactions`` and click **Create with defaults**.
+*  Name the topic ``transactions`` and click **Create with defaults**.
     
-
-#. Clone the |cp| `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will compile and run in this tutorial.
-
-   .. codewithvars:: bash
-
-      $ git clone https://github.com/confluentinc/examples.git
-      $ git checkout |release|-post
-      $ cd examples/clients/avro
-
-   
+   .. image:: images/c3-create-topic-name.png
+       :width: 600px
+    
 
 Terminology
 ^^^^^^^^^^^
@@ -234,8 +235,7 @@ You should see:
    Successfully produced 10 messages to a topic called transactions
    ...
 
-From |c3-short|, you should now see new Avro-serialized data arriving into the topic ``transactions``.
-|c3| dynamically deserializes the data and shows only _newly_ arriving data--not data already in the topic.
+|c3-short| dynamically deserializes the Avro data in the topic ``transactions`` and shows only _newly_ arriving data--not data already in the topic.
 
 .. tip:: If you don't see any data, rerun the Producer and verify it completed successfully
 
@@ -328,18 +328,11 @@ Schemas in Schema Registry
 At this point, you have producers serializing Avro data and consumers deserializing Avro data.
 The producers are registering schemas to and consumers are retrieving schemas from |sr|.
 
-From the |c3-short| navigation menu, click **Management -> Topics**.
+From the |c3| navigation menu, click **Management -> Topics**.
 Click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|:
 
 .. figure:: images/c3-schema-transactions.png
     :align: center
-
-Let's break down what this version of the schema defines
-
-* `subject`: the scope in which schemas for the messages in the topic ``transactions`` can evolve
-* `version`: the schema version for this subject, which starts at 1 for each subject
-* `id`: the globally unique schema version id, unique across all schemas in all subjects
-* `schema`: the structure that defines the schema format
 
 The schema is identical to the :ref:`schema file defined for Java client applications<schema_registry_tutorial_definition>`.
 
@@ -369,6 +362,13 @@ To view the latest schema for this subject in more detail:
      "id": 1,
      "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"
    }
+
+Let's break down what this version of the schema defines
+
+* `subject`: the scope in which schemas for the messages in the topic ``transactions`` can evolve
+* `version`: the schema version for this subject, which starts at 1 for each subject
+* `id`: the globally unique schema version id, unique across all schemas in all subjects
+* `schema`: the structure that defines the schema format
 
 Notice in the output above, the schema is escaped JSON, i.e., the double quotes are preceded with backslashes.
 
@@ -402,17 +402,17 @@ Auto Schema Registration
 
 .. include:: includes/auto-schema-registration.rst
 
-To manually register the schema outside of the application, create a new in |sr|.
-
-For example, in |c3| create a new called ``test`` and then from the *Schema* tab, click on "Set a schema".
-Here you can define the new schema, specifying the values for:
+To manually register the schema outside of the application, you can use |c3|.
+First, create a new topic called ``test`` in the same way that you created a new topic called ``transactions`` earlier in the tutorial.
+Then from the *Schema* tab, click on "Set a schema" to define the new schema.
+Specify values for:
 
 * ``namespace``: a fully qualified name that avoids schema naming conflicts
 * ``type``: `Avro data type <https://avro.apache.org/docs/1.8.1/spec.html#schemas>`_, one of ``record``, ``enum``, ``union``, ``array``, ``map``, ``fixed``
 * ``name``: unique schema name in this namespace
 * ``fields``: one or more simple or complex data types for a ``record``. The first field in this record is called `id`, and it is of type `string`. The second field in this record is called `amount`, and it is of type `double`.
 
-If you were to define the same schema as used earlier, you would enter the following in the |c3| schema editor:
+If you were to define the same schema as used earlier, you would enter the following in the |c3-short| schema editor:
 
 .. sourcecode:: json
 
@@ -433,12 +433,12 @@ If you were to define the same schema as used earlier, you would enter the follo
    }
 
 
-If you prefer to connect directly to the REST endpoint in |sr| to define the schema, you could run the following.
+If you prefer to connect directly to the REST endpoint in |sr| to define a schema for a new subject for the topic ``test``, you could run the following.
 In this sample output, it creates a schema with id of `1`.:
 
 .. sourcecode:: bash
 
-   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
+   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"}' http://localhost:8081/subjects/test-value/versions
    {"id":1}
 
 
@@ -494,7 +494,7 @@ Specifically, ask yourself whether a consumer can use this new schema to read da
 The answer is no.
 Consumers will fail reading data with the older schema because the older data does not have the `region` field, therefore this schema is not backward compatible.
 
-From |c3-short|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
+From |c3|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
 Click on "Edit Schema".
 
 .. image:: images/c3-edit-schema.png
@@ -571,7 +571,7 @@ Consider an updated :devx-examples:`Payment2b schema|clients/avro/src/main/resou
     ]
    }
 
-From |c3-short|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
+From |c3|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
 Click on "Edit Schema".
 
 .. image:: images/c3-edit-schema.png
