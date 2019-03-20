@@ -33,20 +33,43 @@ The target audience is a developer writing Kafka streaming applications who want
 This tutorial is not meant to cover the operational aspects of running the |sr| service. For production deployments of |sr-long|, refer to :ref:`schema-registry-prod`.
 
 
-Before You Begin
-~~~~~~~~~~~~~~~~
+Terminology Review
+^^^^^^^^^^^^^^^^^^
+
+First let us levelset on terminology: what is a `topic` versus a `schema` versus a `subject`.
+
+A Kafka `topic` contains messages, and each message is a key-value pair.
+Either the message key or the message value, or both, can be serialized as Avro.
+A `schema` defines the structure of the Avro data format.
+The Kafka topic name can be independent of the schema name.
+|sr| defines a scope in which schemas can evolve, and that scope is the `subject`.
+The name of the subject depends on the configured `subject name strategy <https://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#subject-name-strategy>`_, which by default is set to derive subject name from topic name.
+
+As a practical example, let's say a retail business is streaming transactions in a Kafka topic called ``transactions``.
+A producer is writing data with a schema `Payment` to that Kafka topic ``transactions``.
+If the producer is serializing the message value as Avro, then |sr| has a subject called `transactions-value`.
+If the producer is also serializing the message key as Avro, |sr| would have a subject called `transactions-key`, but for simplicity, in this tutorial consider only the message value.
+That |sr| subject `transactions-value` has at least one schema called `Payment`.
+The subject `transactions-value` defines the scope in which schemas for that subject can evolve and |sr| does compatibility checking within this scope.
+In this scenario, if developers evolve the schema `Payment` and produce new messages to the topic ``transactions``, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
+
+
+Setup
+~~~~~
 
 Prerequisites
 ^^^^^^^^^^^^^
 
-Before proceeding with this tutorial
-
-#. Verify that you have installed the following on your local machine:
+Before proceeding with this tutorial, verify that you have installed the following on your local machine:
 
    * `Confluent Platform 5.2 or later <https://www.confluent.io/download/>`__
    * Java 1.8 to run |cp|
    * Maven to compile the client Java code
    * ``jq`` tool to nicely format the results from querying the |sr| REST endpoint
+
+
+Environment
+^^^^^^^^^^^
 
 #. Clone the Confluent `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will be compiling and running in this tutorial.
 
@@ -99,26 +122,6 @@ Before proceeding with this tutorial
    .. image:: images/c3-create-topic-name.png
        :width: 600px
     
-
-Terminology
-^^^^^^^^^^^
-
-First let us levelset on terminology: what is a `topic` versus a `schema` versus a `subject`.
-
-A Kafka `topic` contains messages, and each message is a key-value pair.
-Either the message key or the message value, or both, can be serialized as Avro.
-A `schema` defines the structure of the Avro data format.
-The Kafka topic name can be independent of the schema name.
-|sr| defines a scope in which schemas can evolve, and that scope is the `subject`.
-The name of the subject depends on the configured `subject name strategy <https://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#subject-name-strategy>`_, which by default is set to derive subject name from topic name.
-
-As a practical example, let's say a retail business is streaming transactions in a Kafka topic called ``transactions``.
-A producer is writing data with a schema `Payment` to that Kafka topic ``transactions``.
-If the producer is serializing the message value as Avro, then |sr| has a subject called `transactions-value`.
-If the producer is also serializing the message key as Avro, |sr| would have a subject called `transactions-key`, but for simplicity, in this tutorial consider only the message value.
-That |sr| subject `transactions-value` has at least one schema called `Payment`.
-The subject `transactions-value` defines the scope in which schemas for that subject can evolve and |sr| does compatibility checking within this scope.
-In this scenario, if developers evolve the schema `Payment` and produce new messages to the topic ``transactions``, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
 
 .. _schema_registry_tutorial_definition:
 
@@ -176,7 +179,7 @@ Configuring Avro
 Apache Kafka applications using Avro data and |sr-long| need to specify at least two configuration parameters:
 
 * Avro serializer or deserializer
-* URL to the |sr-long|
+* Properties to connect to |sr-long|
 
 There are two basic types of Avro records that your application can use: a specific code-generated class or a generic record.
 The examples in this tutorial demonstrate how to use the specific `Payment` class.
@@ -321,7 +324,7 @@ For examples of other Kafka clients interoperating with Avro and |sr|:
 Centralized Schema Management
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Schemas in Schema Registry
+Vewing Schemas in Schema Registry
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 At this point, you have producers serializing Avro data and consumers deserializing Avro data.
@@ -336,7 +339,7 @@ Click on the ``transactions`` topic and go to the *Schema* tab to retrieve the `
 The schema is identical to the :ref:`schema file defined for Java client applications<schema_registry_tutorial_definition>`.
 
 
-Using curl to interact with Schema Registry
+Using curl to Interact with Schema Registry
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You can also connect directly to the REST endpoint in |sr| to view subjects and associated schemas.
