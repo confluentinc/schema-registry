@@ -498,6 +498,7 @@ Specifically, ask yourself whether a consumer can use this new schema to read da
 The answer is no.
 Consumers will fail reading data with the older schema because the older data does not have the `region` field, therefore this schema is not backward compatible.
 
+Now try it out yourself.
 From |c3|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
 Click on "Edit Schema".
 
@@ -543,7 +544,7 @@ Run the compatibility check and verify that it fails:
    [ERROR] Schema examples/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc is not compatible with subject(transactions-value)
    ...
 
-You could have also just tried to register the new schema `Payment2a` manually to |sr|, which is a useful way for non-Java clients to check compatibility.
+You could have also just tried to register the new schema `Payment2a` manually to |sr|, which is a useful way for non-Java clients to check compatibility if you are not using |c3|.
 As expected, |sr| rejects it with an error message that it is incompatible.
 
 .. sourcecode:: bash
