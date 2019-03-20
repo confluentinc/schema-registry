@@ -74,19 +74,19 @@ Before proceeding with this tutorial
 
 #. For the exercises in this tutorial, you will be producing to and consuming from a topic called ``transactions``. Create this topic in |c3|.
 
-    #.  Navigate to the |c3-short| web interface at `http://localhost:9021/ <http://localhost:9021/>`_.
+    *  Navigate to the |c3-short| web interface at `http://localhost:9021/ <http://localhost:9021/>`_.
 
         .. important:: It may take a minute or two for |c3-short| to come online.
 
         .. image:: images/c3-landing-page.png
             :width: 600px
 
-    #.  Select **Management -> Topics** and click **Create topic**.
+    *  Select **Management -> Topics** and click **Create topic**.
     
         .. image:: images/c3-create-topic.png
             :width: 600px
     
-    #.  Create a topic named ``transactions`` and click **Create with defaults**.
+    *  Name the topic ``transactions`` and click **Create with defaults**.
     
 
 #. Clone the |cp| `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will compile and run in this tutorial.
@@ -344,8 +344,8 @@ Let's break down what this version of the schema defines
 The schema is identical to the :ref:`schema file defined for Java client applications<schema_registry_tutorial_definition>`.
 
 
-Using curl to interact with |sr-short|
---------------------------------------
+Using curl to interact with Schema Registry
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You can also connect directly to the REST endpoint in |sr| to view subjects and associated schemas.
 View all the subjects registered in |sr| (assuming |sr| is running on the local machine listening on port 8081):
