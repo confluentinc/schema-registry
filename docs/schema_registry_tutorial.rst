@@ -326,8 +326,8 @@ For examples of other Kafka clients interoperating with Avro and |sr|:
 Centralized Schema Management
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Vewing Schemas in Schema Registry
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+Viewing Schemas in Schema Registry
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 At this point, you have producers serializing Avro data and consumers deserializing Avro data.
 The producers are registering schemas to and consumers are retrieving schemas from |sr|.
