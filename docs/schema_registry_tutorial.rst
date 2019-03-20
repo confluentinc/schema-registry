@@ -492,7 +492,7 @@ Consider the :devx-examples:`Payment2a schema|clients/avro/src/main/resources/av
     ]
    }
 
-Before proceeding, because the default |sr| compatibility is `backward`, think about whether this schema is backward compatible.
+Before proceeding, because the default |sr| compatibility is :ref:`backward<avro-backward_compatibility>`, think about whether this new schema is backward compatible.
 Specifically, ask yourself whether a consumer can use this new schema to read data written by producers using the older schema without the `region` field.
 The answer is no.
 Consumers will fail reading data with the older schema because the older data does not have the `region` field, therefore this schema is not backward compatible.
@@ -555,7 +555,7 @@ As expected, |sr| rejects it with an error message that it is incompatible.
 Passing Compatibility Checks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To maintain backward compatibility, a new schema must assume default values for the new field if it is not provided.
+To maintain :ref:`backward<avro-backward_compatibility>` compatibility, a new schema must assume default values for the new field if it is not provided.
 Consider an updated :devx-examples:`Payment2b schema|clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc` that has a default value for ``region``:
 
 .. sourcecode:: json
