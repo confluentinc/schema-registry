@@ -72,7 +72,7 @@ Before proceeding with this tutorial
       Starting control-center
       control-center is [UP]
 
-#. For the exercises in this tutorial, you will be producing to and consuming from a topic called `transactions`. Create this topic in |c3|.
+#. For the exercises in this tutorial, you will be producing to and consuming from a topic called ``transactions``. Create this topic in |c3|.
 
     #.  Navigate to the |c3-short| web interface at `http://localhost:9021/ <http://localhost:9021/>`_.
 
@@ -99,8 +99,6 @@ Before proceeding with this tutorial
 
    
 
-.. _schema_registry_tutorial_definition:
-
 Terminology
 ^^^^^^^^^^^
 
@@ -113,13 +111,13 @@ The Kafka topic name can be independent of the schema name.
 |sr| defines a scope in which schemas can evolve, and that scope is the `subject`.
 The name of the subject depends on the configured `subject name strategy <https://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#subject-name-strategy>`_, which by default is set to derive subject name from topic name.
 
-As a practical example, let's say a retail business is streaming transactions in a Kafka topic called `transactions`.
-A producer is writing data with a schema `Payment` to that Kafka topic `transactions`.
+As a practical example, let's say a retail business is streaming transactions in a Kafka topic called ``transactions``.
+A producer is writing data with a schema `Payment` to that Kafka topic ``transactions``.
 If the producer is serializing the message value as Avro, then |sr| has a subject called `transactions-value`.
 If the producer is also serializing the message key as Avro, |sr| would have a subject called `transactions-key`, but for simplicity, in this tutorial consider only the message value.
 That |sr| subject `transactions-value` has at least one schema called `Payment`.
 The subject `transactions-value` defines the scope in which schemas for that subject can evolve and |sr| does compatibility checking within this scope.
-In this scenario, if developers evolve the schema `Payment` and produce new messages to the topic `transactions`, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
+In this scenario, if developers evolve the schema `Payment` and produce new messages to the topic ``transactions``, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
 
 .. _schema_registry_tutorial_definition:
 
@@ -212,11 +210,20 @@ For example:
 
 For a full Java producer example, refer to :devx-examples:`the producer example|clients/avro/src/main/java/io/confluent/examples/clients/basicavro/ProducerExample.java`.
 Because the `pom.xml` includes ``avro-maven-plugin``, the `Payment` class is automatically generated during compile.
-To run this producer, first compile the project and then run ``ProducerExample``.
+To run this producer, first compile the project
 
 .. sourcecode:: bash
 
    $ mvn clean compile package
+
+From the |c3-short| navigation menu, click **Management -> Topics**.
+Click on the ``transactions`` topic and go to the *Inspect* tab.
+You should see no messages because no messages have been produced to this topic yet.
+
+Now run ``ProducerExample``, which produces Avro-formatted messages to the ``transactions`` topic
+
+.. sourcecode:: bash
+
    $ mvn exec:java -Dexec.mainClass=io.confluent.examples.clients.basicavro.ProducerExample
 
 You should see:
@@ -226,6 +233,15 @@ You should see:
    ...
    Successfully produced 10 messages to a topic called transactions
    ...
+
+From |c3-short|, you should now see new Avro-serialized data arriving into the topic ``transactions``.
+|c3| dynamically deserializes the data and shows only _newly_ arriving data--not data already in the topic.
+
+.. tip:: If you don't see any data, rerun the Producer and verify it completed successfully
+
+.. figure:: images/c3-inspect-transactions.png
+    :align: center
+
 
 
 Java Consumers
@@ -310,9 +326,28 @@ Schemas in Schema Registry
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 At this point, you have producers serializing Avro data and consumers deserializing Avro data.
-The producers are registering schemas and consumers are retrieving schemas.
-You can view subjects and associated schemas via the REST endpoint in |sr|.
+The producers are registering schemas to and consumers are retrieving schemas from |sr|.
 
+From the |c3-short| navigation menu, click **Management -> Topics**.
+Click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|:
+
+.. figure:: images/c3-schema-transactions.png
+    :align: center
+
+Let's break down what this version of the schema defines
+
+* `subject`: the scope in which schemas for the messages in the topic ``transactions`` can evolve
+* `version`: the schema version for this subject, which starts at 1 for each subject
+* `id`: the globally unique schema version id, unique across all schemas in all subjects
+* `schema`: the structure that defines the schema format
+
+The schema is identical to the :ref:`schema file defined for Java client applications<schema_registry_tutorial_definition>`.
+
+
+Using curl to interact with |sr-short|
+--------------------------------------
+
+You can also connect directly to the REST endpoint in |sr| to view subjects and associated schemas.
 View all the subjects registered in |sr| (assuming |sr| is running on the local machine listening on port 8081):
 
 .. sourcecode:: bash
@@ -322,9 +357,8 @@ View all the subjects registered in |sr| (assuming |sr| is running on the local 
      "transactions-value"
    ]
 
-In this example, the Kafka topic `transactions` has messages whose value, i.e., payload, is Avro.
-
-View the associated subject `transactions-value` in |sr|:
+In this example, the Kafka topic ``transactions`` has messages whose value, i.e., payload, is Avro, and by default the |sr-short| subject name is `transactions-value`.
+To view the latest schema for this subject in more detail:
 
 .. sourcecode:: bash
 
@@ -336,14 +370,6 @@ View the associated subject `transactions-value` in |sr|:
      "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"
    }
 
-Let's break down what this version of the schema defines
-
-* `subject`: the scope in which schemas for the messages in the topic `transactions` can evolve
-* `version`: the schema version for this subject, which starts at 1 for each subject
-* `id`: the globally unique schema version id, unique across all schemas in all subjects
-* `schema`: the structure that defines the schema format
-
-The schema is identical to the :ref:`schema file defined for Java client applications<schema_registry_tutorial_definition>`.
 Notice in the output above, the schema is escaped JSON, i.e., the double quotes are preceded with backslashes.
 
 Based on the schema id, you can also retrieve the associated schema by querying |sr| REST endpoint:
@@ -531,19 +557,6 @@ Notice the changes:
 * `id`: changed from `1` to `2`
 * `schema`: updated with the new field `region` that has a default value
 
-
-Schema Management with Confluent Control Center
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-|c3| can retrieve a topic's schema from the |sr| and display it:
-
-.. figure:: images/c3-schema-transactions.png
-    :align: center
-
-As new Avro-serialized data arrives into the topic `transactions`, |c3| dynamically deserializes the data and shows the messages live:
-
-.. figure:: images/c3-inspect-transactions.png
-    :align: center
 
 
 Next Steps
