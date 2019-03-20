@@ -31,6 +31,7 @@ The target audience is a developer writing Kafka streaming applications who want
 
 This tutorial is not meant to cover the operational aspects of running the |sr| service. For production deployments of |sr-long|, refer to :ref:`schema-registry-prod`.
 
+
 Before You Begin
 ~~~~~~~~~~~~~~~~
 
@@ -41,11 +42,12 @@ Before proceeding with this tutorial
 
 #. Verify that you have installed the following on your local machine:
 
+   * `Confluent Platform 5.2 or later <https://www.confluent.io/download/>`__
    * Java 1.8 to run |cp|
    * Maven to compile the client Java code
    * ``jq`` tool to nicely format the results from querying the |sr| REST endpoint
 
-#. Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have a basic Kafka cluster with |sr-long| and other services running on your local machine.
+#. Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have a basic Kafka cluster with |sr-long|, |c3|, and other services running on your local machine.
 
    .. sourcecode:: bash
 
@@ -68,10 +70,6 @@ Before proceeding with this tutorial
       ksql-server is [UP]
       Starting control-center
       control-center is [UP]
-
-   .. note::
-
-      If you only want to start |zk|, Kafka, and |sr|, type `confluent start schema-registry`
 
 
 #. Clone the |cp| `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will compile and run in this tutorial.
@@ -307,6 +305,7 @@ View all the subjects registered in |sr| (assuming |sr| is running on the local 
    ]
 
 In this example, the Kafka topic `transactions` has messages whose value, i.e., payload, is Avro.
+
 View the associated subject `transactions-value` in |sr|:
 
 .. sourcecode:: bash
@@ -337,12 +336,6 @@ Based on the schema id, you can also retrieve the associated schema by querying 
    {
      "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"
    }
-
-If you are using |c3|, you can view the topic schema easily from the UI, and inspect new data arriving into the topic:
-
-.. figure:: c3-schema-transactions.png
-    :align: center
-
 
 
 Schema IDs in Messages
@@ -519,6 +512,22 @@ Notice the changes:
 * `version`: changed from `1` to `2`
 * `id`: changed from `1` to `2`
 * `schema`: updated with the new field `region` that has a default value
+
+
+Schema Management with Confluent Control Center
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you are using |cp|, you may leverage |c3| which has integrated capabilities with |sr-long|.
+
+|c3| can retrieve a topic's schema from the |sr| and display it:
+
+.. figure:: images/c3-schema-transactions.png
+    :align: center
+
+As new Avro-serialized data arrives into the topic `transactions`, |c3| dynamically deserializes the data and shows the messages live:
+
+.. figure:: images/c3-inspect-transactions.png
+    :align: center
 
 
 Next Steps
