@@ -449,7 +449,7 @@ In this sample output, it creates a schema with id of `1`.:
 Schema Evolution and Compatibility
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Changing Schemas
+Evolving Schemas
 ^^^^^^^^^^^^^^^^
 
 So far in this tutorial, you have seen the benefit of |sr-long| as being centralized schema management that enables client applications to register and retrieve globally unique schema ids.
@@ -467,7 +467,6 @@ These are the compatibility types:
 
 .. include:: includes/compatibility_list.rst
 
-You can change this globally or per subject, but for the remainder of this tutorial, leave the default compatibility type to `backward`.
 Refer to :ref:`schema_evolution_and_compatibility` for a more in-depth explanation on the compatibility types.
 
 
@@ -493,8 +492,8 @@ Consider the :devx-examples:`Payment2a schema|clients/avro/src/main/resources/av
     ]
    }
 
-Before proceeding, think about whether this schema is backward compatible.
-Specifically, ask yourself whether a consumer can use this new schema to read data written by producers using the older schema without the `region` field?
+Before proceeding, because the default |sr| compatibility is `backward`, think about whether this schema is backward compatible.
+Specifically, ask yourself whether a consumer can use this new schema to read data written by producers using the older schema without the `region` field.
 The answer is no.
 Consumers will fail reading data with the older schema because the older data does not have the `region` field, therefore this schema is not backward compatible.
 
@@ -630,6 +629,28 @@ Notice the changes:
 * `version`: changed from `1` to `2`
 * `id`: changed from `1` to `2`
 * `schema`: updated with the new field `region` that has a default value
+
+
+Changing Compatibility Type
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The default compatibility type is `backward`, but you may change the compatibility type globally or per subject.
+
+To change the compatibility type per subject from |c3|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
+Click on "Edit Schema" and then click on "Compatibility Mode".
+
+.. image:: images/c3-edit-compatibility.png
+    :width: 600px
+
+Notice that the compatibility for this topic is set to the default `backward`, but you may change this as needed.
+
+If you prefer to connect directly to the REST endpoint in |sr|, then to change the compatibility type for the topic ``transactions``, i.e., for the subject ``transactions-value``, run the example command below.
+
+.. sourcecode:: bash
+
+   $ curl -X PUT -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+          --data '{"compatibility": "BACKWARD_TRANSITIVE"}' \
+          http://localhost:8081/config/transactions-value
 
 
 Next Steps
