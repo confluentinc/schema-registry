@@ -48,7 +48,7 @@ Before proceeding with this tutorial
    * Maven to compile the client Java code
    * ``jq`` tool to nicely format the results from querying the |sr| REST endpoint
 
-#. Clone the |cp| `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will compile and run in this tutorial.
+#. Clone the Confluent `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will be compiling and running in this tutorial.
 
    .. codewithvars:: bash
 
@@ -235,19 +235,11 @@ You should see:
    Successfully produced 10 messages to a topic called transactions
    ...
 
-|c3-short| dynamically deserializes the Avro data in the topic ``transactions`` and shows only _newly_ arriving data--not data already in the topic.
-
-.. tip:: If you don't see any data, rerun the Producer and verify it completed successfully
-
-.. figure:: images/c3-inspect-transactions.png
-    :align: center
-
-
 
 Java Consumers
 ^^^^^^^^^^^^^^
 
-Within the application, Java consumers need to configure the Avro deserializer for the Kafka value (or Kafka key) and URL to |sr-long|.
+Within the client application, Java consumers need to configure the Avro deserializer for the Kafka value (or Kafka key) and URL to |sr-long|.
 Then the consumer can read records where the Kafka value is of `Payment` class.
 By default, each record is deserialized into an Avro `GenericRecord`, but in this tutorial the record should be deserialized using the application's code-generated `Payment` class.
 Therefore, configure the deserializer to use Avro `SpecificRecord`, i.e., ``SPECIFIC_AVRO_READER_CONFIG`` should be set to `true`.
@@ -304,6 +296,13 @@ You should see:
 
 Hit ``Ctrl-C`` to stop.
 
+To see the messages in |c3-short|, inspect the ``transactions`` topic as it dynamically deserializes the newly arriving data that was serialized as Avro.
+
+.. tip:: If you don't see any data, rerun the Producer and verify it completed successfully
+
+.. figure:: images/c3-inspect-transactions.png
+    :width: 600px
+
 
 Other Kafka Clients
 ^^^^^^^^^^^^^^^^^^^
@@ -332,7 +331,7 @@ From the |c3| navigation menu, click **Management -> Topics**.
 Click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|:
 
 .. figure:: images/c3-schema-transactions.png
-    :align: center
+    :width: 600px
 
 The schema is identical to the :ref:`schema file defined for Java client applications<schema_registry_tutorial_definition>`.
 
