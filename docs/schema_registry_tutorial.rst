@@ -7,8 +7,9 @@ Confluent Schema Registry Tutorial
 Overview
 ~~~~~~~~
 
-This tutorial provides a step-by-step example to use |sr-long|.
-It walks through the steps to enable client applications to read and write Avro data with compatibility checks as schemas evolve.
+This tutorial provides a step-by-step workflow for using |sr-long|.
+You will learn how to enable client applications to read and write Avro data, check compatibility as schemas evolve, and use |c3|, which has integrated capabilities with |sr-long|.
+
 
 Benefits
 ^^^^^^^^
@@ -71,6 +72,22 @@ Before proceeding with this tutorial
       Starting control-center
       control-center is [UP]
 
+#. For the exercises in this tutorial, you will be producing to and consuming from a topic called `transactions`. Create this topic in |c3|.
+
+    #.  Navigate to the |c3-short| web interface at `http://localhost:9021/ <http://localhost:9021/>`_.
+
+        .. important:: It may take a minute or two for |c3-short| to come online.
+
+        .. image:: images/c3-landing-page.png
+            :width: 600px
+
+    #.  Select **Management -> Topics** and click **Create topic**.
+    
+        .. image:: images/c3-create-topic.png
+            :width: 600px
+    
+    #.  Create a topic named ``transactions`` and click **Create with defaults**.
+    
 
 #. Clone the |cp| `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will compile and run in this tutorial.
 
@@ -79,6 +96,7 @@ Before proceeding with this tutorial
       $ git clone https://github.com/confluentinc/examples.git
       $ git checkout |release|-post
       $ cd examples/clients/avro
+
    
 
 .. _schema_registry_tutorial_definition:
@@ -516,8 +534,6 @@ Notice the changes:
 
 Schema Management with Confluent Control Center
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you are using |cp|, you may leverage |c3| which has integrated capabilities with |sr-long|.
 
 |c3| can retrieve a topic's schema from the |sr| and display it:
 
