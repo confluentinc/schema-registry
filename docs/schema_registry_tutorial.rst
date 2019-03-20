@@ -402,7 +402,39 @@ Auto Schema Registration
 
 .. include:: includes/auto-schema-registration.rst
 
-To manually register the schema outside of the application, send the schema to |sr| and associate it with a subject, in this case `transactions-value`.  It returns a schema id of `1`.
+To manually register the schema outside of the application, create a new in |sr|.
+
+For example, in |c3| create a new called ``test`` and then from the *Schema* tab, click on "Set a schema".
+Here you can define the new schema, specifying the values for:
+
+* ``namespace``: a fully qualified name that avoids schema naming conflicts
+* ``type``: `Avro data type <https://avro.apache.org/docs/1.8.1/spec.html#schemas>`_, one of ``record``, ``enum``, ``union``, ``array``, ``map``, ``fixed``
+* ``name``: unique schema name in this namespace
+* ``fields``: one or more simple or complex data types for a ``record``. The first field in this record is called `id`, and it is of type `string`. The second field in this record is called `amount`, and it is of type `double`.
+
+If you were to define the same schema as used earlier, you would enter the following in the |c3| schema editor:
+
+.. sourcecode:: json
+
+   {
+     "type": "record",
+     "name": "Payment",
+     "namespace": "io.confluent.examples.clients.basicavro",
+     "fields": [
+       {
+         "name": "id",
+         "type": "string"
+       },
+       {
+         "name": "amount",
+         "type": "double"
+       }
+     ]
+   }
+
+
+If you prefer to connect directly to the REST endpoint in |sr| to define the schema, you could run the following.
+In this sample output, it creates a schema with id of `1`.:
 
 .. sourcecode:: bash
 
@@ -461,6 +493,22 @@ Before proceeding, think about whether this schema is backward compatible.
 Specifically, ask yourself whether a consumer can use this new schema to read data written by producers using the older schema without the `region` field?
 The answer is no.
 Consumers will fail reading data with the older schema because the older data does not have the `region` field, therefore this schema is not backward compatible.
+
+From |c3-short|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
+Click on "Edit Schema".
+
+.. image:: images/c3-edit-schema.png
+    :width: 600px
+
+Add the additional field for `region` and click "Save changes".  You should see an error message that says the new schema is incompatible with the original schema.
+
+.. image:: images/c3-edit-schema-fail.png
+    :width: 600px
+
+
+
+Schema Registry Maven Plugin: Fail Compatibility
+------------------------------------------------
 
 Confluent provides a `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, which you can use to check compatibility in development or integrate into your CI/CD pipeline.
 Our sample :devx-examples:`pom.xml|clients/avro/pom.xml#L84-L99` includes this plugin to enable compatibility checks.
@@ -521,6 +569,22 @@ Consider an updated :devx-examples:`Payment2b schema|clients/avro/src/main/resou
         {"name": "region", "type": "string", "default": ""}
     ]
    }
+
+From |c3-short|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
+Click on "Edit Schema".
+
+.. image:: images/c3-edit-schema.png
+    :width: 600px
+
+Add the default value for the new field `region` and click "Save changes".
+
+.. image:: images/c3-edit-schema-pass.png
+    :width: 600px
+
+
+
+Schema Registry Maven Plugin: Pass Compatibility
+------------------------------------------------
 
 Update the :devx-examples:`pom.xml|clients/avro/pom.xml` to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
 Re-run the compatibility check and verify that it passes:
