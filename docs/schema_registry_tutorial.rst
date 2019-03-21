@@ -634,7 +634,7 @@ Notice the changes:
 Changing Compatibility Type
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The default compatibility type is `backward`, but you may change the compatibility type globally or per subject.
+The default compatibility type is `backward`, but you may change it globally or per subject.
 
 To change the compatibility type per subject from |c3|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
 Click on "Edit Schema" and then click on "Compatibility Mode".
