@@ -12,5 +12,4 @@ Installing and Configuring |sr|
     ../../../cloud/connect/schema-reg-cloud-config
     config
     deployment
-    migrate
         
