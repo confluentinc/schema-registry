@@ -81,16 +81,16 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (registerRequest) {
       Integer schemaId = schemaIdCache.get(schema);
       if (schemaId == null) {
-        id = id >= 0 ? id : ids.incrementAndGet();
-        schemaIdCache.put(schema, id);
+        schemaId = id >= 0 ? id : ids.incrementAndGet();
+        schemaIdCache.put(schema, schemaId);
       } else if (id >= 0 && id != schemaId) {
         throw new IllegalStateException("Schema already registered with id "
             + schemaId + " instead of input id " + id);
       }
-      idSchemaMap.put(id, schema);
+      idSchemaMap.put(schemaId, schema);
       idCache.put(subject, idSchemaMap);
       generateVersion(subject, schema);
-      return id;
+      return schemaId;
     } else {
       throw new RestClientException("Schema Not Found", 404, 404001);
     }
