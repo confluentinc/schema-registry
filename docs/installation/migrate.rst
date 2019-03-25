@@ -30,9 +30,8 @@ One-time Migration
 
 Choose a one-time migration to move all data to a fully-managed |ccloud|
 service. In this case, you migrate your existing self-managed |sr| to
-|sr-ccloud| as a primary. All new schemas are registered to Confluent Cloud
-Schema Registry. In the scenario, there is no migration from Confluent Cloud
-Schema Registry back to the self-managed Schema Registry.
+|sr-ccloud| as a primary. All new schemas are registered to |sr-ccloud|. In the
+scenario, there is no migration from |sr-ccloud| back to the self-managed |sr|.
 
 **TBD diagram showing one-time migration**
 
@@ -52,7 +51,7 @@ To migrate |sr| to |ccloud|, follow these steps:
 #.  Configure Replicator with Schema Registry information.
 
 
-    .. code:: bash
+    :: 
     
         schema.topic=_schemas
         schema.registry.url=http://somehost:8081
@@ -88,7 +87,7 @@ To migrate |sr| to |ccloud|, follow these steps:
     configuration and restarting.  
     
     
-    .. code:: bash
+    :: 
     
         mode.mutability=true
        
