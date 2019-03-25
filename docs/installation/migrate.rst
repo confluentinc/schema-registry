@@ -3,14 +3,14 @@
 Migrate an Existing |sr| to |ccloud| 
 ====================================
 
-:ref:`cloud-home` is a fully managed streaming data service based on open source
-|ak-tm|. Just as you can “lift and shift” your Kafka applications from
+:ref:`cloud-home` is a fully managed streaming data service based on |cp|. Just
+as you can “lift and shift” or "extend to cloud" your Kafka applications from
 self-managed Kafka to |ccloud|, you can do the same with |sr-long|.
 
 If you already use |sr| to manage schemas for Kafka applications, and want to
 move some or all of that data and schema management to the cloud, you can use
 |crep|  :ref:`connect_replicator` to migrate your existing schemas to
-|sr-ccloud|. (See :ref:`connect_replicator` and :ref:`replicator_executable`)
+|sr-ccloud|. (See :ref:`connect_replicator` and :ref:`replicator_executable`.)
 
 You can set up continuous migration of |sr| to maintain a hybrid deployment ("extend to
 cloud") or "lift and shift" all to |ccloud| using a one-time migration.
