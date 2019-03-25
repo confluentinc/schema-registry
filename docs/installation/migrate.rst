@@ -52,38 +52,41 @@ To migrate |sr| to |ccloud|, follow these steps:
 
 
     :: 
-    
+        topic.whitelist=mytopic1,mytopic2,_schemas
         schema.topic=_schemas
         schema.registry.url=http://somehost:8081
         schema.registry.client.basic.auth.credentials.source=USER_INFO
         schema.registry.client.basic.auth.user.info=<user>:<password>
   
+  
+    - topic.whitelist lists all topics that will be replicated from source to destination
+    - schema.topic defines the topic that contains all the schemas to be replicated
+    - last 3 are same config schema registry for cloud
     
 #.  Start Replicator so that it can perform the one-time schema migration. 
 
     .. code:: bash
     
         TBD example "start replicator" command
+        
+        SEND THEM TO https://docs.confluent.io/current/multi-dc-replicator/replicator-quickstart.html TO START REPLICATOR
 
-#.  Stop all producers.
+#.  Stop all producers that are producing to Kafka.
 
-    .. code:: bash
-
-        TBD example "stop producers" command
+        TBD example "stop producers" command (THIS IS APPLICATION DEPENDENT )
 
 #.  Wait until the replication lag is 0.
 
     .. code:: bash
 
-        TBD example output 
+        TBD send them here: https://docs.confluent.io/current/multi-dc-replicator/replicator-tuning.html#monitoring-replicator-lag 
 
 #.  Stop Replicator.
 
-    .. code:: bash
 
-        TBD example "stop producers" command
+        APP SPECIFIC, NO EXAMPLES
 
-#.  Enable mode changes in the source Schema Registry by adding the following to the
+#.  Enable mode changes in the self-managed source Schema Registry properties file by adding the following to the
     configuration and restarting.  
     
     
@@ -114,24 +117,31 @@ To migrate |sr| to |ccloud|, follow these steps:
     
 #.  Stop all consumers.
 
-    .. code:: bash
 
-        TBD example output 
+        APP SPECIFIC, NO EXAMPLES 
 
 #.  Configure all consumers to point to the destination |sr| in the cloud and restart them.
 
     .. code:: bash
 
         TBD example output 
+        For example, after migration is complete you change |sr|. If you're configuring schema registry in a Java client, you
+        would change the URL for schema registry from source to destination
+        either in the code or in a properties file (sr URL, type of authentication USER_INFO, credentials)
+        
+        Example: https://docs.confluent.io/current/schema-registry/docs/schema_registry_tutorial.html#java-consumers
 
 #.  Configure all producers to point to the destination |sr| in the cloud and restart them.
 
     .. code:: bash
 
         TBD example output 
+        Example: https://docs.confluent.io/current/schema-registry/docs/schema_registry_tutorial.html#java-producers
 
 #.  (Optional) Stop the source |sr|.
 
-    .. code:: bash
 
         TBD example output 
+
+        APP SPECIFIC, NO EXAMPLES 
+
