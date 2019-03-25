@@ -354,7 +354,7 @@ View all the subjects registered in |sr| (assuming |sr| is running on the local 
      "transactions-value"
    ]
 
-In this example, the Kafka topic ``transactions`` has messages whose value, i.e., payload, is Avro, and by default the |sr-short| subject name is `transactions-value`.
+In this example, the Kafka topic ``transactions`` has messages whose value, i.e., payload, is Avro, and by default the |sr| subject name is `transactions-value`.
 To view the latest schema for this subject in more detail:
 
 .. sourcecode:: bash
@@ -583,7 +583,7 @@ You should see it accepted.
 .. image:: images/c3-edit-schema-pass.png
     :width: 600px
 
-Now this |sr-short| subject for the topic ``transactions`` has two schemas:
+Now this |sr| subject for the topic ``transactions`` has two schemas:
 
 * version 1 is `Payment.avsc`
 * version 2 is `Payment2b.avsc` that has the additional field for `region` with a default empty value.
