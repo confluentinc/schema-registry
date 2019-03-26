@@ -47,44 +47,64 @@ To migrate |sr| to |ccloud|, follow these steps:
     .. code:: bash
 
         curl -X PUT -H "Content-Type: application/json" -H "Authorization: Basic dGVuYW50Mi1rZXk6bm9oYXNo" "http://destregistry:8081/mode" --data '{"mode": "IMPORT"}'
+        
+    .. tip:: In the above command, authorization is provided as a Base64 encoded API key and API secret, which is recommended. 
+    
+    Here is an example showing one way to accomplish Base64 encoding and use environment variables to simplify the command to set |sr| mode. 
+    
+    - Pipe the key pair through a utility called `base64` and assign the result to a variable `BASIC_AUTH`.
+    - Assign the Schema Registry URL to another variable `CCSR_URL`.
+    - Finally, use both the variables in the `curl -X PUT -H ` command to set the destination Schema Registry to IMPORT mode.
+    
+    .. code:: bash
+
+        export BASIC_AUTH=$(echo -n 2GXRGGJJ2BNUNPFE:uZoTd8z/mXWqYPLEU++NTYjOOIZmd2e3BC8btZX4nyI4RNFbItwBSTekT1ntz511 | base64)
+
+        export CCSR_URL=https://psrc-e8j00.us-west-2.aws.devel.cpdev.cloud
+
+        curl -v -X PUT -H "Content-Type: application/vnd.schemaregistry.v1+json" -H "Authorization: Basic ${BASIC_AUTH}" ${CCSR_URL}/mode --data '{"mode": "IMPORT"}'
+
 
 #.  Configure Replicator with Schema Registry information.
 
-
     :: 
+    
+        // Schema Registry migration topics
         topic.whitelist=mytopic1,mytopic2,_schemas
         schema.topic=_schemas
+        
+        // Connection settings for destination Schema Registry
         schema.registry.url=http://somehost:8081
         schema.registry.client.basic.auth.credentials.source=USER_INFO
         schema.registry.client.basic.auth.user.info=<user>:<password>
   
-  
-    - topic.whitelist lists all topics that will be replicated from source to destination
-    - schema.topic defines the topic that contains all the schemas to be replicated
-    - last 3 are same config schema registry for cloud
+     In the example, the first two lines identify the topics to be read from in
+     the source cluster.
+     
+     - `topic.whitelist` lists all topics that will be replicated from source to destination.
+     - `schema.topic` defines the topic that contains all the schemas to be replicated.
+     
+     The last three lines specify connection information for the destination
+     |sr|, the same as are configured in |ccloud|:
+     
+     - `schema.registry.url`is the location of your 
     
+
 #.  Start Replicator so that it can perform the one-time schema migration. 
-
-    .. code:: bash
     
-        TBD example "start replicator" command
+    The method or commands you use to start replicator is dependent on your
+    application setup. See :ref:`replicator tutorial` <replicator-quickstart>`.
         
-        SEND THEM TO https://docs.confluent.io/current/multi-dc-replicator/replicator-quickstart.html TO START REPLICATOR
-
 #.  Stop all producers that are producing to Kafka.
-
-        TBD example "stop producers" command (THIS IS APPLICATION DEPENDENT )
 
 #.  Wait until the replication lag is 0.
 
-    .. code:: bash
 
-        TBD send them here: https://docs.confluent.io/current/multi-dc-replicator/replicator-tuning.html#monitoring-replicator-lag 
+    See :ref: replicator-tuning.rst#monitoring-replicator-lag.
+
 
 #.  Stop Replicator.
 
-
-        APP SPECIFIC, NO EXAMPLES
 
 #.  Enable mode changes in the self-managed source Schema Registry properties file by adding the following to the
     configuration and restarting.  
@@ -118,30 +138,20 @@ To migrate |sr| to |ccloud|, follow these steps:
 #.  Stop all consumers.
 
 
-        APP SPECIFIC, NO EXAMPLES 
-
 #.  Configure all consumers to point to the destination |sr| in the cloud and restart them.
 
-    .. code:: bash
-
-        TBD example output 
-        For example, after migration is complete you change |sr|. If you're configuring schema registry in a Java client, you
-        would change the URL for schema registry from source to destination
-        either in the code or in a properties file (sr URL, type of authentication USER_INFO, credentials)
-        
-        Example: https://docs.confluent.io/current/schema-registry/docs/schema_registry_tutorial.html#java-consumers
+    For example, if you are configuring |sr| in a Java client, change |sr| URL
+    from source to destination either in the code or in a properties file that
+    specifies the |sr| URL, type of authentication USER_INFO, and credentials).
+    
+    See :ref: schema_registry_tutorial.rst#java-consumers for further examples.
+    
 
 #.  Configure all producers to point to the destination |sr| in the cloud and restart them.
 
-    .. code:: bash
-
-        TBD example output 
-        Example: https://docs.confluent.io/current/schema-registry/docs/schema_registry_tutorial.html#java-producers
+    See :ref: schema_registry_tutorial.rst#java-producers for further examples.
+    
 
 #.  (Optional) Stop the source |sr|.
 
-
-        TBD example output 
-
-        APP SPECIFIC, NO EXAMPLES 
 
