@@ -3,6 +3,27 @@
 |sr| Changelog
 ==============
 
+.. _5-2-0-schema-registry:
+
+Version 5.2.0
+-------------
+
+* `PR-1062 <https://github.com/confluentinc/schema-registry/pull/1062>`_ - CC-4091: Enable reregistration of schema with different ID
+* `PR-1056 <https://github.com/confluentinc/schema-registry/pull/1056>`_ - CC-4062: Fix NPE caused after _schemas topic is compacted
+* `PR-1054 <https://github.com/confluentinc/schema-registry/pull/1054>`_ - CC-4056:  Pass id/version when slave forwards register requests
+* `PR-1045 <https://github.com/confluentinc/schema-registry/pull/1045>`_ - CC-4015 : Clean up tombstones from internal caches
+* `PR-1043 <https://github.com/confluentinc/schema-registry/pull/1043>`_ - Support explicit names for non-string map schemas.
+* `PR-1035 <https://github.com/confluentinc/schema-registry/pull/1035>`_ - CC-3956: Revert "Merge pull request #687 from sunbit-dev/canonical-schemas
+* `PR-687 <https://github.com/confluentinc/schema-registry/pull/687>`_ - Fix #28: Normalize schemas to canonical form
+* `PR-1031 <https://github.com/confluentinc/schema-registry/pull/1031>`_ - CC-3930: Only send version/id if not null
+* `PR-1023 <https://github.com/confluentinc/schema-registry/pull/1023>`_ - MINOR: swap deleted w/non-deleted before clearing; fix javadoc
+* `PR-953 <https://github.com/confluentinc/schema-registry/pull/953>`_ - CC-2669 Allow id and version to be passed to register; add modes
+* `PR-992 <https://github.com/confluentinc/schema-registry/pull/992>`_ - CC-3635 - Add config to specify location of static resources
+* `PR-994 <https://github.com/confluentinc/schema-registry/pull/994>`_ - Ability to pass additional topic configs to the schemas topic
+* `PR-948 <https://github.com/confluentinc/schema-registry/pull/948>`_ - Make CachedSchemaRegistryClient thread-safe
+* `PR-930 <https://github.com/confluentinc/schema-registry/pull/930>`_ - CC-3003 : Ability to inject custom headers to CachedSchemaRegistryClient
+* `PR-939 <https://github.com/confluentinc/schema-registry/pull/939>`_ - MINOR: ensure store is initialized for getAllKeys
+
 .. _5-1-0-schema-registry:
 
 Version 5.1.0
