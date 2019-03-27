@@ -86,10 +86,7 @@ To migrate |sr| to |ccloud|, follow these steps:
     - `schema.topic` defines the topic that contains all the schemas to be replicated.
      
     The last three lines specify connection information for the destination
-    |sr|, the same as are configured in |ccloud|:
-     
-    - `schema.registry.url`is the location of your 
-    
+    |sr|, the same as are configured in |ccloud|.
 
 #.  Start Replicator so that it can perform the one-time schema migration. 
     
