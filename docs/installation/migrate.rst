@@ -78,22 +78,23 @@ To migrate |sr| to |ccloud|, follow these steps:
         schema.registry.client.basic.auth.credentials.source=USER_INFO
         schema.registry.client.basic.auth.user.info=<user>:<password>
   
-     In the example, the first two lines identify the topics to be read from in
-     the source cluster.
+  
+    In the example, the first two lines identify the topics to be read from in
+    the source cluster.
      
-     - `topic.whitelist` lists all topics that will be replicated from source to destination.
-     - `schema.topic` defines the topic that contains all the schemas to be replicated.
+    - `topic.whitelist` lists all topics that will be replicated from source to destination.
+    - `schema.topic` defines the topic that contains all the schemas to be replicated.
      
-     The last three lines specify connection information for the destination
-     |sr|, the same as are configured in |ccloud|:
+    The last three lines specify connection information for the destination
+    |sr|, the same as are configured in |ccloud|:
      
-     - `schema.registry.url`is the location of your 
+    - `schema.registry.url`is the location of your 
     
 
 #.  Start Replicator so that it can perform the one-time schema migration. 
     
     The method or commands you use to start replicator is dependent on your
-    application setup. See :ref:`replicator tutorial` <replicator-quickstart>`.
+    application setup. See the :ref:`replicator tutorial` <replicator-quickstart>`.
         
 #.  Stop all producers that are producing to Kafka.
 
