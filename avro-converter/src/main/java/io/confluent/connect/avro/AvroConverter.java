@@ -61,7 +61,7 @@ public class AvroConverter implements Converter {
     if (schemaRegistry == null) {
       schemaRegistry =
           new CachedSchemaRegistryClient(avroConverterConfig.getSchemaRegistryUrls(),
-              avroConverterConfig.getMaxSchemasPerSubject());
+                                         avroConverterConfig.getMaxSchemasPerSubject());
     }
 
     serializer = new Serializer(schemaRegistry);
