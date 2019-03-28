@@ -15,18 +15,16 @@ move some or all of that data and schema management to the cloud, you can use
 You can set up continuous migration of |sr| to maintain a hybrid deployment ("extend to
 cloud") or "lift and shift" all to |ccloud| using a one-time migration.
 
---------------------
 Continuous Migration
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 For continuous migration, you can use your self-managed |sr| as a primary and
 |sr-ccloud| as a secondary. New schemas will be registered directly to the
 self-managed |sr|, and |crep| will continuously copy schemas from it to
 |sr-ccloud|, which is set to IMPORT mode.
 
-------------------
 One-time Migration
-------------------
+~~~~~~~~~~~~~~~~~~
 
 Choose a one-time migration to move all data to a fully-managed |ccloud|
 service. In this case, you migrate your existing self-managed |sr| to
