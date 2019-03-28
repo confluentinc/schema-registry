@@ -66,8 +66,9 @@ Schema migration requires that you configure and run |crep-full|. If you need
 more information than is included in the examples here, refer to the
 :ref:`replicator tutorial` <replicator-quickstart>.
 
+------------------------
 Migrate Schema Registry
------------------------
+------------------------
 
 To migrate |sr| to |ccloud|, follow these steps:
 
