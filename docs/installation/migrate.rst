@@ -15,6 +15,7 @@ move some or all of that data and schema management to the cloud, you can use
 You can set up continuous migration of |sr| to maintain a hybrid deployment ("extend to
 cloud") or "lift and shift" all to |ccloud| using a one-time migration.
 
+--------------------
 Continuous Migration
 --------------------
 
@@ -23,7 +24,7 @@ For continuous migration, you can use your self-managed |sr| as a primary and
 self-managed |sr|, and |crep| will continuously copy schemas from it to
 |sr-ccloud|, which is set to IMPORT mode.
 
-
+------------------
 One-time Migration
 ------------------
 
@@ -49,8 +50,6 @@ Schema migration requires that you configure and run |crep-full|. If you need
 more information than is included in the examples here, refer to the
 :ref:`replicator tutorial` <replicator-quickstart>.
 
-
---------
 Run Book
 --------
 
