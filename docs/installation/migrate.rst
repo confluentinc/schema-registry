@@ -3,6 +3,9 @@
 Migrate an Existing |sr| to |ccloud| 
 ====================================
 
+Overview
+--------
+
 :ref:`cloud-home` is a fully managed streaming data service based on |cp|. Just
 as you can “lift and shift” or "extend to cloud" your Kafka applications from
 self-managed Kafka to |ccloud|, you can do the same with |sr-long|.
@@ -15,29 +18,35 @@ move some or all of that data and schema management to the cloud, you can use
 You can set up continuous migration of |sr| to maintain a hybrid deployment ("extend to
 cloud") or "lift and shift" all to |ccloud| using a one-time migration.
 
+--------------------
 Continuous Migration
-~~~~~~~~~~~~~~~~~~~~
+--------------------
 
 For continuous migration, you can use your self-managed |sr| as a primary and
 |sr-ccloud| as a secondary. New schemas will be registered directly to the
 self-managed |sr|, and |crep| will continuously copy schemas from it to
 |sr-ccloud|, which is set to IMPORT mode.
 
+------------------
 One-time Migration
-~~~~~~~~~~~~~~~~~~
+------------------
 
 Choose a one-time migration to move all data to a fully-managed |ccloud|
 service. In this case, you migrate your existing self-managed |sr| to
 |sr-ccloud| as a primary. All new schemas are registered to |sr-ccloud|. In the
 scenario, there is no migration from |sr-ccloud| back to the self-managed |sr|.
 
-Prerequisites
--------------
+Quick Start
+-----------
 
 The Quick Start describes how to perform a |sr| migration applicable to any type of
 deployment (from on-premise servers or data centers to |sr-ccloud|). The
 examples also serve as a primer you can use to learn the basics of migrating
 schemas from a local cluster to |ccloud|. 
+
+------------------
+Before You Begin
+------------------
 
 If you are new to |cp|, consider first working through these quick starts and
 tutorials to get a baseline understanding of the platform (including the role of
@@ -57,8 +66,8 @@ Schema migration requires that you configure and run |crep-full|. If you need
 more information than is included in the examples here, refer to the
 :ref:`replicator tutorial` <replicator-quickstart>.
 
-Schema Migration Quick Start
-----------------------------
+Migrate Schema Registry
+-----------------------
 
 To migrate |sr| to |ccloud|, follow these steps:
 
@@ -70,22 +79,23 @@ To migrate |sr| to |ccloud|, follow these steps:
     .. code:: bash
   
         <path-to-confluent>/bin/confluent schema-registry
+        
+  
+    .. tip:: Alternatively, you can run ``<path-to-confluent>/bin/confluent start``, 
+             and then stop ``connect`` with ``<path-to-confluent>/bin/confluent stop connect``. 
+             You cannot run |kconnect-long| and |crep| at the same time as |crep| because 
+             |crep| also runs |kconnect|. You will configure and use |crep| for schema migration.
+                       
+#.  Verify that ``schema-registry``, ``kafka``, and ``zookeeper`` are running.
     
-#.  Verify that ``schema-registry``, ``kafka``, and ``zookeeper`` are running and that
-    other services are down, as they can conflict with schema migration.
-    
-    For example, run ``<path-to-confluent>/bin/confluent status``
+    For example, run ``<path-to-confluent>/bin/confluent status``:
     
     ::
     
-         control-center is [DOWN]
-         ksql-server is [DOWN]
-         connect is [DOWN]
-         kafka-rest is [DOWN]
-         schema-registry is [UP]
-         kafka is [UP]
-         zookeeper is [UP]
-
+      schema-registry is [UP]
+      kafka is [UP]
+      zookeeper is [UP]
+    
 #.  Verify that no subjects exist on the destination |sr| in |ccloud|.
 
     .. code:: bash
@@ -135,8 +145,10 @@ To migrate |sr| to |ccloud|, follow these steps:
       "src.kafka.bootstrap.servers": "localhost:9092",
       "src.consumer.group.id": "connect-replicator-migrate-schemas",
       "tasks.max": "1"
+        
+    For a full |crep| example, see :devx-examples:<submit_replicator_schema_migration_config.sh>|ccloud/submit_replicator_schema_migration_config.sh` on GitHub `examples repository <https://github.com/confluentinc/examples>`_
     
-    For example, here is another configuration for the same properties in ``<path-to-confluent>etc/kafka-connect-replicator/quickstart-replicator.properties``:
+    Here is another example configuration defined in ``<path-to-confluent>etc/kafka-connect-replicator/quickstart-replicator.properties``:
 
     :: 
 
@@ -157,7 +169,7 @@ To migrate |sr| to |ccloud|, follow these steps:
       dest.kafka.ssl.endpoint.identification.algorithm=https
       dest.kafka.sasl.mechanism=PLAIN
       dest.kafka.request.timeout.ms=20000
-      dest.kafka.bootstrap.servers=<path-to-cloud-server>.cloud:9092
+      dest.kafka.bootstrap.servers=<path-to-cloud-server>:9092
       retry.backoff.ms=500
       dest.kafka.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="<encrypted-username>" password="<encrypted-password>";
       dest.kafka.security.protocol=SASL_SSL    
@@ -167,7 +179,7 @@ To migrate |sr| to |ccloud|, follow these steps:
       schema.registry.topic=_schemas
       
       # Connection settings for destination Confluent Cloud Schema Registry
-      schema.registry.url=https://<path-to-cloud-schema-registry>.cloud
+      schema.registry.url=https://<path-to-cloud-schema-registry>
       schema.registry.client.basic.auth.credentials.source=USER_INFO
       schema.registry.client.basic.auth.user.info=<schema-registry-api-key>:<schema-registry-api-secret>
 
