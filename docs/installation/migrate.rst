@@ -23,7 +23,6 @@ For continuous migration, you can use your self-managed |sr| as a primary and
 self-managed |sr|, and |crep| will continuously copy schemas from it to
 |sr-ccloud|, which is set to IMPORT mode.
 
-**TBD diagram showing continuous migration**
 
 One-time Migration
 ------------------
@@ -33,7 +32,22 @@ service. In this case, you migrate your existing self-managed |sr| to
 |sr-ccloud| as a primary. All new schemas are registered to |sr-ccloud|. In the
 scenario, there is no migration from |sr-ccloud| back to the self-managed |sr|.
 
-**TBD diagram showing one-time migration**
+Prerequisites
+-------------
+
+The Run Book describes how to perform a |sr| migration applicable to any type of
+deployment (from on-premise or data center to |sr-ccloud|). The examples also
+serve as a quick start tutorial you can use to walk through the basics of
+migrating schemas from a local cluster to |ccloud|. 
+
+Before you begin, verify that you have:
+
+* |ccloud| `5.2` or newer to serve as the destination |sr|
+* a local install of |cp| (for example, from a :ref:`ce-quickstart` download), or other cluster to serve as the origin |sr|
+
+Schema migration requires that you configure and run |crep-full|. If you need
+more information than is included in the examples here, refer to the
+:ref:`replicator tutorial` <replicator-quickstart>.
 
 
 --------
@@ -42,71 +56,92 @@ Run Book
 
 To migrate |sr| to |ccloud|, follow these steps:
 
-#.  Set the destination Schema Registry to IMPORT mode.  For example: 
+#.  Start the origin cluster.
 
-    .. code:: bash
-
-        curl -X PUT -H "Content-Type: application/json" -H "Authorization: Basic dGVuYW50Mi1rZXk6bm9oYXNo" "http://destregistry:8081/mode" --data '{"mode": "IMPORT"}'
-        
-    .. tip:: In the above command, authorization is provided as a Base64 encoded API key and API secret, which is recommended. 
-    
-    Here is an example showing one way to accomplish Base64 encoding and use environment variables to simplify the command to set |sr| mode. 
-    
-    - Pipe the key pair through a utility called `base64` and assign the result to a variable `BASIC_AUTH`.
-    - Assign the Schema Registry URL to another variable `CCSR_URL`.
-    - Finally, use both the variables in the `curl -X PUT -H ` command to set the destination Schema Registry to IMPORT mode.
+    If you are running a local cluster (for example, from a :ref:`ce-quickstart` download),
+    start only |sr| for the purposes of this tutorial.
     
     .. code:: bash
+  
+        ${CONFLUENT_HOME}/bin/confluent schema-registry
+    
+    Verify that `schema-registry`, `kafka`, and `zookeeper` are running and that
+    other services are down, as they can conflict with schema migration.
+    
+    ::
+    
+         control-center is [DOWN]
+         ksql-server is [DOWN]
+         connect is [DOWN]
+         kafka-rest is [DOWN]
+         schema-registry is [UP]
+         kafka is [UP]
+         zookeeper is [UP]
 
-        export BASIC_AUTH=$(echo -n 2GXRGGJJ2BNUNPFE:uZoTd8z/mXWqYPLEU++NTYjOOIZmd2e3BC8btZX4nyI4RNFbItwBSTekT1ntz511 | base64)
+#.  Set the destination |sr| to IMPORT mode.  For example: 
 
-        export CCSR_URL=https://psrc-e8j00.us-west-2.aws.devel.cpdev.cloud
+    .. code:: bash
+    
+        curl -u <schema-registry-api-key>:<schema-registry-api-secret> -X PUT -H "Content-Type: application/json" "http://destregistry:8081/mode" --data '{"mode": "IMPORT"}'
 
-        curl -v -X PUT -H "Content-Type: application/vnd.schemaregistry.v1+json" -H "Authorization: Basic ${BASIC_AUTH}" ${CCSR_URL}/mode --data '{"mode": "IMPORT"}'
+#.  Configure a |crep| worker to specify the addresses of broker(s) in the destination cluster, as described in :ref:`config-and-run-replicator`.
 
-
-#.  Configure Replicator with Schema Registry information.
+    The worker configuration file is in `${CONFLUENT_HOME}/etc/kafka/connect-standalone.properties`.
 
     :: 
+
+    # Connect Standalone Worker configuration
+    bootstrap.servers=localhost:9092
+                
+#.  Configure :ref:`replicator` <replicator-quickstart>` with |sr| and destination cluster information.
+
+    For example, set the following in `etc/kafka-connect-replicator/quickstart-replicator.properties`:
+
+    :: 
+
+        # destination cluster connection info
+        dest.kafka.ssl.endpoint.identification.algorithm=https
+        dest.kafka.sasl.mechanism=PLAIN
+        dest.kafka.request.timeout.ms=20000
+        dest.kafka.bootstrap.servers=<path-to-cloud-server>.cloud:9092
+        retry.backoff.ms=500
+        dest.kafka.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="2OSKHFEI22T7EJ7W" password="+UQUxhdL+R4hkQhzoUrtZg3FXwx/uLchTtXQRZ2NTGXd2zeQNeiBbaNe231tF7F+";
+        dest.kafka.security.protocol=SASL_SSL    
     
-        // Schema Registry migration topics
-        topic.whitelist=mytopic1,mytopic2,_schemas
+        # Schema Registry migration topics to replicate from source to destination
+        topic.whitelist=_schemas
         schema.topic=_schemas
         
-        // Connection settings for destination Schema Registry
-        schema.registry.url=http://somehost:8081
+        # Connection settings for destination Schema Registry
+        schema.registry.url=https://<path-to-cloud-schema-registry>.cloud
         schema.registry.client.basic.auth.credentials.source=USER_INFO
-        schema.registry.client.basic.auth.user.info=<user>:<password>
-  
-  
-    In the example, the first two lines identify the topics to be read from in
-    the source cluster.
-     
-    - `topic.whitelist` lists all topics that will be replicated from source to destination.
-    - `schema.topic` defines the topic that contains all the schemas to be replicated.
-     
-    The last three lines specify connection information for the destination
-    |sr|, the same as are configured in |ccloud|.
+        schema.registry.client.basic.auth.user.info=<schema-registry-api-key>:<schema-registry-api-secret>
 
-#.  Start Replicator so that it can perform the one-time schema migration. 
-    
-    The method or commands you use to start replicator is dependent on your
-    application setup. See the :ref:`replicator tutorial` <replicator-quickstart>`.
-        
+    .. tip:: In `quickstart-replicator.properties`, the replication factor is set to `1` for demo purposes. For this schema migration tutorial, and in production, change this to at least 3: `confluent.topic.replication.factor=3`
+
+
+#.  Start |crep| so that it can perform the schema migration.
+
+    For example:
+
+    .. code:: bash
+
+        <path-to-confluent>/bin/connect-standalone <path-to-confluent>/etc/kafka/connect-standalone.properties \
+        <path-to-confluent>/etc/kafka-connect-replicator/quickstart-replicator.properties
+                
+    The method or commands you use to start |crep| is dependent on your
+    application setup, and may differ from this example. See the :ref:`config-and-run-replicator`.
+            
 #.  Stop all producers that are producing to Kafka.
 
 #.  Wait until the replication lag is 0.
 
+    See :ref:`monitor-replicator-lag`.
 
-    See :ref: replicator-tuning.rst#monitoring-replicator-lag.
+#.  Stop |crep|.
 
-
-#.  Stop Replicator.
-
-
-#.  Enable mode changes in the self-managed source Schema Registry properties file by adding the following to the
+#.  Enable mode changes in the self-managed source |sr| properties file by adding the following to the
     configuration and restarting.  
-    
     
     :: 
     
@@ -123,18 +158,15 @@ To migrate |sr| to |ccloud|, follow these steps:
 
     .. code:: bash
     
-        curl -X PUT -H "Content-Type: application/json" -H "Authorization: Basic dGVuYW50Mi1rZXk6bm9oYXNo" "http://sourceregistry:8081/mode" --data '{"mode": "READONLY"}'
-
+        curl -u <schema-registry-api-key>:<schema-registry-api-secret> -X PUT -H "Content-Type: application/json" "http://destregistry:8081/mode" --data '{"mode": "READONLY"}'
 
 #.  Set the destination |sr| to READ-WRITE mode. 
 
     .. code:: bash
     
-        curl -X PUT -H "Content-Type: application/json" -H "Authorization: Basic dGVuYW50Mi1rZXk6bm9oYXNo" "http://destregistry:8081/mode" --data '{"mode": "READWRITE"}'
-    
+        curl -u <schema-registry-api-key>:<schema-registry-api-secret> -X PUT -H "Content-Type: application/json" "http://destregistry:8081/mode" --data '{"mode": "READWRITE"}'    
     
 #.  Stop all consumers.
-
 
 #.  Configure all consumers to point to the destination |sr| in the cloud and restart them.
 
@@ -142,13 +174,11 @@ To migrate |sr| to |ccloud|, follow these steps:
     from source to destination either in the code or in a properties file that
     specifies the |sr| URL, type of authentication USER_INFO, and credentials).
     
-    See :ref: schema_registry_tutorial.rst#java-consumers for further examples.
+    See :ref:`sr-tutorial-java-consumers` for further examples.
     
-
 #.  Configure all producers to point to the destination |sr| in the cloud and restart them.
 
-    See :ref: schema_registry_tutorial.rst#java-producers for further examples.
-    
+    See :ref:`sr-tutorial-java-producers` for further examples.
 
 #.  (Optional) Stop the source |sr|.
 
