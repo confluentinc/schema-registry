@@ -118,26 +118,25 @@ To migrate |sr| to |ccloud|, follow these steps:
     
     ::
     
-      "name": "replicator",
-      "connector.class": "io.confluent.connect.replicator.ReplicatorSourceConnector",
-      "key.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
-      "value.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
-      "topic.whitelist": "_schemas",
-      "schema.registry.topic": "_schemas",
-      "schema.registry.url": "$SCHEMA_REGISTRY_URL",
-      "schema.registry.client.basic.auth.credentials.source": "$BASIC_AUTH_CREDENTIALS_SOURCE",
-      "schema.registry.client.basic.auth.user.info": "$SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO",
-      "dest.kafka.bootstrap.servers": "$BOOTSTRAP_SERVERS",
-      "dest.kafka.security.protocol": "SASL_SSL",
-      "dest.kafka.sasl.mechanism": "PLAIN",
-      "dest.kafka.sasl.jaas.config": "$REPLICATOR_SASL_JAAS_CONFIG",
-      "dest.kafka.replication.factor": 3,
-      "src.kafka.bootstrap.servers": "localhost:9092",
-      "src.consumer.group.id": "connect-replicator-migrate-schemas",
-      "tasks.max": "1"
-
+        "name": "replicator",
+        "connector.class": "io.confluent.connect.replicator.ReplicatorSourceConnector",
+        "key.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
+        "value.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
+        "topic.whitelist": "_schemas",
+        "schema.registry.topic": "_schemas",
+        "schema.registry.url": "$SCHEMA_REGISTRY_URL",
+        "schema.registry.client.basic.auth.credentials.source": "$BASIC_AUTH_CREDENTIALS_SOURCE",
+        "schema.registry.client.basic.auth.user.info": "$SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO",
+        "dest.kafka.bootstrap.servers": "$BOOTSTRAP_SERVERS",
+        "dest.kafka.security.protocol": "SASL_SSL",
+        "dest.kafka.sasl.mechanism": "PLAIN",
+        "dest.kafka.sasl.jaas.config": "$REPLICATOR_SASL_JAAS_CONFIG",
+        "dest.kafka.replication.factor": 3,
+        "src.kafka.bootstrap.servers": "localhost:9092",
+        "src.consumer.group.id": "connect-replicator-migrate-schemas",
+        "tasks.max": "1"
     
-     For example, here is another configuration for the same properties in `etc/kafka-connect-replicator/quickstart-replicator.properties`:
+    For example, here is another configuration for the same properties in `etc/kafka-connect-replicator/quickstart-replicator.properties`:
 
      :: 
 
