@@ -10,6 +10,7 @@ Installing and Configuring |sr|
 - :ref:`cloud-install-schema-registry`
 - :ref:`schemaregistry_config`
 - :ref:`schema-registry-prod`
+- :ref:`schemaregistry_migrate`
 
 .. toctree::
     :maxdepth: 1
