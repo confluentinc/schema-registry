@@ -60,7 +60,7 @@ To migrate |sr| to |ccloud|, follow these steps:
     
     .. code:: bash
   
-        ${CONFLUENT_HOME}/bin/confluent schema-registry
+        <path-to-confluent>/bin/confluent schema-registry
     
     Verify that `schema-registry`, `kafka`, and `zookeeper` are running and that
     other services are down, as they can conflict with schema migration.
@@ -83,7 +83,7 @@ To migrate |sr| to |ccloud|, follow these steps:
 
 #.  Configure a |crep| worker to specify the addresses of broker(s) in the destination cluster, as described in :ref:`config-and-run-replicator`.
 
-    The worker configuration file is in `${CONFLUENT_HOME}/etc/kafka/connect-standalone.properties`.
+    The worker configuration file is in `<path-to-confluent>/etc/kafka/connect-standalone.properties`.
 
     :: 
 
