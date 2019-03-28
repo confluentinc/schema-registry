@@ -105,7 +105,7 @@ To migrate |sr| to |ccloud|, follow these steps:
 
 #.  Configure a |crep| worker to specify the addresses of broker(s) in the destination cluster, as described in :ref:`config-and-run-replicator`.
 
-    The worker configuration file is in `<path-to-confluent>/etc/kafka/connect-standalone.properties`.
+    The worker configuration file is in ``<path-to-confluent>/etc/kafka/connect-standalone.properties``.
 
     :: 
 
@@ -118,58 +118,58 @@ To migrate |sr| to |ccloud|, follow these steps:
     
     ::
     
-        "name": "replicator",
-        "connector.class": "io.confluent.connect.replicator.ReplicatorSourceConnector",
-        "key.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
-        "value.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
-        "topic.whitelist": "_schemas",
-        "schema.registry.topic": "_schemas",
-        "schema.registry.url": "$SCHEMA_REGISTRY_URL",
-        "schema.registry.client.basic.auth.credentials.source": "$BASIC_AUTH_CREDENTIALS_SOURCE",
-        "schema.registry.client.basic.auth.user.info": "$SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO",
-        "dest.kafka.bootstrap.servers": "$BOOTSTRAP_SERVERS",
-        "dest.kafka.security.protocol": "SASL_SSL",
-        "dest.kafka.sasl.mechanism": "PLAIN",
-        "dest.kafka.sasl.jaas.config": "$REPLICATOR_SASL_JAAS_CONFIG",
-        "dest.kafka.replication.factor": 3,
-        "src.kafka.bootstrap.servers": "localhost:9092",
-        "src.consumer.group.id": "connect-replicator-migrate-schemas",
-        "tasks.max": "1"
+      "name": "replicator",
+      "connector.class": "io.confluent.connect.replicator.ReplicatorSourceConnector",
+      "key.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
+      "value.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
+      "topic.whitelist": "_schemas",
+      "schema.registry.topic": "_schemas",
+      "schema.registry.url": "$SCHEMA_REGISTRY_URL",
+      "schema.registry.client.basic.auth.credentials.source": "$BASIC_AUTH_CREDENTIALS_SOURCE",
+      "schema.registry.client.basic.auth.user.info": "$SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO",
+      "dest.kafka.bootstrap.servers": "$BOOTSTRAP_SERVERS",
+      "dest.kafka.security.protocol": "SASL_SSL",
+      "dest.kafka.sasl.mechanism": "PLAIN",
+      "dest.kafka.sasl.jaas.config": "$REPLICATOR_SASL_JAAS_CONFIG",
+      "dest.kafka.replication.factor": 3,
+      "src.kafka.bootstrap.servers": "localhost:9092",
+      "src.consumer.group.id": "connect-replicator-migrate-schemas",
+      "tasks.max": "1"
     
-    For example, here is another configuration for the same properties in `etc/kafka-connect-replicator/quickstart-replicator.properties`:
+    For example, here is another configuration for the same properties in ``<path-to-confluent>etc/kafka-connect-replicator/quickstart-replicator.properties``:
 
-     :: 
+    :: 
 
-        # basic connector configuration
-        name=replicator-source
-        connector.class=io.confluent.connect.replicator.ReplicatorSourceConnector
+      # basic connector configuration
+      name=replicator-source
+      connector.class=io.confluent.connect.replicator.ReplicatorSourceConnector
 
-        key.converter=io.confluent.connect.replicator.util.ByteArrayConverter
-        value.converter=io.confluent.connect.replicator.util.ByteArrayConverter
-        header.converter=io.confluent.connect.replicator.util.ByteArrayConverter
-        
-        tasks.max=4
+      key.converter=io.confluent.connect.replicator.util.ByteArrayConverter
+      value.converter=io.confluent.connect.replicator.util.ByteArrayConverter
+      header.converter=io.confluent.connect.replicator.util.ByteArrayConverter
+      
+      tasks.max=4
 
-        # source cluster connection info
-        src.kafka.bootstrap.servers=localhost:9092
+      # source cluster connection info
+      src.kafka.bootstrap.servers=localhost:9092
 
-        # destination cluster connection info
-        dest.kafka.ssl.endpoint.identification.algorithm=https
-        dest.kafka.sasl.mechanism=PLAIN
-        dest.kafka.request.timeout.ms=20000
-        dest.kafka.bootstrap.servers=<path-to-cloud-server>.cloud:9092
-        retry.backoff.ms=500
-        dest.kafka.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="<encrypted-username>" password="<encrypted-password>";
-        dest.kafka.security.protocol=SASL_SSL    
-    
-        # Schema Registry migration topics to replicate from source to destination
-        topic.whitelist=_schemas
-        schema.registry.topic=_schemas
-        
-        # Connection settings for destination Confluent Cloud Schema Registry
-        schema.registry.url=https://<path-to-cloud-schema-registry>.cloud
-        schema.registry.client.basic.auth.credentials.source=USER_INFO
-        schema.registry.client.basic.auth.user.info=<schema-registry-api-key>:<schema-registry-api-secret>
+      # destination cluster connection info
+      dest.kafka.ssl.endpoint.identification.algorithm=https
+      dest.kafka.sasl.mechanism=PLAIN
+      dest.kafka.request.timeout.ms=20000
+      dest.kafka.bootstrap.servers=<path-to-cloud-server>.cloud:9092
+      retry.backoff.ms=500
+      dest.kafka.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="<encrypted-username>" password="<encrypted-password>";
+      dest.kafka.security.protocol=SASL_SSL    
+  
+      # Schema Registry migration topics to replicate from source to destination
+      topic.whitelist=_schemas
+      schema.registry.topic=_schemas
+      
+      # Connection settings for destination Confluent Cloud Schema Registry
+      schema.registry.url=https://<path-to-cloud-schema-registry>.cloud
+      schema.registry.client.basic.auth.credentials.source=USER_INFO
+      schema.registry.client.basic.auth.user.info=<schema-registry-api-key>:<schema-registry-api-secret>
 
     .. tip:: In ``quickstart-replicator.properties``, the replication factor is set to ``1`` for demo purposes. For this schema migration tutorial, and in production, change this to at least ``3``: ``confluent.topic.replication.factor=3``
 
