@@ -109,7 +109,7 @@ To migrate |sr| to |ccloud|, follow these steps:
         topic.whitelist=_schemas
         schema.topic=_schemas
         
-        # Connection settings for destination Schema Registry
+        # Connection settings for destination Confluent Cloud Schema Registry
         schema.registry.url=https://<path-to-cloud-schema-registry>.cloud
         schema.registry.client.basic.auth.credentials.source=USER_INFO
         schema.registry.client.basic.auth.user.info=<schema-registry-api-key>:<schema-registry-api-secret>
