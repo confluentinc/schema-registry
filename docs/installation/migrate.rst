@@ -59,12 +59,12 @@ workflows will give you better context for schema migration.
 
 Before you begin schema migration, verify that you have:
 
-- `Access to Confluent Cloud <https://www.confluent.io/confluent-cloud/>` to serve as the destination |sr|
+- `Access to Confluent Cloud <https://www.confluent.io/confluent-cloud/>`_ to serve as the destination |sr|
 - A local install of |cp| (for example, from a :ref:`ce-quickstart` download), or other cluster to serve as the origin |sr|
 
 Schema migration requires that you configure and run |crep-full|. If you need
 more information than is included in the examples here, refer to the
-:ref:`replicator tutorial` <replicator-quickstart>.
+:ref:`replicator tutorial <replicator-quickstart>`.
 
 ------------------------
 Migrate Schema Registry
@@ -87,7 +87,7 @@ To migrate |sr| to |ccloud|, follow these steps:
              because |crep| also runs |kconnect|. If you run |crep| in *distributed mode*,
              the setup is different and you do not have this limitation (you can use ``./bin/confluent start``).
              For more about configuring and running |kconnect| workers (includig |crep|) in standalone and
-             distributed modes, see :ref:`Running Workers` <connect_userguide_standalone_config>` in the Connect guide.
+             distributed modes, see :ref:`Running Workers <connect_userguide_standalone_config>` in the Connect guide.
 
 
 #.  Verify that ``schema-registry``, ``kafka``, and ``zookeeper`` are running.
@@ -108,7 +108,7 @@ To migrate |sr| to |ccloud|, follow these steps:
 
     If no subjects exist, your output will be empty (``[]``), which is what you want.
 
-    If subjects exist, delete them (TBD see Cloud Quick Start or https://docs.confluent.io/current/schema-registry/docs/develop/api.html to show them how to GET subjects and DELETE them.)
+    If subjects exist, delete them (:ref:`cloud-quickstart` or :ref:`schemaregistry_api` to show them how to GET subjects and DELETE them.)
 
 #.  Set the destination |sr| to IMPORT mode.  For example:
 
@@ -119,7 +119,7 @@ To migrate |sr| to |ccloud|, follow these steps:
     .. tip:: If subjects exist on the destination |sr|, the import will fail with a message similar to this: ``{"error_code":42205,"message":"Cannot import since found existing subjects"}``
 
 
-#.  Configure a |crep| worker to specify the addresses of broker(s) in the destination cluster, as described in :ref:`config-and-run-replicator`.
+#.  Configure a |crep| worker to specify the addresses of brokers in the destination cluster, as described in :ref:`config-and-run-replicator`.
 
     The worker configuration file is in ``<path-to-confluent>/etc/kafka/connect-standalone.properties``.
 
@@ -170,7 +170,7 @@ To migrate |sr| to |ccloud|, follow these steps:
     - ``topics.whitelist`` indicates which topics are of interest to replicator.
     - ``schema.registry.topic`` indicates which of the topics in the ``whitelist`` contains schemas.
 
-    For an example of a JSON configuration for |crep| in distributed mode, see :devx-examples:<submit_replicator_schema_migration_config.sh>|ccloud/submit_replicator_schema_migration_config.sh` on GitHub `examples repository <https://github.com/confluentinc/examples>`_
+    For an example of a JSON configuration for |crep| in distributed mode, see :devx-examples:`submit_replicator_schema_migration_config.sh|ccloud/submit_replicator_schema_migration_config.sh` on GitHub `examples repository <https://github.com/confluentinc/examples>`_.
 
 #.  Start |crep| so that it can perform the schema migration.
 
@@ -182,13 +182,11 @@ To migrate |sr| to |ccloud|, follow these steps:
         <path-to-confluent>/etc/kafka-connect-replicator/quickstart-replicator.properties
 
     The method or commands you use to start |crep| is dependent on your
-    application setup, and may differ from this example. See the :ref:``config-and-run-replicator``.
+    application setup, and may differ from this example. For more information, see :ref:`config-and-run-replicator`.
 
 #.  Stop all producers that are producing to Kafka.
 
-#.  Wait until the replication lag is 0.
-
-    See :ref:`monitor-replicator-lag`.
+#.  Wait until the replication lag is 0. For more information, see :ref:`monitor-replicator-lag`.
 
 #.  Stop |crep|.
 
@@ -228,10 +226,6 @@ To migrate |sr| to |ccloud|, follow these steps:
 
     See :ref:`sr-tutorial-java-consumers` for further examples.
 
-#.  Configure all producers to point to the destination |sr| in the cloud and restart them.
-
-    See :ref:`sr-tutorial-java-producers` for further examples.
+#.  Configure all producers to point to the destination |sr| in the cloud and restart them. For more examples, see :ref:`sr-tutorial-java-producers`.
 
 #.  (Optional) Stop the source |sr|.
-
-
