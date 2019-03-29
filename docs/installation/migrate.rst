@@ -79,14 +79,17 @@ To migrate |sr| to |ccloud|, follow these steps:
     
     .. code:: bash
   
-        <path-to-confluent>/bin/confluent schema-registry
+        <path-to-confluent>/bin/confluent start schema-registry
         
   
-    .. tip:: Alternatively, you can run ``<path-to-confluent>/bin/confluent start``, 
-             and then stop ``connect`` with ``<path-to-confluent>/bin/confluent stop connect``. 
-             You cannot run |kconnect-long| and |crep| at the same time as |crep| because 
-             |crep| also runs |kconnect|. You will configure and use |crep| for schema migration.
-                       
+    .. tip:: The examples here show how to use a |crep| worker in *standalone mode* for schema migration.
+             In this mode, you cannot run |kconnect-long| and |crep| at the same time, 
+             because |crep| also runs |kconnect|. If you run |crep| in *distributed mode*, 
+             the setup is different and you do not have this limitation (you can use ``./bin/confluent start``). 
+             For more about configuring and running |kconnect| workers (includig |crep|), see 
+             :ref:`Running Workers` <connect_userguide_standalone_config>` in the Connect guide.
+             
+                                    
 #.  Verify that ``schema-registry``, ``kafka``, and ``zookeeper`` are running.
     
     For example, run ``<path-to-confluent>/bin/confluent status``:
@@ -104,6 +107,8 @@ To migrate |sr| to |ccloud|, follow these steps:
         curl -u <schema-registry-api-key>:<schema-registry-api-secret> <schema-registry-url>/subjects
         
     If no subjects exist, your output will be empty (``[]``), which is what you want.
+    
+    If subjects exist, delete them (TBD see Cloud Quick Start or https://docs.confluent.io/current/schema-registry/docs/develop/api.html to show them how to GET subjects and DELETE them.)
 
 #.  Set the destination |sr| to IMPORT mode.  For example: 
 
@@ -124,32 +129,8 @@ To migrate |sr| to |ccloud|, follow these steps:
         bootstrap.servers=localhost:9092
                 
 #.  Configure :ref:`replicator` <replicator-quickstart>` with |sr| and destination cluster information.
-
-    Set the following properties in the |crep| properties file.
-    
-    ::
-    
-      "name": "replicator",
-      "connector.class": "io.confluent.connect.replicator.ReplicatorSourceConnector",
-      "key.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
-      "value.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
-      "topic.whitelist": "_schemas",
-      "schema.registry.topic": "_schemas",
-      "schema.registry.url": "$SCHEMA_REGISTRY_URL",
-      "schema.registry.client.basic.auth.credentials.source": "$BASIC_AUTH_CREDENTIALS_SOURCE",
-      "schema.registry.client.basic.auth.user.info": "$SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO",
-      "dest.kafka.bootstrap.servers": "$BOOTSTRAP_SERVERS",
-      "dest.kafka.security.protocol": "SASL_SSL",
-      "dest.kafka.sasl.mechanism": "PLAIN",
-      "dest.kafka.sasl.jaas.config": "$REPLICATOR_SASL_JAAS_CONFIG",
-      "dest.kafka.replication.factor": 3,
-      "src.kafka.bootstrap.servers": "localhost:9092",
-      "src.consumer.group.id": "connect-replicator-migrate-schemas",
-      "tasks.max": "1"
-        
-    For a full |crep| example, see :devx-examples:<submit_replicator_schema_migration_config.sh>|ccloud/submit_replicator_schema_migration_config.sh` on GitHub `examples repository <https://github.com/confluentinc/examples>`_
-    
-    Here is another example configuration defined in ``<path-to-confluent>etc/kafka-connect-replicator/quickstart-replicator.properties``:
+                
+    For stand-alone |kconnect| instance, configure the following properties in ``<path-to-confluent>etc/kafka-connect-replicator/quickstart-replicator.properties``:
 
     :: 
 
@@ -185,6 +166,11 @@ To migrate |sr| to |ccloud|, follow these steps:
       schema.registry.client.basic.auth.user.info=<schema-registry-api-key>:<schema-registry-api-secret>
 
     .. tip:: In ``quickstart-replicator.properties``, the replication factor is set to ``1`` for demo purposes. For this schema migration tutorial, and in production, change this to at least ``3``: ``confluent.topic.replication.factor=3``
+    
+    - ``topics.whitelist`` indicates which topics are of interest to replicator.
+    - ``schema.registry.topic`` indicates which of the topics in the ``whitelist`` contains schemas.
+
+    For an example of a JSON configuration for |crep| in distributed mode, see :devx-examples:<submit_replicator_schema_migration_config.sh>|ccloud/submit_replicator_schema_migration_config.sh` on GitHub `examples repository <https://github.com/confluentinc/examples>`_
 
 #.  Start |crep| so that it can perform the schema migration.
 
