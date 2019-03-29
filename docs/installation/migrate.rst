@@ -186,7 +186,7 @@ To migrate |sr| to |ccloud|, follow these steps:
         <path-to-confluent>/etc/kafka-connect-replicator/quickstart-replicator.properties
 
     The method or commands you use to start |crep| is dependent on your
-    application setup, and may differ from this example. See the :ref:``config-and-run-replicator``.
+    application setup, and may differ from this example. For more information, see :ref:`config-and-run-replicator`.
             
 #.  Stop all producers that are producing to Kafka.
 
@@ -230,11 +230,11 @@ To migrate |sr| to |ccloud|, follow these steps:
     from source to destination either in the code or in a properties file that
     specifies the |sr| URL, type of authentication USER_INFO, and credentials).
     
-    See :ref:`sr-tutorial-java-consumers` for further examples.
+    For more examples, see :ref:`sr-tutorial-java-consumers`.
     
 #.  Configure all producers to point to the destination |sr| in the cloud and restart them.
 
-    See :ref:`sr-tutorial-java-producers` for further examples.
+    For more examples, see :ref:`sr-tutorial-java-producers`.
 
 #.  (Optional) Stop the source |sr|.
 
