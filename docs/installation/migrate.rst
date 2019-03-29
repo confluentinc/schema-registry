@@ -59,12 +59,12 @@ workflows will give you better context for schema migration.
 
 Before you begin schema migration, verify that you have:
 
-- `Access to Confluent Cloud <https://www.confluent.io/confluent-cloud/>` to serve as the destination |sr|
-- A local install of |cp| (for example, from a :ref:`ce-quickstart` download), or other cluster to serve as the origin |sr|
+- `Access to Confluent Cloud <https://www.confluent.io/confluent-cloud/>`_ to serve as the destination |sr|
+- A local install of |cp| (for example, from a :ref:`ce-quickstart` download), or other cluster to serve as the origin |sr|.
 
 Schema migration requires that you configure and run |crep-full|. If you need
 more information than is included in the examples here, refer to the
-:ref:`replicator tutorial` <replicator-quickstart>.
+:ref:`replicator tutorial <replicator-quickstart>`.
 
 ------------------------
 Migrate Schema Registry
@@ -132,7 +132,7 @@ To migrate |sr| to |ccloud|, follow these steps:
         # Connect Standalone Worker configuration
         bootstrap.servers=localhost:9092
                 
-#.  Configure :ref:`replicator` <replicator-quickstart>` with |sr| and destination cluster information.
+#.  Configure :ref:`replicator <replicator-quickstart>` with |sr| and destination cluster information.
                 
     For stand-alone |kconnect| instance, configure the following properties in ``<path-to-confluent>etc/kafka-connect-replicator/quickstart-replicator.properties``:
 
@@ -169,7 +169,7 @@ To migrate |sr| to |ccloud|, follow these steps:
       schema.registry.client.basic.auth.credentials.source=USER_INFO
       schema.registry.client.basic.auth.user.info=<schema-registry-api-key>:<schema-registry-api-secret>
 
-    .. tip:: In ``quickstart-replicator.properties``, the replication factor is set to ``1`` for demo purposes. For this schema migration tutorial, and in production, change this to at least ``3``: ``confluent.topic.replication.factor=3``
+    .. tip:: In ``quickstart-replicator.properties``, the replication factor is set to ``1`` for demo purposes. For this schema migration tutorial, and in production, change this to at least ``3``: ``confluent.topic.replication.factor=3``.
     
     - ``topics.whitelist`` indicates which topics are of interest to replicator.
     - ``schema.registry.topic`` indicates which of the topics in the ``whitelist`` contains schemas.
@@ -192,7 +192,7 @@ To migrate |sr| to |ccloud|, follow these steps:
 
 #.  Wait until the replication lag is 0.
 
-    See :ref:`monitor-replicator-lag`.
+    For more information, see :ref:`monitor-replicator-lag`.
 
 #.  Stop |crep|.
 
