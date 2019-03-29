@@ -86,8 +86,8 @@ To migrate |sr| to |ccloud|, follow these steps:
              In this mode, you cannot run |kconnect-long| and |crep| at the same time, 
              because |crep| also runs |kconnect|. If you run |crep| in *distributed mode*, 
              the setup is different and you do not have this limitation (you can use ``./bin/confluent start``). 
-             For more about configuring and running |kconnect| workers (includig |crep|), see 
-             :ref:`Running Workers` <connect_userguide_standalone_config>` in the Connect guide.
+             For more about configuring and running |kconnect| workers (includig |crep|) in standalone and  
+             distributed modes, see :ref:`Running Workers` <connect_userguide_standalone_config>` in the Connect guide.
              
                                     
 #.  Verify that ``schema-registry``, ``kafka``, and ``zookeeper`` are running.
