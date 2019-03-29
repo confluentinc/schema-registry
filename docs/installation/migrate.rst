@@ -108,7 +108,11 @@ To migrate |sr| to |ccloud|, follow these steps:
         
     If no subjects exist, your output will be empty (``[]``), which is what you want.
     
-    If subjects exist, delete them (TBD see Cloud Quick Start or https://docs.confluent.io/current/schema-registry/docs/develop/api.html to show them how to GET subjects and DELETE them.)
+    If subjects exist, delete them. For example:
+    
+    .. code:: bash
+      
+        curl -X DELETE -u <schema-registry-api-key>:<schema-registry-api-secret> <schema-registry-url>/subjects/my-existing-subject    
 
 #.  Set the destination |sr| to IMPORT mode.  For example: 
 
@@ -119,7 +123,7 @@ To migrate |sr| to |ccloud|, follow these steps:
     .. tip:: If subjects exist on the destination |sr|, the import will fail with a message similar to this: ``{"error_code":42205,"message":"Cannot import since found existing subjects"}``
 
 
-#.  Configure a |crep| worker to specify the addresses of broker(s) in the destination cluster, as described in :ref:`config-and-run-replicator`.
+#.  Configure a |crep| worker to specify the addresses of brokers in the destination cluster, as described in :ref:`config-and-run-replicator`.
 
     The worker configuration file is in ``<path-to-confluent>/etc/kafka/connect-standalone.properties``.
 
