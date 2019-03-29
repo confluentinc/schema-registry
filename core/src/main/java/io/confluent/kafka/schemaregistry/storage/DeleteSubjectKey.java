@@ -16,8 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import org.codehaus.jackson.annotate.JsonPropertyOrder;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import org.hibernate.validator.constraints.NotEmpty;
 
 @JsonPropertyOrder(value = {"keytype", "subject", "magic"})

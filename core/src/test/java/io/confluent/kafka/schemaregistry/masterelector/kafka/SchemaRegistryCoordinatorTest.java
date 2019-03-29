@@ -20,6 +20,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -90,7 +91,7 @@ public class SchemaRegistryCoordinatorTest {
   @Before
   public void setup() {
     this.time = new MockTime();
-    this.metadata = new Metadata(0, Long.MAX_VALUE, true);
+    this.metadata = new Metadata(0, Long.MAX_VALUE, new LogContext(), new ClusterResourceListeners());
     this.client = new MockClient(time, new MockClient.MockMetadataUpdater() {
       @Override
       public List<Node> fetchNodes() {

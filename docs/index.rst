@@ -141,21 +141,18 @@ Documentation
 .. toctree::
    :maxdepth: 1
 
-   installation
+   installation/index
    config
    schema_registry_tutorial
    avro
-   ../../cloud/connect/schema-reg-cloud-config
    using
    monitoring
-   operations
    multidc
    security
    ../../confluent-security-plugins/schema-registry/introduction
+   develop/index
    serializer-formatter
    schema-deletion-guidelines
-   maven-plugin
    connect
-   api
    changelog
 

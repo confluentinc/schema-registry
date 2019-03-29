@@ -61,9 +61,12 @@ public class AvroConverter implements Converter {
     AvroConverterConfig avroConverterConfig = new AvroConverterConfig(configs);
 
     if (schemaRegistry == null) {
-      schemaRegistry =
-          new CachedSchemaRegistryClient(avroConverterConfig.getSchemaRegistryUrls(),
-                                         avroConverterConfig.getMaxSchemasPerSubject(), configs);
+      schemaRegistry = new CachedSchemaRegistryClient(
+          avroConverterConfig.getSchemaRegistryUrls(),
+          avroConverterConfig.getMaxSchemasPerSubject(),
+          configs,
+          avroConverterConfig.requestHeaders()
+      );
     }
 
     serializer = new Serializer(configs, schemaRegistry);
@@ -76,7 +79,10 @@ public class AvroConverter implements Converter {
     try {
       return serializer.serialize(topic, isKey, avroData.fromConnectData(schema, value));
     } catch (SerializationException e) {
-      throw new DataException("Failed to serialize Avro data from topic %s :".format(topic), e);
+      throw new DataException(
+          String.format("Failed to serialize Avro data from topic %s :", topic),
+          e
+      );
     }
   }
 
@@ -96,11 +102,14 @@ public class AvroConverter implements Converter {
         return avroData.toConnectData(
             deserialized.getSchema(), ((NonRecordContainer) deserialized).getValue(), version);
       }
-      throw new DataException("Unsupported type returned during deserialization of topic %s "
-                                  .format(topic));
+      throw new DataException(
+          String.format("Unsupported type returned during deserialization of topic %s ", topic)
+      );
     } catch (SerializationException e) {
-      throw new DataException("Failed to deserialize data for topic %s to Avro: "
-                                  .format(topic), e);
+      throw new DataException(
+          String.format("Failed to deserialize data for topic %s to Avro: ", topic),
+          e
+      );
     }
   }
 

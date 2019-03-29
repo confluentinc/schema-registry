@@ -66,7 +66,13 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.CONNECT_INTERNAL_TYPE_NAME;
+import static io.confluent.connect.avro.AvroData.CONNECT_NAME_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_RECORD_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.KEY_FIELD;
+import static io.confluent.connect.avro.AvroData.MAP_ENTRY_TYPE_NAME;
+import static io.confluent.connect.avro.AvroData.NAMESPACE;
+import static io.confluent.connect.avro.AvroData.VALUE_FIELD;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.*;
@@ -91,6 +97,22 @@ public class AvroDataTest {
     EPOCH_PLUS_TEN_THOUSAND_MILLIS.setTimeZone(TimeZone.getTimeZone("UTC"));
     EPOCH_PLUS_TEN_THOUSAND_MILLIS.add(Calendar.MILLISECOND, 10000);
   }
+
+  private static final Schema NAMED_MAP_SCHEMA =
+      SchemaBuilder.map(Schema.OPTIONAL_STRING_SCHEMA, Schema.INT32_SCHEMA)
+          .name("foo.bar")
+          .build();
+  private static final org.apache.avro.Schema NAMED_AVRO_MAP_SCHEMA =
+      org.apache.avro.SchemaBuilder.array()
+          .prop(CONNECT_NAME_PROP, "foo.bar")
+          .items(
+              org.apache.avro.SchemaBuilder.record("foo.bar")
+                  .prop(CONNECT_INTERNAL_TYPE_NAME, MAP_ENTRY_TYPE_NAME)
+                  .fields()
+                  .optionalString(KEY_FIELD)
+                  .requiredInt(VALUE_FIELD)
+                  .endRecord()
+          );
 
   private AvroData avroData = new AvroData(2);
 
@@ -193,6 +215,49 @@ public class AvroDataTest {
     SchemaAndValue schemaAndValue = avroData.toConnectData(avroSchema, avroObj);
     checkNonRecordConversion(avroSchema, avroObj, schemaAndValue.schema(), schemaAndValue.value(),
         avroData);
+  }
+
+  @Test
+  public void testFromConnectMapWithStringKey() {
+    final Schema schema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA);
+    final org.apache.avro.Schema expected = org.apache.avro.SchemaBuilder.map()
+        .values(org.apache.avro.SchemaBuilder.builder().intType());
+    assertThat(avroData.fromConnectSchema(schema), equalTo(expected));
+  }
+
+  @Test
+  public void testFromConnectMapWithOptionalKey() {
+    final Schema schema = SchemaBuilder.map(Schema.OPTIONAL_STRING_SCHEMA, Schema.INT32_SCHEMA);
+    final org.apache.avro.Schema expected = org.apache.avro.SchemaBuilder.array()
+        .items(
+            org.apache.avro.SchemaBuilder.record(NAMESPACE + "." + MAP_ENTRY_TYPE_NAME)
+                .fields()
+                .optionalString(KEY_FIELD)
+                .requiredInt(VALUE_FIELD)
+                .endRecord()
+        );
+
+    assertThat(avroData.fromConnectSchema(schema), equalTo(expected));
+  }
+
+  @Test
+  public void testFromConnectMapWithNonStringKey() {
+    final Schema schema = SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA);
+    final org.apache.avro.Schema expected = org.apache.avro.SchemaBuilder.array()
+        .items(
+            org.apache.avro.SchemaBuilder.record(NAMESPACE + "." + MAP_ENTRY_TYPE_NAME)
+                .fields()
+                .requiredInt(KEY_FIELD)
+                .requiredInt(VALUE_FIELD)
+                .endRecord()
+        );
+
+    assertThat(avroData.fromConnectSchema(schema), equalTo(expected));
+  }
+
+  @Test
+  public void testFromNamedConnectMapWithNonStringKey() {
+    assertThat(avroData.fromConnectSchema(NAMED_MAP_SCHEMA), equalTo(NAMED_AVRO_MAP_SCHEMA));
   }
 
   @Test
@@ -1355,7 +1420,11 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, Collections.singletonMap((byte) 12, value)),
                  avroData.toConnectData(avroSchema, Arrays.asList(record)));
   }  
-  
+
+  @Test
+  public void testToConnectMapWithNamedSchema() {
+    assertThat(avroData.toConnectSchema(NAMED_AVRO_MAP_SCHEMA), equalTo(NAMED_MAP_SCHEMA));
+  }
   
   // Avro -> Connect: Avro types with no corresponding Connect type
 

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -106,10 +107,14 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
 
       this.metrics = new Metrics(metricConfig, reporters, time);
       this.retryBackoffMs = clientConfig.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
+      String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
+      LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
+          + groupId + "] ");
       this.metadata = new Metadata(
           retryBackoffMs,
           clientConfig.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),
-          true
+          logContext,
+          new ClusterResourceListeners()
       );
       List<String> bootstrapServers
           = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
@@ -121,9 +126,6 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig, time);
       long maxIdleMs = clientConfig.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
 
-      String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
-      LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
-                                             + groupId + "] ");
       NetworkClient netClient = new NetworkClient(
           new Selector(maxIdleMs, metrics, time, metricGrpPrefix, channelBuilder, logContext),
           this.metadata,

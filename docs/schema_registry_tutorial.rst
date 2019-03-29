@@ -7,8 +7,9 @@ Confluent Schema Registry Tutorial
 Overview
 ~~~~~~~~
 
-This tutorial provides a step-by-step example to use |sr-long|.
-It walks through the steps to enable client applications to read and write Avro data with compatibility checks as schemas evolve.
+This tutorial provides a step-by-step workflow for using |sr-long|.
+You will learn how to enable client applications to read and write Avro data, check compatibility as schemas evolve, and use |c3|, which has integrated capabilities with |sr-long|.
+
 
 Benefits
 ^^^^^^^^
@@ -29,23 +30,58 @@ Target Audience
 
 The target audience is a developer writing Kafka streaming applications who wants to build a robust application leveraging Avro data and |sr-long|. The principles in this tutorial apply to any Kafka client that interacts with |sr|.
 
-This tutorial is not meant to cover the operational aspects of running the |sr| service. For production deployments of |sr-long|, refer to :ref:`Schema Registry Operations<schemaregistry_operations>`.
+This tutorial is not meant to cover the operational aspects of running the |sr| service. For production deployments of |sr-long|, refer to :ref:`schema-registry-prod`.
 
-Before You Begin
-~~~~~~~~~~~~~~~~
+
+Terminology Review
+^^^^^^^^^^^^^^^^^^
+
+First let us levelset on terminology: what is a `topic` versus a `schema` versus a `subject`.
+
+A Kafka `topic` contains messages, and each message is a key-value pair.
+Either the message key or the message value, or both, can be serialized as Avro.
+A `schema` defines the structure of the Avro data format.
+The Kafka topic name can be independent of the schema name.
+|sr| defines a scope in which schemas can evolve, and that scope is the `subject`.
+The name of the subject depends on the configured `subject name strategy <https://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#subject-name-strategy>`_, which by default is set to derive subject name from topic name.
+
+As a practical example, let's say a retail business is streaming transactions in a Kafka topic called ``transactions``.
+A producer is writing data with a schema `Payment` to that Kafka topic ``transactions``.
+If the producer is serializing the message value as Avro, then |sr| has a subject called `transactions-value`.
+If the producer is also serializing the message key as Avro, |sr| would have a subject called `transactions-key`, but for simplicity, in this tutorial consider only the message value.
+That |sr| subject `transactions-value` has at least one schema called `Payment`.
+The subject `transactions-value` defines the scope in which schemas for that subject can evolve and |sr| does compatibility checking within this scope.
+In this scenario, if developers evolve the schema `Payment` and produce new messages to the topic ``transactions``, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
+
+
+Setup
+~~~~~
 
 Prerequisites
 ^^^^^^^^^^^^^
 
-Before proceeding with this tutorial
+Before proceeding with this tutorial, verify that you have installed the following on your local machine:
 
-#. Verify that you have installed the following on your local machine:
+* `Confluent Platform 5.2 or later <https://www.confluent.io/download/>`__
+* Java 1.8 to run |cp|
+* Maven to compile the client Java code
+* ``jq`` tool to nicely format the results from querying the |sr| REST endpoint
 
-   * Java 1.8 to run |cp|
-   * Maven to compile the client Java code
-   * ``jq`` tool to nicely format the results from querying the |sr| REST endpoint
+.. note:: This tutorial is intended to run on a local install of |cp|. If you have a |ccloud| cluster, you may also use the tutorial with that cluster, in which case enable |ccloud| |sr| for your environment and set the `appropriate properties <https://docs.confluent.io/current/quickstart/cloud-quickstart.html#step-3-configure-sr-ccloud>`__ in your client applications.
 
-#. Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have a basic Kafka cluster with |sr-long| and other services running on your local machine.
+
+Environment
+^^^^^^^^^^^
+
+#. Clone the Confluent `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will be compiling and running in this tutorial.
+
+   .. codewithvars:: bash
+
+      $ git clone https://github.com/confluentinc/examples.git
+      $ git checkout |release|-post
+      $ cd examples/clients/avro
+
+#. Use the :ref:`quickstart` to bring up |cp|. With a single-line command, you can have a basic Kafka cluster with |sr-long|, |c3|, and other services running on your local machine.
 
    .. sourcecode:: bash
 
@@ -69,41 +105,25 @@ Before proceeding with this tutorial
       Starting control-center
       control-center is [UP]
 
-   .. note::
+#. For the exercises in this tutorial, you will be producing to and consuming from a topic called ``transactions``. Create this topic in |c3-short|.
 
-      If you only want to start |zk|, Kafka, and |sr|, type `confluent start schema-registry`
+*  Navigate to the |c3-short| web interface at `http://localhost:9021/ <http://localhost:9021/>`_.
 
+   .. important:: It may take a minute or two for |c3-short| to come online.
 
-#. Clone the |cp| `examples <https://github.com/confluentinc/examples>`_ repo from GitHub and work in the `clients/avro/` subdirectory, which provides the sample code you will compile and run in this tutorial.
+   .. image:: images/c3-landing-page.png
+       :width: 600px
 
-   .. codewithvars:: bash
-
-      $ git clone https://github.com/confluentinc/examples.git
-      $ git checkout |release|-post
-      $ cd examples/clients/avro
-   
-
-.. _schema_registry_tutorial_definition:
-
-Terminology
-^^^^^^^^^^^
-
-First let us levelset on terminology: what is a `topic` versus a `schema` versus a `subject`.
-
-A Kafka `topic` contains messages, and each message is a key-value pair.
-Either the message key or the message value, or both, can be serialized as Avro.
-A `schema` defines the structure of the Avro data format.
-The Kafka topic name can be independent of the schema name.
-|sr| defines a scope in which schemas can evolve, and that scope is the `subject`.
-The name of the subject depends on the configured `subject name strategy <https://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#subject-name-strategy>`_, which by default is set to derive subject name from topic name.
-
-As a practical example, let's say a retail business is streaming transactions in a Kafka topic called `transactions`.
-A producer is writing data with a schema `Payment` to that Kafka topic `transactions`.
-If the producer is serializing the message value as Avro, then |sr| has a subject called `transactions-value`.
-If the producer is also serializing the message key as Avro, |sr| would have a subject called `transactions-key`, but for simplicity, in this tutorial consider only the message value.
-That |sr| subject `transactions-value` has at least one schema called `Payment`.
-The subject `transactions-value` defines the scope in which schemas for that subject can evolve and |sr| does compatibility checking within this scope.
-In this scenario, if developers evolve the schema `Payment` and produce new messages to the topic `transactions`, |sr| checks that those newly evolved schemas are compatible with older schemas in the subject `transactions-value` and adds those new schemas to the subject.
+*  Select **Management -> Topics** and click **Create topic**.
+    
+   .. image:: images/c3-create-topic.png
+       :width: 600px
+    
+*  Name the topic ``transactions`` and click **Create with defaults**.
+    
+   .. image:: images/c3-create-topic-name.png
+       :width: 600px
+    
 
 .. _schema_registry_tutorial_definition:
 
@@ -161,7 +181,7 @@ Configuring Avro
 Apache Kafka applications using Avro data and |sr-long| need to specify at least two configuration parameters:
 
 * Avro serializer or deserializer
-* URL to the |sr-long|
+* Properties to connect to |sr-long|
 
 There are two basic types of Avro records that your application can use: a specific code-generated class or a generic record.
 The examples in this tutorial demonstrate how to use the specific `Payment` class.
@@ -196,11 +216,20 @@ For example:
 
 For a full Java producer example, refer to :devx-examples:`the producer example|clients/avro/src/main/java/io/confluent/examples/clients/basicavro/ProducerExample.java`.
 Because the `pom.xml` includes ``avro-maven-plugin``, the `Payment` class is automatically generated during compile.
-To run this producer, first compile the project and then run ``ProducerExample``.
+To run this producer, first compile the project
 
 .. sourcecode:: bash
 
    $ mvn clean compile package
+
+From the |c3-short| navigation menu, click **Management -> Topics**.
+Click on the ``transactions`` topic and go to the *Inspect* tab.
+You should see no messages because no messages have been produced to this topic yet.
+
+Now run ``ProducerExample``, which produces Avro-formatted messages to the ``transactions`` topic
+
+.. sourcecode:: bash
+
    $ mvn exec:java -Dexec.mainClass=io.confluent.examples.clients.basicavro.ProducerExample
 
 You should see:
@@ -215,7 +244,7 @@ You should see:
 Java Consumers
 ^^^^^^^^^^^^^^
 
-Within the application, Java consumers need to configure the Avro deserializer for the Kafka value (or Kafka key) and URL to |sr-long|.
+Within the client application, Java consumers need to configure the Avro deserializer for the Kafka value (or Kafka key) and URL to |sr-long|.
 Then the consumer can read records where the Kafka value is of `Payment` class.
 By default, each record is deserialized into an Avro `GenericRecord`, but in this tutorial the record should be deserialized using the application's code-generated `Payment` class.
 Therefore, configure the deserializer to use Avro `SpecificRecord`, i.e., ``SPECIFIC_AVRO_READER_CONFIG`` should be set to `true`.
@@ -272,6 +301,13 @@ You should see:
 
 Hit ``Ctrl-C`` to stop.
 
+To see the messages in |c3-short|, inspect the ``transactions`` topic as it dynamically deserializes the newly arriving data that was serialized as Avro.
+
+.. tip:: If you don't see any data, rerun the Producer and verify it completed successfully
+
+.. figure:: images/c3-inspect-transactions.png
+    :width: 600px
+
 
 Other Kafka Clients
 ^^^^^^^^^^^^^^^^^^^
@@ -290,13 +326,25 @@ For examples of other Kafka clients interoperating with Avro and |sr|:
 Centralized Schema Management
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Schemas in Schema Registry
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+Viewing Schemas in Schema Registry
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 At this point, you have producers serializing Avro data and consumers deserializing Avro data.
-The producers are registering schemas and consumers are retrieving schemas.
-You can view subjects and associated schemas via the REST endpoint in |sr|.
+The producers are registering schemas to and consumers are retrieving schemas from |sr|.
 
+From the |c3| navigation menu, click **Management -> Topics**.
+Click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|:
+
+.. figure:: images/c3-schema-transactions.png
+    :width: 600px
+
+The schema is identical to the :ref:`schema file defined for Java client applications<schema_registry_tutorial_definition>`.
+
+
+Using curl to Interact with Schema Registry
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can also connect directly to the REST endpoint in |sr| to view subjects and associated schemas.
 View all the subjects registered in |sr| (assuming |sr| is running on the local machine listening on port 8081):
 
 .. sourcecode:: bash
@@ -306,8 +354,8 @@ View all the subjects registered in |sr| (assuming |sr| is running on the local 
      "transactions-value"
    ]
 
-In this example, the Kafka topic `transactions` has messages whose value, i.e., payload, is Avro.
-View the associated subject `transactions-value` in |sr|:
+In this example, the Kafka topic ``transactions`` has messages whose value, i.e., payload, is Avro, and by default the |sr| subject name is `transactions-value`.
+To view the latest schema for this subject in more detail:
 
 .. sourcecode:: bash
 
@@ -321,12 +369,11 @@ View the associated subject `transactions-value` in |sr|:
 
 Let's break down what this version of the schema defines
 
-* `subject`: the scope in which schemas for the messages in the topic `transactions` can evolve
+* `subject`: the scope in which schemas for the messages in the topic ``transactions`` can evolve
 * `version`: the schema version for this subject, which starts at 1 for each subject
 * `id`: the globally unique schema version id, unique across all schemas in all subjects
 * `schema`: the structure that defines the schema format
 
-The schema is identical to the :ref:`schema file defined for Java client applications<schema_registry_tutorial_definition>`.
 Notice in the output above, the schema is escaped JSON, i.e., the double quotes are preceded with backslashes.
 
 Based on the schema id, you can also retrieve the associated schema by querying |sr| REST endpoint:
@@ -337,12 +384,6 @@ Based on the schema id, you can also retrieve the associated schema by querying 
    {
      "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"
    }
-
-If you are using |c3|, you can view the topic schema easily from the UI, and inspect new data arriving into the topic:
-
-.. figure:: c3-schema-transactions.png
-    :align: center
-
 
 
 Schema IDs in Messages
@@ -365,18 +406,50 @@ Auto Schema Registration
 
 .. include:: includes/auto-schema-registration.rst
 
-To manually register the schema outside of the application, send the schema to |sr| and associate it with a subject, in this case `transactions-value`.  It returns a schema id of `1`.
+To manually register the schema outside of the application, you can use |c3|.
+First, create a new topic called ``test`` in the same way that you created a new topic called ``transactions`` earlier in the tutorial.
+Then from the *Schema* tab, click on "Set a schema" to define the new schema.
+Specify values for:
+
+* ``namespace``: a fully qualified name that avoids schema naming conflicts
+* ``type``: `Avro data type <https://avro.apache.org/docs/1.8.1/spec.html#schemas>`_, one of ``record``, ``enum``, ``union``, ``array``, ``map``, ``fixed``
+* ``name``: unique schema name in this namespace
+* ``fields``: one or more simple or complex data types for a ``record``. The first field in this record is called `id`, and it is of type `string`. The second field in this record is called `amount`, and it is of type `double`.
+
+If you were to define the same schema as used earlier, you would enter the following in the |c3-short| schema editor:
+
+.. sourcecode:: json
+
+   {
+     "type": "record",
+     "name": "Payment",
+     "namespace": "io.confluent.examples.clients.basicavro",
+     "fields": [
+       {
+         "name": "id",
+         "type": "string"
+       },
+       {
+         "name": "amount",
+         "type": "double"
+       }
+     ]
+   }
+
+
+If you prefer to connect directly to the REST endpoint in |sr|, then to define a schema for a new subject for the topic ``test``, run the command below.
+In this sample output, it creates a schema with id of `1`.:
 
 .. sourcecode:: bash
 
-   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
+   $ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"}' http://localhost:8081/subjects/test-value/versions
    {"id":1}
 
 
 Schema Evolution and Compatibility
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Changing Schemas
+Evolving Schemas
 ^^^^^^^^^^^^^^^^
 
 So far in this tutorial, you have seen the benefit of |sr-long| as being centralized schema management that enables client applications to register and retrieve globally unique schema ids.
@@ -394,7 +467,6 @@ These are the compatibility types:
 
 .. include:: includes/compatibility_list.rst
 
-You can change this globally or per subject, but for the remainder of this tutorial, leave the default compatibility type to `backward`.
 Refer to :ref:`schema_evolution_and_compatibility` for a more in-depth explanation on the compatibility types.
 
 
@@ -420,12 +492,26 @@ Consider the :devx-examples:`Payment2a schema|clients/avro/src/main/resources/av
     ]
    }
 
-Before proceeding, think about whether this schema is backward compatible.
-Specifically, ask yourself whether a consumer can use this new schema to read data written by producers using the older schema without the `region` field?
+Before proceeding, because the default |sr| compatibility is :ref:`backward<avro-backward_compatibility>`, think about whether this new schema is backward compatible.
+Specifically, ask yourself whether a consumer can use this new schema to read data written by producers using the older schema without the `region` field.
 The answer is no.
 Consumers will fail reading data with the older schema because the older data does not have the `region` field, therefore this schema is not backward compatible.
 
-Confluent provides a `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, which you can use to check compatibility in development or integrate into your CI/CD pipeline.
+Now try it out yourself.
+From |c3|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
+Click on "Edit Schema".
+
+.. image:: images/c3-edit-schema.png
+    :width: 600px
+
+Add the additional field for `region` and click "Save changes".
+You should see an error message that says the new schema is incompatible with the original schema.
+
+.. image:: images/c3-edit-schema-fail.png
+    :width: 600px
+
+
+Confluent also provides a `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, which you can use to check compatibility in development or integrate into your CI/CD pipeline.
 Our sample :devx-examples:`pom.xml|clients/avro/pom.xml#L84-L99` includes this plugin to enable compatibility checks.
 
 .. sourcecode:: xml
@@ -457,7 +543,7 @@ Run the compatibility check and verify that it fails:
    [ERROR] Schema examples/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc is not compatible with subject(transactions-value)
    ...
 
-You could have also just tried to register the new schema `Payment2a` manually to |sr|, which is a useful way for non-Java clients to check compatibility.
+You could have also just tried to register the new schema `Payment2a` manually to |sr|, which is a useful way for non-Java clients to check compatibility if you are not using |c3|.
 As expected, |sr| rejects it with an error message that it is incompatible.
 
 .. sourcecode:: bash
@@ -469,7 +555,7 @@ As expected, |sr| rejects it with an error message that it is incompatible.
 Passing Compatibility Checks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To maintain backward compatibility, a new schema must assume default values for the new field if it is not provided.
+To maintain :ref:`backward<avro-backward_compatibility>` compatibility, a new schema must assume default values for the new field if it is not provided.
 Consider an updated :devx-examples:`Payment2b schema|clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc` that has a default value for ``region``:
 
 .. sourcecode:: json
@@ -485,7 +571,30 @@ Consider an updated :devx-examples:`Payment2b schema|clients/avro/src/main/resou
     ]
    }
 
-Update the :devx-examples:`pom.xml|clients/avro/pom.xml` to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
+From |c3|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
+Click on "Edit Schema".
+
+.. image:: images/c3-edit-schema.png
+    :width: 600px
+
+Add the default value for the new field `region` and click "Save changes".
+You should see it accepted.
+
+.. image:: images/c3-edit-schema-pass.png
+    :width: 600px
+
+Now this |sr| subject for the topic ``transactions`` has two schemas:
+
+* version 1 is `Payment.avsc`
+* version 2 is `Payment2b.avsc` that has the additional field for `region` with a default empty value.
+
+In |c3-short|, click on "Version history" and select "Turn on version diff" to compare the two versions:
+
+.. image:: images/c3-schema-compare.png
+    :width: 600px
+
+
+Going back to the `Schema Registry Maven Plugin <https://docs.confluent.io/current/schema-registry/docs/maven-plugin.html#sr-maven-plugin>`_, update the :devx-examples:`pom.xml|clients/avro/pom.xml` to refer to `Payment2b.avsc` instead of `Payment2a.avsc`.
 Re-run the compatibility check and verify that it passes:
 
 .. sourcecode:: bash
@@ -495,7 +604,8 @@ Re-run the compatibility check and verify that it passes:
    [INFO] Schema examples/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc is compatible with subject(transactions-value)
    ...
 
-You can try registering the new schema `Payment2b` directly, and it succeeds.
+If you prefer to connect directly to the REST endpoint in |sr|, then to register the new schema `Payment2b`, run the command below.
+It should succeed.
 
 .. sourcecode:: bash
 
@@ -519,6 +629,28 @@ Notice the changes:
 * `version`: changed from `1` to `2`
 * `id`: changed from `1` to `2`
 * `schema`: updated with the new field `region` that has a default value
+
+
+Changing Compatibility Type
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The default compatibility type is `backward`, but you may change it globally or per subject.
+
+To change the compatibility type per subject from |c3|, click on the ``transactions`` topic and go to the *Schema* tab to retrieve the ``transactions`` topic's latest schema from |sr|.
+Click on "Edit Schema" and then click on "Compatibility Mode".
+
+.. image:: images/c3-edit-compatibility.png
+    :width: 600px
+
+Notice that the compatibility for this topic is set to the default `backward`, but you may change this as needed.
+
+If you prefer to connect directly to the REST endpoint in |sr|, then to change the compatibility type for the topic ``transactions``, i.e., for the subject ``transactions-value``, run the example command below.
+
+.. sourcecode:: bash
+
+   $ curl -X PUT -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+          --data '{"compatibility": "BACKWARD_TRANSITIVE"}' \
+          http://localhost:8081/config/transactions-value
 
 
 Next Steps
