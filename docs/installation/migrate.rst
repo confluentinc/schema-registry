@@ -169,10 +169,9 @@ To migrate |sr| to |ccloud|, follow these steps:
       schema.registry.client.basic.auth.credentials.source=USER_INFO
       schema.registry.client.basic.auth.user.info=<schema-registry-api-key>:<schema-registry-api-secret>
 
-    .. tip:: In ``quickstart-replicator.properties``, the replication factor is set to ``1`` for demo purposes. For this schema migration tutorial, and in production, change this to at least ``3``: ``confluent.topic.replication.factor=3``.
-    
-    - ``topics.whitelist`` indicates which topics are of interest to replicator.
-    - ``schema.registry.topic`` indicates which of the topics in the ``whitelist`` contains schemas.
+    .. tip:: - In ``quickstart-replicator.properties``, the replication factor is set to ``1`` for demo purposes. For this schema migration tutorial, and in production, change this to at least ``3``: ``confluent.topic.replication.factor=3``.
+             - ``topics.whitelist`` indicates which topics are of interest to replicator.
+             - ``schema.registry.topic`` indicates which of the topics in the ``whitelist`` contains schemas.
 
     For an example of a JSON configuration for |crep| in distributed mode, see :devx-examples:<submit_replicator_schema_migration_config.sh>|ccloud/submit_replicator_schema_migration_config.sh` on GitHub `examples repository <https://github.com/confluentinc/examples>`_
 
