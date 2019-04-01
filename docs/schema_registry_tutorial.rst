@@ -188,6 +188,7 @@ The examples in this tutorial demonstrate how to use the specific `Payment` clas
 Using a specific code-generated class requires you to define and compile a Java class for your schema, but it easier to work with in your code.
 However, in other scenarios where you need to work dynamically with data of any type and do not have Java classes for your record types, use `GenericRecord <https://docs.confluent.io/current/streams/developer-guide/datatypes.html#avro>`_.
 
+.. _sr-tutorial-java-producers:
 
 Java Producers
 ^^^^^^^^^^^^^^
@@ -240,6 +241,7 @@ You should see:
    Successfully produced 10 messages to a topic called transactions
    ...
 
+.. _sr-tutorial-java-consumers:
 
 Java Consumers
 ^^^^^^^^^^^^^^
