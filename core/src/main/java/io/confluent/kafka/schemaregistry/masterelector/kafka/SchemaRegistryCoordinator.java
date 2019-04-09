@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
@@ -27,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -119,11 +121,12 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   }
 
   @Override
-  public List<JoinGroupRequest.ProtocolMetadata> metadata() {
+  public JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
     ByteBuffer metadata = SchemaRegistryProtocol.serializeMetadata(identity);
-    return Collections.singletonList(
-        new JoinGroupRequest.ProtocolMetadata(SR_SUBPROTOCOL_V0, metadata)
-    );
+    return new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+            Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
+                    .setName(SR_SUBPROTOCOL_V0)
+                    .setMetadata(metadata.array())).iterator());
   }
 
   @Override

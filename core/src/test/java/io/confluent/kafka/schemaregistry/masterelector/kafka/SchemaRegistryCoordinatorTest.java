@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -140,13 +141,13 @@ public class SchemaRegistryCoordinatorTest {
 
   @Test
   public void testMetadata() {
-    List<ProtocolMetadata> serialized = coordinator.metadata();
+    JoinGroupRequestData.JoinGroupRequestProtocolSet serialized = coordinator.metadata();
     assertEquals(1, serialized.size());
 
-    ProtocolMetadata defaultMetadata = serialized.get(0);
+    JoinGroupRequestData.JoinGroupRequestProtocol defaultMetadata = serialized.iterator().next();
     assertEquals(SchemaRegistryCoordinator.SR_SUBPROTOCOL_V0, defaultMetadata.name());
     SchemaRegistryIdentity state
-        = SchemaRegistryProtocol.deserializeMetadata(defaultMetadata.metadata());
+        = SchemaRegistryProtocol.deserializeMetadata(ByteBuffer.wrap(defaultMetadata.metadata()));
     assertEquals(LEADER_INFO, state);
   }
 
