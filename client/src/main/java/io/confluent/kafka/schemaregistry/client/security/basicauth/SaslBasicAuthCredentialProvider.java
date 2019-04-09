@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.JaasContext;
@@ -27,7 +28,6 @@ import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
-import io.confluent.common.config.ConfigException;
 
 public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvider {
 
@@ -66,12 +66,7 @@ public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvi
       Object saslJaasConfig = updatedConfigs.get(SaslConfigs.SASL_JAAS_CONFIG);
       if (saslJaasConfig instanceof String) {
         updatedConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password((String) saslJaasConfig));
-      } else if (saslJaasConfig instanceof io.confluent.common.config.types.Password) {
-        updatedConfigs.put(
-            SaslConfigs.SASL_JAAS_CONFIG,
-            new Password(((io.confluent.common.config.types.Password) saslJaasConfig).value())
-        );
-      }
+      } 
     }
     return updatedConfigs;
   }

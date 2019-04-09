@@ -24,7 +24,6 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecord;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
@@ -52,19 +51,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
-    try {
-      return new KafkaAvroDeserializerConfig(props);
-    } catch (io.confluent.common.config.ConfigException e) {
-      throw new ConfigException(e.getMessage());
-    }
+    return new KafkaAvroDeserializerConfig(props);
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(VerifiableProperties props) {
-    try {
-      return new KafkaAvroDeserializerConfig(props.props());
-    } catch (io.confluent.common.config.ConfigException e) {
-      throw new ConfigException(e.getMessage());
-    }
+    return new KafkaAvroDeserializerConfig(props.props());
   }
 
   private ByteBuffer getByteBuffer(byte[] payload) {

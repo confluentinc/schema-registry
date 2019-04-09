@@ -16,7 +16,8 @@
 
 package io.confluent.kafka.serializers.subject;
 
-import io.confluent.common.Configurable;
+
+import org.apache.kafka.common.Configurable;
 
 /**
  * A {@link SubjectNameStrategy} is used by the Avro serializer to determine

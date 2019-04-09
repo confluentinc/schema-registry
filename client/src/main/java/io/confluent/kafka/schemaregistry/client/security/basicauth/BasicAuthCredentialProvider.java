@@ -16,9 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
-import java.net.URL;
+import org.apache.kafka.common.Configurable;
 
-import io.confluent.common.Configurable;
+import java.net.URL;
 
 public interface BasicAuthCredentialProvider extends Configurable {
 

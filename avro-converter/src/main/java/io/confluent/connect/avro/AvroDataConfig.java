@@ -16,11 +16,12 @@
 
 package io.confluent.connect.avro;
 
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
+
 import java.util.HashMap;
 import java.util.Map;
 
-import io.confluent.common.config.AbstractConfig;
-import io.confluent.common.config.ConfigDef;
 
 public class AvroDataConfig extends AbstractConfig {
 

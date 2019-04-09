@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -30,7 +31,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-import io.confluent.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
 @RunWith(Parameterized.class)
