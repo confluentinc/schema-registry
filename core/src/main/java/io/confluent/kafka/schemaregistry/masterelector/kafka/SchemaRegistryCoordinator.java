@@ -17,8 +17,9 @@ package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -119,11 +120,12 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   }
 
   @Override
-  public List<JoinGroupRequest.ProtocolMetadata> metadata() {
+  public JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
     ByteBuffer metadata = SchemaRegistryProtocol.serializeMetadata(identity);
-    return Collections.singletonList(
-        new JoinGroupRequest.ProtocolMetadata(SR_SUBPROTOCOL_V0, metadata)
-    );
+    return new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+            Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
+                    .setName(SR_SUBPROTOCOL_V0)
+                    .setMetadata(metadata.array())).iterator());
   }
 
   @Override
@@ -141,15 +143,15 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   protected Map<String, ByteBuffer> performAssignment(
       String kafkaLeaderId, // Kafka group "leader" who does assignment, *not* the SR master
       String protocol,
-      Map<String, ByteBuffer> allMemberMetadata
+      List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata
   ) {
     log.debug("Performing assignment");
 
     Map<String, SchemaRegistryIdentity> memberConfigs = new HashMap<>();
-    for (Map.Entry<String, ByteBuffer> entry : allMemberMetadata.entrySet()) {
+    for (JoinGroupResponseData.JoinGroupResponseMember entry : allMemberMetadata) {
       SchemaRegistryIdentity identity
-          = SchemaRegistryProtocol.deserializeMetadata(entry.getValue());
-      memberConfigs.put(entry.getKey(), identity);
+          = SchemaRegistryProtocol.deserializeMetadata(ByteBuffer.wrap(entry.metadata()));
+      memberConfigs.put(entry.memberId(), identity);
     }
 
     log.debug("Member information: {}", memberConfigs);

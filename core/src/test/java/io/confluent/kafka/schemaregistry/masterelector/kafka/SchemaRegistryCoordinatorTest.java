@@ -21,13 +21,13 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -140,13 +140,13 @@ public class SchemaRegistryCoordinatorTest {
 
   @Test
   public void testMetadata() {
-    List<ProtocolMetadata> serialized = coordinator.metadata();
+    JoinGroupRequestData.JoinGroupRequestProtocolSet serialized = coordinator.metadata();
     assertEquals(1, serialized.size());
 
-    ProtocolMetadata defaultMetadata = serialized.get(0);
+    JoinGroupRequestData.JoinGroupRequestProtocol defaultMetadata = serialized.iterator().next();
     assertEquals(SchemaRegistryCoordinator.SR_SUBPROTOCOL_V0, defaultMetadata.name());
     SchemaRegistryIdentity state
-        = SchemaRegistryProtocol.deserializeMetadata(defaultMetadata.metadata());
+        = SchemaRegistryProtocol.deserializeMetadata(ByteBuffer.wrap(defaultMetadata.metadata()));
     assertEquals(LEADER_INFO, state);
   }
 
@@ -306,14 +306,21 @@ public class SchemaRegistryCoordinatorTest {
       Map<String, SchemaRegistryIdentity> memberMasterEligibility,
       Errors error
   ) {
-    Map<String, ByteBuffer> metadata = new HashMap<>();
+    List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
     for (Map.Entry<String, SchemaRegistryIdentity> configStateEntry : memberMasterEligibility.entrySet()) {
       SchemaRegistryIdentity memberIdentity = configStateEntry.getValue();
       ByteBuffer buf = SchemaRegistryProtocol.serializeMetadata(memberIdentity);
-      metadata.put(configStateEntry.getKey(), buf);
+      metadata.add(new JoinGroupResponseData.JoinGroupResponseMember()
+          .setMemberId(configStateEntry.getKey())
+          .setMetadata(buf.array()));
     }
-    return new JoinGroupResponse(error, generationId, SchemaRegistryCoordinator
-        .SR_SUBPROTOCOL_V0, memberId, memberId, metadata);
+    return new JoinGroupResponse(new JoinGroupResponseData()
+            .setErrorCode(error.code())
+            .setGenerationId(generationId)
+            .setProtocolName(SchemaRegistryCoordinator.SR_SUBPROTOCOL_V0)
+            .setMemberId(memberId)
+            .setLeader(memberId)
+            .setMembers(metadata));
   }
 
   private JoinGroupResponse joinGroupFollowerResponse(
@@ -322,13 +329,13 @@ public class SchemaRegistryCoordinatorTest {
       String leaderId,
       Errors error
   ) {
-    return new JoinGroupResponse(
-        error,
-        generationId,
-        SchemaRegistryCoordinator.SR_SUBPROTOCOL_V0,
-        memberId,
-        leaderId,
-        Collections.<String, ByteBuffer>emptyMap()
+    return new JoinGroupResponse(new JoinGroupResponseData()
+        .setErrorCode(error.code())
+        .setGenerationId(generationId)
+        .setProtocolName(SchemaRegistryCoordinator.SR_SUBPROTOCOL_V0)
+        .setMemberId(memberId)
+        .setLeader(leaderId)
+        .setMembers(Collections.emptyList())
     );
   }
 
