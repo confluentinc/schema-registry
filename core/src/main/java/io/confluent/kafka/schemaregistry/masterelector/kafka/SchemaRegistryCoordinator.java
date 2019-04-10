@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.masterelector.kafka;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -30,6 +31,7 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -141,15 +143,15 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   protected Map<String, ByteBuffer> performAssignment(
       String kafkaLeaderId, // Kafka group "leader" who does assignment, *not* the SR master
       String protocol,
-      Map<String, ByteBuffer> allMemberMetadata
+      List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata
   ) {
     log.debug("Performing assignment");
 
     Map<String, SchemaRegistryIdentity> memberConfigs = new HashMap<>();
-    for (Map.Entry<String, ByteBuffer> entry : allMemberMetadata.entrySet()) {
+    for (JoinGroupResponseData.JoinGroupResponseMember entry : allMemberMetadata) {
       SchemaRegistryIdentity identity
-          = SchemaRegistryProtocol.deserializeMetadata(entry.getValue());
-      memberConfigs.put(entry.getKey(), identity);
+          = SchemaRegistryProtocol.deserializeMetadata(ByteBuffer.wrap(entry.metadata()));
+      memberConfigs.put(entry.memberId(), identity);
     }
 
     log.debug("Member information: {}", memberConfigs);
