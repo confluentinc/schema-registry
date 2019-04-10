@@ -132,11 +132,18 @@ Use the following settings to configure |sr| to require authentication:
 ::
 
     authentication.method=BASIC
-    authentication.roles=some-schema-registry-id
-    authentication.realm=SchemaRegistry-Props
+    authentication.roles=<user-role1>,<user-role2>,...
+    authentication.realm=<section-in-jaas_config.file>
 
 The ``authentication.roles`` config defines a comma-separated list of user roles. To be authorized
 to access |sr|, an authenticated user must belong to at least one of these roles.
+
+For example, if you define ``admin``, ``developer``, ``user``, and ``sr-user`` roles,
+the following configuration assigns them for authentication:
+
+::
+
+    authentication.roles=admin,developer,user,sr-user
 
 The ``authentication.realm`` config must match a section within ``jaas_config.file``, which
 defines how the server authenticates users and should be passed as a JVM option during server start:
@@ -155,6 +162,12 @@ An example ``jaas_config.file`` is:
       file="/path/to/password-file"
       debug="false";
     };
+
+Assign the ``SchemaRegistry-Props`` section to the ``authentication.realm`` config setting:
+
+::
+
+    authentication.realm=SchemaRegistry-Props
 
 The example ``jaas_config.file`` above uses the Jetty ``PropertyFileLoginModule``, which
 authenticates users by checking for their credentials in a password file.
