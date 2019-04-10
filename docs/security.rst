@@ -116,7 +116,7 @@ This process enables HTTPS, but still defaults to HTTP so |sr| instances can sti
 - Do a rolling bounce of the cluster
 
 
-.. _schema_registry_basic_http_auth
+.. _schema_registry_basic_http_auth:
 
 Configuring the REST API for Basic HTTP Authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
