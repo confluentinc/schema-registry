@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import org.hibernate.validator.constraints.NotEmpty;
 
 @JsonPropertyOrder(value = {"keytype", "subject", "magic"})
-public class ClearSubjectKey extends SchemaRegistryKey {
+public class ClearSubjectKey extends SchemaRegistryKey implements SubjectContainer {
 
   private static final int MAGIC_BYTE = 0;
   @NotEmpty
@@ -32,6 +32,7 @@ public class ClearSubjectKey extends SchemaRegistryKey {
     this.magicByte = MAGIC_BYTE;
   }
 
+  @Override
   @JsonProperty("subject")
   public String getSubject() {
     return this.subject;

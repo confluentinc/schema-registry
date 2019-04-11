@@ -21,7 +21,7 @@ import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.constraints.Min;
 
-public class DeleteSubjectValue implements SchemaRegistryValue {
+public class DeleteSubjectValue implements SchemaRegistryValue, SubjectContainer {
 
   @NotEmpty
   private String subject;
@@ -34,6 +34,7 @@ public class DeleteSubjectValue implements SchemaRegistryValue {
     this.version = version;
   }
 
+  @Override
   @JsonProperty("subject")
   public String getSubject() {
     return subject;

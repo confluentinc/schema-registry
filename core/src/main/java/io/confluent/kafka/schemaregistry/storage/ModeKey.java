@@ -21,7 +21,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import java.util.Objects;
 
 @JsonPropertyOrder(value = {"keytype", "subject", "magic"})
-public class ModeKey extends SchemaRegistryKey {
+public class ModeKey extends SchemaRegistryKey implements SubjectContainer {
 
   private static final int MAGIC_BYTE = 0;
   private String subject;
@@ -32,6 +32,7 @@ public class ModeKey extends SchemaRegistryKey {
     this.magicByte = MAGIC_BYTE;
   }
 
+  @Override
   @JsonProperty("subject")
   public String getSubject() {
     return this.subject;

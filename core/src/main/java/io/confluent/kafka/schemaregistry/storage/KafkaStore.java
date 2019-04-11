@@ -279,9 +279,19 @@ public class KafkaStore<K, V> implements Store<K, V> {
    */
   public void waitUntilKafkaReaderReachesLastOffset(int timeoutMs) throws StoreException {
     long offsetOfLastMessage = getLatestOffset(timeoutMs);
-    log.info("Wait to catch up until the offset of the last message at " + offsetOfLastMessage);
-    kafkaTopicReader.waitUntilOffset(offsetOfLastMessage, timeoutMs, TimeUnit.MILLISECONDS);
-    log.debug("Reached offset at " + offsetOfLastMessage);
+    waitUntilKafkaReaderReachesOffset(offsetOfLastMessage, timeoutMs);
+  }
+
+  /**
+   * Wait until the KafkaStore catches up to the given offset in the Kafka topic.
+   */
+  public void waitUntilKafkaReaderReachesOffset(long offset, int timeoutMs) throws StoreException {
+    if (offset == -1) {
+      return;
+    }
+    log.info("Wait to catch up until the offset at " + offset);
+    kafkaTopicReader.waitUntilOffset(offset, timeoutMs, TimeUnit.MILLISECONDS);
+    log.debug("Reached offset at " + offset);
   }
 
   public void markLastWrittenOffsetInvalid() {
@@ -321,7 +331,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
       log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
       this.lastWrittenOffset = recordMetadata.offset();
-      kafkaTopicReader.waitUntilOffset(this.lastWrittenOffset, timeout, TimeUnit.MILLISECONDS);
+      if (key instanceof SubjectContainer) {
+        ((LookupCache<K, V>) localStore).setLastOffset(
+            ((SubjectContainer) key).getSubject(), recordMetadata.offset());
+      }
+      waitUntilKafkaReaderReachesOffset(recordMetadata.offset(), timeout);
       knownSuccessfulWrite = true;
     } catch (InterruptedException e) {
       throw new StoreException("Put operation interrupted while waiting for an ack from Kafka", e);
@@ -433,7 +447,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       Future<RecordMetadata> ack = producer.send(producerRecord);
       RecordMetadata metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
       this.lastWrittenOffset = metadata.offset();
-      log.trace("Noop record's offset is " + this.lastWrittenOffset);
+      log.trace("Noop record's offset is " + metadata.offset());
       return this.lastWrittenOffset;
     } catch (Exception e) {
       throw new StoreException("Failed to write Noop record to kafka store.", e);

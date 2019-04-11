@@ -23,7 +23,7 @@ import javax.validation.constraints.Min;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 
-public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue {
+public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue, SubjectContainer {
 
   @NotEmpty
   private String subject;
@@ -56,6 +56,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     this.deleted = false;
   }
 
+  @Override
   @JsonProperty("subject")
   public String getSubject() {
     return subject;
