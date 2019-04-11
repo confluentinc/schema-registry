@@ -116,6 +116,107 @@ This process enables HTTPS, but still defaults to HTTP so |sr| instances can sti
 - Do a rolling bounce of the cluster
 
 
+.. _schema_registry_basic_http_auth:
+
+Configuring the REST API for Basic HTTP Authentication
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+|sr| can be configured to require users to authenticate using a username and password via the Basic HTTP authentication mechanism.
+
+.. note:: If you're using Basic authentication, we recommended that you
+          :ref:`configure Schema Registry to use HTTPS for secure communication <schema_registry_http_https>`,
+          because the Basic protocol passes credentials in plain text.
+
+Use the following settings to configure |sr| to require authentication:
+
+::
+
+    authentication.method=BASIC
+    authentication.roles=<user-role1>,<user-role2>,...
+    authentication.realm=<section-in-jaas_config.file>
+
+The ``authentication.roles`` config defines a comma-separated list of user roles. To be authorized
+to access |sr|, an authenticated user must belong to at least one of these roles.
+
+For example, if you define ``admin``, ``developer``, ``user``, and ``sr-user`` roles,
+the following configuration assigns them for authentication:
+
+::
+
+    authentication.roles=admin,developer,user,sr-user
+
+The ``authentication.realm`` config must match a section within ``jaas_config.file``, which
+defines how the server authenticates users and should be passed as a JVM option during server start:
+
+.. code:: bash
+
+    export SCHEMA_REGISTRY_OPTS=-Djava.security.auth.login.config=/path/to/the/jaas_config.file
+    <path-to-confluent>/bin/schema-registry-start <path-to-confluent>/etc/schema-registry/schema-registry.properties
+
+An example ``jaas_config.file`` is:
+
+::
+
+    SchemaRegistry-Props {
+      org.eclipse.jetty.jaas.spi.PropertyFileLoginModule required
+      file="/path/to/password-file"
+      debug="false";
+    };
+
+Assign the ``SchemaRegistry-Props`` section to the ``authentication.realm`` config setting:
+
+::
+
+    authentication.realm=SchemaRegistry-Props
+
+The example ``jaas_config.file`` above uses the Jetty ``PropertyFileLoginModule``, which
+authenticates users by checking for their credentials in a password file.
+
+You can also use other implementations of the standard Java ``LoginModule`` interface, such as
+the ``LdapLoginModule``, or the ``JDBCLoginModule`` for reading credentials from a database.
+
+The file parameter is the location of the password file, The format is:
+
+::
+
+    <username>: <password-hash>[,<rolename> ...]
+
+Here’s an example:
+
+::
+
+    fred: OBF:1w8t1tvf1w261w8v1w1c1tvn1w8x,user,admin
+    harry: changeme,user,developer
+    tom: MD5:164c88b302622e17050af52c89945d44,user
+    dick: CRYPT:adpexzg3FUZAk,admin,sr-user
+
+Get the password hash for a user by using the ``org.eclipse.jetty.util.security.Password`` utility:
+
+.. code:: bash
+
+    bin/schema-registry-run-class org.eclipse.jetty.util.security.Password fred letmein
+
+Your output should resemble:
+
+::
+
+    letmein
+    OBF:1w8t1tvf1w261w8v1w1c1tvn1w8x
+    MD5:0d107d09f5bbe40cade3de5c71e9e9b7
+    CRYPT:frd5btY/mvXo6
+
+Each line of the output is the password encrypted using different mechanisms, starting with
+plain text.
+
+Once |sr| is configured to use Basic authentication, clients must be
+configured with suitable valid credentials, for example:
+
+::
+
+    schema.registry.basic.auth.credentials.source=USER_INFO
+    schema.registry.basic.auth.user.info=fred:letmein
+
+
 Authorizing Access to the Schemas Topic
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
