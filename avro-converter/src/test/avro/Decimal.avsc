@@ -1,0 +1,12 @@
+{
+  "type": "bytes",
+  "scale": 2,
+  "precision": 64,
+  "connect.version": 1,
+  "connect.parameters": {
+    "scale": "2",
+    "connect.decimal.precision": "64"
+  },
+  "connect.name": "org.apache.kafka.connect.data.Decimal",
+  "logicalType": "decimal"
+}

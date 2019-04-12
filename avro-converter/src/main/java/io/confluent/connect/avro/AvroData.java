@@ -771,7 +771,7 @@ public class AvroData {
     // Extra type annotation information for otherwise lossy conversions
     String connectType = null;
 
-    final org.apache.avro.Schema baseSchema;
+    org.apache.avro.Schema baseSchema;
     switch (schema.type()) {
       case INT8:
         connectType = CONNECT_TYPE_INT8;
@@ -906,6 +906,36 @@ public class AvroData {
         throw new DataException("Unknown schema type: " + schema.type());
     }
 
+    // Only Avro named types (record, enum, fixed) may contain namespace + name. Only Connect's
+    // struct converts to one of those (record), so for everything else that has a name we store
+    // the full name into a special property. For uniformity, we also duplicate this info into
+    // the same field in records as well even though it will also be available in the namespace()
+    // and name().
+    if (schema.name() != null) {
+      if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+        baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DECIMAL);
+      } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+        baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIME_MILLIS);
+      } else if (Timestamp.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+        baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIMESTAMP_MILLIS);
+      } else if (Date.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+        baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DATE);
+      }
+    }
+
+    // FIXME https://github.com/confluentinc/kafka-connect-hdfs/issues/280
+    // Invocation of the Parser sets org.apache.avro.Schema::logicalType field appropriately
+    // The line below is a quick fix
+    baseSchema = setLogicalTypeIfPossible(baseSchema);
+
+    if (schema.parameters() != null) {
+      for (Map.Entry<String, String> entry : schema.parameters().entrySet()) {
+        if (entry.getKey().startsWith(AVRO_PROP)) {
+          baseSchema.addProp(entry.getKey(), entry.getValue());
+        }
+      }
+    }
+
     org.apache.avro.Schema finalSchema = baseSchema;
     if (!baseSchema.getType().equals(org.apache.avro.Schema.Type.UNION)) {
       if (connectMetaData) {
@@ -930,31 +960,6 @@ public class AvroData {
         // limitations in Avro. These types get an extra annotation with their Connect type
         if (connectType != null) {
           baseSchema.addProp(CONNECT_TYPE_PROP, connectType);
-        }
-      }
-
-      // Only Avro named types (record, enum, fixed) may contain namespace + name. Only Connect's
-      // struct converts to one of those (record), so for everything else that has a name we store
-      // the full name into a special property. For uniformity, we also duplicate this info into
-      // the same field in records as well even though it will also be available in the namespace()
-      // and name().
-      if (schema.name() != null) {
-        if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
-          baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DECIMAL);
-        } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
-          baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIME_MILLIS);
-        } else if (Timestamp.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
-          baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIMESTAMP_MILLIS);
-        } else if (Date.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
-          baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DATE);
-        }
-      }
-
-      if (schema.parameters() != null) {
-        for (Map.Entry<String, String> entry : schema.parameters().entrySet()) {
-          if (entry.getKey().startsWith(AVRO_PROP)) {
-            baseSchema.addProp(entry.getKey(), entry.getValue());
-          }
         }
       }
 
@@ -983,6 +988,17 @@ public class AvroData {
     }
     fromConnectSchemaCache.put(schema, finalSchema);
     return finalSchema;
+  }
+
+  private org.apache.avro.Schema setLogicalTypeIfPossible(org.apache.avro.Schema schema) {
+    if (isLogicalTypeItself(schema)) {
+      return new org.apache.avro.Schema.Parser().parse(schema.toString());
+    }
+    return schema;
+  }
+
+  private boolean isLogicalTypeItself(org.apache.avro.Schema schema) {
+    return !Objects.isNull(schema.getProp(AVRO_LOGICAL_TYPE_PROP));
   }
 
   public org.apache.avro.Schema fromConnectSchemaWithCycle(

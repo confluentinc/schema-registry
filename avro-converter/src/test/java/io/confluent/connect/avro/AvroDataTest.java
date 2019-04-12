@@ -44,6 +44,8 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.powermock.reflect.Whitebox;
 
+import java.io.File;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -352,7 +354,7 @@ public class AvroDataTest {
   public void testFromConnectComplexWithDefaults() {
     int dateDefVal = 100;
     int timeDefVal = 1000 * 60 * 60 * 2;
-    long tsDefVal = 1000 * 60 * 60 * 24 * 365 + 100;
+    long tsDefVal = 1000L * 60 * 60 * 24 * 365 + 100;
     java.util.Date dateDef = Date.toLogical(Date.SCHEMA, dateDefVal);
     java.util.Date timeDef = Time.toLogical(Time.SCHEMA, timeDefVal);
     java.util.Date tsDef = Timestamp.toLogical(Timestamp.SCHEMA, tsDefVal);
@@ -771,6 +773,15 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testFromConnectLogicalDecimalWithLogicalTypeCheck() throws IOException {
+    org.apache.avro.Schema avroSchema =
+        new org.apache.avro.Schema.Parser().parse(new File("src/test/avro/Decimal.avsc"));
+    checkNonRecordConversion(avroSchema, ByteBuffer.wrap(TEST_DECIMAL_BYTES), Decimal.builder(2).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64").build(), TEST_DECIMAL, avroData);
+    checkNonRecordConversionNull(Decimal.builder(2).optional().build());
+    assertLogicalTypeEquals(avroSchema, Decimal.builder(2).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64").build(), TEST_DECIMAL, avroData);
+  }
+
+  @Test
   public void testFromConnectLogicalDate() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
     avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Date");
@@ -778,6 +789,15 @@ public class AvroDataTest {
     avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DATE);
     checkNonRecordConversion(avroSchema, 10000, Date.SCHEMA,
                              EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime(), avroData);
+  }
+
+  @Test
+  public void testFromConnectLogicalDateWithLogicalTypeCheck() throws IOException {
+    org.apache.avro.Schema avroSchema =
+        new org.apache.avro.Schema.Parser().parse(new File("src/test/avro/Date.avsc"));
+    checkNonRecordConversion(avroSchema, 10000, Date.SCHEMA,
+        EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime(), avroData);
+    assertLogicalTypeEquals(avroSchema, Date.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime(), avroData);
   }
 
   @Test
@@ -791,6 +811,15 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testFromConnectLogicalTimeWithLogicalTypeCheck() throws IOException {
+    org.apache.avro.Schema avroSchema =
+        new org.apache.avro.Schema.Parser().parse(new File("src/test/avro/Time.avsc"));
+    checkNonRecordConversion(avroSchema, 10000, Time.SCHEMA,
+        EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime(), avroData);
+    assertLogicalTypeEquals(avroSchema, Time.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime(), avroData);
+  }
+
+  @Test
   public void testFromConnectLogicalTimestamp() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
     avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Timestamp");
@@ -798,6 +827,15 @@ public class AvroDataTest {
     avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MILLIS);
     java.util.Date date = new java.util.Date();
     checkNonRecordConversion(avroSchema, date.getTime(), Timestamp.SCHEMA, date, avroData);
+  }
+
+  @Test
+  public void testFromConnectLogicalTimestampWithLogicalTypeCheck() throws IOException {
+    org.apache.avro.Schema avroSchema =
+        new org.apache.avro.Schema.Parser().parse(new File("src/test/avro/Timestamp.avsc"));
+    java.util.Date date = new java.util.Date();
+    checkNonRecordConversion(avroSchema, date.getTime(), Timestamp.SCHEMA, date, avroData);
+    assertLogicalTypeEquals(avroSchema, Timestamp.SCHEMA, date, avroData);
   }
 
   @Test(expected = DataException.class)
@@ -2053,6 +2091,15 @@ public class AvroDataTest {
 
   }
 
+  private void assertLogicalTypeEquals(
+      org.apache.avro.Schema expectedSchema, Schema schema,
+      Object value, AvroData avroData)
+  {
+    Object converted = avroData.fromConnectData(schema, value);
+    NonRecordContainer container = (NonRecordContainer) converted;
+    assertEquals(expectedSchema.getLogicalType(), container.getSchema().getLogicalType());
+  }
+
   private NonRecordContainer checkNonRecordConversion(
       org.apache.avro.Schema expectedSchema, Object expected,
       Schema schema, Object value, AvroData avroData)
@@ -2082,7 +2129,6 @@ public class AvroDataTest {
       org.apache.avro.Schema expected,
       org.apache.avro.Schema actual) {
     assertEquals(expected.getObjectProps(), actual.getObjectProps());
-    assertEquals(expected.getLogicalType(), actual.getLogicalType());
     assertEquals(expected.getType(), actual.getType());
     assertEquals(expected.getDoc(), actual.getDoc());
     switch(actual.getType()) {

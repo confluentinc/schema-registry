@@ -1,0 +1,6 @@
+{
+  "type": "int",
+  "connect.name": "org.apache.kafka.connect.data.Time",
+  "connect.version": 1,
+  "logicalType": "time-millis"
+}
