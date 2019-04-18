@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -23,6 +24,7 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.hamcrest.core.IsEqual;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -30,14 +32,29 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.rules.ExpectedException;
+import org.mockito.Mockito;
+import org.mockito.Spy;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 public class TestCompatibilitySchemaRegistryMojoTest extends SchemaRegistryTest {
+
   TestCompatibilitySchemaRegistryMojo mojo;
+
+  @Spy
+  SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
+
+  @Rule
+  public ExpectedException expectedException = ExpectedException.none();
+
+  @Rule
+  public MockitoRule mockitoRule = MockitoJUnit.rule();
 
   @Before
   public void createMojo() {
     this.mojo = new TestCompatibilitySchemaRegistryMojo();
-    this.mojo.client(new MockSchemaRegistryClient());
+    this.mojo.client(schemaRegistryClient);
   }
 
   @Test
@@ -160,4 +177,47 @@ public class TestCompatibilitySchemaRegistryMojoTest extends SchemaRegistryTest 
 
     Assert.assertThat(this.mojo.schemaCompatibility, IsEqual.equalTo(expectedVersions));
   }
+
+  @Test
+  public void shouldFailWhenIoExceptionHappens()
+      throws MojoFailureException, MojoExecutionException, IOException, RestClientException {
+
+    expectedException.expect(MojoExecutionException.class);
+    expectedException.expectMessage("Failed to validate schema");
+
+    Mockito
+        .when(schemaRegistryClient.testCompatibility(Mockito.anyString(), Mockito.any(Schema.class)))
+        .thenThrow(new IOException("Fake Exception"));
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+    File schemaFile = new File(this.tempDirectory, "TestSubject-Value.avsc");
+    writeSchema(schemaFile, valueSchema);
+
+    subjectToFile.put("subject-value", schemaFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+  }
+
+  @Test
+  public void shouldFailRegistrationWhenRestClientExceptionExceptionHappens()
+      throws MojoFailureException, MojoExecutionException, IOException, RestClientException {
+
+    expectedException.expect(MojoExecutionException.class);
+    expectedException.expectMessage("Failed to validate schema");
+
+    Mockito
+        .when(schemaRegistryClient.testCompatibility(Mockito.anyString(), Mockito.any(Schema.class)))
+        .thenThrow(new RestClientException("Fake Exception", 404, 0));
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+    File schemaFile = new File(this.tempDirectory, "TestSubject-Value.avsc");
+    writeSchema(schemaFile, valueSchema);
+
+    subjectToFile.put("subject-value", schemaFile);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+  }
+
 }
