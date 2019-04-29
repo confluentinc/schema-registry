@@ -28,28 +28,22 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 
-import static io.confluent.kafka.schemaregistry.client.rest.RestService.DEFAULT_REQUEST_PROPERTIES;
 import static org.easymock.EasyMock.anyBoolean;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.stream.IntStream;
-import org.apache.avro.Schema;
 import org.junit.Before;
-import org.junit.Test;
 
 public class CachedSchemaRegistryClientTest {
 
@@ -71,6 +65,24 @@ public class CachedSchemaRegistryClientTest {
     restService = createNiceMock(RestService.class);
 
     client = new CachedSchemaRegistryClient(restService, IDENTITY_MAP_CAPACITY, new HashMap<>());
+  }
+
+  @Test
+  public void testHttpHeaderConfiguration() {
+    Map<String, String> headers = Collections.singletonMap("Authorization", "Bearer RGFuIGlzIGEgZG93bmVy");
+    restService.setHttpHeaders(eq(headers));
+    expectLastCall();
+
+    replay(restService);
+    // Headers should be configured regardless of the value of the "configs" parameter
+    new CachedSchemaRegistryClient(
+        restService,
+        IDENTITY_MAP_CAPACITY,
+        null,
+        headers
+    );
+
+    verify(restService);
   }
 
   @Test

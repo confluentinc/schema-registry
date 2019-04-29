@@ -119,20 +119,22 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   private void configureRestService(Map<String, ?> configs, Map<String, String> httpHeaders) {
-    if (configs != null) {
+    if (httpHeaders != null) {
+      restService.setHttpHeaders(httpHeaders);
+    }
 
+    if (configs != null) {
       String credentialSourceConfig =
           (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
 
       if (credentialSourceConfig != null && !credentialSourceConfig.isEmpty()) {
-
         BasicAuthCredentialProvider basicAuthCredentialProvider =
             BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
                 credentialSourceConfig,
-                configs);
+                configs
+            );
 
         restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
-        restService.setHttpHeaders(httpHeaders);
       }
     }
   }
