@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
@@ -69,6 +70,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     super(logContext,
           client,
           groupId,
+          Optional.empty(),
           rebalanceTimeoutMs,
           sessionTimeoutMs,
           heartbeatIntervalMs,
