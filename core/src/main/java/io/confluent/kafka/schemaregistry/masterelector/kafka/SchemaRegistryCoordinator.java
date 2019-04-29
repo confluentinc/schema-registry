@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
+import java.util.Optional;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -69,6 +70,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     super(logContext,
           client,
           groupId,
+          Optional.empty(),
           rebalanceTimeoutMs,
           sessionTimeoutMs,
           heartbeatIntervalMs,
