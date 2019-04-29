@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayOutputStream;
@@ -45,19 +44,11 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
-    try {
-      return new KafkaAvroSerializerConfig(props);
-    } catch (io.confluent.common.config.ConfigException e) {
-      throw new ConfigException(e.getMessage());
-    }
+    return new KafkaAvroSerializerConfig(props);
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(VerifiableProperties props) {
-    try {
-      return new KafkaAvroSerializerConfig(props.props());
-    } catch (io.confluent.common.config.ConfigException e) {
-      throw new ConfigException(e.getMessage());
-    }
+    return new KafkaAvroSerializerConfig(props.props());
   }
 
   protected byte[] serializeImpl(String subject, Object object) throws SerializationException {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.JaasUtils;
@@ -34,7 +35,6 @@ import java.util.Map;
 import javax.security.auth.login.Configuration;
 
 import avro.shaded.com.google.common.collect.ImmutableMap;
-import io.confluent.common.config.ConfigException;
 
 public class SaslBasicAuthCredentialProviderTest {
 
@@ -128,7 +128,7 @@ public class SaslBasicAuthCredentialProviderTest {
                         + "username=\"user\""
                         + " password=\"password\";";
     Map<String, Object> originalMap = ImmutableMap.of("test-key", "test-value",
-        SaslConfigs.SASL_JAAS_CONFIG, new io.confluent.common.config.types.Password(jaasConfig));
+        SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfig));
 
     SaslBasicAuthCredentialProvider provider = new SaslBasicAuthCredentialProvider();
     Map<String, Object> updatedMap = provider.getConfigsForJaasUtil(originalMap);

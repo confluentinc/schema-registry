@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,11 @@
 
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
+import org.apache.kafka.common.config.ConfigException;
+
 import java.net.URL;
 import java.util.Map;
 
-import io.confluent.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
 public class UserInfoCredentialProvider implements BasicAuthCredentialProvider {

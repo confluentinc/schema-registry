@@ -1,22 +1,23 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.kafka.schemaregistry.rest;
 
 import java.util.Map;
+import org.eclipse.jetty.util.resource.Resource;
+import org.eclipse.jetty.util.resource.ResourceCollection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ConfigResource;
+import io.confluent.kafka.schemaregistry.rest.resources.ModeResource;
 import io.confluent.kafka.schemaregistry.rest.resources.RootResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SchemasResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource;
@@ -92,6 +94,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new SchemasResource(schemaRegistry));
     config.register(new SubjectVersionsResource(schemaRegistry));
     config.register(new CompatibilityResource(schemaRegistry));
+    config.register(new ModeResource(schemaRegistry));
 
     if (schemaRegistryResourceExtensions != null) {
       try {
@@ -103,6 +106,19 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
         log.error("Error starting the schema registry", e);
         System.exit(1);
       }
+    }
+  }
+
+  @Override
+  protected ResourceCollection getStaticResources() {
+    List<String> locations = config.getStaticLocations();
+    if (locations != null && !locations.isEmpty()) {
+      Resource[] resources = locations.stream()
+          .map(Resource::newClassPathResource)
+          .toArray(Resource[]::new);
+      return new ResourceCollection(resources);
+    } else {
+      return super.getStaticResources();
     }
   }
 

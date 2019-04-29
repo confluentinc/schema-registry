@@ -1,5 +1,5 @@
-/**
- * Copyright 2015 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -62,6 +64,12 @@ public class RestService {
       };
   private static final TypeReference<Config> GET_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
+      };
+  private static final TypeReference<List<ModeGetResponse>> GET_MODES_RESPONSE_TYPE =
+      new TypeReference<List<ModeGetResponse>>() {
+      };
+  private static final TypeReference<ModeGetResponse> GET_MODE_RESPONSE_TYPE =
+      new TypeReference<ModeGetResponse>() {
       };
   private static final TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
       new TypeReference<SchemaString>() {
@@ -90,11 +98,18 @@ public class RestService {
       UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE =
       new TypeReference<ConfigUpdateRequest>() {
       };
+  private static final TypeReference<ModeUpdateRequest>
+      UPDATE_MODE_RESPONSE_TYPE_REFERENCE =
+      new TypeReference<ModeUpdateRequest>() {
+      };
   private static final TypeReference<Integer> DELETE_SUBJECT_VERSION_RESPONSE_TYPE =
       new TypeReference<Integer>() {
       };
   private static final TypeReference<? extends List<Integer>> DELETE_SUBJECT_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
+      };
+  private static final TypeReference<String> DELETE_MODE_RESPONSE_TYPE =
+      new TypeReference<String>() {
       };
 
   private static final int HTTP_CONNECT_TIMEOUT_MS = 60000;
@@ -113,6 +128,7 @@ public class RestService {
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
+  private Map<String, String> httpHeaders;
 
   public RestService(UrlList baseUrls) {
     this.baseUrls = baseUrls;
@@ -161,6 +177,7 @@ public class RestService {
       setupSsl(connection);
       connection.setRequestMethod(method);
       setBasicAuthRequestHeader(connection);
+      setCustomHeaders(connection);
       // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
       // On the other hand, leaving this out breaks nothing.
       connection.setDoInput(true);
@@ -313,6 +330,15 @@ public class RestService {
     return registerSchema(request, subject);
   }
 
+  public int registerSchema(String schemaString, String subject, int version, int id)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    request.setVersion(version);
+    request.setId(id);
+    return registerSchema(request, subject);
+  }
+
   public int registerSchema(RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException, RestClientException {
     return registerSchema(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject);
@@ -402,6 +428,47 @@ public class RestService {
     Config config =
         httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
     return config;
+  }
+
+  public ModeUpdateRequest setMode(String mode)
+      throws IOException, RestClientException {
+    return setMode(mode, null);
+  }
+
+  public ModeUpdateRequest setMode(String mode, String subject)
+      throws IOException, RestClientException {
+    ModeUpdateRequest request = new ModeUpdateRequest();
+    request.setMode(mode);
+    return setMode(DEFAULT_REQUEST_PROPERTIES, request, subject);
+  }
+
+  /**
+   * On success, this api simply echoes the request in the response.
+   */
+  public ModeUpdateRequest setMode(Map<String, String> requestProperties,
+                                   ModeUpdateRequest modeUpdateRequest,
+                                   String subject)
+      throws IOException, RestClientException {
+    String path = subject != null ? String.format("/mode/%s", subject) : "/mode";
+
+    ModeUpdateRequest response =
+        httpRequest(path, "PUT", modeUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
+            requestProperties, UPDATE_MODE_RESPONSE_TYPE_REFERENCE);
+    return response;
+  }
+
+  public ModeGetResponse getMode()
+      throws IOException, RestClientException {
+    return getMode(null);
+  }
+
+  public ModeGetResponse getMode(String subject)
+      throws IOException, RestClientException {
+    String path = subject != null ? String.format("/mode/%s", subject) : "/mode";
+
+    ModeGetResponse mode =
+        httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
+    return mode;
   }
 
   public SchemaString getId(int id) throws IOException, RestClientException {
@@ -538,8 +605,19 @@ public class RestService {
     }
   }
 
+  private void setCustomHeaders(HttpURLConnection connection) {
+    if (httpHeaders != null) {
+      httpHeaders.forEach((k, v) -> connection.setRequestProperty(k, v));
+    }
+  }
+
   public void setBasicAuthCredentialProvider(
       BasicAuthCredentialProvider basicAuthCredentialProvider) {
     this.basicAuthCredentialProvider = basicAuthCredentialProvider;
   }
+
+  public void setHttpHeaders(Map<String, String> httpHeaders) {
+    this.httpHeaders = httpHeaders;
+  }
+
 }

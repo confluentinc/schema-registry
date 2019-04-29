@@ -1,5 +1,5 @@
-/**
- * Copyright 2015 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 
 package io.confluent.connect.avro;
 
@@ -34,6 +34,8 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
+import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.node.ArrayNode;
 import org.codehaus.jackson.node.IntNode;
 import org.codehaus.jackson.node.JsonNodeFactory;
 import org.codehaus.jackson.node.ObjectNode;
@@ -53,7 +55,9 @@ import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
+import java.util.stream.Collectors;
 
 import avro.shaded.com.google.common.collect.ImmutableMap;
 import foo.bar.EnumTest;
@@ -62,7 +66,15 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.CONNECT_INTERNAL_TYPE_NAME;
+import static io.confluent.connect.avro.AvroData.CONNECT_NAME_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_RECORD_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.KEY_FIELD;
+import static io.confluent.connect.avro.AvroData.MAP_ENTRY_TYPE_NAME;
+import static io.confluent.connect.avro.AvroData.NAMESPACE;
+import static io.confluent.connect.avro.AvroData.VALUE_FIELD;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.*;
 
 public class AvroDataTest {
@@ -85,6 +97,22 @@ public class AvroDataTest {
     EPOCH_PLUS_TEN_THOUSAND_MILLIS.setTimeZone(TimeZone.getTimeZone("UTC"));
     EPOCH_PLUS_TEN_THOUSAND_MILLIS.add(Calendar.MILLISECOND, 10000);
   }
+
+  private static final Schema NAMED_MAP_SCHEMA =
+      SchemaBuilder.map(Schema.OPTIONAL_STRING_SCHEMA, Schema.INT32_SCHEMA)
+          .name("foo.bar")
+          .build();
+  private static final org.apache.avro.Schema NAMED_AVRO_MAP_SCHEMA =
+      org.apache.avro.SchemaBuilder.array()
+          .prop(CONNECT_NAME_PROP, "foo.bar")
+          .items(
+              org.apache.avro.SchemaBuilder.record("foo.bar")
+                  .prop(CONNECT_INTERNAL_TYPE_NAME, MAP_ENTRY_TYPE_NAME)
+                  .fields()
+                  .optionalString(KEY_FIELD)
+                  .requiredInt(VALUE_FIELD)
+                  .endRecord()
+          );
 
   private AvroData avroData = new AvroData(2);
 
@@ -190,6 +218,49 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testFromConnectMapWithStringKey() {
+    final Schema schema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA);
+    final org.apache.avro.Schema expected = org.apache.avro.SchemaBuilder.map()
+        .values(org.apache.avro.SchemaBuilder.builder().intType());
+    assertThat(avroData.fromConnectSchema(schema), equalTo(expected));
+  }
+
+  @Test
+  public void testFromConnectMapWithOptionalKey() {
+    final Schema schema = SchemaBuilder.map(Schema.OPTIONAL_STRING_SCHEMA, Schema.INT32_SCHEMA);
+    final org.apache.avro.Schema expected = org.apache.avro.SchemaBuilder.array()
+        .items(
+            org.apache.avro.SchemaBuilder.record(NAMESPACE + "." + MAP_ENTRY_TYPE_NAME)
+                .fields()
+                .optionalString(KEY_FIELD)
+                .requiredInt(VALUE_FIELD)
+                .endRecord()
+        );
+
+    assertThat(avroData.fromConnectSchema(schema), equalTo(expected));
+  }
+
+  @Test
+  public void testFromConnectMapWithNonStringKey() {
+    final Schema schema = SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA);
+    final org.apache.avro.Schema expected = org.apache.avro.SchemaBuilder.array()
+        .items(
+            org.apache.avro.SchemaBuilder.record(NAMESPACE + "." + MAP_ENTRY_TYPE_NAME)
+                .fields()
+                .requiredInt(KEY_FIELD)
+                .requiredInt(VALUE_FIELD)
+                .endRecord()
+        );
+
+    assertThat(avroData.fromConnectSchema(schema), equalTo(expected));
+  }
+
+  @Test
+  public void testFromNamedConnectMapWithNonStringKey() {
+    assertThat(avroData.fromConnectSchema(NAMED_MAP_SCHEMA), equalTo(NAMED_AVRO_MAP_SCHEMA));
+  }
+
+  @Test
   public void testFromConnectComplex() {
     Schema schema = SchemaBuilder.struct()
         .field("int8", SchemaBuilder.int8().defaultValue((byte) 2).doc("int8 field").build())
@@ -278,10 +349,224 @@ public class AvroDataTest {
   }
   
   @Test
+  public void testFromConnectComplexWithDefaults() {
+    int dateDefVal = 100;
+    int timeDefVal = 1000 * 60 * 60 * 2;
+    long tsDefVal = 1000 * 60 * 60 * 24 * 365 + 100;
+    java.util.Date dateDef = Date.toLogical(Date.SCHEMA, dateDefVal);
+    java.util.Date timeDef = Time.toLogical(Time.SCHEMA, timeDefVal);
+    java.util.Date tsDef = Timestamp.toLogical(Timestamp.SCHEMA, tsDefVal);
+    BigDecimal decimalDef = new BigDecimal(BigInteger.valueOf(314159L), 5);
+    byte[] decimalDefVal = decimalDef.unscaledValue().toByteArray();
+
+    Schema schema = SchemaBuilder.struct()
+                                 .field("int8", SchemaBuilder.int8().defaultValue((byte) 2).doc("int8 field").build())
+                                 .field("int16", SchemaBuilder.int16().defaultValue((short)12).doc("int16 field").build())
+                                 .field("int32", SchemaBuilder.int32().defaultValue(12).doc("int32 field").build())
+                                 .field("int64", SchemaBuilder.int64().defaultValue(12L).doc("int64 field").build())
+                                 .field("float32", SchemaBuilder.float32().defaultValue(12.2f).doc("float32 field").build())
+                                 .field("float64", SchemaBuilder.float64().defaultValue(12.2).doc("float64 field").build())
+                                 .field("boolean", SchemaBuilder.bool().defaultValue(true).doc("bool field").build())
+                                 .field("string", SchemaBuilder.string().defaultValue("foo").doc("string field").build())
+                                 .field("bytes", SchemaBuilder.bytes().defaultValue(ByteBuffer.wrap("foo".getBytes())).doc("bytes field").build())
+                                 .field("array", SchemaBuilder.array(Schema.STRING_SCHEMA).defaultValue(Arrays.asList("a", "b", "c")).build())
+                                 .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).defaultValue(Collections.singletonMap("field", 1)).build())
+                                 .field("date", Date.builder().defaultValue(dateDef).doc("date field").build())
+                                 .field("time", Time.builder().defaultValue(timeDef).doc("time field").build())
+                                 .field("ts", Timestamp.builder().defaultValue(tsDef).doc("ts field").build())
+                                 .field("decimal", Decimal.builder(5).defaultValue(decimalDef).doc("decimal field").build())
+                                 .build();
+    // leave the struct empty so that only defaults are used
+    Struct struct = new Struct(schema)
+        .put("int8", (byte) 2)
+        .put("int16", (short) 12)
+        .put("int32", 12)
+        .put("int64", 12L)
+        .put("float32", 12.2f)
+        .put("float64", 12.2)
+        .put("boolean", true)
+        .put("string", "foo")
+        .put("bytes", ByteBuffer.wrap("foo".getBytes()))
+        .put("array", Arrays.asList("a", "b", "c"))
+        .put("map", Collections.singletonMap("field", 1))
+        .put("date", dateDef)
+        .put("time", timeDef)
+        .put("ts", tsDef)
+        .put("decimal", decimalDef);
+
+    // Define the expected Avro schema
+    org.apache.avro.Schema complexMapElementSchema =
+        org.apache.avro.SchemaBuilder
+            .record("MapEntry").namespace("io.confluent.connect.avro").fields()
+            .requiredInt("key")
+            .requiredInt("value")
+            .endRecord();
+
+    org.apache.avro.Schema int8Schema = org.apache.avro.SchemaBuilder.builder().intType();
+    int8Schema.addProp("connect.doc", "int8 field");
+    int8Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(2));
+    int8Schema.addProp("connect.type", "int8");
+    org.apache.avro.Schema int16Schema = org.apache.avro.SchemaBuilder.builder().intType();
+    int16Schema.addProp("connect.doc", "int16 field");
+    int16Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12));
+    int16Schema.addProp("connect.type", "int16");
+    org.apache.avro.Schema int32Schema = org.apache.avro.SchemaBuilder.builder().intType();
+    int32Schema.addProp("connect.doc", "int32 field");
+    int32Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12));
+    org.apache.avro.Schema int64Schema = org.apache.avro.SchemaBuilder.builder().longType();
+    int64Schema.addProp("connect.doc", "int64 field");
+    int64Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12L));
+    org.apache.avro.Schema float32Schema = org.apache.avro.SchemaBuilder.builder().floatType();
+    float32Schema.addProp("connect.doc", "float32 field");
+    float32Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12.2f));
+    org.apache.avro.Schema float64Schema = org.apache.avro.SchemaBuilder.builder().doubleType();
+    float64Schema.addProp("connect.doc", "float64 field");
+    float64Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12.2));
+    org.apache.avro.Schema boolSchema = org.apache.avro.SchemaBuilder.builder().booleanType();
+    boolSchema.addProp("connect.doc", "bool field");
+    boolSchema.addProp("connect.default", JsonNodeFactory.instance.booleanNode(true));
+    org.apache.avro.Schema stringSchema = org.apache.avro.SchemaBuilder.builder().stringType();
+    stringSchema.addProp("connect.doc", "string field");
+    stringSchema.addProp("connect.default", JsonNodeFactory.instance.textNode("foo"));
+    org.apache.avro.Schema bytesSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
+    bytesSchema.addProp("connect.doc", "bytes field");
+    bytesSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode("foo".getBytes()));
+
+    org.apache.avro.Schema dateSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    dateSchema.addProp("connect.doc", "date field");
+    dateSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(dateDefVal));
+    dateSchema.addProp(AvroData.CONNECT_NAME_PROP, Date.LOGICAL_NAME);
+    dateSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    dateSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DATE);
+
+    org.apache.avro.Schema timeSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    timeSchema.addProp("connect.doc", "time field");
+    timeSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(timeDefVal));
+    timeSchema.addProp(AvroData.CONNECT_NAME_PROP, Time.LOGICAL_NAME);
+    timeSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    timeSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MILLIS);
+
+    org.apache.avro.Schema tsSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    tsSchema.addProp("connect.doc", "ts field");
+    tsSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(tsDefVal));
+    tsSchema.addProp(AvroData.CONNECT_NAME_PROP, Timestamp.LOGICAL_NAME);
+    tsSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    tsSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MILLIS);
+
+    org.apache.avro.Schema decimalSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
+    decimalSchema.addProp("scale", 5);
+    decimalSchema.addProp("precision", 64);
+    decimalSchema.addProp("connect.doc", "decimal field");
+    decimalSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    decimalSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode(decimalDefVal));
+    decimalSchema.addProp("connect.parameters", parameters("scale", "5"));
+    decimalSchema.addProp(AvroData.CONNECT_NAME_PROP, Decimal.LOGICAL_NAME);
+    decimalSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
+
+    org.apache.avro.Schema arraySchema = org.apache.avro.SchemaBuilder.builder().array().items().stringType();
+    ArrayNode arrayNode = JsonNodeFactory.instance.arrayNode();
+    arrayNode.add("a");
+    arrayNode.add("b");
+    arrayNode.add("c");
+    arraySchema.addProp("connect.default", arrayNode);
+
+    org.apache.avro.Schema mapSchema = org.apache.avro.SchemaBuilder.builder().map().values().intType();
+    ObjectNode mapNode = JsonNodeFactory.instance.objectNode();
+    mapNode.put("field", 1);
+    mapSchema.addProp("connect.default", mapNode);
+
+    org.apache.avro.Schema nonStringMapSchema = org.apache.avro.SchemaBuilder.builder().array()
+                                                                             .items(complexMapElementSchema);
+    ArrayNode nonStringMapNode = JsonNodeFactory.instance.arrayNode();
+    nonStringMapNode.add(JsonNodeFactory.instance.numberNode(1));
+    nonStringMapNode.add(JsonNodeFactory.instance.numberNode(1));
+    ArrayNode nonStringMapArrayNode = JsonNodeFactory.instance.arrayNode();
+    nonStringMapArrayNode.add(nonStringMapNode);
+    nonStringMapSchema.addProp("connect.default", nonStringMapArrayNode);
+
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+        .record(AvroData.DEFAULT_SCHEMA_NAME).namespace(AvroData.NAMESPACE) // default values
+        .fields()
+        .name("int8").doc("int8 field").type(int8Schema).withDefault(2)
+        .name("int16").doc("int16 field").type(int16Schema).withDefault(12)
+        .name("int32").doc("int32 field").type(int32Schema).withDefault(12)
+        .name("int64").doc("int64 field").type(int64Schema).withDefault(12L)
+        .name("float32").doc("float32 field").type(float32Schema).withDefault(12.2f)
+        .name("float64").doc("float64 field").type(float64Schema).withDefault(12.2)
+        .name("boolean").doc("bool field").type(boolSchema).withDefault(true)
+        .name("string").doc("string field").type(stringSchema).withDefault("foo")
+        .name("bytes").doc("bytes field").type(bytesSchema).withDefault(ByteBuffer.wrap("foo".getBytes()))
+        .name("array").type(arraySchema).withDefault(Arrays.asList("a", "b", "c"))
+        .name("map").type(mapSchema).withDefault(Collections.singletonMap("field", 1))
+        .name("date").doc("date field").type(dateSchema).withDefault(dateDefVal)
+        .name("time").doc("time field").type(timeSchema).withDefault(timeDefVal)
+        .name("ts").doc("ts field").type(tsSchema).withDefault(tsDefVal)
+        .name("decimal").doc("decimal field").type(decimalSchema).withDefault(ByteBuffer.wrap(decimalDefVal))
+        .endRecord();
+    org.apache.avro.generic.GenericRecord avroRecord
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
+        .set("int8", 2)
+        .set("int16", 12)
+        .set("int32", 12)
+        .set("int64", 12L)
+        .set("float32", 12.2f)
+        .set("float64", 12.2)
+        .set("boolean", true)
+        .set("string", "foo")
+        .set("bytes", ByteBuffer.wrap("foo".getBytes()))
+        .set("array", Arrays.asList("a", "b", "c"))
+        .set("map", Collections.singletonMap("field", 1))
+        .set("date", dateDefVal)
+        .set("time", timeDefVal)
+        .set("ts", tsDefVal)
+        .set("decimal", decimalDefVal)
+        .build();
+
+    SchemaAndValue schemaAndValue = new SchemaAndValue(schema, struct);
+    schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
+    schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
+    schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
+    assertNotNull(schemaAndValue);
+  }
+
+  protected SchemaAndValue convertToConnect(
+      org.apache.avro.Schema expectedAvroSchema,
+      org.apache.avro.generic.GenericRecord expectedAvroRecord,
+      SchemaAndValue connectSchemaAndValue
+  ) {
+    Object convertedRecord = avroData.fromConnectData(
+        connectSchemaAndValue.schema(),
+        connectSchemaAndValue.value()
+    );
+
+    org.apache.avro.generic.GenericRecord convertedAvroRecord =
+        (org.apache.avro.generic.GenericRecord) convertedRecord;
+    assertSchemaEquals(expectedAvroSchema, convertedAvroRecord.getSchema());
+    assertSchemaEquals(expectedAvroRecord.getSchema(), convertedAvroRecord.getSchema());
+
+    // This doesn't work because the long field's default value is an integer
+    //assertEquals(avroRecord, convertedRecord);
+    // We've already checked the schemas, so we just need to check the record field values
+    for (org.apache.avro.Schema.Field field : expectedAvroSchema.getFields()) {
+      Object actual = convertedAvroRecord.get(field.name());
+      Object expected = expectedAvroRecord.get(field.name());
+      assertValueEquals(expected, actual);
+    }
+
+    SchemaAndValue schemaAndValue = avroData.toConnectData(
+        convertedAvroRecord.getSchema(),
+        convertedRecord
+    );
+    assertEquals(connectSchemaAndValue.schema(), schemaAndValue.schema());
+    assertEquals(connectSchemaAndValue.value(), schemaAndValue.value());
+    return schemaAndValue;
+  }
+
+  @Test
   public void testFromConnectOptionalWithDefaultNull() {
     Schema schema = SchemaBuilder.struct()
-        .field("optionalBool", SchemaBuilder.bool().optional().defaultValue(null).build())
-        .build();
+                                 .field("optionalBool", SchemaBuilder.bool().optional().defaultValue(null).build())
+                                 .build();
     org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
     org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
@@ -299,6 +584,20 @@ public class AvroDataTest {
         .build();
 
     assertEquals(avroRecord, convertedRecord);
+  }
+
+  @Test
+  public void testFromConnectOptionalAnonymousStruct() {
+    Schema schema = SchemaBuilder.struct().optional()
+        .field("int32", Schema.INT32_SCHEMA)
+        .build();
+
+    Struct struct = new Struct(schema).put("int32", 12);
+
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
+
+    assertThat(convertedRecord, instanceOf(GenericRecord.class));
+    assertThat(((GenericRecord)convertedRecord).get("int32"), equalTo(12));
   }
 
   @Test
@@ -1121,7 +1420,11 @@ public class AvroDataTest {
     assertEquals(new SchemaAndValue(schema, Collections.singletonMap((byte) 12, value)),
                  avroData.toConnectData(avroSchema, Arrays.asList(record)));
   }  
-  
+
+  @Test
+  public void testToConnectMapWithNamedSchema() {
+    assertThat(avroData.toConnectSchema(NAMED_AVRO_MAP_SCHEMA), equalTo(NAMED_MAP_SCHEMA));
+  }
   
   // Avro -> Connect: Avro types with no corresponding Connect type
 
@@ -1501,6 +1804,48 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testAvroWithAndWithoutMetaData() {
+    String s1 = "{"
+        + "  \"type\": \"record\","
+        + "  \"name\": \"ListingStateChangedEventKeyRecord\","
+        + "  \"namespace\": \"com.acme.property\","
+        + "  \"doc\": \"Listing State Changed Event Key\","
+        + "  \"fields\": ["
+        + "    {"
+        + "      \"name\": \"listingUuid\","
+        + "      \"type\": {"
+        + "        \"type\": \"string\","
+        + "        \"avro.java.string\": \"String\""
+        + "      }"
+        + "    }"
+        + "  ]"
+        + "}";
+    String s2 = "{"
+        + "  \"type\": \"record\","
+        + "  \"name\": \"ListingStateChangedEventKeyRecord\","
+        + "  \"namespace\": \"com.acme.property\","
+        + "  \"doc\": \"Another listing State Changed Event Key\","
+        + "  \"fields\": ["
+        + "    {"
+        + "      \"name\": \"listingUuid\","
+        + "      \"type\": \"string\""
+        + "    }"
+        + "  ]"
+        + "}";
+
+    org.apache.avro.Schema avroSchema1 = new org.apache.avro.Schema.Parser().parse(s1);
+    org.apache.avro.Schema avroSchema2 = new org.apache.avro.Schema.Parser().parse(s2);
+
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData avroData = new AvroData(avroDataConfig);
+    Schema schema1 = avroData.toConnectSchema(avroSchema1);
+    Schema schema2 = avroData.toConnectSchema(avroSchema2);
+    assertEquals(schema1.parameters(), schema2.parameters());
+  }
+
+  @Test
   public void testArrayOfRecordWithNullNamespace() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.array().items()
             .record("item").fields()
@@ -1732,5 +2077,116 @@ public class AvroDataTest {
     assertNotNull(schemaAndValue.value());
   }
 
+
+  protected void assertSchemaEquals(
+      org.apache.avro.Schema expected,
+      org.apache.avro.Schema actual) {
+    assertEquals(expected.getObjectProps(), actual.getObjectProps());
+    assertEquals(expected.getLogicalType(), actual.getLogicalType());
+    assertEquals(expected.getType(), actual.getType());
+    assertEquals(expected.getDoc(), actual.getDoc());
+    switch(actual.getType()) {
+      case UNION:
+        assertEquals(expected.getTypes(), actual.getTypes());
+        break;
+      case ENUM:
+        assertEquals(expected.getEnumSymbols(), actual.getEnumSymbols());
+        for (String symbol : actual.getEnumSymbols()) {
+          assertEquals(expected.getEnumOrdinal(symbol), actual.getEnumOrdinal(symbol));
+        }
+        assertEquals(expected.getName(), actual.getName());
+        assertEquals(expected.getNamespace(), actual.getNamespace());
+        assertEquals(expected.getFullName(), actual.getFullName());
+        assertEquals(expected.getAliases(), actual.getAliases());
+        break;
+      case RECORD:
+        assertFieldEquals(expected.getFields(), actual.getFields());
+        assertEquals(expected.isError(), actual.isError());
+        assertEquals(expected.getName(), actual.getName());
+        assertEquals(expected.getNamespace(), actual.getNamespace());
+        assertEquals(expected.getFullName(), actual.getFullName());
+        assertEquals(expected.getAliases(), actual.getAliases());
+        break;
+      case FIXED:
+        assertEquals(expected.getFixedSize(), actual.getFixedSize());
+        assertEquals(expected.getName(), actual.getName());
+        assertEquals(expected.getNamespace(), actual.getNamespace());
+        assertEquals(expected.getFullName(), actual.getFullName());
+        assertEquals(expected.getAliases(), actual.getAliases());
+        break;
+      case ARRAY:
+        assertEquals(expected.getElementType(), actual.getElementType());
+        break;
+      default:
+    }
+  }
+
+  protected void assertFieldEquals(
+      List<org.apache.avro.Schema.Field> expected,
+      List<org.apache.avro.Schema.Field> actual
+  ) {
+    Set<String> expectedNames = expected.stream().map(f -> f.name()).collect(Collectors.toSet());
+    Set<String> actualNames = actual.stream().map(f -> f.name()).collect(Collectors.toSet());
+    assertEquals(expectedNames, actualNames);
+    for (int i=0; i!=actualNames.size(); ++i) {
+      assertFieldEquals(expected.get(i), actual.get(i));
+    }
+  }
+
+  protected void assertFieldEquals(
+      org.apache.avro.Schema.Field expected,
+      org.apache.avro.Schema.Field actual
+  ) {
+    assertEquals(expected.name(), actual.name());
+    assertEquals(expected.aliases(), actual.aliases());
+    assertEquals(expected.doc(), actual.doc());
+    assertSchemaEquals(expected.schema(), actual.schema());
+    Object expectedDef = expected.defaultVal();
+    Object actualDef = actual.defaultVal();
+    String msg = "Mismatched default value for field '" + expected.name() + "'";
+    if (expectedDef == null) {
+      assertNull(msg, actualDef);
+      return;
+    }
+    switch(actual.schema().getType()) {
+      case INT:
+      case LONG:
+        long expectedLong = ((Number) expectedDef).longValue();
+        long actualLong = ((Number) actualDef).longValue();
+        assertEquals(msg, expectedLong, actualLong);
+        break;
+      case FLOAT:
+      case DOUBLE:
+        double expectedDouble = ((Number) expectedDef).doubleValue();
+        double actualDouble = ((Number) actualDef).doubleValue();
+        assertEquals(msg, expectedDouble, actualDouble, expectedDouble / 100.0d);
+        break;
+      default:
+        assertEquals(msg, expectedDef, actualDef);
+        break;
+    }
+  }
+
+  protected void assertValueEquals(Object expected, Object actual) {
+    if (actual instanceof byte[]) {
+      actual = ByteBuffer.wrap((byte[]) actual);
+    }
+    if (expected instanceof byte[]) {
+      expected = ByteBuffer.wrap((byte[]) expected);
+    }
+    assertEquals(expected, actual);
+  }
+
+  private JsonNode parameters(String key1, String v1) {
+    return parametersFromConnect(Collections.singletonMap(key1, v1));
+  }
+
+  private JsonNode parametersFromConnect(Map<String, String> params) {
+    ObjectNode result = JsonNodeFactory.instance.objectNode();
+    for (Map.Entry<String, String> entry : params.entrySet()) {
+      result.put(entry.getKey(), entry.getValue());
+    }
+    return result;
+  }
 
 }

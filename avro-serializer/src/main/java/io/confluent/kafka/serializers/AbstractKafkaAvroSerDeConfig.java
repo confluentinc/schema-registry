@@ -1,5 +1,5 @@
-/**
- * Copyright 2015 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,17 +12,20 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 
 package io.confluent.kafka.serializers;
 
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
+
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
-import io.confluent.common.config.AbstractConfig;
-import io.confluent.common.config.ConfigDef;
-import io.confluent.common.config.ConfigDef.Importance;
-import io.confluent.common.config.ConfigDef.Type;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
@@ -32,6 +35,15 @@ import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
  * defaults.
  */
 public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
+
+  /**
+   * Configurations beginning with this prefix can be used to specify headers to include in requests
+   * made to Schema Registry. For example, to include an {@code Authorization} header with a value
+   * of {@code Bearer NjksNDIw}, use the following configuration:
+   * 
+   * <p>{@code request.header.Authorization=Bearer NjksNDIw}
+   */
+  public static final String REQUEST_HEADER_PREFIX = "request.header.";
 
   public static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
   public static final String
@@ -53,7 +65,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
       .BASIC_AUTH_CREDENTIALS_SOURCE;
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DOC =
-      "Specify how to pick the credentials for Basic uth header. "
+      "Specify how to pick the credentials for Basic Auth header. "
       + "The supported values are URL, USER_INFO and SASL_INHERIT";
 
   @Deprecated
@@ -123,6 +135,11 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
   public Object valueSubjectNameStrategy() {
     return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
+  }
+  
+  public Map<String, String> requestHeaders() {
+    return originalsWithPrefix(REQUEST_HEADER_PREFIX).entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, entry -> Objects.toString(entry.getValue())));
   }
 
   private Object subjectNameStrategyInstance(String config) {

@@ -1,22 +1,23 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 import java.util.List;
 
@@ -83,4 +84,48 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param schemaValue the deleted SchemaValue; never {@code null}
    */
   void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue);
+
+  /**
+   * Callback that is invoked when a schema is tombstoned.
+   *
+   * @param schemaKey   the tombstoned SchemaKey; never {@code null}
+   */
+  void schemaTombstoned(SchemaKey schemaKey);
+
+  /**
+   * Retrieves the config for a subject.
+   *
+   * @param subject the subject
+   * @param returnTopLevelIfNotFound whether to return the top level scope if not found
+   * @param defaultForTopLevel default value for the top level scope
+   * @return the compatibility level if found, otherwise null
+   */
+  AvroCompatibilityLevel compatibilityLevel(String subject,
+                                            boolean returnTopLevelIfNotFound,
+                                            AvroCompatibilityLevel defaultForTopLevel);
+
+  /**
+   * Retrieves the mode for a subject.
+   *
+   * @param subject the subject
+   * @param returnTopLevelIfNotFound whether to return the top level scope if not found
+   * @param defaultForTopLevel default value for the top level scope
+   * @return the mode if found, otherwise null.
+   */
+  Mode mode(String subject, boolean returnTopLevelIfNotFound, Mode defaultForTopLevel);
+
+  /**
+   * Returns whether there exist schemas (that are not deleted) that match the given subject.
+   *
+   * @param subject the subject, or null for all subjects
+   * @return whether there exist matching schemas
+   */
+  boolean hasSubjects(String subject) throws StoreException;
+
+  /**
+   * Clears the cache of deleted schemas that match the given subject.
+   *
+   * @param subject the subject, or null for all subjects
+   */
+  void clearSubjects(String subject) throws StoreException;
 }

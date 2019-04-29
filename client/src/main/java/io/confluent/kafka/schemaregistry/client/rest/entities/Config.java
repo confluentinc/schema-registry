@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
-import org.codehaus.jackson.annotate.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class Config {
 
   private String compatibilityLevel;
 
-  public Config(@JsonProperty("compatibility") String compatibilityLevel) {
+  public Config(@JsonProperty("compatibilityLevel") String compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
   }
 
@@ -30,12 +30,12 @@ public class Config {
     compatibilityLevel = null;
   }
 
-  @JsonProperty("compatibility")
+  @JsonProperty("compatibilityLevel")
   public String getCompatibilityLevel() {
     return compatibilityLevel;
   }
 
-  @JsonProperty("compatibility")
+  @JsonProperty("compatibilityLevel")
   public void setCompatibilityLevel(String compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
   }

@@ -17,7 +17,8 @@
             <includes>
                 <include>version.txt</include>
                 <include>README*</include>
-                <include>LICENSE*</include>
+                <include>LICENSE</include>
+                <include>LICENSE-ConfluentCommunity</include>
                 <include>NOTICE*</include>
                 <include>licenses/</include>
                 <include>notices/</include>

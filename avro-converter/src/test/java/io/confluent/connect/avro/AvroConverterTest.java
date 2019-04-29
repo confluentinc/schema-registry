@@ -1,5 +1,5 @@
-/**
- * Copyright 2015 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 
 package io.confluent.connect.avro;
 
@@ -39,10 +39,12 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerDe;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 // AvroConverter is a trivial combination of the serializers and the AvroData conversions, so
@@ -283,6 +285,31 @@ public class AvroConverterTest {
         AbstractKafkaAvroSerDeConfig.KEY_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
     avroConverter.configure(converterConfig, true);
     assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, true);
+  }
+
+  @Test
+  public void testExplicitlyNamedNestedMapsWithNonStringKeys() {
+    final Schema schema = SchemaBuilder.map(
+        Schema.OPTIONAL_STRING_SCHEMA,
+        SchemaBuilder.map(
+            Schema.OPTIONAL_STRING_SCHEMA,
+            Schema.INT32_SCHEMA
+        ).name("foo.bar").build()
+    ).name("biz.baz").version(1).build();
+    final AvroConverter avroConverter = new AvroConverter(new MockSchemaRegistryClient());
+    avroConverter.configure(
+        Collections.singletonMap(
+            AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost"
+        ),
+        false
+    );
+    final Object value = Collections.singletonMap("foo", Collections.singletonMap("bar", 1));
+
+    final byte[] bytes = avroConverter.fromConnectData("topic", schema, value);
+    final SchemaAndValue schemaAndValue = avroConverter.toConnectData("topic", bytes);
+
+    assertThat(schemaAndValue.schema(), equalTo(schema));
+    assertThat(schemaAndValue.value(), equalTo(value));
   }
 
   private void assertSameSchemaMultipleTopic(AvroConverter converter, SchemaRegistryClient schemaRegistry, boolean isKey) throws IOException, RestClientException {

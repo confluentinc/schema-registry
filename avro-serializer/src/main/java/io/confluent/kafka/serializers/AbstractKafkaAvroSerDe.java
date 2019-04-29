@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2018 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
@@ -45,18 +44,19 @@ public abstract class AbstractKafkaAvroSerDe {
 
 
   protected void configureClientProperties(AbstractKafkaAvroSerDeConfig config) {
-    try {
-      List<String> urls = config.getSchemaRegistryUrls();
-      int maxSchemaObject = config.getMaxSchemasPerSubject();
-      Map<String, Object> originals = config.originalsWithPrefix("");
-      if (null == schemaRegistry) {
-        schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject, originals);
-      }
-      keySubjectNameStrategy = config.keySubjectNameStrategy();
-      valueSubjectNameStrategy = config.valueSubjectNameStrategy();
-    } catch (io.confluent.common.config.ConfigException e) {
-      throw new ConfigException(e.getMessage());
+    List<String> urls = config.getSchemaRegistryUrls();
+    int maxSchemaObject = config.getMaxSchemasPerSubject();
+    Map<String, Object> originals = config.originalsWithPrefix("");
+    if (null == schemaRegistry) {
+      schemaRegistry = new CachedSchemaRegistryClient(
+        urls,
+        maxSchemaObject,
+        originals,
+        config.requestHeaders()
+      );
     }
+    keySubjectNameStrategy = config.keySubjectNameStrategy();
+    valueSubjectNameStrategy = config.valueSubjectNameStrategy();
   }
 
   /**
