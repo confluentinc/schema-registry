@@ -49,6 +49,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForward
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
@@ -68,9 +69,11 @@ public class SubjectVersionsResource {
   private final KafkaSchemaRegistry schemaRegistry;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
+  private final SchemaRegistryConfig config;
 
-  public SubjectVersionsResource(KafkaSchemaRegistry registry) {
+  public SubjectVersionsResource(KafkaSchemaRegistry registry, SchemaRegistryConfig config) {
     this.schemaRegistry = registry;
+    this.config = config;
   }
 
   @GET
@@ -155,7 +158,10 @@ public class SubjectVersionsResource {
                        @PathParam("subject") String subjectName,
                        @NotNull RegisterSchemaRequest request) {
 
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers,
+        config
+    );
 
     Schema schema = new Schema(
         subjectName,
@@ -223,7 +229,8 @@ public class SubjectVersionsResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers,
+          config);
       schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject, schema);
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Delete Schema Version operation timed out", e);

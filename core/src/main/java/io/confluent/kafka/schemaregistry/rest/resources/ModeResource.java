@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
@@ -56,9 +57,12 @@ public class ModeResource {
   private final KafkaSchemaRegistry schemaRegistry;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
+  private final SchemaRegistryConfig config;
 
-  public ModeResource(KafkaSchemaRegistry schemaRegistry) {
+  public ModeResource(KafkaSchemaRegistry schemaRegistry,
+      SchemaRegistryConfig config) {
     this.schemaRegistry = schemaRegistry;
+    this.config = config;
   }
 
   @Path("/{subject}")
@@ -75,7 +79,10 @@ public class ModeResource {
       throw new RestInvalidModeException();
     }
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+          headers,
+          config
+      );
       schemaRegistry.setModeOrForward(subject, mode, headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());

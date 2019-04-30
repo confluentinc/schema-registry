@@ -19,6 +19,9 @@ import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import javax.ws.rs.core.HttpHeaders;
@@ -35,8 +38,12 @@ public class RequestHeaderBuilderTest {
     EasyMock.expect(httpHeaders.getHeaderString("Authorization")).andReturn("test");
     EasyMock.replay(httpHeaders);
 
+    SchemaRegistryConfig config = EasyMock.createMock(SchemaRegistryConfig.class);
+    EasyMock.expect(config.headersForward()).andReturn(Collections.EMPTY_LIST);
+    EasyMock.replay(config);
+
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
-    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders);
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, config);
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
@@ -51,13 +58,18 @@ public class RequestHeaderBuilderTest {
     EasyMock.expect(httpHeaders.getHeaderString("Authorization")).andReturn("");
     EasyMock.replay(httpHeaders);
 
+    SchemaRegistryConfig config = EasyMock.createMock(SchemaRegistryConfig.class);
+    EasyMock.expect(config.headersForward()).andReturn(Collections.EMPTY_LIST);
+    EasyMock.replay(config);
+
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
-    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders);
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, config);
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
     Assert.assertNull( requestProps.get("Authorization"));
   }
+
   @Test
   public void testMissingProperty(){
     HttpHeaders httpHeaders = EasyMock.createMock(HttpHeaders.class);
@@ -66,12 +78,81 @@ public class RequestHeaderBuilderTest {
     EasyMock.expect(httpHeaders.getHeaderString("Authorization")).andReturn(null);
     EasyMock.replay(httpHeaders);
 
+    SchemaRegistryConfig config = EasyMock.createMock(SchemaRegistryConfig.class);
+    EasyMock.expect(config.headersForward()).andReturn(Collections.EMPTY_LIST);
+    EasyMock.replay(config);
+
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
-    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders);
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, config);
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
     Assert.assertNull( requestProps.get("Authorization"));
   }
 
+  @Test
+  public void testForwardOneHeader(){
+    HttpHeaders httpHeaders = EasyMock.createMock(HttpHeaders.class);
+    EasyMock.expect(httpHeaders.getHeaderString("Content-Type")).andReturn(null);
+    EasyMock.expect(httpHeaders.getHeaderString("Accept")).andReturn(null);
+    EasyMock.expect(httpHeaders.getHeaderString("Authorization")).andReturn(null);
+    EasyMock.expect(httpHeaders.getHeaderString("target-sr-cluster")).andReturn("sr-xyz");
+    EasyMock.expect(httpHeaders.getHeaderString("some-other-header")).andReturn("abc");
+    EasyMock.replay(httpHeaders);
+
+    SchemaRegistryConfig config = EasyMock.createMock(SchemaRegistryConfig.class);
+    EasyMock.expect(config.headersForward()).andReturn(Collections.singletonList("target-sr-cluster"));
+    EasyMock.replay(config);
+
+    RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, config);
+    Assert.assertNotNull(requestProps);
+    Assert.assertEquals("sr-xyz", requestProps.get("target-sr-cluster"));
+    Assert.assertNull(requestProps.get("some-other-header"));
+  }
+
+  @Test
+  public void testForwardMultipleHeaders(){
+    HttpHeaders httpHeaders = EasyMock.createMock(HttpHeaders.class);
+    EasyMock.expect(httpHeaders.getHeaderString("Content-Type")).andReturn(null);
+    EasyMock.expect(httpHeaders.getHeaderString("Accept")).andReturn(null);
+    EasyMock.expect(httpHeaders.getHeaderString("Authorization")).andReturn(null);
+    EasyMock.expect(httpHeaders.getHeaderString("target-sr-cluster")).andReturn("sr-xyz");
+    EasyMock.expect(httpHeaders.getHeaderString("some-other-header")).andReturn("abc");
+    EasyMock.replay(httpHeaders);
+
+    SchemaRegistryConfig config = EasyMock.createMock(SchemaRegistryConfig.class);
+    List<String> headersForward = new ArrayList<>();
+    headersForward.add("target-sr-cluster");
+    headersForward.add("some-other-header");
+    EasyMock.expect(config.headersForward()).andReturn(headersForward);
+    EasyMock.replay(config);
+
+    RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, config);
+    Assert.assertNotNull(requestProps);
+    Assert.assertEquals("sr-xyz", requestProps.get("target-sr-cluster"));
+    Assert.assertEquals("abc", requestProps.get("some-other-header"));
+  }
+
+  @Test
+  public void testDoNotForwardHeaders() {
+    HttpHeaders httpHeaders = EasyMock.createMock(HttpHeaders.class);
+    EasyMock.expect(httpHeaders.getHeaderString("Content-Type")).andReturn(null);
+    EasyMock.expect(httpHeaders.getHeaderString("Accept")).andReturn(null);
+    EasyMock.expect(httpHeaders.getHeaderString("Authorization")).andReturn(null);
+    EasyMock.expect(httpHeaders.getHeaderString("target-sr-cluster")).andReturn("sr-xyz");
+    EasyMock.expect(httpHeaders.getHeaderString("some-other-header")).andReturn("abc");
+    EasyMock.replay(httpHeaders);
+
+    SchemaRegistryConfig config = EasyMock.createMock(SchemaRegistryConfig.class);
+    EasyMock.expect(config.headersForward()).andReturn(Collections.emptyList());
+    EasyMock.replay(config);
+
+    RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, config);
+    Assert.assertNotNull(requestProps);
+    Assert.assertNull(requestProps.get("target-sr-cluster"));
+    Assert.assertNull(requestProps.get("some-other-header"));
+  }
 }
