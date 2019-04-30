@@ -387,6 +387,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
   }
 
+  public boolean initialized() {
+    return initialized.get();
+  }
+
   /**
    * For testing.
    */
