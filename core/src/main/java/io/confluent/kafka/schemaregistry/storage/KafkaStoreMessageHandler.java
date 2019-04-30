@@ -145,7 +145,7 @@ public class KafkaStoreMessageHandler
   }
 
   private void tombstoneSchemaKey(SchemaKey schemaKey) {
-    if(schemaRegistry.getKafkaStore().initialized()) {
+    if (schemaRegistry.getKafkaStore().initialized()) {
       tombstoneExecutor.execute(() -> {
             try {
               schemaRegistry.getKafkaStore().waitForInit();
