@@ -18,6 +18,8 @@ package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.reflect.ReflectData;
+import org.apache.kafka.common.errors.SerializationException;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -54,6 +56,10 @@ public class AvroSchemaUtils {
   }
 
   public static Schema getSchema(Object object) {
+    return getSchema(object, false);
+  }
+
+  public static Schema getSchema(Object object, boolean useReflection) {
     if (object == null) {
       return primitiveSchemas.get("Null");
     } else if (object instanceof Boolean) {
@@ -70,6 +76,13 @@ public class AvroSchemaUtils {
       return primitiveSchemas.get("String");
     } else if (object instanceof byte[]) {
       return primitiveSchemas.get("Bytes");
+    } else if (useReflection) {
+      Schema schema = ReflectData.get().getSchema(object.getClass());
+      if (schema == null) {
+        throw new SerializationException("Schema is null for object of class " + object.getClass().getCanonicalName());
+      } else {
+        return schema;
+      }
     } else if (object instanceof GenericContainer) {
       return ((GenericContainer) object).getSchema();
     } else {

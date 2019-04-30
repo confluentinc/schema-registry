@@ -41,6 +41,7 @@ public abstract class AbstractKafkaAvroSerDe {
   protected SchemaRegistryClient schemaRegistry;
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
+  protected boolean useSchemaReflection;
 
 
   protected void configureClientProperties(AbstractKafkaAvroSerDeConfig config) {
@@ -57,6 +58,7 @@ public abstract class AbstractKafkaAvroSerDe {
     }
     keySubjectNameStrategy = config.keySubjectNameStrategy();
     valueSubjectNameStrategy = config.valueSubjectNameStrategy();
+    useSchemaReflection = config.useSchemaReflection();
   }
 
   /**

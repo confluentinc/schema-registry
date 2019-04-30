@@ -40,4 +40,17 @@ class ConfigurationUtils {
     return specificAvroEnabledConfig;
   }
 
+  /**
+   * Enables the use of Avro Reflection.
+   *
+   * @param config the serializer/deserializer/serde configuration
+   * @return a copy of the configuration where the use of Avro Reflection is enabled
+   */
+  public static Map<String, Object> withReflectionAvroEnabled(final Map<String, ?> config) {
+    Map<String, Object> reflectionAvroEnabledConfig =
+            config == null ? new HashMap<String, Object>() : new HashMap<>(config);
+    reflectionAvroEnabledConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REFLECTION_CONFIG, true);
+    return reflectionAvroEnabledConfig;
+  }
+
 }
