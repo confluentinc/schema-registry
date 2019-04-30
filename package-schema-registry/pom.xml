@@ -53,7 +53,7 @@
                             <mainClass>io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain</mainClass>
                         </manifest>
                     </archive>
-                    <attach>false</attach>
+                    <!-- <attach>false</attach> -->
                 </configuration>
                 <executions>
                     <execution>
