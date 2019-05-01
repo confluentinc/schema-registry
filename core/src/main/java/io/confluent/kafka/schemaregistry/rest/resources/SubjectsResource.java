@@ -42,7 +42,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -59,12 +58,9 @@ public class SubjectsResource {
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
-  private final SchemaRegistryConfig config;
 
-  public SubjectsResource(KafkaSchemaRegistry schemaRegistry,
-      SchemaRegistryConfig config) {
+  public SubjectsResource(KafkaSchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
-    this.config = config;
   }
 
   @POST
@@ -120,8 +116,11 @@ public class SubjectsResource {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
+      if (schemaRegistry.config() == null) {
+        throw Errors.schemaRegistryException("Schema registry configuration is null", null);
+      }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers,
-          config);
+          schemaRegistry.config().whitelistHeaders());
       deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties, subject);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting the subject " + subject,

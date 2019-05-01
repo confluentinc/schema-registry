@@ -168,8 +168,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "schema.registry.inter.instance.protocol";
   public static final String INTER_INSTANCE_PROTOCOL_CONFIG =
       "inter.instance.protocol";
-  private static final String SCHEMAREGISTRY_HEADERS_FORWARD_CONFIG =
-      "schema.registry.headers.forward";
+  private static final String INTER_INSTANCE_HEADERS_WHITELIST_CONFIG =
+      "inter.instance.headers.whitelist";
 
   protected static final String SCHEMAREGISTRY_GROUP_ID_DOC =
       "Use this setting to override the group.id for the Kafka group used when Kafka is used for "
@@ -316,9 +316,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + "`ssl.truststore.` configs are used while making the call. The "
       + "schema.registry.inter.instance.protocol name is deprecated; prefer using "
       + "inter.instance.protocol instead.";
-  private static final String SCHEMAREGISTRY_HEADERS_FORWARD_DOC
-      = "A list of `http` headers to forward from slave to master, "
-      + "in addition to `Content-Type`, `Accept`, `Authorization`.";
+  private static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
+      = "A list of ``http`` headers to forward from slave to master, "
+      + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
 
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
@@ -363,8 +363,8 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMAREGISTRY_GROUP_ID_CONFIG, ConfigDef.Type.STRING, "schema-registry",
             ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_GROUP_ID_DOC
     )
-    .define(SCHEMAREGISTRY_HEADERS_FORWARD_CONFIG, ConfigDef.Type.LIST, "",
-        ConfigDef.Importance.LOW, SCHEMAREGISTRY_HEADERS_FORWARD_DOC)
+    .define(INTER_INSTANCE_HEADERS_WHITELIST_CONFIG, ConfigDef.Type.LIST, "",
+        ConfigDef.Importance.LOW, INTER_INSTANCE_HEADERS_WHITELIST_DOC)
     .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 30000, atLeast(0),
             ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC
     )
@@ -705,8 +705,8 @@ public class SchemaRegistryConfig extends RestConfig {
     return zkUtils;
   }
 
-  public List<String> headersForward() {
-    return getList(SCHEMAREGISTRY_HEADERS_FORWARD_CONFIG);
+  public List<String> whitelistHeaders() {
+    return getList(INTER_INSTANCE_HEADERS_WHITELIST_CONFIG);
   }
 
   public static void main(String[] args) {

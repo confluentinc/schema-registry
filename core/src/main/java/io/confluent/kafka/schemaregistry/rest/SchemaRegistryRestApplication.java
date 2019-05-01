@@ -89,12 +89,12 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
             SchemaRegistryResourceExtension.class);
 
     config.register(RootResource.class);
-    config.register(new ConfigResource(schemaRegistry, schemaRegistryConfig));
-    config.register(new SubjectsResource(schemaRegistry, schemaRegistryConfig));
+    config.register(new ConfigResource(schemaRegistry));
+    config.register(new SubjectsResource(schemaRegistry));
     config.register(new SchemasResource(schemaRegistry));
-    config.register(new SubjectVersionsResource(schemaRegistry, schemaRegistryConfig));
+    config.register(new SubjectVersionsResource(schemaRegistry));
     config.register(new CompatibilityResource(schemaRegistry));
-    config.register(new ModeResource(schemaRegistry, schemaRegistryConfig));
+    config.register(new ModeResource(schemaRegistry));
 
     if (schemaRegistryResourceExtensions != null) {
       try {

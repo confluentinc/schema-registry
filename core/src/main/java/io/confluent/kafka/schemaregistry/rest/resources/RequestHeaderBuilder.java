@@ -19,28 +19,30 @@ import org.eclipse.jetty.util.StringUtil;
 
 import javax.ws.rs.core.HttpHeaders;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
 public class RequestHeaderBuilder {
 
   public Map<String, String> buildRequestHeaders(
       HttpHeaders httpHeaders,
-      SchemaRegistryConfig config
+      List<String> whitelistedHeaders
   ) {
     Map<String, String> headerProperties = new HashMap<>();
     addStaticHeaders(headerProperties, httpHeaders);
-    addWhitelistedHeaders(headerProperties, httpHeaders, config);
+    addWhitelistedHeaders(headerProperties, httpHeaders, whitelistedHeaders);
     return headerProperties;
   }
 
   private void addWhitelistedHeaders(
       Map<String, String> headerProperties,
       HttpHeaders httpHeaders,
-      SchemaRegistryConfig config
+      List<String> whitelistedHeaders
   ) {
-    config.headersForward()
+    if (whitelistedHeaders == null) {
+      return;
+    }
+    whitelistedHeaders
         .stream()
         .forEach(headerToForward -> addIfNotEmpty(httpHeaders, headerProperties, headerToForward));
   }

@@ -470,7 +470,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-
   public void deleteSchemaVersionOrForward(
       Map<String, String> headerProperties, String subject,
       Schema schema) throws SchemaRegistryException {
@@ -1007,6 +1006,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           "Error while retrieving schema from the backend Kafka"
           + " store", e);
     }
+  }
+
+  @Override
+  public SchemaRegistryConfig config() {
+    return config;
   }
 
   public static class SchemeAndPort {
