@@ -145,18 +145,20 @@ public class KafkaStoreMessageHandler
   }
 
   private void tombstoneSchemaKey(SchemaKey schemaKey) {
-    tombstoneExecutor.execute(() -> {
-          try {
-            schemaRegistry.getKafkaStore().waitForInit();
-            schemaRegistry.getKafkaStore().delete(schemaKey);
-            lookupCache.schemaTombstoned(schemaKey);
-            log.debug("Tombstoned {}", schemaKey);
-          } catch (InterruptedException e) {
-            log.error("Interrupted while waiting for the tombstone thread to be initialized ", e);
-          } catch (StoreException e) {
-            log.error("Failed to tombstone {}", schemaKey, e);
+    if (schemaRegistry.getKafkaStore().initialized()) {
+      tombstoneExecutor.execute(() -> {
+            try {
+              schemaRegistry.getKafkaStore().waitForInit();
+              schemaRegistry.getKafkaStore().delete(schemaKey);
+              lookupCache.schemaTombstoned(schemaKey);
+              log.debug("Tombstoned {}", schemaKey);
+            } catch (InterruptedException e) {
+              log.error("Interrupted while waiting for the tombstone thread to be initialized ", e);
+            } catch (StoreException e) {
+              log.error("Failed to tombstone {}", schemaKey, e);
+            }
           }
-        }
-    );
+      );
+    }
   }
 }
