@@ -21,6 +21,7 @@ import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.reflect.ReflectDatumReader;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecord;
@@ -177,7 +178,12 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
     boolean writerSchemaIsPrimitive =
         AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
     // do not use SpecificDatumReader if writerSchema is a primitive
-    if (useSpecificAvroReader && !writerSchemaIsPrimitive) {
+    if (useSchemaReflection && !writerSchemaIsPrimitive) {
+      if (readerSchema == null) {
+        throw new SerializationException("Reader schema cannot be null when using Avro schema reflection");
+      }
+      return new ReflectDatumReader<>(writerSchema, readerSchema);
+    } else if (useSpecificAvroReader && !writerSchemaIsPrimitive) {
       if (readerSchema == null) {
         readerSchema = getReaderSchema(writerSchema);
       }
