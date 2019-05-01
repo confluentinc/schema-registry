@@ -39,12 +39,12 @@ public class RequestHeaderBuilder {
       HttpHeaders httpHeaders,
       List<String> whitelistedHeaders
   ) {
-    if (whitelistedHeaders == null) {
-      return;
+    if (whitelistedHeaders != null) {
+      whitelistedHeaders
+          .stream()
+          .forEach(
+              headerToForward -> addIfNotEmpty(httpHeaders, headerProperties, headerToForward));
     }
-    whitelistedHeaders
-        .stream()
-        .forEach(headerToForward -> addIfNotEmpty(httpHeaders, headerProperties, headerToForward));
   }
 
   private void addStaticHeaders(Map<String, String> headerProperties, HttpHeaders httpHeaders) {
