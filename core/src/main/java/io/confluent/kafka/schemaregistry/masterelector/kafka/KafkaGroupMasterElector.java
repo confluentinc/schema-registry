@@ -33,6 +33,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -166,7 +167,7 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           this
       );
 
-      AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
+      AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
 
       initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
 
@@ -298,9 +299,9 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
     // Do final cleanup
     AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
     this.stopped.set(true);
-    ClientUtils.closeQuietly(coordinator, "coordinator", firstException);
-    ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
-    ClientUtils.closeQuietly(client, "consumer network client", firstException);
+    Utils.closeQuietly(coordinator, "coordinator", firstException);
+    Utils.closeQuietly(metrics, "consumer metrics", firstException);
+    Utils.closeQuietly(client, "consumer network client", firstException);
     AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
     if (firstException.get() != null && !swallowException) {
       throw new KafkaException(
