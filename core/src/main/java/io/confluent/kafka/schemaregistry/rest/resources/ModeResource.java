@@ -79,9 +79,7 @@ public class ModeResource {
         throw Errors.schemaRegistryException("Schema registry configuration is null", null);
       }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-          headers,
-          schemaRegistry.config().whitelistHeaders()
-      );
+          headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.setModeOrForward(subject, mode, headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());

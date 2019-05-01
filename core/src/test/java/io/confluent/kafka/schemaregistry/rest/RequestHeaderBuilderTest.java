@@ -40,7 +40,8 @@ public class RequestHeaderBuilderTest {
     ));
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
-    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, Collections.EMPTY_LIST);
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
+        httpHeaders, Collections.EMPTY_LIST);
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
@@ -64,7 +65,8 @@ public class RequestHeaderBuilderTest {
     ));
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
-    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, Collections.EMPTY_LIST);
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
+        httpHeaders, Collections.EMPTY_LIST);
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
@@ -79,7 +81,8 @@ public class RequestHeaderBuilderTest {
         "Authorization", ""));
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
-    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, Collections.EMPTY_LIST);
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
+        httpHeaders, Collections.EMPTY_LIST);
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
@@ -97,9 +100,7 @@ public class RequestHeaderBuilderTest {
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
     Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
-        httpHeaders,
-        Collections.singletonList("target-sr-cluster")
-    );
+        httpHeaders, Collections.singletonList("target-sr-cluster"));
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("sr-xyz", requestProps.get("target-sr-cluster"));
     Assert.assertNull(requestProps.get("some-other-header"));
@@ -119,9 +120,7 @@ public class RequestHeaderBuilderTest {
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
     Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
-        httpHeaders,
-        headersForward
-    );
+        httpHeaders, headersForward);
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("sr-xyz", requestProps.get("target-sr-cluster"));
     Assert.assertEquals("abc", requestProps.get("some-other-header"));
@@ -138,7 +137,8 @@ public class RequestHeaderBuilderTest {
     ));
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
-    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, Collections.EMPTY_LIST);
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
+        httpHeaders, Collections.EMPTY_LIST);
     Assert.assertNotNull(requestProps);
     Assert.assertNull(requestProps.get("target-sr-cluster"));
     Assert.assertNull(requestProps.get("some-other-header"));
@@ -155,7 +155,8 @@ public class RequestHeaderBuilderTest {
     ));
 
     RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
-    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(httpHeaders, null);
+    Map<String, String> requestProps = requestHeaderBuilder.buildRequestHeaders(
+        httpHeaders, null);
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));

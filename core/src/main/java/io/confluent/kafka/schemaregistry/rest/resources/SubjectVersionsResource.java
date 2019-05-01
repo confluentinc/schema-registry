@@ -160,9 +160,7 @@ public class SubjectVersionsResource {
     }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers,
-        schemaRegistry.config().whitelistHeaders()
-    );
+        headers, schemaRegistry.config().whitelistHeaders());
 
     Schema schema = new Schema(
         subjectName,
@@ -234,9 +232,7 @@ public class SubjectVersionsResource {
         throw Errors.schemaRegistryException("Schema registry configuration is null", null);
       }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-          headers,
-          schemaRegistry.config().whitelistHeaders()
-      );
+          headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject, schema);
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Delete Schema Version operation timed out", e);
