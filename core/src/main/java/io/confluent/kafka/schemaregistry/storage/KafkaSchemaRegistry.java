@@ -113,6 +113,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
       throws SchemaRegistryException {
+    if (config == null) {
+      throw new SchemaRegistryException("Schema registry configuration is null");
+    }
     this.config = config;
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     SchemeAndPort schemeAndPort = getSchemeAndPortForIdentity(

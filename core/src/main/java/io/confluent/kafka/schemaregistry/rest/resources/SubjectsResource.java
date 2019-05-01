@@ -116,9 +116,6 @@ public class SubjectsResource {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
-      if (schemaRegistry.config() == null) {
-        throw Errors.schemaRegistryException("Schema registry configuration is null", null);
-      }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
       deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties, subject);

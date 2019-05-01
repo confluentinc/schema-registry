@@ -84,9 +84,6 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
     try {
-      if (schemaRegistry.config() == null) {
-        throw Errors.schemaRegistryException("Schema registry configuration is null", null);
-      }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.updateConfigOrForward(subject, compatibilityLevel, headerProperties);
@@ -139,9 +136,6 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
     try {
-      if (schemaRegistry.config() == null) {
-        throw Errors.schemaRegistryException("Schema registry configuration is null", null);
-      }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.updateConfigOrForward(null, compatibilityLevel, headerProperties);

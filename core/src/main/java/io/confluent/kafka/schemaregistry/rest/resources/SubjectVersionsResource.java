@@ -155,10 +155,6 @@ public class SubjectVersionsResource {
                        @PathParam("subject") String subjectName,
                        @NotNull RegisterSchemaRequest request) {
 
-    if (schemaRegistry.config() == null) {
-      throw Errors.schemaRegistryException("Schema registry configuration is null", null);
-    }
-
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
 
@@ -228,9 +224,6 @@ public class SubjectVersionsResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     try {
-      if (schemaRegistry.config() == null) {
-        throw Errors.schemaRegistryException("Schema registry configuration is null", null);
-      }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject, schema);
