@@ -116,7 +116,8 @@ public class SubjectsResource {
       if (!schemaRegistry.listSubjects().contains(subject)) {
         throw Errors.subjectNotFoundException();
       }
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+          headers, schemaRegistry.config().whitelistHeaders());
       deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties, subject);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting the subject " + subject,

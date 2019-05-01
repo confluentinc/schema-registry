@@ -84,7 +84,8 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+          headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.updateConfigOrForward(subject, compatibilityLevel, headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
@@ -135,7 +136,8 @@ public class ConfigResource {
       throw new RestInvalidCompatibilityException();
     }
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+          headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.updateConfigOrForward(null, compatibilityLevel, headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());

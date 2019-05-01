@@ -75,7 +75,8 @@ public class ModeResource {
       throw new RestInvalidModeException();
     }
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+          headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.setModeOrForward(subject, mode, headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());

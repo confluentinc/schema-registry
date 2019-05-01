@@ -155,7 +155,8 @@ public class SubjectVersionsResource {
                        @PathParam("subject") String subjectName,
                        @NotNull RegisterSchemaRequest request) {
 
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
 
     Schema schema = new Schema(
         subjectName,
@@ -223,7 +224,8 @@ public class SubjectVersionsResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(headers);
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+          headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject, schema);
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Delete Schema Version operation timed out", e);

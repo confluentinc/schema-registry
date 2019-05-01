@@ -17,19 +17,40 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import org.eclipse.jetty.util.StringUtil;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import javax.ws.rs.core.HttpHeaders;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class RequestHeaderBuilder {
 
-  public Map<String, String> buildRequestHeaders(HttpHeaders httpHeaders) {
+  public Map<String, String> buildRequestHeaders(
+      HttpHeaders httpHeaders,
+      List<String> whitelistedHeaders
+  ) {
     Map<String, String> headerProperties = new HashMap<>();
+    addStaticHeaders(headerProperties, httpHeaders);
+    addWhitelistedHeaders(headerProperties, httpHeaders, whitelistedHeaders);
+    return headerProperties;
+  }
+
+  private void addWhitelistedHeaders(
+      Map<String, String> headerProperties,
+      HttpHeaders httpHeaders,
+      List<String> whitelistedHeaders
+  ) {
+    if (whitelistedHeaders != null) {
+      whitelistedHeaders
+          .stream()
+          .forEach(
+              headerToForward -> addIfNotEmpty(httpHeaders, headerProperties, headerToForward));
+    }
+  }
+
+  private void addStaticHeaders(Map<String, String> headerProperties, HttpHeaders httpHeaders) {
     addIfNotEmpty(httpHeaders, headerProperties, "Content-Type");
     addIfNotEmpty(httpHeaders, headerProperties, "Accept");
     addIfNotEmpty(httpHeaders, headerProperties, "Authorization");
-    return headerProperties;
   }
 
   private void addIfNotEmpty(

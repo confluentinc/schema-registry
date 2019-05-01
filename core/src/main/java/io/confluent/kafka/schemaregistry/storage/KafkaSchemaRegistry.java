@@ -113,6 +113,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
       throws SchemaRegistryException {
+    if (config == null) {
+      throw new SchemaRegistryException("Schema registry configuration is null");
+    }
     this.config = config;
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     SchemeAndPort schemeAndPort = getSchemeAndPortForIdentity(
@@ -469,7 +472,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                                              + " backend Kafka store", e);
     }
   }
-
 
   public void deleteSchemaVersionOrForward(
       Map<String, String> headerProperties, String subject,
@@ -1007,6 +1009,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           "Error while retrieving schema from the backend Kafka"
           + " store", e);
     }
+  }
+
+  @Override
+  public SchemaRegistryConfig config() {
+    return config;
   }
 
   public static class SchemeAndPort {

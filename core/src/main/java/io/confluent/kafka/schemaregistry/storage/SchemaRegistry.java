@@ -22,6 +22,7 @@ import java.util.Set;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
 public interface SchemaRegistry {
 
@@ -57,4 +58,6 @@ public interface SchemaRegistry {
   void close();
 
   void deleteSchemaVersion(String subject, Schema schema) throws SchemaRegistryException;
+
+  SchemaRegistryConfig config();
 }
