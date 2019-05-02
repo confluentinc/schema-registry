@@ -13,7 +13,7 @@
               files="SchemaRegistryCoordinator.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(AbstractKafkaAvroDeserializer|AvroMessageReader|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroData|KafkaGroupMasterElector).java"/>
+              files="(AbstractKafkaAvroDeserializer|AvroSchemaUtils|AvroMessageReader|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroData|KafkaGroupMasterElector).java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData|KafkaGroupMasterElector).java"/>

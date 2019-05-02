@@ -79,7 +79,8 @@ public class AvroSchemaUtils {
     } else if (useReflection) {
       Schema schema = ReflectData.get().getSchema(object.getClass());
       if (schema == null) {
-        throw new SerializationException("Schema is null for object of class " + object.getClass().getCanonicalName());
+        throw new SerializationException("Schema is null for object of class "
+            + object.getClass().getCanonicalName());
       } else {
         return schema;
       }

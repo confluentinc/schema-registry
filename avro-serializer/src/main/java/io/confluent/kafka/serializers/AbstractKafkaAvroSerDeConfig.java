@@ -145,7 +145,9 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
     return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
   }
 
-  public boolean useSchemaReflection() { return this.getBoolean(SCHEMA_REFLECTION_CONFIG); }
+  public boolean useSchemaReflection() {
+    return this.getBoolean(SCHEMA_REFLECTION_CONFIG);
+  }
   
   public Map<String, String> requestHeaders() {
     return originalsWithPrefix(REQUEST_HEADER_PREFIX).entrySet().stream()
