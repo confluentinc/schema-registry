@@ -33,7 +33,7 @@ import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
  */
-public abstract class AbstractKafkaAvroSerDe {
+public abstract class AbstractKafkaAvroSerDe implements Serializable {
 
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
