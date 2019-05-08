@@ -167,7 +167,7 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           this
       );
 
-      AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
+      AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
 
       initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
 
@@ -297,12 +297,12 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
     }
 
     // Do final cleanup
-    AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
     this.stopped.set(true);
-    Utils.closeQuietly(coordinator, "coordinator", firstException);
-    Utils.closeQuietly(metrics, "consumer metrics", firstException);
-    Utils.closeQuietly(client, "consumer network client", firstException);
+    Utils.closeQuietly(coordinator, "coordinator");
+    Utils.closeQuietly(metrics, "consumer metrics");
+    Utils.closeQuietly(client, "consumer network client");
     AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
+    AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
     if (firstException.get() != null && !swallowException) {
       throw new KafkaException(
           "Failed to stop the schema registry group member",

@@ -297,7 +297,7 @@ public class SchemaRegistryCoordinatorTest {
   }
 
   private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
-    return FindCoordinatorResponse.prepareResponse(error, node);
+    return new FindCoordinatorResponse(error, node);
   }
 
   private JoinGroupResponse joinGroupLeaderResponse(
