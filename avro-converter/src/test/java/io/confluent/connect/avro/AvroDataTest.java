@@ -19,6 +19,9 @@ package io.confluent.connect.avro;
 import com.connect.avro.EnumUnion;
 import com.connect.avro.UserType;
 
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -436,6 +439,10 @@ public class AvroDataTest {
     dateSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(dateDefVal));
     dateSchema.addProp(AvroData.CONNECT_NAME_PROP, Date.LOGICAL_NAME);
     dateSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    // this is the new and correct way to set logical type
+    LogicalTypes.date().addToSchema(dateSchema);
+    // this is the old and wrong way to set logical type
+    // leave the line here for back compatibility
     dateSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DATE);
 
     org.apache.avro.Schema timeSchema = org.apache.avro.SchemaBuilder.builder().intType();
@@ -443,6 +450,10 @@ public class AvroDataTest {
     timeSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(timeDefVal));
     timeSchema.addProp(AvroData.CONNECT_NAME_PROP, Time.LOGICAL_NAME);
     timeSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    // this is the new and correct way to set logical type
+    LogicalTypes.timeMillis().addToSchema(timeSchema);
+    // this is the old and wrong way to set logical type
+    // leave the line here for back compatibility
     timeSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MILLIS);
 
     org.apache.avro.Schema tsSchema = org.apache.avro.SchemaBuilder.builder().longType();
@@ -450,6 +461,10 @@ public class AvroDataTest {
     tsSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(tsDefVal));
     tsSchema.addProp(AvroData.CONNECT_NAME_PROP, Timestamp.LOGICAL_NAME);
     tsSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
+    // this is the new and correct way to set logical type
+    LogicalTypes.timestampMillis().addToSchema(tsSchema);
+    // this is the old and wrong way to set logical type
+    // leave the line here for back compatibility
     tsSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MILLIS);
 
     org.apache.avro.Schema decimalSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
@@ -460,6 +475,10 @@ public class AvroDataTest {
     decimalSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode(decimalDefVal));
     decimalSchema.addProp("connect.parameters", parameters("scale", "5"));
     decimalSchema.addProp(AvroData.CONNECT_NAME_PROP, Decimal.LOGICAL_NAME);
+    // this is the new and correct way to set logical type
+    LogicalTypes.decimal(64, 5).addToSchema(decimalSchema);
+    // this is the old and wrong way to set logical type
+    // leave the line here for back compatibility
     decimalSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
 
     org.apache.avro.Schema arraySchema = org.apache.avro.SchemaBuilder.builder().array().items().stringType();
@@ -744,10 +763,56 @@ public class AvroDataTest {
     decimalSchema.addProp("connect.parameters", avroParams);
     decimalSchema.addProp("connect.name", "org.apache.kafka.connect.data.Decimal");
     decimalSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
+    org.apache.avro.LogicalTypes.decimal(precision, 2).addToSchema(decimalSchema);
 
     return avroSchema;
   }
 
+  // test for new way of logical type handling
+  @Test
+  public void testFromConnectLogicalDecimalNew() {
+    org.apache.avro.Schema avroSchema = createDecimalSchema(true, 64);
+    checkNonRecordConversionNew(avroSchema, ByteBuffer.wrap(TEST_DECIMAL_BYTES), Decimal.builder(2).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64").build(), TEST_DECIMAL, avroData);
+    checkNonRecordConversionNull(Decimal.builder(2).optional().build());
+  }
+
+  // test for new way of logical type handling
+  @Test
+  public void testFromConnectLogicalDateNew() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Date");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DATE);
+    org.apache.avro.LogicalTypes.date().addToSchema(avroSchema);
+    checkNonRecordConversionNew(avroSchema, 10000, Date.SCHEMA,
+        EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime(), avroData);
+  }
+
+  // test for new way of logical type handling
+  @Test
+  public void testFromConnectLogicalTimeNew() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Time");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MILLIS);
+    org.apache.avro.LogicalTypes.timeMillis().addToSchema(avroSchema);
+    checkNonRecordConversionNew(avroSchema, 10000, Time.SCHEMA,
+        EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime(), avroData);
+  }
+
+  // test for new way of logical type handling
+  @Test
+  public void testFromConnectLogicalTimestampNew() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp("connect.name", "org.apache.kafka.connect.data.Timestamp");
+    avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MILLIS);
+    org.apache.avro.LogicalTypes.timestampMillis().addToSchema(avroSchema);
+    java.util.Date date = new java.util.Date();
+    checkNonRecordConversionNew(avroSchema, date.getTime(), Timestamp.SCHEMA, date, avroData);
+  }
+
+  // test for old way of logical type handling
   @Test
   public void testFromConnectLogicalDecimal() {
     org.apache.avro.Schema avroSchema = createDecimalSchema(true, 64);
@@ -755,6 +820,7 @@ public class AvroDataTest {
     checkNonRecordConversionNull(Decimal.builder(2).optional().build());
   }
 
+  // test for old way of logical type handling
   @Test
   public void testFromConnectLogicalDate() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
@@ -765,6 +831,7 @@ public class AvroDataTest {
                              EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime(), avroData);
   }
 
+  // test for old way of logical type handling
   @Test
   public void testFromConnectLogicalTime() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().intType();
@@ -775,6 +842,7 @@ public class AvroDataTest {
                              EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime(), avroData);
   }
 
+  // test for old way of logical type handling
   @Test
   public void testFromConnectLogicalTimestamp() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
@@ -2050,6 +2118,18 @@ public class AvroDataTest {
     return container;
   }
 
+  private NonRecordContainer checkNonRecordConversionNew(
+      org.apache.avro.Schema expectedSchema, Object expected,
+      Schema schema, Object value, AvroData avroData)
+  {
+    Object converted = avroData.fromConnectData(schema, value);
+    assertTrue(converted instanceof NonRecordContainer);
+    NonRecordContainer container = (NonRecordContainer) converted;
+    assertSchemaEquals(expectedSchema, container.getSchema());
+    assertValueEquals(expected, container.getValue());
+    return container;
+  }
+
   private void checkNonRecordConversionNull(Schema schema)
   {
     Object converted = avroData.fromConnectData(schema, null);
@@ -2070,6 +2150,8 @@ public class AvroDataTest {
     assertEquals(expected.getLogicalType(), actual.getLogicalType());
     assertEquals(expected.getType(), actual.getType());
     assertEquals(expected.getDoc(), actual.getDoc());
+    // added to test new way of handling logical type
+    assertEquals(expected.getLogicalType(), actual.getLogicalType());
     switch(actual.getType()) {
       case UNION:
         assertEquals(expected.getTypes(), actual.getTypes());
