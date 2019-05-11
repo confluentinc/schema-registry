@@ -33,7 +33,6 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -299,9 +298,9 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
     // Do final cleanup
     AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
     this.stopped.set(true);
-    Utils.closeQuietly(coordinator, "coordinator", firstException);
-    Utils.closeQuietly(metrics, "consumer metrics", firstException);
-    Utils.closeQuietly(client, "consumer network client", firstException);
+    closeQuietly(coordinator, "coordinator", firstException);
+    closeQuietly(metrics, "consumer metrics", firstException);
+    closeQuietly(client, "consumer network client", firstException);
     AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
     if (firstException.get() != null && !swallowException) {
       throw new KafkaException(
@@ -310,6 +309,20 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       );
     } else {
       log.debug("The schema registry group member has stopped.");
+    }
+  }
+
+  private static void closeQuietly(AutoCloseable closeable,
+                                   String name,
+                                   AtomicReference<Throwable> firstException
+  ) {
+    if (closeable != null) {
+      try {
+        closeable.close();
+      } catch (Throwable t) {
+        firstException.compareAndSet(null, t);
+        log.error("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
+      }
     }
   }
 }
