@@ -122,9 +122,9 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   }
 
   @Override
-  public JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
+  public JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
     ByteBuffer metadata = SchemaRegistryProtocol.serializeMetadata(identity);
-    return new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+    return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
             Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName(SR_SUBPROTOCOL_V0)
                     .setMetadata(metadata.array())).iterator());

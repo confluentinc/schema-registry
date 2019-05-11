@@ -140,7 +140,7 @@ public class SchemaRegistryCoordinatorTest {
 
   @Test
   public void testMetadata() {
-    JoinGroupRequestData.JoinGroupRequestProtocolSet serialized = coordinator.metadata();
+    JoinGroupRequestData.JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
     assertEquals(1, serialized.size());
 
     JoinGroupRequestData.JoinGroupRequestProtocol defaultMetadata = serialized.iterator().next();
