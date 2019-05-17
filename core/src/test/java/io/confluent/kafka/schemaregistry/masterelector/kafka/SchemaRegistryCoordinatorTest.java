@@ -23,6 +23,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -170,9 +171,9 @@ public class SchemaRegistryCoordinatorTest {
       @Override
       public boolean matches(AbstractRequest body) {
         SyncGroupRequest sync = (SyncGroupRequest) body;
-        return sync.memberId().equals(consumerId) &&
-               sync.generationId() == 1 &&
-               sync.groupAssignment().containsKey(consumerId);
+        return sync.data.memberId().equals(consumerId) &&
+               sync.data.generationId() == 1 &&
+               sync.groupAssignments().containsKey(consumerId);
       }
     }, syncGroupResponse);
     coordinator.ensureActiveGroup();
@@ -207,9 +208,9 @@ public class SchemaRegistryCoordinatorTest {
       @Override
       public boolean matches(AbstractRequest body) {
         SyncGroupRequest sync = (SyncGroupRequest) body;
-        return sync.memberId().equals(consumerId) &&
-               sync.generationId() == 1 &&
-               sync.groupAssignment().containsKey(consumerId);
+        return sync.data.memberId().equals(consumerId) &&
+               sync.data.generationId() == 1 &&
+               sync.groupAssignments().containsKey(consumerId);
       }
     }, syncGroupResponse);
 
@@ -246,9 +247,9 @@ public class SchemaRegistryCoordinatorTest {
       @Override
       public boolean matches(AbstractRequest body) {
         SyncGroupRequest sync = (SyncGroupRequest) body;
-        return sync.memberId().equals(consumerId) &&
-               sync.generationId() == 1 &&
-               sync.groupAssignment().containsKey(consumerId);
+        return sync.data.memberId().equals(consumerId) &&
+               sync.data.generationId() == 1 &&
+               sync.groupAssignments().containsKey(consumerId);
       }
     }, syncGroupResponse);
 
@@ -281,9 +282,9 @@ public class SchemaRegistryCoordinatorTest {
       @Override
       public boolean matches(AbstractRequest body) {
         SyncGroupRequest sync = (SyncGroupRequest) body;
-        return sync.memberId().equals(consumerId) &&
-               sync.generationId() == 1 &&
-               sync.groupAssignment().isEmpty();
+        return sync.data.memberId().equals(consumerId) &&
+               sync.data.generationId() == 1 &&
+               sync.groupAssignments().isEmpty();
       }
     }, syncGroupResponse);
     coordinator.ensureActiveGroup();
@@ -349,7 +350,10 @@ public class SchemaRegistryCoordinatorTest {
         assignmentError, master, masterIdentity
     );
     ByteBuffer buf = SchemaRegistryProtocol.serializeAssignment(assignment);
-    return new SyncGroupResponse(error, buf);
+    return new SyncGroupResponse(new SyncGroupResponseData()
+        .setErrorCode(error.code())
+        .setAssignment(buf.array())
+    );
   }
 
   private static class MockRebalanceListener implements SchemaRegistryRebalanceListener {
