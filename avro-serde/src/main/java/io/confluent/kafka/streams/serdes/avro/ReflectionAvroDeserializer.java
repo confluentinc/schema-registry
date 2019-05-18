@@ -18,8 +18,8 @@ package io.confluent.kafka.streams.serdes.avro;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import java.lang.reflect.Type;
 import java.util.Map;
+import org.apache.avro.Schema;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -38,10 +38,10 @@ import org.apache.kafka.common.serialization.Deserializer;
 public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
 
   private final KafkaAvroDeserializer<T> inner;
-  private final Type type;
+  private final Schema schema;
 
   public ReflectionAvroDeserializer(Class<T> type) {
-    this.type = type;
+    this.schema = ReflectData.get().getSchema(type);
     this.inner = new KafkaAvroDeserializer<>();
   }
 
@@ -49,7 +49,7 @@ public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
    * For testing purposes only.
    */
   ReflectionAvroDeserializer(final SchemaRegistryClient client, Class<T> type) {
-    this.type = type;
+    this.schema = ReflectData.get().getSchema(type);
     this.inner = new KafkaAvroDeserializer<>(client);
   }
 
@@ -63,7 +63,7 @@ public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
 
   @Override
   public T deserialize(final String topic, final byte[] bytes) {
-    return inner.deserialize(topic, bytes, ReflectData.get().getSchema(type));
+    return inner.deserialize(topic, bytes, schema);
   }
 
   @Override
