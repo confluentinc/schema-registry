@@ -16,10 +16,12 @@
 
 package io.confluent.kafka.serializers;
 
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.serialization.Deserializer;
+
+import java.util.Map;
+
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 public class KafkaAvroDeserializer<T> extends AbstractKafkaAvroDeserializer<T>
     implements Deserializer<T> {
