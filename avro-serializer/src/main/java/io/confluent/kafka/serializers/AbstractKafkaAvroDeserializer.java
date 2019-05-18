@@ -308,7 +308,8 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
           } else {
             return result;
           }
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
+          // avro deserialization may throw AvroRuntimeException, NullPointerException, etc
           throw new SerializationException("Error deserializing Avro message for id "
               + schemaId, e);
         }
