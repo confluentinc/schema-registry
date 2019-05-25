@@ -77,7 +77,8 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
           metrics,
           metricGrpPrefix,
           time,
-          retryBackoffMs
+          retryBackoffMs,
+          true
     );
     this.identity = identity;
     this.assignmentSnapshot = null;
