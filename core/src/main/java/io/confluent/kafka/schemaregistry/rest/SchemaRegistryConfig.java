@@ -619,10 +619,15 @@ public class SchemaRegistryConfig extends RestConfig {
     final StringBuilder sb = new StringBuilder();
     for (String endpoint : endpoints) {
       if (!endpoint.startsWith(securityProtocolUrlPrefix)) {
-        log.warn(
-            "Ignoring Kafka broker endpoint " + endpoint + " that does not match the setting for "
-            + KAFKASTORE_SECURITY_PROTOCOL_CONFIG + "=" + securityProtocol);
-        continue;
+        if (endpoint.contains("://")) {
+          log.warn(
+              "Ignoring Kafka broker endpoint " + endpoint + " that does not match the setting for "
+                  + KAFKASTORE_SECURITY_PROTOCOL_CONFIG + "=" + securityProtocol);
+          continue;
+        } else {
+          // See https://github.com/confluentinc/schema-registry/issues/790
+          endpoint = securityProtocolUrlPrefix + endpoint;
+        }
       }
 
       if (sb.length() > 0) {
