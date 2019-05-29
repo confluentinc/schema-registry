@@ -99,6 +99,16 @@ public class SchemaRegistryConfigTest {
         SchemaRegistryConfig
             .endpointsToBootstrapServers(endpointsList, SecurityProtocol.SASL_SSL.toString())
     );
+
+    List<String> noprotocolEndpointsList = new ArrayList<String>();
+    noprotocolEndpointsList.add("localhost0:1234");
+    noprotocolEndpointsList.add("localhost1:1234");
+
+    assertEquals(
+        "PLAINTEXT://localhost0:1234,PLAINTEXT://localhost1:1234",
+        SchemaRegistryConfig
+            .endpointsToBootstrapServers(noprotocolEndpointsList, SecurityProtocol.PLAINTEXT.toString())
+    );
   }
 
   @Test
