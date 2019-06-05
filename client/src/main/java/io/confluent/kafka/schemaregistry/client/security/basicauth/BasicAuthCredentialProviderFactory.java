@@ -26,8 +26,12 @@ public class BasicAuthCredentialProviderFactory {
       basicAuthCredentialProviderMap = new HashMap<>();
 
   static {
-    for (BasicAuthCredentialProvider basicAuthCredentialProvider
-        : ServiceLoader.load(BasicAuthCredentialProvider.class)) {
+    ServiceLoader<BasicAuthCredentialProvider> serviceLoader = ServiceLoader.load(
+        BasicAuthCredentialProvider.class,
+        BasicAuthCredentialProviderFactory.class.getClassLoader()
+    );
+
+    for (BasicAuthCredentialProvider basicAuthCredentialProvider : serviceLoader) {
       basicAuthCredentialProviderMap.put(
           basicAuthCredentialProvider.alias(),
           basicAuthCredentialProvider);

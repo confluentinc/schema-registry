@@ -18,6 +18,9 @@ package io.confluent.kafka.schemaregistry.client;
 
 import java.util.Collections;
 import java.util.Objects;
+
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProviderFactory;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -124,17 +127,29 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     if (configs != null) {
-      String credentialSourceConfig =
+      String basicCredentialsSource =
           (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
 
-      if (credentialSourceConfig != null && !credentialSourceConfig.isEmpty()) {
+      if (basicCredentialsSource != null && !basicCredentialsSource.isEmpty()) {
         BasicAuthCredentialProvider basicAuthCredentialProvider =
             BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
-                credentialSourceConfig,
+                basicCredentialsSource,
                 configs
             );
 
         restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+      }
+
+      String bearerCredentialsSource =
+          (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
+
+      if (bearerCredentialsSource != null && !bearerCredentialsSource.isEmpty()) {
+        BearerAuthCredentialProvider bearerAuthCredentialProvider =
+            BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
+                bearerCredentialsSource,
+                configs
+            );
+        restService.setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
       }
     }
   }
