@@ -16,20 +16,19 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.common.config.ConfigException;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
-import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -46,10 +45,12 @@ public abstract class AbstractKafkaAvroSerDe {
 
   protected void configureClientProperties(AbstractKafkaAvroSerDeConfig config) {
     try {
-      List<String> urls = config.getSchemaRegistryUrls();
-      int maxSchemaObject = config.getMaxSchemasPerSubject();
-      Map<String, Object> originals = config.originalsWithPrefix("");
-      if (null == schemaRegistry) {
+      if (null == schemaRegistry && config.hasMockRegistry()) {
+        schemaRegistry = config.getMockSchemaRegistryClient();
+      } else if (null == schemaRegistry) {
+        List<String> urls = config.getSchemaRegistryUrls();
+        int maxSchemaObject = config.getMaxSchemasPerSubject();
+        Map<String, Object> originals = config.originalsWithPrefix("");
         schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject, originals);
       }
       keySubjectNameStrategy = config.keySubjectNameStrategy();

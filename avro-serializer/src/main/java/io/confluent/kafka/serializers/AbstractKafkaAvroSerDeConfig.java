@@ -16,17 +16,20 @@
 
 package io.confluent.kafka.serializers;
 
-import java.util.List;
-import java.util.Map;
-
 import io.confluent.common.config.AbstractConfig;
 import io.confluent.common.config.ConfigDef;
 import io.confluent.common.config.ConfigDef.Importance;
 import io.confluent.common.config.ConfigDef.Type;
+import io.confluent.common.config.ConfigException;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialSource;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * Base class for configs for serializers and deserializers, defining a few common configs and
@@ -34,11 +37,17 @@ import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
  */
 public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
+  public static final String MOCK_SCHEMA_REGISTRY_SCOPE_CONFIG = "mock.schema.registry.scope";
+  public static final String MOCK_SCHEMA_REGISTRY_SCOPE_DOC =
+      "For testing, a scope name to use to get a mock client from MockSchemaRegistry"
+      + "instead of an actual connection to Schema Registry. "
+      + "Either mock.schema.registry.scope or schema.registry.url is required.";
+
   public static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
-  public static final String
-      SCHEMA_REGISTRY_URL_DOC =
+  public static final String SCHEMA_REGISTRY_URL_DOC =
       "Comma-separated list of URLs for schema registry instances that can be used to register "
-      + "or look up schemas.";
+      + "or look up schemas. "
+      + "Either schema.registry.url or mock.schema.registry.scope is required.";
 
   public static final String MAX_SCHEMAS_PER_SUBJECT_CONFIG = "max.schemas.per.subject";
   public static final int MAX_SCHEMAS_PER_SUBJECT_DEFAULT = 1000;
@@ -79,7 +88,9 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
-        .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
+        .defineAlternative("registry", MOCK_SCHEMA_REGISTRY_SCOPE_CONFIG, Type.STRING, null,
+                Importance.LOW, MOCK_SCHEMA_REGISTRY_SCOPE_DOC)
+        .defineAlternative("registry", SCHEMA_REGISTRY_URL_CONFIG, Type.LIST, null,
                 Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
                 Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
@@ -105,7 +116,37 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   }
 
   public List<String> getSchemaRegistryUrls() {
-    return this.getList(SCHEMA_REGISTRY_URL_CONFIG);
+    if (hasMockRegistry()) {
+      return null;
+    } else {
+      return this.getList(SCHEMA_REGISTRY_URL_CONFIG);
+    }
+  }
+
+  public SchemaRegistryClient getMockSchemaRegistryClient() {
+    if (hasMockRegistry()) {
+      return MockSchemaRegistry.getClientForScope(getString(MOCK_SCHEMA_REGISTRY_SCOPE_CONFIG));
+    } else {
+      return null;
+    }
+  }
+
+  public boolean hasMockRegistry() {
+    if (contains(MOCK_SCHEMA_REGISTRY_SCOPE_CONFIG) && getSchemaRegistryUrls() == null) {
+      return true;
+    } else if (!contains(MOCK_SCHEMA_REGISTRY_SCOPE_CONFIG) && getSchemaRegistryUrls() != null) {
+      return false;
+    } else if (!contains(MOCK_SCHEMA_REGISTRY_SCOPE_CONFIG) && getSchemaRegistryUrls() == null) {
+      throw new ConfigException(
+        "Either " + MOCK_SCHEMA_REGISTRY_SCOPE_CONFIG + " or "
+        + SCHEMA_REGISTRY_URL_CONFIG + " is required."
+      );
+    } else {
+      throw new ConfigException(
+        MOCK_SCHEMA_REGISTRY_SCOPE_CONFIG + " cannot be used with "
+        + SCHEMA_REGISTRY_URL_CONFIG + "."
+      );
+    }
   }
 
   public boolean autoRegisterSchema() {
