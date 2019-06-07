@@ -132,7 +132,7 @@ public class RestServiceTest {
 
 
   /*
-   * Test setBasicAuthRequestHeader (private method) indirectly through getAllSubjects.
+   * Test setBearerAuthRequestHeader (private method) indirectly through getAllSubjects.
    */
   @Test
   public void testSetBearerAuthRequestHeader() throws Exception {

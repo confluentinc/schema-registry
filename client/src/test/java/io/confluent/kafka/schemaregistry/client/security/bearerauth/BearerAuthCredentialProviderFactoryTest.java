@@ -17,19 +17,13 @@
 package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-import org.apache.kafka.common.security.JaasUtils;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import javax.security.auth.login.Configuration;
-import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class BearerAuthCredentialProviderFactoryTest {
@@ -37,19 +31,7 @@ public class BearerAuthCredentialProviderFactoryTest {
 
   @Before
   public void setup() throws IOException {
-    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_TOKEN_CONFIG, "user:password");
-    File jaasConfigFile = File.createTempFile("ks-jaas-",".conf");
-    jaasConfigFile.deleteOnExit();
-
-    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM,jaasConfigFile.getPath());
-
-    List<String> lines = new ArrayList<>();
-    lines.add("KafkaClient { org.apache.kafka.common.security.plain.PlainLoginModule required "
-            + "username=\"user\""
-            +" password=\"password\";};");
-    Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);
-
-    Configuration.setConfiguration(null);
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_TOKEN_CONFIG, "auth-token");
   }
 
   @Test
