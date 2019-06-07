@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
+import org.apache.kafka.common.config.ConfigException;
 
 /**
  * Thread-safe Schema Registry Client with client side caching.
@@ -129,21 +130,25 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     if (configs != null) {
       String basicCredentialsSource =
           (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
+      String bearerCredentialsSource =
+          (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
 
-      if (basicCredentialsSource != null && !basicCredentialsSource.isEmpty()) {
+      if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
+        throw new ConfigException(String.format(
+            "Only one of '%s' and '%s' may be specified",
+            SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE,
+            SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE
+        ));
+
+      } else if (isNonEmpty(basicCredentialsSource)) {
         BasicAuthCredentialProvider basicAuthCredentialProvider =
             BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
                 basicCredentialsSource,
                 configs
             );
-
         restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
-      }
 
-      String bearerCredentialsSource =
-          (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
-
-      if (bearerCredentialsSource != null && !bearerCredentialsSource.isEmpty()) {
+      } else if (isNonEmpty(bearerCredentialsSource)) {
         BearerAuthCredentialProvider bearerAuthCredentialProvider =
             BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
                 bearerCredentialsSource,
@@ -152,6 +157,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         restService.setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
       }
     }
+  }
+
+  private static boolean isNonEmpty(String s) {
+    return s != null && !s.isEmpty();
   }
 
   private int registerAndGetId(String subject, Schema schema)
