@@ -27,6 +27,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.client.security.auth.providers.BuiltInAuthProviders;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 
@@ -61,12 +62,25 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String AUTO_REGISTER_SCHEMAS_DOC =
       "Specify if the Serializer should attempt to register the Schema with Schema Registry";
 
+  public static final String HTTP_AUTH_CREDENTIALS_PROVIDER_PROP =
+          SchemaRegistryClientConfig.HTTP_AUTH_CREDENTIALS_PROVIDER_PROP;
+  private static final String HTTP_AUTH_CREDENTIALS_PROVIDER_DEFAULT = "";
+  private static final String HTTP_AUTH_CREDENTIALS_PROVIDER_DOC = "HTTP authentication scheme. "
+          + "Supported schemes are " + BuiltInAuthProviders.builtInHttpCredentialProviders();
+
+  public static final String TOKEN_AUTH_CREDENTIAL_PROP =
+          SchemaRegistryClientConfig.TOKEN_AUTH_CREDENTIAL_PROP;
+  private static final String TOKEN_AUTH_CREDENTIAL_DEFAULT = "";
+  private static final String TOKEN_AUTH_CREDENTIAL_DOC =
+          "String representation of an Authentication Token";
+
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
-  public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
-  public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DOC =
+  private static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
+  private static final String BASIC_AUTH_CREDENTIALS_SOURCE_DOC =
       "Specify how to pick the credentials for Basic Auth header. "
-      + "The supported values are URL, USER_INFO and SASL_INHERIT";
+      + "The supported values are"
+      + BuiltInAuthProviders.builtInBasicAuthCredentialProviders();
 
   @Deprecated
   public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
@@ -101,8 +115,13 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
                 Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
         .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
                 Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
+        .define(HTTP_AUTH_CREDENTIALS_PROVIDER_PROP,
+                Type.STRING, HTTP_AUTH_CREDENTIALS_PROVIDER_DEFAULT,
+                Importance.MEDIUM, HTTP_AUTH_CREDENTIALS_PROVIDER_DOC)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
             Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
+        .define(TOKEN_AUTH_CREDENTIAL_PROP, Type.STRING, TOKEN_AUTH_CREDENTIAL_DEFAULT,
+                Importance.MEDIUM, TOKEN_AUTH_CREDENTIAL_DOC)
         .define(SCHEMA_REGISTRY_USER_INFO_CONFIG, Type.PASSWORD, SCHEMA_REGISTRY_USER_INFO_DEFAULT,
                 Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
         .define(USER_INFO_CONFIG, Type.PASSWORD, USER_INFO_DEFAULT,

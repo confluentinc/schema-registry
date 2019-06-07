@@ -17,10 +17,14 @@
 package io.confluent.kafka.schemaregistry.client;
 
 public class SchemaRegistryClientConfig {
+
+  public static final String HTTP_AUTH_CREDENTIALS_PROVIDER_PROP = "http.auth.credentials.provider";
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = "basic.auth.credentials.source";
+  public static final String USER_INFO_CONFIG = "basic.auth.user.info";
+  public static final String TOKEN_AUTH_CREDENTIALS_SOURCE = "token.auth.credentials.source";
+  public static final String TOKEN_AUTH_CREDENTIAL_PROP = "token.auth.credential";
+
   @Deprecated
   public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
       "schema.registry.basic.auth.user.info";
-  public static final String USER_INFO_CONFIG =
-      "basic.auth.user.info";
 }

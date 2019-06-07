@@ -21,6 +21,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.confluent.kafka.schemaregistry.client.security.auth.providers.HttpBasicCredentialProvider;
+import io.confluent.kafka.schemaregistry.client.security.auth.providers.HttpCredentialProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +33,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -127,7 +128,7 @@ public class RestService {
 
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
-  private BasicAuthCredentialProvider basicAuthCredentialProvider;
+  private HttpCredentialProvider httpCredentialProvider;
   private Map<String, String> httpHeaders;
 
   public RestService(UrlList baseUrls) {
@@ -176,7 +177,7 @@ public class RestService {
 
       setupSsl(connection);
       connection.setRequestMethod(method);
-      setBasicAuthRequestHeader(connection);
+      setAuthRequestHeader(connection);
       setCustomHeaders(connection);
       // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
       // On the other hand, leaving this out breaks nothing.
@@ -595,13 +596,11 @@ public class RestService {
     return baseUrls;
   }
 
-  private void setBasicAuthRequestHeader(HttpURLConnection connection) {
-    String userInfo;
-    if (basicAuthCredentialProvider != null
-        && (userInfo = basicAuthCredentialProvider.getUserInfo(connection.getURL())) != null) {
-      String authHeader = Base64.getEncoder().encodeToString(
-              userInfo.getBytes(StandardCharsets.UTF_8));
-      connection.setRequestProperty("Authorization", "Basic " + authHeader);
+  private void setAuthRequestHeader(HttpURLConnection connection) {
+    if (httpCredentialProvider != null) {
+      connection.setRequestProperty("Authorization",
+              httpCredentialProvider.getScheme()
+                      + " " + httpCredentialProvider.getCredentials());
     }
   }
 
@@ -611,9 +610,16 @@ public class RestService {
     }
   }
 
+  public void setCredentialProvider(HttpCredentialProvider httpCredentialProvider) {
+    this.httpCredentialProvider = httpCredentialProvider;
+  }
+
+  @Deprecated
   public void setBasicAuthCredentialProvider(
       BasicAuthCredentialProvider basicAuthCredentialProvider) {
-    this.basicAuthCredentialProvider = basicAuthCredentialProvider;
+    HttpBasicCredentialProvider httpCredentialProvider =
+            new HttpBasicCredentialProvider(basicAuthCredentialProvider.getUserInfo(null));
+    this.setCredentialProvider(httpCredentialProvider);
   }
 
   public void setHttpHeaders(Map<String, String> httpHeaders) {

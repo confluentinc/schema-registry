@@ -87,15 +87,13 @@ public class RestServiceTest {
     RestService restService = new RestService("http://localhost:8081");
 
     BasicAuthCredentialProvider basicAuthCredentialProvider = createMock(BasicAuthCredentialProvider.class);
-    restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
 
     HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
     InputStream inputStream = createNiceMock(InputStream.class);
 
     expectNew(URL.class, anyString()).andReturn(url);
     expect(url.openConnection()).andReturn(httpURLConnection);
-    expect(httpURLConnection.getURL()).andReturn(url);
-    expect(basicAuthCredentialProvider.getUserInfo(anyObject(URL.class))).andReturn("user:password");
+    expect(basicAuthCredentialProvider.getUserInfo(null)).andReturn("user:password");
     expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
 
     // Make sure that the Authorization header is set with the correct value for "user:password"
@@ -124,6 +122,7 @@ public class RestServiceTest {
     replay(basicAuthCredentialProvider);
     replay(InputStream.class, inputStream);
 
+    restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
     restService.getAllSubjects();
 
     verify(httpURLConnection);

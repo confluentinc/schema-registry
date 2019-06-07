@@ -18,6 +18,9 @@ package io.confluent.kafka.schemaregistry.client;
 
 import java.util.Collections;
 import java.util.Objects;
+
+import io.confluent.kafka.schemaregistry.client.security.auth.providers.BuiltInAuthProviders;
+import io.confluent.kafka.schemaregistry.client.security.auth.providers.HttpCredentialProvider;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -34,8 +37,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpd
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
-import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 
 /**
  * Thread-safe Schema Registry Client with client side caching.
@@ -125,16 +126,15 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
     if (configs != null) {
       String credentialSourceConfig =
-          (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
+          (String) configs.get(SchemaRegistryClientConfig.HTTP_AUTH_CREDENTIALS_PROVIDER_PROP);
 
       if (credentialSourceConfig != null && !credentialSourceConfig.isEmpty()) {
-        BasicAuthCredentialProvider basicAuthCredentialProvider =
-            BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
-                credentialSourceConfig,
-                configs
-            );
+        HttpCredentialProvider httpCredentialProvider =
+            BuiltInAuthProviders.loadHttpCredentialProviders(
+                credentialSourceConfig);
+        httpCredentialProvider.configure(configs);
 
-        restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+        restService.setCredentialProvider(httpCredentialProvider);
       }
     }
   }
