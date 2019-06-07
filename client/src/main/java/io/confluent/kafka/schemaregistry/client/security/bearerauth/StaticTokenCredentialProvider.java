@@ -24,7 +24,7 @@ import java.util.Map;
 
 public class StaticTokenCredentialProvider implements BearerAuthCredentialProvider {
 
-  private String userInfo;
+  private String bearerToken;
 
   @Override
   public String alias() {
@@ -33,8 +33,8 @@ public class StaticTokenCredentialProvider implements BearerAuthCredentialProvid
 
   @Override
   public void configure(Map<String, ?> configs) {
-    userInfo = (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_TOKEN_CONFIG);
-    if (userInfo != null && !userInfo.isEmpty()) {
+    bearerToken = (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_TOKEN_CONFIG);
+    if (bearerToken != null && !bearerToken.isEmpty()) {
       return;
     }
 
@@ -48,6 +48,6 @@ public class StaticTokenCredentialProvider implements BearerAuthCredentialProvid
 
   @Override
   public String getBearerToken(URL url) {
-    return userInfo;
+    return bearerToken;
   }
 }

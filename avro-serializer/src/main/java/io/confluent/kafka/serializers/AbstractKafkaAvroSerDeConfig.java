@@ -70,7 +70,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
           .BEARER_AUTH_CREDENTIALS_SOURCE;
-  public static final String BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT = "";
+  public static final String BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT = "STATIC_TOKEN";
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE_DOC =
           "Specify how to pick the credentials for Bearer Auth header. ";
 
