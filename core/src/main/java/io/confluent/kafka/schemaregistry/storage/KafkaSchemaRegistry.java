@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.Vector;
 import java.util.concurrent.TimeUnit;
@@ -680,10 +681,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private AvroSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
-    AvroSchema avroSchema = AvroUtils.parseSchema(schema.getSchema());
-    if (avroSchema == null) {
-      throw new InvalidSchemaException("Invalid schema " + schema.toString());
-    }
+    AvroSchema avroSchema = Optional.ofNullable(schema.getSchema())
+            .filter(json -> !json.isEmpty())
+            .map(AvroUtils::parseSchema)
+            .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema));
     schema.setSchema(avroSchema.canonicalString);
     return avroSchema;
   }
