@@ -67,6 +67,12 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
       "Specify how to pick the credentials for Basic Auth header. "
       + "The supported values are URL, USER_INFO and SASL_INHERIT";
 
+  public static final String BEARER_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
+          .BEARER_AUTH_CREDENTIALS_SOURCE;
+  public static final String BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT = "STATIC_TOKEN";
+  public static final String BEARER_AUTH_CREDENTIALS_SOURCE_DOC =
+          "Specify how to pick the credentials for Bearer Auth header. ";
+
   @Deprecated
   public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
       SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG;
@@ -77,6 +83,12 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String USER_INFO_CONFIG =
       SchemaRegistryClientConfig.USER_INFO_CONFIG;
   public static final String USER_INFO_DEFAULT = "";
+
+  public static final String BEARER_AUTH_TOKEN_CONFIG = SchemaRegistryClientConfig
+          .BEARER_AUTH_TOKEN_CONFIG;
+  public static final String BEARER_AUTH_TOKEN_DEFAULT = "";
+  public static final String BEARER_AUTH_TOKEN_DOC =
+          "Specify the Bearer token to be used for authentication";
 
   public static final String KEY_SUBJECT_NAME_STRATEGY = "key.subject.name.strategy";
   public static final String KEY_SUBJECT_NAME_STRATEGY_DEFAULT =
@@ -102,10 +114,14 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
             Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
+        .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
+                Importance.MEDIUM, BEARER_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(SCHEMA_REGISTRY_USER_INFO_CONFIG, Type.PASSWORD, SCHEMA_REGISTRY_USER_INFO_DEFAULT,
                 Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
         .define(USER_INFO_CONFIG, Type.PASSWORD, USER_INFO_DEFAULT,
                 Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
+        .define(BEARER_AUTH_TOKEN_CONFIG, Type.PASSWORD, BEARER_AUTH_TOKEN_DEFAULT,
+                Importance.MEDIUM, BEARER_AUTH_TOKEN_DOC)
         .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
         .define(VALUE_SUBJECT_NAME_STRATEGY, Type.CLASS, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
