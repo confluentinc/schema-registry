@@ -23,10 +23,13 @@ import java.util.HashMap;
 import java.util.Arrays;
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import org.apache.kafka.common.config.ConfigException;
+
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
 
 import static org.easymock.EasyMock.anyBoolean;
 import static org.easymock.EasyMock.anyString;
@@ -39,7 +42,6 @@ import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.stream.IntStream;
@@ -344,6 +346,24 @@ public class CachedSchemaRegistryClientTest {
             throw new RuntimeException(e);
           }
         });
+  }
+
+  @Test(expected = ConfigException.class)
+  public void testMultipleCredentialProvider() throws Exception {
+    Map<String, String> config = new HashMap<>();
+    // Default credential provider
+    config.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "URL");
+    config.put(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE, "STATIC_TOKEN");
+    config.put(SchemaRegistryClientConfig.BEARER_AUTH_TOKEN_CONFIG, "auth-token");
+
+    // Throws ConfigException if both credential providers are fully configured.
+    new CachedSchemaRegistryClient(
+            // Sets initial credential set for URL provider
+            new RestService("http://user:password@sr.com:8020"),
+            IDENTITY_MAP_CAPACITY,
+            config,
+            null
+    );
   }
 
   private static Schema avroSchema(final int i) {
