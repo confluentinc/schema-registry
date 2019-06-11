@@ -20,7 +20,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
 import java.util.List;
-import java.util.concurrent.locks.Lock;
 
 /**
  * Internal interface that provides various indexed methods that help lookup the underlying schemas.
@@ -129,10 +128,4 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param subject the subject, or null for all subjects
    */
   void clearSubjects(String subject) throws StoreException;
-
-  long lastOffset(String subject);
-
-  void setLastOffset(String subject, long offset);
-
-  Lock lock(String subject);
 }

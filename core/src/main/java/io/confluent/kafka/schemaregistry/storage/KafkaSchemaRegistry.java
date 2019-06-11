@@ -172,6 +172,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return new InMemoryCache<SchemaRegistryKey, SchemaRegistryValue>();
   }
 
+  protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache() {
+    return lookupCache;
+  }
+
+  protected Serializer<SchemaRegistryKey, SchemaRegistryValue> getSerializer() {
+    return serializer;
+  }
+
   protected IdGenerator identityGenerator(SchemaRegistryConfig config) {
     IdGenerator idGenerator;
     if (config.useKafkaCoordination()) {
@@ -180,6 +188,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       idGenerator = new ZookeeperIdGenerator();
     }
     idGenerator.configure(config);
+    return idGenerator;
+  }
+
+  protected IdGenerator getIdGenerator() {
     return idGenerator;
   }
 
@@ -326,8 +338,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       checkRegisterMode(subject, schema);
 
       // Ensure cache is up-to-date before any potential writes
-      kafkaStore.waitUntilKafkaReaderReachesOffset(
-          lookupCache.lastOffset(subject), kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastSubjectOffset(subject, kafkaStoreTimeoutMs);
 
       // see if the schema to be registered already exists
       int schemaId = schema.getId();
@@ -430,7 +441,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       return existingSchema.getId();
     }
 
-    lookupCache.lock(subject).lock();
+    kafkaStore.lockFor(subject).lock();
     try {
       if (isMaster()) {
         return register(subject, schema);
@@ -444,7 +455,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
       }
     } finally {
-      lookupCache.lock(subject).unlock();
+      kafkaStore.lockFor(subject).unlock();
     }
   }
 
@@ -457,8 +468,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       // Ensure cache is up-to-date before any potential writes
-      kafkaStore.waitUntilKafkaReaderReachesOffset(
-          lookupCache.lastOffset(subject), kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastSubjectOffset(subject, kafkaStoreTimeoutMs);
       SchemaValue schemaValue = new SchemaValue(schema);
       schemaValue.setDeleted(true);
       kafkaStore.put(new SchemaKey(subject, schema.getVersion()), schemaValue);
@@ -482,7 +492,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       Map<String, String> headerProperties, String subject,
       Schema schema) throws SchemaRegistryException {
 
-    lookupCache.lock(subject).lock();
+    kafkaStore.lockFor(subject).lock();
     try {
       if (isMaster()) {
         deleteSchemaVersion(subject, schema);
@@ -496,7 +506,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
       }
     } finally {
-      lookupCache.lock(subject).unlock();
+      kafkaStore.lockFor(subject).unlock();
     }
   }
 
@@ -507,8 +517,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       if (getModeInScope(subject) == Mode.READONLY) {
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
-      kafkaStore.waitUntilKafkaReaderReachesOffset(
-          lookupCache.lastOffset(subject), kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastSubjectOffset(subject, kafkaStoreTimeoutMs);
       List<Integer> deletedVersions = new ArrayList<>();
       int deleteWatermarkVersion = 0;
       Iterator<Schema> schemasToBeDeleted = getAllVersions(subject, false);
@@ -538,7 +547,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public List<Integer> deleteSubjectOrForward(
       Map<String, String> requestProperties,
       String subject) throws SchemaRegistryException {
-    lookupCache.lock(subject).lock();
+    kafkaStore.lockFor(subject).lock();
     try {
       if (isMaster()) {
         return deleteSubject(subject);
@@ -552,7 +561,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
       }
     } finally {
-      lookupCache.lock(subject).unlock();
+      kafkaStore.lockFor(subject).unlock();
     }
   }
 
@@ -844,8 +853,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     ConfigKey configKey = new ConfigKey(subject);
     try {
-      kafkaStore.waitUntilKafkaReaderReachesOffset(
-          lookupCache.lastOffset(subject), kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastSubjectOffset(subject, kafkaStoreTimeoutMs);
       kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
       log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
                 + " Kafka data store with key " + configKey.toString());
@@ -859,7 +867,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                                     Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
              UnknownMasterException, OperationNotPermittedException {
-    lookupCache.lock(subject).lock();
+    kafkaStore.lockFor(subject).lock();
     try {
       if (isMaster()) {
         updateCompatibilityLevel(subject, newCompatibilityLevel);
@@ -874,7 +882,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
       }
     } finally {
-      lookupCache.lock(subject).unlock();
+      kafkaStore.lockFor(subject).unlock();
     }
   }
 
@@ -954,8 +962,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     ModeKey modeKey = new ModeKey(subject);
     try {
-      kafkaStore.waitUntilKafkaReaderReachesOffset(
-          lookupCache.lastOffset(subject), kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastSubjectOffset(subject, kafkaStoreTimeoutMs);
       if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT) {
         // Changing to import mode requires that no schemas exist with matching subjects.
         if (hasSubjects(subject)) {
@@ -976,7 +983,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public void setModeOrForward(String subject, Mode mode, Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownMasterException {
-    lookupCache.lock(subject).lock();
+    kafkaStore.lockFor(subject).lock();
     try {
       if (isMaster()) {
         setMode(subject, mode);
@@ -990,7 +997,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
       }
     } finally {
-      lookupCache.lock(subject).unlock();
+      kafkaStore.lockFor(subject).unlock();
     }
   }
 

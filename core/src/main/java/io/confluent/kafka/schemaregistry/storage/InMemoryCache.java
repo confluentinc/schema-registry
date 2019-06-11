@@ -23,8 +23,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
@@ -42,8 +40,6 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final Map<Integer, SchemaKey> guidToSchemaKey;
   private final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
   private final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
-  private final Lock lock = new ReentrantLock();
-  private volatile long lastOffset = -1;
 
   public InMemoryCache() {
     this(new ConcurrentSkipListMap<>());
@@ -297,20 +293,5 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       }
       return false;
     };
-  }
-
-  @Override
-  public long lastOffset(String subject) {
-    return lastOffset;
-  }
-
-  @Override
-  public void setLastOffset(String subject, long lastOffset) {
-    this.lastOffset = lastOffset;
-  }
-
-  @Override
-  public Lock lock(String subject) {
-    return lock;
   }
 }

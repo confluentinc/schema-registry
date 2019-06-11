@@ -43,6 +43,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
@@ -74,7 +76,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
   // messages with this key
   private final K noopKey;
   private volatile long lastWrittenOffset = -1L;
+  private volatile long lastSubjectOffset = -1L;
   private final SchemaRegistryConfig config;
+  private final Lock lock = new ReentrantLock();
 
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
@@ -283,9 +287,17 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   /**
+   * Wait until the KafkaStore catches up to the given subject offset in the Kafka topic.
+   */
+  public void waitUntilKafkaReaderReachesLastSubjectOffset(String subject, int timeoutMs)
+      throws StoreException {
+    waitUntilKafkaReaderReachesOffset(lastOffset(subject), timeoutMs);
+  }
+
+  /**
    * Wait until the KafkaStore catches up to the given offset in the Kafka topic.
    */
-  public void waitUntilKafkaReaderReachesOffset(long offset, int timeoutMs) throws StoreException {
+  private void waitUntilKafkaReaderReachesOffset(long offset, int timeoutMs) throws StoreException {
     if (offset == -1) {
       return;
     }
@@ -332,8 +344,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
       this.lastWrittenOffset = recordMetadata.offset();
       if (key instanceof SubjectContainer) {
-        ((LookupCache<K, V>) localStore).setLastOffset(
-            ((SubjectContainer) key).getSubject(), recordMetadata.offset());
+        setLastOffset(((SubjectContainer) key).getSubject(), recordMetadata.offset());
       }
       waitUntilKafkaReaderReachesOffset(recordMetadata.offset(), timeout);
       knownSuccessfulWrite = true;
@@ -452,5 +463,17 @@ public class KafkaStore<K, V> implements Store<K, V> {
     } catch (Exception e) {
       throw new StoreException("Failed to write Noop record to kafka store.", e);
     }
+  }
+
+  public long lastOffset(String subject) {
+    return lastSubjectOffset;
+  }
+
+  public void setLastOffset(String subject, long lastOffset) {
+    this.lastSubjectOffset = lastOffset;
+  }
+
+  public Lock lockFor(String subject) {
+    return lock;
   }
 }
