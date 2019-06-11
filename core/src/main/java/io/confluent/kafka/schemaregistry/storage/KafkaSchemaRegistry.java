@@ -191,7 +191,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return idGenerator;
   }
 
-  protected IdGenerator getIdGenerator() {
+  protected IdGenerator getIdentityGenerator() {
     return idGenerator;
   }
 
