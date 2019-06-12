@@ -927,13 +927,40 @@ public class AvroData {
         }
       }
 
+      // the new and correct way to handle logical types
+      if (schema.name() != null) {
+        if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          String precisionString = schema.parameters().get(CONNECT_AVRO_DECIMAL_PRECISION_PROP);
+          String scaleString = schema.parameters().get(Decimal.SCALE_FIELD);
+          int precision = precisionString == null ? CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT :
+              Integer.parseInt(precisionString);
+          int scale = scaleString == null ? 0 : Integer.parseInt(scaleString);
+          org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(baseSchema);
+        } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          org.apache.avro.LogicalTypes.timeMillis().addToSchema(baseSchema);
+        } else if (Timestamp.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          org.apache.avro.LogicalTypes.timestampMillis().addToSchema(baseSchema);
+        } else if (Date.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          org.apache.avro.LogicalTypes.date().addToSchema(baseSchema);
+        }
+      }
+
+      // Initially, to add support for logical types a new property was added
+      // with key `logicalType`. This enabled logical types for avro schemas but not others,
+      // such as parquet. The use of 'addToSchema` above supersedes this method here,
+      //  which should eventually be removed.
+      // Keeping for backwards compatibility until a major version upgrade happens.
+
+      // Below follows the older method of supporting logical types via properties.
+      // It is retained for now and will be deprecated eventually.
       // Only Avro named types (record, enum, fixed) may contain namespace + name. Only Connect's
       // struct converts to one of those (record), so for everything else that has a name we store
       // the full name into a special property. For uniformity, we also duplicate this info into
       // the same field in records as well even though it will also be available in the namespace()
       // and name().
       if (schema.name() != null) {
-        if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+        if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())
+            && schema.parameters().containsKey(CONNECT_AVRO_DECIMAL_PRECISION_PROP)) {
           baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DECIMAL);
         } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
           baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIME_MILLIS);
