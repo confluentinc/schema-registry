@@ -338,7 +338,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       checkRegisterMode(subject, schema);
 
       // Ensure cache is up-to-date before any potential writes
-      kafkaStore.waitUntilKafkaReaderReachesLastSubjectOffset(subject, kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
 
       // see if the schema to be registered already exists
       int schemaId = schema.getId();
@@ -468,7 +468,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       // Ensure cache is up-to-date before any potential writes
-      kafkaStore.waitUntilKafkaReaderReachesLastSubjectOffset(subject, kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       SchemaValue schemaValue = new SchemaValue(schema);
       schemaValue.setDeleted(true);
       kafkaStore.put(new SchemaKey(subject, schema.getVersion()), schemaValue);
@@ -517,7 +517,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       if (getModeInScope(subject) == Mode.READONLY) {
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
-      kafkaStore.waitUntilKafkaReaderReachesLastSubjectOffset(subject, kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       List<Integer> deletedVersions = new ArrayList<>();
       int deleteWatermarkVersion = 0;
       Iterator<Schema> schemasToBeDeleted = getAllVersions(subject, false);
@@ -853,7 +853,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     ConfigKey configKey = new ConfigKey(subject);
     try {
-      kafkaStore.waitUntilKafkaReaderReachesLastSubjectOffset(subject, kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
       log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
                 + " Kafka data store with key " + configKey.toString());
@@ -962,7 +962,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     ModeKey modeKey = new ModeKey(subject);
     try {
-      kafkaStore.waitUntilKafkaReaderReachesLastSubjectOffset(subject, kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT) {
         // Changing to import mode requires that no schemas exist with matching subjects.
         if (hasSubjects(subject)) {

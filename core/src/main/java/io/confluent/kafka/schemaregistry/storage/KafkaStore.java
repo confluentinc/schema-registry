@@ -287,9 +287,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   /**
-   * Wait until the KafkaStore catches up to the given subject offset in the Kafka topic.
+   * Wait until the KafkaStore catches up to the last message for the given subject.
    */
-  public void waitUntilKafkaReaderReachesLastSubjectOffset(String subject, int timeoutMs)
+  public void waitUntilKafkaReaderReachesLastOffset(String subject, int timeoutMs)
       throws StoreException {
     waitUntilKafkaReaderReachesOffset(lastOffset(subject), timeoutMs);
   }
