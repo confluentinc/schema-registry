@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.hibernate.validator.constraints.NotEmpty;
 
-public class ClearSubjectValue implements SchemaRegistryValue, SubjectContainer {
+public class ClearSubjectValue implements SchemaRegistryValue {
 
   @NotEmpty
   private String subject;
@@ -27,7 +27,6 @@ public class ClearSubjectValue implements SchemaRegistryValue, SubjectContainer 
     this.subject = subject;
   }
 
-  @Override
   @JsonProperty("subject")
   public String getSubject() {
     return subject;

@@ -17,30 +17,15 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import org.hibernate.validator.constraints.NotEmpty;
 
 @JsonPropertyOrder(value = {"keytype", "subject", "magic"})
-public class DeleteSubjectKey extends SchemaRegistryKey implements SubjectContainer {
+public class DeleteSubjectKey extends SubjectKey {
 
   private static final int MAGIC_BYTE = 0;
-  @NotEmpty
-  private String subject;
 
   public DeleteSubjectKey(@JsonProperty("subject") String subject) {
-    super(SchemaRegistryKeyType.DELETE_SUBJECT);
-    this.subject = subject;
+    super(SchemaRegistryKeyType.DELETE_SUBJECT, subject);
     this.magicByte = MAGIC_BYTE;
-  }
-
-  @Override
-  @JsonProperty("subject")
-  public String getSubject() {
-    return this.subject;
-  }
-
-  @JsonProperty("subject")
-  public void setSubject(String subject) {
-    this.subject = subject;
   }
 
   @Override
@@ -51,20 +36,12 @@ public class DeleteSubjectKey extends SchemaRegistryKey implements SubjectContai
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    if (!super.equals(o)) {
-      return false;
-    }
-
-    DeleteSubjectKey that = (DeleteSubjectKey) o;
-
-    return subject.equals(that.subject);
+    return super.equals(o);
   }
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
-    result = 31 * result + subject.hashCode();
-    return result;
+    return super.hashCode();
   }
 
   @Override
@@ -72,7 +49,7 @@ public class DeleteSubjectKey extends SchemaRegistryKey implements SubjectContai
     StringBuilder sb = new StringBuilder();
     sb.append("{magic=" + this.magicByte + ",");
     sb.append("keytype=" + this.keyType.keyType + ",");
-    sb.append("subject=" + this.subject + "}");
+    sb.append("subject=" + this.getSubject() + "}");
     return sb.toString();
   }
 }

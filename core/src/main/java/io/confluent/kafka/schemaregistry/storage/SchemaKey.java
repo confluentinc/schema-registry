@@ -22,32 +22,18 @@ import org.hibernate.validator.constraints.NotEmpty;
 import javax.validation.constraints.Min;
 
 @JsonPropertyOrder(value = {"keytype", "subject", "version", "magic"})
-public class SchemaKey extends SchemaRegistryKey implements SubjectContainer {
+public class SchemaKey extends SubjectKey {
 
   private static final int MAGIC_BYTE = 1;
-  @NotEmpty
-  private String subject;
   @Min(1)
   @NotEmpty
   private Integer version;
 
   public SchemaKey(@JsonProperty("subject") String subject,
                    @JsonProperty("version") int version) {
-    super(SchemaRegistryKeyType.SCHEMA);
+    super(SchemaRegistryKeyType.SCHEMA, subject);
     this.magicByte = MAGIC_BYTE;
-    this.subject = subject;
     this.version = version;
-  }
-
-  @Override
-  @JsonProperty("subject")
-  public String getSubject() {
-    return this.subject;
-  }
-
-  @JsonProperty("subject")
-  public void setSubject(String subject) {
-    this.subject = subject;
   }
 
   @JsonProperty("version")
@@ -62,24 +48,23 @@ public class SchemaKey extends SchemaRegistryKey implements SubjectContainer {
 
   @Override
   public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     if (!super.equals(o)) {
       return false;
     }
 
     SchemaKey that = (SchemaKey) o;
-    if (!subject.equals(that.subject)) {
-      return false;
-    }
-    if (!version.equals(that.version)) {
-      return false;
-    }
-    return true;
+    return version.equals(that.version);
   }
 
   @Override
   public int hashCode() {
     int result = super.hashCode();
-    result = 31 * result + subject.hashCode();
     result = 31 * result + version;
     return result;
   }
@@ -89,7 +74,7 @@ public class SchemaKey extends SchemaRegistryKey implements SubjectContainer {
     StringBuilder sb = new StringBuilder();
     sb.append("{magic=" + this.magicByte + ",");
     sb.append("keytype=" + this.keyType.keyType + ",");
-    sb.append("subject=" + this.subject + ",");
+    sb.append("subject=" + this.getSubject() + ",");
     sb.append("version=" + this.version + "}");
     return sb.toString();
   }
@@ -99,8 +84,7 @@ public class SchemaKey extends SchemaRegistryKey implements SubjectContainer {
     int compare = super.compareTo(o);
     if (compare == 0) {
       SchemaKey otherKey = (SchemaKey) o;
-      int subjectComp = this.subject.compareTo(otherKey.subject);
-      return subjectComp == 0 ? this.version - otherKey.version : subjectComp;
+      return this.version - otherKey.version;
     } else {
       return compare;
     }

@@ -343,8 +343,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
       log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
       this.lastWrittenOffset = recordMetadata.offset();
-      if (key instanceof SubjectContainer) {
-        setLastOffset(((SubjectContainer) key).getSubject(), recordMetadata.offset());
+      if (key instanceof SubjectKey) {
+        setLastOffset(((SubjectKey) key).getSubject(), recordMetadata.offset());
       }
       waitUntilKafkaReaderReachesOffset(recordMetadata.offset(), timeout);
       knownSuccessfulWrite = true;
@@ -458,7 +458,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       Future<RecordMetadata> ack = producer.send(producerRecord);
       RecordMetadata metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
       this.lastWrittenOffset = metadata.offset();
-      log.trace("Noop record's offset is " + metadata.offset());
+      log.trace("Noop record's offset is " + this.lastWrittenOffset);
       return this.lastWrittenOffset;
     } catch (Exception e) {
       throw new StoreException("Failed to write Noop record to kafka store.", e);
