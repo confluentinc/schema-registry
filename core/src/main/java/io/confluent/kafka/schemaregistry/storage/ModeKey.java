@@ -18,28 +18,14 @@ package io.confluent.kafka.schemaregistry.storage;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-import java.util.Objects;
-
 @JsonPropertyOrder(value = {"keytype", "subject", "magic"})
-public class ModeKey extends SchemaRegistryKey {
+public class ModeKey extends SubjectKey {
 
   private static final int MAGIC_BYTE = 0;
-  private String subject;
 
   public ModeKey(@JsonProperty("subject") String subject) {
-    super(SchemaRegistryKeyType.MODE);
-    this.subject = subject;
+    super(SchemaRegistryKeyType.MODE, subject);
     this.magicByte = MAGIC_BYTE;
-  }
-
-  @JsonProperty("subject")
-  public String getSubject() {
-    return this.subject;
-  }
-
-  @JsonProperty("subject")
-  public void setSubject(String subject) {
-    this.subject = subject;
   }
 
   @Override
@@ -50,16 +36,12 @@ public class ModeKey extends SchemaRegistryKey {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    if (!super.equals(o)) {
-      return false;
-    }
-    ModeKey modeKey = (ModeKey) o;
-    return Objects.equals(subject, modeKey.subject);
+    return super.equals(o);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), subject);
+    return super.hashCode();
   }
 
   @Override
@@ -67,28 +49,7 @@ public class ModeKey extends SchemaRegistryKey {
     StringBuilder sb = new StringBuilder();
     sb.append("{magic=" + this.magicByte + ",");
     sb.append("keytype=" + this.keyType.keyType + ",");
-    sb.append("subject=" + this.subject + "}");
+    sb.append("subject=" + this.getSubject() + "}");
     return sb.toString();
-  }
-
-  @Override
-  public int compareTo(SchemaRegistryKey o) {
-    int compare = super.compareTo(o);
-    if (compare == 0) {
-      ModeKey otherKey = (ModeKey) o;
-      if (this.subject == null && otherKey.subject == null) {
-        return 0;
-      } else {
-        if (this.subject == null) {
-          return -1;
-        }
-        if (otherKey.subject == null) {
-          return 1;
-        }
-        return this.subject.compareTo(otherKey.subject);
-      }
-    } else {
-      return compare;
-    }
   }
 }

@@ -17,29 +17,15 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import org.hibernate.validator.constraints.NotEmpty;
 
 @JsonPropertyOrder(value = {"keytype", "subject", "magic"})
-public class ClearSubjectKey extends SchemaRegistryKey {
+public class ClearSubjectKey extends SubjectKey {
 
   private static final int MAGIC_BYTE = 0;
-  @NotEmpty
-  private String subject;
 
   public ClearSubjectKey(@JsonProperty("subject") String subject) {
-    super(SchemaRegistryKeyType.CLEAR_SUBJECT);
-    this.subject = subject;
+    super(SchemaRegistryKeyType.CLEAR_SUBJECT, subject);
     this.magicByte = MAGIC_BYTE;
-  }
-
-  @JsonProperty("subject")
-  public String getSubject() {
-    return this.subject;
-  }
-
-  @JsonProperty("subject")
-  public void setSubject(String subject) {
-    this.subject = subject;
   }
 
   @Override
@@ -50,20 +36,12 @@ public class ClearSubjectKey extends SchemaRegistryKey {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    if (!super.equals(o)) {
-      return false;
-    }
-
-    ClearSubjectKey that = (ClearSubjectKey) o;
-
-    return subject.equals(that.subject);
+    return super.equals(o);
   }
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
-    result = 31 * result + subject.hashCode();
-    return result;
+    return super.hashCode();
   }
 
   @Override
@@ -71,7 +49,7 @@ public class ClearSubjectKey extends SchemaRegistryKey {
     StringBuilder sb = new StringBuilder();
     sb.append("{magic=" + this.magicByte + ",");
     sb.append("keytype=" + this.keyType.keyType + ",");
-    sb.append("subject=" + this.subject + "}");
+    sb.append("subject=" + getSubject() + "}");
     return sb.toString();
   }
 }
