@@ -33,9 +33,11 @@ import java.util.Map;
  * Reusing a scope name after cleanup results in a completely new mocked Schema Registry instance.
  *
  * <p>This registry can be used to manage scoped clients directly, but scopes can also be registered
- * and used as {@code mock.schema.registry.scope} instead of {@code schema.registry.url}
+ * and used as {@code schema.registry.url} with the special pseudo-protocol 'mock://'
  * in serde configurations, so that testing code doesn't have to run an actual instance of
- * Schema Registry listening on a local port.
+ * Schema Registry listening on a local port. For example,
+ * {@code schema.registry.url: 'mock://my-scope-name'} corresponds to
+ * {@code MockSchemaRegistry.getClientForScope("my-scope-name")}.
  */
 public final class MockSchemaRegistry {
   private static final Map<String, SchemaRegistryClient> SCOPED_CLIENTS = new HashMap<>();

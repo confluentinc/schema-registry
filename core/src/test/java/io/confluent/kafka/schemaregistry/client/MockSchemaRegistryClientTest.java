@@ -59,7 +59,7 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
     props.put("auto.offset.reset", "earliest");
     props.put("key.deserializer", org.apache.kafka.common.serialization.StringDeserializer.class);
     props.put("value.deserializer", io.confluent.kafka.serializers.KafkaAvroDeserializer.class);
-    props.put("mock.schema.registry", "scope1");
+    props.put("schema.registry.url", "mock://scope1");
     return props;
   }
 
@@ -88,7 +88,7 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
   private Properties createNewProducerProps() {
     Properties props = new Properties();
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-    props.put("mock.schema.registry", "scope1");
+    props.put("schema.registry.url", "mock://scope1");
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.StringSerializer.class);
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
@@ -113,7 +113,7 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
     props.put("key.serializer", org.apache.kafka.common.serialization.StringSerializer.class);
     props.put("value.serializer", io.confluent.kafka.serializers.KafkaAvroSerializer.class);
     props.put("bootstrap.servers", brokerList);
-    props.put("mock.schema.registry", "scope1");
+    props.put("schema.registry.url", "mock://scope1");
     return props;
   }
 

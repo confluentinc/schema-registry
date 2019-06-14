@@ -20,6 +20,7 @@ import io.confluent.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import org.apache.avro.Schema;
@@ -45,19 +46,37 @@ public abstract class AbstractKafkaAvroSerDe {
 
   protected void configureClientProperties(AbstractKafkaAvroSerDeConfig config) {
     try {
-      if (null == schemaRegistry && config.hasMockRegistry()) {
-        schemaRegistry = config.getMockSchemaRegistryClient();
-      } else if (null == schemaRegistry) {
+      if (null == schemaRegistry) {
         List<String> urls = config.getSchemaRegistryUrls();
-        int maxSchemaObject = config.getMaxSchemasPerSubject();
-        Map<String, Object> originals = config.originalsWithPrefix("");
-        schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject, originals);
+        String mockScope = validateAndMaybeGetMockScope(urls);
+        if (mockScope != null) {
+          schemaRegistry = MockSchemaRegistry.getClientForScope(mockScope);
+        } else {
+          int maxSchemaObject = config.getMaxSchemasPerSubject();
+          Map<String, Object> originals = config.originalsWithPrefix("");
+          schemaRegistry = new CachedSchemaRegistryClient(urls, maxSchemaObject, originals);
+        }
       }
       keySubjectNameStrategy = config.keySubjectNameStrategy();
       valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     } catch (io.confluent.common.config.ConfigException e) {
       throw new ConfigException(e.getMessage());
     }
+  }
+
+  private static String validateAndMaybeGetMockScope(List<String> urls) {
+    String mockScope = null;
+    for (String url : urls) {
+      final boolean isMock = url.startsWith("mock://");
+      if (isMock && mockScope != null) {
+        throw new ConfigException(
+            "Only one mock scope is permitted for 'schema.registry.url'. Got: " + urls
+        );
+      } else {
+        mockScope = url.substring("mock://".length());
+      }
+    }
+    return mockScope;
   }
 
   /**
