@@ -76,7 +76,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
   // messages with this key
   private final K noopKey;
   private volatile long lastWrittenOffset = -1L;
-  private volatile long lastSubjectOffset = -1L;
   private final SchemaRegistryConfig config;
   private final Lock lock = new ReentrantLock();
 
@@ -466,11 +465,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   public long lastOffset(String subject) {
-    return lastSubjectOffset;
+    return lastWrittenOffset;
   }
 
   public void setLastOffset(String subject, long lastOffset) {
-    this.lastSubjectOffset = lastOffset;
+    this.lastWrittenOffset = lastOffset;
   }
 
   public Lock lockFor(String subject) {
