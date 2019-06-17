@@ -43,7 +43,6 @@ public class JsonErrorHandler extends ErrorHandler {
       return;
     }
 
-    baseRequest.setHandled(true);
     response.setContentType(MimeTypes.Type.APPLICATION_JSON.asString());
 
     final String reason = (response instanceof Response) ? ((Response) response).getReason() : null;
