@@ -38,6 +38,7 @@ public abstract class AbstractKafkaAvroSerDe {
 
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
+  private static final String MOCK_URL_PREFIX = "mock://";
 
   protected SchemaRegistryClient schemaRegistry;
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
@@ -66,14 +67,26 @@ public abstract class AbstractKafkaAvroSerDe {
 
   private static String validateAndMaybeGetMockScope(List<String> urls) {
     String mockScope = null;
+    boolean sawANonMockUrl = false;
     for (String url : urls) {
-      final boolean isMock = url.startsWith("mock://");
+      final boolean isMock = url.startsWith(MOCK_URL_PREFIX);
+
       if (isMock && mockScope != null) {
         throw new ConfigException(
             "Only one mock scope is permitted for 'schema.registry.url'. Got: " + urls
         );
+      }
+
+      if (isMock ? sawANonMockUrl : mockScope != null) {
+        throw new ConfigException(
+            "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
+        );
+      }
+
+      if (isMock) {
+        mockScope = url.substring(MOCK_URL_PREFIX.length());
       } else {
-        mockScope = url.substring("mock://".length());
+        sawANonMockUrl = true;
       }
     }
     return mockScope;

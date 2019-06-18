@@ -1,14 +1,18 @@
 package io.confluent.kafka.serializers;
 
+import static java.util.Collections.singletonMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 import avro.shaded.com.google.common.collect.ImmutableMap;
+import io.confluent.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
@@ -20,6 +24,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -152,5 +157,68 @@ public class AbstractKafkaAvroDeserializerTest {
     assertThat(deserialized1.getSchema(), sameInstance(deserialized2.getSchema()));
     org.apache.avro.Schema avroSchema = deserialized2.getSchema();
     assertThat(getSchemaInternalHashCode(avroSchema), equalTo(hashCode));
+  }
+
+  @Test
+  public void testMockUrl() {
+    final KafkaAvroSerializer kafkaAvroSerializer = new KafkaAvroSerializer();
+    kafkaAvroSerializer.configure(
+            singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf"),
+            false
+    );
+
+    Assert.assertSame(MockSchemaRegistry.getClientForScope("asdf"), kafkaAvroSerializer.schemaRegistry);
+    Assert.assertNotSame(MockSchemaRegistry.getClientForScope("qwer"), kafkaAvroSerializer.schemaRegistry);
+  }
+
+  @Test
+  public void testMockUrlsAreRejected() {
+    final KafkaAvroSerializer kafkaAvroSerializer = new KafkaAvroSerializer();
+    try {
+        kafkaAvroSerializer.configure(
+                singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf,mock://qwer"),
+                false
+        );
+        fail();
+    } catch (final ConfigException e) {
+        Assert.assertEquals(
+                "Only one mock scope is permitted for 'schema.registry.url'. Got: [mock://asdf, mock://qwer]",
+                e.getMessage()
+        );
+    }
+
+    Assert.assertNull(kafkaAvroSerializer.schemaRegistry);
+  }
+
+  @Test
+  public void testMixedUrlsAreRejected() {
+    final KafkaAvroSerializer kafkaAvroSerializer = new KafkaAvroSerializer();
+    try {
+        kafkaAvroSerializer.configure(
+                singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf,http://qwer"),
+                false
+        );
+        fail();
+    } catch (final ConfigException e) {
+        Assert.assertEquals(
+                "Cannot mix mock and real urls for 'schema.registry.url'. Got: [mock://asdf, http://qwer]",
+                e.getMessage()
+        );
+    }
+
+    try {
+        kafkaAvroSerializer.configure(
+                singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "http://qwer,mock://asdf"),
+                false
+        );
+        fail();
+    } catch (final ConfigException e) {
+        Assert.assertEquals(
+                "Cannot mix mock and real urls for 'schema.registry.url'. Got: [http://qwer, mock://asdf]",
+                e.getMessage()
+        );
+    }
+
+    Assert.assertNull(kafkaAvroSerializer.schemaRegistry);
   }
 }
