@@ -15,8 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
@@ -33,7 +33,7 @@ public class SchemaIdAndSubjects {
   private Map<String, Integer> subjectsAndVersions;
 
   public SchemaIdAndSubjects(int id) {
-    this.subjectsAndVersions = new HashMap<String, Integer>();
+    this.subjectsAndVersions = new ConcurrentHashMap<>();
     this.id = id;
   }
 
