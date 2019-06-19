@@ -108,7 +108,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue) {
     guidToSchemaKey.put(schemaValue.getId(), schemaKey);
     guidToDeletedSchemaKeys
-        .computeIfAbsent(schemaValue.getId(), k -> new CopyOnWriteArrayList<>()).add(schemaKey);
+        .computeIfAbsent(schemaValue.getId(), k -> new CopyOnWriteArrayList<>())
+        .add(schemaKey);
   }
 
   @Override
