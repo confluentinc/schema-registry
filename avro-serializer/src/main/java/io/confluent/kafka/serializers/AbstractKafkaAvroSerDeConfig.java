@@ -37,7 +37,11 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String
       SCHEMA_REGISTRY_URL_DOC =
       "Comma-separated list of URLs for schema registry instances that can be used to register "
-      + "or look up schemas.";
+      + "or look up schemas. "
+      + "If you wish to get a connection to a mocked schema registry for testing, "
+      + "you can specify a scope using the 'mock://' pseudo-protocol. For example, "
+      + "'mock://my-scope-name' corresponds to "
+      + "'MockSchemaRegistry.getClientForScope(\"my-scope-name\")'.";
 
   public static final String MAX_SCHEMAS_PER_SUBJECT_CONFIG = "max.schemas.per.subject";
   public static final int MAX_SCHEMAS_PER_SUBJECT_DEFAULT = 1000;
