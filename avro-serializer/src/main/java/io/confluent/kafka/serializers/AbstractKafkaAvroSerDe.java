@@ -74,7 +74,9 @@ public abstract class AbstractKafkaAvroSerDe {
       }
     }
 
-    if (mockScopes.size() > 1) {
+    if (mockScopes.isEmpty()) {
+      return null;
+    } else if (mockScopes.size() > 1) {
       throw new ConfigException(
               "Only one mock scope is permitted for 'schema.registry.url'. Got: " + urls
       );
@@ -82,8 +84,6 @@ public abstract class AbstractKafkaAvroSerDe {
       throw new ConfigException(
               "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
       );
-    } else if (mockScopes.isEmpty()) {
-      return null;
     } else {
       return mockScopes.get(0);
     }
