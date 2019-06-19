@@ -15,8 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Kafka schema registry maintains a few in memory indices to facilitate schema lookups. One such
@@ -32,7 +32,7 @@ public class SchemaIdAndSubjects {
   private Map<String, Integer> subjectsAndVersions;
 
   public SchemaIdAndSubjects(int id) {
-    this.subjectsAndVersions = new HashMap<String, Integer>();
+    this.subjectsAndVersions = new ConcurrentHashMap<>();
     this.id = id;
   }
 
