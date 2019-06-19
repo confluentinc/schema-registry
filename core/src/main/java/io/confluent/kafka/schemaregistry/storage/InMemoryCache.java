@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -23,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
@@ -108,7 +108,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue) {
     guidToSchemaKey.put(schemaValue.getId(), schemaKey);
     guidToDeletedSchemaKeys
-        .computeIfAbsent(schemaValue.getId(), k -> new ArrayList<>()).add(schemaKey);
+        .computeIfAbsent(schemaValue.getId(), k -> new CopyOnWriteArrayList<>()).add(schemaKey);
   }
 
   @Override
