@@ -28,6 +28,7 @@ import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -38,6 +39,7 @@ public abstract class AbstractKafkaAvroSerDe {
 
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
+  private static final String MOCK_URL_PREFIX = "mock://";
 
   protected SchemaRegistryClient schemaRegistry;
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
@@ -64,19 +66,27 @@ public abstract class AbstractKafkaAvroSerDe {
     }
   }
 
-  private static String validateAndMaybeGetMockScope(List<String> urls) {
-    String mockScope = null;
-    for (String url : urls) {
-      final boolean isMock = url.startsWith("mock://");
-      if (isMock && mockScope != null) {
-        throw new ConfigException(
-            "Only one mock scope is permitted for 'schema.registry.url'. Got: " + urls
-        );
-      } else {
-        mockScope = url.substring("mock://".length());
+  private static String validateAndMaybeGetMockScope(final List<String> urls) {
+    final List<String> mockScopes = new LinkedList<>();
+    for (final String url : urls) {
+      if (url.startsWith(MOCK_URL_PREFIX)) {
+        mockScopes.add(url.substring(MOCK_URL_PREFIX.length()));
       }
     }
-    return mockScope;
+
+    if (mockScopes.isEmpty()) {
+      return null;
+    } else if (mockScopes.size() > 1) {
+      throw new ConfigException(
+              "Only one mock scope is permitted for 'schema.registry.url'. Got: " + urls
+      );
+    } else if (urls.size() > mockScopes.size()) {
+      throw new ConfigException(
+              "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
+      );
+    } else {
+      return mockScopes.get(0);
+    }
   }
 
   /**
