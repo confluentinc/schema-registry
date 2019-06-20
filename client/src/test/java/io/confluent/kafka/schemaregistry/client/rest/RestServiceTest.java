@@ -32,6 +32,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 import avro.shaded.com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.annotation.Mock;
@@ -130,6 +131,56 @@ public class RestServiceTest {
   }
 
 
+  /*
+   * Test setBearerAuthRequestHeader (private method) indirectly through getAllSubjects.
+   */
+  @Test
+  public void testSetBearerAuthRequestHeader() throws Exception {
+    RestService restService = new RestService("http://localhost:8081");
+
+    BearerAuthCredentialProvider bearerAuthCredentialProvider = createMock(BearerAuthCredentialProvider.class);
+    restService.setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
+
+    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
+    InputStream inputStream = createNiceMock(InputStream.class);
+
+    expectNew(URL.class, anyString()).andReturn(url);
+    expect(url.openConnection()).andReturn(httpURLConnection);
+    expect(httpURLConnection.getURL()).andReturn(url);
+    expect(bearerAuthCredentialProvider.getBearerToken(anyObject(URL.class))).andReturn("auth-token");
+    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
+
+    // Make sure that the Authorization header is set with the correct value for "user:password"
+    httpURLConnection.setRequestProperty("Authorization", "Bearer auth-token");
+    expectLastCall().once();
+
+    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
+
+    expect(inputStream.read((byte[]) anyObject(), anyInt(), anyInt()))
+            .andDelegateTo(new InputStream() {
+              @Override
+              public int read() {
+                return 0;
+              }
+
+              @Override
+              public int read(byte[] b, int off, int len) {
+                byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
+                System.arraycopy(json, 0, b, 0, json.length);
+                return json.length;
+              }
+            }).anyTimes();
+
+    replay(URL.class, url);
+    replay(HttpURLConnection.class, httpURLConnection);
+    replay(bearerAuthCredentialProvider);
+    replay(InputStream.class, inputStream);
+
+    restService.getAllSubjects();
+
+    verify(httpURLConnection);
+  }
+  
   /*
  * Test setHttpHeaders (private method) indirectly through getAllSubjects.
  */

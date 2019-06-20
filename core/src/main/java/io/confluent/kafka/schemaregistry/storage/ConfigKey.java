@@ -19,53 +19,29 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 @JsonPropertyOrder(value = {"keytype", "subject", "magic"})
-public class ConfigKey extends SchemaRegistryKey {
+public class ConfigKey extends SubjectKey {
 
   private static final int MAGIC_BYTE = 0;
-  private String subject;
 
   public ConfigKey(@JsonProperty("subject") String subject) {
-    super(SchemaRegistryKeyType.CONFIG);
-    this.subject = subject;
+    super(SchemaRegistryKeyType.CONFIG, subject);
     this.magicByte = MAGIC_BYTE;
-  }
-
-  @JsonProperty("subject")
-  public String getSubject() {
-    return this.subject;
-  }
-
-  @JsonProperty("subject")
-  public void setSubject(String subject) {
-    this.subject = subject;
   }
 
   @Override
   public boolean equals(Object o) {
-    if (!super.equals(o)) {
-      return false;
-    }
-
-    ConfigKey that = (ConfigKey) o;
-    if (this.subject != null && that.subject != null) {
-      if (!subject.equals(that.subject)) {
-        return false;
-      }
-    } else if (this.subject == null && that.subject == null) {
+    if (this == o) {
       return true;
-    } else {
+    }
+    if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    return true;
+    return super.equals(o);
   }
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
-    if (this.subject != null) {
-      result = 31 * result + subject.hashCode();
-    }
-    return result;
+    return super.hashCode();
   }
 
   @Override
@@ -73,28 +49,7 @@ public class ConfigKey extends SchemaRegistryKey {
     StringBuilder sb = new StringBuilder();
     sb.append("{magic=" + this.magicByte + ",");
     sb.append("keytype=" + this.keyType.keyType + ",");
-    sb.append("subject=" + this.subject + "}");
+    sb.append("subject=" + this.getSubject() + "}");
     return sb.toString();
-  }
-
-  @Override
-  public int compareTo(SchemaRegistryKey o) {
-    int compare = super.compareTo(o);
-    if (compare == 0) {
-      ConfigKey otherKey = (ConfigKey) o;
-      if (this.subject == null && otherKey.subject == null) {
-        return 0;
-      } else {
-        if (this.subject == null) {
-          return -1;
-        }
-        if (otherKey.subject == null) {
-          return 1;
-        }
-        return this.subject.compareTo(otherKey.subject);
-      }
-    } else {
-      return compare;
-    }
   }
 }

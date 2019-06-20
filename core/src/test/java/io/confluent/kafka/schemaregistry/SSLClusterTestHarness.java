@@ -51,7 +51,8 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
     Properties props = TestUtils.createBrokerConfig(
             brokerId, zkConnect, false, false, TestUtils.RandomPort(), sslInterBrokerSecurityProtocol,
             trustStoreFileOption, EMPTY_SASL_PROPERTIES, false, false, TestUtils.RandomPort(),
-            true, TestUtils.RandomPort(), false, TestUtils.RandomPort(), Option.<String>empty(), 1, false);
+            true, TestUtils.RandomPort(), false, TestUtils.RandomPort(), Option.<String>empty(), 1, false,
+            1, (short) 1);
 
     // setup client SSL. Needs to happen before the broker is initialized, because the client's cert
     // needs to be added to the broker's trust store.
