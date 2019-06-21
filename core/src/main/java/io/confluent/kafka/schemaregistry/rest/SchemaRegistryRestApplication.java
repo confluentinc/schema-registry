@@ -16,6 +16,8 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import java.util.Map;
+
+import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.resource.ResourceCollection;
 import org.slf4j.Logger;
@@ -49,6 +51,12 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   public SchemaRegistryRestApplication(Properties props) throws RestConfigException {
     this(new SchemaRegistryConfig(props));
+  }
+
+  @Override
+  protected void configurePreResourceHandling(ServletContextHandler context) {
+    super.configurePreResourceHandling(context);
+    context.setErrorHandler(new JsonErrorHandler());
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
