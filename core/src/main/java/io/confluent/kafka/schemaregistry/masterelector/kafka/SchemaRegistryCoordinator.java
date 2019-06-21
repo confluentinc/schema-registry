@@ -30,7 +30,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * This class manages the coordination process with the Kafka group coordinator on the broker for
@@ -62,20 +68,20 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       SchemaRegistryIdentity identity,
       SchemaRegistryRebalanceListener listener) {
     super(
-      new GroupRebalanceConfig(
-        sessionTimeoutMs,
-        rebalanceTimeoutMs,
-        heartbeatIntervalMs,
-        groupId,
-        Optional.empty(),
-        retryBackoffMs,
-        true
-      ),
-      logContext,
-      client,
-      metrics,
-      metricGrpPrefix,
-      time
+        new GroupRebalanceConfig(
+            sessionTimeoutMs,
+            rebalanceTimeoutMs,
+            heartbeatIntervalMs,
+            groupId,
+            Optional.empty(),
+            retryBackoffMs,
+            true
+        ),
+        logContext,
+        client,
+        metrics,
+        metricGrpPrefix,
+        time
     );
     this.identity = identity;
     this.assignmentSnapshot = null;
