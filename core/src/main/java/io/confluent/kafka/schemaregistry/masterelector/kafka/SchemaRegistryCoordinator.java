@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
@@ -29,15 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
+import java.util.*;
 
 /**
  * This class manages the coordination process with the Kafka group coordinator on the broker for
@@ -68,20 +61,21 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       long retryBackoffMs,
       SchemaRegistryIdentity identity,
       SchemaRegistryRebalanceListener listener) {
-    super(new GroupRebalanceConfig(
-            sessionTimeoutMs,
-            rebalanceTimeoutMs,
-            heartbeatIntervalMs,
-            groupId,
-            Optional.empty(),
-            retryBackoffMs,
-            true
-                    ),
-            logContext,
-          client,
-          metrics,
-          metricGrpPrefix,
-          time
+    super(
+      new GroupRebalanceConfig(
+        sessionTimeoutMs,
+        rebalanceTimeoutMs,
+        heartbeatIntervalMs,
+        groupId,
+        Optional.empty(),
+        retryBackoffMs,
+        true
+      ),
+      logContext,
+      client,
+      metrics,
+      metricGrpPrefix,
+      time
     );
     this.identity = identity;
     this.assignmentSnapshot = null;
