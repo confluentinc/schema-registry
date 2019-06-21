@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -67,18 +68,20 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       long retryBackoffMs,
       SchemaRegistryIdentity identity,
       SchemaRegistryRebalanceListener listener) {
-    super(logContext,
+    super(new GroupRebalanceConfig(
+            sessionTimeoutMs,
+            rebalanceTimeoutMs,
+            heartbeatIntervalMs,
+            groupId,
+            Optional.empty(),
+            retryBackoffMs,
+            true
+                    ),
+            logContext,
           client,
-          groupId,
-          Optional.empty(),
-          rebalanceTimeoutMs,
-          sessionTimeoutMs,
-          heartbeatIntervalMs,
           metrics,
           metricGrpPrefix,
-          time,
-          retryBackoffMs,
-          true
+          time
     );
     this.identity = identity;
     this.assignmentSnapshot = null;
