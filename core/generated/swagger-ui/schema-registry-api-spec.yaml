@@ -104,6 +104,8 @@ paths:
           description: "Error code 50001 -- Error in the backend data store"
   /config:
     get:
+      summary: "Get global compatibility level."
+      description: ""
       operationId: "getTopLevelConfig"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -120,7 +122,11 @@ paths:
           description: "successful operation"
           schema:
             $ref: "#/definitions/Config"
+        500:
+          description: "Error code 50001 -- Error in the backend data store"
     put:
+      summary: "Update global compatibility level."
+      description: ""
       operationId: "updateTopLevelConfig"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -137,8 +143,15 @@ paths:
           description: "successful operation"
           schema:
             $ref: "#/definitions/ConfigUpdateRequest"
+        422:
+          description: "Error code 42203 -- Invalid compatibility level"
+        500:
+          description: "Error code 50001 -- Error in the backend data store\nError\
+            \ code 50003 -- Error while forwarding the request to the primary\n"
   /config/{subject}:
     get:
+      summary: "Get compatibility level for a subject."
+      description: ""
       operationId: "getSubjectLevelConfig"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -159,7 +172,13 @@ paths:
           description: "successful operation"
           schema:
             $ref: "#/definitions/Config"
+        404:
+          description: "Subject not found"
+        500:
+          description: "Error code 50001 -- Error in the backend data store"
     put:
+      summary: "Update compatibility level for the specified subject."
+      description: ""
       operationId: "updateSubjectLevelConfig"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -173,6 +192,7 @@ paths:
       parameters:
       - name: "subject"
         in: "path"
+        description: "Name of the Subject"
         required: true
         type: "string"
       responses:
@@ -180,6 +200,12 @@ paths:
           description: "successful operation"
           schema:
             $ref: "#/definitions/ConfigUpdateRequest"
+        422:
+          description: "Error code 42203 -- Invalid compatibility level\nError code\
+            \ 40402 -- Version not found"
+        500:
+          description: "Error code 50001 -- Error in the backend data store\nError\
+            \ code 50003 -- Error while forwarding the request to the primary"
   /mode:
     get:
       operationId: "getTopLevelMode"
@@ -260,6 +286,8 @@ paths:
             $ref: "#/definitions/ModeUpdateRequest"
   /schemas/ids/{id}:
     get:
+      summary: "Get the schema string identified by the input ID."
+      description: ""
       operationId: "getSchema"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -273,6 +301,7 @@ paths:
       parameters:
       - name: "id"
         in: "path"
+        description: "Globally unique identifier of the schema"
         required: true
         type: "integer"
         format: "int32"
@@ -281,8 +310,14 @@ paths:
           description: "successful operation"
           schema:
             $ref: "#/definitions/SchemaString"
+        404:
+          description: "Error code 40403 -- Schema not found\n"
+        500:
+          description: "Error code 50001 -- Error in the backend data store\n"
   /subjects:
     get:
+      summary: "Get a list of registered subjects."
+      description: ""
       operationId: "list"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -302,8 +337,14 @@ paths:
             items:
               type: "string"
             uniqueItems: true
+        500:
+          description: "Error code 50001 -- Error in the backend datastore"
   /subjects/{subject}:
     post:
+      summary: "Check if a schema has already been registered under the specified\
+        \ subject. If so, this returns the schema string along with its globally unique\
+        \ identifier, its version under this subject and the subject name."
+      description: ""
       operationId: "lookUpSchemaUnderSubject"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -317,6 +358,7 @@ paths:
       parameters:
       - name: "subject"
         in: "path"
+        description: "Subject under which the schema will be registered"
         required: true
         type: "string"
       - name: "deleted"
@@ -324,9 +366,18 @@ paths:
         required: false
         type: "boolean"
       responses:
-        default:
-          description: "successful operation"
+        404:
+          description: "Error code 40401 -- Subject not found\nError code 40403 --\
+            \ Schema not found"
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: "#/definitions/Schema"
     delete:
+      summary: "Deletes the specified subject and its associated compatibility level\
+        \ if registered. It is recommended to use this API only when a topic needs\
+        \ to be recycled or in development environment."
+      description: ""
       operationId: "deleteSubject"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -340,13 +391,25 @@ paths:
       parameters:
       - name: "subject"
         in: "path"
+        description: "the name of the subject"
         required: true
         type: "string"
       responses:
-        default:
+        200:
           description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              type: "integer"
+              format: "int32"
+        404:
+          description: "Error code 40401 -- Subject not found"
+        500:
+          description: "Error code 50001 -- Error in the backend datastore"
   /subjects/{subject}/versions:
     get:
+      summary: "Get a list of versions registered under the specified subject."
+      description: ""
       operationId: "list"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -360,6 +423,7 @@ paths:
       parameters:
       - name: "subject"
         in: "path"
+        description: "Name of the Subject"
         required: true
         type: "string"
       responses:
@@ -370,7 +434,27 @@ paths:
             items:
               type: "integer"
               format: "int32"
+        404:
+          description: "Error code 40401 -- Subject not found"
+        500:
+          description: "Error code 50001 -- Error in the backend data store"
     post:
+      summary: "Register a new schema under the specified subject. If successfully\
+        \ registered, this returns the unique identifier of this schema in the registry.\
+        \ The returned identifier should be used to retrieve this schema from the\
+        \ schemas resource and is different from the schema's version which is associated\
+        \ with the subject. If the same schema is registered under a different subject,\
+        \ the same identifier will be returned. However, the version of the schema\
+        \ may be different under different subjects.\nA schema should be compatible\
+        \ with the previously registered schema or schemas (if there are any) as per\
+        \ the configured compatibility level. The configured compatibility level can\
+        \ be obtained by issuing a GET http:get:: /config/(string: subject). If that\
+        \ returns null, then GET http:get:: /config\nWhen there are multiple instances\
+        \ of Schema Registry running in the same cluster, the schema registration\
+        \ request will be forwarded to one of the instances designated as the primary.\
+        \ If the primary is not available, the client will get an error code indicating\
+        \ that the forwarding has failed."
+      description: ""
       operationId: "register"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -384,13 +468,26 @@ paths:
       parameters:
       - name: "subject"
         in: "path"
+        description: "Name of the Subject"
         required: true
         type: "string"
       responses:
-        default:
+        200:
           description: "successful operation"
+          schema:
+            $ref: "#/definitions/RegisterSchemaResponse"
+        409:
+          description: "Incompatible Avro schema"
+        422:
+          description: "Error code 42201 -- Invalid Avro schema"
+        500:
+          description: "Error code 50001 -- Error in the backend data store\nError\
+            \ code 50002 -- Operation timed out\nError code 50003 -- Error while forwarding\
+            \ the request to the primary"
   /subjects/{subject}/versions/{version}:
     get:
+      summary: "Get a specific version of the schema registered under this subject."
+      description: ""
       operationId: "getSchema"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -404,10 +501,16 @@ paths:
       parameters:
       - name: "subject"
         in: "path"
+        description: "Name of the Subject"
         required: true
         type: "string"
       - name: "version"
         in: "path"
+        description: "Version of the schema to be returned. Valid values for versionId\
+          \ are between [1,2^31-1] or the string \"latest\". \"latest\" returns the\
+          \ last registered schema under the specified subject. Note that there may\
+          \ be a new latest schema that gets registered right after this request is\
+          \ served."
         required: true
         type: "string"
       responses:
@@ -415,7 +518,21 @@ paths:
           description: "successful operation"
           schema:
             $ref: "#/definitions/Schema"
+        404:
+          description: "Error code 40401 -- Subject not found\nError code 40402 --\
+            \ Version not found"
+        422:
+          description: "Error code 42202 -- Invalid version"
+        500:
+          description: "Error code 50001 -- Error in the backend data store"
     delete:
+      summary: "Deletes a specific version of the schema registered under this subject.\
+        \ This only deletes the version and the schema ID remains intact making it\
+        \ still possible to decode data using the schema ID. This API is recommended\
+        \ to be used only in development environments or under extreme circumstances\
+        \ where-in, its required to delete a previously registered schema for compatibility\
+        \ purposes or re-register previously registered schema."
+      description: ""
       operationId: "deleteSchemaVersion"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -429,17 +546,36 @@ paths:
       parameters:
       - name: "subject"
         in: "path"
+        description: "Name of the Subject"
         required: true
         type: "string"
       - name: "version"
         in: "path"
+        description: "Version of the schema to be returned. Valid values for versionId\
+          \ are between [1,2^31-1] or the string \"latest\". \"latest\" returns the\
+          \ last registered schema under the specified subject. Note that there may\
+          \ be a new latest schema that gets registered right after this request is\
+          \ served."
         required: true
         type: "string"
       responses:
-        default:
+        200:
           description: "successful operation"
+          schema:
+            type: "integer"
+            format: "int32"
+        404:
+          description: "Error code 40401 -- Subject not found\nError code 40402 --\
+            \ Version not found"
+        422:
+          description: "Error code 42202 -- Invalid version"
+        500:
+          description: "Error code 50001 -- Error in the backend data store"
   /subjects/{subject}/versions/{version}/schema:
     get:
+      summary: "Get the avro schema for the specified version of this subject. The\
+        \ unescaped schema only is returned."
+      description: ""
       operationId: "getSchemaOnly"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -453,10 +589,16 @@ paths:
       parameters:
       - name: "subject"
         in: "path"
+        description: "Name of the Subject"
         required: true
         type: "string"
       - name: "version"
         in: "path"
+        description: "Version of the schema to be returned. Valid values for versionId\
+          \ are between [1,2^31-1] or the string \"latest\". \"latest\" returns the\
+          \ last registered schema under the specified subject. Note that there may\
+          \ be a new latest schema that gets registered right after this request is\
+          \ served."
         required: true
         type: "string"
       responses:
@@ -464,6 +606,13 @@ paths:
           description: "successful operation"
           schema:
             type: "string"
+        404:
+          description: "Error code 40401 -- Subject not found\nError code 40402 --\
+            \ Version not found"
+        422:
+          description: "Error code 42202 -- Invalid version"
+        500:
+          description: "Error code 50001 -- Error in the backend data store"
 definitions:
   CompatibilityCheckResponse:
     type: "object"
@@ -475,11 +624,29 @@ definitions:
     properties:
       compatibilityLevel:
         type: "string"
+        description: "Compatability Level"
+        enum:
+        - "BACKWARD"
+        - "BACKWARD_TRANSITIVE"
+        - "FORWARD"
+        - "FORWARD_TRANSITIVE"
+        - "FULL"
+        - "FULL_TRANSITIVE"
+        - "NONE"
   ConfigUpdateRequest:
     type: "object"
     properties:
       compatibility:
         type: "string"
+        description: "Compatability Level"
+        enum:
+        - "BACKWARD"
+        - "BACKWARD_TRANSITIVE"
+        - "FORWARD"
+        - "FORWARD_TRANSITIVE"
+        - "FULL"
+        - "FULL_TRANSITIVE"
+        - "NONE"
   ModeGetResponse:
     type: "object"
     properties:
@@ -490,6 +657,12 @@ definitions:
     properties:
       mode:
         type: "string"
+  RegisterSchemaResponse:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+        format: "int32"
   Schema:
     type: "object"
     properties:
@@ -508,3 +681,4 @@ definitions:
     properties:
       schema:
         type: "string"
+        description: "Schema string identified by the ID"

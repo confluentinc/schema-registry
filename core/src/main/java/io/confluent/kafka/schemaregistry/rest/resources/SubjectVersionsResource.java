@@ -15,6 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,6 +73,11 @@ public class SubjectVersionsResource {
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
+  private static final String VERSION_PARAM_DESC = "Version of the schema to be returned. "
+      + "Valid values for versionId are between [1,2^31-1] or the string \"latest\". \"latest\" "
+      + "returns the last registered schema under the specified subject. Note that there may be a "
+      + "new latest schema that gets registered right after this request is served.";
+
   public SubjectVersionsResource(KafkaSchemaRegistry registry) {
     this.schemaRegistry = registry;
   }
@@ -76,8 +85,15 @@ public class SubjectVersionsResource {
   @GET
   @Path("/{version}")
   @PerformanceMetric("subjects.versions.get-schema")
-  public Schema getSchema(@PathParam("subject") String subject,
-                          @PathParam("version") String version) {
+  @ApiOperation(value = "Get a specific version of the schema registered under this subject.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found\n"
+          + "Error code 40402 -- Version not found"),
+      @ApiResponse(code = 422, message = "Error code 42202 -- Invalid version"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
+  public Schema getSchema(
+      @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
+      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
@@ -108,14 +124,28 @@ public class SubjectVersionsResource {
   @GET
   @Path("/{version}/schema")
   @PerformanceMetric("subjects.versions.get-schema.only")
-  public String getSchemaOnly(@PathParam("subject") String subject,
-                              @PathParam("version") String version) {
+  @ApiOperation(value = "Get the avro schema for the specified version of this subject. "
+      + "The unescaped schema only is returned.")
+  @ApiResponses(value = {@ApiResponse(code = 404, message =
+      "Error code 40401 -- Subject not found\n"
+          + "Error code 40402 -- Version not found"), @ApiResponse(code = 422,
+      message = "Error code 42202 -- Invalid version"), @ApiResponse(code = 500,
+      message = "Error code 50001 -- Error in the backend data store")})
+  public String getSchemaOnly(
+      @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
+      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
     return getSchema(subject, version).getSchema();
   }
 
   @GET
   @PerformanceMetric("subjects.versions.list")
-  public List<Integer> list(@PathParam("subject") String subject) {
+  @ApiOperation(value = "Get a list of versions registered under the specified subject.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
+  public List<Integer> list(
+      @ApiParam(value = "Name of the Subject", required = true)
+        @PathParam("subject") String subject) {
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
@@ -150,10 +180,32 @@ public class SubjectVersionsResource {
 
   @POST
   @PerformanceMetric("subjects.versions.register")
-  public void register(final @Suspended AsyncResponse asyncResponse,
-                       @Context HttpHeaders headers,
-                       @PathParam("subject") String subjectName,
-                       @NotNull RegisterSchemaRequest request) {
+  @ApiOperation(value = "Register a new schema under the specified subject. If successfully "
+      + "registered, this returns the unique identifier of this schema in the registry. The "
+      + "returned identifier should be used to retrieve this schema from the schemas resource and "
+      + "is different from the schema's version which is associated with the subject. If the same "
+      + "schema is registered under a different subject, the same identifier will be returned. "
+      + "However, the version of the schema may be different under different subjects.\n"
+      + "A schema should be compatible with the previously registered schema or schemas (if there "
+      + "are any) as per the configured compatibility level. The configured compatibility level "
+      + "can be obtained by issuing a GET http:get:: /config/(string: subject). If that returns "
+      + "null, then GET http:get:: /config\n"
+      + "When there are multiple instances of Schema Registry running in the same cluster, the "
+      + "schema registration request will be forwarded to one of the instances designated as "
+      + "the primary. If the primary is not available, the client will get an error code "
+      + "indicating that the forwarding has failed.", response = RegisterSchemaResponse.class)
+  @ApiResponses(value = {
+      @ApiResponse(code = 409, message = "Incompatible Avro schema"),
+      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid Avro schema"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
+          + "Error code 50002 -- Operation timed out\n"
+          + "Error code 50003 -- Error while forwarding the request to the primary")})
+  public void register(
+      final @Suspended AsyncResponse asyncResponse,
+      @Context HttpHeaders headers,
+      @ApiParam(value = "Name of the Subject", required = true)
+        @PathParam("subject") String subjectName,
+      @NotNull RegisterSchemaRequest request) {
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
@@ -195,10 +247,22 @@ public class SubjectVersionsResource {
   @DELETE
   @Path("/{version}")
   @PerformanceMetric("subjects.versions.deleteSchemaVersion-schema")
-  public void deleteSchemaVersion(final @Suspended AsyncResponse asyncResponse,
-                                  @Context HttpHeaders headers,
-                                  @PathParam("subject") String subject,
-                                  @PathParam("version") String version) {
+  @ApiOperation(value = "Deletes a specific version of the schema registered under this subject. "
+      + "This only deletes the version and the schema ID remains intact making it still possible "
+      + "to decode data using the schema ID. This API is recommended to be used only in "
+      + "development environments or under extreme circumstances where-in, its required to delete "
+      + "a previously registered schema for compatibility purposes or re-register previously "
+      + "registered schema.", response = int.class)
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found\n"
+          + "Error code 40402 -- Version not found"),
+      @ApiResponse(code = 422, message = "Error code 42202 -- Invalid version"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
+  public void deleteSchemaVersion(
+      final @Suspended AsyncResponse asyncResponse,
+      @Context HttpHeaders headers,
+      @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
+      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);

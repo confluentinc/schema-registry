@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.annotations.ApiModelProperty;
 
 public class Config {
 
@@ -30,6 +31,9 @@ public class Config {
     compatibilityLevel = null;
   }
 
+  @ApiModelProperty(value = "Compatability Level",
+      allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
+          + "FULL_TRANSITIVE, NONE")
   @JsonProperty("compatibilityLevel")
   public String getCompatibilityLevel() {
     return compatibilityLevel;

@@ -15,6 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,8 +54,14 @@ public class SchemasResource {
 
   @GET
   @Path("/ids/{id}")
+  @ApiOperation("Get the schema string identified by the input ID.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Error code 40403 -- Schema not found\n"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
   @PerformanceMetric("schemas.ids.get-schema")
-  public SchemaString getSchema(@PathParam("id") Integer id) {
+  public SchemaString getSchema(
+      @ApiParam(value = "Globally unique identifier of the schema", required = true)
+      @PathParam("id") Integer id) {
     SchemaString schema = null;
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";

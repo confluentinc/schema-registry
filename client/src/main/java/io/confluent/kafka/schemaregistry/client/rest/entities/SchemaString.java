@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.annotations.ApiModelProperty;
 
 import java.io.IOException;
 
@@ -37,6 +38,7 @@ public class SchemaString {
     return new ObjectMapper().readValue(json, SchemaString.class);
   }
 
+  @ApiModelProperty(value = "Schema string identified by the ID")
   @JsonProperty("schema")
   public String getSchemaString() {
     return schemaString;

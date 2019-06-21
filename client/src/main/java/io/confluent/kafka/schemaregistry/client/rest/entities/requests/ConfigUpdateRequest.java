@@ -19,6 +19,8 @@ package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.swagger.annotations.ApiModelProperty;
+
 import java.io.IOException;
 
 public class ConfigUpdateRequest {
@@ -29,6 +31,9 @@ public class ConfigUpdateRequest {
     return new ObjectMapper().readValue(json, ConfigUpdateRequest.class);
   }
 
+  @ApiModelProperty(value = "Compatability Level",
+      allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
+          + "FULL_TRANSITIVE, NONE")
   @JsonProperty("compatibility")
   public String getCompatibilityLevel() {
     return this.compatibilityLevel;
