@@ -27,7 +27,12 @@ import javax.ws.rs.Produces;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+
+
 @Path("/")
+@Api(value = "/")
 @Produces(
     {Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED, Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
      Versions.JSON_WEIGHTED})
@@ -36,6 +41,9 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 public class RootResource {
 
   @GET
+  @ApiOperation(value = "Schema Registry Root Resource",
+      notes = "The Root resource is a no-op.",
+      response = Map.class)
   public Map<String, String> get() {
     // Currently this just provides an endpoint that's a nop and can be used to check for
     // liveness and can be used for tests that need to test the server setup rather than the

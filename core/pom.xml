@@ -199,6 +199,16 @@
                 </exclusion>
             </exclusions>
         </dependency>
+        <dependency>
+            <groupId>io.swagger</groupId>
+            <artifactId>swagger-annotations</artifactId>
+            <version>1.5.22</version>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger</groupId>
+            <artifactId>swagger-core</artifactId>
+            <version>1.5.3</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -216,6 +226,40 @@
                 <configuration>
                     <mainClass>io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain</mainClass>
                 </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>com.github.kongchen</groupId>
+                <artifactId>swagger-maven-plugin</artifactId>
+                <version>3.1.8</version>
+                <configuration>
+                    <apiSources>
+                        <apiSource>
+                            <springmvc>false</springmvc>
+
+                            <locations>io.confluent.kafka.schemaregistry.rest.resources</locations>
+                            <schemes>http,https
+                            </schemes>
+                            <info>
+                                <title>Confluent Schema Registry</title>
+                                <version>v1</version>
+                            </info>
+                            <outputFormats>yaml</outputFormats>
+                            <swaggerFileName>schema-registry-api-spec</swaggerFileName>
+                            <outputPath>${basedir}/generated/document.html</outputPath>
+                            <swaggerDirectory>${basedir}/generated/swagger-ui</swaggerDirectory>
+                        </apiSource>
+
+                    </apiSources>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

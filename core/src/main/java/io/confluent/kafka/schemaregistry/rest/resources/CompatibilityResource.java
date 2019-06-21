@@ -15,6 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,13 +66,32 @@ public class CompatibilityResource {
 
   @POST
   @Path("/subjects/{subject}/versions/{version}")
+  @ApiOperation(value = "Test input schema against a particular version of a subject's schema for "
+      + "compatibility.",
+      notes = "the compatibility level applied for the check is the configured compatibility level "
+          + "for the subject (http:get:: /config/(string: subject)). If this subject's "
+          + "compatibility level was never changed, then the global compatibility level "
+          + "applies (http:get:: /config).",
+      response = CompatibilityCheckResponse.class
+  )
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found\n"
+          + "Error code 40402 -- Version not found"),
+      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid Avro schema\n"
+          + "Error code 42202 -- Invalid version"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store") })
   @PerformanceMetric("compatibility.subjects.versions.verify")
-  public void lookUpSchemaUnderSubject(final @Suspended AsyncResponse asyncResponse,
-                                       final @HeaderParam("Content-Type") String contentType,
-                                       final @HeaderParam("Accept") String accept,
-                                       @PathParam("subject") String subject,
-                                       @PathParam("version") String version,
-                                       @NotNull RegisterSchemaRequest request) {
+  public void lookUpSchemaUnderSubject(
+      final @Suspended AsyncResponse asyncResponse,
+      final @HeaderParam("Content-Type") String contentType,
+      final @HeaderParam("Accept") String accept,
+      @ApiParam(value = "Subject of the schema version against which compatibility is to be tested",
+          required = true)@PathParam("subject") String subject,
+      @ApiParam(value = "Version of the subject's schema against which compatibility is to be "
+          + "tested. Valid values for versionId are between [1,2^31-1] or the string \"latest\"."
+          + "\"latest\" checks compatibility of the input schema with the last registered schema "
+          + "under the specified subject", required = true)@PathParam("version") String version,
+      @NotNull RegisterSchemaRequest request) {
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
     Map<String, String> headerProperties = new HashMap<String, String>();
