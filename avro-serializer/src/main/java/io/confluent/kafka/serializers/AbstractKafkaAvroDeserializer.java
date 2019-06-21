@@ -99,7 +99,7 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
     }
 
     DeserializationContext context = new DeserializationContext(topic, isKey, payload);
-    return context.read(context.getSchemaFromRegistry(), readerSchema);
+    return context.read(context.schemaFromRegistry(), readerSchema);
   }
 
   private Integer schemaVersion(String topic,
@@ -124,15 +124,6 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
     return isDeprecatedSubjectNameStrategy(isKey)
         ? null
         : getSubjectName(topic, isKey, null, schemaFromRegistry);
-  }
-
-  private Schema schemaForDeserialize(int id,
-                                      Schema schemaFromRegistry,
-                                      String subject,
-                                      Boolean isKey) throws IOException, RestClientException {
-    return isDeprecatedSubjectNameStrategy(isKey)
-        ? AvroSchemaUtils.copyOf(schemaFromRegistry)
-        : schemaRegistry.getBySubjectAndId(subject, id);
   }
 
   /**
@@ -162,7 +153,7 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
     // schema registry's ordering (which is implicit by auto-registration time rather than
     // explicit from the Connector).
     DeserializationContext context = new DeserializationContext(topic, isKey, payload);
-    Schema schema = context.getSchemaForDeserialize();
+    Schema schema = context.schemaForDeserialize();
     W result = context.read(schema, null);
 
     try {
@@ -238,9 +229,6 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
     private final ByteBuffer buffer;
     private final int schemaId;
 
-    private Schema cachedSchemaFromRegistry = null;
-    private Schema cachedSchemaForDeserialize = null;
-
     DeserializationContext(final String topic, final Boolean isKey, final byte[] payload) {
       this.topic = topic;
       this.isKey = isKey;
@@ -248,31 +236,26 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
       this.schemaId = buffer.getInt();
     }
 
-    Schema getSchemaFromRegistry() {
-      if (cachedSchemaFromRegistry == null) {
-        try {
-          this.cachedSchemaFromRegistry = schemaRegistry.getById(schemaId);
-        } catch (RestClientException | IOException e) {
-          throw new SerializationException("Error retrieving Avro schema for id " + schemaId, e);
-        }
+    Schema schemaFromRegistry() {
+      try {
+        return schemaRegistry.getById(schemaId);
+      } catch (RestClientException | IOException e) {
+        throw new SerializationException("Error retrieving Avro schema for id " + schemaId, e);
       }
-      return cachedSchemaFromRegistry;
     }
 
-    Schema getSchemaForDeserialize() {
-      if (cachedSchemaForDeserialize == null) {
-        try {
-          this.cachedSchemaForDeserialize = schemaForDeserialize(
-              schemaId, getSchemaFromRegistry(), getSubject(), isKey);
-        } catch (RestClientException | IOException e) {
-          throw new SerializationException("Error retrieving Avro schema for id " + schemaId, e);
-        }
+    Schema schemaForDeserialize() {
+      try {
+        return isDeprecatedSubjectNameStrategy(isKey)
+            ? AvroSchemaUtils.copyOf(schemaFromRegistry())
+            : schemaRegistry.getBySubjectAndId(getSubject(), schemaId);
+      } catch (RestClientException | IOException e) {
+        throw new SerializationException("Error retrieving Avro schema for id " + schemaId, e);
       }
-      return cachedSchemaForDeserialize;
     }
 
     String getSubject() {
-      return subjectName(topic, isKey, getSchemaFromRegistry());
+      return subjectName(topic, isKey, schemaFromRegistry());
     }
 
     String getTopic() {
