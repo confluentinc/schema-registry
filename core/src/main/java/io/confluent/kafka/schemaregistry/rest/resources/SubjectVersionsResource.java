@@ -91,7 +91,7 @@ public class SubjectVersionsResource {
           + "Error code 40402 -- Version not found"),
       @ApiResponse(code = 422, message = "Error code 42202 -- Invalid version"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
-  public Schema getSchema(
+  public Schema getSchemaByVersion(
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
     VersionId versionId = null;
@@ -134,7 +134,7 @@ public class SubjectVersionsResource {
   public String getSchemaOnly(
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
-    return getSchema(subject, version).getSchema();
+    return getSchemaByVersion(subject, version).getSchema();
   }
 
   @GET
@@ -143,7 +143,7 @@ public class SubjectVersionsResource {
   @ApiResponses(value = {
       @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
-  public List<Integer> list(
+  public List<Integer> listVersions(
       @ApiParam(value = "Name of the Subject", required = true)
         @PathParam("subject") String subject) {
     // check if subject exists. If not, throw 404

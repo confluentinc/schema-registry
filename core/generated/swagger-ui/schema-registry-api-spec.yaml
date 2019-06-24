@@ -56,7 +56,7 @@ paths:
         \ compatibility level for the subject (http:get:: /config/(string: subject)).\
         \ If this subject's compatibility level was never changed, then the global\
         \ compatibility level applies (http:get:: /config)."
-      operationId: "lookUpSchemaUnderSubject"
+      operationId: "testCompatabilityBySubjectName"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
       - "application/vnd.schemaregistry+json"
@@ -410,7 +410,7 @@ paths:
     get:
       summary: "Get a list of versions registered under the specified subject."
       description: ""
-      operationId: "list"
+      operationId: "listVersions"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
       - "application/vnd.schemaregistry+json"
@@ -488,7 +488,7 @@ paths:
     get:
       summary: "Get a specific version of the schema registered under this subject."
       description: ""
-      operationId: "getSchema"
+      operationId: "getSchemaByVersion"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
       - "application/vnd.schemaregistry+json"
