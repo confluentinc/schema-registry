@@ -16,36 +16,27 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
 
 public class BearerAuthCredentialProviderFactory {
 
-  public static final Map<String, BearerAuthCredentialProvider>
-      bearerAuthCredentialProviderMap = new HashMap<>();
+  public static BearerAuthCredentialProvider getBearerAuthCredentialProvider(
+      String bearerAuthCredentialSource,
+      Map<String, ?> configs) {
 
-  static {
     ServiceLoader<BearerAuthCredentialProvider> serviceLoader = ServiceLoader.load(
         BearerAuthCredentialProvider.class,
         BearerAuthCredentialProviderFactory.class.getClassLoader()
     );
 
     for (BearerAuthCredentialProvider bearerAuthCredentialProvider : serviceLoader) {
-      bearerAuthCredentialProviderMap.put(
-          bearerAuthCredentialProvider.alias(),
-          bearerAuthCredentialProvider);
+      if (bearerAuthCredentialProvider.alias().equals(bearerAuthCredentialSource)) {
+        bearerAuthCredentialProvider.configure(configs);
+        return bearerAuthCredentialProvider;
+      }
     }
-  }
 
-  public static BearerAuthCredentialProvider getBearerAuthCredentialProvider(
-      String bearerAuthCredentialSource,
-      Map<String, ?> configs) {
-    BearerAuthCredentialProvider bearerAuthCredentialProvider =
-        bearerAuthCredentialProviderMap.get(bearerAuthCredentialSource);
-    if (bearerAuthCredentialProvider != null) {
-      bearerAuthCredentialProvider.configure(configs);
-    }
-    return bearerAuthCredentialProvider;
+    return null;
   }
 }
