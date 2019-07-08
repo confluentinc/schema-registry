@@ -237,7 +237,7 @@
                         <apiSource>
                             <springmvc>false</springmvc>
 
-                            <locations>io.confluent.kafka.schemaregistry.rest.resources</locations>
+                            <locations><location>io.confluent.kafka.schemaregistry.rest.resources</location></locations>
                             <schemes>http,https
                             </schemes>
                             <info>
