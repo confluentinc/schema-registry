@@ -15,18 +15,19 @@
 
 package io.confluent.kafka.schemaregistry.id;
 
+import io.confluent.common.utils.zookeeper.ZkData;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
-import kafka.utils.ZkUtils;
+import io.confluent.kafka.schemaregistry.utils.ZkUtils;
+
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
 import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Tuple2;
 
 
 public class ZookeeperIdGenerator implements IdGenerator {
@@ -109,8 +110,7 @@ public class ZookeeperIdGenerator implements IdGenerator {
           nextIdBatchLowerBound = getNextBatchLowerBoundFromKafkaStore();
           int nextIdBatchUpperBound = getInclusiveUpperBound(nextIdBatchLowerBound);
           zkUtils.createPersistentPath(ZOOKEEPER_SCHEMA_ID_COUNTER,
-              String.valueOf(nextIdBatchUpperBound),
-              zkUtils.defaultAcls(ZOOKEEPER_SCHEMA_ID_COUNTER));
+              String.valueOf(nextIdBatchUpperBound));
           return nextIdBatchLowerBound;
         } catch (ZkNodeExistsException ignore) {
           // A zombie master may have created this zk node after the initial existence check
@@ -119,9 +119,9 @@ public class ZookeeperIdGenerator implements IdGenerator {
       } else { // ZOOKEEPER_SCHEMA_ID_COUNTER exists
 
         // read the latest counter value
-        final Tuple2<String, Stat> counterValue = zkUtils.readData(ZOOKEEPER_SCHEMA_ID_COUNTER);
-        final String counterData = counterValue._1();
-        final Stat counterStat = counterValue._2();
+        final ZkData counterValue = zkUtils.readData(ZOOKEEPER_SCHEMA_ID_COUNTER);
+        final String counterData = counterValue.getData();
+        final Stat counterStat = counterValue.getStat();
         if (counterData == null) {
           throw new IdGenerationException(
               "Failed to read schema id counter " + ZOOKEEPER_SCHEMA_ID_COUNTER
@@ -166,8 +166,7 @@ public class ZookeeperIdGenerator implements IdGenerator {
             (Integer) zkUtils.conditionalUpdatePersistentPath(
                 ZOOKEEPER_SCHEMA_ID_COUNTER,
                 nextIdBatchUpperBound,
-                counterStat.getVersion(),
-                null)._2();
+                counterStat.getVersion());
         if (newSchemaIdCounterDataVersion >= 0) {
           break;
         }

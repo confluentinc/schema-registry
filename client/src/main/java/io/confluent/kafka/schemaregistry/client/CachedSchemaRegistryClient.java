@@ -55,8 +55,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
   static {
-    DEFAULT_REQUEST_PROPERTIES = new HashMap<String, String>();
-    DEFAULT_REQUEST_PROPERTIES.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    DEFAULT_REQUEST_PROPERTIES =
+        Collections.singletonMap("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
   }
 
   public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {

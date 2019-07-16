@@ -34,13 +34,12 @@ import java.util.Set;
 
 import io.confluent.common.config.AbstractConfig;
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
 import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
-import kafka.utils.ZkUtils;
 import scala.collection.JavaConversions;
-import scala.collection.Seq;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES;
@@ -556,13 +555,13 @@ public class SchemaRegistryConfig extends RestConfig {
       ZkUtils zkUtils = null;
       try {
         zkUtils =
-            ZkUtils.apply(getString(KAFKASTORE_CONNECTION_URL_CONFIG),
+            new ZkUtils(getString(KAFKASTORE_CONNECTION_URL_CONFIG),
                 zkSessionTimeoutMs,
                 zkSessionTimeoutMs,
                 checkZkAclConfig()
             );
-        Seq<Broker> brokerSeq = zkUtils.getAllBrokersInCluster();
-        endpoints = brokersToEndpoints(JavaConversions.seqAsJavaList(brokerSeq));
+        List<Broker> brokerSeq = zkUtils.getAllBrokersInCluster();
+        endpoints = brokersToEndpoints(brokerSeq);
       } finally {
         if (zkUtils != null) {
           zkUtils.close();
@@ -692,15 +691,14 @@ public class SchemaRegistryConfig extends RestConfig {
       final String schemaRegistryNamespace = "/" + srZkNamespace;
       final String schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;
 
-      ZkUtils zkUtilsForNamespaceCreation = ZkUtils.apply(
+      ZkUtils zkUtilsForNamespaceCreation = new ZkUtils(
           zkConnForNamespaceCreation, zkSessionTimeoutMs, zkSessionTimeoutMs, zkAclsEnabled);
       zkUtilsForNamespaceCreation.makeSurePersistentPathExists(
-          schemaRegistryNamespace,
-          zkUtilsForNamespaceCreation.defaultAcls(schemaRegistryNamespace));
+          schemaRegistryNamespace);
       log.info("Created schema registry namespace {} {}",
           zkConnForNamespaceCreation, schemaRegistryNamespace);
       zkUtilsForNamespaceCreation.close();
-      zkUtils = ZkUtils.apply(
+      zkUtils = new ZkUtils(
           schemaRegistryZkUrl,
           zkSessionTimeoutMs,
           zkSessionTimeoutMs,
