@@ -33,7 +33,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -124,8 +124,8 @@ public class RestService {
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
   static {
-    DEFAULT_REQUEST_PROPERTIES = new HashMap<String, String>();
-    DEFAULT_REQUEST_PROPERTIES.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    DEFAULT_REQUEST_PROPERTIES =
+        Collections.singletonMap("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
   }
 
   private UrlList baseUrls;

@@ -111,7 +111,7 @@ public class ZkUtils implements AutoCloseable {
       } catch (ZkNoNodeException z) {
         // the node disappeared; treat as if node existed and let caller handles this
       }
-      if (storedData == null || storedData != data) {
+      if (storedData == null || !storedData.equals(data)) {
         throw e;
       } else {
         // otherwise, the creation succeeded, return normally

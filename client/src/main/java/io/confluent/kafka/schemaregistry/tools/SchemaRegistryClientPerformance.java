@@ -90,8 +90,8 @@ public class SchemaRegistryClientPerformance extends AbstractPerformanceTest {
 
     try {
       client.register(this.subject, schema);
-      int id = client.getId(this.subject, schema);
-      int version = client.getVersion(this.subject, schema);
+      client.getId(this.subject, schema);
+      client.getVersion(this.subject, schema);
       successfullyRegisteredSchemas++;
     } catch (IOException e) {
       System.out.println("Problem registering schema: " + e.getMessage());
