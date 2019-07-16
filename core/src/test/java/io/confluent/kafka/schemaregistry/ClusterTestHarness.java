@@ -34,10 +34,11 @@ import java.util.Vector;
 
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.utils.ZkUtils;
+
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.TestUtils;
-import kafka.utils.ZkUtils;
 import kafka.zk.EmbeddedZookeeper;
 import scala.Option;
 import scala.Option$;
@@ -132,7 +133,7 @@ public abstract class ClusterTestHarness {
   public void setUp() throws Exception {
     zookeeper = new EmbeddedZookeeper();
     zkConnect = String.format("localhost:%d", zookeeper.port());
-    zkUtils = ZkUtils.apply(
+    zkUtils = new ZkUtils(
         zkConnect, zkSessionTimeout, zkConnectionTimeout,
         setZkAcls()
     ); // true or false doesn't matter because the schema registry Kafka principal is the same as the

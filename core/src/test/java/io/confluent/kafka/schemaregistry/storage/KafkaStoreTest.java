@@ -21,6 +21,7 @@ import kafka.log.LogConfig;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.config.ConfigResource;
 import org.junit.After;
@@ -35,6 +36,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Iterator;
 import java.util.Properties;
@@ -275,10 +277,16 @@ public class KafkaStoreTest extends ClusterTestHarness {
   @Test(expected=StoreInitializationException.class)
   public void testMandatoryCompationPolicy() throws Exception {
     Properties kafkaProps = new Properties();
-    Properties topicProps = new Properties();
+    Map<String, String> topicProps = new HashMap<>();
     topicProps.put(LogConfig.CleanupPolicyProp(), "delete");
 
-    AdminUtils.createTopic(zkUtils, SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 1, 1, topicProps, RackAwareMode.Enforced$.MODULE$);
+    NewTopic topic = new NewTopic(SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 1, (short) 1);
+    topic.configs(topicProps);
+
+    Properties props = new Properties();
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    AdminClient admin = AdminClient.create(props);
+    admin.createTopics(Collections.singletonList(topic));
 
     Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
 
@@ -288,11 +296,16 @@ public class KafkaStoreTest extends ClusterTestHarness {
   @Test(expected=StoreInitializationException.class)
   public void testTooManyPartitions() throws Exception {
     Properties kafkaProps = new Properties();
-    Properties topicProps = new Properties();
+    Map<String, String> topicProps = new HashMap<>();
     topicProps.put(LogConfig.CleanupPolicyProp(), "compact");
 
-    AdminUtils.createTopic(zkUtils, SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 3, 1,
-                           topicProps, RackAwareMode.Enforced$.MODULE$);
+    NewTopic topic = new NewTopic(SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 3, (short) 1);
+    topic.configs(topicProps);
+
+    Properties props = new Properties();
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    AdminClient admin = AdminClient.create(props);
+    admin.createTopics(Collections.singletonList(topic));
 
     Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
 

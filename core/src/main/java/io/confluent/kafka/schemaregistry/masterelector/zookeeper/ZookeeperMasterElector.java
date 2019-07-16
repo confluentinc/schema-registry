@@ -35,7 +35,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.storage.MasterElector;
 import io.confluent.kafka.schemaregistry.storage.MasterAwareSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
-import kafka.utils.ZkUtils;
+import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 
 public class ZookeeperMasterElector implements MasterElector {
 
@@ -91,8 +91,7 @@ public class ZookeeperMasterElector implements MasterElector {
       SchemaRegistryInitializationException, IdGenerationException {
     SchemaRegistryIdentity masterIdentity = null;
     try {
-      zkUtils.createEphemeralPathExpectConflict(MASTER_PATH, myIdentityString,
-                                                zkUtils.defaultAcls(MASTER_PATH));
+      zkUtils.createEphemeralPathExpectConflict(MASTER_PATH, myIdentityString);
       log.info("Successfully elected the new master: " + myIdentityString);
       masterIdentity = myIdentity;
       schemaRegistry.setMaster(masterIdentity);
@@ -107,7 +106,7 @@ public class ZookeeperMasterElector implements MasterElector {
     SchemaRegistryIdentity masterIdentity = null;
     // If someone else has written the path, read the new master back
     try {
-      String masterIdentityString = zkUtils.readData(MASTER_PATH)._1();
+      String masterIdentityString = zkUtils.readData(MASTER_PATH).getData();
       try {
         masterIdentity = SchemaRegistryIdentity.fromJson(masterIdentityString);
       } catch (IOException ioe) {
