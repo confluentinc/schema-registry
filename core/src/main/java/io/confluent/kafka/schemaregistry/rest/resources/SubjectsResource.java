@@ -83,6 +83,7 @@ public class SubjectsResource {
       @ApiParam(value = "Subject under which the schema will be registered", required = true)
         @PathParam("subject") String subject,
       @QueryParam("deleted") boolean lookupDeletedSchema,
+      @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     // returns version if the schema exists. Otherwise returns 404
     Schema schema = new Schema(subject, 0, -1, request.getSchema());

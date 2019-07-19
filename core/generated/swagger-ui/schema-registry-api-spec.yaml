@@ -89,6 +89,12 @@ paths:
           \ with the last registered schema under the specified subject"
         required: true
         type: "string"
+      - in: "body"
+        name: "body"
+        description: "Schema"
+        required: true
+        schema:
+          $ref: "#/definitions/RegisterSchemaRequest"
       responses:
         200:
           description: "successful operation"
@@ -365,6 +371,12 @@ paths:
         in: "query"
         required: false
         type: "boolean"
+      - in: "body"
+        name: "body"
+        description: "Schema"
+        required: true
+        schema:
+          $ref: "#/definitions/RegisterSchemaRequest"
       responses:
         404:
           description: "Error code 40401 -- Subject not found\nError code 40403 --\

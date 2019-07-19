@@ -91,6 +91,7 @@ public class CompatibilityResource {
           + "tested. Valid values for versionId are between [1,2^31-1] or the string \"latest\"."
           + "\"latest\" checks compatibility of the input schema with the last registered schema "
           + "under the specified subject", required = true)@PathParam("version") String version,
+      @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
