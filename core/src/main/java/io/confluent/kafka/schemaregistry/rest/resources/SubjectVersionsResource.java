@@ -205,6 +205,7 @@ public class SubjectVersionsResource {
       @Context HttpHeaders headers,
       @ApiParam(value = "Name of the Subject", required = true)
         @PathParam("subject") String subjectName,
+      @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(

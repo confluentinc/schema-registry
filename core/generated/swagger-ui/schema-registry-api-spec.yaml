@@ -471,6 +471,12 @@ paths:
         description: "Name of the Subject"
         required: true
         type: "string"
+      - in: "body"
+        name: "body"
+        description: "Schema"
+        required: true
+        schema:
+          $ref: "#/definitions/RegisterSchemaRequest"
       responses:
         200:
           description: "successful operation"
@@ -656,6 +662,17 @@ definitions:
     type: "object"
     properties:
       mode:
+        type: "string"
+  RegisterSchemaRequest:
+    type: "object"
+    properties:
+      version:
+        type: "integer"
+        format: "int32"
+      id:
+        type: "integer"
+        format: "int32"
+      schema:
         type: "string"
   RegisterSchemaResponse:
     type: "object"
