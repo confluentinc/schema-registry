@@ -15,6 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,8 +68,15 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @PUT
+  @ApiOperation(value = "Update compatibility level for the specified subject.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 422, message = "Error code 42203 -- Invalid compatibility level\n"
+          + "Error code 40402 -- Version not found"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
+          + "Error code 50003 -- Error while forwarding the request to the primary")
+  })
   public ConfigUpdateRequest updateSubjectLevelConfig(
-      @PathParam("subject") String subject,
+      @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @Context HttpHeaders headers,
       @NotNull ConfigUpdateRequest request) {
     Set<String> subjects = null;
@@ -110,6 +121,10 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @GET
+  @ApiOperation(value = "Get compatibility level for a subject.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Subject not found"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
   public Config getSubjectLevelConfig(@PathParam("subject") String subject) {
     Config config = null;
     try {
@@ -127,6 +142,12 @@ public class ConfigResource {
   }
 
   @PUT
+  @ApiOperation(value = "Update global compatibility level.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 422, message = "Error code 42203 -- Invalid compatibility level"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
+          + "Error code 50003 -- Error while forwarding the request to the primary\n")
+  })
   public ConfigUpdateRequest updateTopLevelConfig(
       @Context HttpHeaders headers,
       @NotNull ConfigUpdateRequest request) {
@@ -154,6 +175,10 @@ public class ConfigResource {
   }
 
   @GET
+  @ApiOperation(value = "Get global compatibility level.")
+  @ApiResponses(value = {@ApiResponse(code = 500,
+      message = "Error code 50001 -- Error in the backend data store")}
+  )
   public Config getTopLevelConfig() {
     Config config = null;
     try {

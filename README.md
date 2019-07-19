@@ -109,6 +109,13 @@ with Maven.
 This project uses the [Google Java code style](https://google.github.io/styleguide/javaguide.html)
 to keep code clean and consistent.
 
+OpenAPI Spec
+------------
+
+OpenAPI (formerly known as Swagger) specifications are built automatically using `swagger-maven-plugin`
+on `compile` phase.
+
+
 Contribute
 ----------
 
