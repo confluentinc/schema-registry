@@ -369,5 +369,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public void reset() {
+    schemaCache.clear();
+    idCache.clear();
+    versionCache.clear();
+    idCache.put(null, new HashMap<Integer, Schema>());
   }
 }
