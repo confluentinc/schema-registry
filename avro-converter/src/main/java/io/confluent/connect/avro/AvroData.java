@@ -1494,7 +1494,7 @@ public class AvroData {
   }
 
 
-  private Schema toConnectSchema(org.apache.avro.Schema schema,
+  protected Schema toConnectSchema(org.apache.avro.Schema schema,
                                  Integer version,
                                  ToConnectContext toConnectContext) {
 
@@ -1526,7 +1526,7 @@ public class AvroData {
    *                         used when converting Avro record fields since they define doc values
    * @param toConnectContext context object that holds state while doing the conversion
    */
-  private Schema toConnectSchema(org.apache.avro.Schema schema,
+  protected Schema toConnectSchema(org.apache.avro.Schema schema,
                                  boolean forceOptional,
                                  Object fieldDefaultVal,
                                  String docDefaultVal,
