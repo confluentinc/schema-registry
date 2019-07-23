@@ -49,6 +49,8 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreTest.class);
 
+  private static final int ADMIN_TIMEOUT_SEC = 60;
+
   @Before
   public void setup() {
     log.debug("Zk conn url = " + zkConnect);
@@ -282,7 +284,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     Properties props = new Properties();
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     try (AdminClient admin = AdminClient.create(props)) {
-      admin.createTopics(Collections.singletonList(topic)).all().get(60000, TimeUnit.MILLISECONDS);
+      admin.createTopics(Collections.singletonList(topic)).all().get(ADMIN_TIMEOUT_SEC, TimeUnit.SECONDS);
     }
 
     Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
@@ -302,7 +304,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     Properties props = new Properties();
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     try (AdminClient admin = AdminClient.create(props)) {
-      admin.createTopics(Collections.singletonList(topic)).all().get(60000, TimeUnit.MILLISECONDS);
+      admin.createTopics(Collections.singletonList(topic)).all().get(ADMIN_TIMEOUT_SEC, TimeUnit.SECONDS);
     }
 
     Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
@@ -328,7 +330,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     Map<org.apache.kafka.common.config.ConfigResource, Config> topicConfigs;
     try (AdminClient admin = AdminClient.create(props)) {
       topicConfigs = admin.describeConfigs(Collections.singleton(configResource))
-          .all().get(60000, TimeUnit.MILLISECONDS);
+          .all().get(ADMIN_TIMEOUT_SEC, TimeUnit.SECONDS);
     }
 
     Config config = topicConfigs.get(configResource);
