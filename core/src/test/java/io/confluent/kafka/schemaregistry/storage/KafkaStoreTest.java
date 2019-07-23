@@ -15,15 +15,12 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import kafka.admin.AdminUtils;
-import kafka.admin.RackAwareMode;
-import kafka.log.LogConfig;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -40,7 +37,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Iterator;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
@@ -52,6 +48,8 @@ import static org.junit.Assert.assertNull;
 public class KafkaStoreTest extends ClusterTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreTest.class);
+
+  private static final int ADMIN_TIMEOUT_SEC = 60;
 
   @Before
   public void setup() {
@@ -275,18 +273,19 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test(expected=StoreInitializationException.class)
-  public void testMandatoryCompationPolicy() throws Exception {
+  public void testMandatoryCompactionPolicy() throws Exception {
     Properties kafkaProps = new Properties();
     Map<String, String> topicProps = new HashMap<>();
-    topicProps.put(LogConfig.CleanupPolicyProp(), "delete");
+    topicProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "delete");
 
     NewTopic topic = new NewTopic(SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 1, (short) 1);
     topic.configs(topicProps);
 
     Properties props = new Properties();
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-    AdminClient admin = AdminClient.create(props);
-    admin.createTopics(Collections.singletonList(topic));
+    try (AdminClient admin = AdminClient.create(props)) {
+      admin.createTopics(Collections.singletonList(topic)).all().get(ADMIN_TIMEOUT_SEC, TimeUnit.SECONDS);
+    }
 
     Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
 
@@ -297,15 +296,16 @@ public class KafkaStoreTest extends ClusterTestHarness {
   public void testTooManyPartitions() throws Exception {
     Properties kafkaProps = new Properties();
     Map<String, String> topicProps = new HashMap<>();
-    topicProps.put(LogConfig.CleanupPolicyProp(), "compact");
+    topicProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact");
 
     NewTopic topic = new NewTopic(SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC, 3, (short) 1);
     topic.configs(topicProps);
 
     Properties props = new Properties();
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-    AdminClient admin = AdminClient.create(props);
-    admin.createTopics(Collections.singletonList(topic));
+    try (AdminClient admin = AdminClient.create(props)) {
+      admin.createTopics(Collections.singletonList(topic)).all().get(ADMIN_TIMEOUT_SEC, TimeUnit.SECONDS);
+    }
 
     Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
 
@@ -323,13 +323,15 @@ public class KafkaStoreTest extends ClusterTestHarness {
     Properties props = new Properties();
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
 
-    AdminClient admin = AdminClient.create(props);
     ConfigResource configResource = new ConfigResource(
-            ConfigResource.Type.TOPIC,
-            SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC );
-    Map<org.apache.kafka.common.config.ConfigResource, Config> topicConfigs =
-        admin.describeConfigs(Collections.singleton(configResource)).all()
-            .get(60000, TimeUnit.MILLISECONDS);
+        ConfigResource.Type.TOPIC,
+        SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC
+    );
+    Map<org.apache.kafka.common.config.ConfigResource, Config> topicConfigs;
+    try (AdminClient admin = AdminClient.create(props)) {
+      topicConfigs = admin.describeConfigs(Collections.singleton(configResource))
+          .all().get(ADMIN_TIMEOUT_SEC, TimeUnit.SECONDS);
+    }
 
     Config config = topicConfigs.get(configResource);
     assertNotNull(config.get("delete.retention.ms"));
