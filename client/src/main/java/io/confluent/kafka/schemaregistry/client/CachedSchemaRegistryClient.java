@@ -19,8 +19,6 @@ package io.confluent.kafka.schemaregistry.client;
 import java.util.Collections;
 import java.util.Objects;
 
-import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
-import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProviderFactory;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -37,9 +35,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpd
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
-import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
-import org.apache.kafka.common.config.ConfigException;
 
 /**
  * Thread-safe Schema Registry Client with client side caching.
@@ -119,48 +114,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.versionCache = new HashMap<String, Map<Schema, Integer>>();
     this.restService = restService;
     this.idCache.put(null, new HashMap<Integer, Schema>());
-    configureRestService(configs, httpHeaders);
-  }
-
-  private void configureRestService(Map<String, ?> configs, Map<String, String> httpHeaders) {
     if (httpHeaders != null) {
       restService.setHttpHeaders(httpHeaders);
     }
-
-    if (configs != null) {
-      String basicCredentialsSource =
-          (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
-      String bearerCredentialsSource =
-          (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
-
-      if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
-        throw new ConfigException(String.format(
-            "Only one of '%s' and '%s' may be specified",
-            SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE,
-            SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE
-        ));
-
-      } else if (isNonEmpty(basicCredentialsSource)) {
-        BasicAuthCredentialProvider basicAuthCredentialProvider =
-            BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
-                basicCredentialsSource,
-                configs
-            );
-        restService.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
-
-      } else if (isNonEmpty(bearerCredentialsSource)) {
-        BearerAuthCredentialProvider bearerAuthCredentialProvider =
-            BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
-                bearerCredentialsSource,
-                configs
-            );
-        restService.setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
-      }
-    }
-  }
-
-  private static boolean isNonEmpty(String s) {
-    return s != null && !s.isEmpty();
+    restService.configure(configs);
   }
 
   private int registerAndGetId(String subject, Schema schema)
