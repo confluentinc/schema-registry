@@ -154,35 +154,33 @@ public class RestService implements Configurable {
 
   @Override
   public void configure(Map<String, ?> configs) {
-    if (configs != null) {
-      String basicCredentialsSource =
-          (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
-      String bearerCredentialsSource =
-          (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
+    String basicCredentialsSource =
+        (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
+    String bearerCredentialsSource =
+        (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
 
-      if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
-        throw new ConfigException(String.format(
-            "Only one of '%s' and '%s' may be specified",
-            SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE,
-            SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE
-        ));
+    if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
+      throw new ConfigException(String.format(
+          "Only one of '%s' and '%s' may be specified",
+          SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE,
+          SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE
+      ));
 
-      } else if (isNonEmpty(basicCredentialsSource)) {
-        BasicAuthCredentialProvider basicAuthCredentialProvider =
-            BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
-                basicCredentialsSource,
-                configs
-            );
-        setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+    } else if (isNonEmpty(basicCredentialsSource)) {
+      BasicAuthCredentialProvider basicAuthCredentialProvider =
+          BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
+              basicCredentialsSource,
+              configs
+          );
+      setBasicAuthCredentialProvider(basicAuthCredentialProvider);
 
-      } else if (isNonEmpty(bearerCredentialsSource)) {
-        BearerAuthCredentialProvider bearerAuthCredentialProvider =
-            BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
-                bearerCredentialsSource,
-                configs
-            );
-        setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
-      }
+    } else if (isNonEmpty(bearerCredentialsSource)) {
+      BearerAuthCredentialProvider bearerAuthCredentialProvider =
+          BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
+              bearerCredentialsSource,
+              configs
+          );
+      setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
     }
   }
 

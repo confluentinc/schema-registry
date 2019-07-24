@@ -117,7 +117,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     if (httpHeaders != null) {
       restService.setHttpHeaders(httpHeaders);
     }
-    restService.configure(configs);
+    if (configs != null && !configs.isEmpty()) {
+      restService.configure(configs);
+    }
   }
 
   private int registerAndGetId(String subject, Schema schema)
