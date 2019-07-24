@@ -21,7 +21,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
+
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,11 +58,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProviderFactory;
 
 /**
  * Rest access layer for sending requests to the schema registry.
  */
-public class RestService {
+public class RestService implements Configurable {
 
   private static final Logger log = LoggerFactory.getLogger(RestService.class);
   private static final TypeReference<RegisterSchemaResponse> REGISTER_RESPONSE_TYPE =
@@ -144,6 +150,42 @@ public class RestService {
 
   public RestService(String baseUrlConfig) {
     this(parseBaseUrl(baseUrlConfig));
+  }
+
+  @Override
+  public void configure(Map<String, ?> configs) {
+    String basicCredentialsSource =
+        (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
+    String bearerCredentialsSource =
+        (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
+
+    if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
+      throw new ConfigException(String.format(
+          "Only one of '%s' and '%s' may be specified",
+          SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE,
+          SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE
+      ));
+
+    } else if (isNonEmpty(basicCredentialsSource)) {
+      BasicAuthCredentialProvider basicAuthCredentialProvider =
+          BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
+              basicCredentialsSource,
+              configs
+          );
+      setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+
+    } else if (isNonEmpty(bearerCredentialsSource)) {
+      BearerAuthCredentialProvider bearerAuthCredentialProvider =
+          BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
+              bearerCredentialsSource,
+              configs
+          );
+      setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
+    }
+  }
+
+  private static boolean isNonEmpty(String s) {
+    return s != null && !s.isEmpty();
   }
 
   public void setSslSocketFactory(SSLSocketFactory sslSocketFactory) {
