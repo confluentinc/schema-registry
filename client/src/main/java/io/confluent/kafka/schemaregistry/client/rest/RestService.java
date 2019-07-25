@@ -261,6 +261,10 @@ public class RestService implements Configurable {
         return null;
       } else {
         InputStream es = connection.getErrorStream();
+        if (es == null) {
+          // Most likely some other HTTP code < 400
+          return null;
+        }
         ErrorMessage errorMessage;
         try {
           errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
