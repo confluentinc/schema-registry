@@ -82,6 +82,10 @@ public class KafkaStoreMessageHandler
    */
   @Override
   public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
+    if (value == null) {
+      // Ignore tombstones
+      return;
+    }
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
           (SchemaValue) value);
