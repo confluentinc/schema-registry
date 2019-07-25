@@ -24,8 +24,11 @@ import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.verify;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.powermock.api.easymock.PowerMock.expectNew;
 import static org.powermock.api.easymock.PowerMock.replay;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -39,6 +42,7 @@ import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 
 @RunWith(PowerMockRunner.class)
@@ -105,20 +109,9 @@ public class RestServiceTest {
 
     expect(httpURLConnection.getInputStream()).andReturn(inputStream);
 
-    expect(inputStream.read((byte[]) anyObject(), anyInt(), anyInt()))
-        .andDelegateTo(new InputStream() {
-          @Override
-          public int read() {
-            return 0;
-          }
-
-          @Override
-          public int read(byte[] b, int off, int len) {
-            byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
-            System.arraycopy(json, 0, b, 0, json.length);
-            return json.length;
-          }
-        }).anyTimes();
+    expect(inputStream.read(anyObject(), anyInt(), anyInt()))
+        .andDelegateTo(createInputStream("[\"abc\"]"))
+        .anyTimes();
 
     replay(URL.class, url);
     replay(HttpURLConnection.class, httpURLConnection);
@@ -206,20 +199,9 @@ public class RestServiceTest {
 
     expect(httpURLConnection.getInputStream()).andReturn(inputStream);
 
-    expect(inputStream.read((byte[]) anyObject(), anyInt(), anyInt()))
-        .andDelegateTo(new InputStream() {
-          @Override
-          public int read() {
-            return 0;
-          }
-
-          @Override
-          public int read(byte[] b, int off, int len) {
-            byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
-            System.arraycopy(json, 0, b, 0, json.length);
-            return json.length;
-          }
-        }).anyTimes();
+    expect(inputStream.read(anyObject(), anyInt(), anyInt()))
+        .andDelegateTo(createInputStream("[\"abc\"]"))
+        .anyTimes();
 
     replay(URL.class, url);
     replay(HttpURLConnection.class, httpURLConnection);
@@ -228,5 +210,41 @@ public class RestServiceTest {
     restService.getAllSubjects();
 
     verify(httpURLConnection);
+  }
+
+  @Test
+  public void testErrorResponseWithNullErrorStreamFromConnection() throws Exception {
+    RestService restService = new RestService("http://localhost:8081");
+
+    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
+    InputStream inputStream = createNiceMock(InputStream.class);
+
+    expectNew(URL.class, anyString()).andReturn(url);
+    expect(url.openConnection()).andReturn(httpURLConnection);
+    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_BAD_REQUEST);
+
+    expectLastCall().once();
+
+    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
+    expect(httpURLConnection.getErrorStream()).andReturn(null);
+
+    expect(inputStream.read(anyObject(), anyInt(), anyInt()))
+        .andDelegateTo(createInputStream("[\"abc\"]"))
+        .anyTimes();
+
+    replay(URL.class, url);
+    replay(HttpURLConnection.class, httpURLConnection);
+    replay(InputStream.class, inputStream);
+
+    try {
+      restService.getAllSubjects();
+      fail("Expected RestClientException to be thrown");
+    } catch (RestClientException exception) {
+      assertTrue(exception.getMessage().endsWith("error code: 50005"));
+    }
+  }
+
+  private ByteArrayInputStream createInputStream(String content) {
+    return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
   }
 }
