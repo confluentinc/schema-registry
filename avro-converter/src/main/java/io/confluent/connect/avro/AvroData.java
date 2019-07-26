@@ -1656,8 +1656,8 @@ public class AvroData {
         toConnectContext.cycleReferences.put(schema, new CyclicSchemaWrapper(builder));
         for (org.apache.avro.Schema.Field field : schema.getFields()) {
 
-          Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(), field.defaultValue(),
-                                               field.doc(), toConnectContext);
+          Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
+                  field.defaultValue(), field.doc(), toConnectContext);
           builder.field(field.name(), fieldSchema);
         }
         break;
