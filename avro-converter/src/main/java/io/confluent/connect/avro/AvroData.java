@@ -1489,6 +1489,10 @@ public class AvroData {
     }
   }
 
+  protected boolean getForceOptionalDefault() {
+    return false;
+  }
+
   public Schema toConnectSchema(org.apache.avro.Schema schema) {
     return toConnectSchema(schema, null, new ToConnectContext());
   }
@@ -1508,7 +1512,8 @@ public class AvroData {
       return cachedSchema;
     }
 
-    Schema resultSchema = toConnectSchema(schema, false, null, null, version, toConnectContext);
+    Schema resultSchema = toConnectSchema(schema, getForceOptionalDefault(), null,
+            null, version, toConnectContext);
     toConnectSchemaCache.put(schemaAndVersion, resultSchema);
     return resultSchema;
   }
@@ -1632,7 +1637,8 @@ public class AvroData {
           );
         } else {
           Schema arraySchema = toConnectSchemaWithCycles(
-              schema.getElementType(), false, null, null, toConnectContext);
+              schema.getElementType(), getForceOptionalDefault(),
+                  null, null, toConnectContext);
           builder = SchemaBuilder.array(arraySchema);
         }
         break;
@@ -1640,7 +1646,8 @@ public class AvroData {
       case MAP:
         builder = SchemaBuilder.map(
             Schema.STRING_SCHEMA,
-            toConnectSchemaWithCycles(schema.getValueType(), false, null, null, toConnectContext)
+            toConnectSchemaWithCycles(schema.getValueType(), getForceOptionalDefault(),
+                    null, null, toConnectContext)
         );
         break;
 
@@ -1649,8 +1656,8 @@ public class AvroData {
         toConnectContext.cycleReferences.put(schema, new CyclicSchemaWrapper(builder));
         for (org.apache.avro.Schema.Field field : schema.getFields()) {
 
-          Schema fieldSchema = toConnectSchema(field.schema(), false, field.defaultValue(),
-                                               field.doc(), toConnectContext);
+          Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
+                  field.defaultValue(), field.doc(), toConnectContext);
           builder.field(field.name(), fieldSchema);
         }
         break;
