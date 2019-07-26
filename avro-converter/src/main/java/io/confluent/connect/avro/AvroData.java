@@ -1489,6 +1489,10 @@ public class AvroData {
     }
   }
 
+  protected boolean getForceOptionalDefault() {
+    return false;
+  }
+
   public Schema toConnectSchema(org.apache.avro.Schema schema) {
     return toConnectSchema(schema, null, new ToConnectContext());
   }
@@ -1508,13 +1512,10 @@ public class AvroData {
       return cachedSchema;
     }
 
-    Schema resultSchema = toConnectSchema(schema, getForceOptionalDefault(), null, null, version, toConnectContext);
+    Schema resultSchema = toConnectSchema(schema, getForceOptionalDefault(), null,
+            null, version, toConnectContext);
     toConnectSchemaCache.put(schemaAndVersion, resultSchema);
     return resultSchema;
-  }
-
-  protected boolean getForceOptionalDefault() {
-    return false;
   }
 
   /**
@@ -1636,7 +1637,8 @@ public class AvroData {
           );
         } else {
           Schema arraySchema = toConnectSchemaWithCycles(
-              schema.getElementType(), getForceOptionalDefault(), null, null, toConnectContext);
+              schema.getElementType(), getForceOptionalDefault(),
+                  null, null, toConnectContext);
           builder = SchemaBuilder.array(arraySchema);
         }
         break;
@@ -1644,7 +1646,8 @@ public class AvroData {
       case MAP:
         builder = SchemaBuilder.map(
             Schema.STRING_SCHEMA,
-            toConnectSchemaWithCycles(schema.getValueType(), getForceOptionalDefault(), null, null, toConnectContext)
+            toConnectSchemaWithCycles(schema.getValueType(), getForceOptionalDefault(),
+                    null, null, toConnectContext)
         );
         break;
 
