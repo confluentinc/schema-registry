@@ -141,7 +141,7 @@ public class ZkUtils implements AutoCloseable {
     String parentDir = path.substring(0, path.lastIndexOf('/'));
     if (!parentDir.isEmpty()) {
       checkNamespace();
-      zkClient.createPersistent(path, true, acls);
+      zkClient.createPersistent(parentDir, true, acls);
     }
   }
 
