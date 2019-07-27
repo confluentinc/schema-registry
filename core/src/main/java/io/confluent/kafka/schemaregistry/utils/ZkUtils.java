@@ -36,8 +36,6 @@ import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
 
-import io.confluent.common.utils.zookeeper.ZkData;
-
 /**
  * This is a temporary replacement for kafka.utils.ZkUtils and will be removed in CP 6.0
  * when ZooKeeper references are removed from Schema Registry.
@@ -161,6 +159,10 @@ public class ZkUtils implements AutoCloseable {
     }
   }
 
+  public void updatePersistentPath(String path, String data) {
+    zkClient.writeData(path, data);
+  }
+
   public ZkData readData(String path) {
     Stat stat = new Stat();
     String data = zkClient.readData(path, stat);
@@ -176,6 +178,10 @@ public class ZkUtils implements AutoCloseable {
       data = null;
     }
     return new ZkData(data, stat);
+  }
+
+  public boolean delete(String path) {
+    return zkClient.delete(path);
   }
 
   private void createPersistent(String path, Object data) {
