@@ -14,15 +14,13 @@
  */
 package io.confluent.kafka.schemaregistry.masterelector.zookeeper;
 
-import io.confluent.common.utils.zookeeper.ZkUtils;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
-import io.confluent.kafka.schemaregistry.storage.serialization.ZkStringSerializer;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import org.I0Itec.zkclient.ZkClient;
+import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -41,12 +39,12 @@ public class ZookeeperMasterElectorTest extends ClusterTestHarness {
   private static final String ZK_ID_COUNTER_PATH =
       "/schema_registry" + ZookeeperIdGenerator.ZOOKEEPER_SCHEMA_ID_COUNTER;
 
-  @Test
   /**
    * If the zk id counter used to help hand out unique ids is lower than the lowest id in the
    * kafka store, KafkaSchemaRegistry should still do the right thing and continue to hand out
    * increasing ids when new schemas are registered.
    */
+  @Test
   public void testIncreasingIdZkResetLow() throws Exception {
     // create schema registry instance 1
     final RestApp restApp1 = new RestApp(choosePort(),
@@ -55,7 +53,7 @@ public class ZookeeperMasterElectorTest extends ClusterTestHarness {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(ID_BATCH_SIZE);
     String subject = "testSubject";
 
-    Set<Integer> ids = new HashSet<Integer>();
+    Set<Integer> ids = new HashSet<>();
     int maxId = -1;
     for (int i = 0; i < ID_BATCH_SIZE / 2; i++) {
       int newId = restApp1.restClient.registerSchema(schemas.get(i), subject);
@@ -67,10 +65,9 @@ public class ZookeeperMasterElectorTest extends ClusterTestHarness {
     }
 
     // Overwrite zk id counter to 0
-    final ZkClient zkClient = new ZkClient(zkConnect, 10000, 10000, new ZkStringSerializer());
-    int zkIdCounter = getZkIdCounter(zkClient);
+    int zkIdCounter = getZkIdCounter(zkUtils);
     assertEquals(ID_BATCH_SIZE, zkIdCounter); // sanity check
-    ZkUtils.updatePersistentPath(zkClient, ZK_ID_COUNTER_PATH, "0");
+    zkUtils.updatePersistentPath(ZK_ID_COUNTER_PATH, "0");
 
     // Make sure ids are still increasing
     String anotherSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
@@ -93,11 +90,11 @@ public class ZookeeperMasterElectorTest extends ClusterTestHarness {
                             "Schema registry instance 2 should become the master");
     // Reelection should have triggered zk id to update to the next batch
     assertEquals("Zk counter is not the expected value.",
-                 2 * ID_BATCH_SIZE, getZkIdCounter(zkClient));
+                 2 * ID_BATCH_SIZE, getZkIdCounter(zkUtils));
 
     // Overwrite zk id counter again, then register another batch to trigger id batch update
     // (meanwhile verifying that ids continue to increase)
-    ZkUtils.updatePersistentPath(zkClient, ZK_ID_COUNTER_PATH, "0");
+    zkUtils.updatePersistentPath(ZK_ID_COUNTER_PATH, "0");
     schemas = TestUtils.getRandomCanonicalAvroString(ID_BATCH_SIZE);
     for (int i = 0; i < ID_BATCH_SIZE; i++) {
       newId = restApp2.restClient.registerSchema(schemas.get(i), subject);
@@ -111,10 +108,9 @@ public class ZookeeperMasterElectorTest extends ClusterTestHarness {
 
     // We just wrote another batch worth of schemas, so zk counter should jump
     assertEquals("Zk counter is not the expected value.",
-                 3 * ID_BATCH_SIZE, getZkIdCounter(zkClient));
+                 3 * ID_BATCH_SIZE, getZkIdCounter(zkUtils));
   }
 
-  @Test
   /**
    * If there is no schema data in the kafka, but there is id data in zookeeper when a SchemaRegistry
    * instance is booted up, newly assigned ids should be greater than whatever is in zookeeper.
@@ -123,24 +119,24 @@ public class ZookeeperMasterElectorTest extends ClusterTestHarness {
    * I.e. regardless of initial value, after zk id counter is updated
    * it should be a multiple of if ID_BATCH_SIZE.
    */
+  @Test
   public void testIdBehaviorWithZkWithoutKafka() throws Exception {
     // Overwrite the value in zk
-    final ZkClient zkClient = new ZkClient(zkConnect, 10000, 10000, new ZkStringSerializer());
     int weirdInitialCounterValue = ID_BATCH_SIZE - 1;
-    ZkUtils.createPersistentPath(zkClient, ZK_ID_COUNTER_PATH, "" + weirdInitialCounterValue);
+    zkUtils.createPersistentPath(ZK_ID_COUNTER_PATH, "" + weirdInitialCounterValue);
 
     // Check that zookeeper id counter is updated sensibly during SchemaRegistry bootstrap process
     final RestApp restApp = new RestApp(choosePort(),
                                          zkConnect, KAFKASTORE_TOPIC);
     restApp.start();
-    assertEquals("", 2 * ID_BATCH_SIZE, getZkIdCounter(zkClient));
+    assertEquals("", 2 * ID_BATCH_SIZE, getZkIdCounter(zkUtils));
   }
 
-  @Test
   /**
    * Verify correct id allocation when a SchemaRegistry instance is initialized, and there is
    * preexisting data in the kafkastore, but no zookeeper id counter node.
    */
+  @Test
   public void testIdBehaviorWithoutZkWithKafka() throws Exception {
 
     // Pre-populate kafkastore with a few schemas
@@ -158,33 +154,33 @@ public class ZookeeperMasterElectorTest extends ClusterTestHarness {
     restApp.stop();
 
     // Sanity check id counter then remove it
-    int zkIdCounter = getZkIdCounter(zkClient);
+    int zkIdCounter = getZkIdCounter(zkUtils);
     assertEquals("Incorrect ZK id counter.", ID_BATCH_SIZE, zkIdCounter);
-    zkClient.delete(ZK_ID_COUNTER_PATH);
+    zkUtils.delete(ZK_ID_COUNTER_PATH);
 
     // start up another app instance and verify zk id node
     restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC);
     restApp.start();
-    zkIdCounter = getZkIdCounter(zkClient);
+    zkIdCounter = getZkIdCounter(zkUtils);
     assertEquals("ZK id counter was incorrectly initialized.", 2 * ID_BATCH_SIZE, zkIdCounter);
     restApp.stop();
   }
 
-  @Test
   /** Verify expected value of zk schema id counter when schema registry starts up. */
+  @Test
   public void testZkCounterOnStartup() throws Exception {
     RestApp restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC);
     restApp.start();
 
-    int zkIdCounter = getZkIdCounter(zkClient);
+    int zkIdCounter = getZkIdCounter(zkUtils);
     assertEquals("Initial value of ZooKeeper id counter is incorrect.", ID_BATCH_SIZE, zkIdCounter);
 
     restApp.stop();
   }
 
-  private static int getZkIdCounter(ZkClient zkClient) {
-    return Integer.valueOf(ZkUtils.readData(
-        zkClient, ZK_ID_COUNTER_PATH).getData());
+  private static int getZkIdCounter(ZkUtils zkUtils) {
+    return Integer.valueOf(zkUtils.readData(
+        ZK_ID_COUNTER_PATH).getData());
   }
 
   private void waitUntilIdExists(final RestService restService, final int expectedId, String errorMsg) {

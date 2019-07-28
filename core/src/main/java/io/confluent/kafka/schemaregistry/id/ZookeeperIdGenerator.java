@@ -15,13 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.id;
 
-import io.confluent.common.utils.zookeeper.ZkData;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
+import io.confluent.kafka.schemaregistry.utils.ZkData;
 import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
