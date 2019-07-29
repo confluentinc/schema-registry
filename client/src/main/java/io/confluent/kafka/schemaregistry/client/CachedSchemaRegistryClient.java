@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client;
 import java.util.Collections;
 import java.util.Objects;
 
+import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -26,6 +27,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
@@ -120,6 +122,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
     if (configs != null && !configs.isEmpty()) {
       restService.configure(configs);
+
+      Map<String, Object> sslConfigs = configs.entrySet().stream()
+          .filter(e -> e.getKey().startsWith(SchemaRegistryClientConfig.CLIENT_NAMESPACE))
+          .collect(Collectors.toMap(
+              e -> e.getKey().substring(SchemaRegistryClientConfig.CLIENT_NAMESPACE.length()),
+              Map.Entry::getValue));
+      SslFactory sslFactory = new SslFactory(sslConfigs);
+      restService.setSslFactory(sslFactory);
     }
   }
 

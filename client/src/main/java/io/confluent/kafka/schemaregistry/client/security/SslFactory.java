@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.client.security;
 
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import org.apache.kafka.common.config.SslConfigs;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -39,30 +39,28 @@ public class SslFactory {
   private SecurityStore truststore;
   private SSLContext sslContext;
 
-  private static final String CLIENT_PREFIX = "client";
 
-  public SslFactory(Map<String, ?> configs, boolean client) {
-    String prefix = client ? CLIENT_PREFIX : "";
-    this.protocol = (String) configs.get(prefix + SchemaRegistryClientConfig.SSL_PROTOCOL_CONFIG);
-    this.provider = (String) configs.get(prefix + SchemaRegistryClientConfig.SSL_PROVIDER_CONFIG);
+  public SslFactory(Map<String, ?> configs) {
+    this.protocol = (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
+    this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
 
     this.kmfAlgorithm = (String) configs.get(
-        prefix + SchemaRegistryClientConfig.SSL_KEYMANAGER_ALGORITHM_CONFIG);
+        SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
     this.tmfAlgorithm = (String) configs.get(
-        prefix + SchemaRegistryClientConfig.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
+        SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
 
     try {
       createKeystore(
-          (String) configs.get(prefix + SchemaRegistryClientConfig.SSL_KEYSTORE_TYPE_CONFIG),
-          (String) configs.get(prefix + SchemaRegistryClientConfig.SSL_KEYSTORE_LOCATION_CONFIG),
-          (String) configs.get(prefix + SchemaRegistryClientConfig.SSL_KEYSTORE_PASSWORD_CONFIG),
-          (String) configs.get(prefix + SchemaRegistryClientConfig.SSL_KEY_PASSWORD_CONFIG)
+          (String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
+          (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
+          (String) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
+          (String) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)
       );
 
       createTruststore(
-          (String) configs.get(prefix + SchemaRegistryClientConfig.SSL_TRUSTSTORE_TYPE_CONFIG),
-          (String) configs.get(prefix + SchemaRegistryClientConfig.SSL_TRUSTSTORE_LOCATION_CONFIG),
-          (String) configs.get(prefix + SchemaRegistryClientConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG)
+          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
+          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
+          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)
       );
 
       this.sslContext = createSslContext();

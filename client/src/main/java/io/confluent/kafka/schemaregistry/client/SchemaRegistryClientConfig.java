@@ -16,7 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.common.config.ConfigDef;
+
 public class SchemaRegistryClientConfig {
+
+  public static final String CLIENT_NAMESPACE = "schema.registry.";
+
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = "basic.auth.credentials.source";
   @Deprecated
   public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
@@ -26,50 +31,29 @@ public class SchemaRegistryClientConfig {
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = "bearer.auth.credentials.source";
   public static final String BEARER_AUTH_TOKEN_CONFIG = "bearer.auth.token";
 
-  public static final String SSL_KEYSTORE_LOCATION_CONFIG = "ssl.keystore.location";
-  public static final String SSL_KEYSTORE_PASSWORD_CONFIG = "ssl.keystore.password";
-  public static final String SSL_KEY_PASSWORD_CONFIG = "ssl.key.password";
-  public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
-  public static final String SSL_KEYMANAGER_ALGORITHM_CONFIG = "ssl.keymanager.algorithm";
-  public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = "ssl.truststore.location";
-  public static final String SSL_TRUSTSTORE_PASSWORD_CONFIG = "ssl.truststore.password";
-  public static final String SSL_TRUSTSTORE_TYPE_CONFIG = "ssl.truststore.type";
-  public static final String SSL_TRUSTMANAGER_ALGORITHM_CONFIG = "ssl.trustmanager.algorithm";
-  public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
-  public static final String SSL_PROVIDER_CONFIG = "ssl.provider";
-  public static final String SSL_KEYSTORE_LOCATION_DOC =
-      "Location of the keystore file to use for SSL. This is required for HTTPS.";
-  public static final String SSL_KEYSTORE_LOCATION_DEFAULT = "";
-  public static final String SSL_KEYSTORE_PASSWORD_DOC =
-      "The store password for the keystore file.";
-  public static final String SSL_KEYSTORE_PASSWORD_DEFAULT = "";
-  public static final String SSL_KEY_PASSWORD_DOC =
-      "The password of the private key in the keystore file.";
-  public static final String SSL_KEY_PASSWORD_DEFAULT = "";
-  public static final String SSL_KEYSTORE_TYPE_DOC =
-      "The type of keystore file.";
-  public static final String SSL_KEYSTORE_TYPE_DEFAULT = "JKS";
-  public static final String SSL_KEYMANAGER_ALGORITHM_DOC =
-      "The algorithm used by the key manager factory for SSL connections. "
-          + "Leave blank to use Jetty's default.";
-  public static final String SSL_KEYMANAGER_ALGORITHM_DEFAULT = "";
-  public static final String SSL_TRUSTSTORE_LOCATION_DOC =
-      "Location of the trust store. Required only to authenticate HTTPS clients.";
-  public static final String SSL_TRUSTSTORE_LOCATION_DEFAULT = "";
-  public static final String SSL_TRUSTSTORE_PASSWORD_DOC =
-      "The store password for the trust store file.";
-  public static final String SSL_TRUSTSTORE_PASSWORD_DEFAULT = "";
-  public static final String SSL_TRUSTSTORE_TYPE_DOC =
-      "The type of trust store file.";
-  public static final String SSL_TRUSTSTORE_TYPE_DEFAULT = "JKS";
-  public static final String SSL_TRUSTMANAGER_ALGORITHM_DOC =
-      "The algorithm used by the trust manager factory for SSL connections. "
-          + "Leave blank to use Jetty's default.";
-  public static final String SSL_TRUSTMANAGER_ALGORITHM_DEFAULT = "";
-  public static final String SSL_PROTOCOL_DOC =
-      "The SSL protocol used to generate the SslContextFactory.";
-  public static final String SSL_PROTOCOL_DEFAULT = "TLS";
-  public static final String SSL_PROVIDER_DOC =
-      "The SSL security provider name. Leave blank to use Java's default.";
-  public static final String SSL_PROVIDER_DEFAULT = "";
+
+  public static void withClientSslSupport(ConfigDef configDef, String namespace) {
+    org.apache.kafka.common.config.ConfigDef sslConfigDef = new org.apache.kafka.common.config
+        .ConfigDef();
+    sslConfigDef.withClientSslSupport();
+
+    for (org.apache.kafka.common.config.ConfigDef.ConfigKey configKey
+        : sslConfigDef.configKeys().values()) {
+      configDef.define(namespace + configKey.name,
+          typeFor(configKey.type),
+          configKey.defaultValue != null ? configKey.defaultValue : "",
+          importanceFor(configKey.importance),
+          configKey.documentation);
+    }
+  }
+
+  private static ConfigDef.Type typeFor(org.apache.kafka.common.config.ConfigDef.Type type) {
+    return ConfigDef.Type.valueOf(type.name());
+  }
+
+  private static ConfigDef.Importance importanceFor(
+      org.apache.kafka.common.config.ConfigDef.Importance importance) {
+    return ConfigDef.Importance.valueOf(importance.name());
+  }
+
 }
