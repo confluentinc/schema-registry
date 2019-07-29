@@ -19,7 +19,6 @@ package io.confluent.kafka.schemaregistry.client;
 import java.util.Collections;
 import java.util.Objects;
 
-import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -37,6 +36,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpd
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 
 
 /**
