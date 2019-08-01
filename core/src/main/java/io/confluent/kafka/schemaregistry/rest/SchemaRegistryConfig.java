@@ -242,7 +242,11 @@ public class SchemaRegistryConfig extends RestConfig {
       + "none (new schema can be any valid Avro schema), "
       + "backward (new schema can read data produced by latest registered schema), "
       + "forward (latest registered schema can read data produced by the new schema), "
-      + "full (new schema is backward and forward compatible with latest registered schema)";
+      + "full (new schema is backward and forward compatible with latest registered schema), "
+      + "backward_transitive (new schema is backward compatible with all previous versions), "
+      + "forward_transitive (new schema is forward compatible with all previous versions), "
+      + "full_transitive (new schema is backward and forward compatible with all previous "
+      + "versions)";
   protected static final String MASTER_ELIGIBILITY_DOC =
       "If true, this node can participate in master election. In a multi-colo setup, turn this off "
       + "for clusters in the slave data center.";
