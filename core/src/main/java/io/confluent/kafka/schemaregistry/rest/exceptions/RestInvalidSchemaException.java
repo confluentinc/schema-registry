@@ -25,8 +25,8 @@ public class RestInvalidSchemaException extends RestConstraintViolationException
   public static final int ERROR_CODE = Errors.INVALID_SCHEMA_ERROR_CODE;
 
   public RestInvalidSchemaException() {
-    this("Invalid compatibility level. Valid values are none, backward, forward and full, "
-            + "backward_transitive, forward_transitive, full_transitive");
+    this("Invalid compatibility level. Valid values are none, backward, forward, full, "
+            + "backward_transitive, forward_transitive, and full_transitive");
   }
 
   public RestInvalidSchemaException(String message) {
