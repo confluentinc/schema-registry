@@ -39,6 +39,8 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
   List<String> schemaRegistryUrls;
   @Parameter
   String userInfoConfig;
+  @Parameter
+  Map<String, String> httpHeaders;
   private SchemaRegistryClient client;
 
   void client(SchemaRegistryClient client) {
@@ -54,7 +56,7 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
         config.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
         config.put(SchemaRegistryClientConfig.USER_INFO_CONFIG, userInfoConfig);
       }
-      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, config);
+      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, config, httpHeaders);
     }
     return this.client;
   }
