@@ -101,7 +101,7 @@ public abstract class ClusterTestHarness {
   protected String brokerList = null;
   protected String bootstrapServers = null;
 
-  protected int schemaRegistryPort;
+  protected Integer schemaRegistryPort;
   protected RestApp restApp = null;
 
   public ClusterTestHarness() {
@@ -170,7 +170,8 @@ public abstract class ClusterTestHarness {
     bootstrapServers = Utils.join(serverUrls, ",");
 
     if (setupRestApp) {
-      schemaRegistryPort = choosePort();
+      if (schemaRegistryPort == null)
+        schemaRegistryPort = choosePort();
       Properties schemaRegistryProps = getSchemaRegistryProperties();
       schemaRegistryProps.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
                                                                      "://0.0.0.0:"
