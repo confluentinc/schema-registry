@@ -17,9 +17,7 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import com.google.inject.internal.util.Preconditions;
-
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-
 import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -30,6 +28,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Mojo(name = "test-compatibility")
@@ -39,6 +38,9 @@ public class TestCompatibilitySchemaRegistryMojo extends SchemaRegistryMojo {
   Map<String, File> subjects = new HashMap<>();
 
   Map<String, Boolean> schemaCompatibility;
+
+  @Parameter(required = false)
+  List<String> imports;
 
   @Override
   public void execute() throws MojoExecutionException, MojoFailureException {
@@ -91,5 +93,13 @@ public class TestCompatibilitySchemaRegistryMojo extends SchemaRegistryMojo {
     Preconditions.checkState(errorCount == 0,
                              "One or more schema was found to be incompatible with the current "
                              + "version.");
+  }
+
+  @Override
+  protected Schema.Parser newParser() {
+    if (imports == null || imports.isEmpty()) {
+      return super.newParser();
+    }
+    return parserWithDependencies(imports);
   }
 }

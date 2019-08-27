@@ -51,6 +51,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
   @Parameter(required = true)
   File outputDirectory;
 
+
   @Parameter(required = false, defaultValue = "true")
   boolean prettyPrintSchemas;
 
