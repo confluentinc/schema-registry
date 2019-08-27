@@ -17,9 +17,7 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import com.google.inject.internal.util.Preconditions;
-
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-
 import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -30,6 +28,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Mojo(name = "register")
@@ -37,7 +36,11 @@ public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
 
   @Parameter(required = true)
   Map<String, File> subjects = new HashMap<>();
+
   Map<String, Integer> schemaVersions;
+
+  @Parameter(required = false)
+  List<String> imports;
 
   @Override
   public void execute() throws MojoExecutionException, MojoFailureException {
@@ -76,5 +79,13 @@ public class RegisterSchemaRegistryMojo extends SchemaRegistryMojo {
     Preconditions.checkState(errors == 0,
                              "One or more exceptions were encountered while registering the "
                              + "schemas.");
+  }
+
+  @Override
+  protected Schema.Parser newParser() {
+    if (imports == null || imports.isEmpty()) {
+      return super.newParser();
+    }
+    return parserWithDependencies(imports);
   }
 }
