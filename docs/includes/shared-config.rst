@@ -10,7 +10,7 @@ kafkastore.connection.url
 
 kafkastore.bootstrap.servers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`
+A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`.
 
 The effect of this setting depends on whether you specify `kafkastore.connection.url`.
 
