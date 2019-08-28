@@ -68,15 +68,15 @@ The following configurations should be changed for production environments. Thes
 
 Depending on how |sr| instances coordinate to choose the :ref:`master<schemaregistry_single_master>`, you can deploy |sr| with |zk| (which can be shared with Kafka) or with Kafka itself. You should configure |sr| to use either Kafka-based or |zk|-based master election:
 
-* Kafka-based master election is available since version 4.0. You can use it in cases where |zk| is not available, for example on hosted or cloud environments, or if access to |zk| has been locked down. To configure |sr| to use Kafka for master election, configure the ``kafkastore.bootstrap.servers`` setting.
+**Kafka-based master election** is available since version 4.0. You can use it in cases where |zk| is not available, for example on hosted or cloud environments, or if access to |zk| has been locked down. To configure |sr| to use Kafka for master election, configure the ``kafkastore.bootstra.servers`` setting.
 
-  .. include:: includes/shared-config.rst
+.. include:: includes/shared-config.rst
     :start-line: 10
     :end-line: 25
 
-* |zk|-based master election is available in all versions of |sr|, and if you have an existing |sr| deployment you may continue to use it for compatibility. To configure |sr| to use |zk| for master election, configure the ``kafkastore.connection.url`` setting.
+**ZooKeeper-based master election** is available in all versions of |sr|, and if you have an existing |sr| deployment you may continue to use it for compatibility. To configure |sr| to use |zk| for master election, configure the ``kafkastore.connection.url`` setting.
 
-  .. include:: includes/shared-config.rst
+.. include:: includes/shared-config.rst
     :start-line: 2
     :end-line: 9
 
