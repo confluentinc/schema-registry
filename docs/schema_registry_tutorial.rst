@@ -81,9 +81,6 @@ Before proceeding with this tutorial
       $ git clone https://github.com/confluentinc/examples.git
       $ git checkout |release|-post
       $ cd examples/clients/avro
-   
-
-.. _schema_registry_tutorial_definition:
 
 Terminology
 ^^^^^^^^^^^
@@ -115,7 +112,7 @@ Client applications form a contract: producers will write data in a schema and c
 
 Consider the :devx-examples:`original Payment schema|clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc`:
 
-.. sourcecode:: json
+.. sourcecode:: bash
 
    $ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment.avsc
    {"namespace": "io.confluent.examples.clients.basicavro",
@@ -426,7 +423,7 @@ Without |sr| checking compatibility, your applications could potentially break o
 In the Payment schema example, let's say the business now tracks additional information for each payment, for example, a field ``region`` that represents the place of sale.
 Consider the :devx-examples:`Payment2a schema|clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc` which includes this extra field ``region``:
 
-.. sourcecode:: json
+.. sourcecode:: bash
 
    $ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc
    {"namespace": "io.confluent.examples.clients.basicavro",
@@ -491,7 +488,7 @@ Passing Compatibility Checks
 To maintain backward compatibility, a new schema must assume default values for the new field if it is not provided.
 Consider an updated :devx-examples:`Payment2b schema|clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc` that has a default value for ``region``:
 
-.. sourcecode:: json
+.. sourcecode:: bash
 
    $ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc
    {"namespace": "io.confluent.examples.clients.basicavro",
