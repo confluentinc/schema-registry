@@ -161,7 +161,6 @@ This behavior can be modified by using the following configs
 The other available options that can be configured out of the box include
 
 ``io.confluent.kafka.serializers.subject.RecordNameStrategy``
-
  For any Avro record type that is published to Kafka, registers the schema
  in the registry under the fully-qualified record name (regardless of the
  topic). This strategy allows a topic to contain a mixture of different
@@ -170,7 +169,6 @@ The other available options that can be configured out of the box include
  across **all** topics.
 
 ``io.confluent.kafka.serializers.subject.TopicRecordNameStrategy``
-
  For any Avro record type that is published to Kafka topic <topicName>,
  registers the schema in the registry under the subject name
  <topicName>-<recordName>, where <recordName> is the

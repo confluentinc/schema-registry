@@ -174,7 +174,7 @@ the migration. To do so, simply shutdown all the nodes and start them again with
 Backup and Restore
 ^^^^^^^^^^^^^^^^^^
 
-As discussed in :ref:`schemaregistry_design`, all schemas, subject/version and ID metadata, and compatibility settings are appended as messages to a special Kafka topic ``<kafkastore.topic>`` (default ``_schemas``). This topic is a common source of truth for schema IDs, and you should back it up. In case of some unexpected event that makes the topic inaccessible, you can restore this schemas topic from the backup, enabling consumers to continue to read Kafka messages that were sent in the Avro format.
+As discussed in :ref:`schemaregistry_intro`, all schemas, subject/version and ID metadata, and compatibility settings are appended as messages to a special Kafka topic ``<kafkastore.topic>`` (default ``_schemas``). This topic is a common source of truth for schema IDs, and you should back it up. In case of some unexpected event that makes the topic inaccessible, you can restore this schemas topic from the backup, enabling consumers to continue to read Kafka messages that were sent in the Avro format.
 
 As a best practice, we recommend backing up the ``<kafkastore.topic>``. If you already have a multi-datacenter Kafka deployment, you can backup this topic to another Kafka cluster using :ref:`Confluent Replicator <multi_dc>`. Otherwise, you can use a :ref:`Kafka sink connector <kafka_connect>` to copy the topic data from Kafka to a separate storage (e.g. AWS S3). These will continuously update as the schema topic updates.
 
