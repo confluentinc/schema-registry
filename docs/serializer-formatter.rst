@@ -9,13 +9,13 @@ This document describes how to use Avro with the Kafka Java client and console t
 Assuming that you have |sr| source code checked out at ``/tmp/schema-registry``, the
 following is how you can obtain all needed JARs.
 
-.. sourcecode:: bash
+::
 
    mvn package
 
 The JARs can be found in
 
-.. sourcecode:: bash
+::
 
    /tmp/schema-registrypackage/target/package-$VERSION-package/share/java/avro-serializer/
 
@@ -37,7 +37,7 @@ test passes. The only exception is that the ``null`` type is never registered in
 In the following example, we send a message with key of type string and value of type Avro record
 to Kafka. A ``SerializationException`` may occur during the send call, if the data is not well formed.
 
-.. sourcecode:: bash
+::
 
     import org.apache.avro.Schema;
     import org.apache.avro.generic.GenericData;
@@ -83,7 +83,7 @@ In the following example, we receive messages with key of type ``string`` and va
 from Kafka. When getting the message key or value, a ``SerializationException`` may occur if the data is
 not well formed.
 
-.. sourcecode:: bash
+::
 
     import org.apache.kafka.clients.consumer.Consumer;
     import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -199,6 +199,7 @@ the Basic Auth headers by setting the following configuration in your producer o
 form of ``http://<username>:<password>@sr-host:<sr-port>``
 
 **USER_INFO** - The user info is configured using the below configuration.
+
 ``basic.auth.user.info``
   Specify the user info for Basic Auth in the form of {username}:{password}
 
@@ -221,35 +222,35 @@ are all started. In the following examples, the default |sr| URL value is used.
 
 You can configure that by supplying
 
-.. sourcecode:: bash
+::
 
-   --property schema.registry.url=address of your |sr|
+   --property schema.registry.url=address of your Schema Registry
 
 in the commandline arguments of ``kafka-avro-console-producer`` and ``kafka-avro-console-consumer``.
 
 In the following example, we send Avro records in JSON as the message value (make sure there is no space in the schema string).
 
-.. sourcecode:: bash
+::
 
    bin/kafka-avro-console-producer --broker-list localhost:9092 --topic t1 \
      --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1","type":"string"}]}'
 
 In the shell, type in the following.
 
-.. sourcecode:: bash
+::
 
      {"f1": "value1"}
 
 In the following example, we read the value of the messages in JSON.
 
-.. sourcecode:: bash
+::
 
    bin/kafka-avro-console-consumer --topic t1 \
      --bootstrap-server localhost:9092
 
 You should see following in the console.
 
-.. sourcecode:: bash
+::
 
      {"f1": "value1"}
 
@@ -257,7 +258,7 @@ You should see following in the console.
 In the following example, we send strings and Avro records in JSON as the key and the value of the
 message, respectively.
 
-.. sourcecode:: bash
+::
 
    bin/kafka-avro-console-producer --broker-list localhost:9092 --topic t2 \
      --property parse.key=true \
@@ -266,13 +267,13 @@ message, respectively.
 
 In the shell, type in the following.
 
-.. sourcecode:: bash
+::
 
      "key1" \t {"f1": "value1"}
 
 In the following example, we read both the key and the value of the messages in JSON,
 
-.. sourcecode:: bash
+::
 
    bin/kafka-avro-console-consumer --topic t2 \
      --bootstrap-server localhost:9092 \
@@ -280,7 +281,7 @@ In the following example, we read both the key and the value of the messages in 
 
 You should see following in the console.
 
-.. sourcecode:: bash
+::
 
       "key1" \t {"f1": "value1"}
 
@@ -304,7 +305,7 @@ existing registered schemas. The IDs from different |sr| instances may be differ
 If the topic contains a  key in a format other than avro, you can specify your own key
 deserializer
 
-.. sourcecode:: bash
+::
 
    bin/kafka-avro-console-consumer --topic t2 \
      --bootstrap-server localhost:9092 \
