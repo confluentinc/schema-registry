@@ -65,7 +65,7 @@ public class SslFactory {
 
       this.sslContext = createSslContext();
     } catch (Exception e) {
-      throw new RuntimeException("Error initializing the ssl context for RestService" + e);
+      throw new RuntimeException("Error initializing the ssl context for RestService" , e);
     }
   }
 
