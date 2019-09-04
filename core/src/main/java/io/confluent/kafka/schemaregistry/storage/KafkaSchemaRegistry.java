@@ -781,6 +781,26 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
+  public Set<String> listSubjectsForId(int id) throws SchemaRegistryException {
+    SchemaValue schema = null;
+    try {
+      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
+      if (subjectVersionKey == null) {
+        return null;
+      }
+      schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
+      if (schema == null) {
+        return null;
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with id " + id + " from the backend Kafka store", e);
+    }
+
+    return lookupCache.schemaIdAndSubjects(new Schema(
+        schema.getSubject(), schema.getVersion(), schema.getId(), schema.getSchema()
+    )).allSubjects();
+  }
+
   private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys)
       throws StoreException {
     Set<String> subjects = new HashSet<String>();

@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
@@ -63,6 +64,10 @@ public class SchemaIdAndSubjects {
         .filter(key -> filter.test(key))
         .findAny()
         .orElse(null);
+  }
+
+  public Set<String> allSubjects() {
+    return subjectsAndVersions.keySet();
   }
 
   public void removeIf(Predicate<SchemaKey> filter) {
