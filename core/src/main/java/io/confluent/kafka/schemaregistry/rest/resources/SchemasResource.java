@@ -91,15 +91,16 @@ public class SchemasResource {
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id) {
     Set<String> subjects;
-    String errorMessage = "Error while retrieving all subjects associated with schema id " + id + " from the schema registry";
+    String errorMessage = "Error while retrieving all subjects associated with schema id "
+                          + id + " from the schema registry";
 
     try {
-     subjects = schemaRegistry.listSubjectsForId(id);
+      subjects = schemaRegistry.listSubjectsForId(id);
     } catch (SchemaRegistryStoreException e) {
-     log.debug(errorMessage, e);
-     throw Errors.storeException(errorMessage, e);
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
-     throw Errors.schemaRegistryException(errorMessage, e);
+      throw Errors.schemaRegistryException(errorMessage, e);
     }
 
     if (subjects == null) {

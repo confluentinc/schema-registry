@@ -606,7 +606,8 @@ public class RestService implements Configurable {
       throws IOException, RestClientException {
     String path = String.format("/schemas/ids/%d/subjects", id);
 
-    List<String> response = httpRequest(path, "GET", null, requestProperties, ALL_TOPICS_RESPONSE_TYPE);
+    List<String> response = httpRequest(path, "GET", null, requestProperties,
+                                        ALL_TOPICS_RESPONSE_TYPE);
 
     return response;
   }
