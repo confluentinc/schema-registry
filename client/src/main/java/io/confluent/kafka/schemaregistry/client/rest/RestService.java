@@ -596,6 +596,22 @@ public class RestService implements Configurable {
     return response;
   }
 
+  public List<String> getAllSubjectsById(int id)
+      throws IOException, RestClientException {
+    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, id);
+  }
+
+  public List<String> getAllSubjectsById(Map<String, String> requestProperties,
+                                         int id)
+      throws IOException, RestClientException {
+    String path = String.format("/schemas/ids/%d/subjects", id);
+
+    List<String> response = httpRequest(path, "GET", null, requestProperties,
+                                        ALL_TOPICS_RESPONSE_TYPE);
+
+    return response;
+  }
+
   public Integer deleteSchemaVersion(
       Map<String, String> requestProperties,
       String subject,

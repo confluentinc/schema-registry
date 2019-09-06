@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * Mock implementation of SchemaRegistryClient that can be used for tests. This version is NOT
@@ -203,6 +204,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       idSchemaMap.put(id, schema);
       return schema;
     }
+  }
+
+  @Override
+  public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException {
+    return idCache.entrySet().stream()
+            .filter(entry -> entry.getValue().containsKey(id))
+            .map(Map.Entry::getKey).collect(Collectors.toSet());
   }
 
   private int getLatestVersion(String subject)
