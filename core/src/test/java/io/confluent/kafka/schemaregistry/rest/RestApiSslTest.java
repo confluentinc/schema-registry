@@ -120,7 +120,7 @@ public class RestApiSslTest extends ClusterTestHarness {
       props.put(SchemaRegistryConfig.SSL_CLIENT_AUTHENTICATION_CONFIG, SchemaRegistryConfig.SSL_CLIENT_AUTHENTICATION_REQUIRED);
 
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new RuntimeException("Exception creation SSL properties ", e);
     }
     return props;
   }
