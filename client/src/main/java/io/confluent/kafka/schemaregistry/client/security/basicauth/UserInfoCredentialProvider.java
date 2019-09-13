@@ -23,7 +23,7 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
-public class UserInfoCredentialProvider implements BasicAuthCredentialProvider {
+public class UserInfoCredentialProvider implements BasicAuthCredentialProvider, Cloneable {
 
   private String userInfo;
 
@@ -52,5 +52,14 @@ public class UserInfoCredentialProvider implements BasicAuthCredentialProvider {
   @Override
   public String getUserInfo(URL url) {
     return userInfo;
+  }
+  
+  @Override
+  public UserInfoCredentialProvider clone() {
+    try {
+      return (UserInfoCredentialProvider) super.clone();
+    } catch (CloneNotSupportedException e) {
+      throw new IllegalStateException("Impossibly unable to clone Cloneable", e);
+    }  
   }
 }

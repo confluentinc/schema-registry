@@ -19,7 +19,7 @@ package io.confluent.kafka.schemaregistry.client.security.basicauth;
 import java.net.URL;
 import java.util.Map;
 
-public class UrlBasicAuthCredentialProvider implements BasicAuthCredentialProvider {
+public class UrlBasicAuthCredentialProvider implements BasicAuthCredentialProvider, Cloneable {
 
   @Override
   public void configure(Map<String, ?> configs) {
@@ -33,5 +33,15 @@ public class UrlBasicAuthCredentialProvider implements BasicAuthCredentialProvid
   @Override
   public String getUserInfo(URL url) {
     return url.getUserInfo();
+  }
+  
+  @Override
+  public UrlBasicAuthCredentialProvider clone() {
+    try {
+      return (UrlBasicAuthCredentialProvider) super.clone();
+    } catch (CloneNotSupportedException e) {
+      // Impossible
+      throw new IllegalStateException("Impossibly unable to clone Cloneable", e);
+    }  
   }
 }

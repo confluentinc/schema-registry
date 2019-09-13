@@ -15,22 +15,6 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
-import org.apache.avro.Schema;
-import org.easymock.EasyMock;
-import org.junit.Test;
-
-import java.util.HashMap;
-import java.util.Arrays;
-import java.util.Map;
-
-import org.apache.kafka.common.config.ConfigException;
-
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
-
 import static org.easymock.EasyMock.anyBoolean;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.createNiceMock;
@@ -40,12 +24,29 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.IntStream;
+
+import org.apache.avro.Schema;
+import org.apache.kafka.common.config.ConfigException;
+import org.easymock.EasyMock;
 import org.junit.Before;
+import org.junit.Test;
+
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 
 public class CachedSchemaRegistryClientTest {
 
@@ -366,6 +367,51 @@ public class CachedSchemaRegistryClientTest {
     );
   }
 
+
+  @Test
+  public void testTwoClientsWithBasicHttpAuth() throws Exception {
+    Map<String, String> configOne = new HashMap<>();
+    Map<String, String> configTwo = new HashMap<>();
+    // Default credential providers
+    configOne.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
+    configOne.put(SchemaRegistryClientConfig.USER_INFO_CONFIG, "auth:token");
+    configTwo.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
+    configTwo.put(SchemaRegistryClientConfig.USER_INFO_CONFIG, "token:auth");
+
+    // Throws ConfigException if both credential providers are fully configured.
+    CachedSchemaRegistryClient clientOne = 
+        new CachedSchemaRegistryClient(
+            // Sets initial credential set for URL provider
+            new RestService("http://sr.com:8020"),
+            IDENTITY_MAP_CAPACITY,
+            configOne,
+            null
+        );
+    CachedSchemaRegistryClient clientTwo = 
+        new CachedSchemaRegistryClient(
+            // Sets initial credential set for URL provider
+            new RestService("http://sr.com:8020"),
+            IDENTITY_MAP_CAPACITY,
+            configTwo,
+            null
+        );
+    Field svcField = CachedSchemaRegistryClient.class.getDeclaredField("restService");
+    svcField.setAccessible(true);
+    Field authField = RestService.class.getDeclaredField("basicAuthCredentialProvider");
+    authField.setAccessible(true);
+    
+    RestService svcObjOne = (RestService) svcField.get(clientOne);
+    BasicAuthCredentialProvider basicAuthCredentialProviderOne =
+          (BasicAuthCredentialProvider) authField.get(svcObjOne);
+    String authHeaderOne = basicAuthCredentialProviderOne.getUserInfo(null);
+
+    RestService svcObjTwo = (RestService) svcField.get(clientTwo);
+    BasicAuthCredentialProvider basicAuthCredentialProviderTwo =
+          (BasicAuthCredentialProvider) authField.get(svcObjTwo);
+    String authHeaderTwo = basicAuthCredentialProviderTwo.getUserInfo(null);
+
+    assertNotEquals(authHeaderOne, authHeaderTwo);
+  }
   private static Schema avroSchema(final int i) {
     return new Schema.Parser().parse(avroSchemaString(i));
   }

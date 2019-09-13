@@ -44,6 +44,7 @@ public class BasicAuthCredentialProviderFactory {
     BasicAuthCredentialProvider basicAuthCredentialProvider =
         basicAuthCredentialProviderMap.get(basicAuthCredentialSource);
     if (basicAuthCredentialProvider != null) {
+      basicAuthCredentialProvider = basicAuthCredentialProvider.clone();
       basicAuthCredentialProvider.configure(configs);
     }
     return basicAuthCredentialProvider;

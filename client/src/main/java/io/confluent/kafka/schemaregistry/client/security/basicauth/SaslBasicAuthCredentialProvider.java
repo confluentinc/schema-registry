@@ -29,7 +29,7 @@ import java.util.Map;
 import javax.security.auth.login.AppConfigurationEntry;
 
 
-public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvider {
+public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvider, Cloneable {
 
   private String userInfo;
 
@@ -74,5 +74,15 @@ public class SaslBasicAuthCredentialProvider implements BasicAuthCredentialProvi
   @Override
   public String getUserInfo(URL url) {
     return userInfo;
+  }
+  
+  @Override
+  public SaslBasicAuthCredentialProvider clone() {
+    try {
+      return (SaslBasicAuthCredentialProvider) super.clone();
+    } catch (CloneNotSupportedException e) {
+      // Impossible
+      throw new IllegalStateException("Impossibly unable to clone Cloneable", e);
+    }  
   }
 }

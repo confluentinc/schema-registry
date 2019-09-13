@@ -25,4 +25,6 @@ public interface BasicAuthCredentialProvider extends Configurable {
   String alias();
 
   String getUserInfo(URL url);
+  
+  BasicAuthCredentialProvider clone();
 }
