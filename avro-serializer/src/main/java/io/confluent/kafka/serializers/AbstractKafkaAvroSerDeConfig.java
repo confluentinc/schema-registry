@@ -108,6 +108,11 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
       "Determines how to construct the subject name under which the value schema is registered "
       + "with the schema registry. By default, <topic>-value is used as subject.";
 
+  public static final String SCHEMA_REFLECTION_CONFIG = "schema.reflection";
+  public static final boolean SCHEMA_REFLECTION_DEFAULT = false;
+  public static final String SCHEMA_REFLECTION_DOC =
+          "If true, uses the Avro reflection API when serializing/deserializing ";
+
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
         .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
@@ -129,7 +134,10 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
         .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
         .define(VALUE_SUBJECT_NAME_STRATEGY, Type.CLASS, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
-                Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC);
+                Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC)
+        .define(SCHEMA_REFLECTION_CONFIG, Type.BOOLEAN, SCHEMA_REFLECTION_DEFAULT,
+                Importance.LOW, SCHEMA_REFLECTION_DOC);
+
   }
 
   public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
@@ -154,6 +162,10 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
 
   public Object valueSubjectNameStrategy() {
     return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
+  }
+
+  public boolean useSchemaReflection() {
+    return this.getBoolean(SCHEMA_REFLECTION_CONFIG);
   }
   
   public Map<String, String> requestHeaders() {

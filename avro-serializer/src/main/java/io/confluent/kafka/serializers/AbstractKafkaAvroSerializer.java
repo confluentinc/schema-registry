@@ -21,6 +21,7 @@ import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.reflect.ReflectDatumWriter;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.SerializationException;
@@ -64,7 +65,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
     String restClientErrorMsg = "";
     try {
       int id;
-      schema = AvroSchemaUtils.getSchema(object);
+      schema = AvroSchemaUtils.getSchema(object, useSchemaReflection);
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema: ";
         id = schemaRegistry.register(subject, schema);
@@ -86,6 +87,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
                                                  : object;
         if (value instanceof SpecificRecord) {
           writer = new SpecificDatumWriter<>(schema);
+        } else if (useSchemaReflection) {
+          writer = new ReflectDatumWriter<>(schema);
         } else {
           writer = new GenericDatumWriter<>(schema);
         }
