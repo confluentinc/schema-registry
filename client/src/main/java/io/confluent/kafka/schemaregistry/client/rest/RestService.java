@@ -185,10 +185,21 @@ public class RestService implements Configurable {
           );
       setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
     }
+
+    String proxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
+    Integer proxyPort = (Integer) configs.get(SchemaRegistryClientConfig.PROXY_PORT);
+
+    if (isValidProxyConfig(proxyHost, proxyPort)) {
+      setProxy(proxyHost, proxyPort);
+    }
   }
 
   private static boolean isNonEmpty(String s) {
     return s != null && !s.isEmpty();
+  }
+
+  private static boolean isValidProxyConfig(String proxyHost, Integer proxyPort) {
+    return isNonEmpty(proxyHost) && proxyPort != null && proxyPort > 0;
   }
 
   public void setSslFactory(SslFactory sslFactory) {

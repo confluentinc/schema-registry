@@ -32,6 +32,8 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 import avro.shaded.com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
@@ -239,7 +241,10 @@ public class RestServiceTest {
 
     HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
     InputStream inputStream = createNiceMock(InputStream.class);
-    restService.setProxy("http://localhost", 8080);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put("proxy.host", "http://localhost");
+    configs.put("proxy.port", 8080);
+    restService.configure(configs);
 
     expectNew(URL.class, anyString()).andReturn(url);
     expect(url.openConnection(withProxy())).andReturn(httpURLConnection);
