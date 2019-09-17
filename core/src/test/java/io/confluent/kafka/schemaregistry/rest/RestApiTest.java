@@ -450,6 +450,33 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGetSubjectsAssociatedWithSchemaId() throws Exception {
+    String subject1 = "testTopic1";
+    String subject2 = "testTopic2";
+
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject1);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject2);
+
+    List<String> associatedSubjects = restApp.restClient.getAllSubjectsById(1);
+    assertEquals(associatedSubjects.size(), 2);
+    assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
+  }
+
+  @Test
+  public void testGetSubjectsAssociatedWithNotFoundSchemaId() throws Exception {
+    try {
+      restApp.restClient.getAllSubjectsById(1);
+      fail("Getting all subjects associated with id 1 should fail with "
+            + Errors.SCHEMA_NOT_FOUND_ERROR_CODE + " (schema not found)");
+    } catch (RestClientException rce) {
+      assertEquals("Should get a 404 status for non-existing schema",
+              Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
+              rce.getErrorCode());
+    }
+  }
+
+  @Test
   public void testCompatibilityNonExistentSubject() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {

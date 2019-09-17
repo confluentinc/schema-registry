@@ -229,6 +229,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException {
+    return restService.getAllSubjectsById(id);
+  }
+
+  @Override
   public SchemaMetadata getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response

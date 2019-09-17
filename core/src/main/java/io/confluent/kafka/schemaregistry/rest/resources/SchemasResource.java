@@ -36,6 +36,8 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 
+import java.util.Set;
+
 @Path("/schemas")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
            Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
@@ -77,5 +79,34 @@ public class SchemasResource {
       throw Errors.schemaNotFoundException();
     }
     return schema;
+  }
+
+  @GET
+  @Path("/ids/{id}/subjects")
+  @ApiOperation("Get all the subjects associated with the input ID.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Error code 40403 -- Schema not found\n"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  public Set<String> getSubjects(
+      @ApiParam(value = "Globally unique identifier of the schema", required = true)
+      @PathParam("id") Integer id) {
+    Set<String> subjects;
+    String errorMessage = "Error while retrieving all subjects associated with schema id "
+                          + id + " from the schema registry";
+
+    try {
+      subjects = schemaRegistry.listSubjectsForId(id);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+
+    if (subjects == null) {
+      throw Errors.schemaNotFoundException();
+    }
+
+    return subjects;
   }
 }

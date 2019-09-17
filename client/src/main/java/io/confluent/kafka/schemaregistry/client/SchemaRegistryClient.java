@@ -42,6 +42,8 @@ public interface SchemaRegistryClient {
 
   public Schema getBySubjectAndId(String subject, int id) throws IOException, RestClientException;
 
+  public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException;
+
   public SchemaMetadata getLatestSchemaMetadata(String subject)
       throws IOException, RestClientException;
 

@@ -22,7 +22,8 @@ public class InvalidCompatibilityException extends RestException {
   private static final int UNPROCESSABLE_ENTITY_STATUS_CODE = 422;
 
   public InvalidCompatibilityException() {
-    super("Invalid compatibility level. Valid values are none, backward, forward and full",
+    super("Invalid compatibility level. Valid values are none, backward, forward, full, "
+                    + "backward_transitive, forward_transitive, and full_transitive",
           UNPROCESSABLE_ENTITY_STATUS_CODE,
           UNPROCESSABLE_ENTITY_STATUS_CODE);
   }

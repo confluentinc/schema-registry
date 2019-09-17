@@ -712,7 +712,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       returnDeletedSchema) throws SchemaRegistryException {
     Schema schema = this.get(subject, versionId.getVersionId(), returnDeletedSchema);
     if (schema == null) {
-      if (!this.listSubjects().contains(subject)) {
+      if (!this.hasSubjects(subject)) {
         throw Errors.subjectNotFoundException();
       } else {
         throw Errors.versionNotFoundException();
@@ -777,6 +777,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
     }
+  }
+
+  public Set<String> listSubjectsForId(int id) throws SchemaRegistryException {
+    SchemaValue schema = null;
+    try {
+      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
+      if (subjectVersionKey == null) {
+        return null;
+      }
+      schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
+      if (schema == null) {
+        return null;
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
+                                              + id + " from the backend Kafka store", e);
+    }
+
+    return lookupCache.schemaIdAndSubjects(new Schema(
+        schema.getSubject(), schema.getVersion(), schema.getId(), schema.getSchema()
+    )).allSubjects();
   }
 
   private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys)

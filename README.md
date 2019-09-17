@@ -86,7 +86,7 @@ $ curl -X PUT -H "Content-Type: application/vnd.schemaregistry.v1+json" \
 Installation
 ------------
 
-You can download prebuilt versions of the Kafka REST Proxy as part of the
+You can download prebuilt versions of the schema registry as part of the
 [Confluent Platform](http://confluent.io/downloads/). To install from source,
 follow the instructions in the Development section.
 
