@@ -139,7 +139,7 @@ public class SubjectsResource {
         @PathParam("subject") String subject) {
     List<Integer> deletedVersions;
     try {
-      if (!schemaRegistry.listSubjects().contains(subject)) {
+      if (!schemaRegistry.hasSubjects(subject)) {
         throw Errors.subjectNotFoundException();
       }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(

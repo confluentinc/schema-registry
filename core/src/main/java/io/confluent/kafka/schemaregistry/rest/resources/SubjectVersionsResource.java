@@ -153,7 +153,7 @@ public class SubjectVersionsResource {
                           + subject
                           + " exists in the registry";
     try {
-      if (!schemaRegistry.listSubjects().contains(subject)) {
+      if (!schemaRegistry.hasSubjects(subject)) {
         throw Errors.subjectNotFoundException();
       }
     } catch (SchemaRegistryStoreException e) {
