@@ -13,22 +13,20 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.rest;
+package io.confluent.kafka.schemaregistry.client.security;
 
-import org.eclipse.jetty.util.StringUtil;
-
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.security.SecureRandom;
+import org.apache.kafka.common.config.SslConfigs;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
-
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.SecureRandom;
+import java.util.Map;
 
 public class SslFactory {
 
@@ -42,36 +40,45 @@ public class SslFactory {
   private SSLContext sslContext;
 
 
-  public SslFactory(SchemaRegistryConfig configs) throws SchemaRegistryException {
-    this.protocol = configs.getString(SchemaRegistryConfig.SSL_PROTOCOL_CONFIG);
-    this.provider = configs.getString(SchemaRegistryConfig.SSL_PROVIDER_CONFIG);
+  public SslFactory(Map<String, ?> configs) {
+    this.protocol = (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
+    this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
 
-    this.kmfAlgorithm = configs.getString(SchemaRegistryConfig.SSL_KEYMANAGER_ALGORITHM_CONFIG);
-    this.tmfAlgorithm = configs.getString(SchemaRegistryConfig.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
+    this.kmfAlgorithm = (String) configs.get(
+        SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
+    this.tmfAlgorithm = (String) configs.get(
+        SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
 
-    createKeystore(
-        configs.getString(SchemaRegistryConfig.SSL_KEYSTORE_TYPE_CONFIG),
-        configs.getString(SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG),
-        configs.getPassword(SchemaRegistryConfig.SSL_KEYSTORE_PASSWORD_CONFIG).value(),
-        configs.getPassword(SchemaRegistryConfig.SSL_KEY_PASSWORD_CONFIG).value()
-    );
-
-    createTruststore(
-        configs.getString(SchemaRegistryConfig.SSL_TRUSTSTORE_TYPE_CONFIG),
-        configs.getString(SchemaRegistryConfig.SSL_TRUSTSTORE_LOCATION_CONFIG),
-        configs.getPassword(SchemaRegistryConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG).value()
-    );
     try {
+      createKeystore(
+          (String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
+          (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
+          (String) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
+          (String) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)
+      );
+
+      createTruststore(
+          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
+          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
+          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)
+      );
+
       this.sslContext = createSslContext();
     } catch (Exception e) {
-      throw new SchemaRegistryException("Error initializing the ssl context for RestService", e);
+      throw new RuntimeException("Error initializing the ssl context for RestService" , e);
     }
   }
 
+  private static boolean isNotBlank(String str) {
+    return str != null && !str.trim().isEmpty();
+  }
 
   private SSLContext createSslContext() throws GeneralSecurityException, IOException {
+    if (truststore == null && keystore == null) {
+      return null;
+    }
     SSLContext sslContext;
-    if (StringUtil.isNotBlank(provider)) {
+    if (isNotBlank(provider)) {
       sslContext = SSLContext.getInstance(protocol, provider);
     } else {
       sslContext = SSLContext.getInstance(protocol);
@@ -80,8 +87,8 @@ public class SslFactory {
     KeyManager[] keyManagers = null;
     if (keystore != null) {
       String kmfAlgorithm =
-          StringUtil.isNotBlank(this.kmfAlgorithm) ? this.kmfAlgorithm
-                                                   : KeyManagerFactory.getDefaultAlgorithm();
+          isNotBlank(this.kmfAlgorithm) ? this.kmfAlgorithm
+              : KeyManagerFactory.getDefaultAlgorithm();
       KeyManagerFactory kmf = KeyManagerFactory.getInstance(kmfAlgorithm);
       KeyStore ks = keystore.load();
       String keyPassword = this.keyPassword != null ? this.keyPassword : keystore.password;
@@ -90,8 +97,8 @@ public class SslFactory {
     }
 
     String tmfAlgorithm =
-        StringUtil.isNotBlank(this.tmfAlgorithm) ? this.tmfAlgorithm
-                                                : TrustManagerFactory.getDefaultAlgorithm();
+        isNotBlank(this.tmfAlgorithm) ? this.tmfAlgorithm
+            : TrustManagerFactory.getDefaultAlgorithm();
     TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
     KeyStore ts = truststore == null ? null : truststore.load();
     tmf.init(ts);
@@ -99,7 +106,6 @@ public class SslFactory {
     sslContext.init(keyManagers, tmf.getTrustManagers(), new SecureRandom());
     return sslContext;
   }
-
 
   /**
    * Returns a configured SSLContext.
@@ -110,26 +116,24 @@ public class SslFactory {
     return sslContext;
   }
 
-  private void createKeystore(String type, String path, String password, String keyPassword)
-      throws SchemaRegistryException {
+  private void createKeystore(String type, String path, String password, String keyPassword) {
     if (path == null && password != null) {
-      throw new SchemaRegistryException(
+      throw new RuntimeException(
           "SSL key store is not specified, but key store password is specified.");
     } else if (path != null && password == null) {
-      throw new SchemaRegistryException(
+      throw new RuntimeException(
           "SSL key store is specified, but key store password is not specified.");
-    } else if (StringUtil.isNotBlank(path) && StringUtil.isNotBlank(password)) {
+    } else if (isNotBlank(path) && isNotBlank(password)) {
       this.keystore = new SecurityStore(type, path, password);
       this.keyPassword = keyPassword;
     }
   }
 
-  private void createTruststore(String type, String path, String password)
-      throws SchemaRegistryException {
+  private void createTruststore(String type, String path, String password) {
     if (path == null && password != null) {
-      throw new SchemaRegistryException(
+      throw new RuntimeException(
           "SSL trust store is not specified, but trust store password is specified.");
-    } else if (StringUtil.isNotBlank(path)) {
+    } else if (isNotBlank(path)) {
       this.truststore = new SecurityStore(type, path, password);
     }
   }
@@ -161,5 +165,4 @@ public class SslFactory {
       }
     }
   }
-
 }

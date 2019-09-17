@@ -53,6 +53,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
+import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
@@ -70,7 +71,6 @@ import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
 import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.rest.SslFactory;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
@@ -128,7 +128,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
         isEligibleForMasterElector, schemeAndPort.scheme);
-    this.sslFactory = new SslFactory(config);
+    this.sslFactory = new SslFactory(config.originals());
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
@@ -291,9 +291,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         masterRestService = null;
       } else {
         masterRestService = new RestService(masterIdentity.getUrl());
-        if (sslFactory != null && sslFactory.sslContext() != null) {
-          masterRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
-        }
+        masterRestService.setSslFactory(sslFactory);
       }
 
       if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {

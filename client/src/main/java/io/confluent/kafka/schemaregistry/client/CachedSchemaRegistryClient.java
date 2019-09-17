@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
@@ -35,6 +36,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpd
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.security.SslFactory;
+
 
 /**
  * Thread-safe Schema Registry Client with client side caching.
@@ -119,6 +122,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
     if (configs != null && !configs.isEmpty()) {
       restService.configure(configs);
+
+      Map<String, Object> sslConfigs = configs.entrySet().stream()
+          .filter(e -> e.getKey().startsWith(SchemaRegistryClientConfig.CLIENT_NAMESPACE))
+          .collect(Collectors.toMap(
+              e -> e.getKey().substring(SchemaRegistryClientConfig.CLIENT_NAMESPACE.length()),
+              Map.Entry::getValue));
+      SslFactory sslFactory = new SslFactory(sslConfigs);
+      restService.setSslFactory(sslFactory);
     }
   }
 

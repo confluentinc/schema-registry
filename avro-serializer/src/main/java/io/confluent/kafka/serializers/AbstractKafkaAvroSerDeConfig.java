@@ -39,7 +39,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
    * Configurations beginning with this prefix can be used to specify headers to include in requests
    * made to Schema Registry. For example, to include an {@code Authorization} header with a value
    * of {@code Bearer NjksNDIw}, use the following configuration:
-   * 
+   *
    * <p>{@code request.header.Authorization=Bearer NjksNDIw}
    */
   public static final String REQUEST_HEADER_PREFIX = "request.header.";
@@ -114,7 +114,8 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
           "If true, uses the Avro reflection API when serializing/deserializing ";
 
   public static ConfigDef baseConfigDef() {
-    return new ConfigDef()
+    ConfigDef configDef = new ConfigDef();
+    configDef
         .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
                 Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
@@ -137,7 +138,9 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC)
         .define(SCHEMA_REFLECTION_CONFIG, Type.BOOLEAN, SCHEMA_REFLECTION_DEFAULT,
                 Importance.LOW, SCHEMA_REFLECTION_DOC);
-
+    SchemaRegistryClientConfig.withClientSslSupport(
+        configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
+    return configDef;
   }
 
   public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
@@ -167,7 +170,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public boolean useSchemaReflection() {
     return this.getBoolean(SCHEMA_REFLECTION_CONFIG);
   }
-  
+
   public Map<String, String> requestHeaders() {
     return originalsWithPrefix(REQUEST_HEADER_PREFIX).entrySet().stream()
         .collect(Collectors.toMap(Map.Entry::getKey, entry -> Objects.toString(entry.getValue())));
