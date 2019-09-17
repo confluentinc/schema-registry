@@ -30,12 +30,13 @@ import static org.powermock.api.easymock.PowerMock.expectNew;
 import static org.powermock.api.easymock.PowerMock.replay;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 
 import avro.shaded.com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
+import org.easymock.EasyMock;
+import org.easymock.IArgumentMatcher;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.annotation.Mock;
@@ -83,7 +84,7 @@ public class RestServiceTest {
 
   @Mock
   private URL url;
-  
+
   /*
    * Test setBasicAuthRequestHeader (private method) indirectly through getAllSubjects.
    */
@@ -150,19 +151,7 @@ public class RestServiceTest {
     expect(httpURLConnection.getInputStream()).andReturn(inputStream);
 
     expect(inputStream.read((byte[]) anyObject(), anyInt(), anyInt()))
-            .andDelegateTo(new InputStream() {
-              @Override
-              public int read() {
-                return 0;
-              }
-
-              @Override
-              public int read(byte[] b, int off, int len) {
-                byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
-                System.arraycopy(json, 0, b, 0, json.length);
-                return json.length;
-              }
-            }).anyTimes();
+            .andDelegateTo(createInputStream("[\"abc\"]")).anyTimes();
 
     replay(URL.class, url);
     replay(HttpURLConnection.class, httpURLConnection);
@@ -173,7 +162,7 @@ public class RestServiceTest {
 
     verify(httpURLConnection);
   }
-  
+
   /*
  * Test setHttpHeaders (private method) indirectly through getAllSubjects.
  */
@@ -244,7 +233,58 @@ public class RestServiceTest {
     }
   }
 
+  @Test
+  public void testSetProxy() throws Exception {
+    RestService restService = new RestService("http://localhost:8081");
+
+    HttpURLConnection httpURLConnection = createNiceMock(HttpURLConnection.class);
+    InputStream inputStream = createNiceMock(InputStream.class);
+    restService.setProxy("http://localhost", 8080);
+
+    expectNew(URL.class, anyString()).andReturn(url);
+    expect(url.openConnection(withProxy())).andReturn(httpURLConnection);
+    expect(httpURLConnection.getResponseCode()).andReturn(HttpURLConnection.HTTP_OK);
+    expect(httpURLConnection.getInputStream()).andReturn(inputStream);
+    expect(inputStream.read(anyObject(), anyInt(), anyInt()))
+            .andDelegateTo(createInputStream("[\"abc\"]")).anyTimes();
+
+    replay(URL.class, url);
+    replay(HttpURLConnection.class, httpURLConnection);
+    replay(InputStream.class, inputStream);
+
+    restService.getAllSubjects();
+
+    verify(httpURLConnection);
+  }
+
   private ByteArrayInputStream createInputStream(String content) {
     return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private static Proxy withProxy() {
+    EasyMock.reportMatcher(new IArgumentMatcher() {
+      private final String proxyHost = "http://localhost";
+      private final int proxyPort = 8080;
+
+      @Override
+      public boolean matches(Object proxyObj) {
+        if (proxyObj instanceof Proxy) {
+          Proxy proxy = (Proxy) proxyObj;
+          SocketAddress socketAddress = proxy.address();
+          if (socketAddress instanceof InetSocketAddress) {
+            InetSocketAddress inetAddress = (InetSocketAddress) socketAddress;
+            return inetAddress.getHostName().equals(proxyHost) &&
+                    inetAddress.getPort() == proxyPort;
+          }
+        }
+        return false;
+      }
+
+      @Override
+      public void appendTo(StringBuffer stringBuffer) {
+        stringBuffer.append("HTTP @ ").append(proxyHost).append(":").append(proxyPort);
+      }
+    });
+    return null;
   }
 }
