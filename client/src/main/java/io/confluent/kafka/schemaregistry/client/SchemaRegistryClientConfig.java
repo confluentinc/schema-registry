@@ -31,6 +31,8 @@ public class SchemaRegistryClientConfig {
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = "bearer.auth.credentials.source";
   public static final String BEARER_AUTH_TOKEN_CONFIG = "bearer.auth.token";
 
+  public static final String PROXY_HOST = "proxy.host";
+  public static final String PROXY_PORT = "proxy.port";
 
   public static void withClientSslSupport(ConfigDef configDef, String namespace) {
     org.apache.kafka.common.config.ConfigDef sslConfigDef = new org.apache.kafka.common.config

@@ -45,8 +45,7 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String REQUEST_HEADER_PREFIX = "request.header.";
 
   public static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
-  public static final String
-      SCHEMA_REGISTRY_URL_DOC =
+  public static final String SCHEMA_REGISTRY_URL_DOC =
       "Comma-separated list of URLs for schema registry instances that can be used to register "
       + "or look up schemas. "
       + "If you wish to get a connection to a mocked schema registry for testing, "
@@ -113,6 +112,17 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String SCHEMA_REFLECTION_DOC =
           "If true, uses the Avro reflection API when serializing/deserializing ";
 
+  public static final String PROXY_HOST = SchemaRegistryClientConfig.PROXY_HOST;
+  public static final String PROXY_HOST_DEFAULT = "";
+  public static final String PROXY_HOST_DOC =
+      "The hostname, or address, of the proxy server that will be used to connect to the schema "
+      + "registry instances.";
+  public static final String PROXY_PORT = SchemaRegistryClientConfig.PROXY_PORT;
+  public static final int PROXY_PORT_DEFAULT = -1;
+  public static final String PROXY_PORT_DOC =
+      "The port number of the proxy server that will be used to connect to the schema registry "
+      + "instances.";
+
   public static ConfigDef baseConfigDef() {
     ConfigDef configDef = new ConfigDef();
     configDef
@@ -137,7 +147,11 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
         .define(VALUE_SUBJECT_NAME_STRATEGY, Type.CLASS, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC)
         .define(SCHEMA_REFLECTION_CONFIG, Type.BOOLEAN, SCHEMA_REFLECTION_DEFAULT,
-                Importance.LOW, SCHEMA_REFLECTION_DOC);
+                Importance.LOW, SCHEMA_REFLECTION_DOC)
+        .define(PROXY_HOST, Type.STRING, PROXY_HOST_DEFAULT,
+                Importance.LOW, PROXY_HOST_DOC)
+        .define(PROXY_PORT, Type.INT, PROXY_PORT_DEFAULT,
+                Importance.LOW, PROXY_PORT_DOC);
     SchemaRegistryClientConfig.withClientSslSupport(
         configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
     return configDef;
