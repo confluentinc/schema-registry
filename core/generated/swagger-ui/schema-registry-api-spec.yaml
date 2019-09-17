@@ -143,7 +143,13 @@ paths:
       - "application/vnd.schemaregistry.v1+json"
       - "application/vnd.schemaregistry+json; qs=0.9"
       - "application/json; qs=0.5"
-      parameters: []
+      parameters:
+      - in: "body"
+        name: "body"
+        description: "Config Update Request"
+        required: true
+        schema:
+          $ref: "#/definitions/ConfigUpdateRequest"
       responses:
         200:
           description: "successful operation"
@@ -201,6 +207,12 @@ paths:
         description: "Name of the Subject"
         required: true
         type: "string"
+      - in: "body"
+        name: "body"
+        description: "Config Update Request"
+        required: true
+        schema:
+          $ref: "#/definitions/ConfigUpdateRequest"
       responses:
         200:
           description: "successful operation"
@@ -241,7 +253,13 @@ paths:
       - "application/vnd.schemaregistry.v1+json"
       - "application/vnd.schemaregistry+json; qs=0.9"
       - "application/json; qs=0.5"
-      parameters: []
+      parameters:
+      - in: "body"
+        name: "body"
+        description: "Update Request"
+        required: true
+        schema:
+          $ref: "#/definitions/ModeUpdateRequest"
       responses:
         200:
           description: "successful operation"
@@ -285,6 +303,12 @@ paths:
         in: "path"
         required: true
         type: "string"
+      - in: "body"
+        name: "body"
+        description: "Update Request"
+        required: true
+        schema:
+          $ref: "#/definitions/ModeUpdateRequest"
       responses:
         200:
           description: "successful operation"
