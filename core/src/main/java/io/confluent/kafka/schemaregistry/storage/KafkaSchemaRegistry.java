@@ -714,7 +714,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       returnDeletedSchema) throws SchemaRegistryException {
     Schema schema = this.get(subject, versionId.getVersionId(), returnDeletedSchema);
     if (schema == null) {
-      if (!this.listSubjects().contains(subject)) {
+      if (!this.hasSubjects(subject)) {
         throw Errors.subjectNotFoundException();
       } else {
         throw Errors.versionNotFoundException();

@@ -89,7 +89,7 @@ public class SubjectsResource {
     Schema schema = new Schema(subject, 0, -1, request.getSchema());
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
     try {
-      if (!schemaRegistry.listSubjects().contains(subject)) {
+      if (!schemaRegistry.hasSubjects(subject)) {
         throw Errors.subjectNotFoundException();
       }
       matchingSchema =
@@ -139,7 +139,7 @@ public class SubjectsResource {
         @PathParam("subject") String subject) {
     List<Integer> deletedVersions;
     try {
-      if (!schemaRegistry.listSubjects().contains(subject)) {
+      if (!schemaRegistry.hasSubjects(subject)) {
         throw Errors.subjectNotFoundException();
       }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
