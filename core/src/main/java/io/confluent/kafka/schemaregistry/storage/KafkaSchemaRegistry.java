@@ -16,6 +16,8 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import org.apache.avro.reflect.Nullable;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,9 +32,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.Vector;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import io.confluent.common.metrics.JmxReporter;
 import io.confluent.common.metrics.MetricConfig;
@@ -89,6 +94,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
+
+  private static final long DESCRIBE_CLUSTER_TIMEOUT_MS = 10000L;
 
   private final SchemaRegistryConfig config;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
@@ -904,6 +911,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     } finally {
       kafkaStore.lockFor(subject).unlock();
     }
+  }
+
+  public String getKafkaClusterId() throws SchemaRegistryException {
+    Properties adminClientProps = new Properties();
+    KafkaStore.addSchemaRegistryConfigsToClientProperties(config, adminClientProps);
+    adminClientProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapBrokers());
+
+    String kafkaClusterId;
+    try (AdminClient adminClient = AdminClient.create(adminClientProps)) {
+      kafkaClusterId = adminClient
+              .describeCluster()
+              .clusterId()
+              .get(DESCRIBE_CLUSTER_TIMEOUT_MS, TimeUnit.MICROSECONDS);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+      throw new SchemaRegistryException("Failed to get Kafka cluster ID", e);
+    }
+
+    return kafkaClusterId;
   }
 
   public AvroCompatibilityLevel getCompatibilityLevel(String subject)
