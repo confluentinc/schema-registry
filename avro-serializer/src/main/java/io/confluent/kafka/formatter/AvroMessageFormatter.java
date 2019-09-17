@@ -26,6 +26,7 @@ import org.apache.avro.io.JsonEncoder;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
@@ -59,6 +60,13 @@ import kafka.common.MessageFormatter;
  *   --property schema.registry.url=http://localhost:8081 \
  *   --property print.key=true
  *
+ * <p>3. To read the key, value, and timestamp of the messages in JSON
+ * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
+ *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
+ *   --property schema.registry.url=http://localhost:8081 \
+ *   --property print.key=true \
+ *   --property print.timestamp=true
+ *
  */
 public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     implements MessageFormatter {
@@ -66,6 +74,7 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   private static final byte[] NULL_BYTES = "null".getBytes(StandardCharsets.UTF_8);
   private boolean printKey = false;
+  private boolean printTimestamp = false;
   private boolean printIds = false;
   private boolean printKeyId = false;
   private boolean printValueId = false;
@@ -104,6 +113,9 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
     Map<String, Object> originals = getPropertiesMap(props);
     schemaRegistry = createSchemaRegistry(url, originals);
 
+    if (props.containsKey("print.timestamp")) {
+      printTimestamp = props.getProperty("print.timestamp").trim().toLowerCase().equals("true");
+    }
     if (props.containsKey("print.key")) {
       printKey = props.getProperty("print.key").trim().toLowerCase().equals("true");
     }
@@ -145,6 +157,20 @@ public class AvroMessageFormatter extends AbstractKafkaAvroDeserializer
 
   @Override
   public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
+    if (printTimestamp) {
+      try {
+        TimestampType timestampType = consumerRecord.timestampType();
+        if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) {
+          output.write(String.format("%s:%d",
+                  timestampType, consumerRecord.timestamp()).getBytes(StandardCharsets.UTF_8));
+        } else {
+          output.write("NO_TIMESTAMP".getBytes(StandardCharsets.UTF_8));
+        }
+        output.write(keySeparator);
+      } catch (IOException ioe) {
+        throw new SerializationException("Error while formatting the timestamp", ioe);
+      }
+    }
     if (printKey) {
       try {
         if (keyDeserializer != null) {

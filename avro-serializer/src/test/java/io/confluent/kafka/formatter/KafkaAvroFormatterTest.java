@@ -30,6 +30,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -112,6 +113,35 @@ public class KafkaAvroFormatterTest {
   }
 
   @Test
+  public void testKafkaAvroValueWithTimestampFormatter() {
+    props.put("print.timestamp", "true");
+    formatter.init(props);
+
+    long timestamp = 1000;
+    TimestampType timestampType = TimestampType.LOG_APPEND_TIME;
+
+    String inputJson = "{\"name\":\"myname\"}\n";
+    String expectedJson = String.format("%s:%d\t%s",
+            timestampType.name, timestamp, inputJson);
+    BufferedReader reader =
+            new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    AvroMessageReader avroReader =
+            new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader, true);
+    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+
+    byte[] serializedValue = message.value();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+            "topic1", 0, 200, timestamp, timestampType, 0, 0, serializedValue.length,
+            null, serializedValue);
+    formatter.writeTo(crecord, ps);
+    String outputJson = baos.toString();
+
+    assertEquals("Input value json should match output value json", expectedJson, outputJson);
+  }
+
+  @Test
   public void testInvalidFormat() {
     String inputJson = "{\"invalid-field-name\":\"myname\"}\n";
     BufferedReader reader =
@@ -148,6 +178,39 @@ public class KafkaAvroFormatterTest {
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
         "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
         serializedValue.length, serializedKey, serializedValue);
+    formatter.writeTo(crecord, ps);
+    String outputJson = baos.toString();
+
+    assertEquals("Input key/value json should match output key/value json", expectedJson, outputJson);
+  }
+
+  @Test
+  public void testStringKeyWithTimestamp() {
+    props.put("print.key", "true");
+    props.put("print.timestamp", "true");
+    formatter = new AvroMessageFormatter(schemaRegistry, new StringDeserializer());
+    formatter.init(props);
+
+    long timestamp = 1000;
+    TimestampType timestampType = TimestampType.LOG_APPEND_TIME;
+
+    String inputJson = "{\"name\":\"myname\"}\n";
+    String expectedJson = String.format("%s:%d\tTestKey\t%s",
+            timestampType.name, timestamp, inputJson);
+    BufferedReader reader =
+            new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    AvroMessageReader avroReader =
+            new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+                    true);
+    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+
+    byte[] serializedKey = "TestKey".getBytes();
+    byte[] serializedValue = message.value();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+            "topic1", 0, 200, timestamp, timestampType, 0, serializedKey.length,
+            serializedValue.length, serializedKey, serializedValue);
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
