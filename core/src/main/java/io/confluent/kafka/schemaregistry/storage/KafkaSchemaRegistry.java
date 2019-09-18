@@ -291,7 +291,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         masterRestService = null;
       } else {
         masterRestService = new RestService(masterIdentity.getUrl());
-        masterRestService.setSslFactory(sslFactory);
+        if (sslFactory != null && sslFactory.sslContext() != null) {
+          masterRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
+        }
       }
 
       if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {

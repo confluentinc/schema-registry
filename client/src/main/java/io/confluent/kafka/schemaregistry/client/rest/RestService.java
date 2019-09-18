@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
@@ -46,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 
 import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLSocketFactory;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -137,7 +137,7 @@ public class RestService implements Configurable {
   }
 
   private UrlList baseUrls;
-  private SslFactory sslFactory;
+  private SSLSocketFactory sslSocketFactory;
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
   private BearerAuthCredentialProvider bearerAuthCredentialProvider;
   private Map<String, String> httpHeaders;
@@ -202,8 +202,8 @@ public class RestService implements Configurable {
     return isNonEmpty(proxyHost) && proxyPort != null && proxyPort > 0;
   }
 
-  public void setSslFactory(SslFactory sslFactory) {
-    this.sslFactory = sslFactory;
+  public void setSslSocketFactory(SSLSocketFactory sslSocketFactory) {
+    this.sslSocketFactory = sslSocketFactory;
   }
 
   /**
@@ -229,6 +229,7 @@ public class RestService implements Configurable {
     HttpURLConnection connection = null;
     try {
       URL url = new URL(requestUrl);
+      
       connection = buildConnection(url, method, requestProperties);
 
       if (requestBodyData != null) {
@@ -299,10 +300,8 @@ public class RestService implements Configurable {
   }
 
   private void setupSsl(HttpURLConnection connection) {
-    if (connection instanceof HttpsURLConnection && sslFactory != null
-        && sslFactory.sslContext() != null) {
-      ((HttpsURLConnection)connection)
-          .setSSLSocketFactory(sslFactory.sslContext().getSocketFactory());
+    if (connection instanceof HttpsURLConnection && sslSocketFactory != null) {
+      ((HttpsURLConnection)connection).setSSLSocketFactory(sslSocketFactory);
     }
   }
 
