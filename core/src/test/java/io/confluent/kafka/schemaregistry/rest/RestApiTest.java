@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -35,10 +36,7 @@ import java.util.List;
 
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -900,6 +898,19 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Top Compatibility Level Exists", AvroCompatibilityLevel.FULL.name, restApp
         .restClient.getConfig(null).getCompatibilityLevel());
 
+  }
+
+  @Test
+  public void testGetClusterId() throws Exception {
+    try {
+      ServerClusterId serverClusterId = restApp.restClient.getClusterId();
+      assertEquals("", serverClusterId.getId());
+      assertNotNull(serverClusterId.getScope().get("kafka-cluster"));
+      // by default, the cluster id for schema registry is schema-registry
+      assertEquals("schema-registry", serverClusterId.getScope().get("schema-registry-cluster"));
+    } catch (RestClientException rce) {
+      fail("The operation shouldn't have failed");
+    }
   }
 }
 
