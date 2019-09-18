@@ -129,7 +129,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
               e -> e.getKey().substring(SchemaRegistryClientConfig.CLIENT_NAMESPACE.length()),
               Map.Entry::getValue));
       SslFactory sslFactory = new SslFactory(sslConfigs);
-      if (sslFactory != null && sslFactory.sslContext()!=null) {
+      if (sslFactory != null && sslFactory.sslContext() != null) {
         restService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
       }
     }
