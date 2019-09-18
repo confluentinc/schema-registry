@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.swagger.annotations.ApiParam;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,7 +67,7 @@ public class ModeResource {
   public ModeUpdateRequest updateMode(
       @PathParam("subject") String subject,
       @Context HttpHeaders headers,
-      @NotNull ModeUpdateRequest request
+      @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request
   ) {
     Mode mode;
     try {
@@ -109,7 +110,7 @@ public class ModeResource {
   @PUT
   public ModeUpdateRequest updateTopLevelMode(
       @Context HttpHeaders headers,
-      @NotNull ModeUpdateRequest request) {
+      @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request) {
     return updateMode(null, headers, request);
   }
 

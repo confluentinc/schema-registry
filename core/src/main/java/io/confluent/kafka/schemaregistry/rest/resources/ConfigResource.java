@@ -78,6 +78,7 @@ public class ConfigResource {
   public ConfigUpdateRequest updateSubjectLevelConfig(
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @Context HttpHeaders headers,
+      @ApiParam(value = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
     Set<String> subjects = null;
     try {
@@ -150,6 +151,7 @@ public class ConfigResource {
   })
   public ConfigUpdateRequest updateTopLevelConfig(
       @Context HttpHeaders headers,
+      @ApiParam(value = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
     AvroCompatibilityLevel compatibilityLevel =
         AvroCompatibilityLevel.forName(request.getCompatibilityLevel());
