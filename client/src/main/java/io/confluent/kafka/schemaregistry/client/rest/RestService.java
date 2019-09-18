@@ -34,6 +34,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -139,6 +141,7 @@ public class RestService implements Configurable {
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
   private BearerAuthCredentialProvider bearerAuthCredentialProvider;
   private Map<String, String> httpHeaders;
+  private Proxy proxy;
 
   public RestService(UrlList baseUrls) {
     this.baseUrls = baseUrls;
@@ -182,10 +185,21 @@ public class RestService implements Configurable {
           );
       setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
     }
+
+    String proxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
+    Integer proxyPort = (Integer) configs.get(SchemaRegistryClientConfig.PROXY_PORT);
+
+    if (isValidProxyConfig(proxyHost, proxyPort)) {
+      setProxy(proxyHost, proxyPort);
+    }
   }
 
   private static boolean isNonEmpty(String s) {
     return s != null && !s.isEmpty();
+  }
+
+  private static boolean isValidProxyConfig(String proxyHost, Integer proxyPort) {
+    return isNonEmpty(proxyHost) && proxyPort != null && proxyPort > 0;
   }
 
   public void setSslSocketFactory(SSLSocketFactory sslSocketFactory) {
@@ -215,24 +229,8 @@ public class RestService implements Configurable {
     HttpURLConnection connection = null;
     try {
       URL url = new URL(requestUrl);
-      connection = (HttpURLConnection) url.openConnection();
-
-      connection.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-      connection.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-
-      setupSsl(connection);
-      connection.setRequestMethod(method);
-      setAuthRequestHeaders(connection);
-      setCustomHeaders(connection);
-      // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
-      // On the other hand, leaving this out breaks nothing.
-      connection.setDoInput(true);
-
-      for (Map.Entry<String, String> entry : requestProperties.entrySet()) {
-        connection.setRequestProperty(entry.getKey(), entry.getValue());
-      }
-
-      connection.setUseCaches(false);
+      
+      connection = buildConnection(url, method, requestProperties);
 
       if (requestBodyData != null) {
         connection.setDoOutput(true);
@@ -269,6 +267,36 @@ public class RestService implements Configurable {
         connection.disconnect();
       }
     }
+  }
+
+  private HttpURLConnection buildConnection(URL url, String method, Map<String,
+                                            String> requestProperties)
+      throws IOException {
+    HttpURLConnection connection = null;
+    if (proxy == null) {
+      connection = (HttpURLConnection) url.openConnection();
+    } else {
+      connection = (HttpURLConnection) url.openConnection(proxy);
+    }
+
+    connection.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
+    connection.setReadTimeout(HTTP_READ_TIMEOUT_MS);
+
+    setupSsl(connection);
+    connection.setRequestMethod(method);
+    setAuthRequestHeaders(connection);
+    setCustomHeaders(connection);
+    // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
+    // On the other hand, leaving this out breaks nothing.
+    connection.setDoInput(true);
+
+    for (Map.Entry<String, String> entry : requestProperties.entrySet()) {
+      connection.setRequestProperty(entry.getKey(), entry.getValue());
+    }
+
+    connection.setUseCaches(false);
+
+    return connection;
   }
 
   private void setupSsl(HttpURLConnection connection) {
@@ -662,7 +690,7 @@ public class RestService implements Configurable {
     if (bearerAuthCredentialProvider != null) {
       String bearerToken = bearerAuthCredentialProvider.getBearerToken(connection.getURL());
       if (bearerToken != null) {
-        connection.setRequestProperty(AUTHORIZATION_HEADER, "Bearer " + bearerToken);       
+        connection.setRequestProperty(AUTHORIZATION_HEADER, "Bearer " + bearerToken);
       }
     }
   }
@@ -687,4 +715,7 @@ public class RestService implements Configurable {
     this.httpHeaders = httpHeaders;
   }
 
+  public void setProxy(String proxyHost, int proxyPort) {
+    this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+  }
 }
