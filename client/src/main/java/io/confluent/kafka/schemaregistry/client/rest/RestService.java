@@ -39,7 +39,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -648,7 +647,8 @@ public class RestService implements Configurable {
     return getClusterId(DEFAULT_REQUEST_PROPERTIES);
   }
 
-  public ServerClusterId getClusterId(Map<String, String> requestProperties) throws IOException, RestClientException {
+  public ServerClusterId getClusterId(Map<String, String> requestProperties)
+      throws IOException, RestClientException {
     return httpRequest("/v1/metadata/id", "GET", null,
                         requestProperties, GET_CLUSTER_ID_RESPONSE_TYPE);
   }
