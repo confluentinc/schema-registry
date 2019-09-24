@@ -179,6 +179,10 @@ paths:
         in: "path"
         required: true
         type: "string"
+      - name: "defaultToGlobal"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
