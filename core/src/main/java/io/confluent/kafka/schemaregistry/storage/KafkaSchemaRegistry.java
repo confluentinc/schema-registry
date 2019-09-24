@@ -913,7 +913,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return lookupCache.compatibilityLevel(subject, false, defaultCompatibilityLevel);
   }
 
-  private AvroCompatibilityLevel getCompatibilityLevelInScope(String subject)
+  public AvroCompatibilityLevel getCompatibilityLevelInScope(String subject)
       throws SchemaRegistryStoreException {
     return lookupCache.compatibilityLevel(subject, true, defaultCompatibilityLevel);
   }

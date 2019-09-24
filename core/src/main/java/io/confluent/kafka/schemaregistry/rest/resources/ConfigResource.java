@@ -32,6 +32,7 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 
@@ -126,10 +127,14 @@ public class ConfigResource {
   @ApiResponses(value = {
       @ApiResponse(code = 404, message = "Subject not found"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
-  public Config getSubjectLevelConfig(@PathParam("subject") String subject) {
+  public Config getSubjectLevelConfig(
+      @PathParam("subject") String subject,
+      @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
     Config config = null;
     try {
-      AvroCompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(subject);
+      AvroCompatibilityLevel compatibilityLevel = defaultToGlobal
+                                                  ? schemaRegistry.getCompatibilityLevelInScope(subject)
+                                                  : schemaRegistry.getCompatibilityLevel(subject);
       if (compatibilityLevel == null) {
         throw Errors.subjectNotFoundException();
       }
