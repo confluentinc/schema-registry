@@ -132,9 +132,10 @@ public class ConfigResource {
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
     Config config = null;
     try {
-      AvroCompatibilityLevel compatibilityLevel = defaultToGlobal
-                                                  ? schemaRegistry.getCompatibilityLevelInScope(subject)
-                                                  : schemaRegistry.getCompatibilityLevel(subject);
+      AvroCompatibilityLevel compatibilityLevel =
+          defaultToGlobal
+          ? schemaRegistry.getCompatibilityLevelInScope(subject)
+          : schemaRegistry.getCompatibilityLevel(subject);
       if (compatibilityLevel == null) {
         throw Errors.subjectNotFoundException();
       }
