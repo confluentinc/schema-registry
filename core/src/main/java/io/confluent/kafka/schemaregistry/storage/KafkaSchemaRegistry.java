@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigDef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,7 +129,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
         isEligibleForMasterElector, schemeAndPort.scheme);
-    this.sslFactory = new SslFactory(config.originals());
+    this.sslFactory =
+        new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(config.values()));
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
