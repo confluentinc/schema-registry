@@ -23,8 +23,8 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
-public class KafkaAvroDeserializer<T> extends AbstractKafkaAvroDeserializer<T>
-    implements Deserializer<T> {
+public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
+    implements Deserializer<Object> {
 
   private boolean isKey;
 
@@ -51,14 +51,14 @@ public class KafkaAvroDeserializer<T> extends AbstractKafkaAvroDeserializer<T>
   }
 
   @Override
-  public T deserialize(String s, byte[] bytes) {
+  public Object deserialize(String s, byte[] bytes) {
     return deserialize(bytes);
   }
 
   /**
    * Pass a reader schema to get an Avro projection
    */
-  public T deserialize(String s, byte[] bytes, Schema readerSchema) {
+  public Object deserialize(String s, byte[] bytes, Schema readerSchema) {
     return deserialize(bytes, readerSchema);
   }
 
