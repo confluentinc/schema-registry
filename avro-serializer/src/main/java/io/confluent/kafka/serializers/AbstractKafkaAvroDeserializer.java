@@ -37,7 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import kafka.utils.VerifiableProperties;
 
-public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvroSerDe {
+public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
@@ -77,7 +77,7 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
    * @param payload serialized data
    * @return the deserialized object
    */
-  protected W deserialize(byte[] payload) throws SerializationException {
+  protected Object deserialize(byte[] payload) throws SerializationException {
     return deserialize(null, null, payload, null);
   }
 
@@ -88,11 +88,11 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
    * @param readerSchema schema to use for Avro read (optional, enables Avro projection)
    * @return the deserialized object
    */
-  protected W deserialize(byte[] payload, Schema readerSchema) throws SerializationException {
+  protected Object deserialize(byte[] payload, Schema readerSchema) throws SerializationException {
     return deserialize(null, null, payload, readerSchema);
   }
 
-  protected W deserialize(String topic, Boolean isKey, byte[] payload, Schema readerSchema)
+  protected Object deserialize(String topic, Boolean isKey, byte[] payload, Schema readerSchema)
           throws SerializationException {
     if (payload == null) {
       return null;
@@ -154,7 +154,7 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
     // explicit from the Connector).
     DeserializationContext context = new DeserializationContext(topic, isKey, payload);
     Schema schema = context.schemaForDeserialize();
-    W result = context.read(schema, null);
+    Object result = context.read(schema, null);
 
     try {
       Integer version = schemaVersion(topic, isKey, context.getSchemaId(),
@@ -170,7 +170,7 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
     }
   }
 
-  private DatumReader<W> getDatumReader(Schema writerSchema, Schema readerSchema) {
+  private DatumReader<?> getDatumReader(Schema writerSchema, Schema readerSchema) {
     boolean writerSchemaIsPrimitive =
         AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
     // do not use SpecificDatumReader if writerSchema is a primitive
@@ -270,24 +270,24 @@ public abstract class AbstractKafkaAvroDeserializer<W> extends AbstractKafkaAvro
       return schemaId;
     }
 
-    W read(Schema writerSchema) {
+    Object read(Schema writerSchema) {
       return read(writerSchema, null);
     }
 
-    W read(Schema writerSchema, Schema readerSchema) {
-      DatumReader<W> reader = getDatumReader(writerSchema, readerSchema);
+    Object read(Schema writerSchema, Schema readerSchema) {
+      DatumReader<?> reader = getDatumReader(writerSchema, readerSchema);
       int length = buffer.limit() - 1 - idSize;
       if (writerSchema.getType().equals(Schema.Type.BYTES)) {
         byte[] bytes = new byte[length];
         buffer.get(bytes, 0, length);
-        return (W) bytes;
+        return bytes;
       } else {
         int start = buffer.position() + buffer.arrayOffset();
         try {
-          W result = reader.read(null, decoderFactory.binaryDecoder(buffer.array(),
+          Object result = reader.read(null, decoderFactory.binaryDecoder(buffer.array(),
               start, length, null));
           if (writerSchema.getType().equals(Schema.Type.STRING)) {
-            return (W) result.toString();
+            return result.toString();
           } else {
             return result;
           }
