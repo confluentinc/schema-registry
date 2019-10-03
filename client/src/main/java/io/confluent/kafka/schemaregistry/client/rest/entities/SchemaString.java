@@ -25,6 +25,7 @@ import java.io.IOException;
 public class SchemaString {
 
   private String schemaString;
+  private int highWaterMark;
 
   public SchemaString() {
 
@@ -47,6 +48,16 @@ public class SchemaString {
   @JsonProperty("schema")
   public void setSchemaString(String schemaString) {
     this.schemaString = schemaString;
+  }
+
+  @JsonProperty("hwm")
+  public int getHighWaterMark() {
+    return highWaterMark;
+  }
+
+  @JsonProperty("hwm")
+  public void setHighWaterMark(int highWaterMark) {
+    this.highWaterMark = highWaterMark;
   }
 
   public String toJson() throws IOException {

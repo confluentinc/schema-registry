@@ -22,11 +22,7 @@ import io.swagger.annotations.ApiResponses;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -63,12 +59,13 @@ public class SchemasResource {
   @PerformanceMetric("schemas.ids.get-schema")
   public SchemaString getSchema(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
-      @PathParam("id") Integer id) {
+      @PathParam("id") Integer id,
+      @QueryParam("hwm") boolean highWaterMark) {
     SchemaString schema = null;
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";
     try {
-      schema = schemaRegistry.get(id);
+      schema = schemaRegistry.get(id, highWaterMark);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
