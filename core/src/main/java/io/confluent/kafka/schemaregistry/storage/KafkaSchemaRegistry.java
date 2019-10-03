@@ -768,10 +768,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       }
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
-              "Error while retrieving schema with id "
-                      + id
-                      + " from the backend Kafka"
-                      + " store", e);
+          "Error while retrieving schema with id "
+          + id
+          + " from the backend Kafka"
+          + " store", e);
     }
     SchemaString schemaString = new SchemaString();
     schemaString.setSchemaString(schema.getSchema());
