@@ -335,7 +335,7 @@ paths:
         required: true
         type: "integer"
         format: "int32"
-      - name: "hwm"
+      - name: "fetchMaxId"
         in: "query"
         required: false
         type: "boolean"
@@ -773,6 +773,6 @@ definitions:
       schema:
         type: "string"
         description: "Schema string identified by the ID"
-      hwm:
+      maxId:
         type: "integer"
         format: "int32"
