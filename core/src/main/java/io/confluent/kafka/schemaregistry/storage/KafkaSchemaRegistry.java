@@ -752,7 +752,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   @Override
   public SchemaString get(int id) throws SchemaRegistryException {
-      return get(id, false);
+    return get(id, false);
   }
 
   public SchemaString get(int id, boolean highWaterMark) throws SchemaRegistryException {
