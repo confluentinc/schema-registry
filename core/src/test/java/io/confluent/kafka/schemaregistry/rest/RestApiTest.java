@@ -308,6 +308,20 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGetSchemaWithHighWaterMark() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
+    int latestId = 0;
+
+    for (String schema : schemas) {
+      latestId = restApp.restClient.registerSchema(schema, "subject");
+    }
+
+    // if highWaterMark is not provided then the hwm is 0
+    assertEquals(0, restApp.restClient.getId(1).getHighWaterMark());
+    assertEquals(latestId, restApp.restClient.getId(1, true).getHighWaterMark());
+  }
+
+  @Test
   public void testListVersionsNonExistingSubject() throws Exception {
     try {
       restApp.restClient.getAllVersions("Invalid");

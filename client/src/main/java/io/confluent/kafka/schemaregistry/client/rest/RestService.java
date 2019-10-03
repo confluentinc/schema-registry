@@ -546,6 +546,10 @@ public class RestService implements Configurable {
     return getId(requestProperties, id, false);
   }
 
+  public SchemaString getId(int id, boolean highWaterMark) throws IOException, RestClientException {
+    return getId(DEFAULT_REQUEST_PROPERTIES, id, highWaterMark);
+  }
+
   public SchemaString getId(Map<String, String> requestProperties,
                             int id, boolean highWaterMark) throws IOException, RestClientException {
     String path = String.format("/schemas/ids/%d?hwm=%b", id, highWaterMark);
