@@ -35,10 +35,7 @@ import java.util.List;
 
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -316,9 +313,9 @@ public class RestApiTest extends ClusterTestHarness {
       latestId = restApp.restClient.registerSchema(schema, "subject");
     }
 
-    // if highWaterMark is not provided then the hwm is 0
-    assertEquals(0, restApp.restClient.getId(1).getHighWaterMark());
-    assertEquals(latestId, restApp.restClient.getId(1, true).getHighWaterMark());
+    // if fetchMaxId is not provided then the maxId is null
+    assertNull(restApp.restClient.getId(1).getMaxId());
+    assertEquals(Integer.valueOf(latestId), restApp.restClient.getId(1, true).getMaxId());
   }
 
   @Test

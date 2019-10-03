@@ -546,13 +546,13 @@ public class RestService implements Configurable {
     return getId(requestProperties, id, false);
   }
 
-  public SchemaString getId(int id, boolean highWaterMark) throws IOException, RestClientException {
-    return getId(DEFAULT_REQUEST_PROPERTIES, id, highWaterMark);
+  public SchemaString getId(int id, boolean fetchMaxId) throws IOException, RestClientException {
+    return getId(DEFAULT_REQUEST_PROPERTIES, id, fetchMaxId);
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
-                            int id, boolean highWaterMark) throws IOException, RestClientException {
-    String path = String.format("/schemas/ids/%d?hwm=%b", id, highWaterMark);
+                            int id, boolean fetchMaxId) throws IOException, RestClientException {
+    String path = String.format("/schemas/ids/%d?fetchMaxId=%b", id, fetchMaxId);
 
     SchemaString response = httpRequest(path, "GET", null, requestProperties,
                                         GET_SCHEMA_BY_ID_RESPONSE_TYPE);

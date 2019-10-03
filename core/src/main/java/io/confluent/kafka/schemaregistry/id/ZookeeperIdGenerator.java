@@ -62,6 +62,11 @@ public class ZookeeperIdGenerator implements IdGenerator {
   }
 
   @Override
+  public int maxId() {
+    return maxIdInKafkaStore;
+  }
+
+  @Override
   public void configure(SchemaRegistryConfig config) {
     this.zkUtils = config.zkUtils();
   }

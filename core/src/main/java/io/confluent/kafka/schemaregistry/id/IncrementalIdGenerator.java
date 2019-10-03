@@ -36,6 +36,11 @@ public class IncrementalIdGenerator implements IdGenerator {
   }
 
   @Override
+  public int maxId() {
+    return maxIdInKafkaStore;
+  }
+
+  @Override
   public void configure(SchemaRegistryConfig config) {
 
   }

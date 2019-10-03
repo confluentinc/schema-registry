@@ -111,7 +111,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private MasterElector masterElector = null;
   private Metrics metrics;
   private Sensor masterNodeSensor;
-  private AtomicInteger currentHighWaterMark;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -140,7 +139,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
-    this.currentHighWaterMark = new AtomicInteger(0);
     MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
             .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
@@ -397,7 +395,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
         SchemaValue schemaValue = new SchemaValue(schema);
         kafkaStore.put(new SchemaKey(subject, schema.getVersion()), schemaValue);
-        currentHighWaterMark.set(schema.getId());
         return schema.getId();
       } else {
         throw new IncompatibleSchemaException(
@@ -755,7 +752,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return get(id, false);
   }
 
-  public SchemaString get(int id, boolean highWaterMark) throws SchemaRegistryException {
+  public SchemaString get(int id, boolean fetchMaxId) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
       SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
@@ -775,8 +772,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     SchemaString schemaString = new SchemaString();
     schemaString.setSchemaString(schema.getSchema());
-    if (highWaterMark) {
-      schemaString.setHighWaterMark(currentHighWaterMark.get());
+    if (fetchMaxId) {
+      schemaString.setMaxId(idGenerator.maxId());
     }
     return schemaString;
   }
