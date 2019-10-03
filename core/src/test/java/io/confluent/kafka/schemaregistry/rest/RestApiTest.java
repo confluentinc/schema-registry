@@ -305,7 +305,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testGetSchemaWithHighWaterMark() throws Exception {
+  public void testGetSchemaWithFetchMaxId() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
     int latestId = 0;
 
