@@ -774,7 +774,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     SchemaString schemaString = new SchemaString();
     schemaString.setSchemaString(schema.getSchema());
     if (fetchMaxId) {
-      schemaString.setMaxId(idGenerator.maxId());
+      schemaString.setMaxId(idGenerator.maxId(id));
     }
     return schemaString;
   }

@@ -62,7 +62,10 @@ public class ZookeeperIdGenerator implements IdGenerator {
   }
 
   @Override
-  public int maxId() {
+  public int maxId(Integer currentId) {
+    if (currentId > maxIdInKafkaStore) {
+      log.debug("Requested ID is greater than max ID");
+    }
     return maxIdInKafkaStore;
   }
 
