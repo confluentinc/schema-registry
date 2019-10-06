@@ -52,10 +52,9 @@ public interface IdGenerator {
   /**
    * Returns the current max id from the generator
    *
-   * @param currentId current ID in the request to Schema Registry
    * @return the max id; never {@code null}
    */
-  int getMaxId(int currentId);
+  int maxId();
 
   /**
    * Callback method that is invoked when a schema is registered.
