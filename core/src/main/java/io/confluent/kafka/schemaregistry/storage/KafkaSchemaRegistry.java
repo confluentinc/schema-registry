@@ -750,10 +750,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   @Override
   public SchemaString get(int id) throws SchemaRegistryException {
-    return get(id, false);
-  }
-
-  public SchemaString get(int id, boolean fetchMaxId) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
       SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
@@ -773,9 +769,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     SchemaString schemaString = new SchemaString();
     schemaString.setSchemaString(schema.getSchema());
-    if (fetchMaxId) {
-      schemaString.setMaxId(idGenerator.maxId());
-    }
     return schemaString;
   }
 

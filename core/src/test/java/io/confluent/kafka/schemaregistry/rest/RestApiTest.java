@@ -37,7 +37,6 @@ import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.FORW
 import static io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel.NONE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -306,20 +305,6 @@ public class RestApiTest extends ClusterTestHarness {
                    Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
                    rce.getErrorCode());
     }
-  }
-
-  @Test
-  public void testGetSchemaWithFetchMaxId() throws Exception {
-    List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
-    int latestId = 0;
-
-    for (String schema : schemas) {
-      latestId = restApp.restClient.registerSchema(schema, "subject");
-    }
-
-    // if fetchMaxId is not provided then the maxId is null
-    assertNull(restApp.restClient.getId(1).getMaxId());
-    assertEquals(Integer.valueOf(latestId), restApp.restClient.getId(1, true).getMaxId());
   }
 
   @Test

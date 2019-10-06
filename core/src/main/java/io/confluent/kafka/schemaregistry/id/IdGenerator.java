@@ -50,13 +50,6 @@ public interface IdGenerator {
   void init() throws IdGenerationException;
 
   /**
-   * Returns the current max id from the generator
-   *
-   * @return the max id; never {@code null}
-   */
-  int maxId();
-
-  /**
    * Callback method that is invoked when a schema is registered.
    * IdGenerator implementation can optionally use this to update the next possible id.
    *

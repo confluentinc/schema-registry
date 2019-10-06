@@ -538,21 +538,12 @@ public class RestService implements Configurable {
   }
 
   public SchemaString getId(int id) throws IOException, RestClientException {
-    return getId(DEFAULT_REQUEST_PROPERTIES, id, false);
+    return getId(DEFAULT_REQUEST_PROPERTIES, id);
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
                             int id) throws IOException, RestClientException {
-    return getId(requestProperties, id, false);
-  }
-
-  public SchemaString getId(int id, boolean fetchMaxId) throws IOException, RestClientException {
-    return getId(DEFAULT_REQUEST_PROPERTIES, id, fetchMaxId);
-  }
-
-  public SchemaString getId(Map<String, String> requestProperties,
-                            int id, boolean fetchMaxId) throws IOException, RestClientException {
-    String path = String.format("/schemas/ids/%d?fetchMaxId=%b", id, fetchMaxId);
+    String path = String.format("/schemas/ids/%d", id);
 
     SchemaString response = httpRequest(path, "GET", null, requestProperties,
                                         GET_SCHEMA_BY_ID_RESPONSE_TYPE);
