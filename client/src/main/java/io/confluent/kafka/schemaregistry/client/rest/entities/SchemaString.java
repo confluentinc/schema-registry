@@ -16,18 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.annotations.ApiModelProperty;
 
 import java.io.IOException;
 
-@JsonInclude(JsonInclude.Include.NON_NULL)
 public class SchemaString {
 
   private String schemaString;
-  private Integer maxId;
 
   public SchemaString() {
 
@@ -50,16 +47,6 @@ public class SchemaString {
   @JsonProperty("schema")
   public void setSchemaString(String schemaString) {
     this.schemaString = schemaString;
-  }
-
-  @JsonProperty("maxId")
-  public Integer getMaxId() {
-    return maxId;
-  }
-
-  @JsonProperty("maxId")
-  public void setMaxId(Integer maxId) {
-    this.maxId = maxId;
   }
 
   public String toJson() throws IOException {

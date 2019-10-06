@@ -23,12 +23,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.Consumes;
-import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -65,13 +63,12 @@ public class SchemasResource {
   @PerformanceMetric("schemas.ids.get-schema")
   public SchemaString getSchema(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
-      @PathParam("id") Integer id,
-      @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
+      @PathParam("id") Integer id) {
     SchemaString schema = null;
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";
     try {
-      schema = schemaRegistry.get(id, fetchMaxId);
+      schema = schemaRegistry.get(id);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
