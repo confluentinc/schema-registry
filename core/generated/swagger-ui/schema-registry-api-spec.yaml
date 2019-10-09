@@ -809,6 +809,6 @@ definitions:
         type: "object"
         readOnly: true
         additionalProperties:
-          type: "string"
+          type: "object"
       id:
         type: "string"
