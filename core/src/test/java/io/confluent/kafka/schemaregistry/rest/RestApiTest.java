@@ -924,9 +924,8 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       ServerClusterId serverClusterId = restApp.restClient.getClusterId();
       assertEquals("", serverClusterId.getId());
-      assertNotNull(serverClusterId.getScope().get("kafka-cluster"));
-      // by default, the cluster id for schema registry is schema-registry
-      assertEquals("schema-registry", serverClusterId.getScope().get("schema-registry-cluster"));
+      assertEquals(Collections.emptyList(), serverClusterId.getScope().get("path"));
+      assertNotNull(serverClusterId.getScope().get("clusters"));
     } catch (RestClientException rce) {
       fail("The operation shouldn't have failed");
     }
