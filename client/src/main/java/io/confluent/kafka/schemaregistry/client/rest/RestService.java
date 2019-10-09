@@ -22,6 +22,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
@@ -47,10 +52,6 @@ import java.util.Map;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
@@ -119,6 +120,9 @@ public class RestService implements Configurable {
       };
   private static final TypeReference<String> DELETE_MODE_RESPONSE_TYPE =
       new TypeReference<String>() {
+      };
+  private static final TypeReference<ServerClusterId> GET_CLUSTER_ID_RESPONSE_TYPE =
+      new TypeReference<ServerClusterId>() {
       };
 
   private static final int HTTP_CONNECT_TIMEOUT_MS = 60000;
@@ -672,6 +676,16 @@ public class RestService implements Configurable {
     List<Integer> response = httpRequest(path, "DELETE", null, requestProperties,
                                          DELETE_SUBJECT_RESPONSE_TYPE);
     return response;
+  }
+
+  public ServerClusterId getClusterId() throws IOException, RestClientException {
+    return getClusterId(DEFAULT_REQUEST_PROPERTIES);
+  }
+
+  public ServerClusterId getClusterId(Map<String, String> requestProperties)
+      throws IOException, RestClientException {
+    return httpRequest("/v1/metadata/id", "GET", null,
+                        requestProperties, GET_CLUSTER_ID_RESPONSE_TYPE);
   }
 
   private static List<String> parseBaseUrl(String baseUrl) {

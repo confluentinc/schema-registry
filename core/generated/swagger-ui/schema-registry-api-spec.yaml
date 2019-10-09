@@ -697,6 +697,28 @@ paths:
           description: "Error code 42202 -- Invalid version"
         500:
           description: "Error code 50001 -- Error in the backend data store"
+  /v1/metadata/id:
+    get:
+      summary: "Get the server metadata"
+      description: ""
+      operationId: "getClusterId"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters: []
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            $ref: "#/definitions/ServerClusterId"
+        500:
+          description: "Error code 50001 -- Error in the backend data store\n"
 definitions:
   CompatibilityCheckResponse:
     type: "object"
@@ -780,3 +802,13 @@ definitions:
       maxId:
         type: "integer"
         format: "int32"
+  ServerClusterId:
+    type: "object"
+    properties:
+      scope:
+        type: "object"
+        readOnly: true
+        additionalProperties:
+          type: "object"
+      id:
+        type: "string"
