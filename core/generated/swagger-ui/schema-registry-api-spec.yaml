@@ -179,6 +179,10 @@ paths:
         in: "path"
         required: true
         type: "string"
+      - name: "defaultToGlobal"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -335,6 +339,11 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "fetchMaxId"
+        in: "query"
+        required: false
+        type: "boolean"
+        default: false
       responses:
         200:
           description: "successful operation"
@@ -790,6 +799,9 @@ definitions:
       schema:
         type: "string"
         description: "Schema string identified by the ID"
+      maxId:
+        type: "integer"
+        format: "int32"
   ServerClusterId:
     type: "object"
     properties:

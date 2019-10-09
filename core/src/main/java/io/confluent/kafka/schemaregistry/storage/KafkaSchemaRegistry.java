@@ -19,6 +19,7 @@ import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigDef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -135,7 +136,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
         isEligibleForMasterElector, schemeAndPort.scheme);
-    this.sslFactory = new SslFactory(config.originals());
+    this.sslFactory =
+        new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(config.values()));
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
@@ -755,6 +757,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   @Override
   public SchemaString get(int id) throws SchemaRegistryException {
+    return get(id, false);
+  }
+
+  public SchemaString get(int id, boolean fetchMaxId) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
       SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
@@ -774,6 +780,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     SchemaString schemaString = new SchemaString();
     schemaString.setSchemaString(schema.getSchema());
+    if (fetchMaxId) {
+      schemaString.setMaxId(idGenerator.getMaxId(id));
+    }
     return schemaString;
   }
 
@@ -938,7 +947,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return lookupCache.compatibilityLevel(subject, false, defaultCompatibilityLevel);
   }
 
-  private AvroCompatibilityLevel getCompatibilityLevelInScope(String subject)
+  public AvroCompatibilityLevel getCompatibilityLevelInScope(String subject)
       throws SchemaRegistryStoreException {
     return lookupCache.compatibilityLevel(subject, true, defaultCompatibilityLevel);
   }

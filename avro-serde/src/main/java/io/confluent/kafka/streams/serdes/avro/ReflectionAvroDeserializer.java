@@ -37,12 +37,12 @@ import org.apache.kafka.common.serialization.Deserializer;
 @InterfaceStability.Unstable
 public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
 
-  private final KafkaAvroDeserializer<T> inner;
+  private final KafkaAvroDeserializer inner;
   private final Schema schema;
 
   public ReflectionAvroDeserializer(Class<T> type) {
     this.schema = ReflectData.get().getSchema(type);
-    this.inner = new KafkaAvroDeserializer<>();
+    this.inner = new KafkaAvroDeserializer();
   }
 
   /**
@@ -50,7 +50,7 @@ public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
    */
   ReflectionAvroDeserializer(final SchemaRegistryClient client, Class<T> type) {
     this.schema = ReflectData.get().getSchema(type);
-    this.inner = new KafkaAvroDeserializer<>(client);
+    this.inner = new KafkaAvroDeserializer(client);
   }
 
   @Override
@@ -63,7 +63,7 @@ public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
 
   @Override
   public T deserialize(final String topic, final byte[] bytes) {
-    return inner.deserialize(topic, bytes, schema);
+    return (T) inner.deserialize(topic, bytes, schema);
   }
 
   @Override
