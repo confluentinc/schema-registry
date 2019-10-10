@@ -17,25 +17,56 @@
 package io.confluent.kafka.schemaregistry.avro;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaValidationException;
 import org.apache.avro.SchemaValidator;
 import org.apache.avro.SchemaValidatorBuilder;
+import org.apache.avro.Schemas;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class AvroSchema implements ParsedSchema {
 
-  public static final String AVRO = "AVRO";
+  public static final String TYPE = "AVRO";
 
   private static final SchemaValidator BACKWARD_VALIDATOR =
       new SchemaValidatorBuilder().canReadStrategy().validateLatest();
 
-  public final Schema schemaObj;
+  private final Schema schemaObj;
   private final String canonicalString;
   private final Integer version;
+  private final List<SchemaReference> references;
+  private final Map<String, String> resolvedReferences;
+
+  public AvroSchema(String schemaString) {
+    this(schemaString, Collections.emptyList(), Collections.emptyMap(), null);
+  }
+
+  public AvroSchema(String schemaString,
+                    List<SchemaReference> references,
+                    Map<String, String> resolvedReferences,
+                    Integer version) {
+    List<Schema> schemaRefs = new ArrayList<>();
+    Schema.Parser parser = new Schema.Parser();
+    parser.setValidateDefaults(false);
+    if (resolvedReferences != null) {
+      for (String schema : resolvedReferences.values()) {
+        Schema schemaRef = parser.parse(schema);
+        schemaRefs.add(schemaRef);
+      }
+    }
+    this.schemaObj = parser.parse(schemaString);
+    this.canonicalString = Schemas.toString(schemaObj, schemaRefs);
+    this.references = references;
+    this.resolvedReferences = resolvedReferences;
+    this.version = version;
+  }
 
   public AvroSchema(Schema schemaObj) {
     this(schemaObj, null);
@@ -43,23 +74,19 @@ public class AvroSchema implements ParsedSchema {
 
   public AvroSchema(Schema schemaObj, Integer version) {
     this.schemaObj = schemaObj;
-    this.canonicalString = schemaObj.toString();
+    this.canonicalString = Schemas.toString(schemaObj, null);
     this.version = version;
+    this.references = Collections.emptyList();
+    this.resolvedReferences = Collections.emptyMap();
   }
 
-  public AvroSchema(String schemaString) {
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(false);
-    Schema schemaObj = parser.parse(schemaString);
-    
-    this.schemaObj = schemaObj;
-    this.canonicalString = schemaObj.toString();
-    this.version = null;
+  public Schema rawSchema() {
+    return schemaObj;
   }
 
   @Override
   public String schemaType() {
-    return AVRO;
+    return TYPE;
   }
 
   @Override
@@ -75,9 +102,17 @@ public class AvroSchema implements ParsedSchema {
     return canonicalString;
   }
 
-  @Override
   public Integer version() {
     return version;
+  }
+
+  @Override
+  public List<SchemaReference> references() {
+    return references;
+  }
+
+  public Map<String, String> resolvedReferences() {
+    return resolvedReferences;
   }
 
   @Override
@@ -104,16 +139,17 @@ public class AvroSchema implements ParsedSchema {
     }
     AvroSchema that = (AvroSchema) o;
     return Objects.equals(schemaObj, that.schemaObj)
+        && Objects.equals(references, that.references)
         && Objects.equals(version, that.version);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaObj, version);
+    return Objects.hash(schemaObj, references, version);
   }
 
   @Override
   public String toString() {
-    return schemaObj.toString();
+    return canonicalString;
   }
 }

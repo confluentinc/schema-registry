@@ -14,6 +14,10 @@
  */
 package io.confluent.kafka.schemaregistry.utils;
 
+import org.apache.avro.Protocol;
+import org.apache.avro.Schema;
+import org.apache.avro.Schemas;
+
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -131,5 +135,22 @@ public class TestUtils {
       avroStrings.add(AvroUtils.parseSchema(schemaString).canonicalString());
     }
     return avroStrings;
+  }
+
+  public static List<String> getAvroSchemaWithReferences() {
+    List<String> schemas = new ArrayList<>();
+    String reference = "{\"type\":\"record\","
+        + "\"name\":\"subrecord\","
+        + "\"namespace\":\"otherns\","
+        + "\"fields\":"
+        + "[{\"name\":\"field2\",\"type\":\"string\"}]}";
+    schemas.add(reference);
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"namespace\":\"ns\","
+        + "\"fields\":"
+        + "[{\"name\":\"field1\",\"type\":\"otherns.subrecord\"}]}";
+    schemas.add(schemaString);
+    return schemas;
   }
 }

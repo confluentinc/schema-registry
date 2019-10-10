@@ -127,7 +127,7 @@ public class CompatibilityResource {
       try {
         isCompatible = schemaRegistry.isCompatible(
             subject,
-            request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.AVRO,
+            request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
             request.getSchema(),
             schemaForSpecifiedVersion
         );

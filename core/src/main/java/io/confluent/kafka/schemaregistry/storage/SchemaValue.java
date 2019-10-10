@@ -24,6 +24,10 @@ import org.hibernate.validator.constraints.NotEmpty;
 import javax.validation.constraints.Min;
 import javax.ws.rs.DefaultValue;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 
 public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue {
@@ -36,7 +40,8 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   private Integer id;
   @NotEmpty
   private String schema;
-  private String schemaType = AvroSchema.AVRO;
+  private String schemaType = AvroSchema.TYPE;
+  private List<SchemaReference> references = Collections.emptyList();
   @NotEmpty
   private boolean deleted;
 
@@ -57,12 +62,14 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
                      @JsonProperty("version") Integer version,
                      @JsonProperty("id") Integer id,
                      @JsonProperty("schemaType") @DefaultValue("AVRO") String schemaType,
+                     @JsonProperty("references") List<SchemaReference> references,
                      @JsonProperty("schema") String schema,
                      @JsonProperty("deleted") boolean deleted) {
     this.subject = subject;
     this.version = version;
     this.id = id;
     this.schemaType = schemaType;
+    this.references = references;
     this.schema = schema;
     this.deleted = deleted;
   }
@@ -72,6 +79,11 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     this.version = schemaEntity.getVersion();
     this.id = schemaEntity.getId();
     this.schemaType = schemaEntity.getSchemaType();
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
+        = schemaEntity.getReferences();
+    this.references = refs == null ? null : refs.stream()
+        .map(ref -> new SchemaReference(ref.getName(), ref.getSubject(), ref.getVersion()))
+        .collect(Collectors.toList());
     this.schema = schemaEntity.getSchema();
     this.deleted = false;
   }
@@ -114,6 +126,16 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   @JsonProperty("schemaType")
   public void setSchemaType(String schemaType) {
     this.schemaType = schemaType;
+  }
+
+  @JsonProperty("references")
+  public List<SchemaReference> getReferences() {
+    return this.references;
+  }
+
+  @JsonProperty("references")
+  public void setReferences(List<SchemaReference> references) {
+    this.references = references;
   }
 
   @JsonProperty("schema")
@@ -159,6 +181,9 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     if (!this.schemaType.equals(that.getSchemaType())) {
       return false;
     }
+    if (!this.references.equals(that.getReferences())) {
+      return false;
+    }
     if (!this.schema.equals(that.schema)) {
       return false;
     }
@@ -176,6 +201,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     result = 31 * result + id.intValue();
     result = 31 * result + schemaType.hashCode();
     result = 31 * result + schema.hashCode();
+    result = 31 * result + references.hashCode();
     result = 31 * result + (deleted ? 1 : 0);
     return result;
   }
@@ -187,6 +213,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     sb.append("version=" + this.version + ",");
     sb.append("id=" + this.id + ",");
     sb.append("schemaType=" + this.schemaType + ",");
+    sb.append("references=" + this.references + ",");
     sb.append("schema=" + this.schema + ",");
     sb.append("deleted=" + this.deleted + "}");
     return sb.toString();

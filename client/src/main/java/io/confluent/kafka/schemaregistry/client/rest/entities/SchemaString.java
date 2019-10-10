@@ -22,15 +22,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.annotations.ApiModelProperty;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
-@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class SchemaString {
 
   private String schemaString;
+  private List<SchemaReference> references = Collections.emptyList();
   private Integer maxId;
 
   public SchemaString() {
-
   }
 
   public SchemaString(String schemaString) {
@@ -52,6 +54,18 @@ public class SchemaString {
     this.schemaString = schemaString;
   }
 
+  @ApiModelProperty(value = "Schema references")
+  @JsonProperty("references")
+  public List<SchemaReference> getReferences() {
+    return this.references;
+  }
+
+  @JsonProperty("references")
+  public void setReferences(List<SchemaReference> references) {
+    this.references = references;
+  }
+
+  @ApiModelProperty(value = "Maximum ID")
   @JsonProperty("maxId")
   public Integer getMaxId() {
     return maxId;

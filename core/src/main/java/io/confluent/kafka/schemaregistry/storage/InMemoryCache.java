@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -96,13 +97,21 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) {
-    MD5 md5 = MD5.ofString(schema.getSchema());
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
+        = schema.getReferences();
+    MD5 md5 = MD5.ofString(schema.getSchema(), refs == null ? null : refs.stream()
+        .map(ref -> new SchemaReference(ref.getName(), ref.getSubject(), ref.getVersion()))
+        .collect(Collectors.toList()));
     return schemaHashToGuid.get(md5);
   }
 
   @Override
   public boolean containsSchema(Schema schema) {
-    MD5 md5 = MD5.ofString(schema.getSchema());
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
+        = schema.getReferences();
+    MD5 md5 = MD5.ofString(schema.getSchema(), refs == null ? null : refs.stream()
+        .map(ref -> new SchemaReference(ref.getName(), ref.getSubject(), ref.getVersion()))
+        .collect(Collectors.toList()));
     return this.schemaHashToGuid.containsKey(md5);
   }
 
@@ -137,7 +146,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
-    MD5 md5 = MD5.ofString(schemaValue.getSchema());
+    MD5 md5 = MD5.ofString(schemaValue.getSchema(), schemaValue.getReferences());
     SchemaIdAndSubjects schemaIdAndSubjects = schemaHashToGuid.get(md5);
     if (schemaIdAndSubjects == null) {
       schemaIdAndSubjects = new SchemaIdAndSubjects(schemaValue.getId());
@@ -262,7 +271,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
         // The value returned from the store should not be null since we clean up caches
         // after tombstoning, but we still check defensively
         SchemaKey newSchemaKey = schemaValue != null
-                                 ? getNonDeletedSchemaKey(schemaValue.getSchema())
+                                 ? getNonDeletedSchemaKey(schemaValue)
                                  : null;
         if (newSchemaKey != null) {
           entry.setValue(newSchemaKey);
@@ -273,8 +282,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     }
   }
 
-  private SchemaKey getNonDeletedSchemaKey(String schema) {
-    MD5 md5 = MD5.ofString(schema);
+  private SchemaKey getNonDeletedSchemaKey(SchemaValue schema) {
+    MD5 md5 = MD5.ofString(schema.getSchema(), schema.getReferences());
     SchemaIdAndSubjects keys = schemaHashToGuid.get(md5);
     return keys == null ? null : keys.findAny(key -> {
       SchemaValue value = (SchemaValue) store.get(key);

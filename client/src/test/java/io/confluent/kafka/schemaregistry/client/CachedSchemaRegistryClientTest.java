@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
@@ -35,6 +36,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 
 import static org.easymock.EasyMock.anyBoolean;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.eq;
@@ -56,7 +58,7 @@ public class CachedSchemaRegistryClientTest {
   private static final int ID_25 = 25;
   private static final io.confluent.kafka.schemaregistry.client.rest.entities.Schema SCHEMA_DETAILS
       = new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
-          SUBJECT_0, 7, ID_25, AvroSchema.AVRO, SCHEMA_STR_0);
+          SUBJECT_0, 7, ID_25, SCHEMA_STR_0);
 
   private RestService restService;
   private CachedSchemaRegistryClient client;
@@ -89,7 +91,8 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testRegisterSchemaCache() throws Exception {
     // Expect one call to register schema
-    expect(restService.registerSchema(anyString(), anyString(), eq(SUBJECT_0)))
+    expect(restService.registerSchema(anyString(), anyString(), anyObject(List.class),
+        eq(SUBJECT_0)))
         .andReturn(ID_25)
         .once();
 
@@ -104,7 +107,8 @@ public class CachedSchemaRegistryClientTest {
   @Test
   public void testRegisterSchemaCacheWithVersionAndId() throws Exception {
     // Expect one call to register schema
-    expect(restService.registerSchema(anyString(), anyString(), eq(SUBJECT_0), eq(VERSION_1), eq(ID_25)))
+    expect(restService.registerSchema(anyString(), anyString(),
+        anyObject(List.class), eq(SUBJECT_0), eq(VERSION_1), eq(ID_25)))
         .andReturn(ID_25)
         .once();
 
@@ -118,7 +122,7 @@ public class CachedSchemaRegistryClientTest {
 
   @Test
   public void testRegisterOverCapacity() throws Exception {
-    expect(restService.registerSchema(anyString(), anyString(), anyString()))
+    expect(restService.registerSchema(anyString(), anyString(), anyObject(List.class), anyString()))
         .andReturn(ID_25)
         .andReturn(26)
         .andReturn(27)
@@ -144,7 +148,8 @@ public class CachedSchemaRegistryClientTest {
 
   @Test
   public void testIdCache() throws Exception {
-    expect(restService.registerSchema(anyString(), anyString(), eq(SUBJECT_0)))
+    expect(restService.registerSchema(anyString(), anyString(),
+        anyObject(List.class), eq(SUBJECT_0)))
         .andReturn(ID_25);
 
     // Expect only one call to getId (the rest should hit the cache)
@@ -154,10 +159,14 @@ public class CachedSchemaRegistryClientTest {
     replay(restService);
 
     assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
-    assertEquals(AVRO_SCHEMA_0.schemaObj,
-        ((AvroSchema) client.getSchemaBySubjectAndId(SUBJECT_0, ID_25)).schemaObj);
-    assertEquals(AVRO_SCHEMA_0.schemaObj,
-        ((AvroSchema) client.getSchemaBySubjectAndId(SUBJECT_0, ID_25)).schemaObj); // hit the cache
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaBySubjectAndId(SUBJECT_0, ID_25)).rawSchema()
+    );
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaBySubjectAndId(SUBJECT_0, ID_25)).rawSchema()
+    ); // hit the cache
 
     verify(restService);
   }
@@ -166,14 +175,17 @@ public class CachedSchemaRegistryClientTest {
   public void testVersionCache() throws Exception {
     int version = 7;
 
-    expect(restService.registerSchema(anyString(), anyString(), eq(SUBJECT_0)))
+    expect(restService.registerSchema(anyString(), anyString(),
+        anyObject(List.class), eq(SUBJECT_0)))
         .andReturn(ID_25);
 
     // Expect only one call to lookup the subject (the rest should hit the cache)
-    expect(restService.lookUpSubjectVersion(anyString(), anyString(), eq(SUBJECT_0), eq(true)))
+    expect(restService.lookUpSubjectVersion(anyString(), anyString(), anyObject(List.class),
+        eq(SUBJECT_0),
+        eq(true)))
         .andReturn(
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, version,
-                ID_25, AvroSchema.AVRO, SCHEMA_STR_0));
+                ID_25, SCHEMA_STR_0));
 
     replay(restService);
 
@@ -192,9 +204,11 @@ public class CachedSchemaRegistryClientTest {
     String subjectOne = "subjectOne";
     String subjectTwo = "subjectTwo";
 
-    expect(restService.registerSchema(anyString(), anyString(), eq(subjectOne)))
+    expect(restService.registerSchema(anyString(), anyString(),
+        anyObject(List.class), eq(subjectOne)))
         .andReturn(ID_25);
-    expect(restService.registerSchema(anyString(), anyString(), eq(subjectTwo)))
+    expect(restService.registerSchema(anyString(), anyString(),
+        anyObject(List.class), eq(subjectTwo)))
         .andReturn(ID_25);
 
     expect(restService.getId(eq(ID_25)))
@@ -208,22 +222,31 @@ public class CachedSchemaRegistryClientTest {
     assertEquals(ID_25, client.register(subjectOne, AVRO_SCHEMA_0));
     assertEquals(ID_25, client.register(subjectTwo, AVRO_SCHEMA_0));
     // Neither of these two schemas should be cached yet
-    assertEquals(AVRO_SCHEMA_0.schemaObj,
-        ((AvroSchema) client.getSchemaBySubjectAndId(subjectOne, ID_25)).schemaObj);
-    assertEquals(AVRO_SCHEMA_0.schemaObj,
-        ((AvroSchema) client.getSchemaBySubjectAndId(subjectTwo, ID_25)).schemaObj);
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaBySubjectAndId(subjectOne, ID_25)).rawSchema()
+    );
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaBySubjectAndId(subjectTwo, ID_25)).rawSchema()
+    );
     // These two should be cached now
-    assertEquals(AVRO_SCHEMA_0.schemaObj,
-        ((AvroSchema) client.getSchemaBySubjectAndId(subjectOne, ID_25)).schemaObj);
-    assertEquals(AVRO_SCHEMA_0.schemaObj,
-        ((AvroSchema) client.getSchemaBySubjectAndId(subjectTwo, ID_25)).schemaObj);
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaBySubjectAndId(subjectOne, ID_25)).rawSchema()
+    );
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaBySubjectAndId(subjectTwo, ID_25)).rawSchema()
+    );
 
     verify(restService);
   }
 
   @Test
   public void testDeleteSchemaCache() throws Exception {
-    expect(restService.registerSchema(anyString(), anyString(), eq(SUBJECT_0)))
+    expect(restService.registerSchema(anyString(), anyString(),
+        anyObject(List.class), eq(SUBJECT_0)))
         .andReturn(ID_25)
         .once();
 
@@ -244,15 +267,16 @@ public class CachedSchemaRegistryClientTest {
   public void testDeleteVersionCache() throws Exception {
     int version = 7;
 
-    expect(restService.registerSchema(anyString(), anyString(), eq(SUBJECT_0)))
+    expect(restService.registerSchema(anyString(), anyString(), anyObject(List.class),
+        eq(SUBJECT_0)))
         .andReturn(ID_25);
 
     // Expect only one call to lookup the subject (the rest should hit the cache)
-    expect(restService.lookUpSubjectVersion(anyString(), anyString(), eq(SUBJECT_0), eq(true)))
+    expect(restService.lookUpSubjectVersion(anyString(), anyString(),
+        anyObject(List.class), eq(SUBJECT_0), eq(true)))
         .andReturn(new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0,
                                                                                      version,
             ID_25,
-            AvroSchema.AVRO,
             SCHEMA_STR_0));
 
     expect(restService.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
@@ -324,7 +348,8 @@ public class CachedSchemaRegistryClientTest {
 
   @Test
   public void testThreadSafe() throws Exception {
-    expect(restService.registerSchema(anyString(), anyString(), eq(SUBJECT_0)))
+    expect(restService.registerSchema(anyString(), anyString(),
+        anyObject(List.class), eq(SUBJECT_0)))
         .andReturn(ID_25)
         .anyTimes();
 
@@ -332,7 +357,8 @@ public class CachedSchemaRegistryClientTest {
         .andReturn(new SchemaString(SCHEMA_STR_0))
         .anyTimes();
 
-    expect(restService.lookUpSubjectVersion(eq(AVRO_SCHEMA_0.toString()), anyString(), eq(SUBJECT_0), anyBoolean()))
+    expect(restService.lookUpSubjectVersion(eq(AVRO_SCHEMA_0.toString()), anyString(),
+        anyObject(List.class), eq(SUBJECT_0), anyBoolean()))
         .andReturn(SCHEMA_DETAILS)
         .anyTimes();
 

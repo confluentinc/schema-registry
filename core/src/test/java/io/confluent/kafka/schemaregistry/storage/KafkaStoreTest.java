@@ -358,10 +358,10 @@ public class KafkaStoreTest extends ClusterTestHarness {
     kafkaStore.init();
     int id = 100;
     kafkaStore.put(new SchemaKey("subject", 1),
-        new SchemaValue("subject", 1, id, AvroSchema.AVRO, "schemaString", false)
+        new SchemaValue("subject", 1, id, "schemaString", false)
     );
     kafkaStore.put(new SchemaKey("subject2", 1),
-        new SchemaValue("subject2", 1, id, AvroSchema.AVRO, "schemaString2", false)
+        new SchemaValue("subject2", 1, id, "schemaString2", false)
     );
     int size = 0;
     for (Iterator<SchemaRegistryKey> iter = kafkaStore.getAllKeys(); iter.hasNext(); ) {
@@ -387,10 +387,10 @@ public class KafkaStoreTest extends ClusterTestHarness {
     kafkaStore.init();
     int id = 100;
     kafkaStore.put(new SchemaKey("subject", 1),
-        new SchemaValue("subject", 1, id, AvroSchema.AVRO, "schemaString", false)
+        new SchemaValue("subject", 1, id, "schemaString", false)
     );
     kafkaStore.put(new SchemaKey("subject2", 1),
-        new SchemaValue("subject2", 1, id, AvroSchema.AVRO, "schemaString", false)
+        new SchemaValue("subject2", 1, id, "schemaString", false)
     );
     int size = 0;
     for (Iterator<SchemaRegistryKey> iter = kafkaStore.getAllKeys(); iter.hasNext(); ) {
@@ -407,11 +407,11 @@ public class KafkaStoreTest extends ClusterTestHarness {
     int id = 100;
     SchemaKey schemaKey = new SchemaKey("subject", 1);
     SchemaValue schemaValue =
-        new SchemaValue("subject", 1, id, AvroSchema.AVRO, "schemaString", false);
+        new SchemaValue("subject", 1, id, "schemaString", false);
 
     SchemaKey schemaKey2 = new SchemaKey("subject2", 1);
     SchemaValue schemaValue2 =
-        new SchemaValue("subject2", 1, id, AvroSchema.AVRO, "schemaString", false);
+        new SchemaValue("subject2", 1, id, "schemaString", false);
 
     inMemoryStore.put(schemaKey, schemaValue);
     inMemoryStore.schemaRegistered(schemaKey, schemaValue);
@@ -438,7 +438,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     int id = 100;
     SchemaKey schemaKey = new SchemaKey("subject", 1);
     SchemaValue schemaValue =
-        new SchemaValue("subject", 1, id, AvroSchema.AVRO, "schemaString", true);
+        new SchemaValue("subject", 1, id, "schemaString", true);
 
     // After a compaction, the schema will not be registered but only deleted
     inMemoryStore.put(schemaKey, schemaValue);

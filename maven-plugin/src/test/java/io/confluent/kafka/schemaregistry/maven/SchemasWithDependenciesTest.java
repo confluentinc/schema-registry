@@ -11,7 +11,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -79,7 +78,7 @@ public class SchemasWithDependenciesTest extends SchemaRegistryTest {
         schemas.put("Pizza", pizzaFile);
 
         Map<String, ParsedSchema> parsedSchemas = schemaRegistryMojo.loadSchemas(schemas);
-        Schema pizza = ((AvroSchema) parsedSchemas.get("Pizza")).schemaObj;
+        Schema pizza = ((AvroSchema) parsedSchemas.get("Pizza")).rawSchema();
 
         Assert.assertNotNull("The schema should've been generated", pizza);
         Assert.assertTrue("The schema should contain fields from the dependency", pizza.toString().contains("currency"));
@@ -114,7 +113,7 @@ public class SchemasWithDependenciesTest extends SchemaRegistryTest {
         schemas.put("Pizza", pizzaFile);
 
         Map<String, ParsedSchema> parsedSchemas = schemaRegistryMojo.loadSchemas(schemas);
-        Schema pizza = ((AvroSchema) parsedSchemas.get("Pizza")).schemaObj;
+        Schema pizza = ((AvroSchema) parsedSchemas.get("Pizza")).rawSchema();
 
         Assert.assertNotNull("The schema should've been generated", pizza);
         Assert.assertTrue("The schema should contain fields from the dependency", pizza.toString().contains("currency"));

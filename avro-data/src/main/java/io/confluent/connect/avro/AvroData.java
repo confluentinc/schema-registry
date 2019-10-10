@@ -1974,8 +1974,8 @@ public class AvroData {
 
   private static boolean isEnumSchema(Schema schema) {
     return schema.type() == Schema.Type.STRING
-           && schema.name() != null
-           && schema.name().equals(AVRO_TYPE_ENUM);
+           && schema.parameters() != null
+           && schema.parameters().containsKey(AVRO_TYPE_ENUM);
   }
 
   private static boolean isInstanceOfAvroSchemaTypeForSimpleSchema(Schema fieldSchema,

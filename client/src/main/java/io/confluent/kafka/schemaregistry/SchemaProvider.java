@@ -18,11 +18,18 @@ package io.confluent.kafka.schemaregistry;
 
 import org.apache.kafka.common.Configurable;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 public interface SchemaProvider extends Configurable {
 
-  default void configure(Map<String, ?> var1) {
+  String SCHEMA_VERSION_FETCHER_CONFIG = "schemaVersionFetcher";
+
+  default void configure(Map<String, ?> configs) {
   }
 
   /**
@@ -36,7 +43,12 @@ public interface SchemaProvider extends Configurable {
    * Parses a string representing a schema.
    *
    * @param schemaString the schema
-   * @return a parsed schema, or null if the schema could not be parsed
+   * @param references a list of schema references
+   * @return an optional parsed schema
    */
-  ParsedSchema parseSchema(String schemaString);
+  Optional<ParsedSchema> parseSchema(String schemaString, List<SchemaReference> references);
+
+  default Optional<ParsedSchema> parseSchema(String schemaString) {
+    return parseSchema(schemaString, Collections.emptyList());
+  }
 }

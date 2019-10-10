@@ -24,6 +24,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -32,6 +33,8 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
@@ -97,7 +100,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       RestService restService,
       int identityMapCapacity,
       Map<String, ?> configs) {
-    this(restService, identityMapCapacity, new AvroSchemaProvider(), configs, null);
+    this(restService, identityMapCapacity, null, configs, null);
   }
 
   public CachedSchemaRegistryClient(
@@ -105,8 +108,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       int identityMapCapacity,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(new RestService(baseUrl), identityMapCapacity, new AvroSchemaProvider(), originals,
-        httpHeaders);
+    this(new RestService(baseUrl), identityMapCapacity, null, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
@@ -114,8 +116,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       int identityMapCapacity,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(new RestService(baseUrls), identityMapCapacity, new AvroSchemaProvider(), originals,
-        httpHeaders);
+    this(new RestService(baseUrls), identityMapCapacity, null, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
@@ -133,7 +134,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       int identityMapCapacity,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(restService, identityMapCapacity, new AvroSchemaProvider(), originals, httpHeaders);
+    this(restService, identityMapCapacity, null, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
@@ -148,7 +149,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.versionCache = new HashMap<String, Map<ParsedSchema, Integer>>();
     this.restService = restService;
     this.idCache.put(null, new HashMap<Integer, ParsedSchema>());
-    this.provider = provider;
+    this.provider = provider != null ? provider : new AvroSchemaProvider();
+    Map<String, Object> schemaProviderConfigs = new HashMap<>();
+    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
+    this.provider.configure(schemaProviderConfigs);
     if (httpHeaders != null) {
       restService.setHttpHeaders(httpHeaders);
     }
@@ -169,25 +173,29 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private int registerAndGetId(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
-    return restService.registerSchema(schema.canonicalString(), schema.schemaType(), subject);
+    return restService.registerSchema(schema.canonicalString(), schema.schemaType(),
+        schema.references(), subject);
   }
 
   private int registerAndGetId(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
     return restService.registerSchema(schema.canonicalString(), schema.schemaType(),
-        subject, version, id);
+        schema.references(), subject, version, id);
   }
 
   protected ParsedSchema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
     SchemaString restSchema = restService.getId(id);
-    return provider.parseSchema(restSchema.getSchemaString());
+    Optional<ParsedSchema> schema =
+        provider.parseSchema(restSchema.getSchemaString(), restSchema.getReferences());
+    return schema.orElseThrow(() ->
+        new IOException("Invalid schema " + restSchema.getSchemaString()));
   }
 
   private int getVersionFromRegistry(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
         restService.lookUpSubjectVersion(schema.canonicalString(),
-            schema.schemaType(), subject, true);
+            schema.schemaType(), schema.references(), subject, true);
     return response.getVersion();
   }
 
@@ -195,7 +203,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response =
         restService.lookUpSubjectVersion(schema.canonicalString(),
-            schema.schemaType(), subject, false);
+            schema.schemaType(), schema.references(), subject, false);
     return response.getId();
   }
 
@@ -260,6 +268,15 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public Schema getByVersion(String subject, int version, boolean lookupDeletedSchema) {
+    try {
+      return restService.getVersion(subject, version, lookupDeletedSchema);
+    } catch (IOException | RestClientException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
   public SchemaMetadata getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException {
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema response
@@ -267,7 +284,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     int id = response.getId();
     String schemaType = response.getSchemaType();
     String schema = response.getSchema();
-    return new SchemaMetadata(id, version, schemaType, schema);
+    List<SchemaReference> references = response.getReferences();
+    return new SchemaMetadata(id, version, schemaType, references, schema);
   }
 
   @Override
@@ -279,7 +297,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     int version = response.getVersion();
     String schemaType = response.getSchemaType();
     String schema = response.getSchema();
-    return new SchemaMetadata(id, version, schemaType, schema);
+    List<SchemaReference> references = response.getReferences();
+    return new SchemaMetadata(id, version, schemaType, references, schema);
   }
 
   @Override
@@ -368,7 +387,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public boolean testCompatibility(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     return restService.testCompatibility(schema.canonicalString(), schema.schemaType(),
-        subject, "latest");
+        schema.references(), subject, "latest");
   }
 
   @Override

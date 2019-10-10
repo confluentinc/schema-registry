@@ -20,6 +20,8 @@ import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -432,6 +434,30 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Retrieved schema should be the same as version 1",
                 schemas.get(0),
                 restApp.restClient.getVersionSchemaOnly(subject, 1));
+  }
+
+  @Test
+  public void testSchemaReferences() throws Exception {
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    String subject = "reference";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemas.get(1));
+    SchemaReference ref = new SchemaReference("otherns.subrecord", "reference", 1);
+    request.setReferences(Collections.singletonList(ref));
+    int registeredId = restApp.restClient.registerSchema(request, "referrer");
+    assertEquals("Registering a new schema should succeed", 2, registeredId);
+
+    SchemaString schemaString = restApp.restClient.getId(2);
+    // the newly registered schema should be immediately readable on the master
+    assertEquals("Registered schema should be found",
+        schemas.get(1),
+        schemaString.getSchemaString());
+
+    assertEquals("Schema references should be found",
+        Collections.singletonList(ref),
+        schemaString.getReferences());
   }
 
   @Test

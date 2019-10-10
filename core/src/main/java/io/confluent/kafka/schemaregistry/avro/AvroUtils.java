@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.avro.SchemaParseException;
 
 public class AvroUtils {
@@ -25,6 +26,7 @@ public class AvroUtils {
    * @return A schema object and a canonical representation of the schema string. Return null if
    *     there is any parsing error.
    */
+  @VisibleForTesting
   public static AvroSchema parseSchema(String schemaString) {
     try {
       return new AvroSchema(schemaString);

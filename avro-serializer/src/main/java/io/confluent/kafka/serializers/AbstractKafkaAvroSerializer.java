@@ -29,8 +29,10 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -42,7 +44,11 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean autoRegisterSchema;
 
   protected void configure(KafkaAvroSerializerConfig config) {
-    configureClientProperties(config, new AvroSchemaProvider());
+    Map<String, Object> schemaProviderConfigs = new HashMap<>();
+    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, schemaRegistry);
+    SchemaProvider schemaProvider = new AvroSchemaProvider();
+    schemaProvider.configure(schemaProviderConfigs);
+    configureClientProperties(config, schemaProvider);
     autoRegisterSchema = config.autoRegisterSchema();
   }
 

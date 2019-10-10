@@ -597,6 +597,10 @@ paths:
           \ served."
         required: true
         type: "string"
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -685,6 +689,10 @@ paths:
           \ served."
         required: true
         type: "string"
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -774,6 +782,10 @@ definitions:
         format: "int32"
       schemaType:
         type: "string"
+      references:
+        type: "array"
+        items:
+          $ref: "#/definitions/SchemaReference"
       schema:
         type: "string"
   RegisterSchemaResponse:
@@ -797,15 +809,36 @@ definitions:
         type: "string"
       schemaType:
         type: "string"
+      references:
+        type: "array"
+        items:
+          $ref: "#/definitions/SchemaReference"
+  SchemaReference:
+    type: "object"
+    properties:
+      name:
+        type: "string"
+      subject:
+        type: "string"
+      version:
+        type: "integer"
+        format: "int32"
+        minimum: 1
   SchemaString:
     type: "object"
     properties:
       schema:
         type: "string"
         description: "Schema string identified by the ID"
+      references:
+        type: "array"
+        description: "Schema references"
+        items:
+          $ref: "#/definitions/SchemaReference"
       maxId:
         type: "integer"
         format: "int32"
+        description: "Maximum ID"
   ServerClusterId:
     type: "object"
     properties:

@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.client;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 import java.io.IOException;
@@ -211,6 +212,26 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public Schema getByVersion(String subject, int version, boolean lookupDeletedSchema) {
+    ParsedSchema schema = null;
+    Map<ParsedSchema, Integer> schemaVersionMap = versionCache.get(subject);
+    for (Map.Entry<ParsedSchema, Integer> entry : schemaVersionMap.entrySet()) {
+      if (entry.getValue() == version) {
+        schema = entry.getKey();
+      }
+    }
+    int id = -1;
+    Map<Integer, ParsedSchema> idSchemaMap = idCache.get(subject);
+    for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
+      if (entry.getValue().canonicalString().equals(schema.canonicalString())) {
+        id = entry.getKey();
+      }
+    }
+    return new Schema(subject, version, id, schema.schemaType(), schema.references(),
+        schema.canonicalString());
+  }
+
+  @Override
   public synchronized SchemaMetadata getSchemaMetadata(String subject, int version) {
     ParsedSchema schema = null;
     Map<ParsedSchema, Integer> schemaVersionMap = versionCache.get(subject);
@@ -226,7 +247,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         id = entry.getKey();
       }
     }
-    return new SchemaMetadata(id, version, schema.schemaType(), schema.canonicalString());
+    return new SchemaMetadata(
+        id, version, schema.schemaType(), schema.references(), schema.canonicalString());
   }
 
   @Override

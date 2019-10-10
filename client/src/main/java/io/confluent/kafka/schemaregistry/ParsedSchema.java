@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry;
 
 import java.util.List;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+
 public interface ParsedSchema {
 
   /**
@@ -42,11 +44,11 @@ public interface ParsedSchema {
   String canonicalString();
 
   /**
-   * Returns the version associated with this schema, if any.
+   * Returns a list of schema references.
    *
-   * @return the version, or null
+   * @return the schema references
    */
-  Integer version();
+  List<SchemaReference> references();
 
   /**
    * Checks the backward compatibility between this schema and the specified schema.

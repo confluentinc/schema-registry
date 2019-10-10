@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
@@ -52,6 +53,7 @@ import java.util.Map;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
+import javax.ws.rs.core.UriBuilder;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -359,7 +361,8 @@ public class RestService implements Configurable {
                                      RegisterSchemaRequest registerSchemaRequest,
                                      String subject)
       throws IOException, RestClientException {
-    String path = String.format("/subjects/%s", subject);
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}");
+    String path = builder.build(subject).toString();
     if (requestProperties.isEmpty()) {
       requestProperties = DEFAULT_REQUEST_PROPERTIES;
     }
@@ -383,12 +386,14 @@ public class RestService implements Configurable {
 
   public Schema lookUpSubjectVersion(String schemaString,
                                      String schemaType,
+                                     List<SchemaReference> references,
                                      String subject,
                                      boolean lookupDeletedSchema)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
+    request.setReferences(references);
     return lookUpSubjectVersion(DEFAULT_REQUEST_PROPERTIES, request, subject, lookupDeletedSchema);
   }
 
@@ -398,8 +403,9 @@ public class RestService implements Configurable {
                                      String subject,
                                      boolean lookupDeletedSchema)
       throws IOException, RestClientException {
-    String path = String.format("/subjects/%s?deleted=%s", subject,
-                                lookupDeletedSchema);
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}")
+        .queryParam("deleted", lookupDeletedSchema);
+    String path = builder.build(subject).toString();
 
     Schema schema = httpRequest(path, "POST",
                                 registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
@@ -416,11 +422,13 @@ public class RestService implements Configurable {
     return registerSchema(request, subject);
   }
 
-  public int registerSchema(String schemaString, String schemaType, String subject)
+  public int registerSchema(String schemaString, String schemaType,
+                            List<SchemaReference> references, String subject)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
+    request.setReferences(references);
     return registerSchema(request, subject);
   }
 
@@ -435,11 +443,12 @@ public class RestService implements Configurable {
   }
 
   public int registerSchema(String schemaString, String schemaType,
-                            String subject, int version, int id)
+                            List<SchemaReference> references, String subject, int version, int id)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
+    request.setReferences(references);
     request.setVersion(version);
     request.setId(id);
     return registerSchema(request, subject);
@@ -453,7 +462,8 @@ public class RestService implements Configurable {
   public int registerSchema(Map<String, String> requestProperties,
                             RegisterSchemaRequest registerSchemaRequest, String subject)
       throws IOException, RestClientException {
-    String path = String.format("/subjects/%s/versions", subject);
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
+    String path = builder.build(subject).toString();
 
     RegisterSchemaResponse response = httpRequest(
         path, "POST",
@@ -474,12 +484,14 @@ public class RestService implements Configurable {
 
   public boolean testCompatibility(String schemaString,
                                    String schemaType,
+                                   List<SchemaReference> references,
                                    String subject,
                                    String version)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
+    request.setReferences(references);
     return testCompatibility(request, subject, version);
   }
 
@@ -496,7 +508,9 @@ public class RestService implements Configurable {
                                    String subject,
                                    String version)
       throws IOException, RestClientException {
-    String path = String.format("/compatibility/subjects/%s/versions/%s", subject, version);
+    UriBuilder builder = UriBuilder.fromPath(
+        "/compatibility/subjects/{subject}/versions/{version}");
+    String path = builder.build(subject, version).toString();
 
     CompatibilityCheckResponse response =
         httpRequest(path, "POST",
@@ -525,7 +539,9 @@ public class RestService implements Configurable {
                                           ConfigUpdateRequest configUpdateRequest,
                                           String subject)
       throws IOException, RestClientException {
-    String path = subject != null ? String.format("/config/%s", subject) : "/config";
+    String path = subject != null
+                  ? UriBuilder.fromPath("/config/{subject}").build(subject).toString()
+                  : "/config";
 
     ConfigUpdateRequest response =
         httpRequest(path, "PUT", configUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
@@ -541,7 +557,9 @@ public class RestService implements Configurable {
   public Config getConfig(Map<String, String> requestProperties,
                           String subject)
       throws IOException, RestClientException {
-    String path = subject != null ? String.format("/config/%s", subject) : "/config";
+    String path = subject != null
+                  ? UriBuilder.fromPath("/config/{subject}").build(subject).toString()
+                  : "/config";
 
     Config config =
         httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
@@ -567,7 +585,9 @@ public class RestService implements Configurable {
                                    ModeUpdateRequest modeUpdateRequest,
                                    String subject)
       throws IOException, RestClientException {
-    String path = subject != null ? String.format("/mode/%s", subject) : "/mode";
+    String path = subject != null
+                  ? UriBuilder.fromPath("/mode/{subject}").build(subject).toString()
+                  : "/mode";
 
     ModeUpdateRequest response =
         httpRequest(path, "PUT", modeUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
@@ -582,7 +602,9 @@ public class RestService implements Configurable {
 
   public ModeGetResponse getMode(String subject)
       throws IOException, RestClientException {
-    String path = subject != null ? String.format("/mode/%s", subject) : "/mode";
+    String path = subject != null
+                  ? UriBuilder.fromPath("/mode/{subject}").build(subject).toString()
+                  : "/mode";
 
     ModeGetResponse mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
@@ -604,7 +626,9 @@ public class RestService implements Configurable {
 
   public SchemaString getId(Map<String, String> requestProperties,
                             int id, boolean fetchMaxId) throws IOException, RestClientException {
-    String path = String.format("/schemas/ids/%d?fetchMaxId=%b", id, fetchMaxId);
+    UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}")
+        .queryParam("fetchMaxId", fetchMaxId);
+    String path = builder.build(id).toString();
 
     SchemaString response = httpRequest(path, "GET", null, requestProperties,
                                         GET_SCHEMA_BY_ID_RESPONSE_TYPE);
@@ -612,16 +636,29 @@ public class RestService implements Configurable {
   }
 
   public Schema getVersion(String subject, int version) throws IOException, RestClientException {
-    return getVersion(DEFAULT_REQUEST_PROPERTIES, subject, version);
+    return getVersion(DEFAULT_REQUEST_PROPERTIES, subject, version, false);
+  }
+
+  public Schema getVersion(String subject, int version, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    return getVersion(DEFAULT_REQUEST_PROPERTIES, subject, version, lookupDeletedSchema);
   }
 
   public Schema getVersion(Map<String, String> requestProperties,
                            String subject, int version)
       throws IOException, RestClientException {
-    String path = String.format("/subjects/%s/versions/%d", subject, version);
+    return getVersion(requestProperties, subject, version, false);
+  }
+
+  public Schema getVersion(Map<String, String> requestProperties,
+                           String subject, int version, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}")
+        .queryParam("deleted", lookupDeletedSchema);
+    String path = builder.build(subject, version).toString();
 
     Schema response = httpRequest(path, "GET", null, requestProperties,
-                                  GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
+        GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
     return response;
   }
 
@@ -633,7 +670,8 @@ public class RestService implements Configurable {
   public Schema getLatestVersion(Map<String, String> requestProperties,
                                  String subject)
       throws IOException, RestClientException {
-    String path = String.format("/subjects/%s/versions/latest", subject);
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/latest");
+    String path = builder.build(subject).toString();
 
     Schema response = httpRequest(path, "GET", null, requestProperties,
                                   GET_SCHEMA_BY_VERSION_RESPONSE_TYPE);
@@ -642,7 +680,8 @@ public class RestService implements Configurable {
 
   public String getVersionSchemaOnly(String subject, int version)
             throws IOException, RestClientException {
-    String path = String.format("/subjects/%s/versions/%d/schema", subject, version);
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/schema");
+    String path = builder.build(subject, version).toString();
 
     JsonNode response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
             GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
@@ -651,7 +690,8 @@ public class RestService implements Configurable {
 
   public String getLatestVersionSchemaOnly(String subject)
             throws IOException, RestClientException {
-    String path = String.format("/subjects/%s/versions/latest/schema", subject);
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/latest/schema");
+    String path = builder.build(subject).toString();
 
     JsonNode response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
             GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
@@ -666,7 +706,8 @@ public class RestService implements Configurable {
   public List<Integer> getAllVersions(Map<String, String> requestProperties,
                                       String subject)
       throws IOException, RestClientException {
-    String path = String.format("/subjects/%s/versions", subject);
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
+    String path = builder.build(subject).toString();
 
     List<Integer> response = httpRequest(path, "GET", null, requestProperties,
                                          ALL_VERSIONS_RESPONSE_TYPE);
@@ -693,7 +734,8 @@ public class RestService implements Configurable {
   public List<String> getAllSubjectsById(Map<String, String> requestProperties,
                                          int id)
       throws IOException, RestClientException {
-    String path = String.format("/schemas/ids/%d/subjects", id);
+    UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/subjects");
+    String path = builder.build(id).toString();
 
     List<String> response = httpRequest(path, "GET", null, requestProperties,
                                         ALL_TOPICS_RESPONSE_TYPE);
@@ -707,7 +749,8 @@ public class RestService implements Configurable {
       String version
   ) throws IOException,
                                                                             RestClientException {
-    String path = String.format("/subjects/%s/versions/%s", subject, version);
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}");
+    String path = builder.build(subject, version).toString();
 
     Integer response = httpRequest(path, "DELETE", null, requestProperties,
                                    DELETE_SUBJECT_VERSION_RESPONSE_TYPE);
@@ -719,7 +762,8 @@ public class RestService implements Configurable {
       String subject
   ) throws IOException,
                                                             RestClientException {
-    String path = String.format("/subjects/%s", subject);
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}");
+    String path = builder.build(subject).toString();
 
     List<Integer> response = httpRequest(path, "DELETE", null, requestProperties,
                                          DELETE_SUBJECT_RESPONSE_TYPE);

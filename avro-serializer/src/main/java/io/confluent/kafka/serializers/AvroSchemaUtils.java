@@ -25,6 +25,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+
 public class AvroSchemaUtils {
 
   private static final Map<String, Schema> primitiveSchemas;
@@ -48,10 +50,9 @@ public class AvroSchemaUtils {
     return parser.parse(schemaString);
   }
 
-  protected static Schema copyOf(Schema schema) {
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(false);
-    return parser.parse(schema.toString());
+  protected static AvroSchema copyOf(AvroSchema schema) {
+    return new AvroSchema(schema.canonicalString(), schema.references(),
+        schema.resolvedReferences(), schema.version());
   }
 
   protected static Map<String, Schema> getPrimitiveSchemas() {

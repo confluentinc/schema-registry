@@ -54,11 +54,10 @@ public class RestApiSslTest extends ClusterTestHarness {
     setupHostNameVerifier();
 
     String subject = "testSubject";
-    Schema schema = AvroUtils.parseSchema(
-        "{\"type\":\"record\","
+    Schema schema = AvroUtils.parseSchema("{\"type\":\"record\","
         + "\"name\":\"myrecord\","
         + "\"fields\":"
-        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").schemaObj;
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").rawSchema();
 
     int expectedIdSchema1 = 1;
 
@@ -108,7 +107,7 @@ public class RestApiSslTest extends ClusterTestHarness {
         "{\"type\":\"record\","
             + "\"name\":\"myrecord\","
             + "\"fields\":"
-            + "[{\"type\":\"string\",\"name\":\"f2\"}]}").schemaObj;
+            + "[{\"type\":\"string\",\"name\":\"f2\"}]}").rawSchema();
 
     int expectedIdSchema1 = 1;
 
