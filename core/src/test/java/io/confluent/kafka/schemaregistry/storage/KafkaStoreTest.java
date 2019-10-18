@@ -14,12 +14,6 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
-import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import kafka.admin.AdminUtils;
 import kafka.admin.RackAwareMode;
@@ -34,7 +28,6 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
-import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 
 import java.util.Iterator;
 import java.util.Properties;
@@ -415,68 +408,5 @@ public class KafkaStoreTest extends ClusterTestHarness {
       iter.next();
     }
     assertEquals(2, size);
-  }
-
-  @Test
-  public void testReregisterSameId() throws Exception {
-    Properties props = new Properties();
-    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
-
-    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
-    KafkaSchemaRegistry schemaRegistry = new CustomKafkaSchemaRegistry(
-        config,
-        new SchemaRegistrySerializer()
-    );
-    schemaRegistry.init();
-
-    schemaRegistry.updateCompatibilityLevel("subject", AvroCompatibilityLevel.NONE);
-    schemaRegistry.register("subject", new Schema("subject", null, null, makeSchema(1)));
-    schemaRegistry.register("subject", new Schema("subject", null, null, makeSchema(2)));
-  }
-
-  private static String makeSchema(long num) {
-    String schemaString = "{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
-        + "\"fields\":"
-        + "[{\"type\":\"string\",\"name\":"
-        + "\"f" + num + "\"}]}";
-    return AvroUtils.parseSchema(schemaString).canonicalString;
-  }
-
-  static class CustomKafkaSchemaRegistry extends KafkaSchemaRegistry {
-
-    public CustomKafkaSchemaRegistry(SchemaRegistryConfig config,
-                               Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
-      throws SchemaRegistryException {
-      super(config, serializer);
-    }
-
-    @Override
-    protected IdGenerator identityGenerator(SchemaRegistryConfig config) {
-      return new CustomIdGenerator();
-    }
-  }
-
-  static class CustomIdGenerator implements IdGenerator {
-    private int counter = 0;
-
-    @Override
-    public int id(Schema schema) throws IdGenerationException {
-      // Return duplicate ID every other call
-      return counter++ / 2;
-    }
-
-    @Override
-    public void configure(SchemaRegistryConfig config) {
-    }
-
-    @Override
-    public void init() throws IdGenerationException {
-    }
-
-    @Override
-    public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
-    }
   }
 }
