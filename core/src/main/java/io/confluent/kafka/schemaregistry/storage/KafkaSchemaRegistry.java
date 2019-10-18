@@ -358,27 +358,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           kafkaStore.put(schemaKey, new SchemaValue(schema));
         } else {
           int retries = 0;
-          SchemaValue oldSchemaValue = null;
-          SchemaValue newSchemaValue = null;
-          // Retry until the schema in the store matches this schema to account
-          // for failure scenarios with multiple masters
-          while (oldSchemaValue == null || !oldSchemaValue.equals(newSchemaValue)) {
-            if (retries++ > kafkaStoreMaxRetries) {
-              throw new SchemaRegistryStoreException("Error while registering the schema due "
-                  + "to generating an ID that is already in use.");
-            }
+          while (retries++ < kafkaStoreMaxRetries) {
             int newId = idGenerator.id(schema);
             // Verify id is not already in use
             if (lookupCache.schemaKeyById(newId) == null) {
               schema.setId(newId);
-              newSchemaValue = new SchemaValue(schema);
               if (retries > 0) {
                 log.warn(String.format("Retrying to register the schema with ID %s", newId));
               }
-              kafkaStore.put(schemaKey, newSchemaValue);
-              // Retrieve the stored schema
-              oldSchemaValue = (SchemaValue) kafkaStore.get(schemaKey);
+              kafkaStore.put(schemaKey, new SchemaValue(schema));
+              break;
             }
+          }
+          if (retries >= kafkaStoreMaxRetries) {
+            throw new SchemaRegistryStoreException("Error while registering the schema due "
+                + "to generating an ID that is already in use.");
           }
         }
         return schema.getId();
