@@ -80,6 +80,12 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.topic.replication.factor";
   public static final int DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR = 3;
   /**
+   * <code>kafkastore.write.max.retries</code>
+   */
+  public static final String KAFKASTORE_WRITE_MAX_RETRIES_CONFIG =
+      "kafkastore.write.max.retries";
+  public static final int DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES = 5;
+  /**
    * <code>kafkastore.timeout.ms</code>
    */
   public static final String KAFKASTORE_TIMEOUT_CONFIG = "kafkastore.timeout.ms";
@@ -219,10 +225,7 @@ public class SchemaRegistryConfig extends RestConfig {
       + "will be the smaller of this value and the number of live Kafka brokers.";
   protected static final String KAFKASTORE_WRITE_RETRIES_DOC =
       "Retry a failed register schema request to the underlying Kafka store up to this many times, "
-      + " for example in case of a Kafka broker failure";
-  protected static final String KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC =
-      "The amount of time in milliseconds to wait before attempting to retry a failed write "
-      + "to the Kafka store";
+      + " for example in case of a conflicting schema ID.";
   protected static final String KAFKASTORE_INIT_TIMEOUT_DOC =
       "The timeout for initialization of the Kafka store, including creation of the Kafka topic "
       + "that stores schema data.";
@@ -377,6 +380,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,
         DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR,
         ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC
+    )
+    .define(KAFKASTORE_WRITE_MAX_RETRIES_CONFIG, ConfigDef.Type.INT,
+        DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES, atLeast(0),
+        ConfigDef.Importance.LOW, KAFKASTORE_WRITE_RETRIES_DOC
     )
     .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC
