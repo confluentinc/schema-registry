@@ -426,4 +426,68 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
     inMemoryStore.replaceMatchingDeletedWithNonDeletedOrRemove(s -> s.equals("subject"));
   }
+
+  @Test
+  public void testKafkaStoreMessageHandlerSameIdDifferentDeletedSchema() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+        config,
+        new SchemaRegistrySerializer()
+    );
+
+    KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore = schemaRegistry.kafkaStore;
+    kafkaStore.init();
+    int id = 100;
+    kafkaStore.put(new SchemaKey("subject", 1),
+        new SchemaValue("subject", 1, id, "schemaString", false)
+    );
+    kafkaStore.put(new SchemaKey("subject", 1),
+        new SchemaValue("subject", 1, id, "schemaString", true)
+    );
+    kafkaStore.put(new SchemaKey("subject2", 1),
+        new SchemaValue("subject2", 1, id, "schemaString2", false)
+    );
+    int size = 0;
+    for (Iterator<SchemaRegistryKey> iter = kafkaStore.getAllKeys(); iter.hasNext(); ) {
+      size++;
+      iter.next();
+    }
+    assertEquals(1, size);
+  }
+
+  @Test
+  public void testKafkaStoreMessageHandlerSameIdSameDeletedSchema() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+        config,
+        new SchemaRegistrySerializer()
+    );
+
+    KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore = schemaRegistry.kafkaStore;
+    kafkaStore.init();
+    int id = 100;
+    kafkaStore.put(new SchemaKey("subject", 1),
+        new SchemaValue("subject", 1, id, "schemaString", false)
+    );
+    kafkaStore.put(new SchemaKey("subject", 1),
+        new SchemaValue("subject", 1, id, "schemaString", true)
+    );
+    kafkaStore.put(new SchemaKey("subject2", 1),
+        new SchemaValue("subject2", 1, id, "schemaString", false)
+    );
+    int size = 0;
+    for (Iterator<SchemaRegistryKey> iter = kafkaStore.getAllKeys(); iter.hasNext(); ) {
+      size++;
+      iter.next();
+    }
+    assertEquals(2, size);
+  }
 }

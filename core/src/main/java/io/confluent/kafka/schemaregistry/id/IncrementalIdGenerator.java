@@ -24,7 +24,7 @@ import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 
 public class IncrementalIdGenerator implements IdGenerator {
 
-  private int maxIdInKafkaStore = -1;
+  private volatile int maxIdInKafkaStore = -1;
 
   @Override
   public int id(Schema schema) throws IdGenerationException {

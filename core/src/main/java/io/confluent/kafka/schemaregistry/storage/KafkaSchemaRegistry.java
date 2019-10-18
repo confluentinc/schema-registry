@@ -100,6 +100,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private final Mode defaultMode;
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
+  private final int kafkaStoreMaxRetries;
   private final boolean isEligibleForMasterElector;
   private final boolean allowModeChanges;
   private SchemaRegistryIdentity masterIdentity;
@@ -131,6 +132,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
+    this.kafkaStoreMaxRetries =
+        config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.defaultMode = Mode.READWRITE;
@@ -368,19 +371,29 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           schema.setVersion(newVersion);
         }
 
+        SchemaKey schemaKey = new SchemaKey(subject, newVersion);
         if (schemaId >= 0) {
           schema.setId(schemaId);
+          kafkaStore.put(schemaKey, new SchemaValue(schema));
         } else {
-          int newId = idGenerator.id(schema);
-          if (lookupCache.schemaKeyById(newId) != null) {
+          int retries = 0;
+          while (retries++ < kafkaStoreMaxRetries) {
+            int newId = idGenerator.id(schema);
+            // Verify id is not already in use
+            if (lookupCache.schemaKeyById(newId) == null) {
+              schema.setId(newId);
+              if (retries > 0) {
+                log.warn(String.format("Retrying to register the schema with ID %s", newId));
+              }
+              kafkaStore.put(schemaKey, new SchemaValue(schema));
+              break;
+            }
+          }
+          if (retries >= kafkaStoreMaxRetries) {
             throw new SchemaRegistryStoreException("Error while registering the schema due "
                 + "to generating an ID that is already in use.");
           }
-          schema.setId(newId);
         }
-
-        SchemaValue schemaValue = new SchemaValue(schema);
-        kafkaStore.put(new SchemaKey(subject, schema.getVersion()), schemaValue);
         return schema.getId();
       } else {
         throw new IncompatibleSchemaException(
