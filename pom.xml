@@ -124,6 +124,8 @@
                 <artifactId>jaxws-api</artifactId>
                 <version>2.3.0</version>
             </dependency>
+            <!-- This is a transitive dependency coming from swagger-core jar.
+            Here we are explicitly setting to 2.0.1.Final to avoid verison clash with jetty libs -->
             <dependency>
                 <groupId>javax.validation</groupId>
                 <artifactId>validation-api</artifactId>
