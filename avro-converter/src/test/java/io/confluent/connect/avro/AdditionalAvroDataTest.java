@@ -132,7 +132,7 @@ public class AdditionalAvroDataTest
            "{"
            + "  \"type\" : \"record\","
            + "  \"name\" : \"MyObjectToPersist\","
-           + "  \"namespace\" : \"io.confluent.connect.avro.AdditionalAvroDataTest$\","
+           + "  \"namespace\" : \"io.confluent.connect.avro.AdditionalAvroDataTest\","
            + "  \"fields\" : [ {"
            + "    \"name\" : \"obj\","
            + "    \"type\" : [ \"null\", {"

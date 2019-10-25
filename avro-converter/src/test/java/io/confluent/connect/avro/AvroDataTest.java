@@ -19,9 +19,12 @@ package io.confluent.connect.avro;
 import com.connect.avro.EnumUnion;
 import com.connect.avro.UserType;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.ImmutableMap;
 import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -37,11 +40,6 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
-import org.codehaus.jackson.JsonNode;
-import org.codehaus.jackson.node.ArrayNode;
-import org.codehaus.jackson.node.IntNode;
-import org.codehaus.jackson.node.JsonNodeFactory;
-import org.codehaus.jackson.node.ObjectNode;
 import org.hamcrest.core.IsEqual;
 import org.junit.Assert;
 import org.junit.Test;
@@ -62,7 +60,6 @@ import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 
-import avro.shaded.com.google.common.collect.ImmutableMap;
 import foo.bar.EnumTest;
 import foo.bar.Kind;
 import io.confluent.kafka.serializers.NonRecordContainer;
@@ -411,7 +408,7 @@ public class AvroDataTest {
     int8Schema.addProp("connect.type", "int8");
     org.apache.avro.Schema int16Schema = org.apache.avro.SchemaBuilder.builder().intType();
     int16Schema.addProp("connect.doc", "int16 field");
-    int16Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12));
+    int16Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode((short) 12));
     int16Schema.addProp("connect.type", "int16");
     org.apache.avro.Schema int32Schema = org.apache.avro.SchemaBuilder.builder().intType();
     int32Schema.addProp("connect.doc", "int32 field");
@@ -769,8 +766,8 @@ public class AvroDataTest {
         = required ? org.apache.avro.SchemaBuilder.builder().bytesType() :
           org.apache.avro.SchemaBuilder.builder().unionOf().nullType().and().bytesType().endUnion();
     org.apache.avro.Schema decimalSchema = required ? avroSchema : avroSchema.getTypes().get(1);
-    decimalSchema.addProp("scale", new IntNode(2));
-    decimalSchema.addProp("precision", new IntNode(precision));
+    decimalSchema.addProp("scale", 2);
+    decimalSchema.addProp("precision", precision);
     decimalSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     ObjectNode avroParams = JsonNodeFactory.instance.objectNode();
     avroParams.put("scale", "2");
@@ -1343,8 +1340,8 @@ public class AvroDataTest {
   public void testToConnectDecimalAvro() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
     avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
-    avroSchema.addProp("precision", new IntNode(50));
-    avroSchema.addProp("scale", new IntNode(2));
+    avroSchema.addProp("precision", 50);
+    avroSchema.addProp("scale", 2);
 
     final SchemaAndValue expected = new SchemaAndValue(
         Decimal.builder(2).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "50").build(),
@@ -2242,6 +2239,9 @@ public class AvroDataTest {
         double expectedDouble = ((Number) expectedDef).doubleValue();
         double actualDouble = ((Number) actualDef).doubleValue();
         assertEquals(msg, expectedDouble, actualDouble, expectedDouble / 100.0d);
+        break;
+      case BYTES:
+        assertArrayEquals(msg, (byte[])expectedDef, (byte[])actualDef);
         break;
       default:
         assertEquals(msg, expectedDef, actualDef);

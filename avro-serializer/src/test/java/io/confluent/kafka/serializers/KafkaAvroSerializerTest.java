@@ -17,6 +17,8 @@ package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.example.ExtendedWidget;
 import io.confluent.kafka.example.Widget;
+
+import com.google.common.collect.ImmutableMap;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -31,7 +33,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import avro.shaded.com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
