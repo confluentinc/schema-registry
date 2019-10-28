@@ -15,8 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import avro.shaded.com.google.common.collect.ImmutableList;
-import avro.shaded.com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;

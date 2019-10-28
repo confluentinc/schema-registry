@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
+import com.google.common.collect.ImmutableMap;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -33,8 +34,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.login.Configuration;
-
-import avro.shaded.com.google.common.collect.ImmutableMap;
 
 public class SaslBasicAuthCredentialProviderTest {
 

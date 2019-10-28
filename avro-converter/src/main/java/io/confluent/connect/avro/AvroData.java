@@ -16,6 +16,11 @@
 
 package io.confluent.connect.avro;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -37,12 +42,6 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
-import org.codehaus.jackson.JsonNode;
-import org.codehaus.jackson.node.ArrayNode;
-import org.codehaus.jackson.node.IntNode;
-import org.codehaus.jackson.node.JsonNodeFactory;
-import org.codehaus.jackson.node.NumericNode;
-import org.codehaus.jackson.node.ObjectNode;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -1222,6 +1221,11 @@ public class AvroData {
   }
 
   private Object toConnectData(Schema schema, Object value, ToConnectContext toConnectContext) {
+    return toConnectData(schema, value, toConnectContext, true);
+  }
+
+  private Object toConnectData(Schema schema, Object value, ToConnectContext toConnectContext,
+                               boolean doLogicalConversion) {
     validateSchemaValue(schema, value);
     if (value == null) {
       return null;
@@ -1477,7 +1481,7 @@ public class AvroData {
           throw new DataException("Unknown Connect schema type: " + schema.type());
       }
 
-      if (schema != null && schema.name() != null) {
+      if (schema != null && schema.name() != null && doLogicalConversion) {
         LogicalTypeConverter logicalConverter = TO_CONNECT_LOGICAL_CONVERTERS.get(schema.name());
         if (logicalConverter != null) {
           converted = logicalConverter.convert(schema, converted);
@@ -1560,22 +1564,22 @@ public class AvroData {
       case BYTES:
       case FIXED:
         if (AVRO_LOGICAL_DECIMAL.equalsIgnoreCase(logicalType)) {
-          JsonNode scaleNode = schema.getJsonProp(AVRO_LOGICAL_DECIMAL_SCALE_PROP);
-          if (null == scaleNode || !(scaleNode instanceof NumericNode)) {
+          Object scaleNode = schema.getObjectProp(AVRO_LOGICAL_DECIMAL_SCALE_PROP);
+          if (null == scaleNode || !(scaleNode instanceof Number)) {
             throw new DataException("scale must be specified and must be a number.");
           }
-          NumericNode scale = (NumericNode) scaleNode;
-          builder = Decimal.builder(scale.asInt());
+          Number scale = (Number) scaleNode;
+          builder = Decimal.builder(scale.intValue());
 
-          JsonNode precisionNode = schema.getJsonProp(AVRO_LOGICAL_DECIMAL_PRECISION_PROP);
+          Object precisionNode = schema.getObjectProp(AVRO_LOGICAL_DECIMAL_PRECISION_PROP);
           if (null != precisionNode) {
-            if (!precisionNode.isNumber()) {
+            if (!(precisionNode instanceof Number)) {
               throw new DataException(AVRO_LOGICAL_DECIMAL_PRECISION_PROP
                   + " property must be a JSON Integer."
-                  + " https://avro.apache.org/docs/1.7.7/spec.html#Decimal");
+                  + " https://avro.apache.org/docs/1.9.1/spec.html#Decimal");
             }
             // Capture the precision as a parameter only if it is not the default
-            Integer precision = precisionNode.asInt();
+            Integer precision = ((Number) precisionNode).intValue();
             if (precision != CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT) {
               builder.parameter(CONNECT_AVRO_DECIMAL_PRECISION_PROP, precision.toString());
             }
@@ -1657,7 +1661,7 @@ public class AvroData {
         for (org.apache.avro.Schema.Field field : schema.getFields()) {
 
           Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
-                  field.defaultValue(), field.doc(), toConnectContext);
+                  field.defaultVal(), field.doc(), toConnectContext);
           builder.field(field.name(), fieldSchema);
         }
         break;
@@ -1728,12 +1732,12 @@ public class AvroData {
 
     // Included Kafka Connect version takes priority, fall back to schema registry version
     int versionInt = -1;  // A valid version must be a positive integer (assumed throughout SR)
-    JsonNode versionNode = schema.getJsonProp(CONNECT_VERSION_PROP);
+    Object versionNode = schema.getObjectProp(CONNECT_VERSION_PROP);
     if (versionNode != null) {
-      if (!versionNode.isIntegralNumber()) {
+      if (!(versionNode instanceof Number)) {
         throw new DataException("Invalid Connect version found: " + versionNode.toString());
       }
-      versionInt = versionNode.asInt();
+      versionInt = ((Number) versionNode).intValue();
     } else if (version != null) {
       versionInt = version.intValue();
     }
@@ -1752,45 +1756,46 @@ public class AvroData {
       }
     }
 
-    JsonNode parameters = schema.getJsonProp(CONNECT_PARAMETERS_PROP);
+    Object parameters = schema.getObjectProp(CONNECT_PARAMETERS_PROP);
     if (connectMetaData && parameters != null) {
-      if (!parameters.isObject()) {
+      if (!(parameters instanceof Map)) {
         throw new DataException("Expected JSON object for schema parameters but found: "
             + parameters);
       }
-      Iterator<Map.Entry<String, JsonNode>> paramIt = parameters.getFields();
+      Iterator<Map.Entry<String, Object>> paramIt =
+          ((Map<String, Object>) parameters).entrySet().iterator();
       while (paramIt.hasNext()) {
-        Map.Entry<String, JsonNode> field = paramIt.next();
-        JsonNode jsonValue = field.getValue();
-        if (!jsonValue.isTextual()) {
+        Map.Entry<String, Object> field = paramIt.next();
+        Object jsonValue = field.getValue();
+        if (!(jsonValue instanceof String)) {
           throw new DataException("Expected schema parameter values to be strings but found: "
               + jsonValue);
         }
-        builder.parameter(field.getKey(), jsonValue.getTextValue());
+        builder.parameter(field.getKey(), (String) jsonValue);
       }
     }
 
-    for (Map.Entry<String, String> entry : schema.getProps().entrySet()) {
+    for (Map.Entry<String, Object> entry : schema.getObjectProps().entrySet()) {
       if (entry.getKey().startsWith(AVRO_PROP)) {
-        builder.parameter(entry.getKey(), entry.getValue());
+        builder.parameter(entry.getKey(), entry.getValue().toString());
       }
     }
 
     if (fieldDefaultVal == null) {
-      fieldDefaultVal = schema.getJsonProp(CONNECT_DEFAULT_VALUE_PROP);
+      fieldDefaultVal = schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP);
     }
     if (fieldDefaultVal != null) {
       builder.defaultValue(
           defaultValueFromAvro(builder, schema, fieldDefaultVal, toConnectContext));
     }
 
-    JsonNode connectNameJson = schema.getJsonProp(CONNECT_NAME_PROP);
+    Object connectNameJson = schema.getObjectProp(CONNECT_NAME_PROP);
     String name = null;
     if (connectNameJson != null) {
-      if (!connectNameJson.isTextual()) {
+      if (!(connectNameJson instanceof String)) {
         throw new DataException("Invalid schema name: " + connectNameJson.toString());
       }
-      name = connectNameJson.asText();
+      name = (String) connectNameJson;
 
     } else if (schema.getType() == org.apache.avro.Schema.Type.RECORD
         || schema.getType() == org.apache.avro.Schema.Type.ENUM) {
@@ -1857,33 +1862,37 @@ public class AvroData {
                                       org.apache.avro.Schema avroSchema,
                                       Object value,
                                       ToConnectContext toConnectContext) {
+    if (value == null || value == JsonProperties.NULL_VALUE) {
+      return null;
+    }
+
     // The type will be JsonNode if this default was pulled from a Connect default field, or an
     // Object if it's the actual Avro-specified default. If it's a regular Java object, we can
     // use our existing conversion tools.
     if (!(value instanceof JsonNode)) {
-      return toConnectData(schema, value, toConnectContext);
+      return toConnectData(schema, value, toConnectContext, false);
     }
 
     JsonNode jsonValue = (JsonNode) value;
     switch (avroSchema.getType()) {
       case INT:
         if (schema.type() == Schema.Type.INT8) {
-          return (byte) jsonValue.getIntValue();
+          return (byte) jsonValue.intValue();
         } else if (schema.type() == Schema.Type.INT16) {
-          return (short) jsonValue.getIntValue();
+          return jsonValue.shortValue();
         } else if (schema.type() == Schema.Type.INT32) {
-          return jsonValue.getIntValue();
+          return jsonValue.intValue();
         } else {
           break;
         }
 
       case LONG:
-        return jsonValue.getLongValue();
+        return jsonValue.longValue();
 
       case FLOAT:
-        return (float) jsonValue.getDoubleValue();
+        return (float) jsonValue.doubleValue();
       case DOUBLE:
-        return jsonValue.getDoubleValue();
+        return jsonValue.doubleValue();
 
       case BOOLEAN:
         return jsonValue.asBoolean();
@@ -1901,10 +1910,10 @@ public class AvroData {
           byte[] bytes;
           if (jsonValue.isTextual()) {
             // Avro's JSON form may be a quoted string, so decode the binary value
-            String encoded = jsonValue.getTextValue();
+            String encoded = jsonValue.textValue();
             bytes = encoded.getBytes(StandardCharsets.ISO_8859_1);
           } else {
-            bytes = jsonValue.getBinaryValue();
+            bytes = jsonValue.binaryValue();
           }
           return bytes == null ? null : ByteBuffer.wrap(bytes);
         } catch (IOException e) {
@@ -1928,7 +1937,7 @@ public class AvroData {
           throw new DataException("Invalid JSON for map default value: " + jsonValue.toString());
         }
         Map<String, Object> result = new HashMap<>(jsonValue.size());
-        Iterator<Map.Entry<String, JsonNode>> fieldIt = jsonValue.getFields();
+        Iterator<Map.Entry<String, JsonNode>> fieldIt = jsonValue.fields();
         while (fieldIt.hasNext()) {
           Map.Entry<String, JsonNode> field = fieldIt.next();
           Object converted = defaultValueFromAvro(
