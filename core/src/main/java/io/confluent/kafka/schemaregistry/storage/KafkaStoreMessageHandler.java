@@ -83,6 +83,7 @@ public class KafkaStoreMessageHandler
   public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (value == null) {
       // Ignore tombstones
+      this.lookupCache.schemaDeleted((SchemaKey) key, null);
       return;
     }
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
