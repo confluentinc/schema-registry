@@ -81,14 +81,11 @@ public class KafkaStoreMessageHandler
    */
   @Override
   public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
-    if (value == null && key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
-      // Ignore tombstones
-      this.lookupCache.schemaTombstoned((SchemaKey) key);
-      return;
-    }
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
           (SchemaValue) value);
+    } else if (value == null) {
+      // ignore non-schema tombstone
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
     } else if (key.getKeyType() == SchemaRegistryKeyType.CLEAR_SUBJECT) {
@@ -146,6 +143,8 @@ public class KafkaStoreMessageHandler
                 && v.getVersion() != schemaObj.getVersion())
             .forEach(this::tombstoneSchemaKey);
       }
+    } else {
+      lookupCache.schemaTombstoned(schemaKey);
     }
   }
 
