@@ -83,7 +83,7 @@ public class KafkaStoreMessageHandler
   public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (value == null) {
       // Ignore tombstones
-      this.lookupCache.schemaDeleted((SchemaKey) key, null);
+      this.lookupCache.schemaTombstoned((SchemaKey) key);
       return;
     }
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
@@ -154,7 +154,6 @@ public class KafkaStoreMessageHandler
           try {
             schemaRegistry.getKafkaStore().waitForInit();
             schemaRegistry.getKafkaStore().delete(schemaKey);
-            lookupCache.schemaTombstoned(schemaKey);
             log.debug("Tombstoned {}", schemaKey);
           } catch (InterruptedException e) {
             log.error("Interrupted while waiting for the tombstone thread to be initialized ", e);
