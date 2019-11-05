@@ -81,7 +81,7 @@ public class KafkaStoreMessageHandler
    */
   @Override
   public void handleUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
-    if (value == null) {
+    if (value == null && key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       // Ignore tombstones
       this.lookupCache.schemaTombstoned((SchemaKey) key);
       return;
