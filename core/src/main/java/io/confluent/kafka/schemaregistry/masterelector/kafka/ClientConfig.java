@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -22,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * o.a.k AbstractConfig that parses configs that all Kafka clients require.
@@ -41,6 +43,14 @@ class ClientConfig extends AbstractConfig {
 
   static {
     CONFIG = new ConfigDef()
+        .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG,
+                ConfigDef.Type.STRING,
+                ClientDnsLookup.DEFAULT.toString(),
+                in(ClientDnsLookup.DEFAULT.toString(),
+                   ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                   ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
+                ConfigDef.Importance.MEDIUM,
+                CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
         .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
                 ConfigDef.Type.LONG,
                 METADATA_MAX_AGE_DEFAULT,
