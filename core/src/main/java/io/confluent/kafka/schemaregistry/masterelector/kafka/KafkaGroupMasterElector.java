@@ -119,7 +119,7 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       List<String> bootstrapServers
           = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
       List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers,
-          ClientDnsLookup.DEFAULT.name());
+          clientConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
       this.metadata.bootstrap(addresses, time.milliseconds());
       String metricGrpPrefix = "kafka.schema.registry";
 
@@ -136,7 +136,8 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           clientConfig.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
           clientConfig.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
           clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
-          ClientDnsLookup.DEFAULT,
+          ClientDnsLookup.forConfig(
+              clientConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
           time,
           true,
           new ApiVersions(),
