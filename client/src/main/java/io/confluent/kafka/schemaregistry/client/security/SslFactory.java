@@ -42,6 +42,9 @@ public class SslFactory {
 
   public SslFactory(Map<String, ?> configs) {
     this.protocol = (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
+    if (this.protocol == null) {
+      this.protocol = SslConfigs.DEFAULT_SSL_PROTOCOL;
+    }
     this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
 
     this.kmfAlgorithm = (String) configs.get(
