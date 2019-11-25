@@ -98,6 +98,44 @@ public class RestApiSslTest extends ClusterTestHarness {
   }
 
 
+  @Test
+  public void testRegisterWithClientSecurityWithMinimalProperties() throws Exception {
+
+    setupHostNameVerifier();
+
+    String subject = "testSubject";
+    Schema schema = AvroUtils.parseSchema(
+        "{\"type\":\"record\","
+            + "\"name\":\"myrecord\","
+            + "\"fields\":"
+            + "[{\"type\":\"string\",\"name\":\"f2\"}]}").schemaObj;
+
+    int expectedIdSchema1 = 1;
+
+    Map clientsslConfigs = new HashMap();
+    clientsslConfigs.put(
+        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG,
+        props.get(SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG));
+    clientsslConfigs.put(
+        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEYSTORE_PASSWORD_CONFIG,
+        props.get(SchemaRegistryConfig.SSL_KEYSTORE_PASSWORD_CONFIG));
+    clientsslConfigs.put(
+        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_LOCATION_CONFIG,
+        props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_LOCATION_CONFIG));
+    clientsslConfigs.put(
+        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+        props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+    CachedSchemaRegistryClient schemaRegistryClient = new CachedSchemaRegistryClient(restApp.restClient, 10, clientsslConfigs);
+
+    assertEquals(
+        "Registering should succeed",
+        expectedIdSchema1,
+        schemaRegistryClient.register(subject, schema)
+    );
+
+  }
+
+
   @Override
   protected Properties getSchemaRegistryProperties() {
     Configuration.setConfiguration(null);
