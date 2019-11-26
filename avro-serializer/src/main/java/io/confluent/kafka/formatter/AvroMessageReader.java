@@ -25,6 +25,7 @@ import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -91,6 +92,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
   private Schema valueSchema = null;
   private String keySubject = null;
   private String valueSubject = null;
+  private Serializer keySerializer;
 
   /**
    * Constructor needed by kafka console producer.
@@ -145,7 +147,9 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     Schema.Parser parser = new Schema.Parser();
     valueSchema = parser.parse(valueSchemaString);
 
-    if (parseKey) {
+    keySerializer = getKeySerializer(props);
+
+    if (needsKeySchema()) {
       if (!props.containsKey("key.schema")) {
         throw new ConfigException("Must provide the Avro schema string in key.schema");
       }
@@ -159,6 +163,22 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     } else {
       this.autoRegisterSchema = true;
     }
+  }
+
+  private Serializer getKeySerializer(Properties props) throws ConfigException {
+    if (props.containsKey("key.serializer")) {
+      try {
+        return (Serializer) Class.forName((String) props.get("key.serializer")).newInstance();
+      } catch (Exception e) {
+        throw new ConfigException("Error initializing Key serializer", e);
+      }
+    } else {
+      return null;
+    }
+  }
+
+  private boolean needsKeySchema() {
+    return parseKey && keySerializer == null;
   }
 
   private Map<String, Object> getPropertiesMap(Properties props) {
@@ -195,8 +215,14 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
           String valueString = (keyIndex + keySeparator.length() > line.length())
                                ? ""
                                : line.substring(keyIndex + keySeparator.length());
-          Object key = jsonToAvro(keyString, keySchema);
-          byte[] serializedKey = serializeImpl(keySubject, key);
+
+          byte[] serializedKey;
+          if (keySerializer != null) {
+            serializedKey = keySerializer.serialize(topic, keyString);
+          } else {
+            Object key = jsonToAvro(keyString, keySchema);
+            serializedKey = serializeImpl(keySubject, key);
+          }
           Object value = jsonToAvro(valueString, valueSchema);
           byte[] serializedValue = serializeImpl(valueSubject, value);
           return new ProducerRecord<>(topic, serializedKey, serializedValue);
