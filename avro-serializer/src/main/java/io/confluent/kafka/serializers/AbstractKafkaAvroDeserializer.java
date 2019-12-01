@@ -170,7 +170,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     }
   }
 
-  private DatumReader<?> getDatumReader(Schema writerSchema, Schema readerSchema) {
+  protected DatumReader<?> getDatumReader(Schema writerSchema, Schema readerSchema) {
     boolean writerSchemaIsPrimitive =
         AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
     // do not use SpecificDatumReader if writerSchema is a primitive
