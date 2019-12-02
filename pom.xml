@@ -48,6 +48,7 @@
         <module>client</module>
         <module>avro-serializer</module>
         <module>json-serializer</module>
+        <module>avro-data</module>
         <module>avro-converter</module>
         <module>package-schema-registry</module>
         <module>package-kafka-serde-tools</module>
@@ -98,6 +99,11 @@
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-json-serializer</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-avro-data</artifactId>
+                <version>${confluent.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.confluent</groupId>

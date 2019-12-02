@@ -1,0 +1,96 @@
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-schema-registry-parent</artifactId>
+        <version>5.5.0-SNAPSHOT</version>
+    </parent>
+
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <artifactId>kafka-connect-avro-data</artifactId>
+    <packaging>jar</packaging>
+    <name>kafka-connect-avro-data</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>connect-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.powermock</groupId>
+            <artifactId>powermock-module-junit4</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>uk.co.jemos.podam</groupId>
+            <artifactId>podam</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- fix for Java 10: podam depends on java.xml.ws module -->
+            <groupId>javax.xml.ws</groupId>
+            <artifactId>jaxws-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>generate-test-sources</phase>
+                        <id>test-sources</id>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <id>sources</id>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <detail>true</detail>
+                    <stringType>String</stringType>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
