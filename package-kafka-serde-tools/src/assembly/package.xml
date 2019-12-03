@@ -39,7 +39,6 @@
                  disable transitive filtering. -->
             <useTransitiveFiltering>true</useTransitiveFiltering>
             <excludes>
-                <exclude>io.confluent:common-*</exclude>
                 <exclude>org.apache.kafka:kafka-clients</exclude>
             </excludes>
         </dependencySet>
