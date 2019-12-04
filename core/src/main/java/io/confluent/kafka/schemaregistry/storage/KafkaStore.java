@@ -290,7 +290,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
    */
   public void waitUntilKafkaReaderReachesLastOffset(String subject, int timeoutMs)
       throws StoreException {
-    waitUntilKafkaReaderReachesOffset(lastOffset(subject), timeoutMs);
+    long lastOffset = lastOffset(subject);
+    if (lastOffset == -1) {
+      lastOffset = getLatestOffset(timeoutMs);
+    }
+    waitUntilKafkaReaderReachesOffset(lastOffset, timeoutMs);
   }
 
   /**
