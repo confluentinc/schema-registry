@@ -120,7 +120,7 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
       List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers,
           clientConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
-      this.metadata.bootstrap(addresses, time.milliseconds());
+      this.metadata.bootstrap(addresses);
       String metricGrpPrefix = "kafka.schema.registry";
 
       ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig, time);
