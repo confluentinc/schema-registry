@@ -104,7 +104,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
-  private final Object masterLock = new Object();
   private final AvroCompatibilityLevel defaultCompatibilityLevel;
   private final Mode defaultMode;
   private final int kafkaStoreTimeoutMs;
@@ -268,12 +267,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   public boolean isMaster() {
-    synchronized (masterLock) {
+    kafkaStore.masterLock().lock();
+    try {
       if (masterIdentity != null && masterIdentity.equals(myIdentity)) {
         return true;
       } else {
         return false;
       }
+    } finally {
+      kafkaStore.masterLock().unlock();
     }
   }
 
@@ -295,7 +297,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           "Tried to set an ineligible node to master: " + newMaster);
     }
 
-    synchronized (masterLock) {
+    kafkaStore.masterLock().lock();
+    try {
       SchemaRegistryIdentity previousMaster = masterIdentity;
       masterIdentity = newMaster;
 
@@ -322,6 +325,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         idGenerator.init();
       }
       masterNodeSensor.record(isMaster() ? 1.0 : 0.0);
+    } finally {
+      kafkaStore.masterLock().unlock();
     }
   }
 
@@ -338,8 +343,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
    * Any request that requires writing new data gets forwarded to the master.
    */
   public SchemaRegistryIdentity masterIdentity() {
-    synchronized (masterLock) {
+    kafkaStore.masterLock().lock();
+    try {
       return masterIdentity;
+    } finally {
+      kafkaStore.masterLock().unlock();
     }
   }
 
