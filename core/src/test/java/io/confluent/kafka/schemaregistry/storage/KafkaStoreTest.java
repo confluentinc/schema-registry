@@ -14,6 +14,7 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -504,5 +505,43 @@ public class KafkaStoreTest extends ClusterTestHarness {
       iter.next();
     }
     assertEquals(2, size);
+  }
+
+  // Test no NPE happens when handling DeleteSubjectKey with null value
+  @Test
+  public void testKafkaStoreMessageHandlerDeleteSubjectKeyNullValue() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+            config,
+            new SchemaRegistrySerializer()
+    );
+
+    KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
+            new InMemoryCache<>(), new IncrementalIdGenerator());
+
+    storeMessageHandler.handleUpdate(new DeleteSubjectKey("test"), null);
+  }
+
+  // Test no NPE happens when handling ClearSubjectKey with null value
+  @Test
+  public void testKafkaStoreMessageHandlerClearSubjectKeyNullValue() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+            config,
+            new SchemaRegistrySerializer()
+    );
+
+    KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
+            new InMemoryCache<>(), new IncrementalIdGenerator());
+
+    storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null);
   }
 }
