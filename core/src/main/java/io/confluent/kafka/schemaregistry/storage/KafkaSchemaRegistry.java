@@ -955,7 +955,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       kafkaClusterId = adminClient
               .describeCluster()
               .clusterId()
-              .get(DESCRIBE_CLUSTER_TIMEOUT_MS, TimeUnit.MICROSECONDS);
+              .get(DESCRIBE_CLUSTER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       throw new SchemaRegistryException("Failed to get Kafka cluster ID", e);
     }
