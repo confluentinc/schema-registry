@@ -476,6 +476,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.lastWrittenOffset = lastOffset;
   }
 
+  public Lock masterLock() {
+    return lock;
+  }
+
   public Lock lockFor(String subject) {
     return lock;
   }
