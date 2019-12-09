@@ -363,7 +363,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
             // Verify id is not already in use
             if (lookupCache.schemaKeyById(newId) == null) {
               schema.setId(newId);
-              if (retries > 0) {
+              if (retries > 1) {
                 log.warn(String.format("Retrying to register the schema with ID %s", newId));
               }
               kafkaStore.put(schemaKey, new SchemaValue(schema));
