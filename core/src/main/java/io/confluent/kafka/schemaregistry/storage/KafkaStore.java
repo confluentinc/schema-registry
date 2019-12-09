@@ -301,9 +301,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * Wait until the KafkaStore catches up to the given offset in the Kafka topic.
    */
   private void waitUntilKafkaReaderReachesOffset(long offset, int timeoutMs) throws StoreException {
-    if (offset == -1) {
-      return;
-    }
     log.info("Wait to catch up until the offset at " + offset);
     kafkaTopicReader.waitUntilOffset(offset, timeoutMs, TimeUnit.MILLISECONDS);
     log.debug("Reached offset at " + offset);
@@ -362,7 +359,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreException("Put operation to Kafka failed", ke);
     } finally {
       if (!knownSuccessfulWrite) {
-        this.lastWrittenOffset = -1L;
+        markLastWrittenOffsetInvalid();
       }
     }
   }
