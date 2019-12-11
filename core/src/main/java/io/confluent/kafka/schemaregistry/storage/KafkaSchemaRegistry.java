@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.Vector;
 import java.util.concurrent.TimeUnit;
@@ -79,6 +80,8 @@ import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
+
+import javax.net.ssl.HostnameVerifier;
 
 public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaRegistry {
 
@@ -275,7 +278,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         masterRestService = new RestService(masterIdentity.getUrl());
         if (sslFactory != null && sslFactory.sslContext() != null) {
           masterRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
-          masterRestService.setDisableHostnameVerifier(sslFactory.disableHostnameVerifier());
         }
       }
 
@@ -1006,6 +1008,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           "Error while retrieving schema from the backend Kafka"
           + " store", e);
     }
+  }
+
+  public Optional<HostnameVerifier> hostnameVerifier() throws SchemaRegistryException {
+    String sslEndpointIdentificationAlgo =
+        config.getString(RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
+
+    if (sslEndpointIdentificationAlgo.isEmpty()) {
+      return Optional.of((hostname, session) -> true);
+    }
+
+    if (sslEndpointIdentificationAlgo.equalsIgnoreCase("https")) {
+      return Optional.empty();
+    }
+
+    throw new SchemaRegistryException(
+        RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
+            + sslEndpointIdentificationAlgo
+            + "not supported");
   }
 
   public static class SchemeAndPort {

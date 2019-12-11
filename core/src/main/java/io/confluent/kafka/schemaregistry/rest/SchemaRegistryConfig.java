@@ -111,11 +111,6 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>avro.compatibility.level</code>
    */
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
-  /**
-   * <code>ssl.disable.hostname.verifier</code>
-   */
-  public static final String SSL_DISABLE_HOSTNAME_VERIFIER_CONFIG = "ssl.disable.hostname.verifier";
-  public static final boolean SSL_DISABLE_HOSTNAME_VERIFIER_DEFAULT = false;
 
   public static final String ZOOKEEPER_SET_ACL_CONFIG = "zookeeper.set.acl";
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
@@ -246,8 +241,6 @@ public class SchemaRegistryConfig extends RestConfig {
       + "backward (new schema can read data produced by latest registered schema), "
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema)";
-  protected static final String SSL_DISABLE_HOSTNAME_VERIFIER_DOC =
-      "Specify whether or not to disable hostname verifier from RestService";
   protected static final String MASTER_ELIGIBILITY_DOC =
       "If true, this node can participate in master election. In a multi-colo setup, turn this off "
       + "for clusters in the slave data center.";
@@ -401,9 +394,6 @@ public class SchemaRegistryConfig extends RestConfig {
         )
         .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
             ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
-        )
-        .define(SSL_DISABLE_HOSTNAME_VERIFIER_CONFIG, ConfigDef.Type.BOOLEAN, SSL_DISABLE_HOSTNAME_VERIFIER_DEFAULT,
-            ConfigDef.Importance.MEDIUM, SSL_DISABLE_HOSTNAME_VERIFIER_DOC
         )
         .define(ZOOKEEPER_SET_ACL_CONFIG, ConfigDef.Type.BOOLEAN, ZOOKEEPER_SET_ACL_DEFAULT,
             ConfigDef.Importance.HIGH, ZOOKEEPER_SET_ACL_DOC

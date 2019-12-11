@@ -35,7 +35,9 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 
@@ -127,10 +129,9 @@ public class RestService {
 
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
+  private Optional<HostnameVerifier> hostnameVerifier = Optional.empty();
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
   private Map<String, String> httpHeaders;
-
-  private boolean disableHostnameVerifier = false;
 
   public RestService(UrlList baseUrls) {
     this.baseUrls = baseUrls;
@@ -148,8 +149,8 @@ public class RestService {
     this.sslSocketFactory = sslSocketFactory;
   }
 
-  public void setDisableHostnameVerifier(boolean disableHostnameVerifier) {
-    this.disableHostnameVerifier = disableHostnameVerifier;
+  public void setHostnameVerifier(Optional<HostnameVerifier> hostnameVerifier) {
+    this.hostnameVerifier = hostnameVerifier;
   }
 
   /**
@@ -242,9 +243,7 @@ public class RestService {
   private void setupSsl(HttpURLConnection connection) {
     if (connection instanceof HttpsURLConnection && sslSocketFactory != null) {
       ((HttpsURLConnection)connection).setSSLSocketFactory(sslSocketFactory);
-      if (disableHostnameVerifier) {
-        ((HttpsURLConnection)connection).setHostnameVerifier(((hostname, session) -> true));
-      }
+      hostnameVerifier.ifPresent(((HttpsURLConnection) connection)::setHostnameVerifier);
     }
   }
 
