@@ -129,7 +129,7 @@ public class RestService {
 
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
-  private Optional<HostnameVerifier> hostnameVerifier = Optional.empty();
+  private HostnameVerifier hostnameVerifier;
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
   private Map<String, String> httpHeaders;
 
@@ -149,7 +149,7 @@ public class RestService {
     this.sslSocketFactory = sslSocketFactory;
   }
 
-  public void setHostnameVerifier(Optional<HostnameVerifier> hostnameVerifier) {
+  public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {
     this.hostnameVerifier = hostnameVerifier;
   }
 
@@ -242,8 +242,10 @@ public class RestService {
 
   private void setupSsl(HttpURLConnection connection) {
     if (connection instanceof HttpsURLConnection && sslSocketFactory != null) {
-      ((HttpsURLConnection)connection).setSSLSocketFactory(sslSocketFactory);
-      hostnameVerifier.ifPresent(((HttpsURLConnection) connection)::setHostnameVerifier);
+      ((HttpsURLConnection) connection).setSSLSocketFactory(sslSocketFactory);
+      if (hostnameVerifier != null) {
+        ((HttpsURLConnection) connection).setHostnameVerifier(hostnameVerifier);
+      }
     }
   }
 

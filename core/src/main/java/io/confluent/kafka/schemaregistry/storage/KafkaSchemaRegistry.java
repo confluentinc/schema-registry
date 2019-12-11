@@ -278,7 +278,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         masterRestService = new RestService(masterIdentity.getUrl());
         if (sslFactory != null && sslFactory.sslContext() != null) {
           masterRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
-          masterRestService.setHostnameVerifier(hostnameVerifier());
+          masterRestService.setHostnameVerifier(getHostnameVerifier());
         }
       }
 
@@ -1011,16 +1011,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  public Optional<HostnameVerifier> hostnameVerifier() throws SchemaRegistryStoreException {
+  public HostnameVerifier getHostnameVerifier() throws SchemaRegistryStoreException {
     String sslEndpointIdentificationAlgo =
         config.getString(RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
     if (sslEndpointIdentificationAlgo.isEmpty()) {
-      return Optional.of((hostname, session) -> true);
+      return (hostname, session) -> true;
     }
 
     if (sslEndpointIdentificationAlgo.equalsIgnoreCase("https")) {
-      return Optional.empty();
+      return null;
     }
 
     throw new SchemaRegistryStoreException(
