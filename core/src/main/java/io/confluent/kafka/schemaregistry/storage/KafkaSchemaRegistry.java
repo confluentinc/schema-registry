@@ -278,6 +278,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         masterRestService = new RestService(masterIdentity.getUrl());
         if (sslFactory != null && sslFactory.sslContext() != null) {
           masterRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
+          masterRestService.setHostnameVerifier(hostnameVerifier());
         }
       }
 
@@ -1010,7 +1011,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  public Optional<HostnameVerifier> hostnameVerifier() throws SchemaRegistryException {
+  public Optional<HostnameVerifier> hostnameVerifier() throws SchemaRegistryStoreException {
     String sslEndpointIdentificationAlgo =
         config.getString(RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
@@ -1022,7 +1023,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       return Optional.empty();
     }
 
-    throw new SchemaRegistryException(
+    throw new SchemaRegistryStoreException(
         RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
             + sslEndpointIdentificationAlgo
             + "not supported");
