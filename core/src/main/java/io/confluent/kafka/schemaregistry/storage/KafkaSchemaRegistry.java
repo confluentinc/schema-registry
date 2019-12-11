@@ -1026,8 +1026,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
     throw new SchemaRegistryStoreException(
         RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
+            + " "
             + sslEndpointIdentificationAlgo
-            + "not supported");
+            + " not supported");
   }
 
   public static class SchemeAndPort {
