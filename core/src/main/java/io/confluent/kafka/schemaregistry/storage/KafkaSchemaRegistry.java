@@ -29,7 +29,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.Vector;
 import java.util.concurrent.TimeUnit;
@@ -1015,7 +1014,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     String sslEndpointIdentificationAlgo =
         config.getString(RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
-    if (sslEndpointIdentificationAlgo.isEmpty()) {
+    if (sslEndpointIdentificationAlgo == null
+        || sslEndpointIdentificationAlgo.equals("none")
+        || sslEndpointIdentificationAlgo.isEmpty()) {
       return (hostname, session) -> true;
     }
 
