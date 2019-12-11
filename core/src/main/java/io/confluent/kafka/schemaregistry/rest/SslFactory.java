@@ -40,6 +40,7 @@ public class SslFactory {
   private String keyPassword;
   private SecurityStore truststore;
   private SSLContext sslContext;
+  private boolean disableHostnameVerifier;
 
 
   public SslFactory(SchemaRegistryConfig configs) throws SchemaRegistryException {
@@ -48,6 +49,8 @@ public class SslFactory {
 
     this.kmfAlgorithm = configs.getString(SchemaRegistryConfig.SSL_KEYMANAGER_ALGORITHM_CONFIG);
     this.tmfAlgorithm = configs.getString(SchemaRegistryConfig.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
+
+    this.disableHostnameVerifier = configs.getBoolean(SchemaRegistryConfig.SSL_DISABLE_HOSTNAME_VERIFIER_CONFIG);
 
     createKeystore(
         configs.getString(SchemaRegistryConfig.SSL_KEYSTORE_TYPE_CONFIG),
@@ -108,6 +111,10 @@ public class SslFactory {
    */
   public SSLContext sslContext() {
     return sslContext;
+  }
+
+  public boolean disableHostnameVerifier() {
+    return disableHostnameVerifier;
   }
 
   private void createKeystore(String type, String path, String password, String keyPassword)
