@@ -114,7 +114,7 @@ public class SchemaRegistryConfig extends RestConfig {
   /**
    * <code>ssl.disable.hostname.verifier</code>
    */
-  public static final String SSL_DISABLE_HOSTNAME_VERIFIER_CONFIG = "disable.hostname.verifier";
+  public static final String SSL_DISABLE_HOSTNAME_VERIFIER_CONFIG = "ssl.disable.hostname.verifier";
   public static final boolean SSL_DISABLE_HOSTNAME_VERIFIER_DEFAULT = false;
 
   public static final String ZOOKEEPER_SET_ACL_CONFIG = "zookeeper.set.acl";
