@@ -15,7 +15,6 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.rest.RestConfig;
 import kafka.admin.AdminUtils;
 import kafka.admin.RackAwareMode;
 import kafka.log.LogConfig;
@@ -448,7 +447,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     Properties props = new Properties();
     props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
-    props.put(RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "none");
+    props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "none");
 
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
@@ -464,7 +463,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     Properties props = new Properties();
     props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
-    props.put(RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+    props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
 
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
@@ -480,7 +479,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     Properties props = new Properties();
     props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
-    props.put(RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "https");
+    props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "https");
 
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
