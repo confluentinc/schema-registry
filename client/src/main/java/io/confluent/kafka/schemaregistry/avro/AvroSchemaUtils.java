@@ -130,32 +130,33 @@ public class AvroSchemaUtils {
   }
 
   public static Object toObject(JsonNode value, ParsedSchema parsedSchema) throws IOException {
-    Schema schema = ((AvroSchema) parsedSchema).rawSchema();
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    jsonMapper.writeValue(out, value);
-    DatumReader<Object> reader = new GenericDatumReader<Object>(schema);
-    Object object = reader.read(
-        null,
-        decoderFactory.jsonDecoder(schema, new ByteArrayInputStream(out.toByteArray()))
-    );
-    out.close();
-    return object;
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      Schema schema = ((AvroSchema) parsedSchema).rawSchema();
+      jsonMapper.writeValue(out, value);
+      DatumReader<Object> reader = new GenericDatumReader<Object>(schema);
+      Object object = reader.read(null,
+          decoderFactory.jsonDecoder(schema, new ByteArrayInputStream(out.toByteArray()))
+      );
+      return object;
+    }
   }
 
   public static byte[] toJson(Object value) throws IOException {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    Schema schema = getSchema(value);
-    JsonEncoder encoder = encoderFactory.jsonEncoder(schema, out);
-    DatumWriter<Object> writer = new GenericDatumWriter<Object>(schema);
-    // Some types require wrapping/conversion
-    Object wrappedValue = value;
-    if (value instanceof byte[]) {
-      wrappedValue = ByteBuffer.wrap((byte[]) value);
+    if (value == null) {
+      return null;
     }
-    writer.write(wrappedValue, encoder);
-    encoder.flush();
-    byte[] bytes = out.toByteArray();
-    out.close();
-    return bytes;
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      Schema schema = getSchema(value);
+      JsonEncoder encoder = encoderFactory.jsonEncoder(schema, out);
+      DatumWriter<Object> writer = new GenericDatumWriter<Object>(schema);
+      // Some types require wrapping/conversion
+      Object wrappedValue = value;
+      if (value instanceof byte[]) {
+        wrappedValue = ByteBuffer.wrap((byte[]) value);
+      }
+      writer.write(wrappedValue, encoder);
+      encoder.flush();
+      return out.toByteArray();
+    }
   }
 }
