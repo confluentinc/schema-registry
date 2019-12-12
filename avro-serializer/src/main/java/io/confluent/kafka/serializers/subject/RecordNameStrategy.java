@@ -24,7 +24,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
-import io.confluent.kafka.serializers.AvroSchemaUtils;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 
 /**
  * For any record type that is published to Kafka, registers the schema

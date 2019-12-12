@@ -36,10 +36,10 @@ import java.util.Properties;
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
 import kafka.utils.VerifiableProperties;
 

@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.formatter;
 
-import io.confluent.kafka.serializers.AvroSchemaUtils;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumWriter;

@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements Serializer<Object> {
