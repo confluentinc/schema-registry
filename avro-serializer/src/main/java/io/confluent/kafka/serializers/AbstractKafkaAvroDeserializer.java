@@ -165,8 +165,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         return new GenericContainerWithVersion(new NonRecordContainer(schema, result), version);
       }
     } catch (RestClientException | IOException e) {
-      throw new SerializationException("Error retrieving Avro schema version for id "
-          + context.getSchemaId(), e);
+      throw new SerializationException("Error retrieving Avro "
+                                      + (isKey ? "key" : "value")
+                                      + " schema version for id "
+                                      + context.getSchemaId(), e);
     }
   }
 
@@ -240,7 +242,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       try {
         return schemaRegistry.getById(schemaId);
       } catch (RestClientException | IOException e) {
-        throw new SerializationException("Error retrieving Avro schema for id " + schemaId, e);
+        throw new SerializationException("Error retrieving Avro "
+                                         + getSchemaType()
+                                         + " schema for id "
+                                         + schemaId, e);
       }
     }
 
@@ -250,7 +255,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
             ? AvroSchemaUtils.copyOf(schemaFromRegistry())
             : schemaRegistry.getBySubjectAndId(getSubject(), schemaId);
       } catch (RestClientException | IOException e) {
-        throw new SerializationException("Error retrieving Avro schema for id " + schemaId, e);
+        throw new SerializationException("Error retrieving Avro "
+                                         + getSchemaType()
+                                         + " schema for id "
+                                         + schemaId, e);
+
       }
     }
 
@@ -264,6 +273,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
 
     boolean isKey() {
       return isKey;
+    }
+
+    private String getSchemaType() {
+      if (isKey == null) {
+        return "unknown";
+      } else if (isKey) {
+        return "key";
+      } else {
+        return "value";
+      }
     }
 
     int getSchemaId() {
