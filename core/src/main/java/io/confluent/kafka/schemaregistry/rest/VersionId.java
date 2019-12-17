@@ -32,10 +32,10 @@ public class VersionId {
       try {
         this.version = Integer.parseInt(version.trim());
       } catch (NumberFormatException nfe) {
-        throw new InvalidVersionException();
+        throw new InvalidVersionException(version);
       }
       if (this.version == -1) {
-        throw new InvalidVersionException();
+        throw new InvalidVersionException(version);
       }
       assertValidVersion();
     }
@@ -56,7 +56,7 @@ public class VersionId {
 
   private void assertValidVersion() throws InvalidVersionException {
     if (this.version <= 0 && this.version != -1) {
-      throw new InvalidVersionException();
+      throw new InvalidVersionException(String.valueOf(this.version));
     }
   }
 }

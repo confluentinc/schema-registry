@@ -81,7 +81,7 @@ public class CompatibilityResource {
           + "Error code 42202 -- Invalid version"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store") })
   @PerformanceMetric("compatibility.subjects.versions.verify")
-  public void testCompatabilityBySubjectName(
+  public void testCompatibilityBySubjectName(
       final @Suspended AsyncResponse asyncResponse,
       final @HeaderParam("Content-Type") String contentType,
       final @HeaderParam("Accept") String accept,
@@ -107,7 +107,7 @@ public class CompatibilityResource {
       //Don't check compatibility against deleted schema
       schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), false);
     } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException();
+      throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.storeException("Error while retrieving schema for subject "
                                   + subject + " and version "
@@ -120,7 +120,7 @@ public class CompatibilityResource {
         compatibilityCheckResponse.setIsCompatible(isCompatible);
         asyncResponse.resume(compatibilityCheckResponse);
       } else {
-        throw Errors.versionNotFoundException();
+        throw Errors.versionNotFoundException(versionId.getVersionId());
       }
     } else {
       try {
@@ -145,7 +145,7 @@ public class CompatibilityResource {
     try {
       versionId = new VersionId(version);
     } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException();
+      throw Errors.invalidVersionException(e.getMessage());
     }
     return versionId;
   }
@@ -153,7 +153,7 @@ public class CompatibilityResource {
   private void registerWithError(final String subject, final String errorMessage) {
     try {
       if (!schemaRegistry.hasSubjects(subject)) {
-        throw Errors.subjectNotFoundException();
+        throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);

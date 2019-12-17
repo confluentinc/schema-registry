@@ -514,8 +514,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Error while deleting the schema in the"
-                                             + " backend Kafka store", e);
+      throw new SchemaRegistryStoreException("Error while deleting the schema for subject '"
+                                            + subject + "' in the backend Kafka store", e);
     }
   }
 
@@ -742,12 +742,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   public Schema validateAndGetSchema(String subject, VersionId versionId, boolean
       returnDeletedSchema) throws SchemaRegistryException {
-    Schema schema = this.get(subject, versionId.getVersionId(), returnDeletedSchema);
+    final int version = versionId.getVersionId();
+    Schema schema = this.get(subject, version, returnDeletedSchema);
     if (schema == null) {
       if (!this.hasSubjects(subject)) {
-        throw Errors.subjectNotFoundException();
+        throw Errors.subjectNotFoundException(subject);
       } else {
-        throw Errors.versionNotFoundException();
+        throw Errors.versionNotFoundException(version);
       }
     }
     return schema;

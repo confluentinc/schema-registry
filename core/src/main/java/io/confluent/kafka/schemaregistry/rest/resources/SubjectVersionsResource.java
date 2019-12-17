@@ -98,23 +98,21 @@ public class SubjectVersionsResource {
     try {
       versionId = new VersionId(version);
     } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException();
+      throw Errors.invalidVersionException(e.getMessage());
     }
     Schema schema = null;
-    String errorMessage = null;
-    try {
-      schema = schemaRegistry.validateAndGetSchema(subject, versionId, false);
-    } catch (SchemaRegistryStoreException e) {
-      errorMessage =
-          "Error while retrieving schema for subject "
+    String errorMessage = "Error while retrieving schema for subject "
           + subject
           + " with version "
           + version
           + " from the schema registry";
+    try {
+      schema = schemaRegistry.validateAndGetSchema(subject, versionId, false);
+    } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
     } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException();
+      throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
@@ -154,7 +152,7 @@ public class SubjectVersionsResource {
                           + " exists in the registry";
     try {
       if (!schemaRegistry.hasSubjects(subject)) {
-        throw Errors.subjectNotFoundException();
+        throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
@@ -268,23 +266,22 @@ public class SubjectVersionsResource {
     try {
       versionId = new VersionId(version);
     } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException();
+      throw Errors.invalidVersionException(e.getMessage());
     }
     Schema schema = null;
-    String errorMessage = null;
+    String errorMessage =
+            "Error while retrieving schema for subject "
+            + subject
+            + " with version "
+            + version
+            + " from the schema registry";
     try {
       schema = schemaRegistry.validateAndGetSchema(subject, versionId, false);
     } catch (SchemaRegistryStoreException e) {
-      errorMessage =
-          "Error while retrieving schema for subject "
-          + subject
-          + " with version "
-          + version
-          + " from the schema registry";
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
     } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException();
+      throw Errors.invalidVersionException(e.getMessage());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }

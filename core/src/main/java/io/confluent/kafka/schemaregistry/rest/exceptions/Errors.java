@@ -23,11 +23,12 @@ import io.confluent.rest.exceptions.RestNotFoundException;
 public class Errors {
 
   // HTTP 404
-  public static final String SUBJECT_NOT_FOUND_MESSAGE = "Subject not found.";
+  public static final String SUBJECT_NOT_FOUND_MESSAGE_FORMAT = "Subject '%s' not found.";
   public static final int SUBJECT_NOT_FOUND_ERROR_CODE = 40401;
-  public static final String VERSION_NOT_FOUND_MESSAGE = "Version not found.";
+  public static final String VERSION_NOT_FOUND_MESSAGE_FORMAT = "Version %s not found.";
   public static final int VERSION_NOT_FOUND_ERROR_CODE = 40402;
   public static final String SCHEMA_NOT_FOUND_MESSAGE = "Schema not found";
+  public static final String SCHEMA_NOT_FOUND_MESSAGE_FORMAT = "Schema %s not found";
   public static final int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
 
   // HTTP 409
@@ -47,16 +48,26 @@ public class Errors {
   public static final int UNKNOWN_MASTER_ERROR_CODE = 50004;
   // 50005 is used by the RestService to indicate a JSON Parse Error
 
-  public static RestException subjectNotFoundException() {
-    return new RestNotFoundException(SUBJECT_NOT_FOUND_MESSAGE, SUBJECT_NOT_FOUND_ERROR_CODE);
+  public static RestException subjectNotFoundException(String subject) {
+    return new RestNotFoundException(
+        String.format(SUBJECT_NOT_FOUND_MESSAGE_FORMAT, subject), SUBJECT_NOT_FOUND_ERROR_CODE);
   }
 
-  public static RestException versionNotFoundException() {
-    return new RestNotFoundException(VERSION_NOT_FOUND_MESSAGE, VERSION_NOT_FOUND_ERROR_CODE);
+  public static RestException versionNotFoundException(Integer id) {
+    return new RestNotFoundException(
+        String.format(VERSION_NOT_FOUND_MESSAGE_FORMAT, id), VERSION_NOT_FOUND_ERROR_CODE);
   }
 
   public static RestException schemaNotFoundException() {
     return new RestNotFoundException(SCHEMA_NOT_FOUND_MESSAGE, SCHEMA_NOT_FOUND_ERROR_CODE);
+  }
+
+  public static RestException schemaNotFoundException(Integer id) {
+    if (id == null) {
+      return schemaNotFoundException();
+    }
+    return new RestNotFoundException(
+        String.format(SCHEMA_NOT_FOUND_MESSAGE_FORMAT, id), SCHEMA_NOT_FOUND_ERROR_CODE);
   }
 
   public static RestIncompatibleAvroSchemaException incompatibleSchemaException(String message,
@@ -70,8 +81,8 @@ public class Errors {
     return new RestInvalidSchemaException(message);
   }
 
-  public static RestInvalidVersionException invalidVersionException() {
-    return new RestInvalidVersionException();
+  public static RestInvalidVersionException invalidVersionException(String version) {
+    return new RestInvalidVersionException(version);
   }
 
   public static RestException schemaRegistryException(String message, Throwable cause) {
