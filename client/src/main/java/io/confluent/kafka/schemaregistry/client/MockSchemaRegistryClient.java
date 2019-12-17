@@ -18,6 +18,9 @@ package io.confluent.kafka.schemaregistry.client;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
@@ -48,8 +51,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, String> compatibilityCache;
   private final Map<String, String> modes;
   private final AtomicInteger ids;
+  private final Map<String, SchemaProvider> providers;
 
   public MockSchemaRegistryClient() {
+    this(null);
+  }
+
+  public MockSchemaRegistryClient(List<SchemaProvider> providers) {
     schemaCache = new HashMap<String, Map<ParsedSchema, Integer>>();
     schemaIdCache = new HashMap<>();
     idCache = new HashMap<String, Map<Integer, ParsedSchema>>();
@@ -58,6 +66,20 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     modes = new HashMap<String, String>();
     ids = new AtomicInteger(0);
     idCache.put(null, new HashMap<Integer, ParsedSchema>());
+
+    this.providers = providers != null && !providers.isEmpty()
+                     ? providers.stream().collect(Collectors.toMap(p -> p.schemaType(), p -> p))
+                     : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
+    Map<String, Object> schemaProviderConfigs = new HashMap<>();
+    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
+    for (SchemaProvider provider : this.providers.values()) {
+      provider.configure(schemaProviderConfigs);
+    }
+  }
+
+  @Override
+  public Map<String, SchemaProvider> getSchemaProviders() {
+    return providers;
   }
 
   private int getIdFromRegistry(

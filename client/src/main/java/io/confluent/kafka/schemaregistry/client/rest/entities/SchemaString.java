@@ -25,9 +25,12 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class SchemaString {
 
+  private String schemaType = AvroSchema.TYPE;
   private String schemaString;
   private List<SchemaReference> references = Collections.emptyList();
   private Integer maxId;
@@ -41,6 +44,17 @@ public class SchemaString {
 
   public static SchemaString fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, SchemaString.class);
+  }
+
+  @ApiModelProperty(value = "Schema type")
+  @JsonProperty("schemaType")
+  public String getSchemaType() {
+    return schemaType;
+  }
+
+  @JsonProperty("schemaType")
+  public void setSchemaType(String schemaType) {
+    this.schemaType = schemaType;
   }
 
   @ApiModelProperty(value = "Schema string identified by the ID")

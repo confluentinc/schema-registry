@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +64,7 @@ public abstract class AbstractKafkaSchemaSerDe {
         schemaRegistry = new CachedSchemaRegistryClient(
             urls,
             maxSchemaObject,
-            provider,
+            Collections.singletonList(provider),
             originals,
             config.requestHeaders()
         );

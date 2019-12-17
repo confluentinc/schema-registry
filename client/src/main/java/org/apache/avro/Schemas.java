@@ -27,9 +27,16 @@ import static org.apache.avro.Schema.FACTORY;
 public class Schemas {
 
   public static String toString(Schema schema, Collection<Schema> schemas) {
+    return toString(schema, schemas, false);
+  }
+
+  public static String toString(Schema schema, Collection<Schema> schemas, boolean pretty) {
     try {
       StringWriter writer = new StringWriter();
       JsonGenerator gen = FACTORY.createGenerator(writer);
+      if (pretty) {
+        gen.useDefaultPrettyPrinter();
+      }
       Schema.Names names = new Schema.Names();
       if (schemas != null) {
         for (Schema s : schemas) {

@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
@@ -53,7 +54,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<ParsedSchema, Integer>> schemaCache;
   private final Map<String, Map<Integer, ParsedSchema>> idCache;
   private final Map<String, Map<ParsedSchema, Integer>> versionCache;
-  private final SchemaProvider provider;
+  private final Map<String, SchemaProvider> providers;
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
@@ -91,9 +92,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public CachedSchemaRegistryClient(
       List<String> baseUrls,
       int identityMapCapacity,
-      SchemaProvider provider,
+      List<SchemaProvider> providers,
       Map<String, ?> originals) {
-    this(new RestService(baseUrls), identityMapCapacity, provider, originals, null);
+    this(new RestService(baseUrls), identityMapCapacity, providers, originals, null);
   }
 
   public CachedSchemaRegistryClient(
@@ -122,11 +123,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public CachedSchemaRegistryClient(
       List<String> baseUrls,
       int identityMapCapacity,
-      SchemaProvider provider,
+      List<SchemaProvider> providers,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(new RestService(baseUrls), identityMapCapacity, provider, originals,
-        httpHeaders);
+    this(new RestService(baseUrls), identityMapCapacity, providers, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
@@ -140,7 +140,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public CachedSchemaRegistryClient(
       RestService restService,
       int identityMapCapacity,
-      SchemaProvider provider,
+      List<SchemaProvider> providers,
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
     this.identityMapCapacity = identityMapCapacity;
@@ -149,10 +149,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.versionCache = new HashMap<String, Map<ParsedSchema, Integer>>();
     this.restService = restService;
     this.idCache.put(null, new HashMap<Integer, ParsedSchema>());
-    this.provider = provider != null ? provider : new AvroSchemaProvider();
+    this.providers = providers != null && !providers.isEmpty()
+                     ? providers.stream().collect(Collectors.toMap(p -> p.schemaType(), p -> p))
+                     : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
     Map<String, Object> schemaProviderConfigs = new HashMap<>();
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
-    this.provider.configure(schemaProviderConfigs);
+    for (SchemaProvider provider : this.providers.values()) {
+      provider.configure(schemaProviderConfigs);
+    }
     if (httpHeaders != null) {
       restService.setHttpHeaders(httpHeaders);
     }
@@ -171,6 +175,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
+  @Override
+  public Map<String, SchemaProvider> getSchemaProviders() {
+    return providers;
+  }
+
   private int registerAndGetId(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     return restService.registerSchema(schema.canonicalString(), schema.schemaType(),
@@ -185,6 +194,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   protected ParsedSchema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
     SchemaString restSchema = restService.getId(id);
+    SchemaProvider provider = providers.get(restSchema.getSchemaType());
+    if (provider == null) {
+      throw new IOException("Invalid schema type " + restSchema.getSchemaType());
+    }
     Optional<ParsedSchema> schema =
         provider.parseSchema(restSchema.getSchemaString(), restSchema.getReferences());
     return schema.orElseThrow(() ->

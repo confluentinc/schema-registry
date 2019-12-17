@@ -840,8 +840,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           + " store", e);
     }
     SchemaString schemaString = new SchemaString();
+    schemaString.setSchemaType(schema.getSchemaType());
     schemaString.setSchemaString(schema.getSchema());
-    List<SchemaReference>  refs = schema.getReferences();
+    List<SchemaReference> refs = schema.getReferences();
     if (refs != null) {
       schemaString.setReferences(refs.stream()
           .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(

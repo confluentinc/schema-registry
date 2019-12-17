@@ -22,11 +22,14 @@ import java.util.List;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public interface SchemaRegistryClient extends SchemaVersionFetcher {
+
+  Map<String, SchemaProvider> getSchemaProviders();
 
   @Deprecated
   default int register(String subject, org.apache.avro.Schema schema) throws IOException,

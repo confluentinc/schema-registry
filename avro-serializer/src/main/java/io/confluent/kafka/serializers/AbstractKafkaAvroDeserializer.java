@@ -31,11 +31,9 @@ import org.apache.avro.reflect.ReflectDatumReader;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
@@ -52,11 +50,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    * Useful for testing, where a mock client is injected.
    */
   protected void configure(KafkaAvroDeserializerConfig config) {
-    Map<String, Object> schemaProviderConfigs = new HashMap<>();
-    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, schemaRegistry);
-    SchemaProvider schemaProvider = new AvroSchemaProvider();
-    schemaProvider.configure(schemaProviderConfigs);
-    configureClientProperties(config, schemaProvider);
+    configureClientProperties(config, new AvroSchemaProvider());
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
   }

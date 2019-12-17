@@ -827,6 +827,9 @@ definitions:
   SchemaString:
     type: "object"
     properties:
+      schemaType:
+        type: "string"
+        description: "Schema type"
       schema:
         type: "string"
         description: "Schema string identified by the ID"
