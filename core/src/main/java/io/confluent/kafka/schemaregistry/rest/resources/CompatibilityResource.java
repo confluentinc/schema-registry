@@ -81,7 +81,7 @@ public class CompatibilityResource {
           + "Error code 42202 -- Invalid version"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store") })
   @PerformanceMetric("compatibility.subjects.versions.verify")
-  public void testCompatabilityBySubjectName(
+  public void testCompatibilityBySubjectName(
       final @Suspended AsyncResponse asyncResponse,
       final @HeaderParam("Content-Type") String contentType,
       final @HeaderParam("Accept") String accept,
@@ -152,7 +152,7 @@ public class CompatibilityResource {
 
   private void registerWithError(final String subject, final String errorMessage) {
     try {
-        if (!schemaRegistry.hasSubjects(subject)) {
+      if (!schemaRegistry.hasSubjects(subject)) {
         throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {

@@ -56,7 +56,7 @@ paths:
         \ compatibility level for the subject (http:get:: /config/(string: subject)).\
         \ If this subject's compatibility level was never changed, then the global\
         \ compatibility level applies (http:get:: /config)."
-      operationId: "testCompatabilityBySubjectName"
+      operationId: "testCompatibilityBySubjectName"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
       - "application/vnd.schemaregistry+json"
