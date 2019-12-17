@@ -31,7 +31,8 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   Map<String, SchemaProvider> getSchemaProviders();
 
-  @Deprecated
+  //TODO deprecate
+  //@Deprecated
   default int register(String subject, org.apache.avro.Schema schema) throws IOException,
       RestClientException {
     return register(subject, new AvroSchema(schema));
@@ -54,7 +55,8 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
     return getById(id);
   }
 
-  @Deprecated
+  //TODO deprecate
+  //@Deprecated
   default org.apache.avro.Schema getById(int id) throws IOException, RestClientException {
     ParsedSchema schema = getSchemaById(id);
     return schema instanceof AvroSchema ? ((AvroSchema) schema).rawSchema() : null;
@@ -102,7 +104,8 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public List<Integer> getAllVersions(String subject) throws IOException, RestClientException;
 
-  @Deprecated
+  //TODO deprecate
+  //@Deprecated
   default boolean testCompatibility(String subject, org.apache.avro.Schema schema)
       throws IOException, RestClientException {
     return testCompatibility(subject, new AvroSchema(schema));

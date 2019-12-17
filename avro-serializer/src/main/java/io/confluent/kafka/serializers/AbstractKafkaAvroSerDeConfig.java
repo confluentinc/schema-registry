@@ -23,7 +23,8 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
 /**
- * @deprecated  Use {@link io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig} instead
+ * TODO: deprecate this class
+ * Use {@link io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig} instead
  */
 public class AbstractKafkaAvroSerDeConfig extends AbstractKafkaSchemaSerDeConfig {
 
