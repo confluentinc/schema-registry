@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -134,15 +135,31 @@ public abstract class AbstractKafkaSchemaSerDe {
     }
   }
 
+  @Deprecated
+  public int register(String subject, Schema schema) throws IOException, RestClientException {
+    return schemaRegistry.register(subject, schema);
+  }
+
   public int register(String subject, ParsedSchema schema) throws IOException, RestClientException {
     return schemaRegistry.register(subject, schema);
   }
 
-  public ParsedSchema getById(int id) throws IOException, RestClientException {
+  @Deprecated
+  public Schema getById(int id) throws IOException, RestClientException {
+    return schemaRegistry.getById(id);
+  }
+
+  public ParsedSchema getSchemaById(int id) throws IOException, RestClientException {
     return schemaRegistry.getSchemaById(id);
   }
 
-  public ParsedSchema getBySubjectAndId(String subject, int id)
+  @Deprecated
+  public Schema getBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
+    return schemaRegistry.getBySubjectAndId(subject, id);
+  }
+
+  public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
     return schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
