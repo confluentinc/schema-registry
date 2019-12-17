@@ -166,7 +166,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       }
     } catch (RestClientException | IOException e) {
       throw new SerializationException("Error retrieving Avro "
-                                      + (isKey ? "key" : "value")
+                                      + getSchemaType(isKey)
                                       + " schema version for id "
                                       + context.getSchemaId(), e);
     }
@@ -243,7 +243,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         return schemaRegistry.getById(schemaId);
       } catch (RestClientException | IOException e) {
         throw new SerializationException("Error retrieving Avro "
-                                         + getSchemaType()
+                                         + getSchemaType(isKey)
                                          + " schema for id "
                                          + schemaId, e);
       }
@@ -256,7 +256,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
             : schemaRegistry.getBySubjectAndId(getSubject(), schemaId);
       } catch (RestClientException | IOException e) {
         throw new SerializationException("Error retrieving Avro "
-                                         + getSchemaType()
+                                         + getSchemaType(isKey)
                                          + " schema for id "
                                          + schemaId, e);
 
@@ -275,15 +275,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       return isKey;
     }
 
-    private String getSchemaType() {
-      if (isKey == null) {
-        return "unknown";
-      } else if (isKey) {
-        return "key";
-      } else {
-        return "value";
-      }
-    }
 
     int getSchemaId() {
       return schemaId;
@@ -316,6 +307,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
               + schemaId, e);
         }
       }
+    }
+  }
+
+  private static String getSchemaType(Boolean isKey) {
+    if (isKey == null) {
+      return "unknown";
+    } else if (isKey) {
+      return "key";
+    } else {
+      return "value";
     }
   }
 }
