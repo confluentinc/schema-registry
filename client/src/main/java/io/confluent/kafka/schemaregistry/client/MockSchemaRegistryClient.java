@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 import java.io.IOException;
@@ -32,6 +33,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -78,8 +80,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public Map<String, SchemaProvider> getSchemaProviders() {
-    return providers;
+  public Optional<ParsedSchema> parseSchema(
+      String schemaType,
+      String schemaString,
+      List<SchemaReference> references) {
+    SchemaProvider schemaProvider = providers.get(schemaType);
+    if (schemaProvider == null) {
+      return Optional.empty();
+    }
+    return schemaProvider.parseSchema(schemaString, references);
   }
 
   private int getIdFromRegistry(

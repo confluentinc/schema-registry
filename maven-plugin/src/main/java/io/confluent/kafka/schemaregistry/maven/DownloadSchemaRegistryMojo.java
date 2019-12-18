@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
@@ -63,14 +62,11 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       try {
         getLog().info(String.format("Downloading latest metadata for %s.", subject));
         schemaMetadata = this.client().getLatestSchemaMetadata(subject);
-        SchemaProvider schemaProvider =
-            client().getSchemaProviders().get(schemaMetadata.getSchemaType());
-        if (schemaProvider == null) {
-          throw new MojoExecutionException(
-              String.format("Invalid schema type %s", schemaMetadata.getSchemaType())
-          );
-        }
-        Optional<ParsedSchema> schema = schemaProvider.parseSchema(schemaMetadata.getSchema());
+        Optional<ParsedSchema> schema =
+            this.client().parseSchema(
+                schemaMetadata.getSchemaType(),
+                schemaMetadata.getSchema(),
+                schemaMetadata.getReferences());
         if (schema.isPresent()) {
           results.put(subject, schema.get());
         } else {

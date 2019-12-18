@@ -176,6 +176,17 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public Optional<ParsedSchema> parseSchema(
+      String schemaType,
+      String schemaString,
+      List<SchemaReference> references) {
+    SchemaProvider schemaProvider = providers.get(schemaType);
+    if (schemaProvider == null) {
+      return Optional.empty();
+    }
+    return schemaProvider.parseSchema(schemaString, references);
+  }
+
   public Map<String, SchemaProvider> getSchemaProviders() {
     return providers;
   }
@@ -194,12 +205,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   protected ParsedSchema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
     SchemaString restSchema = restService.getId(id);
-    SchemaProvider provider = providers.get(restSchema.getSchemaType());
-    if (provider == null) {
-      throw new IOException("Invalid schema type " + restSchema.getSchemaType());
-    }
-    Optional<ParsedSchema> schema =
-        provider.parseSchema(restSchema.getSchemaString(), restSchema.getReferences());
+    Optional<ParsedSchema> schema = parseSchema(
+        restSchema.getSchemaType(), restSchema.getSchemaString(), restSchema.getReferences());
     return schema.orElseThrow(() ->
         new IOException("Invalid schema " + restSchema.getSchemaString()));
   }

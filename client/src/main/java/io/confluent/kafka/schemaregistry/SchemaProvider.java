@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry;
 
 import org.apache.kafka.common.Configurable;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,8 +46,4 @@ public interface SchemaProvider extends Configurable {
    * @return an optional parsed schema
    */
   Optional<ParsedSchema> parseSchema(String schemaString, List<SchemaReference> references);
-
-  default Optional<ParsedSchema> parseSchema(String schemaString) {
-    return parseSchema(schemaString, Collections.emptyList());
-  }
 }

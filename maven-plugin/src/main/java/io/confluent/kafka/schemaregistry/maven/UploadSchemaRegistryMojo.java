@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -68,20 +67,17 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       );
 
       String schemaType = schemaTypes.getOrDefault(kvp.getKey(), AvroSchema.TYPE);
-      SchemaProvider schemaProvider = client().getSchemaProviders().get(schemaType);
-      if (schemaProvider == null) {
-        getLog().error("Invalid schema type " + schemaType);
-        errors++;
-        continue;
-      }
       try {
         List<SchemaReference> schemaReferences = getReferences(kvp.getKey(), schemaVersions);
         String schemaString = readFile(kvp.getValue(), StandardCharsets.UTF_8);
-        Optional<ParsedSchema> schema = schemaProvider.parseSchema(schemaString, schemaReferences);
-        if (!schema.isPresent()) {
-          throw new IllegalStateException("Schema for " + kvp.getKey() + " could not be loaded.");
-        } else {
+        Optional<ParsedSchema> schema = client().parseSchema(
+            schemaType, schemaString, schemaReferences);
+        if (schema.isPresent()) {
           schemas.put(kvp.getKey(), schema.get());
+        } else {
+          getLog().error("Schema for " + kvp.getKey() + " could not be parsed.");
+          errors++;
+          continue;
         }
 
         boolean success = processSchema(kvp.getKey(), schema.get(), schemaVersions);
@@ -90,9 +86,6 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
         }
       } catch (IOException | RestClientException ex) {
         getLog().error("Exception thrown while processing " + kvp.getKey(), ex);
-        errors++;
-      } catch (IllegalArgumentException ex) {
-        getLog().error("Exception thrown while retrieving reference " + kvp.getValue(), ex);
         errors++;
       }
     }

@@ -98,4 +98,18 @@ public class SchemaReference implements Comparable<SchemaReference> {
     result = this.version - that.version;
     return result;
   }
+
+  @Override
+  public String toString() {
+    return "{"
+        + "name='"
+        + name
+        + '\''
+        + ", subject='"
+        + subject
+        + '\''
+        + ", version="
+        + version
+        + '}';
+  }
 }
