@@ -29,8 +29,9 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-avro-serializer</artifactId>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.avro</groupId>
@@ -38,7 +39,15 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-avro-data</artifactId>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -53,17 +62,6 @@
         <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-module-junit4</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>uk.co.jemos.podam</groupId>
-            <artifactId>podam</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <!-- fix for Java 10: podam depends on java.xml.ws module -->
-            <groupId>javax.xml.ws</groupId>
-            <artifactId>jaxws-api</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -106,31 +104,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <plugin>
-                <groupId>org.apache.avro</groupId>
-                <artifactId>avro-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>generate-test-sources</phase>
-                        <id>test-sources</id>
-                        <goals>
-                            <goal>schema</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <phase>generate-sources</phase>
-                        <id>sources</id>
-                        <goals>
-                            <goal>schema</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <detail>true</detail>
-                    <stringType>String</stringType>
-                </configuration>
-            </plugin>
-            
             <plugin>
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-connect-maven-plugin</artifactId>
