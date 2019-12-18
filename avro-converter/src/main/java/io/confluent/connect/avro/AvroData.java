@@ -423,12 +423,21 @@ public class AvroData {
     try {
       switch (schemaType) {
         case INT8: {
-          Byte byteValue = (Byte) value; // Check for correct type
+          // To take care of unsigned tinyint values, cast directly to a short.
+          Short shortValue = null;
+          if (value != null)
+            shortValue = Short.valueOf(value.toString());
+          Integer convertedShortValue = shortValue == null ? null : shortValue.intValue();
+          return maybeAddContainer(
+                  avroSchema,
+                  maybeWrapSchemaless(schema, convertedShortValue, ANYTHING_SCHEMA_INT_FIELD),
+                  requireContainer);
+          /*Byte byteValue = (Byte) value; // Check for correct type
           Integer convertedByteValue = byteValue == null ? null : byteValue.intValue();
           return maybeAddContainer(
               avroSchema,
               maybeWrapSchemaless(schema, convertedByteValue, ANYTHING_SCHEMA_INT_FIELD),
-              requireContainer);
+              requireContainer);*/
         }
         case INT16: {
           Short shortValue = (Short) value; // Check for correct type
@@ -615,6 +624,7 @@ public class AvroData {
           throw new DataException("Unknown schema type: " + schema.type());
       }
     } catch (ClassCastException e) {
+      e.printStackTrace();
       throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
     }
   }
