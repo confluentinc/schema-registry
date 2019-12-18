@@ -165,8 +165,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
         return new GenericContainerWithVersion(new NonRecordContainer(schema, result), version);
       }
     } catch (RestClientException | IOException e) {
-      throw new SerializationException("Error retrieving Avro schema version for id "
-          + context.getSchemaId(), e);
+      throw new SerializationException("Error retrieving Avro "
+                                      + getSchemaType(isKey)
+                                      + " schema version for id "
+                                      + context.getSchemaId(), e);
     }
   }
 
@@ -240,7 +242,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       try {
         return schemaRegistry.getById(schemaId);
       } catch (RestClientException | IOException e) {
-        throw new SerializationException("Error retrieving Avro schema for id " + schemaId, e);
+        throw new SerializationException("Error retrieving Avro "
+                                         + getSchemaType(isKey)
+                                         + " schema for id "
+                                         + schemaId, e);
       }
     }
 
@@ -250,7 +255,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
             ? AvroSchemaUtils.copyOf(schemaFromRegistry())
             : schemaRegistry.getBySubjectAndId(getSubject(), schemaId);
       } catch (RestClientException | IOException e) {
-        throw new SerializationException("Error retrieving Avro schema for id " + schemaId, e);
+        throw new SerializationException("Error retrieving Avro "
+                                         + getSchemaType(isKey)
+                                         + " schema for id "
+                                         + schemaId, e);
+
       }
     }
 
@@ -265,6 +274,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
     boolean isKey() {
       return isKey;
     }
+
 
     int getSchemaId() {
       return schemaId;
@@ -297,6 +307,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
               + schemaId, e);
         }
       }
+    }
+  }
+
+  private static String getSchemaType(Boolean isKey) {
+    if (isKey == null) {
+      return "unknown";
+    } else if (isKey) {
+      return "key";
+    } else {
+      return "value";
     }
   }
 }
