@@ -52,6 +52,7 @@ import io.confluent.common.metrics.stats.Gauge;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -764,9 +765,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
-    SchemaProvider provider = providers.get(schema.getSchemaType());
+    String schemaType = schema.getSchemaType();
+    if (schemaType == null) schemaType = AvroSchema.TYPE;
+    SchemaProvider provider = providers.get(schemaType);
     if (provider == null) {
-      throw new IllegalArgumentException("Invalid schema type " + schema.getSchemaType());
+      throw new IllegalArgumentException("Invalid schema type " + schemaType);
     }
     ParsedSchema parsedSchema = provider.parseSchema(schema.getSchema(), schema.getReferences())
         .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema));

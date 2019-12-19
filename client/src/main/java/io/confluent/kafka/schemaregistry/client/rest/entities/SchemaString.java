@@ -19,7 +19,9 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema.SchemaTypeConverter;
 import io.swagger.annotations.ApiModelProperty;
 
 import java.io.IOException;
@@ -50,6 +52,7 @@ public class SchemaString {
 
   @ApiModelProperty(value = "Schema type")
   @JsonProperty("schemaType")
+  @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
     return schemaType;
   }

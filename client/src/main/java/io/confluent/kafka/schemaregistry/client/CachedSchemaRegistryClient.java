@@ -180,6 +180,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       String schemaType,
       String schemaString,
       List<SchemaReference> references) {
+    if (schemaType == null) schemaType = AvroSchema.TYPE;
     SchemaProvider schemaProvider = providers.get(schemaType);
     if (schemaProvider == null) {
       return Optional.empty();
