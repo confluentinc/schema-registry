@@ -72,7 +72,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     this.version = version;
     this.id = id;
     this.schemaType = schemaType;
-    this.references = references;
+    this.references = references != null ? references : Collections.emptyList();
     this.schema = schema;
     this.deleted = deleted;
   }

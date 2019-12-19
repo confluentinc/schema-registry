@@ -50,7 +50,7 @@ public class Schema implements Comparable<Schema> {
     this.version = version;
     this.id = id;
     this.schemaType = schemaType;
-    this.references = references;
+    this.references = references != null ? references : Collections.emptyList();
     this.schema = schema;
   }
 
