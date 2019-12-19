@@ -19,6 +19,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+
+import com.google.common.annotations.VisibleForTesting;
 import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.constraints.Min;
@@ -45,6 +47,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   @NotEmpty
   private boolean deleted;
 
+  @VisibleForTesting
   public SchemaValue(@JsonProperty("subject") String subject,
                      @JsonProperty("version") Integer version,
                      @JsonProperty("id") Integer id,

@@ -16,10 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
-import java.util.Collections;
 import java.util.List;
 
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 public class SchemaMetadata {
@@ -29,10 +27,6 @@ public class SchemaMetadata {
   private String schemaType;
   private String schema;
   private List<SchemaReference> references;
-
-  public SchemaMetadata(int id, int version, String schema) {
-    this(id, version, AvroSchema.TYPE, Collections.emptyList(), schema);
-  }
 
   public SchemaMetadata(int id,
                         int version,

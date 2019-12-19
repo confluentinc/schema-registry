@@ -805,14 +805,14 @@ definitions:
       id:
         type: "integer"
         format: "int32"
-      schema:
-        type: "string"
       schemaType:
         type: "string"
       references:
         type: "array"
         items:
           $ref: "#/definitions/SchemaReference"
+      schema:
+        type: "string"
   SchemaReference:
     type: "object"
     properties:

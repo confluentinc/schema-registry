@@ -414,10 +414,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         undeletedSchemasList.add(latestSchema);
       }
 
-      ParsedSchema parsedSchema = canonicalizeSchema(schema);
+      Schema canonicalizeSchema = canonicalizeSchema(schema);
       // assign a guid and put the schema in the kafka store
-      if (latestSchema == null || isCompatible(
-          subject, schema.getSchemaType(), parsedSchema.canonicalString(), undeletedSchemasList)) {
+      if (latestSchema == null || isCompatible(subject, canonicalizeSchema, undeletedSchemasList)) {
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
         }
@@ -755,27 +754,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private ParsedSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
+  private Schema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
     if (schema == null || schema.getSchema().trim().isEmpty()) {
       throw new InvalidSchemaException("Invalid schema " + schema);
     }
-    ParsedSchema parsedSchema = parseSchema(
-        schema.getSchemaType(), schema.getSchema(), schema.getReferences());
-    schema.setSchema(parsedSchema.canonicalString());
-    return parsedSchema;
+    ParsedSchema parsedSchema = parseSchema(schema);
+    return new Schema(schema.getSubject(), schema.getVersion(), schema.getId(),
+        schema.getSchemaType(), schema.getReferences(), parsedSchema.canonicalString());
   }
 
-  private ParsedSchema parseSchema(
-      String schemaType,
-      String schema,
-      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
-      throws InvalidSchemaException {
-    SchemaProvider provider = providers.get(schemaType);
+  private ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
+    SchemaProvider provider = providers.get(schema.getSchemaType());
     if (provider == null) {
-      throw new IllegalArgumentException("Invalid schema type " + schemaType);
+      throw new IllegalArgumentException("Invalid schema type " + schema.getSchemaType());
     }
-    ParsedSchema parsedSchema = provider.parseSchema(schema, references).orElseThrow(
-        () -> new InvalidSchemaException("Invalid schema " + schema + " of type " + schemaType));
+    ParsedSchema parsedSchema = provider.parseSchema(schema.getSchema(), schema.getReferences())
+        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema));
     return parsedSchema;
   }
 
@@ -883,7 +877,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
 
     return lookupCache.schemaIdAndSubjects(new Schema(
-        schema.getSubject(), schema.getVersion(), schema.getId(), schema.getSchema()
+        schema.getSubject(),
+        schema.getVersion(),
+        schema.getId(),
+        schema.getSchemaType(),
+        schema.getReferences().stream()
+            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+                ref.getName(), ref.getSubject(), ref.getVersion()))
+            .collect(Collectors.toList()),
+        schema.getSchema()
     )).allSubjects();
   }
 
@@ -1023,15 +1025,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   @Override
   public boolean isCompatible(String subject,
-                              String schemaType,
-                              String newSchemaObj,
+                              Schema newSchema,
                               Schema latestSchema)
       throws SchemaRegistryException {
     if (latestSchema == null) {
       throw new InvalidSchemaException(
           "Latest schema not provided");
     }
-    return isCompatible(subject, schemaType, newSchemaObj, Collections.singletonList(latestSchema));
+    return isCompatible(subject, newSchema, Collections.singletonList(latestSchema));
   }
 
   /**
@@ -1039,8 +1040,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
    */
   @Override
   public boolean isCompatible(String subject,
-                              String schemaType,
-                              String newSchemaObj,
+                              Schema newSchema,
                               List<Schema> previousSchemas)
       throws SchemaRegistryException {
 
@@ -1055,20 +1055,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         throw new InvalidSchemaException(
             "Existing schema " + previousSchema + " is not a valid Avro schema");
       }
-      ParsedSchema prevParsedSchema = parseSchema(
-          previousSchema.getSchemaType(),
-          previousSchema.getSchema(),
-          previousSchema.getReferences());
+      ParsedSchema prevParsedSchema = parseSchema(previousSchema);
       prevParsedSchemas.add(prevParsedSchema);
     }
 
     CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
-    SchemaProvider provider = providers.get(schemaType);
-    if (provider == null) {
-      throw new IllegalArgumentException("Invalid schema type " + schemaType);
-    }
-    return parseSchema(schemaType, newSchemaObj, Collections.emptyList())
-        .isCompatible(compatibility, prevParsedSchemas);
+    return parseSchema(newSchema).isCompatible(compatibility, prevParsedSchemas);
   }
 
   private void deleteMode(String subject) throws StoreException {

@@ -39,16 +39,6 @@ public class Schema implements Comparable<Schema> {
   private List<SchemaReference> references = Collections.emptyList();
   private String schema;
 
-  public Schema(@JsonProperty("subject") String subject,
-                @JsonProperty("version") Integer version,
-                @JsonProperty("id") Integer id,
-                @JsonProperty("schema") String schema) {
-    this.subject = subject;
-    this.version = version;
-    this.id = id;
-    this.schema = schema;
-  }
-
   @JsonCreator
   public Schema(@JsonProperty("subject") String subject,
                 @JsonProperty("version") Integer version,

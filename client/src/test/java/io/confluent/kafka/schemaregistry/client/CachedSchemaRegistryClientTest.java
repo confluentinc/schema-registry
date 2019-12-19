@@ -58,7 +58,7 @@ public class CachedSchemaRegistryClientTest {
   private static final int ID_25 = 25;
   private static final io.confluent.kafka.schemaregistry.client.rest.entities.Schema SCHEMA_DETAILS
       = new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
-          SUBJECT_0, 7, ID_25, SCHEMA_STR_0);
+          SUBJECT_0, 7, ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0);
 
   private RestService restService;
   private CachedSchemaRegistryClient client;
@@ -185,7 +185,7 @@ public class CachedSchemaRegistryClientTest {
         eq(true)))
         .andReturn(
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, version,
-                ID_25, SCHEMA_STR_0));
+                ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
 
     replay(restService);
 
@@ -276,8 +276,7 @@ public class CachedSchemaRegistryClientTest {
         anyObject(List.class), eq(SUBJECT_0), eq(true)))
         .andReturn(new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0,
                                                                                      version,
-            ID_25,
-            SCHEMA_STR_0));
+            ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
 
     expect(restService.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
         SUBJECT_0,

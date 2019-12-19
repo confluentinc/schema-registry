@@ -57,13 +57,11 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       throws SchemaRegistryException;
 
   boolean isCompatible(String subject,
-                       String schemaType,
-                       String inputSchema,
+                       Schema newSchema,
                        Schema targetSchema) throws SchemaRegistryException;
 
   boolean isCompatible(String subject,
-                       String schemaType,
-                       String newSchema,
+                       Schema newSchema,
                        List<Schema> previousSchemas) throws SchemaRegistryException;
 
   void close();

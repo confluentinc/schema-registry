@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.annotations.VisibleForTesting;
 import io.swagger.annotations.ApiModelProperty;
 
 import java.io.IOException;
@@ -38,6 +39,7 @@ public class SchemaString {
   public SchemaString() {
   }
 
+  @VisibleForTesting
   public SchemaString(String schemaString) {
     this.schemaString = schemaString;
   }
