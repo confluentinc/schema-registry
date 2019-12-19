@@ -766,7 +766,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   private ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
     String schemaType = schema.getSchemaType();
-    if (schemaType == null) schemaType = AvroSchema.TYPE;
+    if (schemaType == null) {
+      schemaType = AvroSchema.TYPE;
+    }
     SchemaProvider provider = providers.get(schemaType);
     if (provider == null) {
       throw new IllegalArgumentException("Invalid schema type " + schemaType);
