@@ -415,9 +415,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         undeletedSchemasList.add(latestSchema);
       }
 
-      Schema canonicalizeSchema = canonicalizeSchema(schema);
+      canonicalizeSchema(schema);
       // assign a guid and put the schema in the kafka store
-      if (latestSchema == null || isCompatible(subject, canonicalizeSchema, undeletedSchemasList)) {
+      if (latestSchema == null || isCompatible(subject, schema, undeletedSchemasList)) {
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
         }
@@ -755,13 +755,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private Schema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
+  private void canonicalizeSchema(Schema schema) throws InvalidSchemaException {
     if (schema == null || schema.getSchema().trim().isEmpty()) {
       throw new InvalidSchemaException("Invalid schema " + schema);
     }
     ParsedSchema parsedSchema = parseSchema(schema);
-    return new Schema(schema.getSubject(), schema.getVersion(), schema.getId(),
-        schema.getSchemaType(), schema.getReferences(), parsedSchema.canonicalString());
+    schema.setSchema(parsedSchema.canonicalString());
   }
 
   private ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
