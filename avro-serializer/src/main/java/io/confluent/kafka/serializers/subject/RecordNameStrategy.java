@@ -34,7 +34,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
  * Instead, checks compatibility of any occurrences of the same record name
  * across <em>all</em> topics.
  */
-public class RecordNameStrategy implements SubjectNameStrategy<ParsedSchema>,
+public class RecordNameStrategy implements SubjectNameStrategy,
     io.confluent.kafka.serializers.subject.SubjectNameStrategy {
 
   @Override

@@ -64,7 +64,7 @@ public class AbstractKafkaAvroDeserializerTest {
 
   public void assertSchemaNotCopiedWhenDeserializedWithVersion(
       String topic,
-      SubjectNameStrategy<ParsedSchema> subjectNameStrategy) throws IOException,
+      SubjectNameStrategy subjectNameStrategy) throws IOException,
       RestClientException {
     Map configs = ImmutableMap.builder()
         .putAll(defaultConfigs)

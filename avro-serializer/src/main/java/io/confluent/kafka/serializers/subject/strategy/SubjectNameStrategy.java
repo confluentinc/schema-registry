@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.subject.strategy;
 
 import org.apache.kafka.common.Configurable;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
 /**
@@ -25,7 +26,7 @@ import io.confluent.kafka.serializers.subject.TopicNameStrategy;
  * the subject name under which the event record schemas should be registered
  * in the schema registry. The default is {@link TopicNameStrategy}.
  */
-public interface SubjectNameStrategy<T> extends Configurable {
+public interface SubjectNameStrategy extends Configurable {
 
   /**
    * For a given topic and message, returns the subject name under which the
@@ -36,6 +37,6 @@ public interface SubjectNameStrategy<T> extends Configurable {
    * @param schema the schema of the record being serialized/deserialized
    * @return The subject name under which the schema should be registered.
    */
-  String subjectName(String topic, boolean isKey, T schema);
+  String subjectName(String topic, boolean isKey, ParsedSchema schema);
 
 }

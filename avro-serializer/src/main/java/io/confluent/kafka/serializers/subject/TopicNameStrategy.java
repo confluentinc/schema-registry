@@ -27,7 +27,7 @@ import java.util.Map;
  * the subject name &lt;topic&gt;-key, and the message value is registered
  * under the subject name &lt;topic&gt;-value.
  */
-public class TopicNameStrategy implements SubjectNameStrategy<ParsedSchema>,
+public class TopicNameStrategy implements SubjectNameStrategy,
     io.confluent.kafka.serializers.subject.SubjectNameStrategy {
 
   @Override
