@@ -650,6 +650,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         return null;
       }
       schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
+      if (schema == null) {
+        return null;
+      }
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error while retrieving schema with id "
@@ -860,7 +863,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throws SchemaRegistryException {
     try {
       SchemaValue schemaValue = (SchemaValue) this.kafkaStore.get(new SchemaKey(subject, version));
-      return schemaValue.isDeleted();
+      return schemaValue == null || schemaValue.isDeleted();
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error while retrieving schema from the backend Kafka"
