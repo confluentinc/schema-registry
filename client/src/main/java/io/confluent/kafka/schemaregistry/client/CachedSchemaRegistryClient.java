@@ -147,7 +147,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private Schema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
     SchemaString restSchema = restService.getId(id);
-    return new Schema.Parser().parse(restSchema.getSchemaString());
+    Schema.Parser parser = new Schema.Parser();
+    parser.setValidateDefaults(false);
+    return parser.parse(restSchema.getSchemaString());
   }
 
   private int getVersionFromRegistry(String subject, Schema schema)

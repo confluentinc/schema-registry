@@ -31,6 +31,7 @@ public class AvroSchemaUtils {
 
   static {
     Schema.Parser parser = new Schema.Parser();
+    parser.setValidateDefaults(false);
     primitiveSchemas = new HashMap<>();
     primitiveSchemas.put("Null", createPrimitiveSchema(parser, "null"));
     primitiveSchemas.put("Boolean", createPrimitiveSchema(parser, "boolean"));
@@ -48,7 +49,9 @@ public class AvroSchemaUtils {
   }
 
   protected static Schema copyOf(Schema schema) {
-    return new Schema.Parser().parse(schema.toString());
+    Schema.Parser parser = new Schema.Parser();
+    parser.setValidateDefaults(false);
+    return parser.parse(schema.toString());
   }
 
   protected static Map<String, Schema> getPrimitiveSchemas() {
