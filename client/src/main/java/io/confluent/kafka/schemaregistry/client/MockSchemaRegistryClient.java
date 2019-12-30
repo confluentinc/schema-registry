@@ -164,6 +164,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         // each schema. You could also get the schema without using a subject and to cover that we
         // need to add an entry with null subject
         Schema.Parser parser = new Schema.Parser();
+        parser.setValidateDefaults(false);
         idCache.get(null).put(id, parser.parse(schema.toString()));
       }
       return id;
