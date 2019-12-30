@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.avro;
 import org.apache.avro.Schema;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -73,6 +74,28 @@ public class AvroCompatibilityTest {
       + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"bar\"}]}";
   private final Schema schema8 = AvroUtils.parseSchema(schemaString8).schemaObj;
   
+  private final String goodDefaultNullString = "{\"type\":\"record\","
+      + "\"name\":\"myrecord\","
+      + "\"fields\":"
+      + "[{\"type\":[\"null\", \"string\"],\"name\":\"f1\", \"default\": null},"
+      + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"},"
+      + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"bar\"}]}";
+  private final Schema goodDefaultNull = AvroUtils.parseSchema(goodDefaultNullString).schemaObj;
+
+  private final String badDefaultNullString = "{\"type\":\"record\","
+      + "\"name\":\"myrecord\","
+      + "\"fields\":"
+      + "[{\"type\":[\"null\", \"string\"],\"name\":\"f1\", \"default\": \"null\"},"
+      + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"},"
+      + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"bar\"}]}";
+
+
+  @Test
+  public void testBadDefaultNull() {
+    Schema badDefaultNull = AvroUtils.parseSchema(badDefaultNullString).schemaObj;
+    assertEquals(badDefaultNull.toString(), goodDefaultNull.toString());
+  }
+
   /*
    * Backward compatibility: A new schema is backward compatible if it can be used to read the data
    * written in the previous schema.

@@ -87,6 +87,11 @@
                 <artifactId>podam</artifactId>
                 <version>${podam.version}</version>
             </dependency>
+            <dependency>
+                <groupId>net.thisptr</groupId>
+                <artifactId>jackson-jq</artifactId>
+                <version>1.0.0-preview.20191208</version>
+            </dependency>
 
             <!--children-->
             <dependency>
