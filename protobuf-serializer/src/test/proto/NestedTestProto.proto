@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package io.confluent.kafka.serializers.protobuf.test;
+
+option java_package = "io.confluent.kafka.serializers.protobuf.test";
+
+message UserId {
+    oneof user_id {
+        string kafka_user_id = 1;
+        int32 other_user_id = 2;
+        MessageId another_id = 3;
+    }
+}
+
+message MessageId {
+    string id = 1;
+}
+
+enum Status {
+    ACTIVE = 0;
+    INACTIVE = 1;
+}
+
+message ComplexType {
+    oneof some_val {
+        string one_id = 1;
+        int32 other_id = 2;
+    }
+    bool is_active = 3;
+}
+
+/*
+ * Complex message using nested protos and repeated fields
+ */
+message NestedMessage {
+    UserId user_id = 1;
+    bool is_active = 2;
+    repeated string experiments_active = 3;
+    google.protobuf.Timestamp updated_at = 4;
+    Status status = 5;
+    ComplexType complex_type = 6;
+    map<string, string> map_type = 7;
+}

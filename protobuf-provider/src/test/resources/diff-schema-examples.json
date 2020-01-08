@@ -1,0 +1,129 @@
+[
+  {
+    "description": "Detect added field",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}",
+    "changes": [
+      "FIELD_ADDED #/TestMessage/2"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect added field to nested type",
+    "original_schema": "syntax = \"proto3\";\nmessage Wrapper {\n    int32 wrapperInt = 1;\n    message TestMessage {\n    string test_string = 1;\n}\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage Wrapper {\n    int32 wrapperInt = 1;\n    message TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}\n}",
+    "changes": [
+      "FIELD_ADDED #/Wrapper/TestMessage/2"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removed field",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}\n",
+    "changes": [
+      "FIELD_REMOVED #/TestMessage/2"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible field number type change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int32 test_int = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int64 test_int = 2;\n}",
+    "changes": [],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible field string type change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    bytes test_string2 = 2;\n}",
+    "changes": [],
+    "compatible": true
+  },
+  {
+    "description": "Detect field number type to enum change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int32 test_int = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    Status test_int = 2;\n}\nenum Status {\n    ACTIVE = 0;\n    INACTIVE = 1;\n}",
+    "changes": [
+      "ENUM_ADDED #/Status"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect enum type to field number change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    Status test_int = 2;\n}\nenum Status {\n    ACTIVE = 0;\n    INACTIVE = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int32 test_int = 2;\n}",
+    "changes": [
+      "ENUM_REMOVED #/Status"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible field to oneof change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    oneof new_oneof {\n        string test_string2 = 2;\n        int32 other_id = 3;\n}\n}",
+    "changes": [
+      "ONEOF_ADDED #/TestMessage/new_oneof"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible field to oneof change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    oneof new_oneof {\n    string test_string = 1;\n    string test_string2 = 2;\n        int32 other_id = 3;\n}\n}",
+    "changes": [
+      "MULTIPLE_FIELDS_MOVED_TO_ONEOF #/TestMessage/new_oneof",
+      "ONEOF_ADDED #/TestMessage/new_oneof"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect compatible add field to oneof",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    oneof new_oneof {\n    string test_string = 1;\n    string test_string2 = 2;\n}\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    oneof new_oneof {\n    string test_string = 1;\n    string test_string2 = 2;\n        int32 other_id = 3;\n}\n}",
+    "changes": [
+      "ONEOF_FIELD_ADDED #/TestMessage/new_oneof/3"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible remove field from oneof",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    oneof new_oneof {\n    string test_string = 1;\n    string test_string2 = 2;\n        int32 other_id = 3;\n}\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    oneof new_oneof {\n    string test_string = 1;\n    string test_string2 = 2;\n}\n}",
+    "changes": [
+      "ONEOF_FIELD_REMOVED #/TestMessage/new_oneof/3"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect incompatible field type change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int32 test_int = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    TestMessage2 test_int = 2;\n}\nmessage TestMessage2 {\n    string s1 = 1;\n}",
+    "changes": [
+      "MESSAGE_ADDED #/TestMessage2",
+      "FIELD_KIND_CHANGED #/TestMessage/2"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect incompatible field type change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int32 test_int = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}",
+    "changes": [
+      "FIELD_NAME_CHANGED #/TestMessage/2",
+      "FIELD_SCALAR_KIND_CHANGED #/TestMessage/2"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect incompatible field type change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    TestMessage2 test_int = 2;\n}\nmessage TestMessage2 {\n    string s1 = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    TestMessage3 test_int = 2;\n}\nmessage TestMessage3 {\n    string s1 = 1;\n}",
+    "changes": [
+      "MESSAGE_REMOVED #/TestMessage2",
+      "MESSAGE_ADDED #/TestMessage3",
+      "FIELD_NAMED_TYPE_CHANGED #/TestMessage/2"
+    ],
+    "compatible": false
+  }
+]
