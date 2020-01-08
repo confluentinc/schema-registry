@@ -200,11 +200,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
    * </li>
    */
   private Schema getReaderSchema(Schema writerSchema, Schema readerSchema) {
-    if (readerSchema!=null) {
+    if (readerSchema != null) {
       return readerSchema;
     }
     readerSchema = readerSchemaCache.get(writerSchema.getFullName());
-    if (readerSchema!=null) {
+    if (readerSchema != null) {
       return readerSchema;
     }
     boolean writerSchemaIsPrimitive =
