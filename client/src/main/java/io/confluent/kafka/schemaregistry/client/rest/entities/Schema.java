@@ -26,6 +26,7 @@ import javax.ws.rs.DefaultValue;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 
@@ -123,40 +124,18 @@ public class Schema implements Comparable<Schema> {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-
-    Schema that = (Schema) o;
-
-    if (!this.subject.equals(that.subject)) {
-      return false;
-    }
-    if (!this.version.equals(that.version)) {
-      return false;
-    }
-    if (!this.id.equals(that.getId())) {
-      return false;
-    }
-    if (!this.schemaType.equals(that.getSchemaType())) {
-      return false;
-    }
-    if (!this.references.equals(that.getReferences())) {
-      return false;
-    }
-    if (!this.schema.equals(that.schema)) {
-      return false;
-    }
-
-    return true;
+    Schema schema1 = (Schema) o;
+    return Objects.equals(subject, schema1.subject)
+        && Objects.equals(version, schema1.version)
+        && Objects.equals(id, schema1.id)
+        && Objects.equals(schemaType, schema1.schemaType)
+        && Objects.equals(references, schema1.references)
+        && Objects.equals(schema, schema1.schema);
   }
 
   @Override
   public int hashCode() {
-    int result = subject.hashCode();
-    result = 31 * result + version;
-    result = 31 * result + id.intValue();
-    result = 31 * result + schemaType.hashCode();
-    result = 31 * result + references.hashCode();
-    result = 31 * result + schema.hashCode();
-    return result;
+    return Objects.hash(subject, version, id, schemaType, references, schema);
   }
 
   @Override
