@@ -124,8 +124,11 @@ public class CompatibilityResource {
       }
     } else {
       try {
-        isCompatible = schemaRegistry
-            .isCompatible(subject, request.getSchema(), schemaForSpecifiedVersion.getSchema());
+        isCompatible = schemaRegistry.isCompatible(
+            subject, new Schema(subject, request.getVersion(), request.getId(),
+                request.getSchemaType(), request.getReferences(), request.getSchema()),
+            schemaForSpecifiedVersion
+        );
       } catch (InvalidSchemaException e) {
         throw Errors.invalidAvroException("Invalid input schema " + request.getSchema(), e);
       } catch (SchemaRegistryStoreException e) {

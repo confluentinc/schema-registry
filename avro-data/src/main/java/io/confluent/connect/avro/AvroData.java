@@ -59,6 +59,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 
@@ -300,45 +301,9 @@ public class AvroData {
   }
 
   private Cache<Schema, org.apache.avro.Schema> fromConnectSchemaCache;
-  private Cache<AvroSchemaAndVersion, Schema> toConnectSchemaCache;
+  private Cache<AvroSchema, Schema> toConnectSchemaCache;
   private boolean connectMetaData;
   private boolean enhancedSchemaSupport;
-
-  private static class AvroSchemaAndVersion {
-    private org.apache.avro.Schema schema;
-    private Integer version;
-
-    public AvroSchemaAndVersion(org.apache.avro.Schema schema, Integer version) {
-      this.schema = schema;
-      this.version = version;
-    }
-
-    public org.apache.avro.Schema schema() {
-      return schema;
-    }
-
-    public Integer version() {
-      return version;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      AvroSchemaAndVersion that = (AvroSchemaAndVersion) o;
-      return Objects.equals(schema, that.schema) && Objects.equals(version, that.version);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(schema, version);
-    }
-  }
-
 
   public AvroData(int cacheSize) {
     this(new AvroDataConfig.Builder()
@@ -1510,7 +1475,7 @@ public class AvroData {
     // the internal conversions, this is the safest place to add caching since some of the internal
     // conversions take extra flags (like forceOptional) which means the resulting schema might not
     // exactly match the Avro schema.
-    AvroSchemaAndVersion schemaAndVersion = new AvroSchemaAndVersion(schema, version);
+    AvroSchema schemaAndVersion = new AvroSchema(schema, version);
     Schema cachedSchema = toConnectSchemaCache.get(schemaAndVersion);
     if (cachedSchema != null) {
       return cachedSchema;
@@ -2009,8 +1974,8 @@ public class AvroData {
 
   private static boolean isEnumSchema(Schema schema) {
     return schema.type() == Schema.Type.STRING
-           && schema.name() != null
-           && schema.name().equals(AVRO_TYPE_ENUM);
+           && schema.parameters() != null
+           && schema.parameters().containsKey(AVRO_TYPE_ENUM);
   }
 
   private static boolean isInstanceOfAvroSchemaTypeForSimpleSchema(Schema fieldSchema,

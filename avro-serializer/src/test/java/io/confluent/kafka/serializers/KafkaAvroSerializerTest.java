@@ -35,6 +35,8 @@ import java.util.Properties;
 
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.User;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -217,7 +219,7 @@ public class KafkaAvroSerializerTest {
     );
     avroSerializer.configure(configs, false);
     IndexedRecord avroRecord = createAvroRecord();
-    schemaRegistry.register(topic + "-value", avroRecord.getSchema());
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
     assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
@@ -475,7 +477,7 @@ public class KafkaAvroSerializerTest {
     HashMap<String, String> props = new HashMap<>();
     props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
-    props.put(AbstractKafkaAvroSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG, "5");
+    props.put(AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG, "5");
     avroSerializer.configure(props, false);
   }
 

@@ -41,6 +41,7 @@ import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -86,7 +87,14 @@ public class SubjectsResource {
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     // returns version if the schema exists. Otherwise returns 404
-    Schema schema = new Schema(subject, 0, -1, request.getSchema());
+    Schema schema = new Schema(
+        subject,
+        0,
+        -1,
+        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
+        request.getReferences(),
+        request.getSchema()
+    );
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
     try {
       if (!schemaRegistry.hasSubjects(subject)) {

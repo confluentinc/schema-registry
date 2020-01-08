@@ -19,26 +19,47 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema.SchemaTypeConverter;
 import io.swagger.annotations.ApiModelProperty;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
-@JsonInclude(JsonInclude.Include.NON_NULL)
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class SchemaString {
 
+  private String schemaType = AvroSchema.TYPE;
   private String schemaString;
+  private List<SchemaReference> references = Collections.emptyList();
   private Integer maxId;
 
   public SchemaString() {
-
   }
 
+  @VisibleForTesting
   public SchemaString(String schemaString) {
     this.schemaString = schemaString;
   }
 
   public static SchemaString fromJson(String json) throws IOException {
     return new ObjectMapper().readValue(json, SchemaString.class);
+  }
+
+  @ApiModelProperty(value = "Schema type")
+  @JsonProperty("schemaType")
+  @JsonSerialize(converter = SchemaTypeConverter.class)
+  public String getSchemaType() {
+    return schemaType;
+  }
+
+  @JsonProperty("schemaType")
+  public void setSchemaType(String schemaType) {
+    this.schemaType = schemaType;
   }
 
   @ApiModelProperty(value = "Schema string identified by the ID")
@@ -52,6 +73,18 @@ public class SchemaString {
     this.schemaString = schemaString;
   }
 
+  @ApiModelProperty(value = "Schema references")
+  @JsonProperty("references")
+  public List<SchemaReference> getReferences() {
+    return this.references;
+  }
+
+  @JsonProperty("references")
+  public void setReferences(List<SchemaReference> references) {
+    this.references = references;
+  }
+
+  @ApiModelProperty(value = "Maximum ID")
   @JsonProperty("maxId")
   public Integer getMaxId() {
     return maxId;

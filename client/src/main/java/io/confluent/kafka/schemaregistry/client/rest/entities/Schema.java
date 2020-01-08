@@ -16,22 +16,41 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.util.StdConverter;
 
+import javax.ws.rs.DefaultValue;
+
+import java.util.Collections;
+import java.util.List;
+
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class Schema implements Comparable<Schema> {
 
   private String subject;
   private Integer version;
   private Integer id;
+  private String schemaType = AvroSchema.TYPE;
+  private List<SchemaReference> references = Collections.emptyList();
   private String schema;
 
+  @JsonCreator
   public Schema(@JsonProperty("subject") String subject,
                 @JsonProperty("version") Integer version,
                 @JsonProperty("id") Integer id,
+                @JsonProperty("schemaType") @DefaultValue("AVRO") String schemaType,
+                @JsonProperty("references") List<SchemaReference> references,
                 @JsonProperty("schema") String schema) {
     this.subject = subject;
     this.version = version;
     this.id = id;
+    this.schemaType = schemaType;
+    this.references = references != null ? references : Collections.emptyList();
     this.schema = schema;
   }
 
@@ -65,6 +84,27 @@ public class Schema implements Comparable<Schema> {
     this.id = id;
   }
 
+  @JsonProperty("schemaType")
+  @JsonSerialize(converter = SchemaTypeConverter.class)
+  public String getSchemaType() {
+    return this.schemaType;
+  }
+
+  @JsonProperty("schemaType")
+  public void setSchemaType(String schemaType) {
+    this.schemaType = schemaType;
+  }
+
+  @JsonProperty("references")
+  public List<SchemaReference> getReferences() {
+    return this.references;
+  }
+
+  @JsonProperty("references")
+  public void setReferences(List<SchemaReference> references) {
+    this.references = references;
+  }
+
   @JsonProperty("schema")
   public String getSchema() {
     return this.schema;
@@ -95,6 +135,12 @@ public class Schema implements Comparable<Schema> {
     if (!this.id.equals(that.getId())) {
       return false;
     }
+    if (!this.schemaType.equals(that.getSchemaType())) {
+      return false;
+    }
+    if (!this.references.equals(that.getReferences())) {
+      return false;
+    }
     if (!this.schema.equals(that.schema)) {
       return false;
     }
@@ -107,6 +153,8 @@ public class Schema implements Comparable<Schema> {
     int result = subject.hashCode();
     result = 31 * result + version;
     result = 31 * result + id.intValue();
+    result = 31 * result + schemaType.hashCode();
+    result = 31 * result + references.hashCode();
     result = 31 * result + schema.hashCode();
     return result;
   }
@@ -117,6 +165,8 @@ public class Schema implements Comparable<Schema> {
     sb.append("{subject=" + this.subject + ",");
     sb.append("version=" + this.version + ",");
     sb.append("id=" + this.id + ",");
+    sb.append("schemaType=" + this.schemaType + ",");
+    sb.append("references=" + this.references + ",");
     sb.append("schema=" + this.schema + "}");
     return sb.toString();
   }
@@ -129,5 +179,12 @@ public class Schema implements Comparable<Schema> {
     }
     result = this.version - that.version;
     return result;
+  }
+
+  static class SchemaTypeConverter extends StdConverter<String, String> {
+    @Override
+    public String convert(final String value) {
+      return AvroSchema.TYPE.equals(value) ? null : value;
+    }
   }
 }

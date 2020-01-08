@@ -25,6 +25,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * @deprecated  Use {@link io.confluent.kafka.schemaregistry.CompatibilityChecker} instead
+ */
+@Deprecated
 public class AvroCompatibilityChecker {
 
   // Check if the new schema can be used to read data produced by the previous schema

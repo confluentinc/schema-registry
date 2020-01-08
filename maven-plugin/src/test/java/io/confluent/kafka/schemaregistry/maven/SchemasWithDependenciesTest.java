@@ -1,18 +1,19 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import org.apache.avro.Schema;
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.MojoFailureException;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.maven.UploadSchemaRegistryMojo.Reference;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 
 public class SchemasWithDependenciesTest extends SchemaRegistryTest {
 
@@ -50,13 +51,9 @@ public class SchemasWithDependenciesTest extends SchemaRegistryTest {
 
 
     @Test
-    public void testSchemaWithDependenciesRegister() throws IOException {
-        RegisterSchemaRegistryMojo schemaRegistryMojo = new RegisterSchemaRegistryMojo() {
-            @Override
-            public void execute() throws MojoExecutionException, MojoFailureException {
-
-            }
-        };
+    public void testSchemaWithDependencies() throws Exception {
+        RegisterSchemaRegistryMojo schemaRegistryMojo = new RegisterSchemaRegistryMojo();
+        schemaRegistryMojo.client = new MockSchemaRegistryClient();
 
         File pizzaFile = new File(tempDirectory, "pizza.avsc");
         File amountFile = new File(tempDirectory, "amount.avsc");
@@ -68,50 +65,19 @@ public class SchemasWithDependenciesTest extends SchemaRegistryTest {
             amountWriter.write(dependency);
         }
 
-        ArrayList<String> imports = new ArrayList<>();
-        imports.add(amountFile.getAbsolutePath());
-        schemaRegistryMojo.imports = imports;
+        Map<String, List<Reference>> refs = new LinkedHashMap<>();
+        List<Reference> subjectRefs = new ArrayList<>();
+        subjectRefs.add(new Reference("com.pizza.Amount", "Amount", null));
+        refs.put("Pizza", subjectRefs);
+        schemaRegistryMojo.references = refs;
 
-        Map<String,File> schemas = new HashMap<>();
+        Map<String, File> schemas = new LinkedHashMap<>();
+        schemas.put("Amount", amountFile);
         schemas.put("Pizza", pizzaFile);
+        schemaRegistryMojo.subjects = schemas;
 
-        Map<String, Schema> parsedSchemas = schemaRegistryMojo.loadSchemas(schemas);
-        Schema pizza = parsedSchemas.get("Pizza");
-
-        Assert.assertNotNull("The schema should've been generated", pizza);
-        Assert.assertTrue("The schema should contain fields from the dependency", pizza.toString().contains("currency"));
-    }
-
-    @Test
-    public void testSchemaWithDependencies() throws IOException {
-        TestCompatibilitySchemaRegistryMojo schemaRegistryMojo = new TestCompatibilitySchemaRegistryMojo() {
-            @Override
-            public void execute() throws MojoExecutionException, MojoFailureException {
-
-            }
-
-
-        };
-
-        File pizzaFile = new File(tempDirectory, "pizza.avsc");
-        File amountFile = new File(tempDirectory, "amount.avsc");
-        try (
-                FileWriter pizzaWriter = new FileWriter(pizzaFile);
-                FileWriter amountWriter = new FileWriter(amountFile)
-        ) {
-            pizzaWriter.write(schema);
-            amountWriter.write(dependency);
-        }
-
-        ArrayList<String> imports = new ArrayList<>();
-        imports.add(amountFile.getAbsolutePath());
-        schemaRegistryMojo.imports = imports;
-
-        Map<String,File> schemas = new HashMap<>();
-        schemas.put("Pizza", pizzaFile);
-
-        Map<String, Schema> parsedSchemas = schemaRegistryMojo.loadSchemas(schemas);
-        Schema pizza = parsedSchemas.get("Pizza");
+        schemaRegistryMojo.execute();
+        Schema pizza = ((AvroSchema) schemaRegistryMojo.schemas.get("Pizza")).rawSchema();
 
         Assert.assertNotNull("The schema should've been generated", pizza);
         Assert.assertTrue("The schema should contain fields from the dependency", pizza.toString().contains("currency"));

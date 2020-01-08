@@ -16,90 +16,60 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
-import com.google.inject.internal.util.Preconditions;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import org.apache.avro.Schema;
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 @Mojo(name = "test-compatibility")
-public class TestCompatibilitySchemaRegistryMojo extends SchemaRegistryMojo {
+public class TestCompatibilitySchemaRegistryMojo extends UploadSchemaRegistryMojo {
 
-  @Parameter(required = true)
-  Map<String, File> subjects = new HashMap<>();
-
-  Map<String, Boolean> schemaCompatibility;
-
-  @Parameter(required = false)
-  List<String> imports;
+  Map<String, Boolean> schemaCompatibility = new HashMap<>();
 
   @Override
-  public void execute() throws MojoExecutionException, MojoFailureException {
-    Map<String, Schema> subjectToSchemaLookup = loadSchemas(this.subjects);
-    this.schemaCompatibility = new LinkedHashMap<>();
+  protected boolean processSchema(String subject,
+                                  ParsedSchema schema,
+                                  Map<String, Integer> schemaVersions)
+      throws IOException, RestClientException {
 
-    int errorCount = 0;
+    File schemaPath = this.subjects.get(subject);
 
-    for (Map.Entry<String, Schema> kvp : subjectToSchemaLookup.entrySet()) {
-      try {
-        File schemaPath = this.subjects.get(kvp.getKey());
-
-        if (getLog().isDebugEnabled()) {
-          getLog().debug(
-              String.format("Calling register('%s', '%s')", kvp.getKey(),
-                            kvp.getValue().toString(true))
-          );
-        }
-
-        boolean compatible = this.client().testCompatibility(kvp.getKey(), kvp.getValue());
-
-        if (compatible) {
-          getLog().info(
-              String.format(
-                  "Schema %s is compatible with subject(%s)",
-                  schemaPath,
-                  kvp.getKey()
-              )
-          );
-        } else {
-          getLog().error(
-              String.format(
-                  "Schema %s is not compatible with subject(%s)",
-                  schemaPath,
-                  kvp.getKey()
-              )
-          );
-          errorCount++;
-        }
-
-        this.schemaCompatibility.put(kvp.getKey(), compatible);
-      } catch (IOException | RestClientException e) {
-        getLog().error(
-            String.format("Exception thrown while registering subject(%s)", kvp.getKey()),
-            e
-        );
-      }
+    if (getLog().isDebugEnabled()) {
+      getLog().debug(
+          String.format("Calling testCompatibility('%s', '%s')", subject, schema)
+      );
     }
 
-    Preconditions.checkState(errorCount == 0,
-                             "One or more schema was found to be incompatible with the current "
-                             + "version.");
+    boolean compatible = this.client().testCompatibility(subject, schema);
+
+    if (compatible) {
+      getLog().info(
+          String.format(
+              "Schema %s is compatible with subject(%s)",
+              schemaPath,
+              subject
+          )
+      );
+    } else {
+      getLog().error(
+          String.format(
+              "Schema %s is not compatible with subject(%s)",
+              schemaPath,
+              subject
+          )
+      );
+    }
+
+    this.schemaCompatibility.put(subject, compatible);
+    return compatible;
   }
 
   @Override
-  protected Schema.Parser newParser() {
-    if (imports == null || imports.isEmpty()) {
-      return super.newParser();
-    }
-    return parserWithDependencies(imports);
+  protected String failureMessage() {
+    return "One or more schemas found to be incompatible with the current version.";
   }
 }

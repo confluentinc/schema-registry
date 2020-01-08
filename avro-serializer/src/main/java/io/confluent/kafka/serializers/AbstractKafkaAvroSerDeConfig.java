@@ -16,24 +16,17 @@
 
 package io.confluent.kafka.serializers;
 
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
-import io.confluent.common.config.AbstractConfig;
 import io.confluent.common.config.ConfigDef;
-import io.confluent.common.config.ConfigDef.Importance;
-import io.confluent.common.config.ConfigDef.Type;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
-import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 
 /**
- * Base class for configs for serializers and deserializers, defining a few common configs and
- * defaults.
+ * TODO: deprecate this class
+ * Use {@link io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig} instead
  */
-public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
+public class AbstractKafkaAvroSerDeConfig extends AbstractKafkaSchemaSerDeConfig {
 
   /**
    * Configurations beginning with this prefix can be used to specify headers to include in requests
@@ -116,94 +109,15 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   public static final String PROXY_HOST_DEFAULT = "";
   public static final String PROXY_HOST_DOC =
       "The hostname, or address, of the proxy server that will be used to connect to the schema "
-      + "registry instances.";
+          + "registry instances.";
+
   public static final String PROXY_PORT = SchemaRegistryClientConfig.PROXY_PORT;
   public static final int PROXY_PORT_DEFAULT = -1;
   public static final String PROXY_PORT_DOC =
       "The port number of the proxy server that will be used to connect to the schema registry "
-      + "instances.";
-
-  public static ConfigDef baseConfigDef() {
-    ConfigDef configDef = new ConfigDef();
-    configDef
-        .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
-                Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
-        .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
-                Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
-        .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
-                Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
-        .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
-            Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
-        .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
-                Importance.MEDIUM, BEARER_AUTH_CREDENTIALS_SOURCE_DOC)
-        .define(SCHEMA_REGISTRY_USER_INFO_CONFIG, Type.PASSWORD, SCHEMA_REGISTRY_USER_INFO_DEFAULT,
-                Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
-        .define(USER_INFO_CONFIG, Type.PASSWORD, USER_INFO_DEFAULT,
-                Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
-        .define(BEARER_AUTH_TOKEN_CONFIG, Type.PASSWORD, BEARER_AUTH_TOKEN_DEFAULT,
-                Importance.MEDIUM, BEARER_AUTH_TOKEN_DOC)
-        .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
-                Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
-        .define(VALUE_SUBJECT_NAME_STRATEGY, Type.CLASS, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
-                Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC)
-        .define(SCHEMA_REFLECTION_CONFIG, Type.BOOLEAN, SCHEMA_REFLECTION_DEFAULT,
-                Importance.LOW, SCHEMA_REFLECTION_DOC)
-        .define(PROXY_HOST, Type.STRING, PROXY_HOST_DEFAULT,
-                Importance.LOW, PROXY_HOST_DOC)
-        .define(PROXY_PORT, Type.INT, PROXY_PORT_DEFAULT,
-                Importance.LOW, PROXY_PORT_DOC);
-    SchemaRegistryClientConfig.withClientSslSupport(
-        configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
-    return configDef;
-  }
+          + "instances.";
 
   public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
     super(config, props);
-  }
-
-  public int getMaxSchemasPerSubject() {
-    return this.getInt(MAX_SCHEMAS_PER_SUBJECT_CONFIG);
-  }
-
-  public List<String> getSchemaRegistryUrls() {
-    return this.getList(SCHEMA_REGISTRY_URL_CONFIG);
-  }
-
-  public boolean autoRegisterSchema() {
-    return this.getBoolean(AUTO_REGISTER_SCHEMAS);
-  }
-
-  public Object keySubjectNameStrategy() {
-    return subjectNameStrategyInstance(KEY_SUBJECT_NAME_STRATEGY);
-  }
-
-  public Object valueSubjectNameStrategy() {
-    return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
-  }
-
-  public boolean useSchemaReflection() {
-    return this.getBoolean(SCHEMA_REFLECTION_CONFIG);
-  }
-
-  public Map<String, String> requestHeaders() {
-    return originalsWithPrefix(REQUEST_HEADER_PREFIX).entrySet().stream()
-        .collect(Collectors.toMap(Map.Entry::getKey, entry -> Objects.toString(entry.getValue())));
-  }
-
-  private Object subjectNameStrategyInstance(String config) {
-    Class subjectNameStrategyClass = this.getClass(config);
-    Class deprecatedClass = io.confluent.kafka.serializers.subject.SubjectNameStrategy.class;
-    if (deprecatedClass.isAssignableFrom(subjectNameStrategyClass)) {
-      return this.getConfiguredInstance(config, deprecatedClass);
-    }
-    return this.getConfiguredInstance(config, SubjectNameStrategy.class);
-  }
-
-  public String basicAuthUserInfo() {
-    String deprecatedValue = getString(SCHEMA_REGISTRY_USER_INFO_CONFIG);
-    if (deprecatedValue != null && !deprecatedValue.isEmpty()) {
-      return deprecatedValue;
-    }
-    return getString(USER_INFO_CONFIG);
   }
 }

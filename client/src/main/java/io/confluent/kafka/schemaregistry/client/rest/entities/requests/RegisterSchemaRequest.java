@@ -21,13 +21,18 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Objects;
 
-@JsonInclude(JsonInclude.Include.NON_NULL)
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class RegisterSchemaRequest {
 
   private Integer version;
   private Integer id;
+  private String schemaType;
+  private List<SchemaReference> references = null;
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
@@ -54,6 +59,26 @@ public class RegisterSchemaRequest {
     this.id = id;
   }
 
+  @JsonProperty("schemaType")
+  public String getSchemaType() {
+    return this.schemaType;
+  }
+
+  @JsonProperty("schemaType")
+  public void setSchemaType(String schemaType) {
+    this.schemaType = schemaType;
+  }
+
+  @JsonProperty("references")
+  public List<SchemaReference> getReferences() {
+    return this.references;
+  }
+
+  @JsonProperty("references")
+  public void setReferences(List<SchemaReference> references) {
+    this.references = references;
+  }
+
   @JsonProperty("schema")
   public String getSchema() {
     return this.schema;
@@ -75,12 +100,14 @@ public class RegisterSchemaRequest {
     RegisterSchemaRequest that = (RegisterSchemaRequest) o;
     return Objects.equals(version, that.version)
         && Objects.equals(id, that.id)
+        && Objects.equals(schemaType, that.schemaType)
+        && Objects.equals(references, that.references)
         && Objects.equals(schema, that.schema);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(version, id, schema);
+    return Objects.hash(schemaType, references, version, id, schema);
   }
 
   @Override
@@ -93,6 +120,8 @@ public class RegisterSchemaRequest {
     if (id != null) {
       buf.append("id=").append(id).append(", ");
     }
+    buf.append("schemaType=").append(this.schemaType).append(",");
+    buf.append("references=").append(this.references).append(",");
     buf.append("schema=").append(schema).append("}");
     return buf.toString();
   }

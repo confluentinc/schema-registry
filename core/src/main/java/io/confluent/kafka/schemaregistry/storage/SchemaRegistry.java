@@ -19,16 +19,25 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
-public interface SchemaRegistry {
+public interface SchemaRegistry extends SchemaVersionFetcher {
 
   void init() throws SchemaRegistryException;
 
   int register(String subject, Schema schema) throws SchemaRegistryException;
+
+  default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
+    try {
+      return get(subject, version, returnDeletedSchema);
+    } catch (SchemaRegistryException e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   Schema get(String subject, int version, boolean returnDeletedSchema)
       throws SchemaRegistryException;
@@ -48,12 +57,12 @@ public interface SchemaRegistry {
       throws SchemaRegistryException;
 
   boolean isCompatible(String subject,
-                       String inputSchema,
-                       String targetSchema) throws SchemaRegistryException;
+                       Schema newSchema,
+                       Schema targetSchema) throws SchemaRegistryException;
 
   boolean isCompatible(String subject,
-                       String newSchema,
-                       List<String> previousSchemas) throws SchemaRegistryException;
+                       Schema newSchema,
+                       List<Schema> previousSchemas) throws SchemaRegistryException;
 
   void close();
 

@@ -16,30 +16,35 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaParseException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
+import java.util.stream.Collectors;
+
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
 public abstract class SchemaRegistryMojo extends AbstractMojo {
 
   @Parameter(required = true)
   List<String> schemaRegistryUrls;
+
   @Parameter
   String userInfoConfig;
-  private SchemaRegistryClient client;
+
+  @Parameter(required = false)
+  List<String> schemaProviders = new ArrayList<>();
+
+  protected SchemaRegistryClient client;
 
   void client(SchemaRegistryClient client) {
     this.client = client;
@@ -54,65 +59,25 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
         config.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
         config.put(SchemaRegistryClientConfig.USER_INFO_CONFIG, userInfoConfig);
       }
-      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, config);
+      List<SchemaProvider> providers = schemaProviders != null && !schemaProviders.isEmpty()
+                                       ? schemaProviders()
+                                       : Collections.singletonList(new AvroSchemaProvider());
+      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls,
+          1000,
+          providers,
+          config
+      );
     }
     return this.client;
   }
 
-  protected Map<String, Schema> loadSchemas(Map<String, File> subjects) {
-    int errorCount = 0;
-    Map<String, Schema> results = new LinkedHashMap<>();
-
-    for (Map.Entry<String, File> kvp : subjects.entrySet()) {
-      Schema.Parser parser = newParser();
-      getLog().debug(
-          String.format(
-              "Loading schema for subject(%s) from %s.",
-              kvp.getKey(),
-              kvp.getValue()
-          )
-      );
-
-      try (FileInputStream inputStream = new FileInputStream(kvp.getValue())) {
-        Schema schema = parser.parse(inputStream);
-        results.put(kvp.getKey(), schema);
-      } catch (IOException ex) {
-        getLog().error("Exception thrown while loading " + kvp.getValue(), ex);
-        errorCount++;
-      } catch (SchemaParseException ex) {
-        getLog().error("Exception thrown while parsing " + kvp.getValue(), ex);
-        errorCount++;
+  private List<SchemaProvider> schemaProviders() {
+    return schemaProviders.stream().map(s -> {
+      try {
+        return Utils.newInstance(s, SchemaProvider.class);
+      } catch (ClassNotFoundException e) {
+        throw new RuntimeException(e);
       }
-    }
-
-    if (errorCount > 0) {
-      throw new IllegalStateException("One or more schemas could not be loaded.");
-    }
-
-    return results;
+    }).collect(Collectors.toList());
   }
-
-  protected Schema.Parser newParser() {
-    return new Schema.Parser();
-  }
-
-  Schema.Parser parserWithDependencies(List<String> dependencies) {
-    Schema.Parser parserWithDepencies = new Schema.Parser();
-
-    for (String dependency : dependencies) {
-      try (FileInputStream inputStream = new FileInputStream(dependency)) {
-        parserWithDepencies.parse(inputStream);
-        getLog().debug(String.format("Parsing imports:%s", dependency));
-      } catch (IOException ex) {
-        getLog().error("Exception thrown while loading dependency " + dependency, ex);
-      } catch (SchemaParseException ex) {
-        getLog().error("Exception thrown while parsing dependency " + dependency, ex);
-      }
-    }
-
-    return parserWithDepencies;
-  }
-
-
-
 }

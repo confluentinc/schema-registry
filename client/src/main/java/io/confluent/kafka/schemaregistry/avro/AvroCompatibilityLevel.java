@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
+/**
+ * @deprecated  Use {@link io.confluent.kafka.schemaregistry.CompatibilityLevel} instead
+ */
+@Deprecated
 public enum AvroCompatibilityLevel {
   NONE("NONE", AvroCompatibilityChecker.NO_OP_CHECKER),
   BACKWARD("BACKWARD", AvroCompatibilityChecker.BACKWARD_CHECKER),

@@ -14,6 +14,7 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -405,10 +406,12 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
     int id = 100;
     SchemaKey schemaKey = new SchemaKey("subject", 1);
-    SchemaValue schemaValue = new SchemaValue("subject", 1, id, "schemaString", false);
+    SchemaValue schemaValue =
+        new SchemaValue("subject", 1, id, "schemaString", false);
 
     SchemaKey schemaKey2 = new SchemaKey("subject2", 1);
-    SchemaValue schemaValue2 = new SchemaValue("subject2", 1, id, "schemaString", false);
+    SchemaValue schemaValue2 =
+        new SchemaValue("subject2", 1, id, "schemaString", false);
 
     inMemoryStore.put(schemaKey, schemaValue);
     inMemoryStore.schemaRegistered(schemaKey, schemaValue);
@@ -434,7 +437,8 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
     int id = 100;
     SchemaKey schemaKey = new SchemaKey("subject", 1);
-    SchemaValue schemaValue = new SchemaValue("subject", 1, id, "schemaString", true);
+    SchemaValue schemaValue =
+        new SchemaValue("subject", 1, id, "schemaString", true);
 
     // After a compaction, the schema will not be registered but only deleted
     inMemoryStore.put(schemaKey, schemaValue);

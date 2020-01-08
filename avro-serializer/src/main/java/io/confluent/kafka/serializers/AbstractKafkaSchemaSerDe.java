@@ -16,26 +16,30 @@
 
 package io.confluent.kafka.serializers;
 
-import io.confluent.common.config.ConfigException;
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
-import io.confluent.kafka.serializers.subject.TopicNameStrategy;
-import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
+import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
+
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
  */
-public abstract class AbstractKafkaAvroSerDe {
+public abstract class AbstractKafkaSchemaSerDe {
 
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
@@ -47,7 +51,9 @@ public abstract class AbstractKafkaAvroSerDe {
   protected boolean useSchemaReflection;
 
 
-  protected void configureClientProperties(AbstractKafkaAvroSerDeConfig config) {
+  protected void configureClientProperties(
+      AbstractKafkaSchemaSerDeConfig config,
+      SchemaProvider provider) {
     List<String> urls = config.getSchemaRegistryUrls();
     int maxSchemaObject = config.getMaxSchemasPerSubject();
     Map<String, Object> originals = config.originalsWithPrefix("");
@@ -59,6 +65,7 @@ public abstract class AbstractKafkaAvroSerDe {
         schemaRegistry = new CachedSchemaRegistryClient(
             urls,
             maxSchemaObject,
+            Collections.singletonList(provider),
             originals,
             config.requestHeaders()
         );
@@ -95,7 +102,7 @@ public abstract class AbstractKafkaAvroSerDe {
   /**
    * Get the subject name for the given topic and value type.
    */
-  protected String getSubjectName(String topic, boolean isKey, Object value, Schema schema) {
+  protected String getSubjectName(String topic, boolean isKey, Object value, ParsedSchema schema) {
     Object subjectNameStrategy = subjectNameStrategy(isKey);
     if (subjectNameStrategy instanceof SubjectNameStrategy) {
       return ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
@@ -128,15 +135,32 @@ public abstract class AbstractKafkaAvroSerDe {
     }
   }
 
+  @Deprecated
   public int register(String subject, Schema schema) throws IOException, RestClientException {
     return schemaRegistry.register(subject, schema);
   }
 
+  public int register(String subject, ParsedSchema schema) throws IOException, RestClientException {
+    return schemaRegistry.register(subject, schema);
+  }
+
+  @Deprecated
   public Schema getById(int id) throws IOException, RestClientException {
     return schemaRegistry.getById(id);
   }
 
-  public Schema getBySubjectAndId(String subject, int id) throws IOException, RestClientException {
+  public ParsedSchema getSchemaById(int id) throws IOException, RestClientException {
+    return schemaRegistry.getSchemaById(id);
+  }
+
+  @Deprecated
+  public Schema getBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
     return schemaRegistry.getBySubjectAndId(subject, id);
+  }
+
+  public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
+    return schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 }

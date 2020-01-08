@@ -31,16 +31,19 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import kafka.utils.VerifiableProperties;
 
-public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe {
+public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSerDe {
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
 
   protected void configure(KafkaAvroSerializerConfig config) {
-    configureClientProperties(config);
+    configureClientProperties(config, new AvroSchemaProvider());
     autoRegisterSchema = config.autoRegisterSchema();
   }
 
@@ -68,10 +71,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
       schema = AvroSchemaUtils.getSchema(object, useSchemaReflection);
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema: ";
-        id = schemaRegistry.register(subject, schema);
+        id = schemaRegistry.register(subject, new AvroSchema(schema));
       } else {
         restClientErrorMsg = "Error retrieving Avro schema: ";
-        id = schemaRegistry.getId(subject, schema);
+        id = schemaRegistry.getId(subject, new AvroSchema(schema));
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);

@@ -20,7 +20,8 @@ import java.io.IOException;
 
 import io.confluent.common.utils.AbstractPerformanceTest;
 import io.confluent.common.utils.PerformanceStats;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -69,11 +70,11 @@ public class SchemaRegistryClientPerformance extends AbstractPerformanceTest {
 
     client = new CachedSchemaRegistryClient(restService, Integer.MAX_VALUE);
     // No compatibility verification
-    client.updateCompatibility(null, AvroCompatibilityLevel.NONE.name);
+    client.updateCompatibility(null, CompatibilityLevel.NONE.name);
   }
 
   // sequential schema maker
-  private static Schema makeSchema(long num) {
+  private static AvroSchema makeAvroSchema(long num) {
     String schemaString = "{\"type\":\"record\","
                           + "\"name\":\"myrecord\","
                           + "\"fields\":"
@@ -81,12 +82,12 @@ public class SchemaRegistryClientPerformance extends AbstractPerformanceTest {
                           + "\"f" + num + "\"}]}";
     Schema.Parser parser1 = new Schema.Parser();
     Schema schema = parser1.parse(schemaString);
-    return schema;
+    return new AvroSchema(schema);
   }
 
   @Override
   protected void doIteration(PerformanceStats.Callback cb) {
-    Schema schema = makeSchema(this.registeredSchemas);
+    AvroSchema schema = makeAvroSchema(this.registeredSchemas);
 
     try {
       client.register(this.subject, schema);

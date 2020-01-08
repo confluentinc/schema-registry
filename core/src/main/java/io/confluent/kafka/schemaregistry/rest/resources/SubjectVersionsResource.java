@@ -35,11 +35,13 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -93,7 +95,8 @@ public class SubjectVersionsResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
   public Schema getSchemaByVersion(
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
-      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
+      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version,
+      @QueryParam("deleted") boolean lookupDeletedSchema) {
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
@@ -107,7 +110,7 @@ public class SubjectVersionsResource {
           + version
           + " from the schema registry";
     try {
-      schema = schemaRegistry.validateAndGetSchema(subject, versionId, false);
+      schema = schemaRegistry.validateAndGetSchema(subject, versionId, lookupDeletedSchema);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -131,8 +134,9 @@ public class SubjectVersionsResource {
       message = "Error code 50001 -- Error in the backend data store")})
   public String getSchemaOnly(
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
-      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
-    return getSchemaByVersion(subject, version).getSchema();
+      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version,
+      @QueryParam("deleted") boolean lookupDeletedSchema) {
+    return getSchemaByVersion(subject, version, lookupDeletedSchema).getSchema();
   }
 
   @GET
@@ -213,6 +217,8 @@ public class SubjectVersionsResource {
         subjectName,
         request.getVersion() != null ? request.getVersion() : 0,
         request.getId() != null ? request.getId() : -1,
+        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
+        request.getReferences(),
         request.getSchema()
     );
     int id;

@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
@@ -100,9 +100,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param defaultForTopLevel default value for the top level scope
    * @return the compatibility level if found, otherwise null
    */
-  AvroCompatibilityLevel compatibilityLevel(String subject,
-                                            boolean returnTopLevelIfNotFound,
-                                            AvroCompatibilityLevel defaultForTopLevel);
+  CompatibilityLevel compatibilityLevel(String subject,
+                                        boolean returnTopLevelIfNotFound,
+                                        CompatibilityLevel defaultForTopLevel);
 
   /**
    * Retrieves the mode for a subject.
