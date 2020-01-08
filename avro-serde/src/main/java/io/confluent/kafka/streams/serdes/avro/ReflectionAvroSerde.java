@@ -72,9 +72,26 @@ public class ReflectionAvroSerde<T> implements Serde<T> {
 
   private final Serde<T> inner;
 
+  public ReflectionAvroSerde() {
+    inner = Serdes
+        .serdeFrom(new ReflectionAvroSerializer<>(), new ReflectionAvroDeserializer<>());
+  }
+
   public ReflectionAvroSerde(Class<T> type) {
     inner = Serdes
         .serdeFrom(new ReflectionAvroSerializer<>(), new ReflectionAvroDeserializer<>(type));
+  }
+
+  /**
+   * For testing purposes only.
+   */
+  public ReflectionAvroSerde(final SchemaRegistryClient client) {
+    if (client == null) {
+      throw new IllegalArgumentException("schema registry client must not be null");
+    }
+    inner = Serdes.serdeFrom(
+        new ReflectionAvroSerializer<>(client),
+        new ReflectionAvroDeserializer<>(client));
   }
 
   /**
