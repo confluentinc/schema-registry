@@ -123,7 +123,10 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
       this.metadata.bootstrap(addresses);
       String metricGrpPrefix = "kafka.schema.registry";
 
-      ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(clientConfig, time);
+      ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(
+          clientConfig,
+          time,
+          logContext);
       long maxIdleMs = clientConfig.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
 
       NetworkClient netClient = new NetworkClient(
