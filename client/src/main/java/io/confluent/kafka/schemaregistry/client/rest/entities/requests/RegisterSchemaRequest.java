@@ -19,12 +19,14 @@ package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class RegisterSchemaRequest {
@@ -60,6 +62,7 @@ public class RegisterSchemaRequest {
   }
 
   @JsonProperty("schemaType")
+  @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
     return this.schemaType;
   }

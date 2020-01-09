@@ -21,7 +21,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.google.common.annotations.VisibleForTesting;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema.SchemaTypeConverter;
 import io.swagger.annotations.ApiModelProperty;
 
 import java.io.IOException;
