@@ -79,6 +79,7 @@ import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
 import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
 import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -174,6 +175,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     // Ensure Avro SchemaProvider is registered
     SchemaProvider avroSchemaProvider = new AvroSchemaProvider();
     avroSchemaProvider.configure(schemaProviderConfigs);
+    SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
+    protobufSchemaProvider.configure(schemaProviderConfigs);
     schemaProviders.add(avroSchemaProvider);
     for (SchemaProvider schemaProvider : schemaProviders) {
       log.info("Registering schema provider for {}: {}",

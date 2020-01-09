@@ -14,7 +14,7 @@
  *
  */
 
-package io.confluent.kafka.schemaregistry.protobuf.rest;
+package io.confluent.kafka.schemaregistry.rest.protobuf;
 
 import org.junit.Assert;
 import org.junit.Test;
