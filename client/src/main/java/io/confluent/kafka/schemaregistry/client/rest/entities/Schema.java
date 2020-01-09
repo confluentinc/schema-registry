@@ -20,7 +20,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.util.StdConverter;
 
 import javax.ws.rs.DefaultValue;
 
@@ -158,12 +157,5 @@ public class Schema implements Comparable<Schema> {
     }
     result = this.version - that.version;
     return result;
-  }
-
-  static class SchemaTypeConverter extends StdConverter<String, String> {
-    @Override
-    public String convert(final String value) {
-      return AvroSchema.TYPE.equals(value) ? null : value;
-    }
   }
 }
