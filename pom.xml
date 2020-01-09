@@ -226,9 +226,7 @@
                             <configuration>
                                 <protocVersion>${protobuf.version}</protocVersion>
                                 <includeStdTypes>true</includeStdTypes>
-                                <!--
                                 <addSources>none</addSources>
-                                -->
                                 <outputDirectory>src/test/java</outputDirectory>
                                 <inputDirectories>
                                     <include>src/test/proto</include>
