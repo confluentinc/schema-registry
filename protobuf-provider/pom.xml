@@ -54,32 +54,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>com.github.os72</groupId>
-                <artifactId>protoc-jar-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>generate-test-sources</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <protocVersion>${protobuf.version}</protocVersion>
-                            <includeStdTypes>true</includeStdTypes>
-                            <!--
-                            <addSources>none</addSources>
-                            -->
-                            <outputDirectory>src/test/java</outputDirectory>
-                            <inputDirectories>
-                                <include>src/test/proto</include>
-                            </inputDirectories>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
 </project>
