@@ -17,6 +17,7 @@
 package io.confluent.connect.protobuf;
 
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.MessageLite;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -77,12 +78,16 @@ public class ProtobufConverter implements Converter {
   public byte[] fromConnectData(String topic, Schema schema, Object value) {
     try {
       ProtobufSchemaAndValue schemaAndValue = protobufData.fromConnectData(schema, value);
-      return serializer.serialize(
-          topic,
-          isKey,
-          schemaAndValue.getValue(),
-          schemaAndValue.getSchema()
-      );
+      Object v = schemaAndValue.getValue();
+      if (v instanceof MessageLite) {
+        return serializer.serialize(topic,
+            isKey,
+            (MessageLite) v,
+            schemaAndValue.getSchema()
+        );
+      } else {
+        throw new DataException("Unsupported object of class " + v.getClass().getName());
+      }
     } catch (SerializationException e) {
       throw new DataException(String.format(
           "Failed to serialize Protobuf data from topic %s :",
@@ -130,7 +135,7 @@ public class ProtobufConverter implements Converter {
       configure(new KafkaProtobufSerializerConfig(configs));
     }
 
-    public byte[] serialize(String topic, boolean isKey, Object value, ProtobufSchema schema) {
+    public byte[] serialize(String topic, boolean isKey, MessageLite value, ProtobufSchema schema) {
       if (value == null) {
         return null;
       }

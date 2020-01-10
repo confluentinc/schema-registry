@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
+import com.google.protobuf.MessageLite;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -24,8 +25,8 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 
-public class KafkaProtobufSerializer extends AbstractKafkaProtobufSerializer
-    implements Serializer<Object> {
+public class KafkaProtobufSerializer<T extends MessageLite>
+    extends AbstractKafkaProtobufSerializer<T> implements Serializer<T> {
 
   private boolean isKey;
 
@@ -52,11 +53,10 @@ public class KafkaProtobufSerializer extends AbstractKafkaProtobufSerializer
   }
 
   @Override
-  public byte[] serialize(String topic, Object record) {
+  public byte[] serialize(String topic, T record) {
     if (record == null) {
       return null;
     }
-    // TODO also support reflection?
     ProtobufSchema schema = ProtobufSchemaUtils.getSchema(record);
     return serializeImpl(getSubjectName(topic, isKey, record, schema), record, schema);
   }

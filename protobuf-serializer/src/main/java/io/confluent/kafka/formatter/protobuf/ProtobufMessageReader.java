@@ -206,14 +206,14 @@ public class ProtobufMessageReader extends AbstractKafkaProtobufSerializer
         return null;
       }
       if (!parseKey) {
-        Object value = jsonToProtobuf(line, valueSchema);
+        DynamicMessage value = jsonToProtobuf(line, valueSchema);
         byte[] serializedValue = serializeImpl(valueSubject, value, valueSchema);
         return new ProducerRecord<>(topic, serializedValue);
       } else {
         int keyIndex = line.indexOf(keySeparator);
         if (keyIndex < 0) {
           if (ignoreError) {
-            Object value = jsonToProtobuf(line, valueSchema);
+            DynamicMessage value = jsonToProtobuf(line, valueSchema);
             byte[] serializedValue = serializeImpl(valueSubject, value, valueSchema);
             return new ProducerRecord<>(topic, serializedValue);
           } else {
@@ -228,10 +228,10 @@ public class ProtobufMessageReader extends AbstractKafkaProtobufSerializer
           if (keySerializer != null) {
             serializedKey = keySerializer.serialize(topic, keyString);
           } else {
-            Object key = jsonToProtobuf(keyString, keySchema);
+            DynamicMessage key = jsonToProtobuf(keyString, keySchema);
             serializedKey = serializeImpl(keySubject, key, keySchema);
           }
-          Object value = jsonToProtobuf(valueString, valueSchema);
+          DynamicMessage value = jsonToProtobuf(valueString, valueSchema);
           byte[] serializedValue = serializeImpl(valueSubject, value, valueSchema);
           return new ProducerRecord<>(topic, serializedKey, serializedValue);
         }
@@ -241,7 +241,7 @@ public class ProtobufMessageReader extends AbstractKafkaProtobufSerializer
     }
   }
 
-  private Object jsonToProtobuf(String jsonString, ProtobufSchema schema) {
+  private DynamicMessage jsonToProtobuf(String jsonString, ProtobufSchema schema) {
     try {
       DynamicMessage.Builder message = schema.newMessageBuilder();
       JsonFormat.parser().merge(jsonString, message);

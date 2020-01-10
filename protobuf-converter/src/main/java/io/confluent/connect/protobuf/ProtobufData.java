@@ -253,7 +253,6 @@ public class ProtobufData {
                 );
               }
             }
-            // TODO check this
             throw new IllegalArgumentException("Cannot find non-null field");
           } else {
             String scopedStructName = scope + getNameOrDefault(structName);

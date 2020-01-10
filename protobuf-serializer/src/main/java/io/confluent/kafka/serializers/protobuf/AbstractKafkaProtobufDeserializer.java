@@ -17,7 +17,7 @@
 package io.confluent.kafka.serializers.protobuf;
 
 import com.google.protobuf.DynamicMessage;
-import com.google.protobuf.Message;
+import com.google.protobuf.MessageLite;
 import kafka.utils.VerifiableProperties;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -34,8 +34,9 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
-public abstract class AbstractKafkaProtobufDeserializer<T> extends AbstractKafkaSchemaSerDe {
-  protected Class<? extends Message> specificProtobufClass;
+public abstract class AbstractKafkaProtobufDeserializer<T extends MessageLite>
+    extends AbstractKafkaSchemaSerDe {
+  protected Class<T> specificProtobufClass;
   protected Method parseMethod;
 
   /**
@@ -46,7 +47,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T> extends AbstractKafka
   protected void configure(KafkaProtobufDeserializerConfig config) {
     configureClientProperties(config, new ProtobufSchemaProvider());
     try {
-      this.specificProtobufClass = (Class<? extends Message>) config.getClass(
+      this.specificProtobufClass = (Class<T>) config.getClass(
           KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_CLASS_CONFIG);
       if (specificProtobufClass != null && !specificProtobufClass.equals(Object.class)) {
         this.parseMethod = specificProtobufClass.getDeclaredMethod("parseFrom", ByteBuffer.class);

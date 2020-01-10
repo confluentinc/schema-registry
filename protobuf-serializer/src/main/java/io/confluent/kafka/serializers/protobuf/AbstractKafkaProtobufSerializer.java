@@ -16,8 +16,7 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
-import com.google.protobuf.DynamicMessage;
-import com.google.protobuf.GeneratedMessageV3;
+import com.google.protobuf.MessageLite;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -32,7 +31,8 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
-public abstract class AbstractKafkaProtobufSerializer<T> extends AbstractKafkaSchemaSerDe {
+public abstract class AbstractKafkaProtobufSerializer<T extends MessageLite>
+    extends AbstractKafkaSchemaSerDe {
 
   protected boolean autoRegisterSchema;
 
@@ -74,16 +74,7 @@ public abstract class AbstractKafkaProtobufSerializer<T> extends AbstractKafkaSc
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
-      if (object instanceof GeneratedMessageV3) {
-        GeneratedMessageV3 message = (GeneratedMessageV3) object;
-        message.writeTo(out);
-      } else if (object instanceof DynamicMessage) {
-        DynamicMessage message = (DynamicMessage) object;
-        message.writeTo(out);
-      } else {
-        throw new SerializationException("Unsupported object of class " + object.getClass()
-            .getName());
-      }
+      object.writeTo(out);
       byte[] bytes = out.toByteArray();
       out.close();
       return bytes;

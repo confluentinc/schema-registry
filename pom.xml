@@ -59,6 +59,7 @@
         <module>protobuf-converter</module>
         <module>protobuf-provider</module>
         <module>protobuf-serializer</module>
+        <module>protobuf-serde</module>
     </modules>
 
     <properties>
