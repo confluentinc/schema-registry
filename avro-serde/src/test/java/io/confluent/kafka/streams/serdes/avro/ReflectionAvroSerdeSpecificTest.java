@@ -28,7 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.junit.Test;
 
-public class ReflectionAvroSerdeTest {
+public class ReflectionAvroSerdeSpecificTest {
 
   private static final String ANY_TOPIC = "any-topic";
 
@@ -36,6 +36,16 @@ public class ReflectionAvroSerdeTest {
   createConfiguredSerdeForRecordValues(Class<T> type) {
     SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
     ReflectionAvroSerde<T> serde = new ReflectionAvroSerde<>(schemaRegistryClient, type);
+    Map<String, Object> serdeConfig = new HashMap<>();
+    serdeConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
+    serde.configure(serdeConfig, false);
+    return serde;
+  }
+
+  private static <T> ReflectionAvroSerde<T>
+  createConfiguredSerdeForAnyValues() {
+    SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
+    ReflectionAvroSerde<T> serde = new ReflectionAvroSerde<>(schemaRegistryClient);
     Map<String, Object> serdeConfig = new HashMap<>();
     serdeConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
     serde.configure(serdeConfig, false);

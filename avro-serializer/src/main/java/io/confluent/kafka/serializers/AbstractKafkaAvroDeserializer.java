@@ -26,7 +26,7 @@ import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.SerializationException;
-
+import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectDatumReader;
 
 import java.io.IOException;
@@ -177,56 +177,90 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   protected DatumReader<?> getDatumReader(Schema writerSchema, Schema readerSchema) {
+    // normalize reader schema
+    readerSchema = getReaderSchema(writerSchema, readerSchema);
     boolean writerSchemaIsPrimitive =
         AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
-    // do not use SpecificDatumReader if writerSchema is a primitive
-    if (useSchemaReflection && !writerSchemaIsPrimitive) {
-      if (readerSchema == null) {
-        throw new SerializationException(
-            "Reader schema cannot be null when using Avro schema reflection");
-      }
+    if (writerSchemaIsPrimitive) {
+      return new GenericDatumReader<>(writerSchema, readerSchema);
+    } else if (useSchemaReflection) {
       return new ReflectDatumReader<>(writerSchema, readerSchema);
-    } else if (useSpecificAvroReader && !writerSchemaIsPrimitive) {
-      if (readerSchema == null) {
-        readerSchema = getReaderSchema(writerSchema);
-      }
+    } else if (useSpecificAvroReader) {
       return new SpecificDatumReader<>(writerSchema, readerSchema);
     } else {
-      if (readerSchema == null) {
-        return new GenericDatumReader<>(writerSchema);
-      }
       return new GenericDatumReader<>(writerSchema, readerSchema);
     }
   }
 
-  @SuppressWarnings("unchecked")
-  private Schema getReaderSchema(Schema writerSchema) {
-    Schema readerSchema = readerSchemaCache.get(writerSchema.getFullName());
-    if (readerSchema == null) {
-      Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
-      if (readerClass != null) {
-        try {
-          readerSchema = readerClass.newInstance().getSchema();
-        } catch (InstantiationException e) {
-          throw new SerializationException(writerSchema.getFullName()
-                                           + " specified by the "
-                                           + "writers schema could not be instantiated to "
-                                           + "find the readers schema.");
-        } catch (IllegalAccessException e) {
-          throw new SerializationException(writerSchema.getFullName()
-                                           + " specified by the "
-                                           + "writers schema is not allowed to be instantiated "
-                                           + "to find the readers schema.");
-        }
-        readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
-      } else {
-        throw new SerializationException("Could not find class "
-                                         + writerSchema.getFullName()
-                                         + " specified in writer's schema whilst finding reader's "
-                                         + "schema for a SpecificRecord.");
-      }
+  /**
+   * Normalizes the reader schema, puts the resolved schema into the cache. 
+   * <li>
+   * <ul>if the reader schema is provided, use the provided one</ul>
+   * <ul>if the reader schema is cached for the writer schema full name, use the cached value</ul>
+   * <ul>if the writer schema is primitive, use the writer one</ul>
+   * <ul>if schema reflection is used, generate one from the class referred by writer schema</ul>
+   * <ul>if generated classes are used, query the class referred by writer schema</ul>
+   * <ul>otherwise use the writer schema</ul>
+   * </li>
+   */
+  private Schema getReaderSchema(Schema writerSchema, Schema readerSchema) {
+    if (readerSchema != null) {
+      return readerSchema;
+    }
+    readerSchema = readerSchemaCache.get(writerSchema.getFullName());
+    if (readerSchema != null) {
+      return readerSchema;
+    }
+    boolean writerSchemaIsPrimitive =
+        AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
+    if (writerSchemaIsPrimitive) {
+      readerSchema = writerSchema;
+    } else if (useSchemaReflection) {
+      readerSchema = getReflectionReaderSchema(writerSchema);
+      readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
+    } else if (useSpecificAvroReader) {
+      readerSchema = getSpecificReaderSchema(writerSchema);
+      readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
+    } else {
+      readerSchema = writerSchema;
     }
     return readerSchema;
+  }
+
+  @SuppressWarnings("unchecked")
+  private Schema getSpecificReaderSchema(Schema writerSchema) {
+    Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
+    if (readerClass == null) {
+      throw new SerializationException("Could not find class "
+          + writerSchema.getFullName()
+          + " specified in writer's schema whilst finding reader's "
+          + "schema for a SpecificRecord.");
+    }
+    try {
+      return readerClass.newInstance().getSchema();
+    } catch (InstantiationException e) {
+      throw new SerializationException(writerSchema.getFullName()
+                                       + " specified by the "
+                                       + "writers schema could not be instantiated to "
+                                       + "find the readers schema.");
+    } catch (IllegalAccessException e) {
+      throw new SerializationException(writerSchema.getFullName()
+                                       + " specified by the "
+                                       + "writers schema is not allowed to be instantiated "
+                                       + "to find the readers schema.");
+    }
+  }
+
+  private Schema getReflectionReaderSchema(Schema writerSchema) {
+    // shall we use ReflectData.AllowNull.get() instead?
+    Class<?> readerClass = ReflectData.get().getClass(writerSchema);
+    if (readerClass == null) {
+      throw new SerializationException("Could not find class "
+          + writerSchema.getFullName()
+          + " specified in writer's schema whilst finding reader's "
+          + "schema for a reflected class.");
+    }
+    return ReflectData.get().getSchema(readerClass);
   }
 
   class DeserializationContext {
