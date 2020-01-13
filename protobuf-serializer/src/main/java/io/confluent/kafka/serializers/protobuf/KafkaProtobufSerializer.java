@@ -58,7 +58,8 @@ public class KafkaProtobufSerializer<T extends MessageLite>
       return null;
     }
     ProtobufSchema schema = ProtobufSchemaUtils.getSchema(record);
-    return serializeImpl(getSubjectName(topic, isKey, record, schema), record, schema);
+    return serializeImpl(getSubjectName(topic, isKey, record, schema),
+        topic, isKey, record, schema);
   }
 
   @Override

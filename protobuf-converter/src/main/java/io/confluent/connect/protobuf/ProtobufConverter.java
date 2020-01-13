@@ -139,7 +139,8 @@ public class ProtobufConverter implements Converter {
       if (value == null) {
         return null;
       }
-      return serializeImpl(getSubjectName(topic, isKey, value, schema), value, schema);
+      return serializeImpl(getSubjectName(topic, isKey, value, schema),
+          topic, isKey, value, schema);
     }
   }
 

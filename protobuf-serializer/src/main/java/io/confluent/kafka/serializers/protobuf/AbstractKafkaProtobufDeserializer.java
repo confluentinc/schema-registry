@@ -118,41 +118,42 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends MessageLite>
       int length = buffer.limit() - 1 - idSize;
       int start = buffer.position() + buffer.arrayOffset();
 
+      Object value;
       if (parseMethod != null) {
         try {
-          return parseMethod.invoke(null, buffer);
+          value = parseMethod.invoke(null, buffer);
         } catch (Exception e) {
           throw new ConfigException("Not a valid proto3 builder", e);
         }
       } else {
-        Object value = DynamicMessage.parseFrom(schema.toDescriptor(),
+        value = DynamicMessage.parseFrom(schema.toDescriptor(),
             new ByteArrayInputStream(buffer.array(), start, length)
         );
-
-        if (includeSchemaAndVersion) {
-          // Annotate the schema with the version. Note that we only do this if the schema +
-          // version are requested, i.e. in Kafka Connect converters. This is critical because that
-          // code *will not* rely on exact schema equality. Regular deserializers *must not* include
-          // this information because it would return schemas which are not equivalent.
-          //
-          // Note, however, that we also do not fill in the connect.version field. This allows the
-          // Converter to let a version provided by a Kafka Connect source take priority over the
-          // schema registry's ordering (which is implicit by auto-registration time rather than
-          // explicit from the Connector).
-
-          Integer version = schemaVersion(topic, isKey, id, subject, schema, value);
-          return new ProtobufSchemaAndValue(
-              new ProtobufSchema(schema.canonicalString(),
-                  schema.references(),
-                  schema.resolvedReferences(),
-                  version
-              ),
-              value
-          );
-        }
-
-        return value;
       }
+
+      if (includeSchemaAndVersion) {
+        // Annotate the schema with the version. Note that we only do this if the schema +
+        // version are requested, i.e. in Kafka Connect converters. This is critical because that
+        // code *will not* rely on exact schema equality. Regular deserializers *must not* include
+        // this information because it would return schemas which are not equivalent.
+        //
+        // Note, however, that we also do not fill in the connect.version field. This allows the
+        // Converter to let a version provided by a Kafka Connect source take priority over the
+        // schema registry's ordering (which is implicit by auto-registration time rather than
+        // explicit from the Connector).
+
+        Integer version = schemaVersion(topic, isKey, id, subject, schema, value);
+        return new ProtobufSchemaAndValue(
+            new ProtobufSchema(schema.canonicalString(),
+                schema.references(),
+                schema.resolvedReferences(),
+                version
+            ),
+            value
+        );
+      }
+
+      return value;
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error deserializing Protobuf message for id " + id, e);
     } catch (RestClientException e) {

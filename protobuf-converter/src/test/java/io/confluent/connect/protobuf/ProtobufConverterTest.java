@@ -43,6 +43,8 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerConfig;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage;
+import io.confluent.kafka.serializers.subject.DefaultReferenceSubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
 
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
 import static org.junit.Assert.assertArrayEquals;
@@ -472,13 +474,17 @@ public class ProtobufConverterTest {
 
     String subjectSuffix = isKey ? "key" : "value";
     ProtobufSchema schema = new ProtobufSchema(keyValueMessage.getDescriptorForType());
-    schema = ProtobufSchemaUtils.resolveDependencies(schemaRegistry, true, schema);
+    ReferenceSubjectNameStrategy strategy = new DefaultReferenceSubjectNameStrategy();
+    schema = KafkaProtobufSerializer.resolveDependencies(
+        schemaRegistry, true, strategy, "topic1", isKey, schema);
     schemaRegistry.register("topic1-" + subjectSuffix, schema);
     schema = new ProtobufSchema(keyMessage.getDescriptorForType());
-    schema = ProtobufSchemaUtils.resolveDependencies(schemaRegistry, true, schema);
+    schema = KafkaProtobufSerializer.resolveDependencies(
+        schemaRegistry, true, strategy, "topic2", isKey, schema);
     schemaRegistry.register("topic2-" + subjectSuffix, schema);
     schema = new ProtobufSchema(keyValueMessage2.getDescriptorForType());
-    schema = ProtobufSchemaUtils.resolveDependencies(schemaRegistry, true, schema);
+    schema = KafkaProtobufSerializer.resolveDependencies(
+        schemaRegistry, true, strategy, "topic2", isKey, schema);
     schemaRegistry.register("topic2-" + subjectSuffix, schema);
 
     KafkaProtobufSerializer serializer = new KafkaProtobufSerializer(schemaRegistry);

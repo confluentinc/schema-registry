@@ -20,16 +20,35 @@ import java.util.Map;
 
 import io.confluent.common.config.ConfigDef;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.subject.DefaultReferenceSubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
 
 public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
+
+  public static final String REFERENCE_SUBJECT_NAME_STRATEGY_CONFIG =
+      "reference.subject.name.strategy";
+  public static final String REFERENCE_SUBJECT_NAME_STRATEGY_DOC =
+      "Determines how to construct the subject name for referenced schemas. "
+          + "By default, the reference name is used as subject.";
 
   private static final ConfigDef config;
 
   static {
-    config = baseConfigDef();
+    config = baseConfigDef().define(
+        REFERENCE_SUBJECT_NAME_STRATEGY_CONFIG,
+        ConfigDef.Type.CLASS,
+        DefaultReferenceSubjectNameStrategy.class,
+        ConfigDef.Importance.LOW,
+        REFERENCE_SUBJECT_NAME_STRATEGY_DOC
+    );
   }
 
   public KafkaProtobufSerializerConfig(Map<?, ?> props) {
     super(config, props);
+  }
+
+  public ReferenceSubjectNameStrategy referenceSubjectNameStrategyInstance() {
+    return this.getConfiguredInstance(REFERENCE_SUBJECT_NAME_STRATEGY_CONFIG,
+        ReferenceSubjectNameStrategy.class);
   }
 }

@@ -22,20 +22,12 @@ import com.google.protobuf.Descriptors;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
-import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public class ProtobufSchemaUtils {
 
@@ -60,70 +52,6 @@ public class ProtobufSchemaUtils {
       throw new IllegalArgumentException("Unsupported type of class " + object.getClass()
           .getName());
     }
-  }
-
-  public static ProtobufSchema resolveDependencies(
-      SchemaRegistryClient schemaRegistry, boolean autoRegisterSchema, ProtobufSchema schema
-  ) throws IOException, RestClientException {
-    Schema s = resolveDependencies(schemaRegistry,
-        autoRegisterSchema,
-        null,
-        schema.rawSchema(),
-        schema.dependencies()
-    );
-    return new ProtobufSchema(
-        schema.canonicalString(),
-        s.getReferences(),
-        schema.resolvedReferences(),
-        null
-    );
-  }
-
-  private static Schema resolveDependencies(
-      SchemaRegistryClient schemaRegistry,
-      boolean autoRegisterSchema,
-      String name,
-      ProtoFileElement protoFileElement,
-      Map<String, ProtoFileElement> dependencies
-  ) throws IOException, RestClientException {
-    List<SchemaReference> references = new ArrayList<>();
-    for (String dep : protoFileElement.getImports()) {
-      Schema subschema = resolveDependencies(schemaRegistry,
-          autoRegisterSchema,
-          dep,
-          dependencies.get(dep),
-          dependencies
-      );
-      references.add(new SchemaReference(dep, subschema.getSubject(), subschema.getVersion()));
-    }
-    for (String dep : protoFileElement.getPublicImports()) {
-      Schema subschema = resolveDependencies(schemaRegistry,
-          autoRegisterSchema,
-          dep,
-          dependencies.get(dep),
-          dependencies
-      );
-      references.add(new SchemaReference(dep, subschema.getSubject(), subschema.getVersion()));
-    }
-    ProtobufSchema schema = new ProtobufSchema(protoFileElement, references, dependencies);
-    Integer id = null;
-    Integer version = null;
-    if (name != null) {
-      if (autoRegisterSchema) {
-        id = schemaRegistry.register(name, schema);
-      } else {
-        id = schemaRegistry.getId(name, schema);
-      }
-      version = schemaRegistry.getVersion(name, schema);
-    }
-    return new Schema(
-        name,
-        version,
-        id,
-        schema.schemaType(),
-        schema.references(),
-        schema.canonicalString()
-    );
   }
 
   public static Object toObject(JsonNode value, ParsedSchema parsedSchema) throws IOException {

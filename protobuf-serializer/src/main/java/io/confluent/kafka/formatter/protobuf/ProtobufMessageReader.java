@@ -207,14 +207,14 @@ public class ProtobufMessageReader extends AbstractKafkaProtobufSerializer
       }
       if (!parseKey) {
         DynamicMessage value = jsonToProtobuf(line, valueSchema);
-        byte[] serializedValue = serializeImpl(valueSubject, value, valueSchema);
+        byte[] serializedValue = serializeImpl(valueSubject, topic, false, value, valueSchema);
         return new ProducerRecord<>(topic, serializedValue);
       } else {
         int keyIndex = line.indexOf(keySeparator);
         if (keyIndex < 0) {
           if (ignoreError) {
             DynamicMessage value = jsonToProtobuf(line, valueSchema);
-            byte[] serializedValue = serializeImpl(valueSubject, value, valueSchema);
+            byte[] serializedValue = serializeImpl(valueSubject, topic, false, value, valueSchema);
             return new ProducerRecord<>(topic, serializedValue);
           } else {
             throw new KafkaException("No key found in line " + line);
@@ -229,10 +229,10 @@ public class ProtobufMessageReader extends AbstractKafkaProtobufSerializer
             serializedKey = keySerializer.serialize(topic, keyString);
           } else {
             DynamicMessage key = jsonToProtobuf(keyString, keySchema);
-            serializedKey = serializeImpl(keySubject, key, keySchema);
+            serializedKey = serializeImpl(keySubject, topic, true, key, keySchema);
           }
           DynamicMessage value = jsonToProtobuf(valueString, valueSchema);
-          byte[] serializedValue = serializeImpl(valueSubject, value, valueSchema);
+          byte[] serializedValue = serializeImpl(valueSubject, topic, false, value, valueSchema);
           return new ProducerRecord<>(topic, serializedKey, serializedValue);
         }
       }
