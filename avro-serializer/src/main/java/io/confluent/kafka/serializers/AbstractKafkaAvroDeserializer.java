@@ -213,12 +213,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
       readerSchema = writerSchema;
     } else if (useSchemaReflection) {
       readerSchema = getReflectionReaderSchema(writerSchema);
+      readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
     } else if (useSpecificAvroReader) {
       readerSchema = getSpecificReaderSchema(writerSchema);
+      readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
     } else {
       readerSchema = writerSchema;
     }
-    readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
     return readerSchema;
   }
 
