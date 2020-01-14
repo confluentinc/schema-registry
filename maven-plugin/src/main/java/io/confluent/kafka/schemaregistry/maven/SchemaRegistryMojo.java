@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 
 public abstract class SchemaRegistryMojo extends AbstractMojo {
 
@@ -61,7 +62,7 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
       }
       List<SchemaProvider> providers = schemaProviders != null && !schemaProviders.isEmpty()
                                        ? schemaProviders()
-                                       : Collections.singletonList(new AvroSchemaProvider());
+                                       : defaultSchemaProviders();
       this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls,
           1000,
           providers,
@@ -79,5 +80,12 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
         throw new RuntimeException(e);
       }
     }).collect(Collectors.toList());
+  }
+
+  private List<SchemaProvider> defaultSchemaProviders() {
+    List<SchemaProvider> providers = new ArrayList<>();
+    providers.add(new AvroSchemaProvider());
+    providers.add(new ProtobufSchemaProvider());
+    return providers;
   }
 }
