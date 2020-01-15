@@ -21,6 +21,7 @@ import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,9 +83,8 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
   }
 
   private List<SchemaProvider> defaultSchemaProviders() {
-    List<SchemaProvider> providers = new ArrayList<>();
-    providers.add(new AvroSchemaProvider());
-    providers.add(new ProtobufSchemaProvider());
-    return providers;
+    return Arrays.asList(
+        new AvroSchemaProvider(), new ProtobufSchemaProvider()
+    );
   }
 }

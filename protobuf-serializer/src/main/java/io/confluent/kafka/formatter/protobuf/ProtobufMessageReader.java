@@ -50,37 +50,14 @@ import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
  * in the classpath of kafka-console-producer.sh. Then run the following
  * command.
  *
- * <p>1. Send Protobuf string as value. (make sure there is no space in the schema string)
+ * <p>Send Protobuf record as value.
  * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
  * --line-reader io.confluent.kafka.formatter.ProtobufMessageReader \
  * --property schema.registry.url=http://localhost:8081 \
- * --property value.schema='{"type":"string"}'
- *
- * <p>In the shell, type in the following.
- * "a"
- * "b"
- *
- * <p>2. Send Protobuf record as value.
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
- * --line-reader io.confluent.kafka.formatter.ProtobufMessageReader \
- * --property schema.registry.url=http://localhost:8081 \
- * --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1",
- * "type":"string"}]}'
+ * --property value.schema='syntax = "proto3"; message MyRecord { string f1 = 1; }'
  *
  * <p>In the shell, type in the following.
  * {"f1": "value1"}
- *
- * <p>3. Send Protobuf string as key and Protobuf record as value.
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
- * --line-reader io.confluent.kafka.formatter.ProtobufMessageReader \
- * --property schema.registry.url=http://localhost:8081 \
- * --property parse.key=true \
- * --property key.schema='{"type":"string"}' \
- * --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1",
- * "type":"string"}]}'
- *
- * <p>In the shell, type in the following.
- * "key1" \t {"f1": "value1"}
  */
 public class ProtobufMessageReader extends AbstractKafkaProtobufSerializer
     implements MessageReader {
