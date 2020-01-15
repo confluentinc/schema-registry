@@ -172,13 +172,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
             SchemaProvider.class,
             schemaProviderConfigs);
-    // Ensure Avro SchemaProvider is registered
-    SchemaProvider avroSchemaProvider = new AvroSchemaProvider();
-    avroSchemaProvider.configure(schemaProviderConfigs);
-    schemaProviders.add(avroSchemaProvider);
-    SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
-    protobufSchemaProvider.configure(schemaProviderConfigs);
-    schemaProviders.add(protobufSchemaProvider);
+    List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
+        new AvroSchemaProvider(), new ProtobufSchemaProvider()
+    );
+    for (SchemaProvider provider : defaultSchemaProviders) {
+      provider.configure(schemaProviderConfigs);
+    }
+    schemaProviders.addAll(defaultSchemaProviders);
     for (SchemaProvider schemaProvider : schemaProviders) {
       log.info("Registering schema provider for {}: {}",
           schemaProvider.schemaType(),
