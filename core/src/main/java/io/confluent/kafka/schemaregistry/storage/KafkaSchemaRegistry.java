@@ -122,7 +122,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private MasterElector masterElector = null;
   private Metrics metrics;
   private Sensor masterNodeSensor;
-  private Map<String, SchemaProvider> providers = new HashMap<>();
+  private final Map<String, SchemaProvider> providers;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -165,7 +165,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     reporters.add(new JmxReporter(jmxPrefix));
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
     this.masterNodeSensor = metrics.sensor("master-slave-role");
+    this.providers = initProviders(config);
 
+    Map<String, String> configuredTags = Application.parseListToMap(
+        config.getList(RestConfig.METRICS_TAGS_CONFIG)
+    );
+    MetricName
+        m = new MetricName("master-slave-role", "master-slave-role",
+                           "1.0 indicates the node is the active master in the cluster and is the"
+                           + " node where all register schema and config update requests are "
+                           + "served.", configuredTags);
+    this.masterNodeSensor.add(m, new Gauge());
+  }
+
+  private HashMap<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
     Map<String, Object> schemaProviderConfigs = new HashMap<>();
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
     List<SchemaProvider> schemaProviders =
@@ -179,23 +192,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       provider.configure(schemaProviderConfigs);
     }
     schemaProviders.addAll(defaultSchemaProviders);
+    HashMap<String, SchemaProvider> providerMap = new HashMap<>();
     for (SchemaProvider schemaProvider : schemaProviders) {
       log.info("Registering schema provider for {}: {}",
           schemaProvider.schemaType(),
           schemaProvider.getClass().getName()
       );
-      this.providers.put(schemaProvider.schemaType(), schemaProvider);
+      providerMap.put(schemaProvider.schemaType(), schemaProvider);
     }
-
-    Map<String, String> configuredTags = Application.parseListToMap(
-        config.getList(RestConfig.METRICS_TAGS_CONFIG)
-    );
-    MetricName
-        m = new MetricName("master-slave-role", "master-slave-role",
-                           "1.0 indicates the node is the active master in the cluster and is the"
-                           + " node where all register schema and config update requests are "
-                           + "served.", configuredTags);
-    this.masterNodeSensor.add(m, new Gauge());
+    return providerMap;
   }
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
