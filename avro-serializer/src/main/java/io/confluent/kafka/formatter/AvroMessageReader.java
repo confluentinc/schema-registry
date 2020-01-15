@@ -218,7 +218,19 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
 
           byte[] serializedKey;
           if (keySerializer != null) {
-            serializedKey = keySerializer.serialize(topic, keyString);
+            String simpleName = keySerializer.getClass().getSimpleName();
+            switch (simpleName) {
+              case "LongSerializer":
+                Long longKey = Long.parseLong(keyString);
+                serializedKey = keySerializer.serialize(topic, longKey);
+                break;
+              case "IntSerializer":
+                Integer intKey = Integer.parseInt(keyString);
+                serializedKey = keySerializer.serialize(topic, intKey);
+                break;
+              default:
+                serializedKey = keySerializer.serialize(topic, keyString);
+            }
           } else {
             Object key = jsonToAvro(keyString, keySchema);
             serializedKey = serializeImpl(keySubject, key);
