@@ -18,23 +18,15 @@
         </license>
     </licenses>
 
-    <artifactId>kafka-avro-serializer</artifactId>
+    <artifactId>kafka-schema-serializer</artifactId>
     <packaging>jar</packaging>
-    <name>kafka-avro-serializer</name>
+    <name>kafka-schema-serializer</name>
 
     <dependencies>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka_${kafka.scala.version}</artifactId>
             <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.avro</groupId>
-            <artifactId>avro</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-serializer</artifactId>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -51,24 +43,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.avro</groupId>
-                <artifactId>avro-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>schema</goal>
-                        </goals>
-                        <configuration>
-                            <testSourceDirectory>${project.basedir}/src/test/avro</testSourceDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
 </project>
