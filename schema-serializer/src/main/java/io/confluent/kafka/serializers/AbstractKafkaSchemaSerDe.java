@@ -60,13 +60,14 @@ public abstract class AbstractKafkaSchemaSerDe {
     Map<String, Object> originals = config.originalsWithPrefix("");
     if (null == schemaRegistry) {
       String mockScope = validateAndMaybeGetMockScope(urls);
+      List<SchemaProvider> providers = Collections.singletonList(provider);
       if (mockScope != null) {
-        schemaRegistry = MockSchemaRegistry.getClientForScope(mockScope);
+        schemaRegistry = MockSchemaRegistry.getClientForScope(mockScope, providers);
       } else {
         schemaRegistry = new CachedSchemaRegistryClient(
             urls,
             maxSchemaObject,
-            Collections.singletonList(provider),
+            providers,
             originals,
             config.requestHeaders()
         );
