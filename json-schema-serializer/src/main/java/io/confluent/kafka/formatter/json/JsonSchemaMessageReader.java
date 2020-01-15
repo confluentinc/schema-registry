@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.formatter.json;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import kafka.common.KafkaException;
 import kafka.common.MessageReader;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -64,8 +65,7 @@ import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaSerializer;
  * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
  * --line-reader io.confluent.kafka.formatter.JsonSchemaMessageReader \
  * --property schema.registry.url=http://localhost:8081 \
- * --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1",
- * "type":"string"}]}'
+ * --property value.schema='{"type":"object","properties":{"f1":{"type":"string"}}}'
  *
  * <p>In the shell, type in the following.
  * {"f1": "value1"}
@@ -76,7 +76,7 @@ import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaSerializer;
  * --property schema.registry.url=http://localhost:8081 \
  * --property parse.key=true \
  * --property key.schema='{"type":"string"}' \
- * --property value.schema='{"type":"record","name":"myrecord","fields":[{"name":"f1",
+ * --property value.schema='{"type":"object","properties":{"f1":{"type":"string"}}}'
  * "type":"string"}]}'
  *
  * <p>In the shell, type in the following.
@@ -95,6 +95,7 @@ public class JsonSchemaMessageReader extends AbstractKafkaJsonSchemaSerializer
   private String keySubject = null;
   private String valueSubject = null;
   private Serializer keySerializer;
+  private final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
   /**
    * Constructor needed by kafka console producer.
@@ -243,7 +244,7 @@ public class JsonSchemaMessageReader extends AbstractKafkaJsonSchemaSerializer
 
   private Object jsonToJsonNode(String jsonString) {
     try {
-      return Jackson.newObjectMapper().readTree(jsonString);
+      return objectMapper.readTree(jsonString);
     } catch (IOException | ValidationException e) {
       throw new SerializationException(String.format("Error serializing json %s", jsonString), e);
     }

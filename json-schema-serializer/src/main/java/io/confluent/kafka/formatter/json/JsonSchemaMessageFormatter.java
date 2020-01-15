@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.formatter.json;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import kafka.common.MessageFormatter;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.ConfigException;
@@ -77,6 +78,7 @@ public class JsonSchemaMessageFormatter extends AbstractKafkaJsonSchemaDeseriali
   private byte[] lineSeparator = "\n".getBytes(StandardCharsets.UTF_8);
   private byte[] idSeparator = "\t".getBytes(StandardCharsets.UTF_8);
   private Deserializer keyDeserializer;
+  private final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
   /**
    * Constructor needed by kafka console consumer.
@@ -202,7 +204,7 @@ public class JsonSchemaMessageFormatter extends AbstractKafkaJsonSchemaDeseriali
 
   private void writeTo(byte[] data, PrintStream output) throws IOException {
     Object object = deserialize(data);
-    output.print(Jackson.newObjectMapper().writeValueAsString(object));
+    output.print(objectMapper.writeValueAsString(object));
   }
 
   @Override

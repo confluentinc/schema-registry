@@ -71,14 +71,6 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return new KafkaJsonSchemaDeserializerConfig(props.props());
   }
 
-  private ByteBuffer getByteBuffer(byte[] payload) {
-    ByteBuffer buffer = ByteBuffer.wrap(payload);
-    if (buffer.get() != MAGIC_BYTE) {
-      throw new SerializationException("Unknown magic byte!");
-    }
-    return buffer;
-  }
-
   /**
    * Deserializes the payload without including schema information for primitive types, maps, and
    * arrays. Just the resulting deserialized object is returned.
