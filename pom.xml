@@ -46,6 +46,7 @@
     <modules>
         <module>core</module>
         <module>client</module>
+        <module>schema-serializer</module>
         <module>avro-serializer</module>
         <module>json-serializer</module>
         <module>avro-data</module>
@@ -108,6 +109,11 @@
             <dependency>
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-connect-avro-converter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-schema-serializer</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
