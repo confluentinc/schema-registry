@@ -343,6 +343,69 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGetAlwaysTrueHostnameVerifierWhenSslEndpointIdentificationAlgorithmIsNotSet() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+            config,
+            new SchemaRegistrySerializer()
+    );
+
+    assertTrue(schemaRegistry.getHostnameVerifier().verify("", null));
+  }
+
+  @Test
+  public void testGetAlwaysTrueHostnameVerifierWhenSslEndpointIdentificationAlgorithmIsNone() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+    props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "none");
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+            config,
+            new SchemaRegistrySerializer()
+    );
+
+    assertTrue(schemaRegistry.getHostnameVerifier().verify("", null));
+  }
+
+  @Test
+  public void testGetAlwaysTrueHostnameVerifierWhenSslEndpointIdentificationAlgorithmIsEmptyString() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+    props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+            config,
+            new SchemaRegistrySerializer()
+    );
+
+    assertTrue(schemaRegistry.getHostnameVerifier().verify("", null));
+  }
+
+  @Test
+  public void testGetNullHostnameVerifierWhenSslEndpointIdentificationAlgorithmIsHttps() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+    props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "https");
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+            config,
+            new SchemaRegistrySerializer()
+    );
+
+    assertNull(schemaRegistry.getHostnameVerifier());
+  }
+
+  @Test
   public void testKafkaStoreMessageHandlerSameIdDifferentSchema() throws Exception {
     Properties props = new Properties();
     props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);

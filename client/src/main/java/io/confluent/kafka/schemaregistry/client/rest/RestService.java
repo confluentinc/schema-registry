@@ -51,6 +51,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 import javax.ws.rs.core.UriBuilder;
@@ -145,6 +146,7 @@ public class RestService implements Configurable {
 
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
+  private HostnameVerifier hostnameVerifier;
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
   private BearerAuthCredentialProvider bearerAuthCredentialProvider;
   private Map<String, String> httpHeaders;
@@ -211,6 +213,10 @@ public class RestService implements Configurable {
 
   public void setSslSocketFactory(SSLSocketFactory sslSocketFactory) {
     this.sslSocketFactory = sslSocketFactory;
+  }
+
+  public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {
+    this.hostnameVerifier = hostnameVerifier;
   }
 
   /**
@@ -308,7 +314,10 @@ public class RestService implements Configurable {
 
   private void setupSsl(HttpURLConnection connection) {
     if (connection instanceof HttpsURLConnection && sslSocketFactory != null) {
-      ((HttpsURLConnection)connection).setSSLSocketFactory(sslSocketFactory);
+      ((HttpsURLConnection) connection).setSSLSocketFactory(sslSocketFactory);
+      if (hostnameVerifier != null) {
+        ((HttpsURLConnection) connection).setHostnameVerifier(hostnameVerifier);
+      }
     }
   }
 
