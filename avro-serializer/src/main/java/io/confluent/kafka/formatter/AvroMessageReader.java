@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.ShortSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.BufferedReader;
@@ -200,6 +201,10 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     if (serializerClass == IntegerSerializer.class) {
       Integer intKey = Integer.parseInt(keyString);
       return keySerializer.serialize(topic, intKey);
+    }
+    if (serializerClass == ShortSerializer.class) {
+      Short shortKey = Short.parseShort(keyString);
+      return keySerializer.serialize(topic, shortKey);
     }
     return keySerializer.serialize(topic, keyString);
   }
