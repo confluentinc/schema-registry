@@ -25,6 +25,8 @@ import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.BufferedReader;
@@ -189,6 +191,22 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     return originals;
   }
 
+  private byte[] serializeNonAvroKey(String keyString) {
+    byte[] serializedKey;
+
+    Class serializerClass = keySerializer.getClass();
+    if (serializerClass == LongSerializer.class) {
+      Long longKey = Long.parseLong(keyString);
+      serializedKey = keySerializer.serialize(topic, longKey);
+    } else if (serializerClass == IntegerSerializer.class) {
+      Integer intKey = Integer.parseInt(keyString);
+      serializedKey = keySerializer.serialize(topic, intKey);
+    } else {
+      serializedKey = keySerializer.serialize(topic, keyString);
+    }
+    return serializedKey;
+  }
+
   @Override
   public ProducerRecord<byte[], byte[]> readMessage() {
     try {
@@ -218,19 +236,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
 
           byte[] serializedKey;
           if (keySerializer != null) {
-            String simpleName = keySerializer.getClass().getSimpleName();
-            switch (simpleName) {
-              case "LongSerializer":
-                Long longKey = Long.parseLong(keyString);
-                serializedKey = keySerializer.serialize(topic, longKey);
-                break;
-              case "IntSerializer":
-                Integer intKey = Integer.parseInt(keyString);
-                serializedKey = keySerializer.serialize(topic, intKey);
-                break;
-              default:
-                serializedKey = keySerializer.serialize(topic, keyString);
-            }
+            serializedKey = serializeNonAvroKey(keyString);
           } else {
             Object key = jsonToAvro(keyString, keySchema);
             serializedKey = serializeImpl(keySubject, key);
