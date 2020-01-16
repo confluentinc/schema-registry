@@ -74,7 +74,10 @@ public class KafkaProtobufSerde<T extends MessageLite> implements Serde<T> {
   @Override
   public void configure(final Map<String, ?> serdeConfig, final boolean isSerdeForRecordKeys) {
     inner.serializer().configure(serdeConfig, isSerdeForRecordKeys);
-    inner.deserializer().configure(withSpecificClass(serdeConfig), isSerdeForRecordKeys);
+    inner.deserializer().configure(
+        withSpecificClass(serdeConfig, isSerdeForRecordKeys),
+        isSerdeForRecordKeys
+    );
   }
 
   @Override
@@ -83,14 +86,23 @@ public class KafkaProtobufSerde<T extends MessageLite> implements Serde<T> {
     inner.deserializer().close();
   }
 
-  private Map<String, Object> withSpecificClass(final Map<String, ?> config) {
+  private Map<String, Object> withSpecificClass(final Map<String, ?> config, boolean isKey) {
     if (specificProtobufClass == null) {
       return (Map<String, Object>) config;
     }
     Map<String, Object> newConfig =
         config == null ? new HashMap<String, Object>() : new HashMap<>(config);
-    newConfig.put(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_CLASS_CONFIG,
-        specificProtobufClass);
+    if (isKey) {
+      newConfig.put(
+          KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_KEY_TYPE,
+          specificProtobufClass
+      );
+    } else {
+      newConfig.put(
+          KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_VALUE_TYPE,
+          specificProtobufClass
+      );
+    }
     return newConfig;
   }
 

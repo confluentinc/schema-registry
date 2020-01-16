@@ -185,7 +185,38 @@ public class ProtobufSchema implements ParsedSchema {
       dependencies.put(depName, toProtoFile(dependency, depName, dependencies));
       publicImports.add(depName);
     }
-    // NOTE: skip services, extensions, options
+    ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
+    if (file.getOptions().hasJavaPackage()) {
+      OptionElement.Kind kind = OptionElement.Kind.STRING;
+      OptionElement option = new OptionElement(
+          "java_package",
+          kind,
+          file.getOptions().getJavaPackage(),
+          false
+      );
+      options.add(option);
+    }
+    if (file.getOptions().hasJavaOuterClassname()) {
+      OptionElement.Kind kind = OptionElement.Kind.STRING;
+      OptionElement option = new OptionElement(
+          "java_outer_classname",
+          kind,
+          file.getOptions().getJavaOuterClassname(),
+          false
+      );
+      options.add(option);
+    }
+    if (file.getOptions().hasJavaMultipleFiles()) {
+      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
+      OptionElement option = new OptionElement(
+          "java_multiple_files",
+          kind,
+          file.getOptions().getJavaMultipleFiles(),
+          false
+      );
+      options.add(option);
+    }
+    // NOTE: skip services, extensions, some options
     return new ProtoFileElement(location,
         packageName,
         syntax,
@@ -194,7 +225,7 @@ public class ProtobufSchema implements ParsedSchema {
         types.build(),
         Collections.emptyList(),
         Collections.emptyList(),
-        Collections.emptyList()
+        options.build()
     );
   }
 
@@ -315,7 +346,7 @@ public class ProtobufSchema implements ParsedSchema {
     if (ed.getOptions().hasAllowAlias()) {
       OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement(
-          "allow_alis",
+          "allow_alias",
           kind,
           ed.getOptions().getAllowAlias(),
           false
@@ -456,6 +487,21 @@ public class ProtobufSchema implements ParsedSchema {
           schema.addPublicDependency(ref);
           schema.addSchema(toDynamicSchema(ref, dep, dependencies));
         }
+      }
+      String javaPackageName = findOption("java_package", rootElem.getOptions())
+          .map(o -> o.getValue().toString()).orElse(null);
+      if (javaPackageName != null) {
+        schema.setJavaPackage(javaPackageName);
+      }
+      String javaOuterClassname = findOption("java_outer_classname", rootElem.getOptions())
+          .map(o -> o.getValue().toString()).orElse(null);
+      if (javaOuterClassname != null) {
+        schema.setJavaOuterClassname(javaOuterClassname);
+      }
+      Boolean javaMultipleFiles = findOption("java_multiple_files", rootElem.getOptions())
+          .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+      if (javaMultipleFiles != null) {
+        schema.setJavaMultipleFiles(javaMultipleFiles);
       }
       schema.setName(name);
       return schema.build();

@@ -17,8 +17,10 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.dynamic;
 
+import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
+import com.google.protobuf.DescriptorProtos.FileOptions;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.DescriptorValidationException;
 import com.google.protobuf.Descriptors.EnumDescriptor;
@@ -383,6 +385,33 @@ public class DynamicSchema {
       }
       mFileDescProtoBuilder.addDependency(dependency);
       mFileDescProtoBuilder.addPublicDependency(mFileDescProtoBuilder.getDependencyCount() - 1);
+      return this;
+    }
+
+    // Note: added
+    public Builder setJavaPackage(String javaPackage) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setJavaPackage(javaPackage);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setJavaOuterClassname(String javaOuterClassname) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setJavaOuterClassname(javaOuterClassname);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
+    public Builder setJavaMultipleFiles(boolean javaMultipleFiles) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setJavaMultipleFiles(javaMultipleFiles);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
       return this;
     }
 

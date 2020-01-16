@@ -44,11 +44,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends MessageLite>
    * Useful for testing, where a mock client is injected.
    */
   @SuppressWarnings("unchecked")
-  protected void configure(KafkaProtobufDeserializerConfig config) {
+  protected void configure(KafkaProtobufDeserializerConfig config, Class<T> type) {
     configureClientProperties(config, new ProtobufSchemaProvider());
     try {
-      this.specificProtobufClass = (Class<T>) config.getClass(
-          KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_CLASS_CONFIG);
+      this.specificProtobufClass = type;
       if (specificProtobufClass != null && !specificProtobufClass.equals(Object.class)) {
         this.parseMethod = specificProtobufClass.getDeclaredMethod("parseFrom", ByteBuffer.class);
       }

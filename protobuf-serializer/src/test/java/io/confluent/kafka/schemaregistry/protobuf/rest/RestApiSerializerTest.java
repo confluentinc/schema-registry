@@ -149,15 +149,14 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     KafkaProtobufDeserializer protobufDeserializer = new KafkaProtobufDeserializer(schemaRegistry);
 
     Properties dependencyMessageDeserializerConfig = new Properties();
-    dependencyMessageDeserializerConfig.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+    dependencyMessageDeserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus"
     );
-    dependencyMessageDeserializerConfig.put(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_CLASS_CONFIG,
+    KafkaProtobufDeserializer dependencyMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(dependencyMessageDeserializerConfig),
         DependencyMessage.class
-    );
-    KafkaProtobufDeserializer dependencyMessageDeserializer =
-        new KafkaProtobufDeserializer(schemaRegistry,
-        new HashMap(dependencyMessageDeserializerConfig)
     );
 
     byte[] bytes;
@@ -199,14 +198,14 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     KafkaProtobufDeserializer protobufDeserializer = new KafkaProtobufDeserializer(schemaRegistry);
 
     Properties clickCasDeserializerConfig = new Properties();
-    clickCasDeserializerConfig.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+    clickCasDeserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus"
     );
-    clickCasDeserializerConfig.put(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_CLASS_CONFIG,
+    KafkaProtobufDeserializer clickCasDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(clickCasDeserializerConfig),
         ExampleProtoCriteo.ClickCas.class
-    );
-    KafkaProtobufDeserializer clickCasDeserializer = new KafkaProtobufDeserializer(schemaRegistry,
-        new HashMap(clickCasDeserializerConfig)
     );
 
     byte[] bytes;

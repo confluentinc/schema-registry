@@ -152,7 +152,7 @@ public class ProtobufConverter implements Converter {
 
     public Deserializer(Map<String, ?> configs, SchemaRegistryClient client) {
       this(client);
-      configure(new KafkaProtobufDeserializerConfig(configs));
+      configure(new KafkaProtobufDeserializerConfig(configs), null);
     }
 
     public ProtobufSchemaAndValue deserialize(String topic, boolean isKey, byte[] payload) {

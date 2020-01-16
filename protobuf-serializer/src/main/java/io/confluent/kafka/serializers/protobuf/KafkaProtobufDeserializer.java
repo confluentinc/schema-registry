@@ -27,8 +27,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 public class KafkaProtobufDeserializer<T extends MessageLite>
     extends AbstractKafkaProtobufDeserializer<T> implements Deserializer<T> {
 
-  private boolean isKey;
-
   /**
    * Constructor used by Kafka consumer.
    */
@@ -41,15 +39,31 @@ public class KafkaProtobufDeserializer<T extends MessageLite>
   }
 
   @VisibleForTesting
-  public KafkaProtobufDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
+  public KafkaProtobufDeserializer(SchemaRegistryClient client,
+                                   Map<String, ?> props,
+                                   Class<T> type) {
     schemaRegistry = client;
-    configure(deserializerConfig(props));
+    configure(deserializerConfig(props), type);
   }
 
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
-    this.isKey = isKey;
-    configure(new KafkaProtobufDeserializerConfig(configs));
+    configure(new KafkaProtobufDeserializerConfig(configs), isKey);
+  }
+
+  @SuppressWarnings("unchecked")
+  protected void configure(KafkaProtobufDeserializerConfig config, boolean isKey) {
+    if (isKey) {
+      configure(
+          config,
+          (Class<T>) config.getClass(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_KEY_TYPE)
+      );
+    } else {
+      configure(
+          config,
+          (Class<T>) config.getClass(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_VALUE_TYPE)
+      );
+    }
   }
 
   @Override

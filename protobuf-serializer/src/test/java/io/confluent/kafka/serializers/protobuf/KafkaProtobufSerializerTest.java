@@ -87,36 +87,36 @@ public class KafkaProtobufSerializerTest {
     protobufDeserializer = new KafkaProtobufDeserializer(schemaRegistry);
 
     Properties testMessageDeserializerConfig = new Properties();
-    testMessageDeserializerConfig.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+    testMessageDeserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus"
     );
-    testMessageDeserializerConfig.put(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_CLASS_CONFIG,
+    testMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(testMessageDeserializerConfig),
         TestMessage.class
-    );
-    testMessageDeserializer = new KafkaProtobufDeserializer(schemaRegistry,
-        new HashMap(testMessageDeserializerConfig)
     );
 
     Properties nestedMessageDeserializerConfig = new Properties();
-    nestedMessageDeserializerConfig.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+    nestedMessageDeserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus"
     );
-    nestedMessageDeserializerConfig.put(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_CLASS_CONFIG,
+    nestedMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(nestedMessageDeserializerConfig),
         NestedMessage.class
-    );
-    nestedMessageDeserializer = new KafkaProtobufDeserializer(schemaRegistry,
-        new HashMap(nestedMessageDeserializerConfig)
     );
 
     Properties dependencyMessageDeserializerConfig = new Properties();
-    dependencyMessageDeserializerConfig.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+    dependencyMessageDeserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus"
     );
-    dependencyMessageDeserializerConfig.put(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_CLASS_CONFIG,
+    dependencyMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(dependencyMessageDeserializerConfig),
         DependencyMessage.class
-    );
-    dependencyMessageDeserializer = new KafkaProtobufDeserializer(schemaRegistry,
-        new HashMap(dependencyMessageDeserializerConfig)
     );
 
     topic = "test";
