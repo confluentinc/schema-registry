@@ -192,19 +192,16 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
   }
 
   private byte[] serializeNonAvroKey(String keyString) {
-    byte[] serializedKey;
-
     Class serializerClass = keySerializer.getClass();
     if (serializerClass == LongSerializer.class) {
       Long longKey = Long.parseLong(keyString);
-      serializedKey = keySerializer.serialize(topic, longKey);
-    } else if (serializerClass == IntegerSerializer.class) {
-      Integer intKey = Integer.parseInt(keyString);
-      serializedKey = keySerializer.serialize(topic, intKey);
-    } else {
-      serializedKey = keySerializer.serialize(topic, keyString);
+      return keySerializer.serialize(topic, longKey);
     }
-    return serializedKey;
+    if (serializerClass == IntegerSerializer.class) {
+      Integer intKey = Integer.parseInt(keyString);
+      return keySerializer.serialize(topic, intKey);
+    }
+    return keySerializer.serialize(topic, keyString);
   }
 
   @Override
