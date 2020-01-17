@@ -42,4 +42,9 @@ message NestedMessage {
     Status status = 5;
     ComplexType complex_type = 6;
     map<string, string> map_type = 7;
+    InnerMessage inner = 8;
+
+    message InnerMessage {
+        string id = 1;
+    }
 }

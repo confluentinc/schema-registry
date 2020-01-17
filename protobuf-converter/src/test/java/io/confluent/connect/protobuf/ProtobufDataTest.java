@@ -184,6 +184,16 @@ public class ProtobufDataTest {
     return complexTypeBuilder;
   }
 
+  private SchemaBuilder getInnerMessageSchemaBuilder() {
+    final SchemaBuilder innerMessageBuilder = SchemaBuilder.struct();
+    innerMessageBuilder.name("InnerMessage");
+    innerMessageBuilder.field(
+        "id",
+      SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    return innerMessageBuilder;
+  }
+
   private Schema getExpectedNestedTestProtoSchema() {
     final SchemaBuilder builder = SchemaBuilder.struct();
     builder.name("NestedMessage");
@@ -256,6 +266,12 @@ public class ProtobufDataTest {
                 .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2))
                 .build()
         ).name("map_type").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(7)).build()
+    );
+    builder.field(
+        "inner",
+        getInnerMessageSchemaBuilder().optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(8))
+            .build()
     );
     return builder.build();
   }

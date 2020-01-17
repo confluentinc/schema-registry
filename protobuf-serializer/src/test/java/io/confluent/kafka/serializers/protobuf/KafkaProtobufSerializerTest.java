@@ -43,6 +43,7 @@ public class KafkaProtobufSerializerTest {
   private final KafkaProtobufDeserializer testMessageDeserializer;
   private final KafkaProtobufDeserializer nestedMessageDeserializer;
   private final KafkaProtobufDeserializer dependencyMessageDeserializer;
+  private final KafkaProtobufDeserializer innerMessageDeserializer;
   private final String topic;
 
   private static final String TEST_MSG_STRING = "Hello World";
@@ -75,6 +76,8 @@ public class KafkaProtobufSerializerTest {
       .setIsActive(true)
       .setTestMesssage(HELLO_WORLD_MESSAGE)
       .build();
+  private static final NestedMessage.InnerMessage INNER_MESSAGE =
+      NestedMessage.InnerMessage.newBuilder().setId("inner").build();
 
 
   public KafkaProtobufSerializerTest() {
@@ -117,6 +120,17 @@ public class KafkaProtobufSerializerTest {
         schemaRegistry,
         new HashMap(dependencyMessageDeserializerConfig),
         DependencyMessage.class
+    );
+
+    Properties innerMessageDeserializerConfig = new Properties();
+    innerMessageDeserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus"
+    );
+    innerMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(innerMessageDeserializerConfig),
+        NestedMessage.InnerMessage.class
     );
 
     topic = "test";
@@ -198,5 +212,19 @@ public class KafkaProtobufSerializerTest {
             "user_id"
         ), "kafka_user_id")
     );
+  }
+
+  //@Test
+  public void testInner() {
+    byte[] bytes;
+
+    // specific -> specific
+    bytes = protobufSerializer.serialize(topic, INNER_MESSAGE);
+    assertEquals(INNER_MESSAGE, innerMessageDeserializer.deserialize(topic, bytes));
+
+    // specific -> dynamic
+    bytes = protobufSerializer.serialize(topic, INNER_MESSAGE);
+    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals(INNER_MESSAGE.getId(), getField(message, "id"));
   }
 }
