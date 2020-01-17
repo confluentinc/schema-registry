@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
-import com.google.protobuf.MessageLite;
+import com.google.protobuf.Message;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -25,7 +25,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 
-public class KafkaProtobufSerializer<T extends MessageLite>
+public class KafkaProtobufSerializer<T extends Message>
     extends AbstractKafkaProtobufSerializer<T> implements Serializer<T> {
 
   private boolean isKey;

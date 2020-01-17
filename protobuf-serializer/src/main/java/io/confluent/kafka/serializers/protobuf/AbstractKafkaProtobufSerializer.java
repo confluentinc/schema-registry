@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
-import com.google.protobuf.MessageLite;
+import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -37,7 +37,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
 
-public abstract class AbstractKafkaProtobufSerializer<T extends MessageLite>
+public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
 
   protected boolean autoRegisterSchema;

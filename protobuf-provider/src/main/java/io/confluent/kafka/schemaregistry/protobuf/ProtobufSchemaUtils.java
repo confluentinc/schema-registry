@@ -67,9 +67,13 @@ public class ProtobufSchemaUtils {
   public static byte[] toJson(Object value) throws IOException {
     if (value == null) {
       return null;
+    } else if (value instanceof Message) {
+      Message object = (Message) value;
+      String jsonString = JsonFormat.printer().print(object);
+      return jsonString.getBytes(StandardCharsets.UTF_8);
+    } else {
+      throw new IllegalArgumentException("Unsupported type of class " + value.getClass()
+          .getName());
     }
-    Message object = (Message) value;
-    String jsonString = JsonFormat.printer().print(object);
-    return jsonString.getBytes(StandardCharsets.UTF_8);
   }
 }

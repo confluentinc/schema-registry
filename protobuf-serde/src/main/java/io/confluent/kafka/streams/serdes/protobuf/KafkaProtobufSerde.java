@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.streams.serdes.protobuf;
 
-import com.google.protobuf.MessageLite;
+import com.google.protobuf.Message;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -34,7 +34,7 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
  * A schema-registry aware serde (serializer/deserializer) for Apache Kafka's Streams API that can
  * be used for reading and writing data in Protocol Buffers format.
  */
-public class KafkaProtobufSerde<T extends MessageLite> implements Serde<T> {
+public class KafkaProtobufSerde<T extends Message> implements Serde<T> {
 
   private Class<T> specificProtobufClass;
   private final Serde<T> inner;

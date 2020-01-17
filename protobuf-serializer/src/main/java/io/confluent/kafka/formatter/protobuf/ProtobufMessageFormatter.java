@@ -203,7 +203,7 @@ public class ProtobufMessageFormatter extends AbstractKafkaProtobufDeserializer
   }
 
   private void writeTo(byte[] data, PrintStream output) throws IOException {
-    Message object = (Message) deserialize(data);
+    Message object = deserialize(data);
     try {
       output.print(JsonFormat.printer().print(object));
     } catch (InvalidProtocolBufferException e) {

@@ -17,7 +17,7 @@
 package io.confluent.kafka.serializers.protobuf;
 
 import com.google.protobuf.DynamicMessage;
-import com.google.protobuf.MessageLite;
+import com.google.protobuf.Message;
 import kafka.utils.VerifiableProperties;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -34,7 +34,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
-public abstract class AbstractKafkaProtobufDeserializer<T extends MessageLite>
+public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;

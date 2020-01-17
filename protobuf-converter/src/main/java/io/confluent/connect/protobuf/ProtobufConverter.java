@@ -17,7 +17,7 @@
 package io.confluent.connect.protobuf;
 
 import com.google.protobuf.DynamicMessage;
-import com.google.protobuf.MessageLite;
+import com.google.protobuf.Message;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -79,10 +79,10 @@ public class ProtobufConverter implements Converter {
     try {
       ProtobufSchemaAndValue schemaAndValue = protobufData.fromConnectData(schema, value);
       Object v = schemaAndValue.getValue();
-      if (v instanceof MessageLite) {
+      if (v instanceof Message) {
         return serializer.serialize(topic,
             isKey,
-            (MessageLite) v,
+            (Message) v,
             schemaAndValue.getSchema()
         );
       } else {
@@ -135,7 +135,7 @@ public class ProtobufConverter implements Converter {
       configure(new KafkaProtobufSerializerConfig(configs));
     }
 
-    public byte[] serialize(String topic, boolean isKey, MessageLite value, ProtobufSchema schema) {
+    public byte[] serialize(String topic, boolean isKey, Message value, ProtobufSchema schema) {
       if (value == null) {
         return null;
       }
