@@ -214,7 +214,7 @@ public class KafkaProtobufSerializerTest {
     );
   }
 
-  //@Test
+  @Test
   public void testInner() {
     byte[] bytes;
 

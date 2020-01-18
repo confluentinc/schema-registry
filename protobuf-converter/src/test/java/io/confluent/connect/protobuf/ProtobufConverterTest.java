@@ -38,7 +38,6 @@ import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerConfig;
@@ -54,7 +53,7 @@ public class ProtobufConverterTest {
 
   private static final String TOPIC = "topic";
 
-  private static final int PROTOBUF_BYTES_START = 5;
+  private static final int PROTOBUF_BYTES_START = 6; // extra byte for message index
   private static final String TEST_MSG_STRING = "Hello World";
   private static final TestMessage HELLO_WORLD_MESSAGE = TestMessage.newBuilder()
       .setTestString(TEST_MSG_STRING)
@@ -206,7 +205,8 @@ public class ProtobufConverterTest {
   @Test
   public void testToConnectDataForKey() throws Exception {
     converter.configure(SR_CONFIG, true);
-    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1}, HELLO_WORLD_MESSAGE.toByteArray());
+    // extra byte for message index
+    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0}, HELLO_WORLD_MESSAGE.toByteArray());
     schemaRegistry.register("my-topic-key", new ProtobufSchema(TestMessage.getDescriptor()));
     SchemaAndValue result = converter.toConnectData("my-topic", input);
 
@@ -220,7 +220,8 @@ public class ProtobufConverterTest {
   @Test
   public void testToConnectDataForValue() throws Exception {
     converter.configure(SR_CONFIG, false);
-    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1}, HELLO_WORLD_MESSAGE.toByteArray());
+    // extra byte for message index
+    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0}, HELLO_WORLD_MESSAGE.toByteArray());
     schemaRegistry.register("my-topic-value", new ProtobufSchema(TestMessage.getDescriptor()));
     SchemaAndValue result = converter.toConnectData("my-topic", input);
 

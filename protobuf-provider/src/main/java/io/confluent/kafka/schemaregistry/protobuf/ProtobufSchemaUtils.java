@@ -37,7 +37,8 @@ public class ProtobufSchemaUtils {
     return new ProtobufSchema(schema.canonicalString(),
         schema.references(),
         schema.resolvedReferences(),
-        schema.version()
+        schema.version(),
+        schema.name()
     );
   }
 

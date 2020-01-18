@@ -84,6 +84,8 @@ public class ProtobufSchema implements ParsedSchema {
 
   private final Integer version;
 
+  private final String name;
+
   private final List<SchemaReference> references;
 
   private final Map<String, ProtoFileElement> dependencies;
@@ -91,18 +93,20 @@ public class ProtobufSchema implements ParsedSchema {
   private transient DynamicSchema dynamicSchema;
 
   public ProtobufSchema(String schemaString) {
-    this(schemaString, Collections.emptyList(), Collections.emptyMap(), null);
+    this(schemaString, Collections.emptyList(), Collections.emptyMap(), null, null);
   }
 
   public ProtobufSchema(
       String schemaString,
       List<SchemaReference> references,
       Map<String, String> resolvedReferences,
-      Integer version
+      Integer version,
+      String name
   ) {
     try {
       this.schemaObj = ProtoParser.parse(DEFAULT_LOCATION, schemaString);
       this.version = version;
+      this.name = name;
       this.references = references;
       this.dependencies = resolvedReferences.entrySet()
           .stream()
@@ -123,26 +127,28 @@ public class ProtobufSchema implements ParsedSchema {
   ) {
     this.schemaObj = protoFileElement;
     this.version = null;
+    this.name = null;
     this.references = references;
     this.dependencies = dependencies;
   }
 
   public ProtobufSchema(Descriptor descriptor) {
-    this(descriptor.getFile(), descriptor.getName());
+    this(descriptor.getFile(), descriptor.getFullName());
   }
 
   public ProtobufSchema(
       FileDescriptor descriptor, String messageName
   ) {
     Map<String, ProtoFileElement> dependencies = new HashMap<>();
-    this.schemaObj = toProtoFile(descriptor, messageName, dependencies);
+    this.schemaObj = toProtoFile(descriptor, dependencies);
     this.version = null;
+    this.name = messageName;
     this.references = Collections.emptyList();
     this.dependencies = dependencies;
   }
 
   private ProtoFileElement toProtoFile(
-      FileDescriptor file, String messageName, Map<String, ProtoFileElement> dependencies
+      FileDescriptor file, Map<String, ProtoFileElement> dependencies
   ) {
     final Location location = Location.get(file.getFullName());
     String packageName = file.getPackage();
@@ -165,7 +171,7 @@ public class ProtobufSchema implements ParsedSchema {
         break;
     }
     ImmutableList.Builder<TypeElement> types = ImmutableList.builder();
-    for (Descriptor md : reorderMessageTypes(file.getMessageTypes(), messageName)) {
+    for (Descriptor md : file.getMessageTypes()) {
       MessageElement message = toMessage(md);
       types.add(message);
     }
@@ -176,13 +182,13 @@ public class ProtobufSchema implements ParsedSchema {
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     for (FileDescriptor dependency : file.getDependencies()) {
       String depName = dependency.getName();
-      dependencies.put(depName, toProtoFile(dependency, depName, dependencies));
+      dependencies.put(depName, toProtoFile(dependency, dependencies));
       imports.add(depName);
     }
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();
     for (FileDescriptor dependency : file.getPublicDependencies()) {
       String depName = dependency.getName();
-      dependencies.put(depName, toProtoFile(dependency, depName, dependencies));
+      dependencies.put(depName, toProtoFile(dependency, dependencies));
       publicImports.add(depName);
     }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
@@ -227,21 +233,6 @@ public class ProtobufSchema implements ParsedSchema {
         Collections.emptyList(),
         options.build()
     );
-  }
-
-  private List<Descriptor> reorderMessageTypes(List<Descriptor> types, String messageName) {
-    List<Descriptor> result = new ArrayList<>(types.size());
-    for (Descriptor type : types) {
-      if (type.getName().equals(messageName)) {
-        result.add(type);
-      }
-    }
-    for (Descriptor type : types) {
-      if (!type.getName().equals(messageName)) {
-        result.add(type);
-      }
-    }
-    return result;
   }
 
   private MessageElement toMessage(Descriptor descriptor) {
@@ -619,7 +610,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public String name() {
-    return firstMessage().getName();
+    return name != null ? name : firstMessage().getName();
   }
 
   @Override
@@ -688,6 +679,56 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public String toString() {
     return canonicalString();
+  }
+
+  public MessageIndexes toMessageIndexes(String name) {
+    List<Integer> indexes = new ArrayList<>();
+    String[] parts = name.split("\\.");
+    List<TypeElement> types = schemaObj.getTypes();
+    for (String part : parts) {
+      int i = 0;
+      for (TypeElement type : types) {
+        if (type instanceof MessageElement) {
+          if (type.getName().equals(part)) {
+            indexes.add(i);
+            types = type.getNestedTypes();
+            break;
+          }
+          i++;
+        }
+      }
+    }
+    return new MessageIndexes(indexes);
+  }
+
+  public String toMessageName(MessageIndexes indexes) {
+    StringBuilder sb = new StringBuilder();
+    List<TypeElement> types = schemaObj.getTypes();
+    boolean first = true;
+    for (Integer index : indexes.indexes()) {
+      if (!first) {
+        sb.append(".");
+      } else {
+        first = false;
+      }
+      MessageElement message = getMessageAtIndex(types, index);
+      sb.append(message.getName());
+      types = message.getNestedTypes();
+    }
+    return sb.toString();
+  }
+
+  private MessageElement getMessageAtIndex(List<TypeElement> types, int index) {
+    int i = 0;
+    for (TypeElement type : types) {
+      if (type instanceof MessageElement) {
+        if (index == i) {
+          return (MessageElement) type;
+        }
+        i++;
+      }
+    }
+    return null;
   }
 
   public static String toMapEntry(String s) {

@@ -29,6 +29,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
@@ -100,6 +101,15 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
       ProtobufSchema schema = ((ProtobufSchema) schemaRegistry.getSchemaById(id));
+      MessageIndexes indexes = MessageIndexes.readFrom(buffer);
+      String name = schema.toMessageName(indexes);
+      schema = new ProtobufSchema(
+          schema.canonicalString(),
+          schema.references(),
+          schema.resolvedReferences(),
+          schema.version(),
+          name
+      );
       String subject = null;
       if (includeSchemaAndVersion) {
         subject = subjectName(topic, isKey, schema);
@@ -138,7 +148,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
             new ProtobufSchema(schema.canonicalString(),
                 schema.references(),
                 schema.resolvedReferences(),
-                version
+                version,
+                schema.name()
             ),
             value
         );

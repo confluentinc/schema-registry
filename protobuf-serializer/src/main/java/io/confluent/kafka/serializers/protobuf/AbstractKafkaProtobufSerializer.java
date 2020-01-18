@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
@@ -83,6 +84,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
+      MessageIndexes indexes = schema.toMessageIndexes(object.getDescriptorForType().getFullName());
+      out.write(indexes.toByteArray());
       object.writeTo(out);
       byte[] bytes = out.toByteArray();
       out.close();
@@ -115,7 +118,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         schema.canonicalString(),
         s.getReferences(),
         schema.resolvedReferences(),
-        null
+        null,
+        schema.name()
     );
   }
 

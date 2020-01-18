@@ -37,6 +37,7 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
           schemaString,
           references,
           resolveReferences(references),
+          null,
           null
       ));
     } catch (IllegalStateException e) {
