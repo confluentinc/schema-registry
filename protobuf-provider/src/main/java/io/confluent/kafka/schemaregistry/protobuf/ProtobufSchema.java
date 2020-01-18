@@ -712,6 +712,9 @@ public class ProtobufSchema implements ParsedSchema {
         first = false;
       }
       MessageElement message = getMessageAtIndex(types, index);
+      if (message == null) {
+        throw new IllegalArgumentException("Invalid message indexes: " + indexes);
+      }
       sb.append(message.getName());
       types = message.getNestedTypes();
     }

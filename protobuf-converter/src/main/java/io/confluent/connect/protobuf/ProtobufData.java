@@ -215,7 +215,10 @@ public class ProtobufData {
           String scopedMapName = scope + ProtobufSchema.toMapEntry(mapName);
           List<Message> newMapValue = new ArrayList<>();
           for (Map.Entry<?, ?> mapEntry : mapValue.entrySet()) {
-            DynamicMessage.Builder mapBuilder = newMessageBuilder(protobufSchema, scopedMapName);
+            DynamicMessage.Builder mapBuilder = protobufSchema.newMessageBuilder(scopedMapName);
+            if (mapBuilder == null) {
+              throw new IllegalStateException("Invalid message name: " + scopedMapName);
+            }
             Descriptor mapDescriptor = mapBuilder.getDescriptorForType();
             final FieldDescriptor keyDescriptor = mapDescriptor.findFieldByName(KEY_FIELD);
             final FieldDescriptor valueDescriptor = mapDescriptor.findFieldByName(VALUE_FIELD);
@@ -256,10 +259,11 @@ public class ProtobufData {
             throw new IllegalArgumentException("Cannot find non-null field");
           } else {
             String scopedStructName = scope + getNameOrDefault(structName);
-            DynamicMessage.Builder messageBuilder = newMessageBuilder(
-                protobufSchema,
-                scopedStructName
-            );
+            DynamicMessage.Builder messageBuilder =
+                protobufSchema.newMessageBuilder(scopedStructName);
+            if (messageBuilder == null) {
+              throw new IllegalStateException("Invalid message name: " + scopedStructName);
+            }
             for (Field field : schema.fields()) {
               Object fieldValue = fromConnectData(
                   field.schema(),
@@ -292,29 +296,6 @@ public class ProtobufData {
       }
     } catch (ClassCastException e) {
       throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
-    }
-  }
-
-  /*
-   * Search for the message builder from the bottom scope to the top.
-   */
-  private DynamicMessage.Builder newMessageBuilder(
-      ProtobufSchema protobufSchema,
-      String scopedName
-  ) {
-    if (scopedName == null || scopedName.isEmpty()) {
-      return protobufSchema.newMessageBuilder();
-    }
-    DynamicMessage.Builder builder = protobufSchema.newMessageBuilder(scopedName);
-    if (builder != null) {
-      return builder;
-    } else {
-      int index = scopedName.lastIndexOf(".");
-      if (index < 0) {
-        return protobufSchema.newMessageBuilder();
-      } else {
-        return newMessageBuilder(protobufSchema, scopedName.substring(0, index));
-      }
     }
   }
 
