@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.protobuf;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.protobuf.Descriptors;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
@@ -26,8 +25,6 @@ import com.google.protobuf.util.JsonFormat;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
-
-import io.confluent.kafka.schemaregistry.ParsedSchema;
 
 public class ProtobufSchemaUtils {
 
@@ -42,21 +39,11 @@ public class ProtobufSchemaUtils {
     );
   }
 
-  public static ProtobufSchema getSchema(Object object) {
-    if (object == null) {
-      return null;
-    } else if (object instanceof Message) {
-      Message message = (Message) object;
-      Descriptors.Descriptor desc = message.getDescriptorForType();
-      return new ProtobufSchema(desc);
-    } else {
-      throw new IllegalArgumentException("Unsupported type of class " + object.getClass()
-          .getName());
-    }
+  public static ProtobufSchema getSchema(Message message) {
+    return message != null ? new ProtobufSchema(message.getDescriptorForType()) : null;
   }
 
-  public static Object toObject(JsonNode value, ParsedSchema parsedSchema) throws IOException {
-    ProtobufSchema schema = (ProtobufSchema) parsedSchema;
+  public static Object toObject(JsonNode value, ProtobufSchema schema) throws IOException {
     StringWriter out = new StringWriter();
     jsonMapper.writeValue(out, value);
     String jsonString = out.toString();
@@ -65,16 +52,11 @@ public class ProtobufSchemaUtils {
     return message.build();
   }
 
-  public static byte[] toJson(Object value) throws IOException {
-    if (value == null) {
+  public static byte[] toJson(Message message) throws IOException {
+    if (message == null) {
       return null;
-    } else if (value instanceof Message) {
-      Message object = (Message) value;
-      String jsonString = JsonFormat.printer().print(object);
-      return jsonString.getBytes(StandardCharsets.UTF_8);
-    } else {
-      throw new IllegalArgumentException("Unsupported type of class " + value.getClass()
-          .getName());
     }
+    String jsonString = JsonFormat.printer().print(message);
+    return jsonString.getBytes(StandardCharsets.UTF_8);
   }
 }

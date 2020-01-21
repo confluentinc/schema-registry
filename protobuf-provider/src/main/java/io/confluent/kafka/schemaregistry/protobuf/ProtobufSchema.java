@@ -115,7 +115,8 @@ public class ProtobufSchema implements ParsedSchema {
               e -> ProtoParser.parse(Location.get(e.getKey()), e.getValue())
           ));
     } catch (IllegalStateException e) {
-      log.error("Cound not parse Protobuf schema " + schemaString, e);
+      log.error("Could not parse Protobuf schema " + schemaString
+          + " with references " + references, e);
       throw e;
     }
   }
@@ -238,7 +239,7 @@ public class ProtobufSchema implements ParsedSchema {
   private MessageElement toMessage(Descriptor descriptor) {
     Location location = Location.get(descriptor.getFile().getFullName());
     String name = descriptor.getName();
-    log.trace("*** msg name: " + name);
+    log.trace("*** msg name: {}", name);
     ImmutableList.Builder<FieldElement> fields = ImmutableList.builder();
     ImmutableList.Builder<OneOfElement> oneofs = ImmutableList.builder();
     ImmutableList.Builder<TypeElement> nested = ImmutableList.builder();
@@ -308,7 +309,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   private OneOfElement toOneof(OneofDescriptor od) {
     String name = od.getName();
-    log.trace("*** oneof name: " + name);
+    log.trace("*** oneof name: {}", name);
     ImmutableList.Builder<FieldElement> fields = ImmutableList.builder();
     for (FieldDescriptor fd : od.getFields()) {
       FieldElement field = toField(fd, true);
@@ -321,7 +322,7 @@ public class ProtobufSchema implements ParsedSchema {
   private EnumElement toEnum(EnumDescriptor ed) {
     Location location = Location.get(ed.getFile().getFullName());
     String name = ed.getName();
-    log.trace("*** enum name: " + name);
+    log.trace("*** enum name: {}", name);
     ImmutableList.Builder<EnumConstantElement> constants = ImmutableList.builder();
     for (EnumValueDescriptor ev : ed.getValues()) {
       // NOTE: skip options
@@ -351,7 +352,7 @@ public class ProtobufSchema implements ParsedSchema {
   private FieldElement toField(FieldDescriptor fd, boolean inOneof) {
     final Location location = Location.get(fd.getFile().getFullName());
     String name = fd.getName();
-    log.trace("*** field name: " + name);
+    log.trace("*** field name: {}", name);
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (fd.getOptions().hasPacked()) {
       OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
@@ -432,7 +433,7 @@ public class ProtobufSchema implements ParsedSchema {
         return (MessageElement) typeElement;
       }
     }
-    throw new IllegalArgumentException("Protobuf schema definition "
+    throw new IllegalArgumentException("Protobuf schema definition"
         + " contains no message type definitions");
   }
 
@@ -450,7 +451,7 @@ public class ProtobufSchema implements ParsedSchema {
   private static DynamicSchema toDynamicSchema(
       String name, ProtoFileElement rootElem, Map<String, ProtoFileElement> dependencies
   ) {
-    log.trace("*** toDynamicSchema: " + rootElem.toSchema());
+    log.trace("*** toDynamicSchema: {}", rootElem.toSchema());
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     try {
       if (rootElem.getPackageName() != null) {
@@ -505,7 +506,7 @@ public class ProtobufSchema implements ParsedSchema {
       DynamicSchema.Builder schema,
       MessageElement messageElem
   ) {
-    log.trace("*** message: " + messageElem.getName());
+    log.trace("*** message: {}", messageElem.getName());
     MessageDefinition.Builder message = MessageDefinition.newBuilder(messageElem.getName());
     Set<String> added = new HashSet<>();
     for (OneOfElement oneof : messageElem.getOneOfs()) {
@@ -652,7 +653,16 @@ public class ProtobufSchema implements ParsedSchema {
         .collect(Collectors.toList());
     boolean isCompatible = incompatibleDiffs.isEmpty();
     if (!isCompatible) {
-      log.warn("Found incompatible change: {}", incompatibleDiffs.get(0));
+      boolean first = true;
+      for (Difference incompatibleDiff : incompatibleDiffs) {
+        if (first) {
+          // Log first incompatible change as warning
+          log.warn("Found incompatible change: {}", incompatibleDiff);
+          first = false;
+        } else {
+          log.debug("Found incompatible change: {}", incompatibleDiff);
+        }
+      }
     }
     return isCompatible;
   }
