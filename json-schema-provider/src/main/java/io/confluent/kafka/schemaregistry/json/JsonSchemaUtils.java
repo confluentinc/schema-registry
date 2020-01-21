@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 
 public class JsonSchemaUtils {
@@ -82,8 +81,8 @@ public class JsonSchemaUtils {
     return object;
   }
 
-  public static Object toObject(JsonNode value, ParsedSchema parsedSchema) throws IOException {
-    ((JsonSchema) parsedSchema).validate(value);
+  public static Object toObject(JsonNode value, JsonSchema schema) throws IOException {
+    schema.validate(value);
     return value;
   }
 

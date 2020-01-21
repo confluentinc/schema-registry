@@ -38,8 +38,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
-
 public class AvroSchemaUtils {
 
   private static final EncoderFactory encoderFactory = EncoderFactory.get();
@@ -129,13 +127,13 @@ public class AvroSchemaUtils {
     }
   }
 
-  public static Object toObject(JsonNode value, ParsedSchema parsedSchema) throws IOException {
+  public static Object toObject(JsonNode value, AvroSchema schema) throws IOException {
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      Schema schema = ((AvroSchema) parsedSchema).rawSchema();
+      Schema rawSchema = schema.rawSchema();
       jsonMapper.writeValue(out, value);
-      DatumReader<Object> reader = new GenericDatumReader<Object>(schema);
+      DatumReader<Object> reader = new GenericDatumReader<Object>(rawSchema);
       Object object = reader.read(null,
-          decoderFactory.jsonDecoder(schema, new ByteArrayInputStream(out.toByteArray()))
+          decoderFactory.jsonDecoder(rawSchema, new ByteArrayInputStream(out.toByteArray()))
       );
       return object;
     }
