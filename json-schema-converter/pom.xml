@@ -68,4 +68,58 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-maven-plugin</artifactId>
+                <version>0.11.0</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>kafka-connect</goal>
+                        </goals>
+                        <configuration>
+                            <title>Kafka Connect JSON Schema Converter</title>
+                            <documentationUrl>https://docs.confluent.io/current/schema-registry/docs/connect.html</documentationUrl>
+                            <description>
+                                <![CDATA[The Kafka Connect JSON Schema Converter integrates with <a href="https://docs.confluent.io/current/schema-registry/docs/intro.html">Schema Registry</a> to convert data for Kafka Connect to and from JSON Schema format.]]>
+                            </description>
+                            <sourceUrl>https://github.com/confluentinc/schema-registry</sourceUrl>
+
+                            <supportProviderName>Confluent, Inc.</supportProviderName>
+                            <supportSummary>Confluent supports the JSON Schema Converter alongside community members as part of its Confluent Platform offering.</supportSummary>
+                            <supportUrl>https://docs.confluent.io/current/</supportUrl>
+                            <supportLogo>logos/confluent.png</supportLogo>
+
+                            <ownerUsername>confluentinc</ownerUsername>
+                            <ownerType>organization</ownerType>
+                            <ownerName>Confluent, Inc.</ownerName>
+                            <ownerUrl>https://confluent.io/</ownerUrl>
+                            <ownerLogo>logos/confluent.png</ownerLogo>
+
+                            <dockerNamespace>confluentinc</dockerNamespace>
+                            <dockerName>cp-kafka-connect</dockerName>
+                            <dockerTag>${project.version}</dockerTag>
+
+                            <componentTypes>
+                                <componentType>converter</componentType>
+                            </componentTypes>
+
+                            <tags>
+                                <tag>json schema</tag>
+                                <tag>schema registry</tag>
+                            </tags>
+
+                            <kafkaConnectApi>false</kafkaConnectApi>
+                            <singleMessageTransforms>false</singleMessageTransforms>
+                            <supportedEncodings>
+                                <supportedEncoding>json</supportedEncoding>
+                            </supportedEncodings>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
