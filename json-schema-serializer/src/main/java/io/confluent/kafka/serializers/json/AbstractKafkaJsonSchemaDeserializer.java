@@ -39,6 +39,7 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKafkaSchemaSerDe {
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected Class<T> type;
+  protected String typeProperty;
   protected boolean validate = true;
 
   /**
@@ -57,6 +58,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         failUnknownProperties
     );
     this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
+    this.typeProperty = config.getString(KafkaJsonSchemaDeserializerConfig.TYPE_PROPERTY);
   }
 
   protected KafkaJsonSchemaDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -110,12 +112,16 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       int length = buffer.limit() - 1 - idSize;
       int start = buffer.position() + buffer.arrayOffset();
 
-      Object value = type != null
-                     ? objectMapper.readValue(buffer.array(), start, length, type)
-                     : objectMapper.readTree(new ByteArrayInputStream(buffer.array(),
-                         start,
-                         length
-                     ));
+      Object typeName = schema.rawSchema().getUnprocessedProperties().get(typeProperty);
+
+      Object value;
+      if (type != null) {
+        value = objectMapper.readValue(buffer.array(), start, length, type);
+      } else if (typeName != null) {
+        value = deriveType(buffer, length, start, typeName.toString());
+      } else {
+        value = objectMapper.readTree(new ByteArrayInputStream(buffer.array(), start, length));
+      }
 
       if (validate) {
         try {
@@ -153,6 +159,17 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       throw new SerializationException("Error deserializing Protobuf message for id " + id, e);
     } catch (RestClientException e) {
       throw new SerializationException("Error retrieving Protobuf schema for id " + id, e);
+    }
+  }
+
+  private Object deriveType(
+      ByteBuffer buffer, int length, int start, String typeName
+  ) throws IOException {
+    try {
+      Class<?> cls = Class.forName(typeName);
+      return objectMapper.readValue(buffer.array(), start, length, cls);
+    } catch (ClassNotFoundException e) {
+      throw new SerializationException("Class " + typeName + " could not be found.");
     }
   }
 

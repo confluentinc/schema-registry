@@ -16,6 +16,8 @@
 package io.confluent.kafka.serializers.json;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -105,6 +107,10 @@ public class KafkaJsonSchemaSerializerTest {
     byte[] bytes = serializer.serialize("foo", user);
     Object deserialized = getDeserializer(User.class).deserialize(topic, bytes);
     assertEquals(user, deserialized);
+
+    // Test for javaType property
+    deserialized = getDeserializer(null).deserialize(topic, bytes);
+    assertEquals(user, deserialized);
   }
 
   @Test(expected = SerializationException.class)
@@ -116,6 +122,9 @@ public class KafkaJsonSchemaSerializerTest {
     assertEquals(user, deserialized);
   }
 
+  // Generate javaType property
+  @JsonSchemaInject(strings = {@JsonSchemaString(path="javaType",
+      value="io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerTest$User")})
   public static class User {
     @JsonProperty
     public String firstName;

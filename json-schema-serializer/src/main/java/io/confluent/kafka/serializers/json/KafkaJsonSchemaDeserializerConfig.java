@@ -43,6 +43,11 @@ public class KafkaJsonSchemaDeserializerConfig extends AbstractKafkaSchemaSerDeC
   public static final String JSON_VALUE_TYPE_DOC = "Classname of the type that the message value "
       + "should be deserialized to";
 
+  public static final String TYPE_PROPERTY = "type.property";
+  public static final String TYPE_PROPERTY_DEFAULT = "javaType";
+  public static final String TYPE_PROPERTY_DOC = "Property on the JSON Schema that contains the "
+      + "fully-qualified classname";
+
   private static ConfigDef config;
 
   static {
@@ -66,6 +71,11 @@ public class KafkaJsonSchemaDeserializerConfig extends AbstractKafkaSchemaSerDeC
         JSON_VALUE_TYPE_DEFAULT,
         ConfigDef.Importance.MEDIUM,
         JSON_VALUE_TYPE_DOC
+    ).define(TYPE_PROPERTY,
+        ConfigDef.Type.STRING,
+        TYPE_PROPERTY_DEFAULT,
+        ConfigDef.Importance.MEDIUM,
+        TYPE_PROPERTY_DOC
     );
   }
 
