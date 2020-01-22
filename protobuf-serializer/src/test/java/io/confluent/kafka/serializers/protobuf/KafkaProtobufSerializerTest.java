@@ -40,6 +40,7 @@ public class KafkaProtobufSerializerTest {
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaProtobufSerializer protobufSerializer;
   private final KafkaProtobufDeserializer protobufDeserializer;
+  private final KafkaProtobufDeserializer deriveTypeDeserializer;
   private final KafkaProtobufDeserializer testMessageDeserializer;
   private final KafkaProtobufDeserializer nestedMessageDeserializer;
   private final KafkaProtobufDeserializer dependencyMessageDeserializer;
@@ -88,6 +89,21 @@ public class KafkaProtobufSerializerTest {
     protobufSerializer = new KafkaProtobufSerializer(schemaRegistry, new HashMap(serializerConfig));
 
     protobufDeserializer = new KafkaProtobufDeserializer(schemaRegistry);
+
+    Properties deriveTypeDeserializerConfig = new Properties();
+    deriveTypeDeserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus"
+    );
+    deriveTypeDeserializerConfig.put(
+        KafkaProtobufDeserializerConfig.DERIVE_TYPE_CONFIG,
+        true
+    );
+    deriveTypeDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(deriveTypeDeserializerConfig),
+        null
+    );
 
     Properties testMessageDeserializerConfig = new Properties();
     testMessageDeserializerConfig.put(
@@ -153,6 +169,10 @@ public class KafkaProtobufSerializerTest {
     bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE);
     assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, bytes));
 
+    // specific -> derived
+    bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE);
+    assertEquals(HELLO_WORLD_MESSAGE, deriveTypeDeserializer.deserialize(topic, bytes));
+
     // specific -> dynamic
     bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE);
     DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
@@ -162,6 +182,10 @@ public class KafkaProtobufSerializerTest {
     // dynamic -> specific
     bytes = protobufSerializer.serialize(topic, message);
     assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, bytes));
+
+    // dynamic -> derived
+    bytes = protobufSerializer.serialize(topic, message);
+    assertEquals(HELLO_WORLD_MESSAGE, deriveTypeDeserializer.deserialize(topic, bytes));
 
     // dynamic -> dynamic
     bytes = protobufSerializer.serialize(topic, message);
@@ -173,6 +197,10 @@ public class KafkaProtobufSerializerTest {
     bytes = protobufSerializer.serialize(topic, NESTED_MESSAGE);
     assertEquals(NESTED_MESSAGE, nestedMessageDeserializer.deserialize(topic, bytes));
 
+    // dynamic -> derived
+    bytes = protobufSerializer.serialize(topic, NESTED_MESSAGE);
+    assertEquals(NESTED_MESSAGE, deriveTypeDeserializer.deserialize(topic, bytes));
+
     // specific -> dynamic
     bytes = protobufSerializer.serialize(topic, NESTED_MESSAGE);
     message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
@@ -183,6 +211,10 @@ public class KafkaProtobufSerializerTest {
     // dynamic -> specific
     bytes = protobufSerializer.serialize(topic, message);
     assertEquals(NESTED_MESSAGE, nestedMessageDeserializer.deserialize(topic, bytes));
+
+    // dynamic -> derived
+    bytes = protobufSerializer.serialize(topic, message);
+    assertEquals(NESTED_MESSAGE, deriveTypeDeserializer.deserialize(topic, bytes));
 
     // specific -> specific
     bytes = protobufSerializer.serialize(topic, message);

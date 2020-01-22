@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.protobuf;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Range;
+import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto.ReservedRange;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
@@ -689,6 +690,38 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public String toString() {
     return canonicalString();
+  }
+
+  public String fullName() {
+    return fullName(name());
+  }
+
+  public String fullName(String name) {
+    Descriptor descriptor = toDescriptor(name);
+    FileDescriptor fd = descriptor.getFile();
+    DescriptorProtos.FileOptions o = fd.getOptions();
+    String p = o.hasJavaPackage() ? o.getJavaPackage() : fd.getPackage();
+    String outer = "";
+    if (!o.getJavaMultipleFiles()) {
+      if (o.hasJavaOuterClassname()) {
+        outer = o.getJavaOuterClassname();
+      } else {
+        // Can't determine full name without either java_outer_classname or java_multiple_files
+        return null;
+      }
+    }
+    StringBuilder inner = new StringBuilder();
+    while (descriptor != null) {
+      if (inner.length() == 0) {
+        inner.insert(0, descriptor.getName());
+      } else {
+        inner.insert(0, descriptor.getName() + "$");
+      }
+      descriptor = descriptor.getContainingType();
+    }
+    String d1 = (!outer.isEmpty() || inner.length() != 0 ? "." : "");
+    String d2 = (!outer.isEmpty() && inner.length() != 0 ? "$" : "");
+    return p + d1 + outer + d2 + inner;
   }
 
   public MessageIndexes toMessageIndexes(String name) {

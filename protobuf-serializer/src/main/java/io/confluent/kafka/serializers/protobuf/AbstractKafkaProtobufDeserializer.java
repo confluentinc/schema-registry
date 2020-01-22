@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -39,6 +40,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
+  protected boolean deriveType;
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
@@ -52,10 +54,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       if (specificProtobufClass != null && !specificProtobufClass.equals(Object.class)) {
         this.parseMethod = specificProtobufClass.getDeclaredMethod("parseFrom", ByteBuffer.class);
       }
+      this.deriveType = config.getBoolean(KafkaProtobufDeserializerConfig.DERIVE_TYPE_CONFIG);
     } catch (Exception e) {
-      throw new ConfigException("Proto class "
-          + specificProtobufClass.getCanonicalName()
-          + " is not a valid proto3 message class", e);
+      throw new ConfigException("Class " + specificProtobufClass.getCanonicalName()
+          + " is not a valid protobuf message class", e);
     }
   }
 
@@ -124,8 +126,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         try {
           value = parseMethod.invoke(null, buffer);
         } catch (Exception e) {
-          throw new ConfigException("Not a valid proto3 builder", e);
+          throw new ConfigException("Not a valid protobuf builder", e);
         }
+      } else if (deriveType) {
+        value = deriveType(buffer, schema);
       } else {
         value = DynamicMessage.parseFrom(schema.toDescriptor(),
             new ByteArrayInputStream(buffer.array(), start, length)
@@ -160,6 +164,27 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       throw new SerializationException("Error deserializing Protobuf message for id " + id, e);
     } catch (RestClientException e) {
       throw new SerializationException("Error retrieving Protobuf schema for id " + id, e);
+    }
+  }
+
+  private Object deriveType(ByteBuffer buffer, ProtobufSchema schema) {
+    String clsName = schema.fullName();
+    if (clsName == null) {
+      throw new SerializationException("If `derive.type` is true, then either "
+          + "`java_outer_classname` or `java_multiple_files` must be set "
+          + "in the Protobuf schema");
+    }
+    try {
+      Class<?> cls = Class.forName(clsName);
+      Method parseMethod = cls.getDeclaredMethod("parseFrom", ByteBuffer.class);
+      return parseMethod.invoke(null, buffer);
+    } catch (ClassNotFoundException e) {
+      throw new SerializationException("Class " + clsName + " could not be found.");
+    } catch (NoSuchMethodException e) {
+      throw new SerializationException("Class " + clsName
+          + " is not a valid protobuf message class", e);
+    } catch (IllegalAccessException | InvocationTargetException e) {
+      throw new SerializationException("Not a valid protobuf builder");
     }
   }
 

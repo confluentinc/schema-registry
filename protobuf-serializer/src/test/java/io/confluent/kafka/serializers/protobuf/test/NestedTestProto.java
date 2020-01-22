@@ -5026,9 +5026,9 @@ public final class NestedTestProto {
       "otobuf.test.NestedMessage.InnerMessage\032." +
       "\n\014MapTypeEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001" +
       "(\t:\0028\001\032\032\n\014InnerMessage\022\n\n\002id\030\001 \001(\t*\"\n\006St" +
-      "atus\022\n\n\006ACTIVE\020\000\022\014\n\010INACTIVE\020\001B.\n,io.con" +
-      "fluent.kafka.serializers.protobuf.testb\006" +
-      "proto3"
+      "atus\022\n\n\006ACTIVE\020\000\022\014\n\010INACTIVE\020\001B?\n,io.con" +
+      "fluent.kafka.serializers.protobuf.testB\017" +
+      "NestedTestProtob\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

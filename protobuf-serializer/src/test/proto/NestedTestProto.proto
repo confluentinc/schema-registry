@@ -5,6 +5,7 @@ import "google/protobuf/timestamp.proto";
 package io.confluent.kafka.serializers.protobuf.test;
 
 option java_package = "io.confluent.kafka.serializers.protobuf.test";
+option java_outer_classname = "NestedTestProto";
 
 message UserId {
     oneof user_id {
