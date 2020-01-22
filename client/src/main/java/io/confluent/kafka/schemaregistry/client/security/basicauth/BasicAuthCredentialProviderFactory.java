@@ -16,36 +16,27 @@
 
 package io.confluent.kafka.schemaregistry.client.security.basicauth;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
 
 public class BasicAuthCredentialProviderFactory {
 
-  public static final Map<String, BasicAuthCredentialProvider>
-      basicAuthCredentialProviderMap = new HashMap<>();
+  public static BasicAuthCredentialProvider getBasicAuthCredentialProvider(
+      String basicAuthCredentialSource,
+      Map<String, ?> configs) {
 
-  static {
     ServiceLoader<BasicAuthCredentialProvider> serviceLoader = ServiceLoader.load(
         BasicAuthCredentialProvider.class,
         BasicAuthCredentialProviderFactory.class.getClassLoader()
     );
 
     for (BasicAuthCredentialProvider basicAuthCredentialProvider : serviceLoader) {
-      basicAuthCredentialProviderMap.put(
-          basicAuthCredentialProvider.alias(),
-          basicAuthCredentialProvider);
+      if (basicAuthCredentialProvider.alias().equals(basicAuthCredentialSource)) {
+        basicAuthCredentialProvider.configure(configs);
+        return basicAuthCredentialProvider;
+      }
     }
-  }
 
-  public static BasicAuthCredentialProvider getBasicAuthCredentialProvider(
-      String basicAuthCredentialSource,
-      Map<String, ?> configs) {
-    BasicAuthCredentialProvider basicAuthCredentialProvider =
-        basicAuthCredentialProviderMap.get(basicAuthCredentialSource);
-    if (basicAuthCredentialProvider != null) {
-      basicAuthCredentialProvider.configure(configs);
-    }
-    return basicAuthCredentialProvider;
+    return null;
   }
 }
