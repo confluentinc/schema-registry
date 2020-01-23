@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.json.diff;
 
 import org.everit.json.schema.ObjectSchema;
+import org.everit.json.schema.Schema;
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -121,13 +122,13 @@ public class ObjectSchemaDiff {
 
       for (String propertyKey : propertyKeys) {
         try (Context.PathScope pathScope2 = ctx.enterPath(propertyKey)) {
-          if (!update.getPropertyDependencies().containsKey(propertyKey)) {
+          Set<String> originalDependencies = original.getPropertyDependencies().get(propertyKey);
+          Set<String> updateDependencies = update.getPropertyDependencies().get(propertyKey);
+          if (updateDependencies == null) {
             ctx.addDifference(DEPENDENCY_ARRAY_REMOVED);
-          } else if (!original.getPropertyDependencies().containsKey(propertyKey)) {
+          } else if (originalDependencies == null) {
             ctx.addDifference(DEPENDENCY_ARRAY_ADDED);
           } else {
-            Set<String> originalDependencies = original.getPropertyDependencies().get(propertyKey);
-            Set<String> updateDependencies = original.getPropertyDependencies().get(propertyKey);
             if (originalDependencies.equals(updateDependencies)) {
               if (updateDependencies.containsAll(originalDependencies)) {
                 ctx.addDifference(DEPENDENCY_ARRAY_EXTENDED);
@@ -146,15 +147,14 @@ public class ObjectSchemaDiff {
 
       for (String propertyKey : propertyKeys) {
         try (Context.PathScope pathScope2 = ctx.enterPath(propertyKey)) {
-          if (!update.getSchemaDependencies().containsKey(propertyKey)) {
+          Schema originalSchema = original.getSchemaDependencies().get(propertyKey);
+          Schema updateSchema = update.getSchemaDependencies().get(propertyKey);
+          if (updateSchema == null) {
             ctx.addDifference(DEPENDENCY_SCHEMA_REMOVED);
-          } else if (!original.getSchemaDependencies().containsKey(propertyKey)) {
+          } else if (originalSchema == null) {
             ctx.addDifference(DEPENDENCY_SCHEMA_ADDED);
           } else {
-            SchemaDiff.compare(ctx,
-                original.getSchemaDependencies().get(propertyKey),
-                update.getSchemaDependencies().get(propertyKey)
-            );
+            SchemaDiff.compare(ctx, originalSchema, updateSchema);
           }
         }
       }
@@ -170,12 +170,14 @@ public class ObjectSchemaDiff {
 
       for (String propertyKey : propertyKeys) {
         try (Context.PathScope pathScope2 = ctx.enterPath(propertyKey)) {
-          if (!update.getPropertySchemas().containsKey(propertyKey)) {
+          Schema originalSchema = original.getPropertySchemas().get(propertyKey);
+          Schema updateSchema = update.getPropertySchemas().get(propertyKey);
+          if (updateSchema == null) {
             // We only consider the content model of the update
             ctx.addDifference(isOpenContentModel(update)
                               ? PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL
                               : PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL);
-          } else if (!original.getPropertySchemas().containsKey(propertyKey)) {
+          } else if (originalSchema == null) {
             // We only consider the content model of the original
             if (isOpenContentModel(original)) {
               ctx.addDifference(PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
@@ -191,10 +193,7 @@ public class ObjectSchemaDiff {
               }
             }
           } else {
-            SchemaDiff.compare(ctx,
-                original.getPropertySchemas().get(propertyKey),
-                update.getPropertySchemas().get(propertyKey)
-            );
+            SchemaDiff.compare(ctx, originalSchema, updateSchema);
           }
         }
       }
