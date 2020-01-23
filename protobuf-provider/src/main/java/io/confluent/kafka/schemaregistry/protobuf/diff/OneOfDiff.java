@@ -42,12 +42,14 @@ public class OneOfDiff {
     allTags.addAll(updateByTag.keySet());
     for (Integer tag : allTags) {
       try (Context.PathScope pathScope = ctx.enterPath(tag.toString())) {
-        if (!updateByTag.containsKey(tag)) {
+        FieldElement originalField = originalByTag.get(tag);
+        FieldElement updateField = updateByTag.get(tag);
+        if (updateField == null) {
           ctx.addDifference(ONEOF_FIELD_REMOVED);
-        } else if (!originalByTag.containsKey(tag)) {
+        } else if (originalField == null) {
           ctx.addDifference(ONEOF_FIELD_ADDED);
         } else {
-          FieldSchemaDiff.compare(ctx, originalByTag.get(tag), updateByTag.get(tag));
+          FieldSchemaDiff.compare(ctx, originalField, updateField);
         }
       }
     }

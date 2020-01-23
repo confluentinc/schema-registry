@@ -79,12 +79,14 @@ public class MessageSchemaDiff {
         allOneOfs.addAll(updateOneOfs.keySet());
         for (String oneOfName : allOneOfs) {
           try (Context.PathScope pathScope = ctx.enterPath(oneOfName)) {
-            if (!updateOneOfs.containsKey(oneOfName)) {
+            OneOfElement originalOneOf = originalOneOfs.get(oneOfName);
+            OneOfElement updateOneOf = updateOneOfs.get(oneOfName);
+            if (updateOneOf == null) {
               ctx.addDifference(ONEOF_REMOVED);
-            } else if (!originalOneOfs.containsKey(oneOfName)) {
+            } else if (originalOneOf == null) {
               ctx.addDifference(ONEOF_ADDED);
             } else {
-              OneOfDiff.compare(ctx, originalOneOfs.get(oneOfName), updateOneOfs.get(oneOfName));
+              OneOfDiff.compare(ctx, originalOneOf, updateOneOf);
             }
           }
         }
@@ -93,12 +95,14 @@ public class MessageSchemaDiff {
         allTags.addAll(updateByTag.keySet());
         for (Integer tag : allTags) {
           try (Context.PathScope pathScope = ctx.enterPath(tag.toString())) {
-            if (!updateByTag.containsKey(tag)) {
+            FieldElement originalField = originalByTag.get(tag);
+            FieldElement updateField = updateByTag.get(tag);
+            if (updateField == null) {
               ctx.addDifference(FIELD_REMOVED);
-            } else if (!originalByTag.containsKey(tag)) {
+            } else if (originalField == null) {
               ctx.addDifference(FIELD_ADDED);
             } else {
-              FieldSchemaDiff.compare(ctx, originalByTag.get(tag), updateByTag.get(tag));
+              FieldSchemaDiff.compare(ctx, originalField, updateField);
             }
           }
         }

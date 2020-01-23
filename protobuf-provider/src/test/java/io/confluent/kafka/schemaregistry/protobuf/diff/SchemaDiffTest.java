@@ -93,13 +93,8 @@ public class SchemaDiffTest {
     )));
   }
 
-  public static String readFile(String fileName) {
-    ClassLoader classLoader = ClassLoader.getSystemClassLoader();
-    InputStream is = classLoader.getResourceAsStream(fileName);
-    if (is != null) {
-      BufferedReader reader = new BufferedReader(new InputStreamReader(is));
-      return reader.lines().collect(Collectors.joining(System.lineSeparator()));
-    }
-    return null;
+  private static String readFile(String fileName) {
+    ResourceLoader resourceLoader = new ResourceLoader("/");
+    return resourceLoader.toString(fileName);
   }
 }

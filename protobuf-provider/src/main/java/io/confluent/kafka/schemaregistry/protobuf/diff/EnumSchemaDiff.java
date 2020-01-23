@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_ADDED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_REMOVED;
 
 public class EnumSchemaDiff {
@@ -42,10 +43,14 @@ public class EnumSchemaDiff {
 
     for (Integer tag : allTags) {
       try (Context.PathScope pathScope = ctx.enterPath(tag.toString())) {
-        if (!updateByTag.containsKey(tag)) {
+        EnumConstantElement originalEnumConstant = originalByTag.get(tag);
+        EnumConstantElement updateEnumConstant = updateByTag.get(tag);
+        if (updateEnumConstant == null) {
           ctx.addDifference(ENUM_CONST_REMOVED);
-        } else if (!originalByTag.containsKey(tag)) {
+        } else if (originalEnumConstant == null) {
           ctx.addDifference(ENUM_CONST_ADDED);
+        } else if (!originalEnumConstant.getName().equals(updateEnumConstant.getName())) {
+          ctx.addDifference(ENUM_CONST_CHANGED);
         }
       }
     }

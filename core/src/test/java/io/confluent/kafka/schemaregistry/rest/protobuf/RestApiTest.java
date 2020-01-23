@@ -128,8 +128,8 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testSchemaReferences() throws Exception {
-    Map<String, String> schemas = getProtobufSchemaWithReferences();
+  public void testSchemaDependencies() throws Exception {
+    Map<String, String> schemas = getProtobufSchemaWithDependencies();
     String subject = "reference";
     registerAndVerifySchema(restApp.restClient, schemas.get("ref.proto"), 1, subject);
 
@@ -148,7 +148,7 @@ public class RestApiTest extends ClusterTestHarness {
         schemaString.getSchemaString()
     );
 
-    assertEquals("Schema references should be found",
+    assertEquals("Schema dependencies should be found",
         Collections.singletonList(ref),
         schemaString.getReferences()
     );
@@ -190,7 +190,7 @@ public class RestApiTest extends ClusterTestHarness {
     return schemas;
   }
 
-  public static Map<String, String> getProtobufSchemaWithReferences() {
+  public static Map<String, String> getProtobufSchemaWithDependencies() {
     Map<String, String> schemas = new HashMap<>();
     String reference =
         "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n\n"
