@@ -1,0 +1,591 @@
+syntax = "proto3";
+
+package Criteo.Glup;
+option java_package = "com.criteo.glup";
+
+/**
+ * GLUP messages SHALL:
+ *   - Have an Origin field with id 1.
+ *   - Have an Partition field with id 2.
+ *   - Not use id 3 and 4.
+ *   - Have an ControlMessage field with id 2097151.
+ * You can create a new one by copying BaseGlupMessage and adding your
+ * own fields.
+ */
+
+import "google/protobuf/descriptor.proto";
+
+// It holds the kafka topic name
+message KafkaMessageOptions {
+  repeated string topic = 1;
+}
+
+
+// It describes the currently supported partitioning scheme
+enum PartitionScheme {
+  UNSUPPORTED_PARTITION_SCHEME = 0;
+  DAILY = 2; /* Deprecated, use PLATFORM_HOURLY instead */
+  HOURLY = 3;
+  PLATFORM_HOURLY = 4;
+  EVENTTYPE_PLATFORM_HOURLY = 5;
+}
+
+enum MessageFormat {
+  UNSUPPORTED_FORMAT = 0;
+  JSON = 1;
+  PROTOBUF = 2;
+}
+
+// It describes the currently supported data on HDFS, usually partitioned in PAIL files
+enum HDFSDataFormat {
+  UNSUPPORTED_DATA_FORMAT = 0;
+  JSON_PAIL = 2;
+  PROTOBUF_SEQ = 3;
+  PROTOBUF_PARQUET = 4;
+}
+
+enum DataSetKind {
+  UNSUPPORTED_KIND = 0;
+  TIMESERIES = 1;
+}
+
+enum MonitoringLevel {
+  DEFAULT = 0;
+  REMOVE_MONITORING = 1; // consensus and last_run monitoring will be skipped
+  INFORMATIVE_MONITORING = 2; // No page for consensus or last_run monitoring
+  CONSENSUS_IGNORED = 3;  // consensus monitoring will be skip but last_run will be monitored (can page)
+  CONSENSUS_IGNORED_AND_INFORMATIVE_MONITORING = 4; // consensus monitoring will be skip and last_run will be monitored as informative (no page)
+}
+
+// Defines a data set with its underlying available formats
+message DataSet {
+  // A uniq identifier for this dataset.
+  // This string must be lowercase and only contain alphanumerical characters
+  // or underscores.
+  string id = 1;
+  // A set of formats available for this dataset.
+  repeated DataSetFormat format = 2;
+  // Partition scheme used to store data inside the path.
+  PartitionScheme partition_scheme = 3;
+  // (Mandatory) This should be java class which will represent the dataset's schema.
+  string java_class = 4;
+  // is this dataset a unit test dataset
+  bool for_tests = 5;
+  // owner of this dataset
+  string owner = 6;
+  // is this dataset private
+  bool private = 7;
+  // kind of dataset
+  DataSetKind kind = 8;
+  // retention period (in days)
+  int32 retention_days = 9;
+}
+
+// Defines a set of dataset partitions
+message DataSetChunk {
+  repeated Partition partition = 1;
+  DataSetFormat format = 2;
+  string datasetId = 3;
+}
+
+// Defines a dataset format.
+message DataSetFormat {
+  reserved 6; // used to be the flag 'prefered_format'
+
+  // Location of the data.
+  string path = 1;
+  // File format used to store records.
+  HDFSDataFormat file_format = 2;
+  // Partition scheme used to store data inside the path.
+  PartitionScheme partition_scheme = 3;
+  // The minimum defined partition for this format inclusive.
+  HDFSPartition start_partition = 4;
+  // The maximum defined partition for this format exclusive.
+  HDFSPartition end_partition = 5;
+  // Retention in days
+  int32 retention_days = 7;
+  // Priority, bigger number means higher priority, 0 as the lowest, used to decide which format to use when several are available.
+  int32 priority = 8;
+  // Label, should be unique across all formats in a same dataset.
+  string label = 9;
+  //Monitoring level, if not set DEFAULT will be applied
+  MonitoringLevel monitoring_level = 10;
+}
+
+
+message HDFSOptions {
+  message ImportOptions {
+    message View {
+      // Defines a table view of a surrounding hdfs import into hive.
+      // All other settings (owner, namespace, name) are already
+      // in the surrounding block.
+      message HiveOptions {
+        /*
+          The database will be glup
+          The table name will be:
+          - PROD:
+            glup_${name} prod data
+          - PREPROD:
+            - sync: glup_${name} copy of [sampled] prod data
+            - others: glup_${name}_preprod preprod data
+        */
+        // if not provided it will default to the glup partition_scheme
+        PartitionScheme partitioning = 3;
+      }
+
+      // define table mapping in hive
+      HiveOptions hive = 10;
+
+      // Add here new view of data in HDFS
+    }
+    message Generator {
+      message DedupOptions {
+        // Name of input dataset to deduplicate
+        string input_dataset_id = 1;
+        // Label of input format
+        string input_format_label = 2;
+        // Name of output dataset to deduplicate
+        string output_dataset_id = 3;
+        // Label of output format
+        string output_format_label = 4;
+        // Generate the conf for the cuttle job and not for the legacy lobster job
+        // Check RIVERS-3614 for details
+        // TODO : remove this property when lobster job will be fully decomissioned
+        bool use_hippo_cuttle_job = 5;
+      }
+
+      message Kafka2HdfsOptions {
+        reserved 2; // deprecated: enable per-datacenter import:
+        // settings specific to kafka2hdfs
+        string topic = 1;
+        // should the output be deduplicated
+        bool deduplicate = 3;
+        // Name of the dataset import will produce
+        string output_dataset_id = 4;
+        // Label of output format
+        string output_format_label = 5;
+      }
+
+      message KacohaConfig {
+        // How many partitions per task
+        int32 partitions_per_task = 1;
+        // The size of the poll buffer used in KaCoHa
+        int32 poll_buffer_size_bytes = 2;
+      }
+
+      message KacohaConfigPerDc {
+        // The Data center to which this config applies
+        DataCenter dc = 1;
+        // The configuration for this data center
+        KacohaConfig config = 2;
+      }
+
+      message KaCoHaOptions {
+        // settings specific to KaCoHa
+        string topic = 1;
+        // Name of the dataset import will produce
+        string output_dataset_id = 2;
+        // Deduplicate dataset in the consolidation
+        bool deduplicate = 3;
+        // Common configs for all data centers
+        KacohaConfig config = 4;
+        // Label of output format
+        string output_format_label = 5;
+        // Override specific configs for each data center
+        repeated KacohaConfigPerDc config_per_dc = 6;
+      }
+
+      message DataloaderOptions {
+        // settings specific to dataloader
+        // If no platform is defined, it will default to all platforms
+        repeated Platform platform = 1;
+      }
+
+      message SyncOptions {
+        // defines the source of the sync
+        Location from = 1;
+        // The default is glup
+        string source_namespace = 3;
+        // string start_date = 4;  // REMOVED because duplicates generator.start_date
+        // string stop_date = 5;  // REMOVED because duplicates generator.stop_date
+        // default is all platforms.
+        repeated Platform platforms = 6;
+        // define if sync is a backfilling (from now to oldest partitions
+        bool is_backfilling = 8;
+        // define where data will be sync'ed, based on dataset_id and label
+        string to_label = 9;
+        // define where data will be sync'ed, based on dataset_id and label
+        string to_dataset_id = 10;
+        // define backfilling in addition to sync at the same time
+        bool with_backfilling = 11;
+        // defines whether should we schedule generator on to or from location
+        bool is_scheduled_on_source = 12;
+      }
+
+      message BackupOptions {
+        // defines the source of the sync
+        Location from = 1;
+        // The default is glup
+        string source_namespace = 2;
+        // default is all platforms.
+        repeated Platform platforms = 3;
+      }
+
+      // Defines how to transcode data from one format to an other
+      message TranscodingOptions {
+          // id of the source data set
+          string input_dataset_id = 1;
+          // id of the target data set, it can be the same as the source
+          string output_dataset_id = 2;
+          // format of the source data set
+          HDFSDataFormat input_format = 3;
+          // format of the target data set
+          HDFSDataFormat output_format = 4;
+          // input format label
+          string input_dataset_label = 5;
+          // output format label
+          string output_dataset_label = 6;
+          // transcoding job should work by platform
+          bool is_by_platform = 7;
+      }
+
+      message SamplerOptions {
+        // Name of input dataset to sample
+        string input_dataset_id = 1;
+        // Label of input format
+        string input_format_label = 2;
+        // Name of output dataset to sample
+        string output_dataset_id = 3;
+        // Label of output format
+        string output_format_label = 4;
+        // Sampling rate between 0 and 1
+        float sampling_rate = 5;
+      }
+
+      // Used by the DataComparator
+      // NB: comparision is symmetric, left and right are just name and
+      // do not refer to join strategy
+      message ComparatorOptions {
+        // The first data set to compare
+        string left_dataset_id = 1;
+        // The specific format of the first data set
+        string left_format_label = 2;
+        // The second data set to compare
+        string right_dataset_id = 3;
+        // The specific format of the second data set
+        string right_format_label = 4;
+        // If set, filtering left and right dataset to a specific hostname.
+        // Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
+        string hostname = 5;
+        // If set, fields ignored in the comparison separated by ','
+        string ignored_fields = 6;
+      }
+
+      message ExternalOptions {
+      }
+
+      // oneof is not currently supporte by protonet
+      DataloaderOptions dataloader = 1;
+      Kafka2HdfsOptions kafka2hdfs = 2;
+      SyncOptions sync = 3;
+      ExternalOptions external = 4;
+      BackupOptions backup = 5;
+      TranscodingOptions transcoding = 6;
+      KaCoHaOptions kacoha = 7;
+      DedupOptions deduplicate = 8;
+      SamplerOptions sampler = 9;
+      ComparatorOptions comparator = 10;
+      // Add here any new hdfs producer
+
+      // defines where it will run and push data
+      repeated Location to = 250;
+      string namespace = 251;
+
+      // define beginning date inclusive
+      string start_date = 253;
+      // define stop date exclusive
+      string stop_date = 254;
+
+      // TODO : remove this property when RIVERS-3723 (remove CN platform) is over
+      bool ignore_cn = 255;
+    }
+
+
+    // location on hdfs
+    string owner = 1;
+    string name = 2;
+    PartitionScheme partitioning = 4;
+    HDFSDataFormat format = 5;
+    // if set to true, imported data won't be readable from other users
+    // (permission o-rwx)
+    bool private = 6;
+
+    repeated Generator generator = 11;
+    repeated View view = 12;
+  }
+
+  repeated ImportOptions import = 3;
+}
+
+/* Describes the producers to use when emitting a Glup
+ * If the producer is not set or is set to false, then the producer is not used
+ */
+message ProducerTransportOptions {
+  // send glup through syslog. Deprecated, do not use for new glup
+  bool syslog = 1;
+  // send glup through kafka
+  bool kafka = 2;
+}
+
+/* Describes additional glup properties
+ * It is used to help selecting the most appropriate pipeline configuration when sending a glup
+ */
+message PropertyOptions {
+  // can be used to provide a different QoS for important glups
+  bool valuable = 1;
+  // can be used to select suitable instances capable of handling a high volume of glups
+  bool high_volume = 2;
+}
+
+message GlupOptions {
+  // kafka settings
+  KafkaMessageOptions kafka = 1;
+  // hdfs import settings
+  HDFSOptions hdfs = 2;
+  // field samplimg rate
+  uint32 sampling_pct = 3;
+  // preprod message sampling rate
+  uint32 preprod_sampling_pct = 4;
+  // dataset definition
+  repeated DataSet dataset = 5;
+  // message sampling rate
+  uint32 message_sampling_pct = 6;
+  // producer(s) to use
+  ProducerTransportOptions producers = 7;
+  // additional glup properties
+  PropertyOptions properties = 8;
+}
+
+// Internal extensions uses 50000 to 99999
+// https://github.com/google/protobuf/blob/master/src/google/protobuf/descriptor.proto#L267
+extend google.protobuf.MessageOptions {
+  GlupOptions glup = 50000;
+  // Does message contains nullable field. This will be subject to special generation that will allow
+  // to know if a specific field in the corresponding message or sub-message has been set or not.
+  bool contains_nullable_fields = 50001;
+}
+
+/* It describes glup fields options:
+disabled_platform => list of platform where the field will never be sent
+*/
+message GlupFieldOptions {
+  bool sampled = 1;
+  bool sampling_key = 2;
+  repeated Platform disabled_platform = 3;
+  bool should_clean_pii = 4;
+
+  // The next fields are part of the Try&Wipe hackathon 2018 project:
+  // When true, this field can not be used by GLUP consumers anymore
+  bool pending_deletion = 5;
+  // Date at which the field has been added to the schema.
+  string added_at = 6;
+}
+
+// Internal extensions uses 50000 to 99999
+// https://github.com/google/protobuf/blob/master/src/google/protobuf/descriptor.proto#L267
+extend google.protobuf.FieldOptions {
+  GlupFieldOptions glupfield = 50000;
+}
+
+
+// This option is used when exposing a message to hive
+message JsonMapping {
+  string name = 1; // alias to use for json serialization
+  bool skip = 2; // do we have to skip this field from json serialization
+}
+
+// This option is used by the transcoder
+// Note that both options could be merged, see RIVERS-1894
+message JsonAlias {
+  // alias for json serialization
+  string name = 1;
+  // When the field type is an enum in protobuf, the value of this field in
+  // json is the id of the field of the enum (an integer value) rather
+  // than its name.
+  bool use_enum_field_id = 3;
+}
+
+
+// Internal extensions uses 50000 to 99999
+// https://github.com/google/protobuf/blob/master/src/google/protobuf/descriptor.proto#L267
+extend google.protobuf.FieldOptions {
+  JsonMapping json_mapping = 50001; // add JsonProxy extension
+  JsonAlias json = 50002; // add JsonAlias extension
+}
+
+
+
+
+/* It is safe to read any GLUP message as a BaseGlupMessage */
+message BaseGlupMessage {
+  option (contains_nullable_fields) = true;
+  Origin glup_origin = 1;
+  Partition partition = 2;
+  // ID 3 is reserved, ask rivers-team@ first.
+  // ID 4 is reserved, ask rivers-team@ first.
+  map<int32, bool> set_fields = 50010; // nullable tracking special field
+  repeated ControlMessage.Watermark control_message = 2097151 [ (json).name = "__metadata" ]; // standard glup field
+}
+
+/* Message to be used for forward watermarks in KaCoHa */
+message ForwardedWatermarkMessage {
+  int64  original_kafka_offset = 5; //Where it was taken
+  int64  timestamp = 6; //When message was created
+  bool   consolidation_enabled = 7; //True to update consensus in consolidation folder, false for consensus in dataset folder
+  string dataset_id = 10; //DatasetId that we should process
+  string dataset_format_label = 11;  // Exact format that we're processing (when overriding the default format)
+  repeated ControlMessage.Watermark control_message = 2097151 [ (json).name = "__metadata" ]; // original watermark
+}
+
+
+
+/* Describes the emitter of a message. */
+enum DataCenter {
+  // If a MARS datacenter gets added, code built before that will see
+  // UNSUPPORTED_DATACENTER as the value.
+  // Never emit the actual value of UNSUPPORTED_DATACENTER.
+  UNSUPPORTED_DATACENTER = 0;
+  AM5 = 2;
+  HK5 = 3;
+  NY8 = 4;
+  PAR = 5;
+  PA4 = 6;
+  SH5 = 7;
+  SV6 = 8;
+  TY5 = 9;
+  VA1 = 10;
+  AM6 = 11;
+  DA1 = 12;
+}
+
+enum Environment {
+  UNSUPPORTED_ENVIRONMENT = 0;
+  PREPROD = 1;
+  PROD = 2;
+}
+
+message Location {
+  Environment env = 1;
+  DataCenter dc = 2;
+  // label, associated with dataset_id (both required) is used to override source path of data
+  string label = 3;
+  // label, associated with dataset_id (both required) is used to override source path of data
+  string dataset_id = 4;
+}
+
+
+/* Identifies the emitter of a message. */
+message Origin {
+  // DataCenter of the emitting server.
+  DataCenter datacenter = 1;
+  // Mandatory for TLAs and chef-deployed producers.
+  // IP v4 adresses in netork byte order
+  fixed32 ip4 = 2 [ (json_mapping).name = "host_ip" ];
+  // Mandatory for TLAs and chef-deployed producers.
+  string hostname = 3;
+  // Mandatory on container environment.
+  string container_task = 4 [ (json_mapping).skip = true ];
+  string container_app = 5 [ (json_mapping).skip = true ];
+}
+
+
+/* For use by infrastructure teams. */
+message ControlMessage {
+  enum Cluster {
+    UNSUPPORTED_CLUSTER = 0;
+    LOCAL = 2;
+    CENTRAL = 3;
+    STREAM = 4;
+  }
+  message WatermarkOrigin {
+    string kafka_topic = 1;
+    DataCenter datacenter = 2;
+    Cluster cluster = 3;
+  }
+  message Watermark {
+    option (contains_nullable_fields) = true;
+    string type = 1; // backward compatibility watermark type
+    string hostname = 2; // hostname of sender
+    string kafka_topic = 3; // topic concerned
+    int32 partition = 4; // partition id
+    int32 partition_count = 5; // partition count
+    bytes process_uuid = 6; // process uuid of sender
+    string region = 7; // region of sender
+    int32 timestamp_seconds = 8 [ (json).name = "timestamp" ]; // timestamp in second
+    string cluster = 9; // cluster
+    string environment = 10; // prod or preprod
+    map<int32, bool> set_fields = 50010; // nullable map to track set fields
+  }
+  Watermark watermark = 1;
+}
+
+
+/* Used in HourlyPlatformPartition to describe where should the message go on HDFS. */
+enum Platform {
+  // If a MARS platform gets added, code built before that will see
+  // UNSUPPORTED_PLATFORM as the value.
+  // Never emit the actual value of UNSUPPORTED_PLATFORM.
+  UNSUPPORTED_PLATFORM = 0;
+  EU = 2;
+  US = 3;
+  AS = 4;
+  CN = 5;
+}
+
+enum EventType {
+  UNSUPPORTED_EVENT_TYPE = 0;
+  ItemPageView = 2;
+  Sales = 3;
+  Basket = 4;
+  Other = 5;
+}
+
+/* Describes where messages should go on HDFS.
+ * This information is carried by all glup message.
+ */
+message Partition {
+  // Unix timestamp in seconds
+  uint64 timestamp_seconds = 1 [ (json_mapping).name = "timestamp" ];
+  Platform host_platform = 2;
+  EventType event_type = 3 [ (json_mapping).skip = true ];
+  /* Other partition keys... */
+}
+
+/* Internaly used by datadiscovery framework to handlde
+ * datadiscovery path and datadisco filesystem
+ */
+message HDFSPartition {
+  // Unix timestamp in seconds
+  uint64 timestamp_seconds = 1;
+  Platform host_platform = 2;
+  EventType event_type = 3;
+  // Define the depth of a partition. This is used in order to distinguished partition
+  // membership within a parent partition:
+  // 2017-02-01/12/EU with depth 3 is a parent partition of 2017-02-01/12 with depth 2
+  int32 depth = 4;
+}
+
+/* Three-state boolean to use when willing to express the absence of
+ * information for a field. */
+enum YesNo {
+    UNKNOWN = 0;
+    NO = 1;
+    YES = 2;
+}
+
+/* 128bit hash to pass publisher information through the request URL  */
+message Hash128 {
+  fixed64 most_sig_bits = 1; // most significant bits
+  fixed64 least_sig_bits = 2; // least significant bits
+  map<int32, bool> set_fields = 50010; // nullable map to track set fields
+}

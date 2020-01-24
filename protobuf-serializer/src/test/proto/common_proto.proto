@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package Criteo.Glup;
+option java_package = "com.criteo.glup";
+
+import "metadata_proto.proto";
+
+/* Describes if an event or campaign is an appinstall or normal
+ * retargeting one
+ */
+enum MarketingObjectiveType {
+  Sale = 0;
+  Install = 1;
+}
+
+/* Enumerate reasons of opt-out
+ * sorted by check order
+ */
+enum IdentificationForbiddenReason {
+  NoReason = 0;
+  ExplicitConsentRequired = 1;
+  OptoutCookie = 2;
+  CtoOptoutCookie = 3;
+  LimitedAdTracking = 4;
+  HstsOptout = 5;
+  DoNotTrackHeader = 6;
+  OoOCookie = 7;
+  PendingOptout = 8;
+}
+
+/* Describes the consent status and the reasons
+ * of consent refusal
+ */
+message Consent {
+  option (contains_nullable_fields) = true;
+  bool identification_forbidden = 1; //Value of IdentificationForbidden for user identity
+  IdentificationForbiddenReason reason = 2; //Reason for identification forbidden, NoReason if identification not forbidden
+  map<int32, bool> set_fields = 50010; // nullable tracking special field
+}

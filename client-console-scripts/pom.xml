@@ -19,7 +19,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
     </licenses>
 
     <groupId>io.confluent</groupId>
-    <artifactId>avro-console-scripts</artifactId>
+    <artifactId>client-console-scripts</artifactId>
     <packaging>pom</packaging>
     <name>${project.artifactId}</name>
 

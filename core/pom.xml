@@ -20,6 +20,10 @@
             <artifactId>kafka-schema-registry-client</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-protobuf-provider</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka_${kafka.scala.version}</artifactId>
         </dependency>
@@ -224,12 +228,13 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>2.2</version>
+                <version>2.6</version>
                 <executions>
                     <execution>
                         <goals>
                             <goal>test-jar</goal>
                         </goals>
+                        <phase>test-compile</phase>
                     </execution>
                 </executions>
             </plugin>
