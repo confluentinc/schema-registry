@@ -79,7 +79,9 @@ public class ProtobufConverter implements Converter {
     try {
       ProtobufSchemaAndValue schemaAndValue = protobufData.fromConnectData(schema, value);
       Object v = schemaAndValue.getValue();
-      if (v instanceof Message) {
+      if (v == null) {
+        return null;
+      } else if (v instanceof Message) {
         return serializer.serialize(topic,
             isKey,
             (Message) v,
@@ -110,8 +112,8 @@ public class ProtobufConverter implements Converter {
           return protobufData.toConnectData(deserialized.getSchema(), message);
         }
       }
-      throw new DataException(String.format("Unsupported type returned during deserialization of "
-              + "topic %s ",
+      throw new DataException(String.format(
+          "Unsupported type returned during deserialization of topic %s ",
           topic
       ));
     } catch (SerializationException e) {
@@ -130,7 +132,6 @@ public class ProtobufConverter implements Converter {
     }
 
     public Serializer(Map<String, ?> configs, SchemaRegistryClient client) {
-
       this(client, false);
       configure(new KafkaProtobufSerializerConfig(configs));
     }

@@ -256,13 +256,13 @@ public class ProtobufData {
                 );
               }
             }
-            throw new IllegalArgumentException("Cannot find non-null field");
+            throw new DataException("Cannot find non-null field");
           } else {
             String scopedStructName = scope + getNameOrDefault(structName);
             DynamicMessage.Builder messageBuilder =
                 protobufSchema.newMessageBuilder(scopedStructName);
             if (messageBuilder == null) {
-              throw new IllegalStateException("Invalid message name: " + scopedStructName);
+              throw new DataException("Invalid message name: " + scopedStructName);
             }
             for (Field field : schema.fields()) {
               Object fieldValue = fromConnectData(
@@ -283,7 +283,7 @@ public class ProtobufData {
                       .findFieldByName(field.name());
                 }
                 if (fieldDescriptor == null) {
-                  throw new IllegalArgumentException("Cannot find field with name " + field.name());
+                  throw new DataException("Cannot find field with name " + field.name());
                 }
                 messageBuilder.setField(fieldDescriptor, fieldValue);
               }
@@ -594,6 +594,9 @@ public class ProtobufData {
   @SuppressWarnings("unchecked")
   protected Object toConnectData(Schema schema, Object value) {
     try {
+      if (value == null) {
+        return null;
+      }
       if (isProtobufTimestamp(schema)) {
         DynamicMessage message = (DynamicMessage) value;
 
@@ -666,8 +669,8 @@ public class ProtobufData {
           } else if (value instanceof ByteString) {
             converted = ((ByteString) value).asReadOnlyByteBuffer();
           } else {
-            throw new DataException("Invalid class for bytes type, expecting byte[] or ByteBuffer "
-                + "but found "
+            throw new DataException("Invalid class for bytes type, expecting byte[], ByteBuffer, "
+                + "or ByteString but found "
                 + value.getClass());
           }
           break;

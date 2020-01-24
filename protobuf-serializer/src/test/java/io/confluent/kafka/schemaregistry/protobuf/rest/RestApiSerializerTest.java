@@ -25,7 +25,6 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Properties;
-import java.util.Random;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -48,8 +47,6 @@ import static io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerTes
 import static org.junit.Assert.assertEquals;
 
 public class RestApiSerializerTest extends ClusterTestHarness {
-
-  private static final Random random = new Random();
 
   private final String topic = "test";
 

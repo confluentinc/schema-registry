@@ -332,11 +332,12 @@ public class ProtobufConverterTest {
     assertEquals(expected, schemaAndValue.value());
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testNull() {
-    byte[] converted = converter.fromConnectData(TOPIC, Schema.OPTIONAL_BOOLEAN_SCHEMA, null);
+    Schema schema = SchemaBuilder.struct().build();
+    byte[] converted = converter.fromConnectData(TOPIC, schema, null);
     SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
-    assertEquals(new SchemaAndValue(SchemaBuilder.bool().version(1).build(), null), schemaAndValue);
+    assertEquals(SchemaAndValue.NULL, schemaAndValue);
   }
 
   @Test
