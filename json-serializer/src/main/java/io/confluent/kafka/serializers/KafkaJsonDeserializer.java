@@ -62,6 +62,7 @@ public class KafkaJsonDeserializer<T> implements Deserializer<T> {
     } else {
       configure(config, (Class<T>) config.getClass(KafkaJsonDeserializerConfig.JSON_VALUE_TYPE));
     }
+
   }
 
   @Override

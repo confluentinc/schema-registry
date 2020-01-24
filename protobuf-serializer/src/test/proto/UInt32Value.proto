@@ -1,8 +1,0 @@
-syntax = "proto3";
-
-option java_package = "io.confluent.kafka.serializers.protobuf.test";
-
-// Wrapper message for `uint32`.
-message UInt32Value {
-    uint32 value = 1;
-}

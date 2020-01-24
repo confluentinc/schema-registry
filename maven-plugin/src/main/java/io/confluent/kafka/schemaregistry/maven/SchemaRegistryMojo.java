@@ -21,7 +21,7 @@ import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +32,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 
 public abstract class SchemaRegistryMojo extends AbstractMojo {
 
@@ -62,7 +61,7 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
       }
       List<SchemaProvider> providers = schemaProviders != null && !schemaProviders.isEmpty()
                                        ? schemaProviders()
-                                       : defaultSchemaProviders();
+                                       : Collections.singletonList(new AvroSchemaProvider());
       this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls,
           1000,
           providers,
@@ -80,11 +79,5 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
         throw new RuntimeException(e);
       }
     }).collect(Collectors.toList());
-  }
-
-  private List<SchemaProvider> defaultSchemaProviders() {
-    return Arrays.asList(
-        new AvroSchemaProvider(), new ProtobufSchemaProvider()
-    );
   }
 }

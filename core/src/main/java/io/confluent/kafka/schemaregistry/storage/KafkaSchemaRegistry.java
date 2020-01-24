@@ -79,7 +79,6 @@ import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
 import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
 import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -124,7 +123,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private MasterElector masterElector = null;
   private Metrics metrics;
   private Sensor masterNodeSensor;
-  private final Map<String, SchemaProvider> providers;
+  private Map<String, SchemaProvider> providers = new HashMap<>();
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -167,7 +166,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     reporters.add(new JmxReporter(jmxPrefix));
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
     this.masterNodeSensor = metrics.sensor("master-slave-role");
-    this.providers = initProviders(config);
+
+    Map<String, Object> schemaProviderConfigs = new HashMap<>();
+    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
+    List<SchemaProvider> schemaProviders =
+        config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
+            SchemaProvider.class,
+            schemaProviderConfigs);
+    // Ensure Avro SchemaProvider is registered
+    SchemaProvider avroSchemaProvider = new AvroSchemaProvider();
+    avroSchemaProvider.configure(schemaProviderConfigs);
+    schemaProviders.add(avroSchemaProvider);
+    for (SchemaProvider schemaProvider : schemaProviders) {
+      log.info("Registering schema provider for {}: {}",
+          schemaProvider.schemaType(),
+          schemaProvider.getClass().getName()
+      );
+      this.providers.put(schemaProvider.schemaType(), schemaProvider);
+    }
 
     Map<String, String> configuredTags = Application.parseListToMap(
         config.getList(RestConfig.METRICS_TAGS_CONFIG)
@@ -178,31 +194,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                            + " node where all register schema and config update requests are "
                            + "served.", configuredTags);
     this.masterNodeSensor.add(m, new Gauge());
-  }
-
-  private HashMap<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
-    Map<String, Object> schemaProviderConfigs = new HashMap<>();
-    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
-    List<SchemaProvider> schemaProviders =
-        config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
-            SchemaProvider.class,
-            schemaProviderConfigs);
-    List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
-        new AvroSchemaProvider(), new ProtobufSchemaProvider()
-    );
-    for (SchemaProvider provider : defaultSchemaProviders) {
-      provider.configure(schemaProviderConfigs);
-    }
-    schemaProviders.addAll(defaultSchemaProviders);
-    HashMap<String, SchemaProvider> providerMap = new HashMap<>();
-    for (SchemaProvider schemaProvider : schemaProviders) {
-      log.info("Registering schema provider for {}: {}",
-          schemaProvider.schemaType(),
-          schemaProvider.getClass().getName()
-      );
-      providerMap.put(schemaProvider.schemaType(), schemaProvider);
-    }
-    return providerMap;
   }
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(

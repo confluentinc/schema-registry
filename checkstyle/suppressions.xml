@@ -13,7 +13,7 @@
               files="SchemaRegistryCoordinator.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AvroMessageReader|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroData|KafkaGroupMasterElector|ProtobufSchema|ProtobufData).java"/>
+              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AvroMessageReader|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroData|KafkaGroupMasterElector).java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData|KafkaGroupMasterElector).java"/>
@@ -22,13 +22,13 @@
               files="(Errors|AvroMessageReader).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(AbstractKafkaAvroDeserializer|AvroSchemaUtils|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter|MockSchemaRegistryClient|SchemaRegistrySerializer|SchemaValue|SubjectVersionsResource|ProtobufSchema|SchemaDiff|FieldSchemaDiff|MessageSchemaDiff|DynamicSchema|ProtobufMessageFormatter|ProtobufData).java"/>
+              files="(AbstractKafkaAvroDeserializer|AvroSchemaUtils|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter|MockSchemaRegistryClient|SchemaRegistrySerializer|SchemaValue|SubjectVersionsResource).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter|KafkaSchemaRegistry|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|ProtobufMessageFormatter|ProtobufData).java"/>
+              files="(AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter|KafkaSchemaRegistry|Schema|SchemaValue).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AvroData|ProtobufData).java"/>
+              files="AvroData.java"/>
 
     <suppress checks="MethodLength"
               files="AvroData.java"/>
@@ -37,12 +37,9 @@
               files=".*SchemaRegistryClient.java"/>
 
     <suppress checks="MethodLength"
-              files="(SchemaRegistryConfig|ProtobufData).java"/>
+              files="SchemaRegistryConfig.java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="AvroData.java"/>
-
-    <suppress checks="MemberName"
-              files="(DynamicSchema|EnumDefinition|MessageDefinition).java"/>
 
 </suppressions>
