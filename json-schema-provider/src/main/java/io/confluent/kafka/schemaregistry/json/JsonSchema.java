@@ -1,0 +1,235 @@
+/*
+ * Copyright 2020 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+
+package io.confluent.kafka.schemaregistry.json;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.BinaryNode;
+import com.fasterxml.jackson.databind.node.BooleanNode;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.NumericNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.annotations.VisibleForTesting;
+import org.everit.json.schema.Schema;
+import org.everit.json.schema.ValidationException;
+import org.everit.json.schema.loader.SchemaLoader;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.json.diff.Difference;
+import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
+import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+
+public class JsonSchema implements ParsedSchema {
+
+  private static final Logger log = LoggerFactory.getLogger(JsonSchemaProvider.class);
+
+  public static final String TYPE = "JSON";
+
+  private static final Object NONE_MARKER = new Object();
+
+  private final Schema schemaObj;
+
+  private final Integer version;
+
+  private final List<SchemaReference> references;
+
+  private final Map<String, String> resolvedReferences;
+
+  private final ObjectMapper objectMapper = Jackson.newObjectMapper();
+
+  @VisibleForTesting
+  public JsonSchema(JsonNode jsonNode) throws JsonProcessingException {
+    this(new ObjectMapper().writeValueAsString(jsonNode));
+  }
+
+  public JsonSchema(String schemaString) {
+    this(schemaString, Collections.emptyList(), Collections.emptyMap(), null);
+  }
+
+  public JsonSchema(
+      String schemaString,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      Integer version
+  ) {
+    SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder();
+    if (resolvedReferences != null) {
+      try {
+        for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+          builder.registerSchemaByURI(new URI(dep.getKey()), new JSONObject(dep.getValue()));
+        }
+      } catch (URISyntaxException e) {
+        throw new IllegalArgumentException("Invalid dependency name", e);
+      }
+    }
+    builder.schemaJson(new JSONObject(schemaString));
+    SchemaLoader loader = builder.build();
+    this.schemaObj = loader.load().build();
+    this.version = version;
+    this.references = references;
+    this.resolvedReferences = resolvedReferences;
+  }
+
+  public JsonSchema(Schema schemaObj) {
+    this(schemaObj, null);
+  }
+
+  public JsonSchema(Schema schemaObj, Integer version) {
+    this.schemaObj = schemaObj;
+    this.version = version;
+    this.references = Collections.emptyList();
+    this.resolvedReferences = Collections.emptyMap();
+  }
+
+  public Schema rawSchema() {
+    return schemaObj;
+  }
+
+  @Override
+  public String schemaType() {
+    return TYPE;
+  }
+
+  @Override
+  public String name() {
+    return schemaObj.getTitle();
+  }
+
+  @Override
+  public String canonicalString() {
+    return schemaObj.toString();
+  }
+
+  public Integer version() {
+    return version;
+  }
+
+  @Override
+  public List<SchemaReference> references() {
+    return references;
+  }
+
+  public Map<String, String> resolvedReferences() {
+    return resolvedReferences;
+  }
+
+  public void validate(Object value) throws JsonProcessingException, ValidationException {
+    Object primitiveValue = NONE_MARKER;
+    if (isPrimitive(value)) {
+      primitiveValue = value;
+    } else if (value instanceof BinaryNode) {
+      primitiveValue = ((BinaryNode) value).asText();
+    } else if (value instanceof BooleanNode) {
+      primitiveValue = ((BooleanNode) value).asBoolean();
+    } else if (value instanceof NullNode) {
+      primitiveValue = null;
+    } else if (value instanceof NumericNode) {
+      primitiveValue = ((NumericNode) value).numberValue();
+    } else if (value instanceof TextNode) {
+      primitiveValue = ((TextNode) value).asText();
+    }
+    if (primitiveValue != NONE_MARKER) {
+      rawSchema().validate(primitiveValue);
+    } else {
+      Object jsonObject;
+      if (value instanceof ArrayNode) {
+        jsonObject = objectMapper.treeToValue(((ArrayNode) value), JSONArray.class);
+      } else if (value instanceof JsonNode) {
+        jsonObject = objectMapper.treeToValue(((JsonNode) value), JSONObject.class);
+      } else if (value.getClass().isArray()) {
+        jsonObject = objectMapper.convertValue(value, JSONArray.class);
+      } else {
+        jsonObject = objectMapper.convertValue(value, JSONObject.class);
+      }
+      rawSchema().validate(jsonObject);
+    }
+  }
+
+  private static boolean isPrimitive(Object value) {
+    return value == null
+        || value instanceof Boolean
+        || value instanceof Number
+        || value instanceof String;
+  }
+
+  @Override
+  public boolean isBackwardCompatible(ParsedSchema previousSchema) {
+    if (!schemaType().equals(previousSchema.schemaType())) {
+      return false;
+    }
+    final List<Difference> differences = SchemaDiff.compare(
+        ((JsonSchema) previousSchema).schemaObj,
+        schemaObj
+    );
+    final List<Difference> incompatibleDiffs = differences.stream()
+        .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
+        .collect(Collectors.toList());
+    boolean isCompatible = incompatibleDiffs.isEmpty();
+    if (!isCompatible) {
+      boolean first = true;
+      for (Difference incompatibleDiff : incompatibleDiffs) {
+        if (first) {
+          // Log first incompatible change as warning
+          log.warn("Found incompatible change: {}", incompatibleDiff);
+          first = false;
+        } else {
+          log.debug("Found incompatible change: {}", incompatibleDiff);
+        }
+      }
+    }
+    return isCompatible;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    JsonSchema that = (JsonSchema) o;
+    return Objects.equals(schemaObj, that.schemaObj)
+        && Objects.equals(references, that.references)
+        && Objects.equals(version, that.version);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(schemaObj, references, version);
+  }
+
+  @Override
+  public String toString() {
+    return canonicalString();
+  }
+}

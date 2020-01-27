@@ -10,6 +10,7 @@
       <outputDirectory></outputDirectory>
       <includes>
         <include>kafka-avro-console-*</include>
+        <include>kafka-json-schema-console-*</include>
         <include>kafka-protobuf-console-*</include>
         <include>schema-registry-run-class</include>
       </includes>

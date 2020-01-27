@@ -374,7 +374,7 @@ public class AvroSchemaTest {
   }
 
 
-  private static void expectConversionException(JsonNode obj, ParsedSchema schema) {
+  private static void expectConversionException(JsonNode obj, AvroSchema schema) {
     try {
       AvroSchemaUtils.toObject(obj, schema);
       fail("Expected conversion of "
@@ -399,7 +399,7 @@ public class AvroSchemaTest {
     }
   }
 
-  private static ParsedSchema createPrimitiveSchema(String type) {
+  private static AvroSchema createPrimitiveSchema(String type) {
     String schemaString = String.format("{\"type\" : \"%s\"}", type);
     return new AvroSchema(parser.parse(schemaString));
   }

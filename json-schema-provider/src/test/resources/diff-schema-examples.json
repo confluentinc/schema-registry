@@ -1,0 +1,882 @@
+[
+  {
+    "description": "Detect changes to id",
+    "original_schema": {
+      "id": "something"
+    },
+    "update_schema": {
+      "id": "something_else"
+    },
+    "changes": [
+      "ID_CHANGED #/"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to title",
+    "original_schema": {
+      "title": "something"
+    },
+    "update_schema": {
+      "title": "something_else"
+    },
+    "changes": [
+      "TITLE_CHANGED #/"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to description",
+    "original_schema": {
+      "description": "something"
+    },
+    "update_schema": {
+      "description": "something_else"
+    },
+    "changes": [
+      "DESCRIPTION_CHANGED #/"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to simple schema type",
+    "original_schema": {
+      "type": "object"
+    },
+    "update_schema": {
+      "type": "array"
+    },
+    "changes": [
+      "TYPE_CHANGED #/"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to minLength string schema",
+    "original_schema": {
+      "type": "string",
+      "minLength": 10
+    },
+    "update_schema": {
+      "type": "string",
+      "minLength": 11
+    },
+    "changes": [
+      "MIN_LENGTH_INCREASED #/minLength"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to maxLength string schema",
+    "original_schema": {
+      "type": "string",
+      "maxLength": 10
+    },
+    "update_schema": {
+      "type": "string",
+      "maxLength": 12
+    },
+    "changes": [
+      "MAX_LENGTH_INCREASED #/maxLength"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to pattern string schema",
+    "original_schema": {
+      "type": "string",
+      "pattern": "date-time"
+    },
+    "update_schema": {
+      "type": "string",
+      "pattern": "uuid"
+    },
+    "changes": [
+      "PATTERN_CHANGED #/pattern"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to pattern",
+    "original_schema": {
+      "type": "string",
+      "pattern": "date-time"
+    },
+    "update_schema": {
+      "type": "string",
+      "pattern": "date-time"
+    },
+    "changes": [],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to maximum number schema",
+    "original_schema": {
+      "type": "number",
+      "maximum": 10
+    },
+    "update_schema": {
+      "type": "number",
+      "maximum": 11
+    },
+    "changes": [
+      "MAXIMUM_INCREASED #/maximum"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to minimum number schema",
+    "original_schema": {
+      "type": "number",
+      "minimum": 10
+    },
+    "update_schema": {
+      "type": "number",
+      "minimum": 11
+    },
+    "changes": [
+      "MINIMUM_INCREASED #/minimum"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to multipleOf number schema",
+    "original_schema": {
+      "type": "number",
+      "multipleOf": 10
+    },
+    "update_schema": {
+      "type": "number",
+      "multipleOf": 11
+    },
+    "changes": [
+      "MULTIPLE_OF_CHANGED #/multipleOf"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to number schema",
+    "original_schema": {
+      "type": "number"
+    },
+    "update_schema": {
+      "type": "integer"
+    },
+    "changes": [
+      "TYPE_NARROWED #/"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to enum schema",
+    "original_schema": {
+      "allOf": [
+        {
+          "type": "string"
+        },
+        {
+          "enum": [
+            "red"
+          ]
+        }
+      ]
+    },
+    "update_schema": {
+      "allOf": [
+        {
+          "type": "string"
+        },
+        {
+          "enum": [
+            "blue"
+          ]
+        }
+      ]
+    },
+    "changes": [
+      "ENUM_ARRAY_CHANGED #/allOf/1/enum"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to type array",
+    "original_schema": {
+      "type": [
+        "object"
+      ]
+    },
+    "update_schema": {
+      "type": [
+        "object",
+        "array"
+      ]
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to sub schemas",
+    "original_schema": {
+      "oneOf": [
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "update_schema": {
+      "oneOf": [
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "changes": [
+      "TYPE_CHANGED #/oneOf/0"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to number of sub schemas",
+    "original_schema": {
+      "oneOf": [
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "update_schema": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/",
+      "TYPE_CHANGED #/oneOf/0"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to remove properties",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "properties": {
+        "bar": {
+          "type": "string"
+        }
+      }
+    },
+    "changes": [
+      "PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL #/properties/bar",
+      "PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL #/properties/foo"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect change type of properties",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "number"
+        }
+      }
+    },
+    "changes": [
+      "TYPE_CHANGED #/properties/foo"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect optional property added to closed content model",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "changes": [
+      "OPTIONAL_PROPERTY_ADDED_TO_CLOSED_CONTENT_MODEL #/properties/bar"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect property added to open content model",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^S_": {
+          "type": "string"
+        },
+        "^I_": {
+          "type": "integer"
+        }
+      }
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^S_": {
+          "type": "string"
+        },
+        "^I_": {
+          "type": "integer"
+        }
+      }
+    },
+    "changes": [
+      "PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL #/properties/bar"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect property added to open content model",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "number"
+        }
+      }
+    },
+    "changes": [
+      "PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL #/properties/bar"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to composed schema type",
+    "original_schema": {
+      "oneOf": [
+        {
+          "properties": {
+            "foo": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "update_schema": {
+      "oneOf": [
+        {
+          "properties": {
+            "foo": {
+              "type": "number"
+            }
+          }
+        }
+      ]
+    },
+    "changes": [
+      "TYPE_CHANGED #/oneOf/0/properties/foo"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to validation criteria in composed schema type",
+    "original_schema": {
+      "oneOf": [
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "update_schema": {
+      "allOf": [
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "changes": [
+      "COMPOSITION_METHOD_CHANGED #/"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to dependencies as array",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "number"
+        },
+        "bar": {
+          "type": "string"
+        }
+      },
+      "dependencies": {
+        "foo": [
+          "bar"
+        ]
+      }
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "number"
+        },
+        "bar": {
+          "type": "string"
+        }
+      },
+      "dependencies": {
+        "bar": [
+          "foo"
+        ]
+      }
+    },
+    "changes": [
+      "DEPENDENCY_ARRAY_ADDED #/dependencies/bar",
+      "DEPENDENCY_ARRAY_REMOVED #/dependencies/foo"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect incompatible changes to dependencies schemas",
+    "original_schema": {
+      "dependencies": {
+        "foo": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "dependencies": {
+        "foo": {
+          "type": "number"
+        }
+      }
+    },
+    "changes": [
+      "TYPE_CHANGED #/dependencies/foo"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to dependencies properties",
+    "original_schema": {
+      "dependencies": {
+        "foo": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "dependencies": {
+        "bar": {
+          "type": "string"
+        }
+      }
+    },
+    "changes": [
+      "DEPENDENCY_SCHEMA_ADDED #/dependencies/bar",
+      "DEPENDENCY_SCHEMA_REMOVED #/dependencies/foo"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect required array to be removed",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "foo"
+      ]
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      }
+    },
+    "changes": [
+      "REQUIRED_ATTRIBUTE_REMOVED #/required/foo"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect required array to be added",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "foo"
+      ]
+    },
+    "changes": [
+      "REQUIRED_ATTRIBUTE_ADDED #/required/foo"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect required array to be changed",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "foo"
+      ]
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "bar"
+      ]
+    },
+    "changes": [
+      "REQUIRED_ATTRIBUTE_REMOVED #/required/foo"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to maxProperties",
+    "original_schema": {
+      "maxProperties": 2
+    },
+    "update_schema": {
+      "maxProperties": 1
+    },
+    "changes": [
+      "MAX_PROPERTIES_DECREASED #/maxProperties"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to minProperties",
+    "original_schema": {
+      "minProperties": 2
+    },
+    "update_schema": {
+      "minProperties": 1
+    },
+    "changes": [
+      "MIN_PROPERTIES_DECREASED #/minProperties"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to all items schema",
+    "original_schema": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "update_schema": {
+      "type": "array"
+    },
+    "changes": [
+      "SCHEMA_REMOVED #/items"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to items schema list",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "update_schema": {
+      "type": "array"
+    },
+    "changes": [
+      "ITEMS_REMOVED_FROM_OPEN_CONTENT_MODEL #/"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to items in the schema list",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "changes": [
+      "TYPE_CHANGED #/items/0"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to maxItems",
+    "original_schema": {
+      "type": "array",
+      "maxItems": 2
+    },
+    "update_schema": {
+      "type": "array",
+      "maxItems": 1
+    },
+    "changes": [
+      "MAX_ITEMS_DECREASED #/maxItems"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to minItems",
+    "original_schema": {
+      "type": "array",
+      "minItems": 2
+    },
+    "update_schema": {
+      "type": "array",
+      "minItems": 1
+    },
+    "changes": [
+      "MIN_ITEMS_DECREASED #/minItems"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect unique items removed",
+    "original_schema": {
+      "type": "array",
+      "uniqueItems": true
+    },
+    "update_schema": {
+      "type": "array"
+    },
+    "changes": [
+      "UNIQUE_ITEMS_REMOVED #/uniqueItems"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible changes to reference schemas",
+    "original_schema": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/someRef"
+      },
+      "definitions": {
+        "someRef": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/someRef"
+      },
+      "definitions": {
+        "someRef": {
+          "type": "number"
+        }
+      }
+    },
+    "changes": [
+      "TYPE_CHANGED #/items/$ref"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to boolean additional properties",
+    "original_schema": {
+      "additionalProperties": true
+    },
+    "update_schema": {
+      "additionalProperties": false
+    },
+    "changes": [
+      "ADDITIONAL_PROPERTIES_REMOVED #/additionalProperties"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect narrowing changes to additional properties schema",
+    "original_schema": {
+      "additionalProperties": true
+    },
+    "update_schema": {
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "changes": [
+      "ADDITIONAL_PROPERTIES_NARROWED #/additionalProperties"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to additional properties schema",
+    "original_schema": {
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "update_schema": {
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "changes": [
+      "TYPE_CHANGED #/additionalProperties"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to boolean additional items",
+    "original_schema": {
+      "additionalItems": true
+    },
+    "update_schema": {
+      "additionalItems": false
+    },
+    "changes": [
+      "ADDITIONAL_ITEMS_REMOVED #/additionalItems"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to additional items schema",
+    "original_schema": {
+      "additionalItems": {
+        "type": "string"
+      }
+    },
+    "update_schema": {
+      "additionalItems": {
+        "type": "number"
+      }
+    },
+    "changes": [
+      "TYPE_CHANGED #/additionalItems"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect change to oneOf schema",
+    "original_schema": {
+      "type": "string"
+    },
+    "update_schema": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect change to oneOf schema",
+    "original_schema": {
+      "type": "string",
+      "maxLength": 3
+    },
+    "update_schema": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "changes": [
+      "MAX_LENGTH_REMOVED #/maxLength",
+      "SUM_TYPE_EXTENDED #/"
+    ],
+    "compatible": true
+  }
+]
