@@ -195,7 +195,16 @@ public class JsonSchema implements ParsedSchema {
         .collect(Collectors.toList());
     boolean isCompatible = incompatibleDiffs.isEmpty();
     if (!isCompatible) {
-      log.warn("Found incompatible change: {}", incompatibleDiffs.get(0));
+      boolean first = true;
+      for (Difference incompatibleDiff : incompatibleDiffs) {
+        if (first) {
+          // Log first incompatible change as warning
+          log.warn("Found incompatible change: {}", incompatibleDiff);
+          first = false;
+        } else {
+          log.debug("Found incompatible change: {}", incompatibleDiff);
+        }
+      }
     }
     return isCompatible;
   }
