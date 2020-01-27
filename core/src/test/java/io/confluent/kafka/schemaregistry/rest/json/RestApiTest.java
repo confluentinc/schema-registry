@@ -170,8 +170,8 @@ public class RestApiTest extends ClusterTestHarness {
     );
     Assert.assertEquals(
         "Registering a new schema should succeed",
-        (long) expectedId,
-        (long) registeredId
+        expectedId,
+        registeredId
     );
     Assert.assertEquals("Registered schema should be found",
         MAPPER.readTree(schemaString),
