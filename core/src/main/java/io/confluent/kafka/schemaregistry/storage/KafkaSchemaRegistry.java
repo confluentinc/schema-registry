@@ -77,6 +77,7 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
 import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
 import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -188,7 +189,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
             SchemaProvider.class,
             schemaProviderConfigs);
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
-        new AvroSchemaProvider(), new ProtobufSchemaProvider()
+        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
     );
     for (SchemaProvider provider : defaultSchemaProviders) {
       provider.configure(schemaProviderConfigs);
