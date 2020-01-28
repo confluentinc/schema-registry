@@ -97,9 +97,9 @@ public class ProtobufData {
 
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
     fromConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.getSchemasCacheSize()));
+        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
     toConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.getSchemasCacheSize()));
+        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
   }
 
   /**
@@ -299,7 +299,7 @@ public class ProtobufData {
     }
   }
 
-  private ProtobufSchema fromConnectSchema(Schema schema) {
+  public ProtobufSchema fromConnectSchema(Schema schema) {
     if (schema == null) {
       return null;
     }
@@ -312,7 +312,7 @@ public class ProtobufData {
       name = DEFAULT_SCHEMA_NAME + "1";
     }
     ProtobufSchema resultSchema =
-        new ProtobufSchema(dynamicSchemaFromConnectSchema(schema).getMessageDescriptor(
+        new ProtobufSchema(rawSchemaFromConnectSchema(schema).getMessageDescriptor(
         name));
     fromConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
@@ -321,7 +321,7 @@ public class ProtobufData {
   /*
    * DynamicSchema is used as a temporary helper class and should not be exposed in the API.
    */
-  private DynamicSchema dynamicSchemaFromConnectSchema(Schema rootElem) {
+  private DynamicSchema rawSchemaFromConnectSchema(Schema rootElem) {
     if (rootElem.type() != Schema.Type.STRUCT) {
       throw new IllegalArgumentException("Unsupported root schema of type " + rootElem.type());
     }
@@ -586,7 +586,6 @@ public class ProtobufData {
     }
 
     Schema schema = toConnectSchema(protobufSchema);
-
     return new SchemaAndValue(schema, toConnectData(schema, message));
   }
 
@@ -768,7 +767,7 @@ public class ProtobufData {
     result.put(fieldName, toConnectData(field.schema(), obj));
   }
 
-  private Schema toConnectSchema(ProtobufSchema schema) {
+  public Schema toConnectSchema(ProtobufSchema schema) {
     if (schema == null) {
       return null;
     }

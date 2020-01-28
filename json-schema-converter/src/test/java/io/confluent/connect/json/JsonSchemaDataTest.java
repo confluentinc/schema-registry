@@ -303,13 +303,14 @@ public class JsonSchemaDataTest {
 
   @Test
   public void testFromNamedConnectMap() {
-    assertEquals(jsonSchemaConverter.fromConnectSchema(NAMED_MAP_SCHEMA), NAMED_JSON_MAP_SCHEMA);
+    assertEquals(
+        jsonSchemaConverter.fromConnectSchema(NAMED_MAP_SCHEMA).rawSchema(), NAMED_JSON_MAP_SCHEMA);
   }
 
   private void checkNonObjectConversion(
       org.everit.json.schema.Schema expectedSchema, Object expected, Schema schema, Object value
   ) {
-    JsonSchema jsonSchema = new JsonSchema(jsonSchemaConverter.fromConnectSchema(schema));
+    JsonSchema jsonSchema = jsonSchemaConverter.fromConnectSchema(schema);
     JsonNode jsonValue = jsonSchemaConverter.fromConnectData(schema, value);
     assertEquals(expectedSchema, jsonSchema.rawSchema());
     assertEquals(expected, jsonValue);
@@ -712,6 +713,25 @@ public class JsonSchemaDataTest {
 
     Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.0", (byte) 12);
     checkNonObjectConversion(expectedSchema, expected, schema, ShortNode.valueOf((short) 12));
+  }
+
+  @Test
+  public void testToConnectUnionSecondField() {
+    NumberSchema firstSchema = NumberSchema.builder()
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
+        .build();
+    NumberSchema secondSchema = NumberSchema.builder()
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int32"))
+        .build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.INT8_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.INT32_SCHEMA);
+    Schema expectedSchema = builder.build();
+
+    Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.1", 12);
+    checkNonObjectConversion(expectedSchema, expected, schema, IntNode.valueOf(12));
   }
 
   @Test

@@ -178,10 +178,11 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
           Schema fieldSchema = field.schema();
 
           if (isInstanceOfSchemaTypeForSimpleSchema(fieldSchema, value)) {
-            return new Struct(schema.schema()).put(JSON_TYPE_ONE_OF + ".field." + index++,
+            return new Struct(schema.schema()).put(JSON_TYPE_ONE_OF + ".field." + index,
                 toConnectData(fieldSchema, value)
             );
           }
+          index++;
         }
         throw new DataException("Did not find matching oneof field for data: " + value.toString());
       } else {
@@ -353,7 +354,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
 
   @Override
   public byte[] fromConnectData(String topic, Schema schema, Object value) {
-    JsonSchema jsonSchema = new JsonSchema(fromConnectSchema(schema));
+    JsonSchema jsonSchema = fromConnectSchema(schema);
     JsonNode jsonValue = fromConnectData(schema, value);
     try {
       return serializer.serialize(topic, isKey, jsonValue, jsonSchema);
@@ -531,7 +532,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       }
 
       JsonSchema jsonSchema = deserialized.getSchema();
-      Schema schema = toConnectSchema(jsonSchema.rawSchema(), jsonSchema.version());
+      Schema schema = toConnectSchema(jsonSchema);
       return new SchemaAndValue(schema, toConnectData(schema, (JsonNode) deserialized.getValue()));
     } catch (SerializationException e) {
       throw new DataException("Converting byte[] to Kafka Connect data failed due to "
@@ -591,7 +592,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
 
     final JsonToConnectTypeConverter typeConverter = TO_CONNECT_CONVERTERS.get(schemaType);
     if (typeConverter == null) {
-      throw new DataException("Unknown schema type: " + String.valueOf(schemaType));
+      throw new DataException("Unknown schema type: " + schemaType);
     }
 
     Object converted = typeConverter.convert(schema, jsonValue);
@@ -604,7 +605,11 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     return converted;
   }
 
-  protected org.everit.json.schema.Schema fromConnectSchema(Schema schema) {
+  public JsonSchema fromConnectSchema(Schema schema) {
+    return new JsonSchema(rawSchemaFromConnectSchema(schema));
+  }
+
+  private org.everit.json.schema.Schema rawSchemaFromConnectSchema(Schema schema) {
     if (schema == null) {
       return null;
     }
@@ -612,16 +617,16 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     if (cachedSchema != null) {
       return cachedSchema;
     }
-    org.everit.json.schema.Schema resultSchema = fromConnectSchema(schema, null);
+    org.everit.json.schema.Schema resultSchema = rawSchemaFromConnectSchema(schema, null);
     fromConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
   }
 
-  private org.everit.json.schema.Schema fromConnectSchema(Schema schema, Integer index) {
-    return fromConnectSchema(schema, index, false);
+  private org.everit.json.schema.Schema rawSchemaFromConnectSchema(Schema schema, Integer index) {
+    return rawSchemaFromConnectSchema(schema, index, false);
   }
 
-  private org.everit.json.schema.Schema fromConnectSchema(
+  private org.everit.json.schema.Schema rawSchemaFromConnectSchema(
       Schema schema, Integer index, boolean ignoreOptional
   ) {
     if (schema == null) {
@@ -678,18 +683,22 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
         unprocessedProps.put(CONNECT_TYPE_PROP, CONNECT_TYPE_BYTES);
         break;
       case ARRAY:
-        builder = ArraySchema.builder().allItemSchema(fromConnectSchema(schema.valueSchema()));
+        builder = ArraySchema.builder().allItemSchema(
+            rawSchemaFromConnectSchema(schema.valueSchema()));
         break;
       case MAP:
         // JSON Schema only supports string keys
         if (schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
-          org.everit.json.schema.Schema valueSchema = fromConnectSchema(schema.valueSchema());
+          org.everit.json.schema.Schema valueSchema =
+              rawSchemaFromConnectSchema(schema.valueSchema());
           builder = ObjectSchema.builder().schemaOfAdditionalProperties(valueSchema);
           unprocessedProps.put(CONNECT_TYPE_PROP, CONNECT_TYPE_MAP);
         } else {
           ObjectSchema.Builder entryBuilder = ObjectSchema.builder();
-          org.everit.json.schema.Schema keySchema = fromConnectSchema(schema.keySchema(), 0);
-          org.everit.json.schema.Schema valueSchema = fromConnectSchema(schema.valueSchema(), 1);
+          org.everit.json.schema.Schema keySchema =
+              rawSchemaFromConnectSchema(schema.keySchema(), 0);
+          org.everit.json.schema.Schema valueSchema =
+              rawSchemaFromConnectSchema(schema.valueSchema(), 1);
           entryBuilder.addPropertySchema(KEY_FIELD, keySchema);
           entryBuilder.addPropertySchema(VALUE_FIELD, valueSchema);
           builder = ArraySchema.builder().allItemSchema(entryBuilder.build());
@@ -704,7 +713,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
             combinedBuilder.subschema(NullSchema.INSTANCE);
           }
           for (Field field : schema.fields()) {
-            combinedBuilder.subschema(fromConnectSchema(nonOptional(field.schema()),
+            combinedBuilder.subschema(rawSchemaFromConnectSchema(nonOptional(field.schema()),
                 field.index(),
                 true
             ));
@@ -714,12 +723,12 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
           CombinedSchema.Builder combinedBuilder = CombinedSchema.builder();
           combinedBuilder.criterion(CombinedSchema.ONE_CRITERION);
           combinedBuilder.subschema(NullSchema.INSTANCE);
-          combinedBuilder.subschema(fromConnectSchema(nonOptional(schema)));
+          combinedBuilder.subschema(rawSchemaFromConnectSchema(nonOptional(schema)));
           builder = combinedBuilder;
         } else {
           ObjectSchema.Builder objectBuilder = ObjectSchema.builder();
           for (Field field : schema.fields()) {
-            org.everit.json.schema.Schema fieldSchema = fromConnectSchema(field.schema(),
+            org.everit.json.schema.Schema fieldSchema = rawSchemaFromConnectSchema(field.schema(),
                 field.index()
             );
             objectBuilder.addPropertySchema(field.name(), fieldSchema);
@@ -818,19 +827,20 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     }
   }
 
-  private Schema toConnectSchema(JsonSchema schema) {
+  public Schema toConnectSchema(JsonSchema schema) {
     if (schema == null) {
       return null;
     }
     Schema cachedSchema = toConnectSchemaCache.get(schema);
     if (cachedSchema != null) {
-      return null;
+      return cachedSchema;
     }
     Schema resultSchema = toConnectSchema(schema.rawSchema(), schema.version(), false);
     toConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
   }
 
+  @VisibleForTesting
   protected Schema toConnectSchema(org.everit.json.schema.Schema jsonSchema) {
     return toConnectSchema(jsonSchema, null);
   }
