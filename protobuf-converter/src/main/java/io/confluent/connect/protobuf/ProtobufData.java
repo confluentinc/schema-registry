@@ -717,7 +717,7 @@ public class ProtobufData {
               // Already added field as oneof
               continue;
             }
-            if (fieldDescriptor.getType() != FieldDescriptor.Type.MESSAGE
+            if (fieldDescriptor.getJavaType() != FieldDescriptor.JavaType.MESSAGE
                 || fieldDescriptor.isRepeated()
                 || message.hasField(fieldDescriptor)) {
               setStructField(schema, message, struct, fieldDescriptor);

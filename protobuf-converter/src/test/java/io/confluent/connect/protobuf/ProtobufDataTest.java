@@ -302,7 +302,7 @@ public class ProtobufDataTest {
 
     result.put("status", 1); // INACTIVE
     result.put("map_type", getTestKeyValueMap());
-    
+
     Struct inner = new Struct(schema.field("inner").schema());
     inner.put("id", "");
     result.put("inner", inner);
