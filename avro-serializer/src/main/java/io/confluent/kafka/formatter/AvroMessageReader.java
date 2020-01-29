@@ -28,8 +28,6 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.ShortSerializer;
-import org.apache.kafka.common.serialization.FloatSerializer;
-import org.apache.kafka.common.serialization.DoubleSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 
@@ -208,14 +206,6 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     if (serializerClass == ShortSerializer.class) {
       Short shortKey = Short.parseShort(keyString);
       return keySerializer.serialize(topic, shortKey);
-    }
-    if (serializerClass == FloatSerializer.class) {
-      Float floatKey = Float.parseFloat(keyString);
-      return keySerializer.serialize(topic, floatKey);
-    }
-    if (serializerClass == DoubleSerializer.class) {
-      Double doubleKey = Double.parseDouble(keyString);
-      return keySerializer.serialize(topic, doubleKey);
     }
     return keySerializer.serialize(topic, keyString);
   }
