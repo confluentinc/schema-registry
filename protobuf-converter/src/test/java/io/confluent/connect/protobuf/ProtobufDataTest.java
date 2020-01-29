@@ -143,7 +143,9 @@ public class ProtobufDataTest {
     message.addExperimentsActive("first experiment");
     message.addExperimentsActive("second experiment");
     message.setStatus(NestedTestProto.Status.INACTIVE);
-
+    NestedMessage.InnerMessage.Builder inner = NestedMessage.InnerMessage.newBuilder();
+    inner.setId("");
+    message.setInner(inner.build());
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
     java.util.Date date = sdf.parse("2017/09/18");
     Timestamp timestamp = Timestamps.fromMillis(date.getTime());
@@ -300,6 +302,10 @@ public class ProtobufDataTest {
 
     result.put("status", 1); // INACTIVE
     result.put("map_type", getTestKeyValueMap());
+    
+    Struct inner = new Struct(schema.field("inner").schema());
+    inner.put("id", "");
+    result.put("inner", inner);
     return result;
   }
 
@@ -324,6 +330,10 @@ public class ProtobufDataTest {
 
     result.put("status", 1); // INACTIVE
     result.put("map_type", getTestKeyValueMap());
+
+    Struct inner = new Struct(schema.field("inner").schema());
+    inner.put("id", "");
+    result.put("inner", inner);
     return result;
   }
 
