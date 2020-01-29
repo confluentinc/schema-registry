@@ -697,20 +697,17 @@ public class ProtobufData {
           break;
         case STRUCT:
           final DynamicMessage message = (DynamicMessage) value; // Validate type
-          if (message.equals(message.getDefaultInstanceForType())) {
-            // Note: this is so that fields that are omitted are not set with the default values.
-            return null;
-          }
-
           final Struct struct = new Struct(schema.schema());
           final Descriptor descriptor = message.getDescriptorForType();
 
           for (OneofDescriptor oneOfDescriptor : descriptor.getOneofs()) {
-            FieldDescriptor fieldDescriptor = message.getOneofFieldDescriptor(oneOfDescriptor);
-            Object obj = message.getField(fieldDescriptor);
-            if (obj != null) {
-              setUnionField(schema, message, struct, oneOfDescriptor, fieldDescriptor);
-              break;
+            if (message.hasOneof(oneOfDescriptor)) {
+              FieldDescriptor fieldDescriptor = message.getOneofFieldDescriptor(oneOfDescriptor);
+              Object obj = message.getField(fieldDescriptor);
+              if (obj != null) {
+                setUnionField(schema, message, struct, oneOfDescriptor, fieldDescriptor);
+                break;
+              }
             }
           }
 
@@ -720,7 +717,11 @@ public class ProtobufData {
               // Already added field as oneof
               continue;
             }
-            setStructField(schema, message, struct, fieldDescriptor);
+            if (fieldDescriptor.getJavaType() != FieldDescriptor.JavaType.MESSAGE
+                || fieldDescriptor.isRepeated()
+                || message.hasField(fieldDescriptor)) {
+              setStructField(schema, message, struct, fieldDescriptor);
+            }
           }
 
           converted = struct;
@@ -819,6 +820,7 @@ public class ProtobufData {
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
       builder.field(fieldDescriptor.getName(), toConnectSchema(fieldDescriptor));
     }
+    builder.optional();
     return builder.build();
   }
 

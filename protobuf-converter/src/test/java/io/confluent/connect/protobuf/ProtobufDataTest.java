@@ -115,11 +115,8 @@ public class ProtobufDataTest {
     schemaBuilder.name(message.getDescriptorForType().getName());
     schemaBuilder.field(VALUE_FIELD_NAME, fieldSchema);
     final Schema schema = schemaBuilder.build();
-    Struct expectedResult = null;
-    if (!message.equals(message.getDefaultInstanceForType())) {
-      expectedResult = new Struct(schema);
-      expectedResult.put(VALUE_FIELD_NAME, value);
-    }
+    Struct expectedResult = new Struct(schema);
+    expectedResult.put(VALUE_FIELD_NAME, value);
     return new SchemaAndValue(schema, expectedResult);
   }
 
@@ -146,7 +143,9 @@ public class ProtobufDataTest {
     message.addExperimentsActive("first experiment");
     message.addExperimentsActive("second experiment");
     message.setStatus(NestedTestProto.Status.INACTIVE);
-
+    NestedMessage.InnerMessage.Builder inner = NestedMessage.InnerMessage.newBuilder();
+    inner.setId("");
+    message.setInner(inner.build());
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
     java.util.Date date = sdf.parse("2017/09/18");
     Timestamp timestamp = Timestamps.fromMillis(date.getTime());
@@ -176,7 +175,7 @@ public class ProtobufDataTest {
         "other_id",
         SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
     );
-    complexTypeBuilder.field("some_val_0", someValBuilder.build());
+    complexTypeBuilder.field("some_val_0", someValBuilder.optional().build());
     complexTypeBuilder.field(
         "is_active",
         SchemaBuilder.bool().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3)).build()
@@ -219,7 +218,7 @@ public class ProtobufDataTest {
         "another_id",
         messageIdBuilder.optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3)).build()
     );
-    userIdBuilder.field("user_id_0", idBuilder.build());
+    userIdBuilder.field("user_id_0", idBuilder.optional().build());
     builder.field(
         "user_id",
         userIdBuilder.optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
@@ -303,6 +302,10 @@ public class ProtobufDataTest {
 
     result.put("status", 1); // INACTIVE
     result.put("map_type", getTestKeyValueMap());
+
+    Struct inner = new Struct(schema.field("inner").schema());
+    inner.put("id", "");
+    result.put("inner", inner);
     return result;
   }
 
@@ -327,6 +330,10 @@ public class ProtobufDataTest {
 
     result.put("status", 1); // INACTIVE
     result.put("map_type", getTestKeyValueMap());
+
+    Struct inner = new Struct(schema.field("inner").schema());
+    inner.put("id", "");
+    result.put("inner", inner);
     return result;
   }
 
