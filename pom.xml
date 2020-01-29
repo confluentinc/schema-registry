@@ -76,7 +76,8 @@
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <protobuf.version>3.11.1</protobuf.version>
-        <wire.version>3.0.2</wire.version>
+	<wire.version>3.0.2</wire.version>
+	<swagger.version>1.5.24</swagger.version>
     </properties>
 
     <repositories>
@@ -147,6 +148,22 @@
                 <groupId>uk.co.jemos.podam</groupId>
                 <artifactId>podam</artifactId>
                 <version>${podam.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger</groupId>
+                <artifactId>swagger-annotations</artifactId>
+		<version>${swagger.version}</version>
+            </dependency>
+            <dependency>
+               <groupId>io.swagger</groupId>
+               <artifactId>swagger-core</artifactId>
+	       <version>${swagger.version}</version>
+               <exclusions>
+                  <exclusion>
+                     <groupId>javax.validation</groupId>
+                     <artifactId>validation-api</artifactId>
+                  </exclusion>
+               </exclusions>
             </dependency>
 
             <!--children-->
