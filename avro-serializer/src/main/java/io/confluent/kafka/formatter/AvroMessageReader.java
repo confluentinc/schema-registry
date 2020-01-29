@@ -25,7 +25,11 @@ import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.ShortSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -189,6 +193,23 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     return originals;
   }
 
+  private byte[] serializeNonAvroKey(String keyString) {
+    Class serializerClass = keySerializer.getClass();
+    if (serializerClass == LongSerializer.class) {
+      Long longKey = Long.parseLong(keyString);
+      return keySerializer.serialize(topic, longKey);
+    }
+    if (serializerClass == IntegerSerializer.class) {
+      Integer intKey = Integer.parseInt(keyString);
+      return keySerializer.serialize(topic, intKey);
+    }
+    if (serializerClass == ShortSerializer.class) {
+      Short shortKey = Short.parseShort(keyString);
+      return keySerializer.serialize(topic, shortKey);
+    }
+    return keySerializer.serialize(topic, keyString);
+  }
+
   @Override
   public ProducerRecord<byte[], byte[]> readMessage() {
     try {
@@ -218,7 +239,7 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
 
           byte[] serializedKey;
           if (keySerializer != null) {
-            serializedKey = keySerializer.serialize(topic, keyString);
+            serializedKey = serializeNonAvroKey(keyString);
           } else {
             Object key = jsonToAvro(keyString, keySchema);
             serializedKey = serializeImpl(keySubject, key);
