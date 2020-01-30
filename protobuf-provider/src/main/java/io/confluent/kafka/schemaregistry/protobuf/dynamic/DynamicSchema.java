@@ -349,6 +349,11 @@ public class DynamicSchema {
       return new DynamicSchema(fileDescSetBuilder.build());
     }
 
+    public Builder setSyntax(String syntax) {
+      mFileDescProtoBuilder.setSyntax(syntax);
+      return this;
+    }
+
     public Builder setName(String name) {
       mFileDescProtoBuilder.setName(name);
       return this;

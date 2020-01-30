@@ -59,6 +59,7 @@ import static io.confluent.connect.protobuf.ProtobufDataConfig.SCHEMAS_CACHE_SIZ
 public class ProtobufData {
 
   public static final String NAMESPACE = "io.confluent.connect.protobuf";
+  public static final String PROTO3 = "proto3";
 
   public static final String DEFAULT_SCHEMA_NAME = "ConnectDefault";
   public static final String MAP_ENTRY_SUFFIX = ProtobufSchema.MAP_ENTRY_SUFFIX;  // Suffix used
@@ -142,9 +143,6 @@ public class ProtobufData {
         case INT16:
         case INT32: {
           final int intValue = ((Number) value).intValue(); // Check for correct type
-          if (intValue == 0) {
-            return null;
-          }
           return intValue;
         }
 
@@ -155,41 +153,26 @@ public class ProtobufData {
           }
 
           final long longValue = ((Number) value).longValue(); // Check for correct type
-          if (longValue == 0L) {
-            return null;
-          }
           return longValue;
         }
 
         case FLOAT32: {
           final float floatValue = ((Number) value).floatValue(); // Check for correct type
-          if (floatValue == 0.0f) {
-            return null;
-          }
           return floatValue;
         }
 
         case FLOAT64: {
           final double doubleValue = ((Number) value).doubleValue(); // Check for correct type
-          if (doubleValue == 0.0d) {
-            return null;
-          }
           return doubleValue;
         }
 
         case BOOLEAN: {
           final Boolean boolValue = (Boolean) value; // Check for correct type
-          if (boolValue == false) {
-            return null;
-          }
           return boolValue;
         }
 
         case STRING: {
           final String stringValue = (String) value; // Check for correct type
-          if (stringValue.isEmpty()) {
-            return null;
-          }
           return stringValue;
         }
 
@@ -197,9 +180,6 @@ public class ProtobufData {
           final ByteBuffer bytesValue = value instanceof byte[]
                                         ? ByteBuffer.wrap((byte[]) value)
                                         : (ByteBuffer) value;
-          if (bytesValue.array().length == 0) {
-            return null;
-          }
           return ByteString.copyFrom(bytesValue);
         }
         case ARRAY:
@@ -327,6 +307,7 @@ public class ProtobufData {
     }
     try {
       DynamicSchema.Builder schema = DynamicSchema.newBuilder();
+      schema.setSyntax(PROTO3);
       String name = getNameOrDefault(rootElem.name());
       schema.addMessageDefinition(messageDefinitionFromConnectSchema(schema, name, rootElem));
       return schema.build();
@@ -430,6 +411,7 @@ public class ProtobufData {
         message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
       } else if (type.equals(GOOGLE_PROTOBUF_TIMESTAMP_FULL_NAME)) {
         DynamicSchema.Builder timestampSchema = DynamicSchema.newBuilder();
+        timestampSchema.setSyntax(PROTO3);
         timestampSchema.setName(GOOGLE_PROTOBUF_TIMESTAMP_LOCATION);
         timestampSchema.setPackage(GOOGLE_PROTOBUF_PACKAGE);
         timestampSchema.addMessageDefinition(timestampDefinition());
@@ -580,7 +562,7 @@ public class ProtobufData {
     return Timestamp.SCHEMA.name().equals(schema.name());
   }
 
-  public SchemaAndValue toConnectData(ProtobufSchema protobufSchema, DynamicMessage message) {
+  public SchemaAndValue toConnectData(ProtobufSchema protobufSchema, Message message) {
     if (message == null) {
       return SchemaAndValue.NULL;
     }
@@ -597,7 +579,7 @@ public class ProtobufData {
         return null;
       }
       if (isProtobufTimestamp(schema)) {
-        DynamicMessage message = (DynamicMessage) value;
+        Message message = (Message) value;
 
         long seconds = 0L;
         int nanos = 0;
@@ -685,9 +667,9 @@ public class ProtobufData {
         case MAP:
           final Schema keySchema = schema.keySchema();
           final Schema valueSchema = schema.valueSchema();
-          final Collection<DynamicMessage> map = (Collection<DynamicMessage>) value;
+          final Collection<? extends Message> map = (Collection<? extends Message>) value;
           final Map<Object, Object> newMap = new HashMap<>();
-          for (DynamicMessage message : map) {
+          for (Message message : map) {
             Descriptor descriptor = message.getDescriptorForType();
             Object elemKey = message.getField(descriptor.findFieldByName(KEY_FIELD));
             Object elemValue = message.getField(descriptor.findFieldByName(VALUE_FIELD));
@@ -696,7 +678,7 @@ public class ProtobufData {
           converted = newMap;
           break;
         case STRUCT:
-          final DynamicMessage message = (DynamicMessage) value; // Validate type
+          final Message message = (Message) value; // Validate type
           final Struct struct = new Struct(schema.schema());
           final Descriptor descriptor = message.getDescriptorForType();
 

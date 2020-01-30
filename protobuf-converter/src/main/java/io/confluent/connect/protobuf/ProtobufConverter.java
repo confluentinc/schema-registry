@@ -16,7 +16,6 @@
 
 package io.confluent.connect.protobuf;
 
-import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
@@ -107,8 +106,8 @@ public class ProtobufConverter implements Converter {
         return SchemaAndValue.NULL;
       } else {
         Object object = deserialized.getValue();
-        if (object instanceof DynamicMessage) {
-          DynamicMessage message = (DynamicMessage) object;
+        if (object instanceof Message) {
+          Message message = (Message) object;
           return protobufData.toConnectData(deserialized.getSchema(), message);
         }
       }

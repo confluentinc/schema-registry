@@ -455,6 +455,9 @@ public class ProtobufSchema implements ParsedSchema {
     log.trace("*** toDynamicSchema: {}", rootElem.toSchema());
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     try {
+      if (rootElem.getSyntax() != null) {
+        schema.setSyntax(rootElem.getSyntax().toString());
+      }
       if (rootElem.getPackageName() != null) {
         schema.setPackage(rootElem.getPackageName());
       }
