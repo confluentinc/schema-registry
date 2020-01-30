@@ -562,7 +562,7 @@ public class ProtobufData {
     return Timestamp.SCHEMA.name().equals(schema.name());
   }
 
-  public SchemaAndValue toConnectData(ProtobufSchema protobufSchema, DynamicMessage message) {
+  public SchemaAndValue toConnectData(ProtobufSchema protobufSchema, Message message) {
     if (message == null) {
       return SchemaAndValue.NULL;
     }
@@ -579,7 +579,7 @@ public class ProtobufData {
         return null;
       }
       if (isProtobufTimestamp(schema)) {
-        DynamicMessage message = (DynamicMessage) value;
+        Message message = (Message) value;
 
         long seconds = 0L;
         int nanos = 0;
@@ -667,9 +667,9 @@ public class ProtobufData {
         case MAP:
           final Schema keySchema = schema.keySchema();
           final Schema valueSchema = schema.valueSchema();
-          final Collection<DynamicMessage> map = (Collection<DynamicMessage>) value;
+          final Collection<? extends Message> map = (Collection<? extends Message>) value;
           final Map<Object, Object> newMap = new HashMap<>();
-          for (DynamicMessage message : map) {
+          for (Message message : map) {
             Descriptor descriptor = message.getDescriptorForType();
             Object elemKey = message.getField(descriptor.findFieldByName(KEY_FIELD));
             Object elemValue = message.getField(descriptor.findFieldByName(VALUE_FIELD));
@@ -678,7 +678,7 @@ public class ProtobufData {
           converted = newMap;
           break;
         case STRUCT:
-          final DynamicMessage message = (DynamicMessage) value; // Validate type
+          final Message message = (Message) value; // Validate type
           final Struct struct = new Struct(schema.schema());
           final Descriptor descriptor = message.getDescriptorForType();
 
