@@ -126,7 +126,7 @@ public class KafkaStoreMessageHandler
 
   private void handleSchemaUpdate(SchemaKey schemaKey,
                                   SchemaValue schemaValue,
-                                  SchemaValue oldValue) {
+                                  SchemaValue oldSchemaValue) {
     if (schemaValue != null) {
       // If the schema is marked to be deleted, we store it in an internal datastructure
       // that holds all deleted schema keys for an id.
@@ -143,7 +143,7 @@ public class KafkaStoreMessageHandler
         lookupCache.schemaRegistered(schemaKey, schemaValue);
       }
     } else {
-      lookupCache.schemaTombstoned(schemaKey, oldValue);
+      lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
     }
   }
 }
