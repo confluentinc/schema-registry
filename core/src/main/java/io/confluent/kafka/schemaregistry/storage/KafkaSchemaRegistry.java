@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Vector;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -414,23 +413,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       }
 
       // determine the latest version of the schema in the subject
-      Iterator<Schema> allVersions = getAllVersions(subject, true);
-      Iterator<Schema> undeletedVersions = getAllVersions(subject, false);
+      List<SchemaValue> allVersions = getAllSchemaValues(subject);
 
-      List<Schema> undeletedSchemasList = new ArrayList<>();
-      Schema latestSchema = null;
+      List<SchemaValue> deletedVersions = new ArrayList<>();
+      List<SchemaValue> undeletedVersions = new ArrayList<>();
       int newVersion = MIN_VERSION;
-      while (allVersions.hasNext()) {
-        newVersion = allVersions.next().getVersion() + 1;
+      for (SchemaValue schemaValue : allVersions) {
+        newVersion = schemaValue.getVersion() + 1;
+        if (schemaValue.isDeleted()) {
+          deletedVersions.add(schemaValue);
+        } else {
+          undeletedVersions.add(schemaValue);
+        }
       }
-      while (undeletedVersions.hasNext()) {
-        latestSchema = undeletedVersions.next();
-        undeletedSchemasList.add(latestSchema);
-      }
+
+      List<Schema> undeletedSchemasList = undeletedVersions.stream()
+          .map(s -> getSchemaEntityFromSchemaValue(s))
+          .collect(Collectors.toList());
 
       canonicalizeSchema(schema);
       // assign a guid and put the schema in the kafka store
-      if (latestSchema == null || isCompatible(subject, schema, undeletedSchemasList)) {
+      if (undeletedSchemasList.isEmpty() || isCompatible(subject, schema, undeletedSchemasList)) {
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
         }
@@ -456,6 +459,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           if (retries >= kafkaStoreMaxRetries) {
             throw new SchemaRegistryStoreException("Error while registering the schema due "
                 + "to generating an ID that is already in use.");
+          }
+        }
+        for (SchemaValue schemaValue : deletedVersions) {
+          if (schemaValue.getId().equals(schema.getId())) {
+            // Tombstone previous version with the same ID
+            SchemaKey key = new SchemaKey(schemaValue.getSubject(), schemaValue.getVersion());
+            kafkaStore.delete(key);
           }
         }
         return schema.getId();
@@ -945,16 +955,29 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
+  private List<SchemaValue> getAllSchemaValues(String subject)
+      throws SchemaRegistryException {
+    try {
+      SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
+      SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
+      Iterator<SchemaRegistryValue> allVersions = kafkaStore.getAll(key1, key2);
+      return sortSchemaValuesByVersion(allVersions);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error from the backend Kafka store", e);
+    }
+  }
+
   @Override
   public Schema getLatestVersion(String subject) throws SchemaRegistryException {
     try {
       SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
       SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
       Iterator<SchemaRegistryValue> allVersions = kafkaStore.getAll(key1, key2);
-      Vector<Schema> sortedVersions = sortSchemasByVersion(allVersions, false);
+      List<Schema> sortedVersions = sortSchemasByVersion(allVersions, false);
       Schema latestSchema = null;
       if (sortedVersions.size() > 0) {
-        latestSchema = sortedVersions.lastElement();
+        latestSchema = sortedVersions.get(sortedVersions.size() - 1);
       }
       return latestSchema;
     } catch (StoreException e) {
@@ -1148,20 +1171,31 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return this.kafkaStore;
   }
 
-  private Vector<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas,
+  private List<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas,
                                               boolean returnDeletedSchemas) throws StoreException {
-    Vector<Schema> schemaVector = new Vector<Schema>();
+    List<Schema> schemaList = new ArrayList<>();
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
       if (returnDeletedSchemas || !schemaValue.isDeleted()) {
-        schemaVector.add(getSchemaEntityFromSchemaValue(schemaValue));
+        schemaList.add(getSchemaEntityFromSchemaValue(schemaValue));
       }
     }
-    Collections.sort(schemaVector);
-    return schemaVector;
+    Collections.sort(schemaList);
+    return schemaList;
   }
 
-  private Schema getSchemaEntityFromSchemaValue(SchemaValue schemaValue) throws StoreException {
+  private List<SchemaValue> sortSchemaValuesByVersion(Iterator<SchemaRegistryValue> schemas)
+      throws StoreException {
+    List<SchemaValue> schemaList = new ArrayList<>();
+    while (schemas.hasNext()) {
+      SchemaValue schemaValue = (SchemaValue) schemas.next();
+      schemaList.add(schemaValue);
+    }
+    Collections.sort(schemaList);
+    return schemaList;
+  }
+
+  private Schema getSchemaEntityFromSchemaValue(SchemaValue schemaValue) {
     if (schemaValue == null) {
       return null;
     }

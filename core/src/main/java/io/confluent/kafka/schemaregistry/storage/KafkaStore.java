@@ -317,11 +317,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   @Override
-  public void put(K key, V value) throws StoreTimeoutException, StoreException {
+  public V put(K key, V value) throws StoreTimeoutException, StoreException {
     assertInitialized();
     if (key == null) {
       throw new StoreException("Key should not be null");
     }
+    V oldValue = get(key);
 
     // write to the Kafka topic
     ProducerRecord<byte[], byte[]> producerRecord = null;
@@ -362,6 +363,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
         markLastWrittenOffsetInvalid();
       }
     }
+    return oldValue;
   }
 
   @Override
@@ -380,10 +382,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   @Override
-  public void delete(K key) throws StoreException {
+  public V delete(K key) throws StoreException {
     assertInitialized();
     // deleteSchemaVersion from the Kafka topic by writing a null value for the key
-    put(key, null);
+    return put(key, null);
   }
 
   @Override

@@ -186,12 +186,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                       + ") to the local store");
             boolean valid = this.storeUpdateHandler.validateUpdate(messageKey, message);
             if (valid) {
+              V oldMessage;
               if (message == null) {
-                localStore.delete(messageKey);
+                oldMessage = localStore.delete(messageKey);
               } else {
-                localStore.put(messageKey, message);
+                oldMessage = localStore.put(messageKey, message);
               }
-              this.storeUpdateHandler.handleUpdate(messageKey, message);
+              this.storeUpdateHandler.handleUpdate(messageKey, message, oldMessage);
             } else {
               if (localStore.get(messageKey) == null) {
                 try {
