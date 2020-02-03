@@ -19,8 +19,6 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 
-import java.util.List;
-
 /**
  * Internal interface that provides various indexed methods that help lookup the underlying schemas.
  * The interface has also callback methods for various schema lifecycle events like register,
@@ -58,14 +56,6 @@ public interface LookupCache<K,V> extends Store<K,V> {
   SchemaKey schemaKeyById(Integer id);
 
   /**
-   * Provides the list of {@link SchemaKey} that have been deleted for the registered {SchemaValue}
-   *
-   * @param schemaValue the SchemaValue being registered; never {@code null}
-   * @return the list of {@link SchemaKey} that have been marked to be deleted, can be null or empty
-   */
-  List<SchemaKey> deletedSchemaKeys(SchemaValue schemaValue);
-
-  /**
    * Callback that is invoked when a schema is registered.
    * This can be used to update any internal data structure.
    * This is invoked synchronously during register.
@@ -89,8 +79,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * Callback that is invoked when a schema is tombstoned.
    *
    * @param schemaKey   the tombstoned SchemaKey; never {@code null}
+   * @param schemaValue the tombstoned SchemaValue; never {@code null}
    */
-  void schemaTombstoned(SchemaKey schemaKey);
+  void schemaTombstoned(SchemaKey schemaKey, SchemaValue schemaValue);
 
   /**
    * Retrieves the config for a subject.
