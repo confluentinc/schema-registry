@@ -70,14 +70,14 @@ public class Errors {
         String.format(SCHEMA_NOT_FOUND_MESSAGE_FORMAT, id), SCHEMA_NOT_FOUND_ERROR_CODE);
   }
 
-  public static RestIncompatibleAvroSchemaException incompatibleSchemaException(String message,
-                                                                                Throwable cause) {
-    return new RestIncompatibleAvroSchemaException(message,
-                                                   RestIncompatibleAvroSchemaException.DEFAULT_ERROR_CODE,
+  public static RestIncompatibleSchemaException incompatibleSchemaException(String message,
+                                                                            Throwable cause) {
+    return new RestIncompatibleSchemaException(message,
+                                                   RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
                                                    cause);
   }
 
-  public static RestInvalidSchemaException invalidAvroException(String message, Throwable cause) {
+  public static RestInvalidSchemaException invalidSchemaException(String message, Throwable cause) {
     return new RestInvalidSchemaException(message);
   }
 

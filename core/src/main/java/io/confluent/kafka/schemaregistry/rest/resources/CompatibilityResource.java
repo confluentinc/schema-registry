@@ -77,7 +77,7 @@ public class CompatibilityResource {
   @ApiResponses(value = {
       @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
-      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid Avro schema\n"
+      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid schema or schema type\n"
           + "Error code 42202 -- Invalid version"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store") })
   @PerformanceMetric("compatibility.subjects.versions.verify")
@@ -130,7 +130,7 @@ public class CompatibilityResource {
             schemaForSpecifiedVersion
         );
       } catch (InvalidSchemaException e) {
-        throw Errors.invalidAvroException("Invalid input schema " + request.getSchema(), e);
+        throw Errors.invalidSchemaException("Invalid input schema " + request.getSchema(), e);
       } catch (SchemaRegistryStoreException e) {
         throw Errors.storeException(
             "Error while getting compatibility level for subject " + subject, e);
