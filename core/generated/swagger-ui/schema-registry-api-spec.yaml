@@ -104,8 +104,8 @@ paths:
           description: "Error code 40401 -- Subject not found\nError code 40402 --\
             \ Version not found"
         422:
-          description: "Error code 42201 -- Invalid Avro schema\nError code 42202\
-            \ -- Invalid version"
+          description: "Error code 42201 -- Invalid schema or schema type\nError code\
+            \ 42202 -- Invalid version"
         500:
           description: "Error code 50001 -- Error in the backend data store"
   /config:
@@ -561,9 +561,9 @@ paths:
           schema:
             $ref: "#/definitions/RegisterSchemaResponse"
         409:
-          description: "Incompatible Avro schema"
+          description: "Incompatible schema"
         422:
-          description: "Error code 42201 -- Invalid Avro schema"
+          description: "Error code 42201 -- Invalid schema or schema type"
         500:
           description: "Error code 50001 -- Error in the backend data store\nError\
             \ code 50002 -- Operation timed out\nError code 50003 -- Error while forwarding\
@@ -661,8 +661,8 @@ paths:
           description: "Error code 50001 -- Error in the backend data store"
   /subjects/{subject}/versions/{version}/schema:
     get:
-      summary: "Get the avro schema for the specified version of this subject. The\
-        \ unescaped schema only is returned."
+      summary: "Get the schema for the specified version of this subject. The unescaped\
+        \ schema only is returned."
       description: ""
       operationId: "getSchemaOnly"
       consumes:

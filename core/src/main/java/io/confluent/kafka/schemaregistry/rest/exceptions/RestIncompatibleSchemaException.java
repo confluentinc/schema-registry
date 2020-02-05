@@ -23,16 +23,16 @@ import io.confluent.rest.exceptions.RestException;
  * An exception thrown when the registered schema is not compatible with the latest schema according
  * to the compatibility level.
  */
-public class RestIncompatibleAvroSchemaException extends RestException {
+public class RestIncompatibleSchemaException extends RestException {
 
   public static final int DEFAULT_ERROR_CODE =
       Response.Status.CONFLICT.getStatusCode();
 
-  public RestIncompatibleAvroSchemaException(String message, int errorCode) {
+  public RestIncompatibleSchemaException(String message, int errorCode) {
     this(message, errorCode, null);
   }
 
-  public RestIncompatibleAvroSchemaException(String message, int errorCode, Throwable cause) {
+  public RestIncompatibleSchemaException(String message, int errorCode, Throwable cause) {
     super(message, Response.Status.CONFLICT.getStatusCode(), errorCode, cause);
   }
 }

@@ -793,7 +793,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     SchemaProvider provider = providers.get(schemaType);
     if (provider == null) {
-      throw new IllegalArgumentException("Invalid schema type " + schemaType);
+      throw new InvalidSchemaException("Invalid schema type " + schemaType);
     }
     ParsedSchema parsedSchema = provider.parseSchema(schema.getSchema(), schema.getReferences())
         .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema));
@@ -1091,10 +1091,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
     List<ParsedSchema> prevParsedSchemas = new ArrayList<>(previousSchemas.size());
     for (Schema previousSchema : previousSchemas) {
-      if (previousSchema == null) {
-        throw new InvalidSchemaException(
-            "Existing schema " + previousSchema + " is not a valid Avro schema");
-      }
       ParsedSchema prevParsedSchema = parseSchema(previousSchema);
       prevParsedSchemas.add(prevParsedSchema);
     }

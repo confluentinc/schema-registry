@@ -18,7 +18,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleAvroSchemaException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
 import org.junit.Test;
 
@@ -57,7 +57,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       // this is expected.
       assertEquals("Should get a conflict status",
-                   RestIncompatibleAvroSchemaException.DEFAULT_ERROR_CODE,
+                   RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
                    e.getStatus());
     }
 
@@ -111,7 +111,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       // this is expected.
       assertEquals("Should get a conflict status",
-                   RestIncompatibleAvroSchemaException.DEFAULT_ERROR_CODE,
+                   RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
                    e.getStatus());
     }
 
@@ -193,7 +193,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       // this is expected.
       assertEquals("Should get a conflict status",
-                   RestIncompatibleAvroSchemaException.DEFAULT_ERROR_CODE,
+                   RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
                    e.getStatus());
     }
 

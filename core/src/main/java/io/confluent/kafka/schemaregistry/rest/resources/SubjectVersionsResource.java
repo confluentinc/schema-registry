@@ -125,7 +125,7 @@ public class SubjectVersionsResource {
   @GET
   @Path("/{version}/schema")
   @PerformanceMetric("subjects.versions.get-schema.only")
-  @ApiOperation(value = "Get the avro schema for the specified version of this subject. "
+  @ApiOperation(value = "Get the schema for the specified version of this subject. "
       + "The unescaped schema only is returned.")
   @ApiResponses(value = {@ApiResponse(code = 404, message =
       "Error code 40401 -- Subject not found\n"
@@ -197,8 +197,8 @@ public class SubjectVersionsResource {
       + "the primary. If the primary is not available, the client will get an error code "
       + "indicating that the forwarding has failed.", response = RegisterSchemaResponse.class)
   @ApiResponses(value = {
-      @ApiResponse(code = 409, message = "Incompatible Avro schema"),
-      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid Avro schema"),
+      @ApiResponse(code = 409, message = "Incompatible schema"),
+      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid schema or schema type"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
           + "Error code 50002 -- Operation timed out\n"
           + "Error code 50003 -- Error while forwarding the request to the primary")})
@@ -225,7 +225,7 @@ public class SubjectVersionsResource {
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
     } catch (InvalidSchemaException e) {
-      throw Errors.invalidAvroException("Input schema is an invalid Avro schema", e);
+      throw Errors.invalidSchemaException("Input schema is an invalid schema", e);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
