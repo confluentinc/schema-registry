@@ -299,6 +299,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
+  public boolean initialized() {
+    return kafkaStore.initialized();
+  }
+
   public boolean isMaster() {
     kafkaStore.masterLock().lock();
     try {
