@@ -25,7 +25,7 @@ for dir in $base_dir/package-kafka-serde-tools/target/kafka-serde-tools-package-
   export CLASSPATH=$CLASSPATH:$dir/share/java/kafka-serde-tools/*
 done
 
-DEFAULT_PROTOBUF_FORMATTER="--formatter io.confluent.kafka.formatter.JsonSchemaMessageFormatter"
+DEFAULT_PROTOBUF_FORMATTER="--formatter io.confluent.kafka.formatter.json.JsonSchemaMessageFormatter"
 
 DEFAULT_SCHEMA_REGISTRY_URL="--property schema.registry.url=http://localhost:8081"
 
