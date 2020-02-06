@@ -45,11 +45,7 @@ public class JsonSchemaUtils {
   }
 
   public static JsonSchema copyOf(JsonSchema schema) {
-    return new JsonSchema(schema.canonicalString(),
-        schema.references(),
-        schema.resolvedReferences(),
-        schema.version()
-    );
+    return JsonSchema.copy(schema);
   }
 
   public static JsonSchema getSchema(Object object) {

@@ -64,6 +64,8 @@ public class JsonSchema implements ParsedSchema {
 
   private final Map<String, String> resolvedReferences;
 
+  private transient String canonicalString;
+
   private final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
   @VisibleForTesting
@@ -110,6 +112,40 @@ public class JsonSchema implements ParsedSchema {
     this.resolvedReferences = Collections.emptyMap();
   }
 
+  private JsonSchema(
+      Schema schemaObj,
+      Integer version,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      String canonicalString
+  ) {
+    this.schemaObj = schemaObj;
+    this.version = version;
+    this.references = references;
+    this.resolvedReferences = resolvedReferences;
+    this.canonicalString = canonicalString;
+  }
+
+  public static JsonSchema copy(JsonSchema schema) {
+    return new JsonSchema(
+        schema.schemaObj,
+        schema.version,
+        schema.references,
+        schema.resolvedReferences,
+        schema.canonicalString
+    );
+  }
+
+  public static JsonSchema copy(JsonSchema schema, Integer version) {
+    return new JsonSchema(
+        schema.schemaObj,
+        version,
+        schema.references,
+        schema.resolvedReferences,
+        schema.canonicalString
+    );
+  }
+
   public Schema rawSchema() {
     return schemaObj;
   }
@@ -126,7 +162,10 @@ public class JsonSchema implements ParsedSchema {
 
   @Override
   public String canonicalString() {
-    return schemaObj.toString();
+    if (canonicalString == null) {
+      canonicalString = schemaObj.toString();
+    }
+    return canonicalString;
   }
 
   public Integer version() {

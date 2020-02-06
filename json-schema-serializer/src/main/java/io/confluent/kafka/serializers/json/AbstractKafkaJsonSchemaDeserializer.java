@@ -146,12 +146,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         // explicit from the Connector).
 
         Integer version = schemaVersion(topic, isKey, id, subject, schema, value);
-        return new JsonSchemaAndValue(new JsonSchema(
-            schema.canonicalString(),
-            schema.references(),
-            schema.resolvedReferences(),
-            version
-        ), value);
+        return new JsonSchemaAndValue(JsonSchema.copy(schema, version), value);
       }
 
       return value;

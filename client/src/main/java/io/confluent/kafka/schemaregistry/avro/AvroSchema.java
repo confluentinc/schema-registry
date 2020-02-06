@@ -80,6 +80,30 @@ public class AvroSchema implements ParsedSchema {
     this.resolvedReferences = Collections.emptyMap();
   }
 
+  private AvroSchema(
+      Schema schemaObj,
+      String canonicalString,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      Integer version
+  ) {
+    this.schemaObj = schemaObj;
+    this.canonicalString = canonicalString;
+    this.references = references;
+    this.resolvedReferences = resolvedReferences;
+    this.version = version;
+  }
+
+  public static AvroSchema copy(AvroSchema schema) {
+    return new AvroSchema(
+        schema.schemaObj,
+        schema.canonicalString,
+        schema.references,
+        schema.resolvedReferences,
+        schema.version
+    );
+  }
+
   public Schema rawSchema() {
     return schemaObj;
   }
