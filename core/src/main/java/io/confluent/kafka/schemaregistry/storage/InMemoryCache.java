@@ -142,8 +142,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return;
     }
-    subjectVersions.entrySet().removeIf(e ->
-        e.getKey().equals(schemaKey.getSubject()) && e.getValue().equals(schemaKey.getVersion()));
+    subjectVersions.computeIfPresent(schemaKey.getSubject(),
+        (k, v) -> schemaKey.getVersion() == v ? null : v);
     if (subjectVersions.isEmpty()) {
       guidToSubjectVersions.remove(schemaValue.getId());
     }

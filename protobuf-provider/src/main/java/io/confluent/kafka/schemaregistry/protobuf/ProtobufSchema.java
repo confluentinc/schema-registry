@@ -91,7 +91,11 @@ public class ProtobufSchema implements ParsedSchema {
 
   private final Map<String, ProtoFileElement> dependencies;
 
+  private transient String canonicalString;
+
   private transient DynamicSchema dynamicSchema;
+
+  private transient Descriptor descriptor;
 
   public ProtobufSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null, null);
@@ -108,13 +112,13 @@ public class ProtobufSchema implements ParsedSchema {
       this.schemaObj = ProtoParser.parse(DEFAULT_LOCATION, schemaString);
       this.version = version;
       this.name = name;
-      this.references = references;
-      this.dependencies = resolvedReferences.entrySet()
+      this.references = Collections.unmodifiableList(references);
+      this.dependencies = Collections.unmodifiableMap(resolvedReferences.entrySet()
           .stream()
           .collect(Collectors.toMap(
               Map.Entry::getKey,
               e -> ProtoParser.parse(Location.get(e.getKey()), e.getValue())
-          ));
+          )));
     } catch (IllegalStateException e) {
       log.error("Could not parse Protobuf schema " + schemaString
           + " with references " + references, e);
@@ -130,8 +134,8 @@ public class ProtobufSchema implements ParsedSchema {
     this.schemaObj = protoFileElement;
     this.version = null;
     this.name = null;
-    this.references = references;
-    this.dependencies = dependencies;
+    this.references = Collections.unmodifiableList(references);
+    this.dependencies = Collections.unmodifiableMap(dependencies);
   }
 
   public ProtobufSchema(Descriptor descriptor) {
@@ -147,6 +151,79 @@ public class ProtobufSchema implements ParsedSchema {
     this.name = messageName;
     this.references = Collections.emptyList();
     this.dependencies = dependencies;
+    this.descriptor = descriptor.findMessageTypeByName(messageName);
+  }
+
+  private ProtobufSchema(
+      ProtoFileElement schemaObj,
+      Integer version,
+      String name,
+      List<SchemaReference> references,
+      Map<String, ProtoFileElement> dependencies,
+      String canonicalString,
+      DynamicSchema dynamicSchema,
+      Descriptor descriptor
+  ) {
+    this.schemaObj = schemaObj;
+    this.version = version;
+    this.name = name;
+    this.references = references;
+    this.dependencies = dependencies;
+    this.canonicalString = canonicalString;
+    this.dynamicSchema = dynamicSchema;
+    this.descriptor = descriptor;
+  }
+
+  public static ProtobufSchema copy(ProtobufSchema schema) {
+    return new ProtobufSchema(
+        schema.schemaObj,
+        schema.version,
+        schema.name,
+        schema.references,
+        schema.dependencies,
+        schema.canonicalString,
+        schema.dynamicSchema,
+        schema.descriptor
+    );
+  }
+
+  public static ProtobufSchema copy(ProtobufSchema schema, Integer version) {
+    return new ProtobufSchema(
+        schema.schemaObj,
+        version,
+        schema.name,
+        schema.references,
+        schema.dependencies,
+        schema.canonicalString,
+        schema.dynamicSchema,
+        schema.descriptor
+    );
+  }
+
+  public static ProtobufSchema copy(ProtobufSchema schema, String name) {
+    return new ProtobufSchema(
+        schema.schemaObj,
+        schema.version,
+        name,
+        schema.references,
+        schema.dependencies,
+        schema.canonicalString,
+        schema.dynamicSchema,
+        schema.descriptor
+    );
+  }
+
+  public static ProtobufSchema copy(ProtobufSchema schema, List<SchemaReference> references) {
+    return new ProtobufSchema(
+        schema.schemaObj,
+        schema.version,
+        schema.name,
+        references,
+        schema.dependencies,
+        schema.canonicalString,
+        schema.dynamicSchema,
+        schema.descriptor
+    );
   }
 
   private ProtoFileElement toProtoFile(
@@ -413,7 +490,10 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public Descriptor toDescriptor() {
-    return toDescriptor(name());
+    if (descriptor == null) {
+      descriptor = toDescriptor(name());
+    }
+    return descriptor;
   }
 
   public Descriptor toDescriptor(String name) {
@@ -620,8 +700,11 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public String canonicalString() {
-    // Remove full-line comments, such as the location
-    return schemaObj.toSchema().replaceAll("^//.*?\\n", "");
+    if (canonicalString == null) {
+      // Remove full-line comments, such as the location
+      canonicalString = schemaObj.toSchema().replaceAll("^//.*?\\n", "");
+    }
+    return canonicalString;
   }
 
   public Integer version() {
@@ -696,11 +779,7 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public String fullName() {
-    return fullName(name());
-  }
-
-  public String fullName(String name) {
-    Descriptor descriptor = toDescriptor(name);
+    Descriptor descriptor = toDescriptor();
     FileDescriptor fd = descriptor.getFile();
     DescriptorProtos.FileOptions o = fd.getOptions();
     String p = o.hasJavaPackage() ? o.getJavaPackage() : fd.getPackage();

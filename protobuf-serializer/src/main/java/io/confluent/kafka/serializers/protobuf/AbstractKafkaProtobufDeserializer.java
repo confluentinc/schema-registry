@@ -105,13 +105,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       ProtobufSchema schema = ((ProtobufSchema) schemaRegistry.getSchemaById(id));
       MessageIndexes indexes = MessageIndexes.readFrom(buffer);
       String name = schema.toMessageName(indexes);
-      schema = new ProtobufSchema(
-          schema.canonicalString(),
-          schema.references(),
-          schema.resolvedReferences(),
-          schema.version(),
-          name
-      );
+      schema = ProtobufSchema.copy(schema, name);
       String subject = null;
       if (includeSchemaAndVersion) {
         subject = subjectName(topic, isKey, schema);
@@ -148,15 +142,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         // explicit from the Connector).
 
         Integer version = schemaVersion(topic, isKey, id, subject, schema, value);
-        return new ProtobufSchemaAndValue(
-            new ProtobufSchema(schema.canonicalString(),
-                schema.references(),
-                schema.resolvedReferences(),
-                version,
-                schema.name()
-            ),
-            value
-        );
+        return new ProtobufSchemaAndValue(ProtobufSchema.copy(schema, version), value);
       }
 
       return value;
