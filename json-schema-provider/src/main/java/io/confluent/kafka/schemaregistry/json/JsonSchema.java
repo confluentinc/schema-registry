@@ -97,8 +97,8 @@ public class JsonSchema implements ParsedSchema {
     SchemaLoader loader = builder.build();
     this.schemaObj = loader.load().build();
     this.version = version;
-    this.references = references;
-    this.resolvedReferences = resolvedReferences;
+    this.references = Collections.unmodifiableList(references);
+    this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
   }
 
   public JsonSchema(Schema schemaObj) {

@@ -112,13 +112,13 @@ public class ProtobufSchema implements ParsedSchema {
       this.schemaObj = ProtoParser.parse(DEFAULT_LOCATION, schemaString);
       this.version = version;
       this.name = name;
-      this.references = references;
-      this.dependencies = resolvedReferences.entrySet()
+      this.references = Collections.unmodifiableList(references);
+      this.dependencies = Collections.unmodifiableMap(resolvedReferences.entrySet()
           .stream()
           .collect(Collectors.toMap(
               Map.Entry::getKey,
               e -> ProtoParser.parse(Location.get(e.getKey()), e.getValue())
-          ));
+          )));
     } catch (IllegalStateException e) {
       log.error("Could not parse Protobuf schema " + schemaString
           + " with references " + references, e);
@@ -134,8 +134,8 @@ public class ProtobufSchema implements ParsedSchema {
     this.schemaObj = protoFileElement;
     this.version = null;
     this.name = null;
-    this.references = references;
-    this.dependencies = dependencies;
+    this.references = Collections.unmodifiableList(references);
+    this.dependencies = Collections.unmodifiableMap(dependencies);
   }
 
   public ProtobufSchema(Descriptor descriptor) {
