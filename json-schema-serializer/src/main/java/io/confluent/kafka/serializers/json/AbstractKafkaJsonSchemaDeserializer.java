@@ -112,13 +112,13 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       int length = buffer.limit() - 1 - idSize;
       int start = buffer.position() + buffer.arrayOffset();
 
-      Object typeName = schema.rawSchema().getUnprocessedProperties().get(typeProperty);
+      String typeName = schema.getString(typeProperty);
 
       Object value;
       if (type != null) {
         value = objectMapper.readValue(buffer.array(), start, length, type);
       } else if (typeName != null) {
-        value = deriveType(buffer, length, start, typeName.toString());
+        value = deriveType(buffer, length, start, typeName);
       } else {
         value = objectMapper.readTree(new ByteArrayInputStream(buffer.array(), start, length));
       }
@@ -146,14 +146,14 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         // explicit from the Connector).
 
         Integer version = schemaVersion(topic, isKey, id, subject, schema, value);
-        return new JsonSchemaAndValue(JsonSchema.copy(schema, version), value);
+        return new JsonSchemaAndValue(schema.copy(version), value);
       }
 
       return value;
     } catch (IOException | RuntimeException e) {
-      throw new SerializationException("Error deserializing Protobuf message for id " + id, e);
+      throw new SerializationException("Error deserializing JSON message for id " + id, e);
     } catch (RestClientException e) {
-      throw new SerializationException("Error retrieving Protobuf schema for id " + id, e);
+      throw new SerializationException("Error retrieving JSON schema for id " + id, e);
     }
   }
 

@@ -23,7 +23,7 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
   public static final String FAIL_INVALID_SCHEMA = "json.fail.invalid.schema";
-  public static final boolean FAIL_INVALID_SCHEMA_DEFAULT = true;
+  public static final boolean FAIL_INVALID_SCHEMA_DEFAULT = false;
   public static final String FAIL_INVALID_SCHEMA_DOC = "Whether to fail deserialization if the "
       + "payload does not match the schema";
 

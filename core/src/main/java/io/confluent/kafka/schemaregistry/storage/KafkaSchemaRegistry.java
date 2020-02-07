@@ -1093,13 +1093,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           "Previous schema not provided");
     }
 
+    CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
+    if (compatibility == CompatibilityLevel.NONE) {
+      // optimization to avoid parsing schemas
+      return true;
+    }
+
     List<ParsedSchema> prevParsedSchemas = new ArrayList<>(previousSchemas.size());
     for (Schema previousSchema : previousSchemas) {
       ParsedSchema prevParsedSchema = parseSchema(previousSchema);
       prevParsedSchemas.add(prevParsedSchema);
     }
 
-    CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
     return parseSchema(newSchema).isCompatible(compatibility, prevParsedSchemas);
   }
 

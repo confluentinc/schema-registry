@@ -31,7 +31,7 @@ public class ProtobufSchemaUtils {
   private static final ObjectMapper jsonMapper = new ObjectMapper();
 
   public static ProtobufSchema copyOf(ProtobufSchema schema) {
-    return ProtobufSchema.copy(schema);
+    return schema.copy();
   }
 
   public static ProtobufSchema getSchema(Message message) {

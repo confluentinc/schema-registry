@@ -42,7 +42,7 @@ public class JsonSchemaTest {
       + "     \"null\": {\"type\": \"null\"},\n"
       + "     \"boolean\": {\"type\": \"boolean\"},\n"
       + "     \"number\": {\"type\": \"number\"},\n"
-      + "     \"string\": {\"type\": \"string\"},\n"
+      + "     \"string\": {\"type\": \"string\"}\n"
       + "  },\n"
       + "  \"additionalProperties\": false\n"
       + "}";

@@ -46,6 +46,7 @@ public class KafkaJsonSchemaSerializerTest {
     config = new Properties();
     config.put(KafkaJsonSchemaSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
     config.put(KafkaJsonSchemaSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    config.put(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA, true);
     schemaRegistry = new MockSchemaRegistryClient();
     serializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(config));
     deserializer = getDeserializer(Object.class);

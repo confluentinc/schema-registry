@@ -66,7 +66,7 @@ public class AvroSchemaUtils {
   }
 
   public static AvroSchema copyOf(AvroSchema schema) {
-    return AvroSchema.copy(schema);
+    return schema.copy();
   }
 
   public static Map<String, Schema> getPrimitiveSchemas() {

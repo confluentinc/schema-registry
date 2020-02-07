@@ -45,7 +45,7 @@ public class JsonSchemaUtils {
   }
 
   public static JsonSchema copyOf(JsonSchema schema) {
-    return JsonSchema.copy(schema);
+    return schema.copy();
   }
 
   public static JsonSchema getSchema(Object object) {
