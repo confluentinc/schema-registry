@@ -75,6 +75,7 @@
         <podam.version>6.0.2.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
+        <json-schema.version>1.12.1</json-schema.version>
         <protobuf.version>3.11.1</protobuf.version>
         <wire.version>3.0.2</wire.version>
     </properties>
@@ -136,7 +137,7 @@
             <dependency>
                 <groupId>com.github.everit-org.json-schema</groupId>
                 <artifactId>org.everit.json.schema</artifactId>
-                <version>1.12.0</version>
+                <version>${json-schema.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.kjetland</groupId>

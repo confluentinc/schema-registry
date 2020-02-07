@@ -18,12 +18,15 @@ package io.confluent.kafka.schemaregistry.tools;
 import io.confluent.common.utils.AbstractPerformanceTest;
 import io.confluent.common.utils.PerformanceStats;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.avro.AvroUtils;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 
 import java.io.IOException;
+import java.util.Collections;
 
 public class SchemaRegistryPerformance extends AbstractPerformanceTest {
 
@@ -32,6 +35,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
   String baseUrl;
   RestService restService;
   String subject;
+  String schemaType;
   long registeredSchemas = 0;
   long successfullyRegisteredSchemas = 0;
 
@@ -40,7 +44,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
     if (args.length < 4) {
       System.out.println(
           "Usage: java " + SchemaRegistryPerformance.class.getName() + " schema_registry_url"
-          + " subject num_schemas target_schemas_per_sec"
+          + " subject num_schemas target_schemas_per_sec schema_type"
       );
       System.exit(1);
     }
@@ -49,22 +53,28 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
     String subject = args[1];
     int numSchemas = Integer.parseInt(args[2]);
     int targetSchemasPerSec = Integer.parseInt(args[3]);
+    String schemaType = args[4];
 
     SchemaRegistryPerformance perf =
-        new SchemaRegistryPerformance(baseUrl, subject, numSchemas, targetSchemasPerSec);
+        new SchemaRegistryPerformance(baseUrl, subject, numSchemas, targetSchemasPerSec,
+            schemaType);
+    perf.init();
     perf.run(targetSchemasPerSec);
     perf.close();
   }
 
   public SchemaRegistryPerformance(String baseUrl, String subject, long numSchemas,
-                                   long targetSchemasPerSec) throws Exception {
+                                   long targetSchemasPerSec, String schemaType) {
     super(numSchemas);
     this.baseUrl = baseUrl;
     this.restService = new RestService(baseUrl);
     this.subject = subject;
+    this.schemaType = schemaType;
     this.targetRegisteredSchemas = numSchemas;
     this.targetSchemasPerSec = targetSchemasPerSec;
+  }
 
+  protected void init() throws Exception {
     // No compatibility verification
     ConfigUpdateRequest request = new ConfigUpdateRequest();
     request.setCompatibilityLevel(CompatibilityLevel.NONE.name);
@@ -72,21 +82,35 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
   }
 
   // sequential schema maker
-  private static String makeSchema(long num) {
-    String schemaString = "{\"type\":\"record\","
-                          + "\"name\":\"myrecord\","
-                          + "\"fields\":"
-                          + "[{\"type\":\"string\",\"name\":"
-                          + "\"f" + num + "\"}]}";
-    return AvroUtils.parseSchema(schemaString).canonicalString();
+  protected static String makeSchema(String schemaType, long num) {
+    String schemaString;
+    switch (schemaType) {
+      case AvroSchema.TYPE:
+        schemaString = "{\"type\":\"record\","
+            + "\"name\":\"myrecord\","
+            + "\"fields\":"
+            + "[{\"type\":\"string\",\"name\":"
+            + "\"f" + num + "\"}]}";
+        break;
+      case JsonSchema.TYPE:
+        schemaString = "{\"type\":\"object\",\"properties\":{\"f" + num + "\":{\"type"
+            + "\":\"string\"}}}";
+        break;
+      case ProtobufSchema.TYPE:
+        schemaString = "message Foo { required string f" + num + " = 1; }";
+        break;
+      default:
+        throw new IllegalArgumentException("Unsupported schema type " + schemaType);
+    }
+    return schemaString;
   }
 
   @Override
   protected void doIteration(PerformanceStats.Callback cb) {
-    String schema = makeSchema(this.registeredSchemas);
+    String schema = makeSchema(this.schemaType, this.registeredSchemas);
 
     try {
-      restService.registerSchema(schema, this.subject);
+      restService.registerSchema(schema, this.schemaType, Collections.emptyList(), this.subject);
       successfullyRegisteredSchemas++;
     } catch (IOException e) {
       System.out.println("Problem registering schema: " + e.getMessage());

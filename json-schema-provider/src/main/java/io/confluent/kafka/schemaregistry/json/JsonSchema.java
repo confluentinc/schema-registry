@@ -66,11 +66,11 @@ public class JsonSchema implements ParsedSchema {
 
   private transient String canonicalString;
 
-  private final ObjectMapper objectMapper = Jackson.newObjectMapper();
+  private final static ObjectMapper objectMapper = Jackson.newObjectMapper();
 
   @VisibleForTesting
   public JsonSchema(JsonNode jsonNode) throws JsonProcessingException {
-    this(new ObjectMapper().writeValueAsString(jsonNode));
+    this(objectMapper.writeValueAsString(jsonNode));
   }
 
   public JsonSchema(String schemaString) {
