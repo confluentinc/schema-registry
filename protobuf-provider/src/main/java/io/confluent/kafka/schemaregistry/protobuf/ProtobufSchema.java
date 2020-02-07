@@ -174,55 +174,55 @@ public class ProtobufSchema implements ParsedSchema {
     this.descriptor = descriptor;
   }
 
-  public static ProtobufSchema copy(ProtobufSchema schema) {
+  public ProtobufSchema copy() {
     return new ProtobufSchema(
-        schema.schemaObj,
-        schema.version,
-        schema.name,
-        schema.references,
-        schema.dependencies,
-        schema.canonicalString,
-        schema.dynamicSchema,
-        schema.descriptor
+        this.schemaObj,
+        this.version,
+        this.name,
+        this.references,
+        this.dependencies,
+        this.canonicalString,
+        this.dynamicSchema,
+        this.descriptor
     );
   }
 
-  public static ProtobufSchema copy(ProtobufSchema schema, Integer version) {
+  public ProtobufSchema copy(Integer version) {
     return new ProtobufSchema(
-        schema.schemaObj,
+        this.schemaObj,
         version,
-        schema.name,
-        schema.references,
-        schema.dependencies,
-        schema.canonicalString,
-        schema.dynamicSchema,
-        schema.descriptor
+        this.name,
+        this.references,
+        this.dependencies,
+        this.canonicalString,
+        this.dynamicSchema,
+        this.descriptor
     );
   }
 
-  public static ProtobufSchema copy(ProtobufSchema schema, String name) {
+  public ProtobufSchema copy(String name) {
     return new ProtobufSchema(
-        schema.schemaObj,
-        schema.version,
+        this.schemaObj,
+        this.version,
         name,
-        schema.references,
-        schema.dependencies,
-        schema.canonicalString,
-        schema.dynamicSchema,
-        schema.descriptor
+        this.references,
+        this.dependencies,
+        this.canonicalString,
+        this.dynamicSchema,
+        this.descriptor
     );
   }
 
-  public static ProtobufSchema copy(ProtobufSchema schema, List<SchemaReference> references) {
+  public ProtobufSchema copy(List<SchemaReference> references) {
     return new ProtobufSchema(
-        schema.schemaObj,
-        schema.version,
-        schema.name,
+        this.schemaObj,
+        this.version,
+        this.name,
         references,
-        schema.dependencies,
-        schema.canonicalString,
-        schema.dynamicSchema,
-        schema.descriptor
+        this.dependencies,
+        this.canonicalString,
+        this.dynamicSchema,
+        this.descriptor
     );
   }
 

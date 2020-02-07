@@ -140,25 +140,25 @@ public class JsonSchema implements ParsedSchema {
     this.canonicalString = canonicalString;
   }
 
-  public static JsonSchema copy(JsonSchema schema) {
+  public JsonSchema copy() {
     return new JsonSchema(
-        schema.jsonNode,
-        schema.schemaObj,
-        schema.version,
-        schema.references,
-        schema.resolvedReferences,
-        schema.canonicalString
+        this.jsonNode,
+        this.schemaObj,
+        this.version,
+        this.references,
+        this.resolvedReferences,
+        this.canonicalString
     );
   }
 
-  public static JsonSchema copy(JsonSchema schema, Integer version) {
+  public JsonSchema copy(Integer version) {
     return new JsonSchema(
-        schema.jsonNode,
-        schema.schemaObj,
+        this.jsonNode,
+        this.schemaObj,
         version,
-        schema.references,
-        schema.resolvedReferences,
-        schema.canonicalString
+        this.references,
+        this.resolvedReferences,
+        this.canonicalString
     );
   }
 

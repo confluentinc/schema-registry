@@ -118,7 +118,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         schema.rawSchema(),
         schema.dependencies()
     );
-    return ProtobufSchema.copy(schema, s.getReferences());
+    return schema.copy(s.getReferences());
   }
 
   private static Schema resolveDependencies(

@@ -94,13 +94,13 @@ public class AvroSchema implements ParsedSchema {
     this.version = version;
   }
 
-  public static AvroSchema copy(AvroSchema schema) {
+  public AvroSchema copy() {
     return new AvroSchema(
-        schema.schemaObj,
-        schema.canonicalString,
-        schema.references,
-        schema.resolvedReferences,
-        schema.version
+        this.schemaObj,
+        this.canonicalString,
+        this.references,
+        this.resolvedReferences,
+        this.version
     );
   }
 
