@@ -697,10 +697,10 @@ public class ProtobufDataTest {
     assertEquals("string", fieldElem.getType());
     fieldElem = messageElem.getFields().get(10);
     assertEquals("map", fieldElem.getName());
-    assertEquals("ConnectDefault1.ConnectDefault2Entry", fieldElem.getType());
+    assertEquals("ConnectDefault2Entry", fieldElem.getType());
     fieldElem = messageElem.getFields().get(11);
     assertEquals("mapNonStringKeys", fieldElem.getName());
-    assertEquals("ConnectDefault1.ConnectDefault3Entry", fieldElem.getType());
+    assertEquals("ConnectDefault3Entry", fieldElem.getType());
 
     Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
         .findFieldByName("int8");

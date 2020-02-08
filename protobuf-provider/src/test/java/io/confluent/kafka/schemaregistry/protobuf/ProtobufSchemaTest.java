@@ -23,10 +23,13 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.List;
+
+import io.confluent.kafka.schemaregistry.protobuf.diff.ResourceLoader;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -358,6 +361,28 @@ public class ProtobufSchemaTest {
     assertEquals("one", fieldNode.get("first").asText());
     assertNotNull(fieldNode.get("second"));
     assertEquals("two", fieldNode.get("second").asText());
+  }
+
+  @Test
+  public void testFileDescriptorProto() throws Exception {
+    ResourceLoader resourceLoader = new ResourceLoader(
+        "/io/confluent/kafka/schemaregistry/protobuf/diff/");
+
+    ProtoFileElement original = resourceLoader.readObj("TestProto.proto");
+    ProtobufSchema schema = new ProtobufSchema(original.toSchema());
+    String fileProto = schema.formattedString(ProtobufSchema.PROTO_FORMAT);
+    ProtobufSchema schema2 = new ProtobufSchema(fileProto);
+    fileProto = schema2.formattedString(ProtobufSchema.PROTO_FORMAT);
+    ProtobufSchema schema3 = new ProtobufSchema(fileProto);
+    assertEquals(schema2, schema3);
+
+    original = resourceLoader.readObj("NestedTestProto.proto");
+    schema = new ProtobufSchema(original.toSchema());
+    fileProto = schema.formattedString(ProtobufSchema.PROTO_FORMAT);
+    schema2 = new ProtobufSchema(fileProto);
+    fileProto = schema2.formattedString(ProtobufSchema.PROTO_FORMAT);
+    schema3 = new ProtobufSchema(fileProto);
+    assertEquals(schema2, schema3);
   }
 
   private static JsonNode jsonTree(String jsonData) {

@@ -44,6 +44,15 @@ public interface ParsedSchema {
   String canonicalString();
 
   /**
+   * Returns a formatted string according to a type-specific format.
+   *
+   * @return the formatted string
+   */
+  default String formattedString(String format) {
+    throw new IllegalArgumentException("Format not supported: " + format);
+  }
+
+  /**
    * Returns a list of schema references.
    *
    * @return the schema references

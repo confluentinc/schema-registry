@@ -59,7 +59,6 @@ import static io.confluent.connect.protobuf.ProtobufDataConfig.SCHEMAS_CACHE_SIZ
 public class ProtobufData {
 
   public static final String NAMESPACE = "io.confluent.connect.protobuf";
-  public static final String PROTO3 = "proto3";
 
   public static final String DEFAULT_SCHEMA_NAME = "ConnectDefault";
   public static final String MAP_ENTRY_SUFFIX = ProtobufSchema.MAP_ENTRY_SUFFIX;  // Suffix used
@@ -307,7 +306,7 @@ public class ProtobufData {
     }
     try {
       DynamicSchema.Builder schema = DynamicSchema.newBuilder();
-      schema.setSyntax(PROTO3);
+      schema.setSyntax(ProtobufSchema.PROTO3);
       String name = getNameOrDefault(rootElem.name());
       schema.addMessageDefinition(messageDefinitionFromConnectSchema(schema, name, rootElem));
       return schema.build();
@@ -411,7 +410,7 @@ public class ProtobufData {
         message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
       } else if (type.equals(GOOGLE_PROTOBUF_TIMESTAMP_FULL_NAME)) {
         DynamicSchema.Builder timestampSchema = DynamicSchema.newBuilder();
-        timestampSchema.setSyntax(PROTO3);
+        timestampSchema.setSyntax(ProtobufSchema.PROTO3);
         timestampSchema.setName(GOOGLE_PROTOBUF_TIMESTAMP_LOCATION);
         timestampSchema.setPackage(GOOGLE_PROTOBUF_PACKAGE);
         timestampSchema.addMessageDefinition(timestampDefinition());
