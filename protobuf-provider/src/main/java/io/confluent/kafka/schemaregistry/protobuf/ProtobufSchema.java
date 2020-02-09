@@ -614,6 +614,13 @@ public class ProtobufSchema implements ParsedSchema {
   ) {
     log.trace("*** message: {}", messageElem.getName());
     MessageDefinition.Builder message = MessageDefinition.newBuilder(messageElem.getName());
+    for (TypeElement type : messageElem.getNestedTypes()) {
+      if (type instanceof MessageElement) {
+        message.addMessageDefinition(toDynamicMessage(schema, (MessageElement) type));
+      } else if (type instanceof EnumElement) {
+        message.addEnumDefinition(toDynamicEnum((EnumElement) type));
+      }
+    }
     Set<String> added = new HashSet<>();
     for (OneOfElement oneof : messageElem.getOneOfs()) {
       MessageDefinition.OneofBuilder oneofBuilder = message.addOneof(oneof.getName());
@@ -631,6 +638,7 @@ public class ProtobufSchema implements ParsedSchema {
         added.add(field.getName());
       }
     }
+    // Process fields after messages so that any newly created map entry messages are at the end
     for (FieldElement field : messageElem.getFields()) {
       if (added.contains(field.getName())) {
         continue;
@@ -651,7 +659,7 @@ public class ProtobufSchema implements ParsedSchema {
         mapMessage.setMapEntry(true);
         mapMessage.addField(null, protoType.getKeyType().getSimpleName(), KEY_FIELD, 1, null);
         mapMessage.addField(null, protoType.getValueType().getSimpleName(), VALUE_FIELD, 2, null);
-        schema.addMessageDefinition(mapMessage.build());
+        message.addMessageDefinition(mapMessage.build());
       }
       message.addField(
           label,
@@ -662,13 +670,6 @@ public class ProtobufSchema implements ParsedSchema {
           jsonName,
           isPacked
       );
-    }
-    for (TypeElement type : messageElem.getNestedTypes()) {
-      if (type instanceof MessageElement) {
-        message.addMessageDefinition(toDynamicMessage(schema, (MessageElement) type));
-      } else if (type instanceof EnumElement) {
-        message.addEnumDefinition(toDynamicEnum((EnumElement) type));
-      }
     }
     for (ReservedElement reserved : messageElem.getReserveds()) {
       for (Object elem : reserved.getValues()) {

@@ -154,6 +154,17 @@ public class ProtobufDataTest {
     return message.build();
   }
 
+  private NestedMessage createEmptyNestedTestProto() throws ParseException {
+    NestedMessage.Builder message = NestedMessage.newBuilder();
+    return message.build();
+  }
+
+  private Map<String, String> getTestKeyValueMap() {
+    Map<String, String> result = new HashMap<>();
+    result.put("Hello", "World");
+    return result;
+  }
+
   private Schema getExpectedNestedTestProtoSchemaStringUserId() {
     return getExpectedNestedTestProtoSchema();
   }
@@ -280,12 +291,6 @@ public class ProtobufDataTest {
     return builder.build();
   }
 
-  private Map<String, String> getTestKeyValueMap() {
-    Map<String, String> result = new HashMap<>();
-    result.put("Hello", "World");
-    return result;
-  }
-
   private Struct getExpectedNestedProtoResultStringUserId() throws ParseException {
     Schema schema = getExpectedNestedTestProtoSchemaStringUserId();
     Struct result = new Struct(schema.schema());
@@ -341,6 +346,20 @@ public class ProtobufDataTest {
     inner.put("id", "");
     inner.put("ids", new ArrayList<>());
     result.put("inner", inner);
+    return result;
+  }
+
+  private Struct getExpectedEmptyNestedTestProtoResult() throws ParseException {
+    Schema schema = getExpectedNestedTestProtoSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("is_active", false);
+
+    List<String> experiments = new ArrayList<>();
+    result.put("experiments_active", experiments);
+
+    result.put("status", 0);
+    result.put("map_type", new HashMap<>());
+
     return result;
   }
 
@@ -420,6 +439,18 @@ public class ProtobufDataTest {
     Schema expectedSchema = getExpectedNestedTestProtoSchemaIntUserId();
     assertSchemasEqual(expectedSchema, result.schema());
     Struct expected = getExpectedNestedTestProtoResultIntUserId();
+    assertSchemasEqual(expected.schema(), ((Struct) result.value()).schema());
+    assertEquals(expected.schema(), ((Struct) result.value()).schema());
+    assertEquals(expected, result.value());
+  }
+
+  @Test
+  public void testToConnectDataWithEmptyNestedProtobufMessage() throws Exception {
+    NestedMessage message = createEmptyNestedTestProto();
+    SchemaAndValue result = getSchemaAndValue(message);
+    Schema expectedSchema = getExpectedNestedTestProtoSchema();
+    assertSchemasEqual(expectedSchema, result.schema());
+    Struct expected = getExpectedEmptyNestedTestProtoResult();
     assertSchemasEqual(expected.schema(), ((Struct) result.value()).schema());
     assertEquals(expected.schema(), ((Struct) result.value()).schema());
     assertEquals(expected, result.value());
@@ -629,6 +660,16 @@ public class ProtobufDataTest {
   @Test
   public void testFromConnectDataWithNestedProtobufMessageAndIntUserId() throws Exception {
     NestedMessage nestedMessage = createNestedTestProtoIntUserId();
+    SchemaAndValue schemaAndValue = getSchemaAndValue(nestedMessage);
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+    Message message = NestedTestProto.NestedMessage.parseFrom(messageBytes);
+
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  @Test
+  public void testFromConnectDataWithEmptyNestedProtobufMessage() throws Exception {
+    NestedMessage nestedMessage = createEmptyNestedTestProto();
     SchemaAndValue schemaAndValue = getSchemaAndValue(nestedMessage);
     byte[] messageBytes = getMessageBytes(schemaAndValue);
     Message message = NestedTestProto.NestedMessage.parseFrom(messageBytes);

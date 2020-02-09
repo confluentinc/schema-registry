@@ -24,6 +24,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -334,7 +335,7 @@ public class ProtobufSchemaTest {
 
   @Test
   public void testMapToJson() throws Exception {
-    DynamicMessage.Builder mapBuilder = mapSchema.newMessageBuilder("TestMapEntry");
+    DynamicMessage.Builder mapBuilder = mapSchema.newMessageBuilder("TestMap.TestMapEntry");
     Descriptor mapDesc = mapBuilder.getDescriptorForType();
     FieldDescriptor keyField = mapDesc.findFieldByName("key");
     mapBuilder.setField(keyField, "first");
@@ -342,7 +343,7 @@ public class ProtobufSchemaTest {
     mapBuilder.setField(valueField, "one");
     DynamicMessage mapEntry = mapBuilder.build();
 
-    DynamicMessage.Builder mapBuilder2 = mapSchema.newMessageBuilder("TestMapEntry");
+    DynamicMessage.Builder mapBuilder2 = mapSchema.newMessageBuilder("TestMap.TestMapEntry");
     Descriptor mapDesc2 = mapBuilder2.getDescriptorForType();
     FieldDescriptor keyField2 = mapDesc2.findFieldByName("key");
     mapBuilder2.setField(keyField2, "second");
