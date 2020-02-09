@@ -183,6 +183,9 @@ public class ProtobufData {
         }
         case ARRAY:
           final Collection<?> listValue = (Collection<?>) value;
+          if (listValue.isEmpty()) {
+            return null;
+          }
           List<Object> newListValue = new ArrayList<>();
           for (Object o : listValue) {
             newListValue.add(fromConnectData(schema.valueSchema(), scope, o, protobufSchema));

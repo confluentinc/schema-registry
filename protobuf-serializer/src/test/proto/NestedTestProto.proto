@@ -54,7 +54,7 @@ message NestedMessage {
     enum InnerEnum {
         option allow_alias = true;
         ZERO = 0;
-        ONE = 1;
+        ALSO_ZERO = 0;
     }
 
     reserved 14, 15, 9 to 11;

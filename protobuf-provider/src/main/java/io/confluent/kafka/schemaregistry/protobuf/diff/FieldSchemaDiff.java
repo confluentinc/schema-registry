@@ -39,9 +39,13 @@ public class FieldSchemaDiff {
 
   static void compareTypes(final Context ctx, ProtoType original, ProtoType update) {
     Optional<ProtoType> originalMap = ctx.getMap(original.simpleName(), true);
-    if (originalMap.isPresent()) original = originalMap.get();
+    if (originalMap.isPresent()) {
+      original = originalMap.get();
+    }
     Optional<ProtoType> updateMap = ctx.getMap(update.simpleName(), false);
-    if (updateMap.isPresent()) update = updateMap.get();
+    if (updateMap.isPresent()) {
+      update = updateMap.get();
+    }
 
     Kind originalKind = kind(ctx, original, true);
     Kind updateKind = kind(ctx, update, false);

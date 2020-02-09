@@ -190,6 +190,11 @@ public class ProtobufDataTest {
         "id",
       SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
     );
+    innerMessageBuilder.field(
+        "ids",
+        SchemaBuilder.array(SchemaBuilder.int32().optional().build())
+            .optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
     return innerMessageBuilder;
   }
 
@@ -305,6 +310,7 @@ public class ProtobufDataTest {
 
     Struct inner = new Struct(schema.field("inner").schema());
     inner.put("id", "");
+    inner.put("ids", new ArrayList<>());
     result.put("inner", inner);
     return result;
   }
@@ -333,6 +339,7 @@ public class ProtobufDataTest {
 
     Struct inner = new Struct(schema.field("inner").schema());
     inner.put("id", "");
+    inner.put("ids", new ArrayList<>());
     result.put("inner", inner);
     return result;
   }
