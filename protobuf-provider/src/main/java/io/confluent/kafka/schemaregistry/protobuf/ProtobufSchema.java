@@ -694,7 +694,7 @@ public class ProtobufSchema implements ParsedSchema {
     return message.build();
   }
 
-  private static Optional<OptionElement> findOption(String name, List<OptionElement> options) {
+  public static Optional<OptionElement> findOption(String name, List<OptionElement> options) {
     return options.stream().filter(o -> o.getName().equals(name)).findFirst();
   }
 

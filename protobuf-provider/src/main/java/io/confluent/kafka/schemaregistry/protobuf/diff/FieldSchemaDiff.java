@@ -20,6 +20,7 @@ import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 
 import java.util.Objects;
+import java.util.Optional;
 
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_KIND_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_NAMED_TYPE_CHANGED;
@@ -36,7 +37,12 @@ public class FieldSchemaDiff {
     compareTypes(ctx, originalType, updateType);
   }
 
-  static void compareTypes(final Context ctx, final ProtoType original, final ProtoType update) {
+  static void compareTypes(final Context ctx, ProtoType original, ProtoType update) {
+    Optional<ProtoType> originalMap = ctx.getMap(original.simpleName(), true);
+    if (originalMap.isPresent()) original = originalMap.get();
+    Optional<ProtoType> updateMap = ctx.getMap(update.simpleName(), false);
+    if (updateMap.isPresent()) update = updateMap.get();
+
     Kind originalKind = kind(ctx, original, true);
     Kind updateKind = kind(ctx, update, false);
     if (!Objects.equals(originalKind, updateKind)) {

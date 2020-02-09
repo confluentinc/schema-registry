@@ -27,9 +27,14 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Difference;
 import io.confluent.kafka.schemaregistry.protobuf.diff.ResourceLoader;
+import io.confluent.kafka.schemaregistry.protobuf.diff.SchemaDiff;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -372,16 +377,24 @@ public class ProtobufSchemaTest {
     ProtobufSchema schema = new ProtobufSchema(original.toSchema());
     String fileProto = schema.formattedString(ProtobufSchema.PROTO_FORMAT);
     ProtobufSchema schema2 = new ProtobufSchema(fileProto);
+    assertTrue(schema.isCompatible(
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)));
     fileProto = schema2.formattedString(ProtobufSchema.PROTO_FORMAT);
     ProtobufSchema schema3 = new ProtobufSchema(fileProto);
+    assertTrue(schema2.isCompatible(
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)));
     assertEquals(schema2, schema3);
 
     original = resourceLoader.readObj("NestedTestProto.proto");
     schema = new ProtobufSchema(original.toSchema());
     fileProto = schema.formattedString(ProtobufSchema.PROTO_FORMAT);
     schema2 = new ProtobufSchema(fileProto);
+    assertTrue(schema.isCompatible(
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)));
     fileProto = schema2.formattedString(ProtobufSchema.PROTO_FORMAT);
     schema3 = new ProtobufSchema(fileProto);
+    assertTrue(schema2.isCompatible(
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)));
     assertEquals(schema2, schema3);
   }
 
