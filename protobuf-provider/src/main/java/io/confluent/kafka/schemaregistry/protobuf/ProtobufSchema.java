@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.protobuf;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Range;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.DescriptorProto.ReservedRange;
@@ -47,6 +46,7 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ProtoParser;
 import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import kotlin.ranges.IntRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -238,7 +238,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   private ProtoFileElement toProtoFile(String schema) {
     try {
-      return ProtoParser.parse(DEFAULT_LOCATION, schema);
+      return ProtoParser.Companion.parse(DEFAULT_LOCATION, schema);
     } catch (Exception e) {
       try {
         // Attempt to parse binary FileDescriptorProto
@@ -415,7 +415,7 @@ public class ProtobufSchema implements ParsedSchema {
     List<Object> values = new ArrayList<>();
     int start = range.getStart();
     int end = range.getEnd();
-    values.add(start == end ? start : Range.closed(start, end));
+    values.add(start == end ? start : new IntRange(start, end));
     return new ReservedElement(DEFAULT_LOCATION, "", values);
   }
 
@@ -649,8 +649,8 @@ public class ProtobufSchema implements ParsedSchema {
         fieldType = toMapEntry(field.getName());
         MessageDefinition.Builder mapMessage = MessageDefinition.newBuilder(fieldType);
         mapMessage.setMapEntry(true);
-        mapMessage.addField(null, protoType.keyType().simpleName(), KEY_FIELD, 1, null);
-        mapMessage.addField(null, protoType.valueType().simpleName(), VALUE_FIELD, 2, null);
+        mapMessage.addField(null, protoType.getKeyType().getSimpleName(), KEY_FIELD, 1, null);
+        mapMessage.addField(null, protoType.getValueType().getSimpleName(), VALUE_FIELD, 2, null);
         schema.addMessageDefinition(mapMessage.build());
       }
       message.addField(
@@ -677,9 +677,9 @@ public class ProtobufSchema implements ParsedSchema {
         } else if (elem instanceof Integer) {
           int tag = (Integer) elem;
           message.addReservedRange(tag, tag);
-        } else if (elem instanceof Range) {
-          Range<Integer> range = (Range<Integer>) elem;
-          message.addReservedRange(range.lowerEndpoint(), range.upperEndpoint());
+        } else if (elem instanceof IntRange) {
+          IntRange range = (IntRange) elem;
+          message.addReservedRange(range.getStart(), range.getEndInclusive());
         } else {
           throw new IllegalStateException("Unsupported reserved type: " + elem.getClass()
               .getName());

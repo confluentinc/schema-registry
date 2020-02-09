@@ -29,12 +29,9 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.protobuf.diff.Difference;
 import io.confluent.kafka.schemaregistry.protobuf.diff.ResourceLoader;
-import io.confluent.kafka.schemaregistry.protobuf.diff.SchemaDiff;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
