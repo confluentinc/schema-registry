@@ -565,7 +565,7 @@ public class ProtobufSchema implements ParsedSchema {
       }
       for (TypeElement typeElem : rootElem.getTypes()) {
         if (typeElem instanceof MessageElement) {
-          MessageDefinition message = toDynamicMessage(schema, (MessageElement) typeElem);
+          MessageDefinition message = toDynamicMessage((MessageElement) typeElem);
           schema.addMessageDefinition(message);
         } else if (typeElem instanceof EnumElement) {
           EnumDefinition enumer = toDynamicEnum((EnumElement) typeElem);
@@ -609,14 +609,13 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private static MessageDefinition toDynamicMessage(
-      DynamicSchema.Builder schema,
       MessageElement messageElem
   ) {
     log.trace("*** message: {}", messageElem.getName());
     MessageDefinition.Builder message = MessageDefinition.newBuilder(messageElem.getName());
     for (TypeElement type : messageElem.getNestedTypes()) {
       if (type instanceof MessageElement) {
-        message.addMessageDefinition(toDynamicMessage(schema, (MessageElement) type));
+        message.addMessageDefinition(toDynamicMessage((MessageElement) type));
       } else if (type instanceof EnumElement) {
         message.addEnumDefinition(toDynamicEnum((EnumElement) type));
       }
