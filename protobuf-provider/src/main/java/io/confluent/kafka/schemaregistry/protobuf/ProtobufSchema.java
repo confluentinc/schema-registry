@@ -50,8 +50,6 @@ import kotlin.ranges.IntRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -734,22 +732,10 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public String formattedString(String format) {
     if (PROTO_FORMAT.equals(format)) {
-      return fileDescriptorProtoToString();
+      FileDescriptorProto file = toDynamicSchema().getFileDescriptorProto();
+      return base64Encoder.encodeToString(file.toByteArray());
     }
     throw new IllegalArgumentException("Unsupported format " + format);
-  }
-
-  private String fileDescriptorProtoToString() {
-    try {
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      FileDescriptorProto file = toDynamicSchema().getFileDescriptorProto();
-      file.writeTo(out);
-      byte[] bytes = out.toByteArray();
-      out.close();
-      return base64Encoder.encodeToString(bytes);
-    } catch (IOException e) {
-      throw new IllegalStateException("Could not format protobuf", e);
-    }
   }
 
   public Integer version() {
