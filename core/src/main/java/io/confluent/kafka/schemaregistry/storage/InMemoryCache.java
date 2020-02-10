@@ -138,6 +138,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public void schemaTombstoned(SchemaKey schemaKey, SchemaValue schemaValue) {
+    if (schemaValue == null) {
+      return;
+    }
     Map<String, Integer> subjectVersions = guidToSubjectVersions.get(schemaValue.getId());
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return;
