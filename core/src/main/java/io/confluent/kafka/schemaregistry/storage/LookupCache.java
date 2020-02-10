@@ -79,7 +79,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * Callback that is invoked when a schema is tombstoned.
    *
    * @param schemaKey   the tombstoned SchemaKey; never {@code null}
-   * @param schemaValue the tombstoned SchemaValue; never {@code null}
+   * @param schemaValue the tombstoned SchemaValue
    */
   void schemaTombstoned(SchemaKey schemaKey, SchemaValue schemaValue);
 
