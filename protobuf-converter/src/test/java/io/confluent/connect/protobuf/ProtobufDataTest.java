@@ -159,12 +159,6 @@ public class ProtobufDataTest {
     return message.build();
   }
 
-  private Map<String, String> getTestKeyValueMap() {
-    Map<String, String> result = new HashMap<>();
-    result.put("Hello", "World");
-    return result;
-  }
-
   private Schema getExpectedNestedTestProtoSchemaStringUserId() {
     return getExpectedNestedTestProtoSchema();
   }
@@ -289,6 +283,12 @@ public class ProtobufDataTest {
             .build()
     );
     return builder.build();
+  }
+
+  private Map<String, String> getTestKeyValueMap() {
+    Map<String, String> result = new HashMap<>();
+    result.put("Hello", "World");
+    return result;
   }
 
   private Struct getExpectedNestedProtoResultStringUserId() throws ParseException {
