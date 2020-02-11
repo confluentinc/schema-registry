@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
 import com.squareup.wire.schema.internal.parser.EnumElement;
+import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
@@ -26,7 +27,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_ADDED;
@@ -76,12 +80,12 @@ public class SchemaDiff {
 
   @SuppressWarnings("ConstantConditions")
   static void compare(final Context ctx, ProtoFileElement original, ProtoFileElement update) {
-    collectEnums(ctx, original.getTypes(), true);
-    collectEnums(ctx, update.getTypes(), false);
+    collectContextInfo(ctx, original.getTypes(), true);
+    collectContextInfo(ctx, update.getTypes(), false);
     compareTypeElements(ctx, original.getTypes(), update.getTypes());
   }
 
-  private static void collectEnums(
+  private static void collectContextInfo(
       final Context ctx,
       final List<TypeElement> types,
       boolean isOriginal
@@ -89,11 +93,24 @@ public class SchemaDiff {
     for (TypeElement typeElement : types) {
       if (typeElement instanceof MessageElement) {
         MessageElement messageElement = (MessageElement) typeElement;
-        collectEnums(ctx, messageElement.getNestedTypes(), isOriginal);
+        Boolean isMapEntry = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
+            .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+        Optional<FieldElement> key = findField(ProtobufSchema.KEY_FIELD,
+            messageElement.getFields());
+        Optional<FieldElement> value = findField(ProtobufSchema.VALUE_FIELD,
+            messageElement.getFields());
+        if (isMapEntry != null && key.isPresent() && value.isPresent()) {
+          ctx.addMap(messageElement.getName(), key.get(), value.get(), isOriginal);
+        }
+        collectContextInfo(ctx, messageElement.getNestedTypes(), isOriginal);
       } else if (typeElement instanceof EnumElement) {
         ctx.addEnum(typeElement.getName(), isOriginal);
       }
     }
+  }
+
+  public static Optional<FieldElement> findField(String name, List<FieldElement> options) {
+    return options.stream().filter(o -> o.getName().equals(name)).findFirst();
   }
 
   public static void compareTypeElements(

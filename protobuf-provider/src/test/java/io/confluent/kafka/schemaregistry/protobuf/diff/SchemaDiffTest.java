@@ -48,8 +48,10 @@ public class SchemaDiffTest {
       final ObjectNode testCase = (ObjectNode) nodes.get(i);
       String originalSchema = testCase.get("original_schema").asText();
       String updateSchema = testCase.get("update_schema").asText();
-      ProtoFileElement original = ProtoParser.parse(Location.get("unknown"), originalSchema);
-      ProtoFileElement update = ProtoParser.parse(Location.get("unknown"), updateSchema);
+      ProtoFileElement original = ProtoParser.Companion.parse(
+          Location.get("unknown"), originalSchema);
+      ProtoFileElement update = ProtoParser.Companion.parse(
+          Location.get("unknown"), updateSchema);
       final ArrayNode changes = (ArrayNode) testCase.get("changes");
       boolean isCompatible = testCase.get("compatible").asBoolean();
       final List<String> errorMessages = new ArrayList<>();

@@ -39,7 +39,7 @@ public class ResourceLoader {
   @SuppressWarnings("unchecked")
   public ProtoFileElement readObj(String relPath) throws IOException {
     String data = toString(relPath);
-    return ProtoParser.parse(Location.get("unknown"), data);
+    return ProtoParser.Companion.parse(Location.get("unknown"), data);
   }
 
   public String toString(String relPath) {

@@ -90,6 +90,15 @@ public class DynamicSchema {
   // --- public ---
 
   /**
+   * Gets the protobuf file descriptor proto
+   *
+   * @return the file descriptor proto
+   */
+  public FileDescriptorProto getFileDescriptorProto() {
+    return mFileDescSet.getFile(0);
+  }
+
+  /**
    * Creates a new dynamic message builder for the given message type
    *
    * @param msgTypeName the message type name

@@ -66,12 +66,13 @@ public class SchemasResource {
   public SchemaString getSchema(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @DefaultValue("") @QueryParam("format") String format,
       @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
     SchemaString schema = null;
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";
     try {
-      schema = schemaRegistry.get(id, fetchMaxId);
+      schema = schemaRegistry.get(id, format, fetchMaxId);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
