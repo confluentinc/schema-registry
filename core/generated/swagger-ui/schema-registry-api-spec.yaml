@@ -390,6 +390,31 @@ paths:
           description: "Error code 40403 -- Schema not found\n"
         500:
           description: "Error code 50001 -- Error in the backend data store\n"
+  /schemas/types:
+    get:
+      summary: "Get the schema types supported by this registry."
+      description: ""
+      operationId: "getSchemaTypes"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters: []
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              type: "string"
+            uniqueItems: true
+        500:
+          description: "Error code 50001 -- Error in the backend data store\n"
   /subjects:
     get:
       summary: "Get a list of registered subjects."

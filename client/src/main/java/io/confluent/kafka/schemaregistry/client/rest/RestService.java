@@ -88,6 +88,9 @@ public class RestService implements Configurable {
   private static final TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
       new TypeReference<SchemaString>() {
       };
+  private static final TypeReference<List<String>> GET_SCHEMA_TYPES_TYPE =
+      new TypeReference<List<String>>() {
+      };
   private static final TypeReference<JsonNode> GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE =
       new TypeReference<JsonNode>() {
       };
@@ -641,6 +644,20 @@ public class RestService implements Configurable {
 
     SchemaString response = httpRequest(path, "GET", null, requestProperties,
                                         GET_SCHEMA_BY_ID_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<String> getSchemaTypes() throws IOException, RestClientException {
+    return getSchemaTypes(DEFAULT_REQUEST_PROPERTIES);
+  }
+
+  public List<String> getSchemaTypes(Map<String, String> requestProperties)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/types");
+    String path = builder.toString();
+
+    List<String> response = httpRequest(path, "GET", null, requestProperties,
+        GET_SCHEMA_TYPES_TYPE);
     return response;
   }
 
