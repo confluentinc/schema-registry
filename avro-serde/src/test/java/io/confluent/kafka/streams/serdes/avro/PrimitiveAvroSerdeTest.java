@@ -89,6 +89,7 @@ public class PrimitiveAvroSerdeTest {
 
     // Then
     assertThat(roundTrippedFloatRecord, equalTo(floatRecord));
+    floatSerde.close();
   }
 
   @Test
