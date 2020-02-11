@@ -339,6 +339,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "format"
+        in: "query"
+        required: false
+        type: "string"
       - name: "fetchMaxId"
         in: "query"
         required: false

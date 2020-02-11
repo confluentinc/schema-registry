@@ -24,7 +24,6 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -373,11 +372,11 @@ public class ProtobufSchemaTest {
 
     ProtoFileElement original = resourceLoader.readObj("TestProto.proto");
     ProtobufSchema schema = new ProtobufSchema(original.toSchema());
-    String fileProto = schema.formattedString(ProtobufSchema.PROTO_FORMAT);
+    String fileProto = schema.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
     ProtobufSchema schema2 = new ProtobufSchema(fileProto);
     assertTrue(schema.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)));
-    fileProto = schema2.formattedString(ProtobufSchema.PROTO_FORMAT);
+    fileProto = schema2.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
     ProtobufSchema schema3 = new ProtobufSchema(fileProto);
     assertTrue(schema2.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)));
@@ -385,11 +384,11 @@ public class ProtobufSchemaTest {
 
     original = resourceLoader.readObj("NestedTestProto.proto");
     schema = new ProtobufSchema(original.toSchema());
-    fileProto = schema.formattedString(ProtobufSchema.PROTO_FORMAT);
+    fileProto = schema.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
     schema2 = new ProtobufSchema(fileProto);
     assertTrue(schema.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)));
-    fileProto = schema2.formattedString(ProtobufSchema.PROTO_FORMAT);
+    fileProto = schema2.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
     schema3 = new ProtobufSchema(fileProto);
     assertTrue(schema2.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)));

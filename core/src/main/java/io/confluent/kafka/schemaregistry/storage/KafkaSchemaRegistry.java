@@ -791,7 +791,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
-    String schemaType = schema.getSchemaType();
+    return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences());
+  }
+
+  private ParsedSchema parseSchema(
+      String schemaType,
+      String schema,
+      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
+      throws InvalidSchemaException {
     if (schemaType == null) {
       schemaType = AvroSchema.TYPE;
     }
@@ -799,7 +806,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     if (provider == null) {
       throw new InvalidSchemaException("Invalid schema type " + schemaType);
     }
-    ParsedSchema parsedSchema = provider.parseSchema(schema.getSchema(), schema.getReferences())
+    ParsedSchema parsedSchema = provider.parseSchema(schema, references)
         .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema));
     return parsedSchema;
   }
@@ -843,10 +850,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   @Override
   public SchemaString get(int id) throws SchemaRegistryException {
-    return get(id, false);
+    return get(id, null, false);
   }
 
-  public SchemaString get(int id, boolean fetchMaxId) throws SchemaRegistryException {
+  public SchemaString get(
+      int id,
+      String format,
+      boolean fetchMaxId
+  ) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
       SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
@@ -866,13 +877,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     SchemaString schemaString = new SchemaString();
     schemaString.setSchemaType(schema.getSchemaType());
-    schemaString.setSchemaString(schema.getSchema());
-    List<SchemaReference> refs = schema.getReferences();
-    if (refs != null) {
-      schemaString.setReferences(refs.stream()
-          .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
-              ref.getName(), ref.getSubject(), ref.getVersion()))
-          .collect(Collectors.toList()));
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs =
+        schema.getReferences() != null
+        ? schema.getReferences().stream()
+            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+                ref.getName(), ref.getSubject(), ref.getVersion()))
+          .collect(Collectors.toList())
+        : null;
+    schemaString.setReferences(refs);
+    if (format != null && !format.trim().isEmpty()) {
+      ParsedSchema parsedSchema = parseSchema(schema.getSchemaType(), schema.getSchema(), refs);
+      schemaString.setSchemaString(parsedSchema.formattedString(format));
+    } else {
+      schemaString.setSchemaString(schema.getSchema());
     }
     if (fetchMaxId) {
       schemaString.setMaxId(idGenerator.getMaxId(id));

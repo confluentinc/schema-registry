@@ -49,6 +49,9 @@ public interface ParsedSchema {
    * @return the formatted string
    */
   default String formattedString(String format) {
+    if (format == null || format.trim().isEmpty()) {
+      return canonicalString();
+    }
     throw new IllegalArgumentException("Format not supported: " + format);
   }
 

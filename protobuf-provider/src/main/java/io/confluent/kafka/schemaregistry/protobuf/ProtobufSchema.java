@@ -80,9 +80,10 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final String TYPE = "PROTOBUF";
 
+  public static final String SERIALIZED_FORMAT = "serialized";
+
   public static final String PROTO2 = "proto2";
   public static final String PROTO3 = "proto3";
-  public static final String PROTO_FORMAT = "proto";
 
   public static final String DEFAULT_NAME = "default";
   public static final String MAP_ENTRY_SUFFIX = "Entry";  // Suffix used by protoc
@@ -731,7 +732,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public String formattedString(String format) {
-    if (PROTO_FORMAT.equals(format)) {
+    if (SERIALIZED_FORMAT.equals(format)) {
       FileDescriptorProto file = toDynamicSchema().getFileDescriptorProto();
       return base64Encoder.encodeToString(file.toByteArray());
     }
