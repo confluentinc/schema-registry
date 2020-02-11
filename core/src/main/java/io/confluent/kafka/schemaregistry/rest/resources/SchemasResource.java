@@ -113,4 +113,13 @@ public class SchemasResource {
 
     return subjects;
   }
+
+  @GET
+  @Path("/types")
+  @ApiOperation("Get the schema types supported by this registry.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  public Set<String> getSchemaTypes() {
+    return schemaRegistry.schemaTypes();
+  }
 }

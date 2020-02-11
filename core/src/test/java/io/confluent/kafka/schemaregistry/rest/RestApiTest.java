@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
@@ -324,6 +325,12 @@ public class RestApiTest extends ClusterTestHarness {
     // if fetchMaxId is not provided then the maxId is null
     assertNull(restApp.restClient.getId(1).getMaxId());
     assertEquals(Integer.valueOf(latestId), restApp.restClient.getId(1, true).getMaxId());
+  }
+
+  @Test
+  public void testGetSchemaTypes() throws Exception {
+    assertEquals(new HashSet<>(Arrays.asList("AVRO", "JSON", "PROTOBUF")),
+        new HashSet<>(restApp.restClient.getSchemaTypes()));
   }
 
   @Test

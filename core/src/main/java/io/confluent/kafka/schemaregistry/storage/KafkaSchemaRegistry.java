@@ -389,6 +389,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
+  public Set<String> schemaTypes() {
+    return providers.keySet();
+  }
+
   @Override
   public int register(String subject,
                       Schema schema)
