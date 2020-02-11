@@ -154,6 +154,11 @@ public class ProtobufDataTest {
     return message.build();
   }
 
+  private NestedMessage createEmptyNestedTestProto() throws ParseException {
+    NestedMessage.Builder message = NestedMessage.newBuilder();
+    return message.build();
+  }
+
   private Schema getExpectedNestedTestProtoSchemaStringUserId() {
     return getExpectedNestedTestProtoSchema();
   }
@@ -189,6 +194,11 @@ public class ProtobufDataTest {
     innerMessageBuilder.field(
         "id",
       SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    innerMessageBuilder.field(
+        "ids",
+        SchemaBuilder.array(SchemaBuilder.int32().optional().build())
+            .optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
     );
     return innerMessageBuilder;
   }
@@ -305,6 +315,7 @@ public class ProtobufDataTest {
 
     Struct inner = new Struct(schema.field("inner").schema());
     inner.put("id", "");
+    inner.put("ids", new ArrayList<>());
     result.put("inner", inner);
     return result;
   }
@@ -333,7 +344,22 @@ public class ProtobufDataTest {
 
     Struct inner = new Struct(schema.field("inner").schema());
     inner.put("id", "");
+    inner.put("ids", new ArrayList<>());
     result.put("inner", inner);
+    return result;
+  }
+
+  private Struct getExpectedEmptyNestedTestProtoResult() throws ParseException {
+    Schema schema = getExpectedNestedTestProtoSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("is_active", false);
+
+    List<String> experiments = new ArrayList<>();
+    result.put("experiments_active", experiments);
+
+    result.put("status", 0);
+    result.put("map_type", new HashMap<>());
+
     return result;
   }
 
@@ -413,6 +439,18 @@ public class ProtobufDataTest {
     Schema expectedSchema = getExpectedNestedTestProtoSchemaIntUserId();
     assertSchemasEqual(expectedSchema, result.schema());
     Struct expected = getExpectedNestedTestProtoResultIntUserId();
+    assertSchemasEqual(expected.schema(), ((Struct) result.value()).schema());
+    assertEquals(expected.schema(), ((Struct) result.value()).schema());
+    assertEquals(expected, result.value());
+  }
+
+  @Test
+  public void testToConnectDataWithEmptyNestedProtobufMessage() throws Exception {
+    NestedMessage message = createEmptyNestedTestProto();
+    SchemaAndValue result = getSchemaAndValue(message);
+    Schema expectedSchema = getExpectedNestedTestProtoSchema();
+    assertSchemasEqual(expectedSchema, result.schema());
+    Struct expected = getExpectedEmptyNestedTestProtoResult();
     assertSchemasEqual(expected.schema(), ((Struct) result.value()).schema());
     assertEquals(expected.schema(), ((Struct) result.value()).schema());
     assertEquals(expected, result.value());
@@ -630,6 +668,16 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testFromConnectDataWithEmptyNestedProtobufMessage() throws Exception {
+    NestedMessage nestedMessage = createEmptyNestedTestProto();
+    SchemaAndValue schemaAndValue = getSchemaAndValue(nestedMessage);
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+    Message message = NestedTestProto.NestedMessage.parseFrom(messageBytes);
+
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  @Test
   public void testFromConnectComplex() {
     Schema schema = SchemaBuilder.struct()
         .field("int8", SchemaBuilder.int8().defaultValue((byte) 2).doc("int8 field").build())
@@ -697,10 +745,10 @@ public class ProtobufDataTest {
     assertEquals("string", fieldElem.getType());
     fieldElem = messageElem.getFields().get(10);
     assertEquals("map", fieldElem.getName());
-    assertEquals("ConnectDefault1.ConnectDefault2Entry", fieldElem.getType());
+    assertEquals("ConnectDefault2Entry", fieldElem.getType());
     fieldElem = messageElem.getFields().get(11);
     assertEquals("mapNonStringKeys", fieldElem.getName());
-    assertEquals("ConnectDefault1.ConnectDefault3Entry", fieldElem.getType());
+    assertEquals("ConnectDefault3Entry", fieldElem.getType());
 
     Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
         .findFieldByName("int8");

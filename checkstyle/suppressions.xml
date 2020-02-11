@@ -28,7 +28,7 @@
               files="(AvroData|DownloadSchemaRegistryMojo|AvroMessageFormatter|KafkaSchemaRegistry|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|ProtobufMessageFormatter|ProtobufData|JsonSchemaMessageFormatter|JsonSchemaConverter).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AvroData|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaConverter|KafkaSchemaRegistry).java"/>
+              files="(AvroData|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaConverter|KafkaSchemaRegistry|ProtobufSchema).java"/>
 
     <suppress checks="MethodLength"
               files="AvroData.java"/>

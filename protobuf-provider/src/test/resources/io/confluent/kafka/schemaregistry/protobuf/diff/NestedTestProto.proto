@@ -1,7 +1,5 @@
 syntax = "proto3";
 
-import "google/protobuf/timestamp.proto";
-
 package io.confluent.kafka.serializers.protobuf.test;
 
 option java_package = "io.confluent.kafka.serializers.protobuf.test";
@@ -40,7 +38,7 @@ message NestedMessage {
     UserId user_id = 1;
     bool is_active = 2;
     repeated string experiments_active = 3;
-    google.protobuf.Timestamp updated_at = 4;
+    int64 updated_at = 4;
     Status status = 5;
     ComplexType complex_type = 6;
     map<string, string> map_type = 7;
