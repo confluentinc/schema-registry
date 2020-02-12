@@ -40,7 +40,7 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
           null,
           null
       ));
-    } catch (IllegalStateException e) {
+    } catch (Exception e) {
       return Optional.empty();
     }
   }
