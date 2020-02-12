@@ -40,6 +40,7 @@ public class Errors {
   public static final int INVALID_COMPATIBILITY_LEVEL_ERROR_CODE = 42203;
   public static final int INVALID_MODE_ERROR_CODE = 42204;
   public static final int OPERATION_NOT_PERMITTED_ERROR_CODE = 42205;
+  public static final int REFERENCE_EXISTS_ERROR_CODE = 42206;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -99,6 +100,10 @@ public class Errors {
 
   public static RestOperationNotPermittedException operationNotPermittedException(String message) {
     return new RestOperationNotPermittedException(message);
+  }
+
+  public static RestReferenceExistsException referenceExistsException(String message) {
+    return new RestReferenceExistsException(message);
   }
 
   public static RestException requestForwardingFailedException(String message, Throwable cause) {
