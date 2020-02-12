@@ -15,8 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
-import org.apache.avro.SchemaParseException;
-
 import java.util.List;
 import java.util.Optional;
 
@@ -37,7 +35,7 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
     try {
       return Optional.of(
           new AvroSchema(schemaString, references, resolveReferences(references), null));
-    } catch (SchemaParseException e) {
+    } catch (Exception e) {
       return Optional.empty();
     }
   }

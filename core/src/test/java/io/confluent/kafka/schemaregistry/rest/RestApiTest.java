@@ -494,6 +494,44 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testBad() throws Exception {
+    String subject1 = "testTopic1";
+    List<String> allSubjects = new ArrayList<String>();
+
+    // test getAllSubjects with no existing data
+    assertEquals("Getting all subjects should return empty",
+        allSubjects,
+        restApp.restClient.getAllSubjects()
+    );
+
+    try {
+      TestUtils.registerAndVerifySchema(restApp.restClient, TestUtils.getBadSchema(), 1, subject1);
+      fail("Registering bad schema should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    try {
+      TestUtils.registerAndVerifySchema(restApp.restClient,
+          TestUtils.getRandomCanonicalAvroString(1).get(0),
+          Arrays.asList(new SchemaReference("bad", "bad", 100)), 1, subject1);
+      fail("Registering bad reference should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    // test getAllSubjects with existing data
+    assertEquals("Getting all subjects should match all registered subjects",
+        allSubjects,
+        restApp.restClient.getAllSubjects()
+    );
+  }
+
+  @Test
   public void testLookUpSchemaUnderNonExistentSubject() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {
