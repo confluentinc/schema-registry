@@ -28,10 +28,18 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.util.Map;
 
 /**
+ * <p>
  * A schema-registry aware serde (serializer/deserializer) for Apache Kafka's Streams API that can
- * be used for reading and writing data of Avro primitive types.  This serde's "specific Avro"
- * counterpart is {@link SpecificAvroSerde} and "generic Avro" counterpart is {@link
- * GenericAvroSerde}.
+ * be used for reading and writing data of <strong>Avro primitive</strong> types.
+ * </p>
+ * <p>
+ * The Avro primitive types (cf https://avro.apache.org/docs/current/spec.html#schema_primitive) are
+ * null, boolean, int, long, float, double, bytes, and string. Any other types aren't supported by
+ * this Serde.
+ * </p>
+ * <p>
+ * This serde's "specific Avro" counterpart is {@link SpecificAvroSerde} and "generic Avro"
+ * counterpart is {@link GenericAvroSerde}.</p>
  *
  * <p>This serde reads and writes data according to the wire format defined at
  * http://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#wire-format. It
