@@ -29,6 +29,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   void init() throws SchemaRegistryException;
 
+  Set<String> schemaTypes();
+
   int register(String subject, Schema schema) throws SchemaRegistryException;
 
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
