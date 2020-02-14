@@ -611,7 +611,7 @@ public class SchemaRegistryConfig extends RestConfig {
    * returns whether or not the user has enabled ZooKeeper ACLs.
    */
   public boolean checkZkAclConfig() {
-    if (getBoolean(ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils.isZkSecurityEnabled()) {
+    if (getBoolean(ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils.isZkSaslEnabled()) {
       throw new ConfigException(ZOOKEEPER_SET_ACL_CONFIG
                                 + " is set to true but ZooKeeper's "
                                 + "JAAS SASL configuration is not configured.");
