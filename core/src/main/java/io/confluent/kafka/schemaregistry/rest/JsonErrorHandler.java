@@ -51,7 +51,7 @@ public class JsonErrorHandler extends ErrorHandler {
         .getStatus(), reason);
 
     baseRequest.setHandled(true);
-    baseRequest.getResponse().completeOutput();
+    baseRequest.getResponse().closeOutput();
   }
 
   @Override
