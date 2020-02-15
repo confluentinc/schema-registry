@@ -13,15 +13,26 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.connect.json;
+package io.confluent.kafka.schemaregistry.exceptions;
 
-import java.util.Map;
+/**
+ * Indicates the schema cannot be deleted because another schema refernces it.
+ */
+public class ReferenceExistsException extends SchemaRegistryException {
 
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+  public ReferenceExistsException(String message, Throwable cause) {
+    super(message, cause);
+  }
 
-public class JsonSchemaConverterConfig extends AbstractKafkaSchemaSerDeConfig {
+  public ReferenceExistsException(String message) {
+    super(message);
+  }
 
-  public JsonSchemaConverterConfig(Map<?, ?> props) {
-    super(baseConfigDef(), props);
+  public ReferenceExistsException(Throwable cause) {
+    super(cause);
+  }
+
+  public ReferenceExistsException() {
+    super();
   }
 }

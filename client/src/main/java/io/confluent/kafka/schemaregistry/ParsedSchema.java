@@ -86,4 +86,11 @@ public interface ParsedSchema {
     }
     return CompatibilityChecker.checker(level).isCompatible(this, previousSchemas);
   }
+
+  /**
+   * Returns the underlying raw representation of the schema.
+   *
+   * @return the raw schema
+   */
+  <T> T rawSchema();
 }
