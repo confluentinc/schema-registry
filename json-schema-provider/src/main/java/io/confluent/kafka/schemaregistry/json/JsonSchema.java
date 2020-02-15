@@ -162,6 +162,7 @@ public class JsonSchema implements ParsedSchema {
     );
   }
 
+  @Override
   public Schema rawSchema() {
     if (schemaObj == null) {
       try {

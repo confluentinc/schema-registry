@@ -707,6 +707,7 @@ public class ProtobufSchema implements ParsedSchema {
     return enumer.build();
   }
 
+  @Override
   public ProtoFileElement rawSchema() {
     return schemaObj;
   }

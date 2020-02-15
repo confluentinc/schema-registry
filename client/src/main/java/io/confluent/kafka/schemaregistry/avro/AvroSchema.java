@@ -104,6 +104,7 @@ public class AvroSchema implements ParsedSchema {
     );
   }
 
+  @Override
   public Schema rawSchema() {
     return schemaObj;
   }

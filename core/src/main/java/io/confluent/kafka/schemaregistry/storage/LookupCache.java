@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import java.util.Set;
+
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
@@ -40,12 +42,20 @@ public interface LookupCache<K,V> extends Store<K,V> {
   SchemaIdAndSubjects schemaIdAndSubjects(Schema schema);
 
   /**
-   * Checks is a schema is registered in any subject.
+   * Checks if a schema is registered in any subject.
    *
    * @param schema schema object
    * @return true if the schema is already registered else false
    */
   boolean containsSchema(Schema schema);
+
+  /**
+   * Returns schemas that reference the given schema.
+   *
+   * @param schema schema object
+   * @return the ids of schemas that reference the given schema
+   */
+  Set<Integer> referencesSchema(SchemaKey schema);
 
   /**
    * Provides the {@link SchemaKey} for the provided schema id.
