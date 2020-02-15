@@ -49,12 +49,13 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
   }
 
   private void resolveReferences(List<SchemaReference> references, Map<String, String> schemas) {
-    if (references == null) {
-      return;
-    }
     for (SchemaReference reference : references) {
       String subject = reference.getSubject();
       Schema schema = schemaVersionFetcher().getByVersion(subject, reference.getVersion(), true);
+      if (schema == null) {
+        throw new IllegalStateException("No schema reference found for subject \"" + subject
+                + "\" and version " + reference.getVersion());
+      }
       resolveReferences(schema.getReferences(), schemas);
       schemas.put(reference.getName(), schema.getSchema());
     }

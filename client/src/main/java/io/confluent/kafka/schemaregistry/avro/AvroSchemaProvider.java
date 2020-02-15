@@ -21,8 +21,12 @@ import java.util.Optional;
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AvroSchemaProvider extends AbstractSchemaProvider {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroSchemaProvider.class);
 
   @Override
   public String schemaType() {
@@ -36,6 +40,7 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
       return Optional.of(
           new AvroSchema(schemaString, references, resolveReferences(references), null));
     } catch (Exception e) {
+      log.warn("Could not parse schema", e);
       return Optional.empty();
     }
   }
