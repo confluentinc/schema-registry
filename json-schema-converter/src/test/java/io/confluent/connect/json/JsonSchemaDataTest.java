@@ -49,17 +49,15 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
-import static io.confluent.connect.json.JsonSchemaConverter.CONNECT_TYPE_MAP;
-import static io.confluent.connect.json.JsonSchemaConverter.CONNECT_TYPE_PROP;
-import static io.confluent.connect.json.JsonSchemaConverter.JSON_TYPE_ENUM;
-import static io.confluent.connect.json.JsonSchemaConverter.JSON_TYPE_ONE_OF;
-import static io.confluent.connect.json.JsonSchemaConverter.KEY_FIELD;
-import static io.confluent.connect.json.JsonSchemaConverter.VALUE_FIELD;
+import static io.confluent.connect.json.JsonSchemaData.CONNECT_TYPE_MAP;
+import static io.confluent.connect.json.JsonSchemaData.CONNECT_TYPE_PROP;
+import static io.confluent.connect.json.JsonSchemaData.JSON_TYPE_ENUM;
+import static io.confluent.connect.json.JsonSchemaData.JSON_TYPE_ONE_OF;
+import static io.confluent.connect.json.JsonSchemaData.KEY_FIELD;
+import static io.confluent.connect.json.JsonSchemaData.VALUE_FIELD;
 import static org.apache.kafka.connect.data.Decimal.LOGICAL_NAME;
 import static org.apache.kafka.connect.data.Decimal.SCALE_FIELD;
 import static org.junit.Assert.assertArrayEquals;
@@ -79,15 +77,9 @@ public class JsonSchemaDataTest {
       .title("foo.bar")
       .build();
 
-  private JsonSchemaConverter jsonSchemaConverter = new JsonSchemaConverter();
+  private JsonSchemaData jsonSchemaData = new JsonSchemaData();
 
   public JsonSchemaDataTest() {
-    Map<String, Object> configs = new HashMap<>();
-    configs.put(JsonSchemaConverterConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://foo");
-    configs.put(JsonSchemaConverterConfig.SCHEMAS_CACHE_SIZE_CONFIG,
-        JsonSchemaConverterConfig.SCHEMAS_CACHE_SIZE_DEFAULT
-    );
-    jsonSchemaConverter.configure(configs, false);
   }
 
   // Connect -> JSON Schema
@@ -304,14 +296,14 @@ public class JsonSchemaDataTest {
   @Test
   public void testFromNamedConnectMap() {
     assertEquals(
-        jsonSchemaConverter.fromConnectSchema(NAMED_MAP_SCHEMA).rawSchema(), NAMED_JSON_MAP_SCHEMA);
+        jsonSchemaData.fromConnectSchema(NAMED_MAP_SCHEMA).rawSchema(), NAMED_JSON_MAP_SCHEMA);
   }
 
   private void checkNonObjectConversion(
       org.everit.json.schema.Schema expectedSchema, Object expected, Schema schema, Object value
   ) {
-    JsonSchema jsonSchema = jsonSchemaConverter.fromConnectSchema(schema);
-    JsonNode jsonValue = jsonSchemaConverter.fromConnectData(schema, value);
+    JsonSchema jsonSchema = jsonSchemaData.fromConnectSchema(schema);
+    JsonNode jsonValue = jsonSchemaData.fromConnectData(schema, value);
     assertEquals(expectedSchema, jsonSchema.rawSchema());
     assertEquals(expected, jsonValue);
   }
@@ -784,14 +776,14 @@ public class JsonSchemaDataTest {
 
   @Test
   public void testToNamedConnectMap() {
-    assertEquals(jsonSchemaConverter.toConnectSchema(NAMED_JSON_MAP_SCHEMA), NAMED_MAP_SCHEMA);
+    assertEquals(jsonSchemaData.toConnectSchema(NAMED_JSON_MAP_SCHEMA), NAMED_MAP_SCHEMA);
   }
 
   private void checkNonObjectConversion(
       Schema expectedSchema, Object expected, org.everit.json.schema.Schema schema, JsonNode value
   ) {
-    Schema connectSchema = jsonSchemaConverter.toConnectSchema(schema);
-    Object jsonValue = jsonSchemaConverter.toConnectData(connectSchema, value);
+    Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
+    Object jsonValue = jsonSchemaData.toConnectData(connectSchema, value);
     assertEquals(expectedSchema, connectSchema);
     if (expected instanceof byte[]) {
       assertArrayEquals((byte[]) expected, (byte[]) jsonValue);
