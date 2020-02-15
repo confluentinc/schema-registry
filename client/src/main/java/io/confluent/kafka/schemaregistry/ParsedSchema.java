@@ -92,5 +92,5 @@ public interface ParsedSchema {
    *
    * @return the raw schema
    */
-  <T> T rawSchema();
+  Object rawSchema();
 }
