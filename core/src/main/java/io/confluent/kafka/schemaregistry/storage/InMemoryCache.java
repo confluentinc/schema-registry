@@ -16,9 +16,11 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -40,6 +42,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   protected final ConcurrentNavigableMap<K, V> store;
   private final Map<Integer, Map<String, Integer>> guidToSubjectVersions;
   private final Map<MD5, Integer> hashToGuid;
+  private final Map<SchemaKey, Set<Integer>> referencedBy;
 
   public InMemoryCache() {
     this(new ConcurrentSkipListMap<>());
@@ -49,6 +52,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     this.store = store;
     this.guidToSubjectVersions = new ConcurrentHashMap<>();
     this.hashToGuid = new ConcurrentHashMap<>();
+    this.referencedBy = new ConcurrentHashMap<>();
   }
 
   public void init() throws StoreInitializationException {
@@ -117,6 +121,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public Set<Integer> referencesSchema(SchemaKey schema) {
+    return referencedBy.getOrDefault(schema, new HashSet<>());
+  }
+
+  @Override
   public SchemaKey schemaKeyById(Integer id) {
     Map<String, Integer> subjectVersions = guidToSubjectVersions.get(id);
     if (subjectVersions == null || subjectVersions.isEmpty()) {
@@ -134,6 +143,16 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
     addToSchemaHashToGuid(schemaKey, schemaValue);
+    for (SchemaReference ref : schemaValue.getReferences()) {
+      SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
+      Set<Integer> refBy = referencedBy.get(refKey);
+      if (refBy != null) {
+        refBy.remove(schemaValue.getId());
+        if (refBy.isEmpty()) {
+          referencedBy.remove(refKey);
+        }
+      }
+    }
   }
 
   @Override
@@ -158,6 +177,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
         guidToSubjectVersions.computeIfAbsent(schemaValue.getId(), k -> new HashMap<>());
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     addToSchemaHashToGuid(schemaKey, schemaValue);
+    for (SchemaReference ref : schemaValue.getReferences()) {
+      SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
+      Set<Integer> refBy = referencedBy.computeIfAbsent(refKey, k -> new HashSet<>());
+      refBy.add(schemaValue.getId());
+    }
   }
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
