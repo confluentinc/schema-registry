@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
@@ -135,22 +136,34 @@ public class AvroSchemaUtils {
     }
   }
 
+  public static Object toObject(String value, AvroSchema schema) throws IOException {
+    Schema rawSchema = schema.rawSchema();
+    DatumReader<Object> reader = new GenericDatumReader<Object>(rawSchema);
+    Object object = reader.read(null,
+        decoderFactory.jsonDecoder(rawSchema, value));
+    return object;
+  }
+
   public static byte[] toJson(Object value) throws IOException {
     if (value == null) {
       return null;
     }
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      Schema schema = getSchema(value);
-      JsonEncoder encoder = encoderFactory.jsonEncoder(schema, out);
-      DatumWriter<Object> writer = new GenericDatumWriter<Object>(schema);
-      // Some types require wrapping/conversion
-      Object wrappedValue = value;
-      if (value instanceof byte[]) {
-        wrappedValue = ByteBuffer.wrap((byte[]) value);
-      }
-      writer.write(wrappedValue, encoder);
-      encoder.flush();
+      toJson(value, out);
       return out.toByteArray();
     }
+  }
+
+  public static void toJson(Object value, OutputStream out) throws IOException {
+    Schema schema = getSchema(value);
+    JsonEncoder encoder = encoderFactory.jsonEncoder(schema, out);
+    DatumWriter<Object> writer = new GenericDatumWriter<>(schema);
+    // Some types require wrapping/conversion
+    Object wrappedValue = value;
+    if (value instanceof byte[]) {
+      wrappedValue = ByteBuffer.wrap((byte[]) value);
+    }
+    writer.write(wrappedValue, encoder);
+    encoder.flush();
   }
 }

@@ -24,6 +24,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka_${kafka.scala.version}</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client</artifactId>
         </dependency>

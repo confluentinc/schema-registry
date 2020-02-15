@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.protobuf;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 
@@ -41,9 +42,13 @@ public class ProtobufSchemaUtils {
   public static Object toObject(JsonNode value, ProtobufSchema schema) throws IOException {
     StringWriter out = new StringWriter();
     jsonMapper.writeValue(out, value);
-    String jsonString = out.toString();
+    return toObject(out.toString(), schema);
+  }
+
+  public static Object toObject(String value, ProtobufSchema schema)
+      throws InvalidProtocolBufferException {
     DynamicMessage.Builder message = schema.newMessageBuilder();
-    JsonFormat.parser().merge(jsonString, message);
+    JsonFormat.parser().merge(value, message);
     return message.build();
   }
 
