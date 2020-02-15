@@ -22,8 +22,12 @@ import java.util.Optional;
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ProtobufSchemaProvider extends AbstractSchemaProvider {
+
+  private static final Logger log = LoggerFactory.getLogger(ProtobufSchemaProvider.class);
 
   @Override
   public String schemaType() {
@@ -40,7 +44,8 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
           null,
           null
       ));
-    } catch (IllegalStateException e) {
+    } catch (Exception e) {
+      log.warn("Could not parse schema", e);
       return Optional.empty();
     }
   }
