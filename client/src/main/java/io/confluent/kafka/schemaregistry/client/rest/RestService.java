@@ -97,6 +97,9 @@ public class RestService implements Configurable {
   private static final TypeReference<Schema> GET_SCHEMA_BY_VERSION_RESPONSE_TYPE =
       new TypeReference<Schema>() {
       };
+  private static final TypeReference<List<Integer>> GET_REFERENCED_BY_RESPONSE_TYPE =
+      new TypeReference<List<Integer>>() {
+      };
   private static final TypeReference<List<Integer>> ALL_VERSIONS_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
       };
@@ -722,6 +725,22 @@ public class RestService implements Configurable {
     JsonNode response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
             GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
     return response.toString();
+  }
+
+  public List<Integer> getReferencedBy(String subject, int version) throws IOException,
+      RestClientException {
+    return getReferencedBy(DEFAULT_REQUEST_PROPERTIES, subject, version);
+  }
+
+  public List<Integer> getReferencedBy(Map<String, String> requestProperties,
+                                       String subject, int version)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/referencedby");
+    String path = builder.build(subject, version).toString();
+
+    List<Integer> response = httpRequest(path, "GET", null, requestProperties,
+        GET_REFERENCED_BY_RESPONSE_TYPE);
+    return response;
   }
 
   public List<Integer> getAllVersions(String subject)

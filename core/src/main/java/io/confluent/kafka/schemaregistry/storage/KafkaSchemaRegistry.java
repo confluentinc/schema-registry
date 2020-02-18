@@ -67,6 +67,7 @@ import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
@@ -550,11 +551,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       if (getModeInScope(subject) == Mode.READONLY) {
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
+      SchemaKey key = new SchemaKey(subject, schema.getVersion());
+      if (!lookupCache.referencesSchema(key).isEmpty()) {
+        throw new ReferenceExistsException(key.toString());
+      }
       // Ensure cache is up-to-date before any potential writes
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       SchemaValue schemaValue = new SchemaValue(schema);
       schemaValue.setDeleted(true);
-      kafkaStore.put(new SchemaKey(subject, schema.getVersion()), schemaValue);
+      kafkaStore.put(key, schemaValue);
       if (!getAllVersions(subject, false).hasNext()) {
         if (getMode(subject) != null) {
           deleteMode(subject);
@@ -606,6 +611,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       Iterator<Schema> schemasToBeDeleted = getAllVersions(subject, false);
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
+        SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
+        if (!lookupCache.referencesSchema(key).isEmpty()) {
+          throw new ReferenceExistsException(key.toString());
+        }
         deletedVersions.add(deleteWatermarkVersion);
       }
       DeleteSubjectKey key = new DeleteSubjectKey(subject);
@@ -791,6 +800,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throw new InvalidSchemaException("Invalid schema " + schema);
     }
     ParsedSchema parsedSchema = parseSchema(schema);
+    try {
+      // Access the raw schema in case it is lazily computed
+      parsedSchema.rawSchema();
+    } catch (Exception e) {
+      throw new InvalidSchemaException("Invalid schema " + schema);
+    }
     schema.setSchema(parsedSchema.canonicalString());
   }
 
@@ -899,6 +914,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       schemaString.setMaxId(idGenerator.getMaxId(id));
     }
     return schemaString;
+  }
+
+  public List<Integer> getReferencedBy(String subject, VersionId versionId)
+      throws SchemaRegistryException {
+    int version = versionId.getVersionId();
+    if (versionId.isLatest()) {
+      version = getLatestVersion(subject).getVersion();
+    }
+    SchemaKey key = new SchemaKey(subject, version);
+    List<Integer> ids = new ArrayList<>(lookupCache.referencesSchema(key));
+    Collections.sort(ids);
+    return ids;
   }
 
   @Override
