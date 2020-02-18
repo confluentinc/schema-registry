@@ -20,7 +20,15 @@ import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Value;
+import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,14 +49,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
-import io.confluent.common.metrics.JmxReporter;
-import io.confluent.common.metrics.MetricConfig;
-import io.confluent.common.metrics.MetricName;
-import io.confluent.common.metrics.Metrics;
-import io.confluent.common.metrics.MetricsReporter;
-import io.confluent.common.metrics.Sensor;
-import io.confluent.common.metrics.stats.Gauge;
-import io.confluent.common.utils.SystemTime;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -178,7 +178,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                            "1.0 indicates the node is the active master in the cluster and is the"
                            + " node where all register schema and config update requests are "
                            + "served.", configuredTags);
-    this.masterNodeSensor.add(m, new Gauge());
+    this.masterNodeSensor.add(m, new Value());
   }
 
   private HashMap<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
