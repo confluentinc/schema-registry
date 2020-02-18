@@ -155,7 +155,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         try {
           messageKey = this.serializer.deserializeKey(record.key());
         } catch (SerializationException e) {
-          log.error("Failed to deserialize the schema or config key", e);
+          log.error("Failed to deserialize the schema or config key at offset "
+                  + record.offset(), e);
           continue;
         }
 
@@ -175,7 +176,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                 record.value() == null ? null
                                        : serializer.deserializeValue(messageKey, record.value());
           } catch (SerializationException e) {
-            log.error("Failed to deserialize a schema or config update", e);
+            log.error("Failed to deserialize a schema or config update at offset "
+                    + record.offset(), e);
             continue;
           }
           try {
