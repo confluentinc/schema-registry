@@ -34,7 +34,6 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 
@@ -103,7 +102,7 @@ public class AvroSchemaTest {
 
   @Test
   public void testPrimitiveTypesToAvro() throws Exception {
-    Object result = AvroSchemaUtils.toObject(null, createPrimitiveSchema("null"));
+    Object result = AvroSchemaUtils.toObject((JsonNode) null, createPrimitiveSchema("null"));
     assertTrue(result == null);
 
     result = AvroSchemaUtils.toObject(jsonTree("true"), createPrimitiveSchema("boolean"));

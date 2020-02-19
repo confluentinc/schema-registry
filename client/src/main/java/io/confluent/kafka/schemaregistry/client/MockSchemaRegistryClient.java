@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -42,6 +45,8 @@ import java.util.stream.Collectors;
  * thread safe. Schema data is stored in memory and is not persistent or shared across instances.
  */
 public class MockSchemaRegistryClient implements SchemaRegistryClient {
+
+  private static final Logger log = LoggerFactory.getLogger(MockSchemaRegistryClient.class);
 
   private static final String WILDCARD = "*";
 
@@ -89,6 +94,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
     SchemaProvider schemaProvider = providers.get(schemaType);
     if (schemaProvider == null) {
+      log.error("No provider found for schema type " + schemaType);
       return Optional.empty();
     }
     return schemaProvider.parseSchema(schemaString, references);

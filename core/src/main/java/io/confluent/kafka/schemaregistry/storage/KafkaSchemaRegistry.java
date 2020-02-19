@@ -797,7 +797,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   private void canonicalizeSchema(Schema schema) throws InvalidSchemaException {
     if (schema == null || schema.getSchema().trim().isEmpty()) {
-      throw new InvalidSchemaException("Invalid schema " + schema);
+      throw new InvalidSchemaException("Empty schema");
     }
     ParsedSchema parsedSchema = parseSchema(schema);
     try {
@@ -825,8 +825,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     if (provider == null) {
       throw new InvalidSchemaException("Invalid schema type " + schemaType);
     }
+    final String type = schemaType;
     ParsedSchema parsedSchema = provider.parseSchema(schema, references)
-        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema));
+        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
+            + " of type " + type));
     return parsedSchema;
   }
 

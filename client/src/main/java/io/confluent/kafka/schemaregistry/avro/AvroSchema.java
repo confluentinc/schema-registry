@@ -74,7 +74,7 @@ public class AvroSchema implements ParsedSchema {
 
   public AvroSchema(Schema schemaObj, Integer version) {
     this.schemaObj = schemaObj;
-    this.canonicalString = Schemas.toString(schemaObj, null);
+    this.canonicalString = schemaObj != null ? Schemas.toString(schemaObj, null) : null;
     this.version = version;
     this.references = Collections.emptyList();
     this.resolvedReferences = Collections.emptyMap();

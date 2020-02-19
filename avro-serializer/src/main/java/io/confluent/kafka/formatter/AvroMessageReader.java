@@ -18,32 +18,23 @@ package io.confluent.kafka.formatter;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.util.Utf8;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.ShortSerializer;
 import org.apache.kafka.common.serialization.Serializer;
-
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.Collections;
+import java.util.List;
 
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
-import kafka.common.KafkaException;
-import kafka.common.MessageReader;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 
 /**
@@ -84,19 +75,9 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
  * "key1" \t {"f1": "value1"}
  *
  */
-public class AvroMessageReader extends AbstractKafkaAvroSerializer implements MessageReader {
+public class AvroMessageReader extends SchemaMessageReader<Object> {
 
-  private String topic = null;
-  private BufferedReader reader = null;
-  private Boolean parseKey = false;
-  private String keySeparator = "\t";
-  private boolean ignoreError = false;
   private final DecoderFactory decoderFactory = DecoderFactory.get();
-  private Schema keySchema = null;
-  private Schema valueSchema = null;
-  private String keySubject = null;
-  private String valueSubject = null;
-  private Serializer keySerializer;
 
   /**
    * Constructor needed by kafka console producer.
@@ -108,157 +89,44 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
    * For testing only.
    */
   AvroMessageReader(
-      SchemaRegistryClient schemaRegistryClient, Schema keySchema, Schema valueSchema,
-      String topic, boolean parseKey, BufferedReader reader, boolean autoRegister
+      SchemaRegistryClient schemaRegistryClient,
+      Schema keySchema,
+      Schema valueSchema,
+      String topic,
+      boolean parseKey,
+      BufferedReader reader,
+      boolean autoRegister
   ) {
-    this.schemaRegistry = schemaRegistryClient;
-    this.keySchema = keySchema;
-    this.valueSchema = valueSchema;
-    this.topic = topic;
-    this.keySubject = topic + "-key";
-    this.valueSubject = topic + "-value";
-    this.parseKey = parseKey;
-    this.reader = reader;
-    this.autoRegisterSchema = autoRegister;
+    super(schemaRegistryClient, new AvroSchema(keySchema), new AvroSchema(valueSchema), topic,
+        parseKey, reader, autoRegister);
   }
 
   @Override
-  public void init(java.io.InputStream inputStream, java.util.Properties props) {
-    topic = props.getProperty("topic");
-    if (props.containsKey("parse.key")) {
-      parseKey = props.getProperty("parse.key").trim().toLowerCase().equals("true");
-    }
-    if (props.containsKey("key.separator")) {
-      keySeparator = props.getProperty("key.separator");
-    }
-    if (props.containsKey("ignore.error")) {
-      ignoreError = props.getProperty("ignore.error").trim().toLowerCase().equals("true");
-    }
-    reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
-    String url = props.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
-    if (url == null) {
-      throw new ConfigException("Missing schema registry url!");
-    }
-
-    Map<String, Object> originals = getPropertiesMap(props);
-
-    schemaRegistry = new CachedSchemaRegistryClient(
-        url, AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, originals);
-    if (!props.containsKey("value.schema")) {
-      throw new ConfigException("Must provide the Avro schema string in value.schema");
-    }
-    String valueSchemaString = props.getProperty("value.schema");
-    Schema.Parser parser = new Schema.Parser();
-    valueSchema = parser.parse(valueSchemaString);
-
-    keySerializer = getKeySerializer(props);
-
-    if (needsKeySchema()) {
-      if (!props.containsKey("key.schema")) {
-        throw new ConfigException("Must provide the Avro schema string in key.schema");
-      }
-      String keySchemaString = props.getProperty("key.schema");
-      keySchema = parser.parse(keySchemaString);
-    }
-    keySubject = topic + "-key";
-    valueSubject = topic + "-value";
-    if (props.containsKey("auto.register")) {
-      this.autoRegisterSchema = Boolean.valueOf(props.getProperty("auto.register").trim());
-    } else {
-      this.autoRegisterSchema = true;
-    }
-  }
-
-  private Serializer getKeySerializer(Properties props) throws ConfigException {
-    if (props.containsKey("key.serializer")) {
-      try {
-        return (Serializer) Class.forName((String) props.get("key.serializer")).newInstance();
-      } catch (Exception e) {
-        throw new ConfigException("Error initializing Key serializer", e);
-      }
-    } else {
-      return null;
-    }
-  }
-
-  private boolean needsKeySchema() {
-    return parseKey && keySerializer == null;
-  }
-
-  private Map<String, Object> getPropertiesMap(Properties props) {
-    Map<String, Object> originals = new HashMap<>();
-    for (final String name: props.stringPropertyNames()) {
-      originals.put(name, props.getProperty(name));
-    }
-    return originals;
-  }
-
-  private byte[] serializeNonAvroKey(String keyString) {
-    Class serializerClass = keySerializer.getClass();
-    if (serializerClass == LongSerializer.class) {
-      Long longKey = Long.parseLong(keyString);
-      return keySerializer.serialize(topic, longKey);
-    }
-    if (serializerClass == IntegerSerializer.class) {
-      Integer intKey = Integer.parseInt(keyString);
-      return keySerializer.serialize(topic, intKey);
-    }
-    if (serializerClass == ShortSerializer.class) {
-      Short shortKey = Short.parseShort(keyString);
-      return keySerializer.serialize(topic, shortKey);
-    }
-    return keySerializer.serialize(topic, keyString);
+  protected SchemaMessageSerializer<Object> createSerializer(
+      SchemaRegistryClient schemaRegistryClient,
+      boolean autoRegister,
+      Serializer keySerializer
+  ) {
+    return new AvroMessageSerializer(schemaRegistryClient, autoRegister, keySerializer);
   }
 
   @Override
-  public ProducerRecord<byte[], byte[]> readMessage() {
-    try {
-      String line = reader.readLine();
-      if (line == null) {
-        return null;
-      }
-      if (!parseKey) {
-        Object value = jsonToAvro(line, valueSchema);
-        byte[] serializedValue = serializeImpl(valueSubject, value);
-        return new ProducerRecord<>(topic, serializedValue);
-      } else {
-        int keyIndex = line.indexOf(keySeparator);
-        if (keyIndex < 0) {
-          if (ignoreError) {
-            Object value = jsonToAvro(line, valueSchema);
-            byte[] serializedValue = serializeImpl(valueSubject, value);
-            return new ProducerRecord<>(topic, serializedValue);
-          } else {
-            throw new KafkaException("No key found in line " + line);
-          }
-        } else {
-          String keyString = line.substring(0, keyIndex);
-          String valueString = (keyIndex + keySeparator.length() > line.length())
-                               ? ""
-                               : line.substring(keyIndex + keySeparator.length());
-
-          byte[] serializedKey;
-          if (keySerializer != null) {
-            serializedKey = serializeNonAvroKey(keyString);
-          } else {
-            Object key = jsonToAvro(keyString, keySchema);
-            serializedKey = serializeImpl(keySubject, key);
-          }
-          Object value = jsonToAvro(valueString, valueSchema);
-          byte[] serializedValue = serializeImpl(valueSubject, value);
-          return new ProducerRecord<>(topic, serializedKey, serializedValue);
-        }
-      }
-    } catch (IOException e) {
-      throw new KafkaException("Error reading from input", e);
-    }
+  protected ParsedSchema parseSchema(
+      SchemaRegistryClient schemaRegistry,
+      String schema,
+      List<SchemaReference> references
+  ) {
+    SchemaProvider provider = new AvroSchemaProvider();
+    provider.configure(Collections.singletonMap(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG,
+        schemaRegistry));
+    return provider.parseSchema(schema, references).get();
   }
 
-  private Object jsonToAvro(String jsonString, Schema schema) {
+  @Override
+  protected Object readFrom(String jsonString, ParsedSchema parsedSchema) {
+    Schema schema = ((AvroSchema) parsedSchema).rawSchema();
     try {
-      DatumReader<Object> reader = new GenericDatumReader<Object>(schema);
-      Object object = reader.read(null, decoderFactory.jsonDecoder(schema, jsonString));
-
+      Object object = AvroSchemaUtils.toObject(jsonString, (AvroSchema) parsedSchema);
       if (schema.getType().equals(Schema.Type.STRING)) {
         object = ((Utf8) object).toString();
       }
@@ -272,8 +140,38 @@ public class AvroMessageReader extends AbstractKafkaAvroSerializer implements Me
     }
   }
 
-  @Override
-  public void close() {
-    // nothing to do
+  static class AvroMessageSerializer extends AbstractKafkaAvroSerializer
+      implements SchemaMessageSerializer<Object> {
+
+    protected final Serializer keySerializer;
+
+    AvroMessageSerializer(
+        SchemaRegistryClient schemaRegistryClient, boolean autoRegister, Serializer keySerializer
+    ) {
+      this.schemaRegistry = schemaRegistryClient;
+      this.autoRegisterSchema = autoRegister;
+      this.keySerializer = keySerializer;
+    }
+
+    @Override
+    public Serializer getKeySerializer() {
+      return keySerializer;
+    }
+
+    @Override
+    public byte[] serializeKey(String topic, Object payload) {
+      return keySerializer.serialize(topic, payload);
+    }
+
+    @Override
+    public byte[] serialize(
+        String subject,
+        String topic,
+        boolean isKey,
+        Object object,
+        ParsedSchema schema
+    ) {
+      return super.serializeImpl(subject, object);
+    }
   }
 }
