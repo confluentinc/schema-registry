@@ -76,8 +76,8 @@
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <json-schema.version>1.12.1</json-schema.version>
-        <protobuf.version>3.11.1</protobuf.version>
-        <wire.version>3.0.3</wire.version>
+        <protobuf.version>3.11.4</protobuf.version>
+        <wire.version>3.1.0</wire.version>
     </properties>
 
     <repositories>
