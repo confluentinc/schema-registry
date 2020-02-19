@@ -44,7 +44,7 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
           null
       ));
     } catch (Exception e) {
-      log.warn("Could not parse schema", e);
+      log.error("Could not parse JSON schema", e);
       return Optional.empty();
     }
   }

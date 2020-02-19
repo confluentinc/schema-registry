@@ -40,7 +40,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected Class<T> type;
   protected String typeProperty;
-  protected boolean validate = true;
+  protected boolean validate;
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
