@@ -21648,7 +21648,6 @@ public final class MetadataProto {
           /**
            * <pre>
            * If set, filtering left and right dataset to a specific hostname.
-           * Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
            * </pre>
            *
            * <code>string hostname = 5;</code>
@@ -21658,7 +21657,6 @@ public final class MetadataProto {
           /**
            * <pre>
            * If set, filtering left and right dataset to a specific hostname.
-           * Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
            * </pre>
            *
            * <code>string hostname = 5;</code>
@@ -21993,7 +21991,6 @@ public final class MetadataProto {
           /**
            * <pre>
            * If set, filtering left and right dataset to a specific hostname.
-           * Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
            * </pre>
            *
            * <code>string hostname = 5;</code>
@@ -22014,7 +22011,6 @@ public final class MetadataProto {
           /**
            * <pre>
            * If set, filtering left and right dataset to a specific hostname.
-           * Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
            * </pre>
            *
            * <code>string hostname = 5;</code>
@@ -22859,7 +22855,6 @@ public final class MetadataProto {
             /**
              * <pre>
              * If set, filtering left and right dataset to a specific hostname.
-             * Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
              * </pre>
              *
              * <code>string hostname = 5;</code>
@@ -22880,7 +22875,6 @@ public final class MetadataProto {
             /**
              * <pre>
              * If set, filtering left and right dataset to a specific hostname.
-             * Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
              * </pre>
              *
              * <code>string hostname = 5;</code>
@@ -22902,7 +22896,6 @@ public final class MetadataProto {
             /**
              * <pre>
              * If set, filtering left and right dataset to a specific hostname.
-             * Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
              * </pre>
              *
              * <code>string hostname = 5;</code>
@@ -22922,7 +22915,6 @@ public final class MetadataProto {
             /**
              * <pre>
              * If set, filtering left and right dataset to a specific hostname.
-             * Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
              * </pre>
              *
              * <code>string hostname = 5;</code>
@@ -22937,7 +22929,6 @@ public final class MetadataProto {
             /**
              * <pre>
              * If set, filtering left and right dataset to a specific hostname.
-             * Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
              * </pre>
              *
              * <code>string hostname = 5;</code>
