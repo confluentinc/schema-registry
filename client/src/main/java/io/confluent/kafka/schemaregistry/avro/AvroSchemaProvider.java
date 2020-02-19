@@ -40,7 +40,7 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
       return Optional.of(
           new AvroSchema(schemaString, references, resolveReferences(references), null));
     } catch (Exception e) {
-      log.warn("Could not parse schema", e);
+      log.error("Could not parse Avro schema", e);
       return Optional.empty();
     }
   }

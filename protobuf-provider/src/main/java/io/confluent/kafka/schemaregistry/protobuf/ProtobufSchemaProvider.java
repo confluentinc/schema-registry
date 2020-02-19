@@ -45,7 +45,7 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
           null
       ));
     } catch (Exception e) {
-      log.warn("Could not parse schema", e);
+      log.error("Could not parse Protobuf schema", e);
       return Optional.empty();
     }
   }
