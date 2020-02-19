@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package Criteo.Glup;
-option java_package = "com.criteo.glup";
+package Acme.Glup;
+option java_package = "com.acme.glup";
 
 /**
  * GLUP messages SHALL:
@@ -275,7 +275,6 @@ message HDFSOptions {
         // The specific format of the second data set
         string right_format_label = 4;
         // If set, filtering left and right dataset to a specific hostname.
-        // Please note hostname must be resolvable to be able to get the ip (example : web-rtb254-par.par.ad.criteo.prod)
         string hostname = 5;
         // If set, fields ignored in the comparison separated by ','
         string ignored_fields = 6;

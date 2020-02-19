@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package Criteo.Glup;
-option java_package = "com.criteo.glup";
+package Acme.Glup;
+option java_package = "com.acme.glup";
 
 import "metadata_proto.proto";
 
