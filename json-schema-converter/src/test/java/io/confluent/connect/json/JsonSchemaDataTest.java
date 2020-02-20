@@ -35,6 +35,7 @@ import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.json.DecimalFormat;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
@@ -202,7 +203,35 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testFromConnectBase64Decimal() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.DECIMAL_FORMAT_CONFIG,
+                DecimalFormat.BASE64.name())));
+    NumberSchema schema = NumberSchema.builder()
+        .title("org.apache.kafka.connect.data.Decimal")
+        .unprocessedProperties(ImmutableMap.of("connect.type",
+            "bytes",
+            "connect.version",
+            1,
+            "connect.parameters",
+            ImmutableMap.of("scale", "2")
+        ))
+        .build();
+    checkNonObjectConversion(schema,
+        BinaryNode.valueOf(new byte[]{0, -100}),
+        Decimal.schema(2),
+        new BigDecimal(new BigInteger("156"), 2)
+    );
+    jsonSchemaData = new JsonSchemaData();
+  }
+
+  @Test
   public void testFromConnectNumericDecimal() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.DECIMAL_FORMAT_CONFIG,
+                DecimalFormat.NUMERIC.name())));
     NumberSchema schema = NumberSchema.builder()
         .title("org.apache.kafka.connect.data.Decimal")
         .unprocessedProperties(ImmutableMap.of("connect.type",
@@ -218,6 +247,7 @@ public class JsonSchemaDataTest {
         Decimal.schema(2),
         new BigDecimal(new BigInteger("156"), 2)
     );
+    jsonSchemaData = new JsonSchemaData();
   }
 
   @Test
@@ -633,6 +663,25 @@ public class JsonSchemaDataTest {
         .name("Record")
         .field("nestedRecord", recordWithStringSchema())
         .build();
+  }
+
+  @Test
+  public void testToConnectNumericBase64Decimal() {
+    NumberSchema schema = NumberSchema.builder()
+        .title("org.apache.kafka.connect.data.Decimal")
+        .unprocessedProperties(ImmutableMap.of("connect.type",
+            "bytes",
+            "connect.parameters",
+            ImmutableMap.of("scale", "2")
+        ))
+        .build();
+    BigDecimal reference = new BigDecimal(new BigInteger("156"), 2);
+    Schema expectedSchema = SchemaBuilder.bytes()
+        .name(LOGICAL_NAME)
+        .parameter(SCALE_FIELD, Integer.toString(2))
+        .build();
+    checkNonObjectConversion(expectedSchema, reference, schema,
+        BinaryNode.valueOf(new byte[]{0, -100}));
   }
 
   @Test
