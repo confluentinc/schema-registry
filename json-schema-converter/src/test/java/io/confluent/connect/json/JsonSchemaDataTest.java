@@ -666,7 +666,7 @@ public class JsonSchemaDataTest {
   }
 
   @Test
-  public void testToConnectNumericBase64Decimal() {
+  public void testToConnectBase64Decimal() {
     NumberSchema schema = NumberSchema.builder()
         .title("org.apache.kafka.connect.data.Decimal")
         .unprocessedProperties(ImmutableMap.of("connect.type",
