@@ -56,7 +56,10 @@ public class ProtobufSchemaUtils {
     if (message == null) {
       return null;
     }
-    String jsonString = JsonFormat.printer().print(message);
+    String jsonString = JsonFormat.printer()
+        .includingDefaultValueFields()
+        .omittingInsignificantWhitespace()
+        .print(message);
     return jsonString.getBytes(StandardCharsets.UTF_8);
   }
 }
