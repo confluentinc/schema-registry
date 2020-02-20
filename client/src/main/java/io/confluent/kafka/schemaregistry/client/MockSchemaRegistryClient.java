@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 import java.io.IOException;
@@ -239,6 +240,18 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return idCache.entrySet().stream()
             .filter(entry -> entry.getValue().containsKey(id))
             .map(Map.Entry::getKey).collect(Collectors.toSet());
+  }
+
+  @Override
+  public Collection<SubjectVersion> getAllVersionsById(int id) throws IOException,
+      RestClientException {
+    return idCache.entrySet().stream()
+        .filter(entry -> entry.getValue().containsKey(id))
+        .map(e -> {
+          ParsedSchema schema = e.getValue().get(id);
+          int version = versionCache.get(e.getKey()).get(schema);
+          return new SubjectVersion(e.getKey(), version);
+        }).collect(Collectors.toList());
   }
 
   private int getLatestVersion(String subject)

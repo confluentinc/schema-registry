@@ -56,6 +56,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -954,7 +955,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       }
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while retrieving schema with id "
-                                              + id + " from the backend Kafka store", e);
+          + id + " from the backend Kafka store", e);
     }
 
     return lookupCache.schemaIdAndSubjects(new Schema(
@@ -968,6 +969,38 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
             .collect(Collectors.toList()),
         schema.getSchema()
     )).allSubjects();
+  }
+
+  public List<SubjectVersion> listVersionsForId(int id) throws SchemaRegistryException {
+    SchemaValue schema = null;
+    try {
+      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
+      if (subjectVersionKey == null) {
+        return null;
+      }
+      schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
+      if (schema == null) {
+        return null;
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
+                                              + id + " from the backend Kafka store", e);
+    }
+
+    return lookupCache.schemaIdAndSubjects(new Schema(
+        schema.getSubject(),
+        schema.getVersion(),
+        schema.getId(),
+        schema.getSchemaType(),
+        schema.getReferences().stream()
+            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+                ref.getName(), ref.getSubject(), ref.getVersion()))
+            .collect(Collectors.toList()),
+        schema.getSchema()
+    )).allSubjectVersions().entrySet()
+        .stream()
+        .map(e -> new SubjectVersion(e.getKey(), e.getValue()))
+        .collect(Collectors.toList());
   }
 
   private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys)
