@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
@@ -105,6 +106,9 @@ public class RestService implements Configurable {
       };
   private static final TypeReference<List<String>> ALL_TOPICS_RESPONSE_TYPE =
       new TypeReference<List<String>>() {
+      };
+  private static final TypeReference<List<SubjectVersion>> GET_VERSIONS_RESPONSE_TYPE =
+      new TypeReference<List<SubjectVersion>>() {
       };
   private static final TypeReference<CompatibilityCheckResponse>
       COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE =
@@ -784,6 +788,23 @@ public class RestService implements Configurable {
 
     List<String> response = httpRequest(path, "GET", null, requestProperties,
                                         ALL_TOPICS_RESPONSE_TYPE);
+
+    return response;
+  }
+
+  public List<SubjectVersion> getAllVersionsById(int id)
+      throws IOException, RestClientException {
+    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, id);
+  }
+
+  public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
+                                                 int id)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/versions");
+    String path = builder.build(id).toString();
+
+    List<SubjectVersion> response = httpRequest(path, "GET", null, requestProperties,
+        GET_VERSIONS_RESPONSE_TYPE);
 
     return response;
   }

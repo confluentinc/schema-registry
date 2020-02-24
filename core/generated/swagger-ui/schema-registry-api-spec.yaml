@@ -390,6 +390,38 @@ paths:
           description: "Error code 40403 -- Schema not found\n"
         500:
           description: "Error code 50001 -- Error in the backend data store\n"
+  /schemas/ids/{id}/versions:
+    get:
+      summary: "Get all the subject-version pairs associated with the input ID."
+      description: ""
+      operationId: "getVersions"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters:
+      - name: "id"
+        in: "path"
+        description: "Globally unique identifier of the schema"
+        required: true
+        type: "integer"
+        format: "int32"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/SubjectVersion"
+        404:
+          description: "Error code 40403 -- Schema not found\n"
+        500:
+          description: "Error code 50001 -- Error in the backend data store\n"
   /schemas/types:
     get:
       summary: "Get the schema types supported by this registry."
@@ -925,3 +957,11 @@ definitions:
           type: "object"
       id:
         type: "string"
+  SubjectVersion:
+    type: "object"
+    properties:
+      subject:
+        type: "string"
+      version:
+        type: "integer"
+        format: "int32"

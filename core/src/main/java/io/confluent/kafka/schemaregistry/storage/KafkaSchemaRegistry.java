@@ -56,6 +56,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -442,7 +443,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
       canonicalizeSchema(schema);
       // assign a guid and put the schema in the kafka store
-      if (undeletedSchemasList.isEmpty() || isCompatible(subject, schema, undeletedSchemasList)) {
+      if (isCompatible(subject, schema, undeletedSchemasList)) {
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
         }
@@ -796,7 +797,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private void canonicalizeSchema(Schema schema) throws InvalidSchemaException {
-    if (schema == null || schema.getSchema().trim().isEmpty()) {
+    if (schema == null
+        || schema.getSchema() == null
+        || schema.getSchema().trim().isEmpty()) {
+      log.error("Empty schema");
       throw new InvalidSchemaException("Empty schema");
     }
     ParsedSchema parsedSchema = parseSchema(schema);
@@ -804,6 +808,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       // Access the raw schema in case it is lazily computed
       parsedSchema.rawSchema();
     } catch (Exception e) {
+      log.error("Invalid schema " + schema);
       throw new InvalidSchemaException("Invalid schema " + schema);
     }
     schema.setSchema(parsedSchema.canonicalString());
@@ -823,6 +828,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     SchemaProvider provider = providers.get(schemaType);
     if (provider == null) {
+      log.error("Invalid schema type " + schemaType);
       throw new InvalidSchemaException("Invalid schema type " + schemaType);
     }
     final String type = schemaType;
@@ -954,7 +960,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       }
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while retrieving schema with id "
-                                              + id + " from the backend Kafka store", e);
+          + id + " from the backend Kafka store", e);
     }
 
     return lookupCache.schemaIdAndSubjects(new Schema(
@@ -968,6 +974,38 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
             .collect(Collectors.toList()),
         schema.getSchema()
     )).allSubjects();
+  }
+
+  public List<SubjectVersion> listVersionsForId(int id) throws SchemaRegistryException {
+    SchemaValue schema = null;
+    try {
+      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
+      if (subjectVersionKey == null) {
+        return null;
+      }
+      schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
+      if (schema == null) {
+        return null;
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
+                                              + id + " from the backend Kafka store", e);
+    }
+
+    return lookupCache.schemaIdAndSubjects(new Schema(
+        schema.getSubject(),
+        schema.getVersion(),
+        schema.getId(),
+        schema.getSchemaType(),
+        schema.getReferences().stream()
+            .map(ref -> new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
+                ref.getName(), ref.getSubject(), ref.getVersion()))
+            .collect(Collectors.toList()),
+        schema.getSchema()
+    )).allSubjectVersions().entrySet()
+        .stream()
+        .map(e -> new SubjectVersion(e.getKey(), e.getValue()))
+        .collect(Collectors.toList());
   }
 
   private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys)
@@ -1123,8 +1161,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                               Schema latestSchema)
       throws SchemaRegistryException {
     if (latestSchema == null) {
-      throw new InvalidSchemaException(
-          "Latest schema not provided");
+      log.error("Lastest schema not provided");
+      throw new InvalidSchemaException("Latest schema not provided");
     }
     return isCompatible(subject, newSchema, Collections.singletonList(latestSchema));
   }
@@ -1138,9 +1176,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                               List<Schema> previousSchemas)
       throws SchemaRegistryException {
 
-    if (previousSchemas == null || previousSchemas.isEmpty()) {
-      throw new InvalidSchemaException(
-          "Previous schema not provided");
+    if (previousSchemas == null) {
+      log.error("Previous schema not provided");
+      throw new InvalidSchemaException("Previous schema not provided");
     }
 
     CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
@@ -1155,7 +1193,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       prevParsedSchemas.add(prevParsedSchema);
     }
 
-    return parseSchema(newSchema).isCompatible(compatibility, prevParsedSchemas);
+    ParsedSchema parsedSchema = parseSchema(newSchema);
+    boolean isCompatible = parsedSchema.isCompatible(compatibility, prevParsedSchemas);
+    // Allow schema providers to modify the schema during compatibility checks
+    newSchema.setSchema(parsedSchema.canonicalString());
+    return isCompatible;
   }
 
   private void deleteMode(String subject) throws StoreException {
