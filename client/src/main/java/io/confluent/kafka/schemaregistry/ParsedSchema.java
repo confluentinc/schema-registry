@@ -64,6 +64,9 @@ public interface ParsedSchema {
 
   /**
    * Checks the backward compatibility between this schema and the specified schema.
+   * <p/>
+   * Custom providers may choose to modify this schema during this check,
+   * to ensure that it is compatible with the specified schema.
    *
    * @param previousSchema previous schema
    * @return whether this schema is backward compatible with the previous schema
@@ -72,6 +75,9 @@ public interface ParsedSchema {
 
   /**
    * Checks the compatibility between this schema and the specified schemas.
+   * <p/>
+   * Custom providers may choose to modify this schema during this check,
+   * to ensure that it is compatible with the specified schemas.
    *
    * @param level the compatibility level
    * @param previousSchemas full schema history in chronological order

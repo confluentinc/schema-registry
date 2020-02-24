@@ -75,6 +75,10 @@ public class SchemaIdAndSubjects {
     return subjectsAndVersions.keySet();
   }
 
+  public Map<String, Integer> allSubjectVersions() {
+    return subjectsAndVersions;
+  }
+
   public void removeIf(Predicate<SchemaKey> filter) {
     subjectsAndVersions.entrySet().removeIf(e ->
         filter.test(new SchemaKey(e.getKey(), e.getValue())));
