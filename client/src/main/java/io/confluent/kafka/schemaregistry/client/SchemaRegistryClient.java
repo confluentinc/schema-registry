@@ -36,8 +36,7 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
       String schemaString,
       List<SchemaReference> references);
 
-  //TODO deprecate
-  //@Deprecated
+  @Deprecated
   default int register(String subject, org.apache.avro.Schema schema) throws IOException,
       RestClientException {
     return register(subject, new AvroSchema(schema));
@@ -60,8 +59,7 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
     return getById(id);
   }
 
-  //TODO deprecate
-  //@Deprecated
+  @Deprecated
   default org.apache.avro.Schema getById(int id) throws IOException, RestClientException {
     ParsedSchema schema = getSchemaById(id);
     return schema instanceof AvroSchema ? ((AvroSchema) schema).rawSchema() : null;
@@ -87,8 +85,10 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException;
 
-  public Collection<SubjectVersion> getAllVersionsById(int id) throws IOException,
-      RestClientException;
+  default Collection<SubjectVersion> getAllVersionsById(int id) throws IOException,
+      RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   @Override
   default Schema getByVersion(String subject, int version, boolean lookupDeletedSchema) {
@@ -112,8 +112,7 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public List<Integer> getAllVersions(String subject) throws IOException, RestClientException;
 
-  //TODO deprecate
-  //@Deprecated
+  @Deprecated
   default boolean testCompatibility(String subject, org.apache.avro.Schema schema)
       throws IOException, RestClientException {
     return testCompatibility(subject, new AvroSchema(schema));
