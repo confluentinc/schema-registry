@@ -602,8 +602,8 @@ public class RestApiTest extends ClusterTestHarness {
 
     List<SubjectVersion> associatedSubjects = restApp.restClient.getAllVersionsById(1);
     assertEquals(associatedSubjects.size(), 2);
-    assertEquals(Arrays.asList(new SubjectVersion(subject1, 1), new SubjectVersion(subject2, 1)),
-        associatedSubjects);
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
   }
 
   @Test
