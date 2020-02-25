@@ -157,7 +157,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     String clsName = schema.fullName();
     if (clsName == null) {
       throw new SerializationException("If `derive.type` is true, then either "
-          + "`java_outer_classname` or `java_multiple_files` must be set "
+          + "`java_outer_classname` or `java_multiple_files = true` must be set "
           + "in the Protobuf schema");
     }
     try {
