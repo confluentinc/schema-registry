@@ -174,7 +174,9 @@ public class ProtobufData {
           final String stringValue = (String) value; // Check for correct type
           if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
             String tag = schema.parameters().get(PROTOBUF_TYPE_ENUM_PREFIX + stringValue);
-            return Integer.parseInt(tag);
+            if (tag != null) {
+              return Integer.parseInt(tag);
+            }
           }
           return stringValue;
         }
