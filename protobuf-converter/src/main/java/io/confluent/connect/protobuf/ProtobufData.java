@@ -415,7 +415,6 @@ public class ProtobufData {
       } else if (fieldSchema.parameters() != null && fieldSchema.parameters()
           .containsKey(PROTOBUF_TYPE_ENUM)) {
         message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
-
       } else if (type.equals(GOOGLE_PROTOBUF_TIMESTAMP_FULL_NAME)) {
         DynamicSchema.Builder timestampSchema = DynamicSchema.newBuilder();
         timestampSchema.setSyntax(ProtobufSchema.PROTO3);
