@@ -45,6 +45,7 @@ public class KafkaProtobufFormatterTest {
   private Properties props;
   private ProtobufMessageFormatter formatter;
   private ProtobufSchema recordSchema = null;
+  private ProtobufSchema enumSchema = null;
   private ProtobufSchema keySchema = null;
   private SchemaRegistryClient schemaRegistry = null;
   private static ObjectMapper objectMapper = new ObjectMapper();
@@ -55,6 +56,10 @@ public class KafkaProtobufFormatterTest {
     props.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
 
     String userSchema = "syntax = \"proto3\"; message User { string name = 1; }";
+    recordSchema = new ProtobufSchema(userSchema);
+    String enumSchema = "syntax = \"proto3\"; message ConfluentDefault1 {enum Suit {SPADES = 0; "
+      + "HEARTS = 1; DIAMONDS = 2; CLUBS = 4;} Suit c1 = 1;}";
+    this.enumSchema = new ProtobufSchema(enumSchema);
     recordSchema = new ProtobufSchema(userSchema);
     String keySchema = "syntax = \"proto3\"; message Key { int32 key = 1; }";
     this.keySchema = new ProtobufSchema(keySchema);
@@ -71,6 +76,32 @@ public class KafkaProtobufFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
         new ProtobufMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
+            true);
+    ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
+
+    byte[] serializedValue = message.value();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
+        null, serializedValue);
+    formatter.writeTo(crecord, ps);
+    String outputJson = baos.toString();
+
+    assertEquals("Input value json should match output value json",
+        objectMapper.readTree(inputJson),
+        objectMapper.readTree(outputJson));
+  }
+
+  @Test
+  public void testKafkaProtobufEnumValueFormatter() throws Exception {
+    formatter.init(props);
+
+    String inputJson = "{\"c1\":\"SPADES\"}\n";
+    BufferedReader reader =
+        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    ProtobufMessageReader protobufReader =
+        new ProtobufMessageReader(schemaRegistry, null, enumSchema, "topic1", false, reader,
             true);
     ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
 
