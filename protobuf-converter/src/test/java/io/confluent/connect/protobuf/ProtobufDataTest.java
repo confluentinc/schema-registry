@@ -252,7 +252,7 @@ public class ProtobufDataTest {
             .build()
     );
     builder.field("status",
-        SchemaBuilder.int32()
+        SchemaBuilder.string()
             .name("Status")
             .optional()
             .parameter(PROTOBUF_TYPE_TAG, String.valueOf(5))
@@ -310,7 +310,7 @@ public class ProtobufDataTest {
     experiments.add("second experiment");
     result.put("experiments_active", experiments);
 
-    result.put("status", 1); // INACTIVE
+    result.put("status", "INACTIVE");
     result.put("map_type", getTestKeyValueMap());
 
     Struct inner = new Struct(schema.field("inner").schema());
@@ -339,7 +339,7 @@ public class ProtobufDataTest {
     experiments.add("second experiment");
     result.put("experiments_active", experiments);
 
-    result.put("status", 1); // INACTIVE
+    result.put("status", "INACTIVE");
     result.put("map_type", getTestKeyValueMap());
 
     Struct inner = new Struct(schema.field("inner").schema());
@@ -357,7 +357,7 @@ public class ProtobufDataTest {
     List<String> experiments = new ArrayList<>();
     result.put("experiments_active", experiments);
 
-    result.put("status", 0);
+    result.put("status", "ACTIVE");
     result.put("map_type", new HashMap<>());
 
     return result;

@@ -172,6 +172,10 @@ public class ProtobufData {
 
         case STRING: {
           final String stringValue = (String) value; // Check for correct type
+          if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
+            String tag = schema.parameters().get(PROTOBUF_TYPE_ENUM_PREFIX + stringValue);
+            return Integer.parseInt(tag);
+          }
           return stringValue;
         }
 
@@ -411,6 +415,7 @@ public class ProtobufData {
       } else if (fieldSchema.parameters() != null && fieldSchema.parameters()
           .containsKey(PROTOBUF_TYPE_ENUM)) {
         message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
+
       } else if (type.equals(GOOGLE_PROTOBUF_TIMESTAMP_FULL_NAME)) {
         DynamicSchema.Builder timestampSchema = DynamicSchema.newBuilder();
         timestampSchema.setSyntax(ProtobufSchema.PROTO3);
@@ -545,6 +550,9 @@ public class ProtobufData {
       case BOOLEAN:
         return FieldDescriptor.Type.BOOL.toString().toLowerCase();
       case STRING:
+        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
+          return FieldDescriptor.Type.INT32.toString().toLowerCase();
+        }
         return FieldDescriptor.Type.STRING.toString().toLowerCase();
       case BYTES:
         return FieldDescriptor.Type.BYTES.toString().toLowerCase();
@@ -604,13 +612,7 @@ public class ProtobufData {
         case INT8:
         case INT16:
         case INT32:
-          if (value instanceof Number) {
-            converted = ((Number) value).intValue(); // Validate type
-          } else if (value instanceof Enum) {
-            converted = ((Enum) value).ordinal();
-          } else if (value instanceof EnumValueDescriptor) {
-            converted = ((EnumValueDescriptor) value).getNumber();
-          }
+          converted = ((Number) value).intValue();
           break;
         case INT64:
           long longValue;
@@ -622,21 +624,20 @@ public class ProtobufData {
           converted = longValue;
           break;
         case FLOAT32:
-          float floatValue = ((Number) value).floatValue(); // Validate type
-          converted = value;
+          converted = ((Number) value).floatValue();
           break;
         case FLOAT64:
-          double doubleValue = ((Number) value).doubleValue(); // Validate type
-          converted = value;
+          converted = ((Number) value).doubleValue();
           break;
         case BOOLEAN:
-          Boolean boolValue = (Boolean) value; // Validate type
-          converted = value;
+          converted = (Boolean) value;
           break;
         case STRING:
           if (value instanceof String) {
             converted = value;
-          } else if (value instanceof CharSequence) {
+          } else if (value instanceof CharSequence
+              || value instanceof Enum
+              || value instanceof EnumValueDescriptor) {
             converted = value.toString();
           } else {
             throw new DataException("Invalid class for string type, expecting String or "
@@ -680,7 +681,7 @@ public class ProtobufData {
           converted = newMap;
           break;
         case STRUCT:
-          final Message message = (Message) value; // Validate type
+          final Message message = (Message) value;
           final Struct struct = new Struct(schema.schema());
           final Descriptor descriptor = message.getDescriptorForType();
 
@@ -854,7 +855,7 @@ public class ProtobufData {
         break;
 
       case ENUM:
-        builder = SchemaBuilder.int32();
+        builder = SchemaBuilder.string();
         EnumDescriptor enumDescriptor = descriptor.getEnumType();
         builder.name(enumDescriptor.getName());
         builder.parameter(PROTOBUF_TYPE_ENUM, enumDescriptor.getName());
