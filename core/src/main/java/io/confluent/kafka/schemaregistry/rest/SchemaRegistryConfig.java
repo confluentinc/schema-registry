@@ -570,7 +570,7 @@ public class SchemaRegistryConfig extends RestConfig {
           + KAFKASTORE_CONNECTION_URL_CONFIG + " or " + KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
       );
     }
-    return !haveStoreConnectionUrl;
+    return haveBootstrapServers;
   }
 
   public String bootstrapBrokers() {
