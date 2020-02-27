@@ -54,6 +54,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1030,26 +1031,7 @@ public class AvroData {
 
     Object defaultVal = null;
     if (fieldSchema.defaultValue() != null) {
-      defaultVal = fieldSchema.defaultValue();
-
-      // If this is a logical, convert to the primitive form for the Avro default value
-      defaultVal = toAvroLogical(fieldSchema, defaultVal);
-
-      // Avro doesn't handle a few types that Connect uses, so convert those explicitly here
-      if (defaultVal instanceof Byte) {
-        // byte are mapped to integers in Avro
-        defaultVal = ((Byte) defaultVal).intValue();
-      } else if (defaultVal instanceof Short) {
-        // Shorts are mapped to integers in Avro
-        defaultVal = ((Short) defaultVal).intValue();
-      } else if (defaultVal instanceof ByteBuffer) {
-        // Avro doesn't handle ByteBuffer directly, but does handle 'byte[]'
-        // Copy the contents of the byte buffer without side effects on the buffer
-        ByteBuffer buffer = (ByteBuffer)defaultVal;
-        byte[] bytes = new byte[buffer.remaining()];
-        buffer.duplicate().get(bytes);
-        defaultVal = bytes;
-      }
+      defaultVal = defaultValueToConnect(fieldSchema, fieldSchema.defaultValue());
     } else if (fieldSchema.isOptional()) {
       defaultVal = JsonProperties.NULL_VALUE;
     }
@@ -1059,6 +1041,38 @@ public class AvroData {
         fieldSchema.doc(),
         defaultVal);
     fields.add(field);
+  }
+
+  private Object defaultValueToConnect(Schema fieldSchema, Object defaultVal) {
+    // If this is a logical, convert to the primitive form for the Avro default value
+    defaultVal = toAvroLogical(fieldSchema, defaultVal);
+
+    // Avro doesn't handle a few types that Connect uses, so convert those explicitly here
+    if (defaultVal instanceof Byte) {
+      // byte are mapped to integers in Avro
+      defaultVal = ((Byte) defaultVal).intValue();
+    } else if (defaultVal instanceof Short) {
+      // Shorts are mapped to integers in Avro
+      defaultVal = ((Short) defaultVal).intValue();
+    } else if (defaultVal instanceof ByteBuffer) {
+      // Avro doesn't handle ByteBuffer directly, but does handle 'byte[]'
+      // Copy the contents of the byte buffer without side effects on the buffer
+      ByteBuffer buffer = (ByteBuffer)defaultVal;
+      byte[] bytes = new byte[buffer.remaining()];
+      buffer.duplicate().get(bytes);
+      defaultVal = bytes;
+    } else if (defaultVal instanceof Struct) {
+      Struct struct = (Struct)defaultVal;
+      Map<String, Object> map = new LinkedHashMap<>();
+      for (Field field : struct.schema().fields()) {
+        Object object = struct.get(field);
+        if (object != null) {
+          map.put(field.name(), defaultValueToConnect(field.schema(), object));
+        }
+      }
+      defaultVal = map;
+    }
+    return defaultVal;
   }
 
   private static Object toAvroLogical(Schema schema, Object value) {
@@ -1463,6 +1477,16 @@ public class AvroData {
               throw new DataException(
                   "Did not find matching union field for data: " + value.toString());
             }
+          } else if (value instanceof Map) {
+            // Default values from Avro are returned as Map
+            Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
+            Struct result = new Struct(schema);
+            for (Field field : schema.fields()) {
+              Object convertedFieldValue =
+                  toConnectData(field.schema(), original.get(field.name()), toConnectContext);
+              result.put(field, convertedFieldValue);
+            }
+            return result;
           } else {
             IndexedRecord original = (IndexedRecord) value;
             Struct result = new Struct(schema);
