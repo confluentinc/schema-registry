@@ -118,6 +118,7 @@ public class AdditionalAvroDataTest
         Assert.assertEquals(SpecificData.get().toString(avroMessage), SpecificData.get().toString(output));
 
     }
+
     @Test
     /**
      * @see https://github.com/confluentinc/schema-registry/issues/405
@@ -173,4 +174,35 @@ public class AdditionalAvroDataTest
     static class MyImpl2 implements MyInterface
     { private String data; }
     static class MyObjectToPersist { private MyInterface obj; }
+
+    @Test
+    public void testRecordDefault() {
+        Schema myAvroObjectSchema = new Parser().parse(
+            "{"
+                + "  \"type\" : \"record\","
+                + "  \"name\" : \"MyRecord\","
+                + "  \"namespace\" : \"io.confluent.connect.avro.AdditionalAvroDataTest\","
+                + "  \"fields\" : [ {"
+                + "    \"name\" : \"obj\","
+                + "    \"type\" : {"
+                + "      \"name\" : \"obj2\","
+                + "      \"type\" : \"record\","
+                + "      \"fields\" : [ {"
+                + "        \"name\" : \"data\","
+                + "        \"type\" : \"string\","
+                + "        \"default\" : \"\""
+                + "      } ]"
+                + "    },"
+                + "    \"default\" : { \"data\" : \"\" }"
+                + "  } ]"
+                + "}");
+        GenericData.Record obj = new GenericRecordBuilder(myAvroObjectSchema).build();
+
+        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(myAvroObjectSchema);
+        SchemaAndValue schemaAndValue = avroData.toConnectData(myAvroObjectSchema, obj);
+        Object o = avroData.fromConnectData(schemaAndValue.schema(), schemaAndValue.value());
+        Assert.assertEquals(obj ,o);
+        avroData.fromConnectSchema(connectSchema);
+    }
+
 }
