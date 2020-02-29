@@ -808,8 +808,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       // Access the raw schema in case it is lazily computed
       parsedSchema.rawSchema();
     } catch (Exception e) {
-      log.error("Invalid schema " + schema);
-      throw new InvalidSchemaException("Invalid schema " + schema);
+      String errMsg = "Invalid schema " + schema;
+      log.error(errMsg);
+      throw new InvalidSchemaException(errMsg, e);
     }
     schema.setSchema(parsedSchema.canonicalString());
   }
@@ -828,8 +829,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     SchemaProvider provider = providers.get(schemaType);
     if (provider == null) {
-      log.error("Invalid schema type " + schemaType);
-      throw new InvalidSchemaException("Invalid schema type " + schemaType);
+      String errMsg = "Invalid schema type " + schemaType;
+      log.error(errMsg);
+      throw new InvalidSchemaException(errMsg);
     }
     final String type = schemaType;
     ParsedSchema parsedSchema = provider.parseSchema(schema, references)
