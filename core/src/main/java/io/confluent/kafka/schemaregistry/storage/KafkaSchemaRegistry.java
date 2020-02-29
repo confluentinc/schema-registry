@@ -809,7 +809,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       parsedSchema.rawSchema();
     } catch (Exception e) {
       log.error("Invalid schema " + schema);
-      throw new InvalidSchemaException("Invalid schema " + schema);
+      throw new InvalidSchemaException("Invalid schema " + schema, e);
     }
     schema.setSchema(parsedSchema.canonicalString());
   }
