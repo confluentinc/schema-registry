@@ -277,7 +277,11 @@ public class RestService implements Configurable {
       } else {
         ErrorMessage errorMessage;
         try (InputStream es = connection.getErrorStream()) {
-          errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
+          if (es != null) {
+            errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
+          } else {
+            errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
+          }
         } catch (JsonProcessingException e) {
           errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, e.getMessage());
         }
