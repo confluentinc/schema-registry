@@ -185,17 +185,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private HashMap<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
     Map<String, Object> schemaProviderConfigs = new HashMap<>();
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
-    List<SchemaProvider> schemaProviders =
+    List<SchemaProvider> schemaProviders = Arrays.asList(
+        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
+    );
+    for (SchemaProvider provider : schemaProviders) {
+      provider.configure(schemaProviderConfigs);
+    }
+    List<SchemaProvider> customSchemaProviders =
         config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
             SchemaProvider.class,
             schemaProviderConfigs);
-    List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
-        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
-    );
-    for (SchemaProvider provider : defaultSchemaProviders) {
-      provider.configure(schemaProviderConfigs);
-    }
-    schemaProviders.addAll(defaultSchemaProviders);
+    // Allow custom providers to override default providers
+    schemaProviders.addAll(customSchemaProviders);
     HashMap<String, SchemaProvider> providerMap = new HashMap<>();
     for (SchemaProvider schemaProvider : schemaProviders) {
       log.info("Registering schema provider for {}: {}",
@@ -805,8 +806,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     ParsedSchema parsedSchema = parseSchema(schema);
     try {
-      // Access the raw schema in case it is lazily computed
-      parsedSchema.rawSchema();
+      parsedSchema.validate();
     } catch (Exception e) {
       String errMsg = "Invalid schema " + schema;
       log.error(errMsg);

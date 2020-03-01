@@ -63,6 +63,13 @@ public interface ParsedSchema {
   List<SchemaReference> references();
 
   /**
+   * Validates the schema and ensures all references are resolved properly.
+   * Throws an exception if the schema is not valid.
+   */
+  default void validate() {
+  }
+
+  /**
    * Checks the backward compatibility between this schema and the specified schema.
    * <p/>
    * Custom providers may choose to modify this schema during this check,

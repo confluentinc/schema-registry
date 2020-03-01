@@ -53,8 +53,7 @@ public class AvroSchema implements ParsedSchema {
                     Map<String, String> resolvedReferences,
                     Integer version) {
     List<Schema> schemaRefs = new ArrayList<>();
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(false);
+    Schema.Parser parser = getParser();
     if (resolvedReferences != null) {
       for (String schema : resolvedReferences.values()) {
         Schema schemaRef = parser.parse(schema);
@@ -102,6 +101,12 @@ public class AvroSchema implements ParsedSchema {
         this.resolvedReferences,
         this.version
     );
+  }
+
+  protected Schema.Parser getParser() {
+    Schema.Parser parser = new Schema.Parser();
+    parser.setValidateDefaults(false);
+    return parser;
   }
 
   @Override
