@@ -222,6 +222,12 @@ public class JsonSchema implements ParsedSchema {
     return resolvedReferences;
   }
 
+  @Override
+  public void validate() {
+    // Access the raw schema since it is computed lazily
+    rawSchema();
+  }
+
   public void validate(Object value) throws JsonProcessingException, ValidationException {
     Object primitiveValue = NONE_MARKER;
     if (isPrimitive(value)) {
