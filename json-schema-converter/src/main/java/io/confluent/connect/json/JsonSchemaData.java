@@ -496,7 +496,7 @@ public class JsonSchemaData {
     final Schema.Type schemaType;
     if (schema != null) {
       schemaType = schema.type();
-      if (jsonValue.isNull()) {
+      if (jsonValue == null || jsonValue.isNull()) {
         if (schema.defaultValue() != null) {
           return schema.defaultValue(); // any logical type conversions should already have been
         }
@@ -507,6 +507,9 @@ public class JsonSchemaData {
         throw new DataException("Invalid null value for required " + schemaType + " field");
       }
     } else {
+      if (jsonValue == null) {
+        return null;
+      }
       switch (jsonValue.getNodeType()) {
         case NULL:
           return null;

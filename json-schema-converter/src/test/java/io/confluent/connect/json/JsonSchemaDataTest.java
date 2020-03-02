@@ -86,6 +86,17 @@ public class JsonSchemaDataTest {
   // Connect -> JSON Schema
 
   @Test
+  public void testFromConnectNull() throws Exception {
+    BooleanSchema booleanSchema = BooleanSchema.builder().build();
+    CombinedSchema expectedSchema =
+        CombinedSchema.oneOf(ImmutableList.of(NullSchema.INSTANCE, booleanSchema)).build();
+    Schema schema = Schema.OPTIONAL_BOOLEAN_SCHEMA;
+    checkNonObjectConversion(expectedSchema, NullNode.getInstance(), schema, null);
+
+    checkNonObjectConversion(null, null, (Schema) null, null);
+  }
+
+  @Test
   public void testFromConnectBoolean() {
     BooleanSchema schema = BooleanSchema.builder().build();
     checkNonObjectConversion(schema, BooleanNode.getTrue(), Schema.BOOLEAN_SCHEMA, true);
@@ -334,11 +345,22 @@ public class JsonSchemaDataTest {
   ) {
     JsonSchema jsonSchema = jsonSchemaData.fromConnectSchema(schema);
     JsonNode jsonValue = jsonSchemaData.fromConnectData(schema, value);
-    assertEquals(expectedSchema, jsonSchema.rawSchema());
+    assertEquals(expectedSchema, jsonSchema != null ? jsonSchema.rawSchema() : null);
     assertEquals(expected, jsonValue);
   }
 
   // JSON Schema -> Connect: directly corresponding types
+
+  @Test
+  public void testToConnectNull() {
+    BooleanSchema booleanSchema = BooleanSchema.builder().build();
+    CombinedSchema schema =
+        CombinedSchema.oneOf(ImmutableList.of(NullSchema.INSTANCE, booleanSchema)).build();
+    Schema expectedSchema = Schema.OPTIONAL_BOOLEAN_SCHEMA;
+    checkNonObjectConversion(expectedSchema, null, schema, null);
+
+    checkNonObjectConversion((Schema) null, null, null, null);
+  }
 
   @Test
   public void testToConnectBoolean() {

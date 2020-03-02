@@ -475,11 +475,14 @@ public class ProtobufDataTest {
   }
 
   // Data Conversion tests
+
   @Test
   public void testToConnectNull() {
     ProtobufData protobufData = new ProtobufData();
     Schema schema = OPTIONAL_BOOLEAN_SCHEMA.schema();
     assertNull(protobufData.toConnectData(schema, null));
+
+    assertNull(protobufData.toConnectData((Schema) null, null));
   }
 
   @Test
@@ -789,6 +792,17 @@ public class ProtobufDataTest {
     assertEquals(1, dynamicMessage.getField(fieldDescriptor));
   }
 
+  @Test
+  public void testFromConnectNull() throws Exception {
+    ProtobufData protobufData = new ProtobufData();
+    Schema schema = SchemaBuilder.struct().field(VALUE_FIELD_NAME, OPTIONAL_BOOLEAN_SCHEMA).build();
+    ProtobufSchemaAndValue converted = protobufData.fromConnectData(schema, null);
+    assertNull(converted.getValue());
+
+    converted = protobufData.fromConnectData(null, null);
+    assertNull(converted.getSchema());
+    assertNull(converted.getValue());
+  }
 
   @Test
   public void testFromConnectInt8() throws Exception {
