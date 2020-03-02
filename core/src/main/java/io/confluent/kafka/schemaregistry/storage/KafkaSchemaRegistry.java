@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -182,22 +183,30 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.masterNodeSensor.add(m, new Gauge());
   }
 
-  private HashMap<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
+  private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
     Map<String, Object> schemaProviderConfigs = new HashMap<>();
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
-    List<SchemaProvider> schemaProviders = Arrays.asList(
+    List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
     );
-    for (SchemaProvider provider : schemaProviders) {
+    for (SchemaProvider provider : defaultSchemaProviders) {
       provider.configure(schemaProviderConfigs);
     }
+    Map<String ,SchemaProvider> providerMap = new HashMap<>();
+    registerProviders(providerMap, defaultSchemaProviders);
     List<SchemaProvider> customSchemaProviders =
         config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
             SchemaProvider.class,
             schemaProviderConfigs);
     // Allow custom providers to override default providers
-    schemaProviders.addAll(customSchemaProviders);
-    HashMap<String, SchemaProvider> providerMap = new HashMap<>();
+    registerProviders(providerMap, customSchemaProviders);
+    return providerMap;
+  }
+
+  private void registerProviders(
+      Map<String, SchemaProvider> providerMap,
+      List<SchemaProvider> schemaProviders
+  ) {
     for (SchemaProvider schemaProvider : schemaProviders) {
       log.info("Registering schema provider for {}: {}",
           schemaProvider.schemaType(),
@@ -205,7 +214,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       );
       providerMap.put(schemaProvider.schemaType(), schemaProvider);
     }
-    return providerMap;
   }
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
