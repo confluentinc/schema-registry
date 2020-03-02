@@ -131,7 +131,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testSchemaDependencies() throws Exception {
+  public void testSchemaReferences() throws Exception {
     Map<String, String> schemas = getProtobufSchemaWithDependencies();
     String subject = "reference";
     registerAndVerifySchema(restApp.restClient, schemas.get("ref.proto"), 1, subject);
@@ -155,6 +155,17 @@ public class RestApiTest extends ClusterTestHarness {
         Collections.singletonList(ref),
         schemaString.getReferences()
     );
+  }
+
+  @Test(expected = RestClientException.class)
+  public void testSchemaMissingReferences() throws Exception {
+    Map<String, String> schemas = getProtobufSchemaWithDependencies();
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemas.get("root.proto"));
+    request.setSchemaType(ProtobufSchema.TYPE);
+    request.setReferences(Collections.emptyList());
+    restApp.restClient.registerSchema(request, "referrer");
   }
 
   @Test

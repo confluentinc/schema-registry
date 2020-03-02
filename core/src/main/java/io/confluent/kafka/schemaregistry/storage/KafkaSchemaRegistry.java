@@ -182,21 +182,30 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.masterNodeSensor.add(m, new Value());
   }
 
-  private HashMap<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
+  private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
     Map<String, Object> schemaProviderConfigs = new HashMap<>();
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
-    List<SchemaProvider> schemaProviders =
-        config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
-            SchemaProvider.class,
-            schemaProviderConfigs);
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
     );
     for (SchemaProvider provider : defaultSchemaProviders) {
       provider.configure(schemaProviderConfigs);
     }
-    schemaProviders.addAll(defaultSchemaProviders);
-    HashMap<String, SchemaProvider> providerMap = new HashMap<>();
+    Map<String ,SchemaProvider> providerMap = new HashMap<>();
+    registerProviders(providerMap, defaultSchemaProviders);
+    List<SchemaProvider> customSchemaProviders =
+        config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
+            SchemaProvider.class,
+            schemaProviderConfigs);
+    // Allow custom providers to override default providers
+    registerProviders(providerMap, customSchemaProviders);
+    return providerMap;
+  }
+
+  private void registerProviders(
+      Map<String, SchemaProvider> providerMap,
+      List<SchemaProvider> schemaProviders
+  ) {
     for (SchemaProvider schemaProvider : schemaProviders) {
       log.info("Registering schema provider for {}: {}",
           schemaProvider.schemaType(),
@@ -204,7 +213,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       );
       providerMap.put(schemaProvider.schemaType(), schemaProvider);
     }
-    return providerMap;
   }
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
@@ -805,8 +813,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     ParsedSchema parsedSchema = parseSchema(schema);
     try {
-      // Access the raw schema in case it is lazily computed
-      parsedSchema.rawSchema();
+      parsedSchema.validate();
     } catch (Exception e) {
       String errMsg = "Invalid schema " + schema;
       log.error(errMsg);

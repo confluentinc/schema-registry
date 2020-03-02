@@ -760,6 +760,11 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   @Override
+  public void validate() {
+    toDynamicSchema();
+  }
+
+  @Override
   public boolean isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return false;

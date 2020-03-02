@@ -48,22 +48,20 @@ public class AvroSchemaUtils {
   private static final Map<String, Schema> primitiveSchemas;
 
   static {
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(false);
     primitiveSchemas = new HashMap<>();
-    primitiveSchemas.put("Null", createPrimitiveSchema(parser, "null"));
-    primitiveSchemas.put("Boolean", createPrimitiveSchema(parser, "boolean"));
-    primitiveSchemas.put("Integer", createPrimitiveSchema(parser, "int"));
-    primitiveSchemas.put("Long", createPrimitiveSchema(parser, "long"));
-    primitiveSchemas.put("Float", createPrimitiveSchema(parser, "float"));
-    primitiveSchemas.put("Double", createPrimitiveSchema(parser, "double"));
-    primitiveSchemas.put("String", createPrimitiveSchema(parser, "string"));
-    primitiveSchemas.put("Bytes", createPrimitiveSchema(parser, "bytes"));
+    primitiveSchemas.put("Null", createPrimitiveSchema("null"));
+    primitiveSchemas.put("Boolean", createPrimitiveSchema("boolean"));
+    primitiveSchemas.put("Integer", createPrimitiveSchema("int"));
+    primitiveSchemas.put("Long", createPrimitiveSchema("long"));
+    primitiveSchemas.put("Float", createPrimitiveSchema("float"));
+    primitiveSchemas.put("Double", createPrimitiveSchema("double"));
+    primitiveSchemas.put("String", createPrimitiveSchema("string"));
+    primitiveSchemas.put("Bytes", createPrimitiveSchema("bytes"));
   }
 
-  private static Schema createPrimitiveSchema(Schema.Parser parser, String type) {
+  private static Schema createPrimitiveSchema(String type) {
     String schemaString = String.format("{\"type\" : \"%s\"}", type);
-    return parser.parse(schemaString);
+    return new AvroSchema(schemaString).rawSchema();
   }
 
   public static AvroSchema copyOf(AvroSchema schema) {

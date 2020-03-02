@@ -186,6 +186,17 @@ public class RestApiTest extends ClusterTestHarness {
             (RestService.DEFAULT_REQUEST_PROPERTIES, "reference", "1"));
   }
 
+  @Test(expected = RestClientException.class)
+  public void testSchemaMissingReferences() throws Exception {
+    Map<String, String> schemas = getJsonSchemaWithReferences();
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemas.get("main.json"));
+    request.setSchemaType(JsonSchema.TYPE);
+    request.setReferences(Collections.emptyList());
+    restApp.restClient.registerSchema(request, "referrer");
+  }
+
   @Test
   public void testBad() throws Exception {
     String subject1 = "testTopic1";
