@@ -17,7 +17,6 @@
 package io.confluent.kafka.formatter;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import kafka.common.KafkaException;
 import kafka.common.MessageReader;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -41,6 +40,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 
 public abstract class SchemaMessageReader<T> implements MessageReader {
@@ -114,7 +114,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     List<SchemaReference> valueRefs = Collections.emptyList();
     if (props.containsKey("value.refs")) {
       try {
-        valueRefs = new ObjectMapper().readValue(
+        valueRefs = JacksonMapper.INSTANCE.readValue(
             props.getProperty("value.refs"),
             new TypeReference<List<SchemaReference>>() {}
         );
@@ -134,7 +134,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       List<SchemaReference> keyRefs = Collections.emptyList();
       if (props.containsKey("key.refs")) {
         try {
-          keyRefs = new ObjectMapper().readValue(
+          keyRefs = JacksonMapper.INSTANCE.readValue(
               props.getProperty("key.refs"),
               new TypeReference<List<SchemaReference>>() {}
           );

@@ -51,8 +51,8 @@ public class KafkaJsonDeserializer<T> implements Deserializer<T> {
     boolean
         failUnknownProperties =
         config.getBoolean(KafkaJsonDeserializerConfig.FAIL_UNKNOWN_PROPERTIES);
-    this.objectMapper
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, failUnknownProperties);
+    this.objectMapper.configure(
+        DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, failUnknownProperties);
   }
 
   @SuppressWarnings("unchecked")
