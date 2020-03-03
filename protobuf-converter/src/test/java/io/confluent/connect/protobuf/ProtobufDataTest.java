@@ -20,6 +20,7 @@ import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.Descriptors;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.FloatValue;
@@ -697,6 +698,14 @@ public class ProtobufDataTest {
         .field("mapNonStringKeys",
             SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build()
         )
+        .field("enum", SchemaBuilder.string()
+            .name("Status")
+            .optional()
+            .parameter(ProtobufData.PROTOBUF_TYPE_ENUM, "Status")
+            .parameter(ProtobufData.PROTOBUF_TYPE_ENUM_PREFIX + "ACTIVE", "0")
+            .parameter(ProtobufData.PROTOBUF_TYPE_ENUM_PREFIX + "INACTIVE", "1")
+            .build()
+        )
         .build();
     Struct struct = new Struct(schema).put("int8", (byte) 12)
         .put("int16", (short) 12)
@@ -709,7 +718,8 @@ public class ProtobufDataTest {
         .put("bytes", ByteBuffer.wrap("foo".getBytes()))
         .put("array", Arrays.asList("a", "b", "c"))
         .put("map", Collections.singletonMap("field", 1))
-        .put("mapNonStringKeys", Collections.singletonMap(1, 1));
+        .put("mapNonStringKeys", Collections.singletonMap(1, 1))
+        .put("enum", "ACTIVE");
 
     ProtobufSchemaAndValue convertedRecord = new ProtobufData().fromConnectData(schema, struct);
     ProtobufSchema protobufSchema = convertedRecord.getSchema();
@@ -752,6 +762,9 @@ public class ProtobufDataTest {
     fieldElem = messageElem.getFields().get(11);
     assertEquals("mapNonStringKeys", fieldElem.getName());
     assertEquals("ConnectDefault3Entry", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(12);
+    assertEquals("enum", fieldElem.getName());
+    assertEquals("Status", fieldElem.getType());
 
     Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
         .findFieldByName("int8");
@@ -790,6 +803,11 @@ public class ProtobufDataTest {
     assertEquals(1, dynamicMessage.getField(fieldDescriptor));
     fieldDescriptor = dynamicMessage.getDescriptorForType().findFieldByName("value");
     assertEquals(1, dynamicMessage.getField(fieldDescriptor));
+
+    fieldDescriptor = message.getDescriptorForType().findFieldByName("enum");
+    EnumValueDescriptor enumValueDescriptor =
+        (EnumValueDescriptor) message.getField(fieldDescriptor);
+    assertEquals("ACTIVE", enumValueDescriptor.getName());
   }
 
   @Test
