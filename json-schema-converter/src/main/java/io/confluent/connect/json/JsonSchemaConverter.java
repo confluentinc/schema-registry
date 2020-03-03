@@ -75,6 +75,9 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
 
   @Override
   public byte[] fromConnectData(String topic, Schema schema, Object value) {
+    if (schema == null && value == null) {
+      return null;
+    }
     JsonSchema jsonSchema = jsonSchemaData.fromConnectSchema(schema);
     JsonNode jsonValue = jsonSchemaData.fromConnectData(schema, value);
     try {
