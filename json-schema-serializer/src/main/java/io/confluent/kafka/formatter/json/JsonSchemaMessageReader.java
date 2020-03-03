@@ -82,7 +82,7 @@ import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaSerializer;
 public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
     implements MessageReader {
 
-  private final ObjectMapper objectMapper = Jackson.newObjectMapper();
+  private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
   /**
    * Constructor needed by kafka console producer.

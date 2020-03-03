@@ -67,6 +67,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProviderFactory;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 /**
  * Rest access layer for sending requests to the schema registry.
@@ -143,7 +144,7 @@ public class RestService implements Configurable {
   private static final int HTTP_READ_TIMEOUT_MS = 60000;
 
   private static final int JSON_PARSE_ERROR_CODE = 50005;
-  private static ObjectMapper jsonDeserializer = new ObjectMapper();
+  private static ObjectMapper jsonDeserializer = JacksonMapper.INSTANCE;
 
   private static final String AUTHORIZATION_HEADER = "Authorization";
 
