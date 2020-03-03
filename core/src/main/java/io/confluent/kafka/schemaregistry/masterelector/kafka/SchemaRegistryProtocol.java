@@ -16,12 +16,12 @@
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 /**
  * This class implements the protocol for Schema Registry instances in a Kafka group. It includes
@@ -74,7 +74,7 @@ class SchemaRegistryProtocol {
       try {
         byte[] jsonBytes = new byte[json.remaining()];
         json.get(jsonBytes);
-        return new ObjectMapper().readValue(jsonBytes, Assignment.class);
+        return JacksonMapper.INSTANCE.readValue(jsonBytes, Assignment.class);
       } catch (IOException e) {
         throw new IllegalArgumentException("Error deserializing identity information", e);
       }
@@ -106,7 +106,7 @@ class SchemaRegistryProtocol {
 
     public ByteBuffer toJsonBytes() {
       try {
-        return ByteBuffer.wrap(new ObjectMapper().writeValueAsBytes(this));
+        return ByteBuffer.wrap(JacksonMapper.INSTANCE.writeValueAsBytes(this));
       } catch (IOException e) {
         throw new IllegalArgumentException("Error serializing identity information", e);
       }

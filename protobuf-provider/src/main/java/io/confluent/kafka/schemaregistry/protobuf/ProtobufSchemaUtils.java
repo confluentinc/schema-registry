@@ -27,9 +27,11 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+
 public class ProtobufSchemaUtils {
 
-  private static final ObjectMapper jsonMapper = new ObjectMapper();
+  private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
   public static ProtobufSchema copyOf(ProtobufSchema schema) {
     return schema.copy();

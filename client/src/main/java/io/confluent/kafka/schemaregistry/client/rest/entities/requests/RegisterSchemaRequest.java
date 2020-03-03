@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import java.io.IOException;
@@ -27,6 +26,7 @@ import java.util.Objects;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class RegisterSchemaRequest {
@@ -38,7 +38,7 @@ public class RegisterSchemaRequest {
   private String schema;
 
   public static RegisterSchemaRequest fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, RegisterSchemaRequest.class);
+    return JacksonMapper.INSTANCE.readValue(json, RegisterSchemaRequest.class);
   }
 
   @JsonProperty("version")
@@ -130,7 +130,7 @@ public class RegisterSchemaRequest {
   }
 
   public String toJson() throws IOException {
-    return new ObjectMapper().writeValueAsString(this);
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
 }

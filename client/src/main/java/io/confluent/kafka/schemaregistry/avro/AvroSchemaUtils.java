@@ -39,11 +39,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+
 public class AvroSchemaUtils {
 
   private static final EncoderFactory encoderFactory = EncoderFactory.get();
   private static final DecoderFactory decoderFactory = DecoderFactory.get();
-  private static final ObjectMapper jsonMapper = new ObjectMapper();
+  private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
   private static final Map<String, Schema> primitiveSchemas;
 

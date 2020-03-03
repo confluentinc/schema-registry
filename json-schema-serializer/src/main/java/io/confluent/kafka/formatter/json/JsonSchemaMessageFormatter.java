@@ -59,7 +59,7 @@ import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaDeserializer;
  */
 public class JsonSchemaMessageFormatter extends SchemaMessageFormatter<JsonNode> {
 
-  private final ObjectMapper objectMapper = Jackson.newObjectMapper();
+  private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
   /**
    * Constructor needed by kafka console consumer.
