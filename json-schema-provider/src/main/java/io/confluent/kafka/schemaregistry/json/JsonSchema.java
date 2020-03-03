@@ -114,7 +114,7 @@ public class JsonSchema implements ParsedSchema {
 
   public JsonSchema(Schema schemaObj, Integer version) {
     try {
-      this.jsonNode = objectMapper.readTree(schemaObj.toString());
+      this.jsonNode = schemaObj != null ? objectMapper.readTree(schemaObj.toString()) : null;
       this.schemaObj = schemaObj;
       this.version = version;
       this.references = Collections.emptyList();
@@ -164,6 +164,9 @@ public class JsonSchema implements ParsedSchema {
 
   @Override
   public Schema rawSchema() {
+    if (jsonNode == null) {
+      return null;
+    }
     if (schemaObj == null) {
       try {
         SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder();
