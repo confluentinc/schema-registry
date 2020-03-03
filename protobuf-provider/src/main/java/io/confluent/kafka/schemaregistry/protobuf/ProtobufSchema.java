@@ -529,6 +529,10 @@ public class ProtobufSchema implements ParsedSchema {
     return toDynamicSchema().newMessageBuilder(name);
   }
 
+  public Descriptors.EnumValueDescriptor getEnumValue(String enumTypeName, int enumNumber) {
+    return toDynamicSchema().getEnumValue(enumTypeName, enumNumber);
+  }
+
   private MessageElement firstMessage() {
     for (TypeElement typeElement : schemaObj.getTypes()) {
       if (typeElement instanceof MessageElement) {
