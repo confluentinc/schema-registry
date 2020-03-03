@@ -1092,6 +1092,11 @@ public class AvroDataTest {
   // Avro -> Connect: directly corresponding types
 
   @Test
+  public void testToConnectNull() {
+    assertNull(avroData.toConnectData(null, null));
+  }
+
+  @Test
   public void testToConnectBoolean() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().booleanType();
     assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true),
@@ -1494,7 +1499,7 @@ public class AvroDataTest {
   // Avro -> Connect: Avro types with no corresponding Connect type
 
   @Test(expected = DataException.class)
-  public void testToConnectNull() {
+  public void testToConnectNullType() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().nullType();
     // If we somehow did end up with a null schema and an actual value that let it get past the
     avroData.toConnectData(avroSchema, true);
