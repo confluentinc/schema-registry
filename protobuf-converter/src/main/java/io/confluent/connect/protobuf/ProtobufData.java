@@ -175,7 +175,7 @@ public class ProtobufData {
           if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
             String tag = schema.parameters().get(PROTOBUF_TYPE_ENUM_PREFIX + stringValue);
             if (tag != null) {
-              return Integer.parseInt(tag);
+              return protobufSchema.getEnumValue(stringValue, Integer.parseInt(tag));
             }
           }
           return stringValue;
@@ -552,7 +552,7 @@ public class ProtobufData {
         return FieldDescriptor.Type.BOOL.toString().toLowerCase();
       case STRING:
         if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
-          return FieldDescriptor.Type.INT32.toString().toLowerCase();
+          return schema.parameters().get(PROTOBUF_TYPE_ENUM);
         }
         return FieldDescriptor.Type.STRING.toString().toLowerCase();
       case BYTES:
