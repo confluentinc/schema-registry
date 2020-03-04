@@ -30,6 +30,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -107,10 +109,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
 
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(
         url, AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, originals);
-    if (!props.containsKey("value.schema")) {
-      throw new ConfigException("Must provide the schema string in value.schema");
-    }
-    String valueSchemaString = props.getProperty("value.schema");
+    String valueSchemaString = getSchemaString(props, false);
     List<SchemaReference> valueRefs = Collections.emptyList();
     if (props.containsKey("value.refs")) {
       try {
@@ -127,10 +126,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     Serializer keySerializer = getKeySerializer(props);
 
     if (needsKeySchema()) {
-      if (!props.containsKey("key.schema")) {
-        throw new ConfigException("Must provide the schema string in key.schema");
-      }
-      String keySchemaString = props.getProperty("key.schema");
+      String keySchemaString = getSchemaString(props, true);
       List<SchemaReference> keyRefs = Collections.emptyList();
       if (props.containsKey("key.refs")) {
         try {
@@ -163,6 +159,23 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       String schema,
       List<SchemaReference> references
   );
+
+  private String getSchemaString(Properties props, boolean isKey) {
+    String propKeyRaw = isKey ? "key.schema" : "value.schema";
+    String propKeyFile = isKey ? "key.schema.file" : "value.schema.file";
+    if (props.containsKey(propKeyRaw)) {
+      return props.getProperty(propKeyRaw);
+    } else if (props.containsKey(propKeyFile)) {
+      try {
+        return new String(Files.readAllBytes(Paths.get(props.getProperty(propKeyFile))));
+      } catch (IOException e) {
+        throw new ConfigException("Error reading schema from " + props.getProperty(propKeyFile));
+      }
+    } else {
+      throw new ConfigException("Must provide the " + (isKey ? "key" : "value")
+                                + " schema in either " + propKeyRaw + " or " + propKeyFile);
+    }
+  }
 
   private Serializer getKeySerializer(Properties props) throws ConfigException {
     if (props.containsKey("key.serializer")) {
