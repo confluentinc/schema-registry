@@ -110,34 +110,14 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(
         url, AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, originals);
     String valueSchemaString = getSchemaString(props, false);
-    List<SchemaReference> valueRefs = Collections.emptyList();
-    if (props.containsKey("value.refs")) {
-      try {
-        valueRefs = JacksonMapper.INSTANCE.readValue(
-            props.getProperty("value.refs"),
-            new TypeReference<List<SchemaReference>>() {}
-        );
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
+    List<SchemaReference> valueRefs = getSchemaReferences(props, false);
     valueSchema = parseSchema(schemaRegistry, valueSchemaString, valueRefs);
 
     Serializer keySerializer = getKeySerializer(props);
 
     if (needsKeySchema()) {
       String keySchemaString = getSchemaString(props, true);
-      List<SchemaReference> keyRefs = Collections.emptyList();
-      if (props.containsKey("key.refs")) {
-        try {
-          keyRefs = JacksonMapper.INSTANCE.readValue(
-              props.getProperty("key.refs"),
-              new TypeReference<List<SchemaReference>>() {}
-          );
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-      }
+      List<SchemaReference> keyRefs = getSchemaReferences(props, true);
       keySchema = parseSchema(schemaRegistry, keySchemaString, keyRefs);
     }
     keySubject = topic + "-key";
@@ -175,6 +155,21 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       throw new ConfigException("Must provide the " + (isKey ? "key" : "value")
                                 + " schema in either " + propKeyRaw + " or " + propKeyFile);
     }
+  }
+
+  private List<SchemaReference> getSchemaReferences(Properties props, boolean isKey) {
+    String propKey = isKey ? "key.refs" : "value.refs";
+    if (props.containsKey(propKey)) {
+      try {
+        return JacksonMapper.INSTANCE.readValue(
+                props.getProperty(propKey),
+                new TypeReference<List<SchemaReference>>() {}
+        );
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return Collections.emptyList();
   }
 
   private Serializer getKeySerializer(Properties props) throws ConfigException {
