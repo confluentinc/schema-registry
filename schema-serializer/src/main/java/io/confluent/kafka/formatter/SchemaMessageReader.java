@@ -147,7 +147,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       return props.getProperty(propKeyRaw);
     } else if (props.containsKey(propKeyFile)) {
       try {
-        return new String(Files.readAllBytes(Paths.get(props.getProperty(propKeyFile))));
+        return new String(Files.readAllBytes(Paths.get(props.getProperty(propKeyFile))),
+                          StandardCharsets.UTF_8);
       } catch (IOException e) {
         throw new ConfigException("Error reading schema from " + props.getProperty(propKeyFile));
       }
