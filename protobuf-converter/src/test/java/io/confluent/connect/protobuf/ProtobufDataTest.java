@@ -719,7 +719,7 @@ public class ProtobufDataTest {
         .put("array", Arrays.asList("a", "b", "c"))
         .put("map", Collections.singletonMap("field", 1))
         .put("mapNonStringKeys", Collections.singletonMap(1, 1))
-        .put("enum", "ACTIVE");
+        .put("enum", "INACTIVE");
 
     ProtobufSchemaAndValue convertedRecord = new ProtobufData().fromConnectData(schema, struct);
     ProtobufSchema protobufSchema = convertedRecord.getSchema();
@@ -807,7 +807,7 @@ public class ProtobufDataTest {
     fieldDescriptor = message.getDescriptorForType().findFieldByName("enum");
     EnumValueDescriptor enumValueDescriptor =
         (EnumValueDescriptor) message.getField(fieldDescriptor);
-    assertEquals("ACTIVE", enumValueDescriptor.getName());
+    assertEquals("INACTIVE", enumValueDescriptor.getName());
   }
 
   @Test
