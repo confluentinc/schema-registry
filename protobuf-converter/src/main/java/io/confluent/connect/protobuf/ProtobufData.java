@@ -173,9 +173,10 @@ public class ProtobufData {
         case STRING: {
           final String stringValue = (String) value; // Check for correct type
           if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
+            String enumType = schema.parameters().get(PROTOBUF_TYPE_ENUM);
             String tag = schema.parameters().get(PROTOBUF_TYPE_ENUM_PREFIX + stringValue);
             if (tag != null) {
-              return protobufSchema.getEnumValue(stringValue, Integer.parseInt(tag));
+              return protobufSchema.getEnumValue(scope + enumType, Integer.parseInt(tag));
             }
           }
           return stringValue;
