@@ -1911,6 +1911,58 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testIntWithConnectDefault() {
+    final String s = "{"
+        + "  \"type\": \"record\","
+        + "  \"name\": \"SomeThing\","
+        + "  \"namespace\": \"com.acme.property\","
+        + "  \"fields\": ["
+        + "    {"
+        + "      \"name\": \"f\","
+        + "      \"type\": {"
+        + "        \"type\": \"int\","
+        + "        \"connect.default\": 42,"
+        + "        \"connect.version\": 1"
+        + "      }"
+        + "    }"
+        + "  ]"
+        + "}";
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(s);
+
+    AvroData avroData = new AvroData(0);
+    Schema schema = avroData.toConnectSchema(avroSchema);
+
+    assertEquals(42, schema.field("f").schema().defaultValue());
+  }
+
+  @Test
+  public void testLongWithConnectDefault() {
+    final String s = "{"
+        + "  \"type\": \"record\","
+        + "  \"name\": \"SomeThing\","
+        + "  \"namespace\": \"com.acme.property\","
+        + "  \"fields\": ["
+        + "    {"
+        + "      \"name\": \"f\","
+        + "      \"type\": {"
+        + "        \"type\": \"long\","
+        + "        \"connect.default\": 42,"
+        + "        \"connect.version\": 1"
+        + "      }"
+        + "    }"
+        + "  ]"
+        + "}";
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(s);
+
+    AvroData avroData = new AvroData(0);
+    Schema schema = avroData.toConnectSchema(avroSchema);
+
+    assertEquals(42L, schema.field("f").schema().defaultValue());
+  }
+
+  @Test
   public void testArrayOfRecordWithNullNamespace() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.array().items()
             .record("item").fields()
