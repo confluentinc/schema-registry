@@ -28,6 +28,7 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.util.internal.JacksonUtils;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -1806,7 +1807,7 @@ public class AvroData {
     }
 
     if (fieldDefaultVal == null) {
-      fieldDefaultVal = schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP);
+      fieldDefaultVal = JacksonUtils.toJsonNode(schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP));
     }
     if (fieldDefaultVal != null) {
       builder.defaultValue(
