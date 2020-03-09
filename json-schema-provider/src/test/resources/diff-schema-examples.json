@@ -67,6 +67,21 @@
     "compatible": false
   },
   {
+    "description": "Detect changes to minLength string schema",
+    "original_schema": {
+      "type": "string",
+      "minLength": 11
+    },
+    "update_schema": {
+      "type": "string",
+      "minLength": 10
+    },
+    "changes": [
+      "MIN_LENGTH_DECREASED #/minLength"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect changes to maxLength string schema",
     "original_schema": {
       "type": "string",
@@ -78,6 +93,35 @@
     },
     "changes": [
       "MAX_LENGTH_INCREASED #/maxLength"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to maxLength string schema",
+    "original_schema": {
+      "type": "string",
+      "maxLength": 12
+    },
+    "update_schema": {
+      "type": "string",
+      "maxLength": 10
+    },
+    "changes": [
+      "MAX_LENGTH_DECREASED #/maxLength"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect removed pattern from string schema",
+    "original_schema": {
+      "type": "string",
+      "pattern": "uuid"
+    },
+    "update_schema": {
+      "type": "string"
+    },
+    "changes": [
+      "PATTERN_REMOVED #/pattern"
     ],
     "compatible": true
   },
@@ -116,11 +160,54 @@
       "maximum": 10
     },
     "update_schema": {
+      "type": "number"
+    },
+    "changes": [
+      "MAXIMUM_REMOVED #/maximum"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to maximum number schema",
+    "original_schema": {
+      "type": "number",
+      "maximum": 10
+    },
+    "update_schema": {
       "type": "number",
       "maximum": 11
     },
     "changes": [
       "MAXIMUM_INCREASED #/maximum"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to maximum number schema",
+    "original_schema": {
+      "type": "number",
+      "maximum": 11
+    },
+    "update_schema": {
+      "type": "number",
+      "maximum": 10
+    },
+    "changes": [
+      "MAXIMUM_DECREASED #/maximum"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to minimum number schema",
+    "original_schema": {
+      "type": "number",
+      "minimum": 10
+    },
+    "update_schema": {
+      "type": "number"
+    },
+    "changes": [
+      "MINIMUM_REMOVED #/minimum"
     ],
     "compatible": true
   },
@@ -140,6 +227,50 @@
     "compatible": false
   },
   {
+    "description": "Detect changes to minimum number schema",
+    "original_schema": {
+      "type": "number",
+      "minimum": 11
+    },
+    "update_schema": {
+      "type": "number",
+      "minimum": 10
+    },
+    "changes": [
+      "MINIMUM_DECREASED #/minimum"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to multipleOf number schema",
+    "original_schema": {
+      "type": "number",
+      "multipleOf": 10
+    },
+    "update_schema": {
+      "type": "number"
+    },
+    "changes": [
+      "MULTIPLE_OF_REMOVED #/multipleOf"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to multipleOf number schema",
+    "original_schema": {
+      "type": "number",
+      "multipleOf": 10
+    },
+    "update_schema": {
+      "type": "number",
+      "multipleOf": 2
+    },
+    "changes": [
+      "MULTIPLE_OF_REDUCED #/multipleOf"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect changes to multipleOf number schema",
     "original_schema": {
       "type": "number",
@@ -155,7 +286,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to number schema",
+    "description": "Detect narrowed change to number schema",
     "original_schema": {
       "type": "number"
     },
@@ -166,6 +297,19 @@
       "TYPE_NARROWED #/"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect extended change to number schema",
+    "original_schema": {
+      "type": "integer"
+    },
+    "update_schema": {
+      "type": "number"
+    },
+    "changes": [
+      "TYPE_EXTENDED #/"
+    ],
+    "compatible": true
   },
   {
     "description": "Detect changes to enum schema",
@@ -486,6 +630,46 @@
     "compatible": false
   },
   {
+    "description": "Detect compatible changes to dependencies schemas",
+    "original_schema": {
+      "dependencies": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "dependencies": {
+        "foo": {
+          "type": "string"
+        }
+      }
+    },
+    "changes": [
+      "DEPENDENCY_SCHEMA_REMOVED #/dependencies/bar"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible changes to dependencies schemas",
+    "original_schema": {
+      "dependencies": {
+        "foo": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+    },
+    "changes": [
+      "DEPENDENCY_SCHEMA_REMOVED #/dependencies/foo"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect incompatible changes to dependencies schemas",
     "original_schema": {
       "dependencies": {
@@ -606,6 +790,31 @@
   {
     "description": "Detect changes to maxProperties",
     "original_schema": {
+      "maxProperties": 1
+    },
+    "update_schema": {
+    },
+    "changes": [
+      "MAX_PROPERTIES_REMOVED #/maxProperties"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to maxProperties",
+    "original_schema": {
+      "maxProperties": 1
+    },
+    "update_schema": {
+      "maxProperties": 2
+    },
+    "changes": [
+      "MAX_PROPERTIES_INCREASED #/maxProperties"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to maxProperties",
+    "original_schema": {
       "maxProperties": 2
     },
     "update_schema": {
@@ -613,6 +822,31 @@
     },
     "changes": [
       "MAX_PROPERTIES_DECREASED #/maxProperties"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to minProperties",
+    "original_schema": {
+      "minProperties": 2
+    },
+    "update_schema": {
+    },
+    "changes": [
+      "MIN_PROPERTIES_REMOVED #/minProperties"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to minProperties",
+    "original_schema": {
+      "minProperties": 1
+    },
+    "update_schema": {
+      "minProperties": 2
+    },
+    "changes": [
+      "MIN_PROPERTIES_INCREASED #/minProperties"
     ],
     "compatible": false
   },
@@ -708,6 +942,35 @@
     "description": "Detect changes to minItems",
     "original_schema": {
       "type": "array",
+      "minItems": 1
+    },
+    "update_schema": {
+      "type": "array"
+    },
+    "changes": [
+      "MIN_ITEMS_REMOVED #/minItems"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect changes to minItems",
+    "original_schema": {
+      "type": "array",
+      "minItems": 1
+    },
+    "update_schema": {
+      "type": "array",
+      "minItems": 2
+    },
+    "changes": [
+      "MIN_ITEMS_INCREASED #/minItems"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to minItems",
+    "original_schema": {
+      "type": "array",
       "minItems": 2
     },
     "update_schema": {
@@ -761,6 +1024,18 @@
       "TYPE_CHANGED #/items/$ref"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect changes to boolean additional properties",
+    "original_schema": {
+      "additionalProperties": false
+    },
+    "update_schema": {
+    },
+    "changes": [
+      "ADDITIONAL_PROPERTIES_ADDED #/additionalProperties"
+    ],
+    "compatible": true
   },
   {
     "description": "Detect changes to boolean additional properties",
@@ -841,6 +1116,30 @@
     "description": "Detect change to oneOf schema",
     "original_schema": {
       "type": "string"
+    },
+    "update_schema": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect change to oneOf schema",
+    "original_schema": {
+      "oneOf": [
+        {
+          "type": "number"
+        }
+      ]
     },
     "update_schema": {
       "oneOf": [

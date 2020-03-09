@@ -27,6 +27,16 @@
     "compatible": true
   },
   {
+    "description": "Detect changed field number",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 2;\n}",
+    "changes": [
+      "FIELD_REMOVED #/TestMessage/1",
+      "FIELD_ADDED #/TestMessage/2"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect compatible field number type change",
     "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int32 test_int = 2;\n}",
     "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int64 test_int = 2;\n}",

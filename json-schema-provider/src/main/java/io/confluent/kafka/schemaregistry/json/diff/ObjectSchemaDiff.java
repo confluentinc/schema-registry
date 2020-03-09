@@ -174,11 +174,13 @@ public class ObjectSchemaDiff {
           Schema updateSchema = update.getPropertySchemas().get(propertyKey);
           if (updateSchema == null) {
             // We only consider the content model of the update
+            // since we can only remove properties if the update is an open content model
             ctx.addDifference(isOpenContentModel(update)
                               ? PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL
                               : PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL);
           } else if (originalSchema == null) {
             // We only consider the content model of the original
+            // since we can only add properties if the original is a closed content model
             if (isOpenContentModel(original)) {
               ctx.addDifference(PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
             } else {
