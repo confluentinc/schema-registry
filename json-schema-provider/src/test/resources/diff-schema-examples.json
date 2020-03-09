@@ -52,7 +52,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to minLength string schema",
+    "description": "Detect increased minLength string schema",
     "original_schema": {
       "type": "string",
       "minLength": 10
@@ -67,7 +67,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to minLength string schema",
+    "description": "Detect decreased minLength string schema",
     "original_schema": {
       "type": "string",
       "minLength": 11
@@ -82,7 +82,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to maxLength string schema",
+    "description": "Detect increased maxLength string schema",
     "original_schema": {
       "type": "string",
       "maxLength": 10
@@ -97,7 +97,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to maxLength string schema",
+    "description": "Detect decreased maxLength string schema",
     "original_schema": {
       "type": "string",
       "maxLength": 12
@@ -154,7 +154,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to maximum number schema",
+    "description": "Detect removed maximum number schema",
     "original_schema": {
       "type": "number",
       "maximum": 10
@@ -168,7 +168,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to maximum number schema",
+    "description": "Detect increaded maximum number schema",
     "original_schema": {
       "type": "number",
       "maximum": 10
@@ -183,7 +183,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to maximum number schema",
+    "description": "Detect decreased maximum number schema",
     "original_schema": {
       "type": "number",
       "maximum": 11
@@ -198,7 +198,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to minimum number schema",
+    "description": "Detect removed minimum number schema",
     "original_schema": {
       "type": "number",
       "minimum": 10
@@ -212,7 +212,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to minimum number schema",
+    "description": "Detect increased minimum number schema",
     "original_schema": {
       "type": "number",
       "minimum": 10
@@ -227,7 +227,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to minimum number schema",
+    "description": "Detect decreased minimum number schema",
     "original_schema": {
       "type": "number",
       "minimum": 11
@@ -242,7 +242,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to multipleOf number schema",
+    "description": "Detect removed multipleOf number schema",
     "original_schema": {
       "type": "number",
       "multipleOf": 10
@@ -256,7 +256,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to multipleOf number schema",
+    "description": "Detect reduced multipleOf number schema",
     "original_schema": {
       "type": "number",
       "multipleOf": 10
@@ -788,7 +788,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to maxProperties",
+    "description": "Detect removed maxProperties",
     "original_schema": {
       "maxProperties": 1
     },
@@ -800,7 +800,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to maxProperties",
+    "description": "Detect increased maxProperties",
     "original_schema": {
       "maxProperties": 1
     },
@@ -813,7 +813,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to maxProperties",
+    "description": "Detect decreased maxProperties",
     "original_schema": {
       "maxProperties": 2
     },
@@ -826,7 +826,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to minProperties",
+    "description": "Detect removed minProperties",
     "original_schema": {
       "minProperties": 2
     },
@@ -838,7 +838,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to minProperties",
+    "description": "Detect increased minProperties",
     "original_schema": {
       "minProperties": 1
     },
@@ -851,7 +851,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to minProperties",
+    "description": "Detect decreased minProperties",
     "original_schema": {
       "minProperties": 2
     },
@@ -924,7 +924,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to maxItems",
+    "description": "Detect decreased maxItems",
     "original_schema": {
       "type": "array",
       "maxItems": 2
@@ -939,7 +939,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to minItems",
+    "description": "Detect removed minItems",
     "original_schema": {
       "type": "array",
       "minItems": 1
@@ -953,7 +953,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to minItems",
+    "description": "Detect increased minItems",
     "original_schema": {
       "type": "array",
       "minItems": 1
@@ -968,7 +968,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to minItems",
+    "description": "Detect decreased minItems",
     "original_schema": {
       "type": "array",
       "minItems": 2
@@ -1026,7 +1026,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to boolean additional properties",
+    "description": "Detect added boolean additional properties",
     "original_schema": {
       "additionalProperties": false
     },
@@ -1038,7 +1038,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to boolean additional properties",
+    "description": "Detect removed boolean additional properties",
     "original_schema": {
       "additionalProperties": true
     },
@@ -1083,7 +1083,7 @@
     "compatible": false
   },
   {
-    "description": "Detect changes to boolean additional items",
+    "description": "Detect removed boolean additional items",
     "original_schema": {
       "additionalItems": true
     },

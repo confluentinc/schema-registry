@@ -1270,7 +1270,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private List<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas,
-                                              boolean returnDeletedSchemas) {
+                                            boolean returnDeletedSchemas) {
     List<Schema> schemaList = new ArrayList<>();
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
