@@ -1045,42 +1045,34 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   @Override
   public Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
       throws SchemaRegistryException {
-    try {
-      SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
-      SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
-      Iterator<SchemaRegistryValue> allVersions = kafkaStore.getAll(key1, key2);
-      return sortSchemasByVersion(allVersions, returnDeletedSchemas).iterator();
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException(
-          "Error from the backend Kafka store", e);
-    }
+    return sortSchemasByVersion(allVersions(subject, false), returnDeletedSchemas).iterator();
+  }
+
+  // Can be used by extensions as a simple subject search
+  public Iterator<Schema> getAllVersionsWithPrefix(String prefix, boolean returnDeletedSchemas)
+      throws SchemaRegistryException {
+    return sortSchemasByVersion(allVersions(prefix, true), returnDeletedSchemas).iterator();
   }
 
   private List<SchemaValue> getAllSchemaValues(String subject)
       throws SchemaRegistryException {
-    try {
-      SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
-      SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
-      Iterator<SchemaRegistryValue> allVersions = kafkaStore.getAll(key1, key2);
-      return sortSchemaValuesByVersion(allVersions);
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException(
-          "Error from the backend Kafka store", e);
-    }
+    return sortSchemaValuesByVersion(allVersions(subject, false));
   }
 
   @Override
   public Schema getLatestVersion(String subject) throws SchemaRegistryException {
+    List<Schema> sortedVersions = sortSchemasByVersion(allVersions(subject, false), false);
+    return sortedVersions.size() > 0 ? sortedVersions.get(sortedVersions.size() - 1) : null;
+  }
+
+  private Iterator<SchemaRegistryValue> allVersions(String subjectOrPrefix, boolean isPrefix)
+      throws SchemaRegistryException {
     try {
-      SchemaKey key1 = new SchemaKey(subject, MIN_VERSION);
-      SchemaKey key2 = new SchemaKey(subject, MAX_VERSION);
-      Iterator<SchemaRegistryValue> allVersions = kafkaStore.getAll(key1, key2);
-      List<Schema> sortedVersions = sortSchemasByVersion(allVersions, false);
-      Schema latestSchema = null;
-      if (sortedVersions.size() > 0) {
-        latestSchema = sortedVersions.get(sortedVersions.size() - 1);
-      }
-      return latestSchema;
+      String start = subjectOrPrefix;
+      String end = isPrefix ? subjectOrPrefix + Character.MAX_VALUE : subjectOrPrefix;
+      SchemaKey key1 = new SchemaKey(start, MIN_VERSION);
+      SchemaKey key2 = new SchemaKey(end, MAX_VERSION);
+      return kafkaStore.getAll(key1, key2);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
@@ -1278,7 +1270,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private List<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas,
-                                              boolean returnDeletedSchemas) throws StoreException {
+                                            boolean returnDeletedSchemas) {
     List<Schema> schemaList = new ArrayList<>();
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
@@ -1290,8 +1282,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return schemaList;
   }
 
-  private List<SchemaValue> sortSchemaValuesByVersion(Iterator<SchemaRegistryValue> schemas)
-      throws StoreException {
+  private List<SchemaValue> sortSchemaValuesByVersion(Iterator<SchemaRegistryValue> schemas) {
     List<SchemaValue> schemaList = new ArrayList<>();
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
