@@ -168,7 +168,7 @@
     "compatible": true
   },
   {
-    "description": "Detect increaded maximum number schema",
+    "description": "Detect increased maximum number schema",
     "original_schema": {
       "type": "number",
       "maximum": 10
