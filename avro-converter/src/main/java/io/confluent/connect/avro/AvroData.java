@@ -931,6 +931,7 @@ public class AvroData {
         }
       }
 
+      boolean forceLegacyDecimal = false;
       // the new and correct way to handle logical types
       if (schema.name() != null) {
         if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
@@ -946,10 +947,11 @@ public class AvroData {
                 scale,
                 precision
             );
-            schema.parameters().putIfAbsent(
-                CONNECT_AVRO_DECIMAL_PRECISION_PROP,
-                Integer.toString(precision)
-            );
+            // We cannot use the Avro Java library's support for the decimal logical type when the
+            // scale is either negative or greater than the precision as this violates the Avro spec
+            // and causes the Avro library to throw an exception, so we fall back in this case to
+            // using the legacy method for encoding decimal logical type information.
+            forceLegacyDecimal = true;
           } else {
             org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(baseSchema);
           }
@@ -977,7 +979,8 @@ public class AvroData {
       // and name().
       if (schema.name() != null) {
         if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())
-            && schema.parameters().containsKey(CONNECT_AVRO_DECIMAL_PRECISION_PROP)) {
+            && (schema.parameters().containsKey(CONNECT_AVRO_DECIMAL_PRECISION_PROP)
+                || forceLegacyDecimal)) {
           baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DECIMAL);
         } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
           baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIME_MILLIS);
