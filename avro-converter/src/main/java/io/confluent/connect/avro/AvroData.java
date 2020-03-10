@@ -61,12 +61,16 @@ import java.util.Objects;
 import java.util.Set;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
  * Utilities for converting between our runtime data format and Avro, and (de)serializing that data.
  */
 public class AvroData {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroData.class);
 
   public static final String NAMESPACE = "io.confluent.connect.avro";
   // Avro does not permit empty schema names, which might be the ideal default since we also are
@@ -935,7 +939,20 @@ public class AvroData {
           int precision = precisionString == null ? CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT :
               Integer.parseInt(precisionString);
           int scale = scaleString == null ? 0 : Integer.parseInt(scaleString);
-          org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(baseSchema);
+          if (scale < 0 || scale > precision) {
+            log.debug(
+                "Scale and precision of {} and {} cannot be serialized as native Avro logical " 
+                    + "decimal type; reverting to legacy serialization method",
+                scale,
+                precision
+            );
+            schema.parameters().putIfAbsent(
+                CONNECT_AVRO_DECIMAL_PRECISION_PROP,
+                Integer.toString(precision)
+            );
+          } else {
+            org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(baseSchema);
+          }
         } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
           org.apache.avro.LogicalTypes.timeMillis().addToSchema(baseSchema);
         } else if (Timestamp.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
