@@ -7,12 +7,12 @@ import org.junit.Test;
 import java.io.File;
 import java.io.FileWriter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.maven.UploadSchemaRegistryMojo.Reference;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 
 public class SchemasWithDependenciesTest extends SchemaRegistryTest {
@@ -65,11 +65,14 @@ public class SchemasWithDependenciesTest extends SchemaRegistryTest {
             amountWriter.write(dependency);
         }
 
-        Map<String, List<Reference>> refs = new LinkedHashMap<>();
+        Map<String, List<Reference>> schemaRefs = new LinkedHashMap<>();
         List<Reference> subjectRefs = new ArrayList<>();
-        subjectRefs.add(new Reference("com.pizza.Amount", "Amount", null));
-        refs.put("Pizza", subjectRefs);
-        schemaRegistryMojo.references = refs;
+        Reference ref = new Reference();
+        ref.name = "com.pizza.Amount";
+        ref.subject = "Amount";
+        subjectRefs.add(ref);
+        schemaRefs.put("Pizza", Collections.singletonList(ref));
+        schemaRegistryMojo.references = schemaRefs;
 
         Map<String, File> schemas = new LinkedHashMap<>();
         schemas.put("Amount", amountFile);
