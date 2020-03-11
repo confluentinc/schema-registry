@@ -60,7 +60,6 @@
                 <version>3.6.0</version>
                 <configuration>
                     <goalPrefix>schema-registry</goalPrefix>
-
                 </configuration>
                 <executions>
                     <execution>
