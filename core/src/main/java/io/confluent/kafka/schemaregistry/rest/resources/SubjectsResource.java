@@ -146,6 +146,7 @@ public class SubjectsResource {
       @Context HttpHeaders headers,
       @ApiParam(value = "the name of the subject", required = true)
         @PathParam("subject") String subject) {
+    log.info("Deleting subject '{}'", subject);
     List<Integer> deletedVersions;
     try {
       if (!schemaRegistry.hasSubjects(subject)) {
