@@ -61,12 +61,16 @@ import java.util.Objects;
 import java.util.Set;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
  * Utilities for converting between our runtime data format and Avro, and (de)serializing that data.
  */
 public class AvroData {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroData.class);
 
   public static final String NAMESPACE = "io.confluent.connect.avro";
   // Avro does not permit empty schema names, which might be the ideal default since we also are
@@ -927,6 +931,7 @@ public class AvroData {
         }
       }
 
+      boolean forceLegacyDecimal = false;
       // the new and correct way to handle logical types
       if (schema.name() != null) {
         if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
@@ -935,7 +940,24 @@ public class AvroData {
           int precision = precisionString == null ? CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT :
               Integer.parseInt(precisionString);
           int scale = scaleString == null ? 0 : Integer.parseInt(scaleString);
-          org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(baseSchema);
+          if (scale < 0 || scale > precision) {
+            log.trace(
+                "Scale and precision of {} and {} cannot be serialized as native Avro logical " 
+                    + "decimal type; reverting to legacy serialization method",
+                scale,
+                precision
+            );
+            // We cannot use the Avro Java library's support for the decimal logical type when the
+            // scale is either negative or greater than the precision as this violates the Avro spec
+            // and causes the Avro library to throw an exception, so we fall back in this case to
+            // using the legacy method for encoding decimal logical type information.
+            // Can't add a key/value pair with the CONNECT_AVRO_DECIMAL_PRECISION_PROP key to the
+            // schema's parameters since the parameters for Connect schemas are immutable, so we
+            // just track this in a local boolean variable instead.
+            forceLegacyDecimal = true;
+          } else {
+            org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(baseSchema);
+          }
         } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
           org.apache.avro.LogicalTypes.timeMillis().addToSchema(baseSchema);
         } else if (Timestamp.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
@@ -960,7 +982,8 @@ public class AvroData {
       // and name().
       if (schema.name() != null) {
         if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())
-            && schema.parameters().containsKey(CONNECT_AVRO_DECIMAL_PRECISION_PROP)) {
+            && (schema.parameters().containsKey(CONNECT_AVRO_DECIMAL_PRECISION_PROP)
+                || forceLegacyDecimal)) {
           baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DECIMAL);
         } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
           baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIME_MILLIS);
