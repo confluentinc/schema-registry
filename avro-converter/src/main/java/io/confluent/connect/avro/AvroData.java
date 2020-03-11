@@ -951,6 +951,9 @@ public class AvroData {
             // scale is either negative or greater than the precision as this violates the Avro spec
             // and causes the Avro library to throw an exception, so we fall back in this case to
             // using the legacy method for encoding decimal logical type information.
+            // Can't add a key/value pair with the CONNECT_AVRO_DECIMAL_PRECISION_PROP key to the
+            // schema's parameters since the parameters for Connect schemas are immutable, so we
+            // just track this in a local boolean variable instead.
             forceLegacyDecimal = true;
           } else {
             org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(baseSchema);
