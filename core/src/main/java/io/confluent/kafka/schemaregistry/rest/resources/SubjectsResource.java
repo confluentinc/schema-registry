@@ -87,6 +87,8 @@ public class SubjectsResource {
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
+    log.info("Schema lookup under subject {}, deleted {}, type {}",
+             subject, lookupDeletedSchema, request.getSchemaType());
     // returns version if the schema exists. Otherwise returns 404
     Schema schema = new Schema(
         subject,
@@ -146,7 +148,7 @@ public class SubjectsResource {
       @Context HttpHeaders headers,
       @ApiParam(value = "the name of the subject", required = true)
         @PathParam("subject") String subject) {
-    log.info("Deleting subject '{}'", subject);
+    log.info("Deleting subject {}", subject);
     List<Integer> deletedVersions;
     try {
       if (!schemaRegistry.hasSubjects(subject)) {
