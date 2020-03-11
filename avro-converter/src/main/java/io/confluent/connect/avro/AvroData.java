@@ -941,7 +941,7 @@ public class AvroData {
               Integer.parseInt(precisionString);
           int scale = scaleString == null ? 0 : Integer.parseInt(scaleString);
           if (scale < 0 || scale > precision) {
-            log.debug(
+            log.trace(
                 "Scale and precision of {} and {} cannot be serialized as native Avro logical " 
                     + "decimal type; reverting to legacy serialization method",
                 scale,
