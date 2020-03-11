@@ -7,7 +7,6 @@ import org.junit.Test;
 import java.io.File;
 import java.io.FileWriter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +70,7 @@ public class SchemasWithDependenciesTest extends SchemaRegistryTest {
         ref.name = "com.pizza.Amount";
         ref.subject = "Amount";
         subjectRefs.add(ref);
-        schemaRefs.put("Pizza", Collections.singletonList(ref));
+        schemaRefs.put("Pizza", subjectRefs);
         schemaRegistryMojo.references = schemaRefs;
 
         Map<String, File> schemas = new LinkedHashMap<>();
