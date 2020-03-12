@@ -262,6 +262,29 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testFromConnectNumericDecimalWithTrailingZeros() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.DECIMAL_FORMAT_CONFIG,
+                DecimalFormat.NUMERIC.name())));
+    NumberSchema schema = NumberSchema.builder()
+        .title("org.apache.kafka.connect.data.Decimal")
+        .unprocessedProperties(ImmutableMap.of("connect.type",
+            "bytes",
+            "connect.version",
+            1,
+            "connect.parameters",
+            ImmutableMap.of("scale", "4")
+        ))
+        .build();
+    checkNonObjectConversion(schema,
+        DecimalNode.valueOf(new BigDecimal("1.5600")),
+        Decimal.schema(4),
+        new BigDecimal(new BigInteger("15600"), 4)
+    );
+  }
+
+  @Test
   public void testFromConnectMapWithStringKey() {
     Schema connectSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA);
     NumberSchema numberSchema = NumberSchema.builder()
@@ -720,6 +743,24 @@ public class JsonSchemaDataTest {
     Schema expectedSchema = SchemaBuilder.bytes()
         .name(LOGICAL_NAME)
         .parameter(SCALE_FIELD, Integer.toString(2))
+        .build();
+    checkNonObjectConversion(expectedSchema, reference, schema, DecimalNode.valueOf(reference));
+  }
+
+  @Test
+  public void testToConnectNumericDecimalWithTrailingZeros() {
+    NumberSchema schema = NumberSchema.builder()
+        .title("org.apache.kafka.connect.data.Decimal")
+        .unprocessedProperties(ImmutableMap.of("connect.type",
+            "bytes",
+            "connect.parameters",
+            ImmutableMap.of("scale", "4")
+        ))
+        .build();
+    BigDecimal reference = new BigDecimal(new BigInteger("15600"), 4);
+    Schema expectedSchema = SchemaBuilder.bytes()
+        .name(LOGICAL_NAME)
+        .parameter(SCALE_FIELD, Integer.toString(4))
         .build();
     checkNonObjectConversion(expectedSchema, reference, schema, DecimalNode.valueOf(reference));
   }
