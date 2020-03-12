@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -27,7 +26,6 @@ import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -74,7 +72,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
               String.format("Error while parsing schema for %s", subject)
           );
         }
-      } catch (RestClientException | IOException ex) {
+      } catch (Exception ex) {
         throw new MojoExecutionException(
             String.format("Exception thrown while downloading metadata for %s.", subject),
             ex
@@ -161,7 +159,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
           new FileOutputStream(outputFile), StandardCharsets.UTF_8)
       ) {
         writer.write(kvp.getValue().toString());
-      } catch (IOException ex) {
+      } catch (Exception ex) {
         throw new MojoExecutionException(
             String.format("Exception thrown while writing subject('%s') schema to %s", kvp.getKey(),
                           outputFile),
