@@ -105,9 +105,9 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     } catch (Exception ex) {
       getLog().error("Exception thrown while processing " + key, ex);
       errors++;
+    } finally {
+      subjectsProcessed.add(key);
     }
-
-    subjectsProcessed.add(key);
   }
 
   protected abstract boolean processSchema(String subject,
