@@ -244,6 +244,8 @@ public class SubjectVersionsResource {
         @PathParam("subject") String subjectName,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
+    log.info("Registering new schema: subject {}, version {}, id {}, type {}",
+             subjectName, request.getVersion(), request.getId(), request.getSchemaType());
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
@@ -304,6 +306,7 @@ public class SubjectVersionsResource {
       @Context HttpHeaders headers,
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
+    log.info("Deleting schema version {} from subject {}", version, subject);
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
