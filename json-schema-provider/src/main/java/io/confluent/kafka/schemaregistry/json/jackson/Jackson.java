@@ -16,7 +16,9 @@
 package io.confluent.kafka.schemaregistry.json.jackson;
 
 import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.joda.JodaModule;
@@ -60,7 +62,9 @@ public class Jackson {
     mapper.registerModule(new Jdk8Module());
     mapper.registerModule(new JavaTimeModule());
     mapper.registerModule(new JsonOrgModule());
+    mapper.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
     mapper.disable(FAIL_ON_UNKNOWN_PROPERTIES);
+    mapper.setNodeFactory(JsonNodeFactory.withExactBigDecimals(true));
 
     return mapper;
   }

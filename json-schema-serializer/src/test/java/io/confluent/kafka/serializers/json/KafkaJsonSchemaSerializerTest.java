@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 import javax.validation.constraints.Min;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -76,10 +77,10 @@ public class KafkaJsonSchemaSerializerTest {
 
     bytes = serializer.serialize(topic, 1.23f);
     // JSON can't distinguish doubles
-    assertEquals(1.23, deserializer.deserialize(topic, bytes));
+    assertEquals(new BigDecimal("1.23"), deserializer.deserialize(topic, bytes));
 
     bytes = serializer.serialize(topic, 2.34d);
-    assertEquals(2.34, deserializer.deserialize(topic, bytes));
+    assertEquals(new BigDecimal("2.34"), deserializer.deserialize(topic, bytes));
 
     bytes = serializer.serialize(topic, "abc");
     assertEquals("abc", deserializer.deserialize(topic, bytes));
@@ -94,7 +95,7 @@ public class KafkaJsonSchemaSerializerTest {
   public void serializeMap() throws Exception {
     Map<String, Object> message = new HashMap<>();
     message.put("foo", "bar");
-    message.put("baz", 354.99);
+    message.put("baz", new BigDecimal("354.99"));
 
     byte[] bytes = serializer.serialize("foo", message);
     Object deserialized = deserializer.deserialize(topic, bytes);
