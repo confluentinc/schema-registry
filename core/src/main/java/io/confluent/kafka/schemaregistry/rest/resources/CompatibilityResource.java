@@ -93,6 +93,9 @@ public class CompatibilityResource {
           + "under the specified subject", required = true)@PathParam("version") String version,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
+    log.info("Testing schema subject {} compatibility between existing version {} and "
+             + "specified version {}, id {}, type {}",
+             subject, version, request.getVersion(), request.getId(), request.getSchemaType());
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
     Map<String, String> headerProperties = new HashMap<String, String>();
