@@ -282,6 +282,7 @@ public class JsonSchemaDataTest {
         Decimal.schema(4),
         new BigDecimal(new BigInteger("15600"), 4)
     );
+    jsonSchemaData = new JsonSchemaData();
   }
 
   @Test
