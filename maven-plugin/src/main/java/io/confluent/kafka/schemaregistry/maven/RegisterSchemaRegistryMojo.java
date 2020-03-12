@@ -24,7 +24,7 @@ import org.apache.maven.plugins.annotations.Mojo;
 import java.io.IOException;
 import java.util.Map;
 
-@Mojo(name = "register")
+@Mojo(name = "register", configurator = "custom-basic")
 public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
 
   @Override

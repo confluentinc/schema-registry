@@ -25,7 +25,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-@Mojo(name = "test-compatibility")
+@Mojo(name = "test-compatibility", configurator = "custom-basic")
 public class TestCompatibilitySchemaRegistryMojo extends UploadSchemaRegistryMojo {
 
   Map<String, Boolean> schemaCompatibility = new HashMap<>();
