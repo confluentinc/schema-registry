@@ -207,7 +207,10 @@ public class RestService implements Configurable {
     }
 
     String proxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
-    Integer proxyPort = (Integer) configs.get(SchemaRegistryClientConfig.PROXY_PORT);
+    Object proxyPortVal = configs.get(SchemaRegistryClientConfig.PROXY_PORT);
+    Integer proxyPort = proxyPortVal instanceof String
+                        ? Integer.valueOf((String) proxyPortVal)
+                        : (Integer) proxyPortVal;
 
     if (isValidProxyConfig(proxyHost, proxyPort)) {
       setProxy(proxyHost, proxyPort);
