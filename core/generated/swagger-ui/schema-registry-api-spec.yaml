@@ -533,6 +533,10 @@ paths:
         description: "the name of the subject"
         required: true
         type: "string"
+      - name: "permanent"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -565,6 +569,10 @@ paths:
         description: "Name of the Subject"
         required: true
         type: "string"
+      - name: "includeDeleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -707,6 +715,10 @@ paths:
           \ served."
         required: true
         type: "string"
+      - name: "permanent"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"

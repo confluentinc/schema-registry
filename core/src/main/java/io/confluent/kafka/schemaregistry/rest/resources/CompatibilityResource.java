@@ -158,7 +158,7 @@ public class CompatibilityResource {
 
   private void registerWithError(final String subject, final String errorMessage) {
     try {
-      if (!schemaRegistry.hasSubjects(subject)) {
+      if (!schemaRegistry.hasSubjects(subject, false)) {
         throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {
