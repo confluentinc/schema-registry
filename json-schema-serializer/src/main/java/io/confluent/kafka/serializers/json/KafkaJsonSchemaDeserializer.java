@@ -41,6 +41,10 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
     schemaRegistry = client;
   }
 
+  public KafkaJsonSchemaDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
+    this(client, props, null);
+  }
+
   @VisibleForTesting
   public KafkaJsonSchemaDeserializer(
       SchemaRegistryClient client,

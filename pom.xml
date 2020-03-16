@@ -65,6 +65,7 @@
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
+        <module>benchmark</module>
     </modules>
 
     <properties>

@@ -108,6 +108,10 @@ public class ProtobufSchema implements ParsedSchema {
 
   private transient Descriptor descriptor;
 
+  private transient int hashCode = NO_HASHCODE;
+
+  private static final int NO_HASHCODE = Integer.MIN_VALUE;
+
   private static final Base64.Encoder base64Encoder = Base64.getEncoder();
 
   private static final Base64.Decoder base64Decoder = Base64.getDecoder();
@@ -511,6 +515,9 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public Descriptor toDescriptor() {
+    if (schemaObj == null) {
+      return null;
+    }
     if (descriptor == null) {
       descriptor = toDescriptor(name());
     }
@@ -545,6 +552,9 @@ public class ProtobufSchema implements ParsedSchema {
 
   @VisibleForTesting
   protected DynamicSchema toDynamicSchema() {
+    if (schemaObj == null) {
+      return null;
+    }
     if (dynamicSchema == null) {
       dynamicSchema = toDynamicSchema(DEFAULT_NAME, schemaObj, dependencies);
     }
@@ -728,6 +738,9 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public String canonicalString() {
+    if (schemaObj == null) {
+      return null;
+    }
     if (canonicalString == null) {
       // Remove comments, such as the location
       canonicalString = schemaObj.toSchema().replaceAll("//.*?\\n", "");
@@ -813,8 +826,11 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public int hashCode() {
-    // Can't use schemaObj as locations may differ
-    return Objects.hash(canonicalString(), references, version);
+    if (hashCode == NO_HASHCODE) {
+      // Can't use schemaObj as locations may differ
+      hashCode = Objects.hash(canonicalString(), references, version);
+    }
+    return hashCode;
   }
 
   @Override

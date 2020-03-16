@@ -19,11 +19,8 @@ import java.io.IOException;
 import io.confluent.common.utils.PerformanceStats;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.json.JsonSchema;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 
 public class SchemaRegistryClientPerformance extends SchemaRegistryPerformance {
 
@@ -69,21 +66,8 @@ public class SchemaRegistryClientPerformance extends SchemaRegistryPerformance {
 
   @Override
   protected void doIteration(PerformanceStats.Callback cb) {
-    String schema = makeSchema(this.schemaType, this.registeredSchemas);
-    ParsedSchema parsedSchema;
-    switch (schemaType) {
-      case AvroSchema.TYPE:
-        parsedSchema = new AvroSchema(schema);
-        break;
-      case JsonSchema.TYPE:
-        parsedSchema = new JsonSchema(schema);
-        break;
-      case ProtobufSchema.TYPE:
-        parsedSchema = new ProtobufSchema(schema);
-        break;
-      default:
-        throw new IllegalArgumentException("Unsupported schema type " + schemaType);
-    }
+    ParsedSchema parsedSchema =
+        makeParsedSchema(this.schemaType, this.registeredSchemas);
 
     try {
       client.register(this.subject, parsedSchema);

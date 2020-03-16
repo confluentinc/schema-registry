@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.tools;
 import io.confluent.common.utils.AbstractPerformanceTest;
 import io.confluent.common.utils.PerformanceStats;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -82,7 +83,7 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
   }
 
   // sequential schema maker
-  protected static String makeSchema(String schemaType, long num) {
+  public static String makeSchema(String schemaType, long num) {
     String schemaString;
     switch (schemaType) {
       case AvroSchema.TYPE:
@@ -103,6 +104,26 @@ public class SchemaRegistryPerformance extends AbstractPerformanceTest {
         throw new IllegalArgumentException("Unsupported schema type " + schemaType);
     }
     return schemaString;
+  }
+
+  // sequential schema maker
+  public static ParsedSchema makeParsedSchema(String schemaType, long num) {
+    String schema = makeSchema(schemaType, num);
+    ParsedSchema parsedSchema;
+    switch (schemaType) {
+      case AvroSchema.TYPE:
+        parsedSchema = new AvroSchema(schema);
+        break;
+      case JsonSchema.TYPE:
+        parsedSchema = new JsonSchema(schema);
+        break;
+      case ProtobufSchema.TYPE:
+        parsedSchema = new ProtobufSchema(schema);
+        break;
+      default:
+        throw new IllegalArgumentException("Unsupported schema type " + schemaType);
+    }
+    return parsedSchema;
   }
 
   @Override
