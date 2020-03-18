@@ -249,7 +249,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       localStore.close();
     }
     super.awaitShutdown();
-    consumer.close();
+    if (consumer != null) {
+      consumer.close();
+    }
     log.info("KafkaStoreReaderThread shutdown complete.");
   }
 

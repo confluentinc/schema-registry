@@ -386,7 +386,7 @@ public class AvroData {
     Object value = logicalValue;
     if (schema != null && schema.name() != null) {
       LogicalTypeConverter logicalConverter = TO_AVRO_LOGICAL_CONVERTERS.get(schema.name());
-      if (logicalConverter != null && logicalValue != null) {
+      if (logicalConverter != null) {
         value = logicalConverter.convert(schema, logicalValue);
       }
     }
@@ -1494,7 +1494,7 @@ public class AvroData {
           throw new DataException("Unknown Connect schema type: " + schema.type());
       }
 
-      if (schema != null && schema.name() != null && doLogicalConversion) {
+      if (schema.name() != null && doLogicalConversion) {
         LogicalTypeConverter logicalConverter = TO_CONNECT_LOGICAL_CONVERTERS.get(schema.name());
         if (logicalConverter != null) {
           converted = logicalConverter.convert(schema, converted);
@@ -1502,7 +1502,8 @@ public class AvroData {
       }
       return converted;
     } catch (ClassCastException e) {
-      throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
+      String schemaType = schema != null ? schema.type().toString() : "null";
+      throw new DataException("Invalid type for " + schemaType + ": " + value.getClass());
     }
   }
 
