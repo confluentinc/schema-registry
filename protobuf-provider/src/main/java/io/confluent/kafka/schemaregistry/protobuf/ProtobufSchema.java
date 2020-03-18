@@ -570,8 +570,9 @@ public class ProtobufSchema implements ParsedSchema {
     log.trace("*** toDynamicSchema: {}", rootElem.toSchema());
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     try {
-      if (rootElem.getSyntax() != null) {
-        schema.setSyntax(rootElem.getSyntax().toString());
+      ProtoFile.Syntax syntax = rootElem.getSyntax();
+      if (syntax != null) {
+        schema.setSyntax(syntax.toString());
       }
       if (rootElem.getPackageName() != null) {
         schema.setPackage(rootElem.getPackageName());
@@ -655,7 +656,8 @@ public class ProtobufSchema implements ParsedSchema {
       if (added.contains(field.getName())) {
         continue;
       }
-      String label = field.getLabel() != null ? field.getLabel().toString().toLowerCase() : null;
+      Field.Label fieldLabel = field.getLabel();
+      String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
       String fieldType = field.getType();
       String defaultVal = field.getDefaultValue();
       String jsonName = findOption("json_name", field.getOptions())
@@ -663,14 +665,16 @@ public class ProtobufSchema implements ParsedSchema {
       Boolean isPacked = findOption("packed", field.getOptions())
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
       ProtoType protoType = ProtoType.get(fieldType);
+      ProtoType keyType = protoType.getKeyType();
+      ProtoType valueType = protoType.getValueType();
       // Map fields are only permitted in messages
-      if (protoType.isMap()) {
+      if (protoType.isMap() && keyType != null && valueType != null) {
         label = "repeated";
         fieldType = toMapEntry(field.getName());
         MessageDefinition.Builder mapMessage = MessageDefinition.newBuilder(fieldType);
         mapMessage.setMapEntry(true);
-        mapMessage.addField(null, protoType.getKeyType().getSimpleName(), KEY_FIELD, 1, null);
-        mapMessage.addField(null, protoType.getValueType().getSimpleName(), VALUE_FIELD, 2, null);
+        mapMessage.addField(null, keyType.getSimpleName(), KEY_FIELD, 1, null);
+        mapMessage.addField(null, valueType.getSimpleName(), VALUE_FIELD, 2, null);
         message.addMessageDefinition(mapMessage.build());
       }
       message.addField(
