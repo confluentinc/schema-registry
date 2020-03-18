@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import com.google.common.annotations.VisibleForTesting;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.ValidationException;
 import org.everit.json.schema.loader.SchemaLoader;
@@ -69,10 +68,13 @@ public class JsonSchema implements ParsedSchema {
 
   private transient String canonicalString;
 
+  private transient int hashCode = NO_HASHCODE;
+
+  private static final int NO_HASHCODE = Integer.MIN_VALUE;
+
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
-  @VisibleForTesting
-  public JsonSchema(JsonNode jsonNode) throws JsonProcessingException {
+  public JsonSchema(JsonNode jsonNode) {
     this(jsonNode, Collections.emptyList(), Collections.emptyMap(), null);
   }
 
@@ -202,6 +204,9 @@ public class JsonSchema implements ParsedSchema {
 
   @Override
   public String canonicalString() {
+    if (jsonNode == null) {
+      return null;
+    }
     if (canonicalString == null) {
       try {
         canonicalString = objectMapper.writeValueAsString(jsonNode);
@@ -314,7 +319,10 @@ public class JsonSchema implements ParsedSchema {
 
   @Override
   public int hashCode() {
-    return Objects.hash(jsonNode, references, version);
+    if (hashCode == NO_HASHCODE) {
+      hashCode = Objects.hash(jsonNode, references, version);
+    }
+    return hashCode;
   }
 
   @Override
