@@ -91,6 +91,10 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Class name="~io.confluent.schemaregistry.benchmark.generated.*"/>
     </Match>
 
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+    </Match>
+    
     <!-- false positive in Java 11, see https://github.com/spotbugs/spotbugs/issues/756 -->
     <Match>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
