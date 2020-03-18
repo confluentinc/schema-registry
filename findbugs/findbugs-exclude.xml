@@ -73,6 +73,11 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
 
     <Match>
         <Class name="io.confluent.connect.avro.AvroData"/>
+        <Bug pattern="RC_REF_COMPARISON_BAD_PRACTICE"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.connect.avro.AvroData"/>
         <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
     </Match>
 
@@ -94,7 +99,7 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     <Match>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
     </Match>
-    
+
     <!-- false positive in Java 11, see https://github.com/spotbugs/spotbugs/issues/756 -->
     <Match>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>

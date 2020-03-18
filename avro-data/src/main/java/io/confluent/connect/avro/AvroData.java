@@ -1594,7 +1594,7 @@ public class AvroData {
             }
             // Capture the precision as a parameter only if it is not the default
             Integer precision = ((Number) precisionNode).intValue();
-            if (precision.equals(CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT)) {
+            if (precision != CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT) {
               builder.parameter(CONNECT_AVRO_DECIMAL_PRECISION_PROP, precision.toString());
             }
           }
