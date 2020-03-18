@@ -22,9 +22,6 @@ import io.swagger.annotations.ApiResponses;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.HeaderParam;
@@ -98,9 +95,6 @@ public class CompatibilityResource {
              subject, version, request.getVersion(), request.getId(), request.getSchemaType());
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
-    Map<String, String> headerProperties = new HashMap<String, String>();
-    headerProperties.put("Content-Type", contentType);
-    headerProperties.put("Accept", accept);
     boolean isCompatible = false;
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     String errorMessage = "Error while retrieving list of all subjects";

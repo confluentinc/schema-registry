@@ -38,6 +38,10 @@ public class KafkaProtobufDeserializer<T extends Message>
     schemaRegistry = client;
   }
 
+  public KafkaProtobufDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
+    this(client, props, null);
+  }
+
   @VisibleForTesting
   public KafkaProtobufDeserializer(SchemaRegistryClient client,
                                    Map<String, ?> props,

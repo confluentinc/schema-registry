@@ -8,10 +8,25 @@ evolution of schemas according to the configured compatibility setting. It
 provides serializers that plug into Kafka clients that handle schema storage and
 retrieval for Kafka messages that are sent in the Avro format.
 
-Quickstart
-----------
+Documentation
+-------------
 
-The following assumes you have Kafka and an instance of the Schema Registry running using the default settings.
+Here are a few links to Schema Registry pages in the Confluent Documentation.
+
+- [Installing and Configuring Schema Registry](https://docs.confluent.io/current/schema-registry/installation/index.html)
+- [Schema Management overview](https://docs.confluent.io/current/schema-registry/index.html)
+- [Schema Registry Tutorial](https://docs.confluent.io/current/schema-registry/schema_registry_tutorial.html)
+- [Schema Registry API reference](https://docs.confluent.io/current/schema-registry/develop/api.html)
+- [Serializers, Deserializers for supported schema types](https://docs.confluent.io/current/schema-registry/serializer-formatter.html)
+- [Kafka Clients](https://docs.confluent.io/current/clients/index.html#kafka-clients)
+- [Schema Registry on Confluent Cloud](https://docs.confluent.io/current/quickstart/cloud-quickstart/schema-registry.html)
+
+Quickstart API Usage examples
+-----------------------------
+
+The following assumes you have Kafka and an [instance of the Schema Registry](https://docs.confluent.io/current/schema-registry/installation/index.html)
+running using the default settings. These examples are also included as [API Usage examples](https://docs.confluent.io/current/schema-registry/using.html) on
+[docs.confluent.io](https://docs.confluent.io/current/).
 
 ```bash
 # Register a new version of a schema under the subject "Kafka-key"
