@@ -115,11 +115,6 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
 
     Serializer keySerializer = getKeySerializer(props);
 
-    if (needsKeySchema()) {
-      String keySchemaString = getSchemaString(props, true);
-      List<SchemaReference> keyRefs = getSchemaReferences(props, true);
-      keySchema = parseSchema(schemaRegistry, keySchemaString, keyRefs);
-    }
     keySubject = topic + "-key";
     valueSubject = topic + "-value";
     boolean autoRegisterSchema;
@@ -131,6 +126,12 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
 
     if (this.serializer == null) {
       this.serializer = createSerializer(schemaRegistry, autoRegisterSchema, keySerializer);
+    }
+
+    if (needsKeySchema()) {
+      String keySchemaString = getSchemaString(props, true);
+      List<SchemaReference> keyRefs = getSchemaReferences(props, true);
+      keySchema = parseSchema(schemaRegistry, keySchemaString, keyRefs);
     }
   }
 
