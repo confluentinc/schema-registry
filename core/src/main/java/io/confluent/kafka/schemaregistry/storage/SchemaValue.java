@@ -186,7 +186,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     if (!this.id.equals(that.getId())) {
       return false;
     }
-    if (!this.schemaType.equals(that.getSchemaType())) {
+    if (schemaType != null ? !schemaType.equals(that.schemaType) : that.schemaType != null) {
       return false;
     }
     if (!this.references.equals(that.getReferences())) {
@@ -207,7 +207,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     int result = subject.hashCode();
     result = 31 * result + version;
     result = 31 * result + id.intValue();
-    result = 31 * result + schemaType.hashCode();
+    result = 31 * result + (schemaType != null ? schemaType.hashCode() : 0);
     result = 31 * result + schema.hashCode();
     result = 31 * result + references.hashCode();
     result = 31 * result + (deleted ? 1 : 0);
