@@ -557,7 +557,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   @Override
   public void deleteSchemaVersion(String subject,
                                   Schema schema,
-                                  boolean permanent)
+                                  boolean permanentDelete)
       throws SchemaRegistryException {
     try {
       if (getModeInScope(subject) == Mode.READONLY) {
@@ -568,12 +568,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         throw new ReferenceExistsException(key.toString());
       }
       SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
-      if (permanent && !schemaValue.isDeleted()) {
+      if (permanentDelete && !schemaValue.isDeleted()) {
         throw new SchemaVersionNotSoftDeletedException(subject, schema.getVersion().toString());
       }
       // Ensure cache is up-to-date before any potential writes
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      if (!permanent) {
+      if (!permanentDelete) {
         schemaValue = new SchemaValue(schema);
         schemaValue.setDeleted(true);
         kafkaStore.put(key, schemaValue);
@@ -599,17 +599,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   public void deleteSchemaVersionOrForward(
       Map<String, String> headerProperties, String subject,
-      Schema schema, boolean permanent) throws SchemaRegistryException {
+      Schema schema, boolean permanentDelete) throws SchemaRegistryException {
 
     kafkaStore.lockFor(subject).lock();
     try {
       if (isMaster()) {
-        deleteSchemaVersion(subject, schema, permanent);
+        deleteSchemaVersion(subject, schema, permanentDelete);
       } else {
         // forward registering request to the master
         if (masterIdentity != null) {
           forwardDeleteSchemaVersionRequestToMaster(headerProperties, subject,
-                  schema.getVersion(), permanent);
+                  schema.getVersion(), permanentDelete);
         } else {
           throw new UnknownMasterException("Register schema request failed since master is "
                                            + "unknown");
@@ -658,8 +658,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           deleteSubjectCompatibility(subject);
         }
       } else {
-        for (Integer i: deletedVersions) {
-          kafkaStore.put(new SchemaKey(subject, i), null);
+        for (Integer version : deletedVersions) {
+          kafkaStore.put(new SchemaKey(subject, version), null);
         }
       }
       return deletedVersions;
@@ -777,14 +777,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       Map<String, String> headerProperties,
       String subject,
       Integer version,
-      boolean permanent) throws SchemaRegistryRequestForwardingException {
+      boolean permanentDelete) throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = masterRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding deleteSchemaVersion schema version request %s-%s to %s",
                             subject, version, baseUrl));
     try {
       masterRestService.deleteSchemaVersion(headerProperties, subject,
-              String.valueOf(version), permanent);
+              String.valueOf(version), permanentDelete);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
@@ -898,7 +898,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           returnDeletedSchema) throws SchemaRegistryException {
     final int version = versionId.getVersionId();
     Schema schema = this.get(subject, version, returnDeletedSchema);
-    return !(schema == null);
+    return (schema != null);
   }
 
   @Override
@@ -986,10 +986,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   @Override
-  public Set<String> listSubjects() throws SchemaRegistryException {
+  public Set<String> listSubjects(boolean returnDeletedSubjects)
+          throws SchemaRegistryException {
     try {
       Iterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys();
-      return extractUniqueSubjects(allKeys);
+      return extractUniqueSubjects(allKeys,
+              returnDeletedSubjects);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
@@ -1057,7 +1059,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         .collect(Collectors.toList());
   }
 
-  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys)
+  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys,
+                                            boolean returnDeletedSubjects)
       throws StoreException {
     Set<String> subjects = new HashSet<String>();
     while (allKeys.hasNext()) {
@@ -1065,7 +1068,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       if (k instanceof SchemaKey) {
         SchemaKey key = (SchemaKey) k;
         SchemaValue value = (SchemaValue) kafkaStore.get(key);
-        if (value != null && !value.isDeleted()) {
+        if (value != null
+                && (!value.isDeleted() || returnDeletedSubjects)) {
           subjects.add(key.getSubject());
         }
       }
@@ -1073,10 +1077,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return subjects;
   }
 
-  public boolean hasSubjects(String subject, boolean lookupDeleted)
+  public boolean hasSubjects(String subject,
+                             boolean lookupDeletedSubjects)
           throws SchemaRegistryStoreException {
     try {
-      return lookupCache.hasSubjects(subject, lookupDeleted);
+      return lookupCache.hasSubjects(subject, lookupDeletedSubjects);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);

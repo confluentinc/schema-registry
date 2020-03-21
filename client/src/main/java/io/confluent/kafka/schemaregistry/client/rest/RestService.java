@@ -770,10 +770,10 @@ public class RestService implements Configurable {
 
   public List<Integer> getAllVersions(Map<String, String> requestProperties,
                                       String subject,
-                                      boolean includeDeleted)
+                                      boolean lookupDeletedSchema)
           throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
-    builder.queryParam("includeDeleted", includeDeleted);
+    builder.queryParam("deleted", lookupDeletedSchema);
     String path = builder.build(subject).toString();
 
     List<Integer> response = httpRequest(path, "GET", null, requestProperties,
@@ -784,6 +784,16 @@ public class RestService implements Configurable {
   public List<String> getAllSubjects()
       throws IOException, RestClientException {
     return getAllSubjects(DEFAULT_REQUEST_PROPERTIES);
+  }
+
+  public List<String> getAllSubjects(boolean deletedSubjects)
+          throws IOException, RestClientException {
+    List<String> response = httpRequest("/subjects"
+                    + (deletedSubjects ? "?deleted=true" : ""),
+            "GET",
+            null, DEFAULT_REQUEST_PROPERTIES,
+            ALL_TOPICS_RESPONSE_TYPE);
+    return response;
   }
 
   public List<String> getAllSubjects(Map<String, String> requestProperties)
@@ -845,11 +855,11 @@ public class RestService implements Configurable {
           Map<String, String> requestProperties,
           String subject,
           String version,
-          boolean permanent
+          boolean permanentDelete
   ) throws IOException,
           RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}");
-    builder.queryParam("permanent", permanent);
+    builder.queryParam("permanent", permanentDelete);
     String path = builder.build(subject, version).toString();
 
     Integer response = httpRequest(path, "DELETE", null, requestProperties,
@@ -873,11 +883,11 @@ public class RestService implements Configurable {
   public List<Integer> deleteSubject(
           Map<String, String> requestProperties,
           String subject,
-          boolean permanent
+          boolean permanentDelete
   ) throws IOException,
           RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}");
-    builder.queryParam("permanent", permanent);
+    builder.queryParam("permanent", permanentDelete);
     String path = builder.build(subject).toString();
 
     List<Integer> response = httpRequest(path, "DELETE", null, requestProperties,

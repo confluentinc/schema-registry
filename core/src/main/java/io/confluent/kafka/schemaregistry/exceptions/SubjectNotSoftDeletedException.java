@@ -17,6 +17,6 @@ package io.confluent.kafka.schemaregistry.exceptions;
 
 public class SubjectNotSoftDeletedException extends SchemaRegistryException {
   public SubjectNotSoftDeletedException(String subject) {
-    super("Subject " + subject + " must be deleted first before permanent delete.");
+    super("Subject " + subject + " must be deleted first before being permanently deleted.");
   }
 }

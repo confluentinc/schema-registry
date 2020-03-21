@@ -1074,6 +1074,44 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testListSubjects() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    String subject1 = "test1";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject1);
+    String subject2 = "test2";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject2);;
+    List<String> expectedResponse = new ArrayList<>();
+    expectedResponse.add(subject2);
+    expectedResponse.add(subject1);
+    assertEquals("Current Subjects", expectedResponse,
+            restApp.restClient.getAllSubjects());
+    List<Integer> deletedResponse = new ArrayList<>();
+    deletedResponse.add(1);
+    assertEquals("Versions Deleted Match", deletedResponse,
+            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject2));
+
+    expectedResponse = new ArrayList<>();
+    expectedResponse.add(subject1);
+    assertEquals("Current Subjects", expectedResponse,
+            restApp.restClient.getAllSubjects());
+
+    expectedResponse = new ArrayList<>();
+    expectedResponse.add(subject2);
+    expectedResponse.add(subject1);
+    assertEquals("Current Subjects", expectedResponse,
+            restApp.restClient.getAllSubjects(true));
+
+    assertEquals("Versions Deleted Match", deletedResponse,
+            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES,
+                    subject2, true));
+
+    expectedResponse = new ArrayList<>();
+    expectedResponse.add(subject1);
+    assertEquals("Current Subjects", expectedResponse,
+            restApp.restClient.getAllSubjects());
+  }
+
+  @Test
   public void testDeleteSubjectBasic() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";

@@ -232,11 +232,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public boolean hasSubjects(String subject, boolean lookupDeletedSubject) {
-    return hasSubjects(matchingPredicate(subject), lookupDeletedSubject);
+  public boolean hasSubjects(String subject, boolean lookupDeletedSubjects) {
+    return hasSubjects(matchingPredicate(subject), lookupDeletedSubjects);
   }
 
-  public boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubject) {
+  public boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .anyMatch(e -> {
           K k = e.getKey();
@@ -244,7 +244,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
           if (k instanceof SchemaKey) {
             SchemaKey key = (SchemaKey) k;
             SchemaValue value = (SchemaValue) v;
-            if (value != null && (!value.isDeleted() || lookupDeletedSubject)) {
+            if (value != null && (!value.isDeleted() || lookupDeletedSubjects)) {
               return match.test(key.getSubject());
             }
           }

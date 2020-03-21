@@ -184,7 +184,7 @@ public class SubjectVersionsResource {
   public List<Integer> listVersions(
       @ApiParam(value = "Name of the Subject", required = true)
         @PathParam("subject") String subject,
-      @QueryParam("includeDeleted") boolean includeDeleted) {
+      @QueryParam("deleted") boolean lookupDeletedSchema) {
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
@@ -192,7 +192,7 @@ public class SubjectVersionsResource {
                           + subject
                           + " exists in the registry";
     try {
-      if (!schemaRegistry.hasSubjects(subject, includeDeleted)) {
+      if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
         throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {
@@ -204,7 +204,7 @@ public class SubjectVersionsResource {
                    + subject;
     try {
       allSchemasForThisTopic = schemaRegistry.getAllVersions(subject,
-              includeDeleted);
+              lookupDeletedSchema);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -306,8 +306,10 @@ public class SubjectVersionsResource {
   public void deleteSchemaVersion(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
-      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version,
+      @ApiParam(value = "Name of the Subject", required = true)
+        @PathParam("subject") String subject,
+      @ApiParam(value = VERSION_PARAM_DESC, required = true)
+        @PathParam("version") String version,
       @QueryParam("permanent") boolean permanentDelete) {
     log.info("Deleting schema version {} from subject {}", version, subject);
     VersionId versionId = null;

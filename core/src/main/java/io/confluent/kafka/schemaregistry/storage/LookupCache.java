@@ -121,7 +121,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param subject the subject, or null for all subjects
    * @return whether there exist matching schemas
    */
-  boolean hasSubjects(String subject, boolean lookupDeletedSubject) throws StoreException;
+  boolean hasSubjects(String subject, boolean lookupDeletedSubjects) throws StoreException;
 
   /**
    * Clears the cache of deleted schemas that match the given subject.

@@ -46,7 +46,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   SchemaString get(int id) throws SchemaRegistryException;
 
-  Set<String> listSubjects() throws SchemaRegistryException;
+  Set<String> listSubjects(boolean returnDeletedSubjects)
+          throws SchemaRegistryException;
 
   Iterator<Schema> getAllVersions(String subject, boolean filterDeletes)
       throws SchemaRegistryException;
@@ -70,7 +71,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   void close();
 
   void deleteSchemaVersion(String subject, Schema schema,
-                           boolean permanent) throws SchemaRegistryException;
+                           boolean permanentDelete) throws SchemaRegistryException;
 
   SchemaRegistryConfig config();
 }

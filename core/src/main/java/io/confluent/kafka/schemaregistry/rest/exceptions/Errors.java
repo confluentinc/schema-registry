@@ -30,17 +30,17 @@ public class Errors {
   public static final String SCHEMA_NOT_FOUND_MESSAGE = "Schema not found";
   public static final String SCHEMA_NOT_FOUND_MESSAGE_FORMAT = "Schema %s not found";
   public static final int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
-  public static final String SUBJECT_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' exists in soft deleted format."
+  public static final String SUBJECT_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' was soft deleted."
           + "Set permanent=true to delete permanently";
   public static final int SUBJECT_SOFT_DELETED_ERROR_CODE = 40404;
   public static final String SUBJECT_NOT_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' was not deleted "
-          + "first before permanent delete";
+          + "first before being permanently deleted";
   public static final int SUBJECT_NOT_SOFT_DELETED_ERROR_CODE = 40405;
-  public static final String SCHEMAVERSION_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' Version %s exists in soft deleted format."
+  public static final String SCHEMAVERSION_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' Version %s was soft deleted."
           + "Set permanent=true to delete permanently";
   public static final int SCHEMAVERSION_SOFT_DELETED_ERROR_CODE = 40406;
   public static final String SCHEMAVERSION_NOT_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' Version %s was not deleted "
-          + "first before permanent delete";
+          + "first before being permanently deleted";
   public static final int SCHEMAVERSION_NOT_SOFT_DELETED_ERROR_CODE = 40407;
 
 

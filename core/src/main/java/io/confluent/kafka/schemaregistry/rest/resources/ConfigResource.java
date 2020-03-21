@@ -83,7 +83,7 @@ public class ConfigResource {
       @NotNull ConfigUpdateRequest request) {
     Set<String> subjects = null;
     try {
-      subjects = schemaRegistry.listSubjects();
+      subjects = schemaRegistry.listSubjects(false);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to retrieve a list of all subjects"
                                   + " from the registry", e);

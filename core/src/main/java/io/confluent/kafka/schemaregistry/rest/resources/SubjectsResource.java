@@ -122,9 +122,11 @@ public class SubjectsResource {
   @ApiResponses(value = {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")})
   @PerformanceMetric("subjects.list")
-  public Set<String> list() {
+  public Set<String> list(
+          @QueryParam("deleted") boolean lookupDeletedSubjects
+  ) {
     try {
-      return schemaRegistry.listSubjects();
+      return schemaRegistry.listSubjects(lookupDeletedSubjects);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {
