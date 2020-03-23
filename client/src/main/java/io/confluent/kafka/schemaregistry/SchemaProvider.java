@@ -23,12 +23,11 @@ import java.util.Map;
 import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 /**
  * A factory for parsed schemas.
- * <p>
- * This factory produces instances of {@link io.confluent.kafka.schemaregistry.ParsedSchema}.
+ *
+ * <p>This factory produces instances of {@link io.confluent.kafka.schemaregistry.ParsedSchema}.
  * To have schema registry use a specific factory, it's fully qualified class name needs to be
  * specified using the configuration property <code>schema.providers</code>.
  */
