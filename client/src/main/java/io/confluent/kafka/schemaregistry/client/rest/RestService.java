@@ -788,8 +788,10 @@ public class RestService implements Configurable {
 
   public List<String> getAllSubjects(boolean deletedSubjects)
           throws IOException, RestClientException {
-    List<String> response = httpRequest("/subjects"
-                    + (deletedSubjects ? "?deleted=true" : ""),
+    UriBuilder builder = UriBuilder.fromPath("/subjects");
+    builder.queryParam("deleted", deletedSubjects);
+    String path = builder.build().toString();
+    List<String> response = httpRequest(path,
             "GET",
             null, DEFAULT_REQUEST_PROPERTIES,
             ALL_TOPICS_RESPONSE_TYPE);

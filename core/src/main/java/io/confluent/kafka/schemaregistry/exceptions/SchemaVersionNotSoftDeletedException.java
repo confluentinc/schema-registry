@@ -20,7 +20,7 @@ public class SchemaVersionNotSoftDeletedException extends SchemaRegistryExceptio
   private final String version;
 
   public SchemaVersionNotSoftDeletedException(String subject, String version) {
-    super("Subject:" + subject + " Version:"
+    super("Subject: " + subject + " Version: "
             + version + " must be deleted first before being permanently deleted.");
     this.subject = subject;
     this.version = version;
