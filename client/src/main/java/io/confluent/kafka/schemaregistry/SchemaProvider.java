@@ -24,6 +24,14 @@ import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+/**
+ * A factory for parsed schemas.
+ *
+ * <p>This factory produces instances of {@link io.confluent.kafka.schemaregistry.ParsedSchema}.
+ * To have schema registry use a specific factory, the fully qualified class name of the factory
+ * needs to be specified using the configuration property <code>schema.providers</code>,
+ * which takes a comma-separated list of such factories.
+ */
 public interface SchemaProvider extends Configurable {
 
   String SCHEMA_VERSION_FETCHER_CONFIG = "schemaVersionFetcher";

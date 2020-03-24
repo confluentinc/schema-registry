@@ -20,6 +20,12 @@ import java.util.List;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+/**
+ * A parsed schema.
+ *
+ * <p>Implementations of this interface are instantiated by a corresponding
+ * {@link io.confluent.kafka.schemaregistry.SchemaProvider}.
+ */
 public interface ParsedSchema {
 
   /**
