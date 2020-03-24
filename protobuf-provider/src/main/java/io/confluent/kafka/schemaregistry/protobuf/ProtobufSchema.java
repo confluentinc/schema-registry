@@ -31,7 +31,6 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DynamicMessage;
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.squareup.wire.schema.Field;
 import com.squareup.wire.schema.Location;
 import com.squareup.wire.schema.ProtoFile;
@@ -247,8 +246,8 @@ public class ProtobufSchema implements ParsedSchema {
         // Attempt to parse binary FileDescriptorProto
         byte[] bytes = base64Decoder.decode(schema);
         return toProtoFile(FileDescriptorProto.parseFrom(bytes));
-      } catch (InvalidProtocolBufferException pe) {
-        throw new IllegalArgumentException("Could not parse Protobuf", pe);
+      } catch (Exception pe) {
+        throw new IllegalArgumentException("Could not parse Protobuf", e);
       }
     }
   }
