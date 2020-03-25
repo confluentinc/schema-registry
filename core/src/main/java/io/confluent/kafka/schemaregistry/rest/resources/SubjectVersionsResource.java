@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
@@ -182,7 +183,8 @@ public class SubjectVersionsResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
   public List<Integer> listVersions(
       @ApiParam(value = "Name of the Subject", required = true)
-        @PathParam("subject") String subject) {
+        @PathParam("subject") String subject,
+      @QueryParam("deleted") boolean lookupDeletedSchema) {
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
@@ -190,7 +192,7 @@ public class SubjectVersionsResource {
                           + subject
                           + " exists in the registry";
     try {
-      if (!schemaRegistry.hasSubjects(subject)) {
+      if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
         throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {
@@ -201,8 +203,8 @@ public class SubjectVersionsResource {
     errorMessage = "Error while listing all versions for subject "
                    + subject;
     try {
-      //return only non-deleted versions for the subject
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject, false);
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject,
+              lookupDeletedSchema);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -304,8 +306,11 @@ public class SubjectVersionsResource {
   public void deleteSchemaVersion(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
-      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
+      @ApiParam(value = "Name of the Subject", required = true)
+        @PathParam("subject") String subject,
+      @ApiParam(value = VERSION_PARAM_DESC, required = true)
+        @PathParam("version") String version,
+      @QueryParam("permanent") boolean permanentDelete) {
     log.info("Deleting schema version {} from subject {}", version, subject);
     VersionId versionId = null;
     try {
@@ -316,12 +321,19 @@ public class SubjectVersionsResource {
     Schema schema = null;
     String errorMessage =
             "Error while retrieving schema for subject "
-            + subject
-            + " with version "
-            + version
-            + " from the schema registry";
+                    + subject
+                    + " with version "
+                    + version
+                    + " from the schema registry";
     try {
-      schema = schemaRegistry.validateAndGetSchema(subject, versionId, false);
+      if (schemaRegistry.schemaVersionExists(subject, versionId, true)) {
+        if (!permanentDelete
+                && !schemaRegistry.schemaVersionExists(subject,
+                        versionId, false)) {
+          throw Errors.schemaVersionSoftDeletedException(subject, version);
+        }
+      }
+      schema = schemaRegistry.validateAndGetSchema(subject, versionId, true);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -330,10 +342,15 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
+
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-          headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject, schema);
+              headers, schemaRegistry.config().whitelistHeaders());
+      schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
+              schema, permanentDelete);
+    } catch (SchemaVersionNotSoftDeletedException e) {
+      throw Errors.schemaVersionNotSoftDeletedException(e.getSubject(),
+              e.getVersion());
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Delete Schema Version operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
