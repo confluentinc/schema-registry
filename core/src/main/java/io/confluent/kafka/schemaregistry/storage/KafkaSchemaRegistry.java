@@ -458,7 +458,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           schema.setVersion(newVersion);
         }
 
-        SchemaKey schemaKey = new SchemaKey(subject, newVersion);
+        SchemaKey schemaKey = new SchemaKey(subject, schema.getVersion());
         if (schemaId >= 0) {
           schema.setId(schemaId);
           kafkaStore.put(schemaKey, new SchemaValue(schema));
