@@ -1133,6 +1133,26 @@
     "compatible": true
   },
   {
+    "description": "Detect change to optional oneOf schema",
+    "original_schema": {
+      "type": "null"
+    },
+    "update_schema": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect change to oneOf schema",
     "original_schema": {
       "oneOf": [
