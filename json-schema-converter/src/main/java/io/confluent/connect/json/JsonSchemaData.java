@@ -869,18 +869,23 @@ public class JsonSchemaData {
         throw new IllegalArgumentException("Unsupported criterion: " + criterion);
       }
       if (combinedSchema.getSubschemas().size() == 2) {
-        if (combinedSchema.getSubschemas().contains(NullSchema.INSTANCE)) {
-          for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
-            if (!subSchema.equals(NullSchema.INSTANCE)) {
-              return toConnectSchema(subSchema, version, true);
-            }
+        boolean foundNullSchema = false;
+        org.everit.json.schema.Schema nonNullSchema = null;
+        for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
+          if (subSchema instanceof NullSchema) {
+            foundNullSchema = true;
+          } else {
+            nonNullSchema = subSchema;
           }
+        }
+        if (foundNullSchema) {
+          return toConnectSchema(nonNullSchema, version, true);
         }
       }
       int index = 0;
       builder = SchemaBuilder.struct().name(name);
       for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
-        if (subSchema.equals(NullSchema.INSTANCE)) {
+        if (subSchema instanceof NullSchema) {
           builder.optional();
         } else {
           String subFieldName = name + ".field." + index++;
