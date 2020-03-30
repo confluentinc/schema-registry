@@ -21,15 +21,12 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.BufferedReader;
-import java.util.Collections;
-import java.util.List;
 
 import io.confluent.kafka.formatter.SchemaMessageReader;
 import io.confluent.kafka.formatter.SchemaMessageSerializer;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
@@ -87,15 +84,8 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
   }
 
   @Override
-  protected ParsedSchema parseSchema(
-      SchemaRegistryClient schemaRegistry,
-      String schema,
-      List<SchemaReference> references
-  ) {
-    SchemaProvider provider = new ProtobufSchemaProvider();
-    provider.configure(Collections.singletonMap(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG,
-        schemaRegistry));
-    return provider.parseSchema(schema, references).get();
+  protected SchemaProvider getProvider() {
+    return new ProtobufSchemaProvider();
   }
 
   @Override

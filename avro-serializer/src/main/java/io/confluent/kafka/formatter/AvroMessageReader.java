@@ -25,8 +25,6 @@ import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -34,7 +32,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 
 /**
@@ -111,15 +108,8 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
   }
 
   @Override
-  protected ParsedSchema parseSchema(
-      SchemaRegistryClient schemaRegistry,
-      String schema,
-      List<SchemaReference> references
-  ) {
-    SchemaProvider provider = new AvroSchemaProvider();
-    provider.configure(Collections.singletonMap(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG,
-        schemaRegistry));
-    return provider.parseSchema(schema, references).get();
+  protected SchemaProvider getProvider() {
+    return new AvroSchemaProvider();
   }
 
   @Override
