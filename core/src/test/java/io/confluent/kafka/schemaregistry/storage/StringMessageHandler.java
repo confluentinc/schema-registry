@@ -22,8 +22,9 @@ public class StringMessageHandler implements StoreUpdateHandler<String, String> 
    *
    * @param key   Key associated with the data
    * @param value Data written to the store
+   * @param timestamp Timestamp of record
    */
-  public boolean validateUpdate(String key, String value) {
+  public boolean validateUpdate(String key, String value, long timestamp) {
     return true;
   }
 
@@ -32,9 +33,10 @@ public class StringMessageHandler implements StoreUpdateHandler<String, String> 
    *
    * @param key   Key associated with the data
    * @param value Data written to the store
+   * @param timestamp Timestamp of record
    */
   @Override
-  public void handleUpdate(String key, String value, String oldValue) {
+  public void handleUpdate(String key, String value, String oldValue, long timestamp) {
 
   }
 }

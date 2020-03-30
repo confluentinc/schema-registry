@@ -22,8 +22,9 @@ public interface StoreUpdateHandler<K, V> {
    *
    * @param key   Key associated with the data
    * @param value Data written to the store
+   * @param timestamp Timestamp of record
    */
-  public boolean validateUpdate(K key, V value);
+  public boolean validateUpdate(K key, V value, long timestamp);
 
   /**
    * Invoked on every new K,V pair written to the store
@@ -31,7 +32,8 @@ public interface StoreUpdateHandler<K, V> {
    * @param key   Key associated with the data
    * @param value Data written to the store
    * @param oldValue the previous value associated with key, or null if there was no mapping for key
+   * @param timestamp Timestamp of record
    */
-  public void handleUpdate(K key, V value, V oldValue);
+  public void handleUpdate(K key, V value, V oldValue, long timestamp);
 
 }
