@@ -50,6 +50,11 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
 
   private void resolveReferences(List<SchemaReference> references, Map<String, String> schemas) {
     for (SchemaReference reference : references) {
+      if (reference.getName() == null
+          || reference.getSubject() == null
+          || reference.getVersion() == null) {
+        throw new IllegalStateException("Invalid reference: " + reference);
+      }
       String subject = reference.getSubject();
       Schema schema = schemaVersionFetcher().getByVersion(subject, reference.getVersion(), true);
       if (schema == null) {
