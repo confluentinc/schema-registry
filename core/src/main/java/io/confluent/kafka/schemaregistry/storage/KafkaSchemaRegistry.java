@@ -162,7 +162,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     for (SchemaProvider provider : defaultSchemaProviders) {
       provider.configure(schemaProviderConfigs);
     }
-    Map<String ,SchemaProvider> providerMap = new HashMap<>();
+    Map<String, SchemaProvider> providerMap = new HashMap<>();
     registerProviders(providerMap, defaultSchemaProviders);
     List<SchemaProvider> customSchemaProviders =
         config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
@@ -189,9 +189,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
       SchemaRegistryConfig config) throws SchemaRegistryException {
+    List<SchemaUpdateHandler> customSchemaHandlers =
+        config.getConfiguredInstances(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLER_CONFIG,
+            SchemaUpdateHandler.class);
+    KafkaStoreMessageHandler storeHandler =
+        new KafkaStoreMessageHandler(this, lookupCache, idGenerator);
+    customSchemaHandlers.add(storeHandler);
     return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
         config,
-        new KafkaStoreMessageHandler(this, lookupCache, idGenerator),
+        new CompositeSchemaUpdateHandler(customSchemaHandlers),
         this.serializer, lookupCache, new NoopKey());
   }
 

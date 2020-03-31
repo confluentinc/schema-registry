@@ -23,8 +23,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class KafkaStoreMessageHandler
-    implements StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> {
+public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;

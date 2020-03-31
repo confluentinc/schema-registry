@@ -18,15 +18,15 @@ package io.confluent.kafka.schemaregistry.storage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CompositeStoreUpdateHandler
-    implements StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> {
+import java.util.List;
 
-  private static final Logger log = LoggerFactory.getLogger(CompositeStoreUpdateHandler.class);
+public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
 
-  private final StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue>[] handlers;
+  private static final Logger log = LoggerFactory.getLogger(CompositeSchemaUpdateHandler.class);
 
-  public CompositeStoreUpdateHandler(
-      StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> ...handlers) {
+  private final List<SchemaUpdateHandler> handlers;
+
+  public CompositeSchemaUpdateHandler(List<SchemaUpdateHandler> handlers) {
     this.handlers = handlers;
   }
 
@@ -37,7 +37,7 @@ public class CompositeStoreUpdateHandler
    * @param value Data written to the store
    */
   public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value, long timestamp) {
-    for (StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> handler : handlers) {
+    for (SchemaUpdateHandler handler : handlers) {
       boolean valid = handler.validateUpdate(key, value, timestamp);
       if (!valid) {
         return false;
@@ -57,7 +57,7 @@ public class CompositeStoreUpdateHandler
                            SchemaRegistryValue value,
                            SchemaRegistryValue oldValue,
                            long timestamp) {
-    for (StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> handler : handlers) {
+    for (SchemaUpdateHandler handler : handlers) {
       handler.handleUpdate(key, value, oldValue, timestamp);
     }
   }

@@ -15,7 +15,15 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-public interface StoreUpdateHandler<K, V> {
+import org.apache.kafka.common.Configurable;
+
+import java.util.Map;
+
+public interface StoreUpdateHandler<K, V> extends Configurable {
+
+  @Override
+  default void configure(Map<String, ?> map) {
+  }
 
   /**
    * Invoked before every new K,V pair written to the store
@@ -24,7 +32,9 @@ public interface StoreUpdateHandler<K, V> {
    * @param value Data written to the store
    * @param timestamp Timestamp of record
    */
-  public boolean validateUpdate(K key, V value, long timestamp);
+  default boolean validateUpdate(K key, V value, long timestamp) {
+    return true;
+  }
 
   /**
    * Invoked on every new K,V pair written to the store
@@ -34,6 +44,6 @@ public interface StoreUpdateHandler<K, V> {
    * @param oldValue the previous value associated with key, or null if there was no mapping for key
    * @param timestamp Timestamp of record
    */
-  public void handleUpdate(K key, V value, V oldValue, long timestamp);
+  void handleUpdate(K key, V value, V oldValue, long timestamp);
 
 }

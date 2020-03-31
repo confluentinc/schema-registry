@@ -95,6 +95,10 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>kafkastore.init.timeout.ms</code>
    */
   public static final String KAFKASTORE_INIT_TIMEOUT_CONFIG = "kafkastore.init.timeout.ms";
+  /**
+   * <code>kafkastore.update.handler</code>
+   */
+  public static final String KAFKASTORE_UPDATE_HANDLER_CONFIG = "kafkastore.update.handler";
 
   /**
    * <code>master.eligibility</code>*
@@ -238,6 +242,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + "that stores schema data.";
   protected static final String KAFKASTORE_TIMEOUT_DOC =
       "The timeout for an operation on the Kafka store";
+  protected static final String KAFKASTORE_UPDATE_HANDLER_DOC =
+      "  A list of classes to use as StoreUpdateHandler. Implementing the interface "
+          + "<code>StoreUpdateHandler</code> allows you to handle Kafka store update events.";
   protected static final String HOST_DOC =
       "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
@@ -400,6 +407,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC
+    )
+    .define(KAFKASTORE_UPDATE_HANDLER_CONFIG, ConfigDef.Type.LIST, "",
+        ConfigDef.Importance.LOW, KAFKASTORE_UPDATE_HANDLER_DOC
     )
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC
