@@ -23,11 +23,13 @@ import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
 
+import java.util.Collections;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
@@ -61,10 +63,12 @@ public class ProtobufConverter implements Converter {
     ProtobufConverterConfig protobufConverterConfig = new ProtobufConverterConfig(configs);
 
     if (schemaRegistry == null) {
-      schemaRegistry =
-          new CachedSchemaRegistryClient(protobufConverterConfig.getSchemaRegistryUrls(),
+      schemaRegistry = new CachedSchemaRegistryClient(
+          protobufConverterConfig.getSchemaRegistryUrls(),
           protobufConverterConfig.getMaxSchemasPerSubject(),
-          configs
+          Collections.singletonList(new ProtobufSchemaProvider()),
+          configs,
+          protobufConverterConfig.requestHeaders()
       );
     }
 

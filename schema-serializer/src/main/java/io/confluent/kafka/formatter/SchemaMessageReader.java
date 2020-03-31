@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -108,7 +109,11 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     Map<String, Object> originals = getPropertiesMap(props);
 
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(
-        url, AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT, originals);
+        Collections.singletonList(url),
+        AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
+        Collections.singletonList(getProvider()),
+        originals
+    );
     String valueSchemaString = getSchemaString(props, false);
     List<SchemaReference> valueRefs = getSchemaReferences(props, false);
     valueSchema = parseSchema(schemaRegistry, valueSchemaString, valueRefs);
@@ -135,11 +140,18 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     }
   }
 
-  protected abstract ParsedSchema parseSchema(
+  protected abstract SchemaProvider getProvider();
+
+  protected ParsedSchema parseSchema(
       SchemaRegistryClient schemaRegistry,
       String schema,
       List<SchemaReference> references
-  );
+  ) {
+    SchemaProvider provider = getProvider();
+    provider.configure(Collections.singletonMap(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG,
+        schemaRegistry));
+    return provider.parseSchema(schema, references).get();
+  }
 
   private String getSchemaString(Properties props, boolean isKey) {
     String propKeyRaw = isKey ? "key.schema" : "value.schema";
