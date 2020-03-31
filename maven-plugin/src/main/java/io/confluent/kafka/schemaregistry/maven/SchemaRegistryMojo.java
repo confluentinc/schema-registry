@@ -64,7 +64,8 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
       List<SchemaProvider> providers = schemaProviders != null && !schemaProviders.isEmpty()
                                        ? schemaProviders()
                                        : defaultSchemaProviders();
-      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls,
+      this.client = new CachedSchemaRegistryClient(
+          this.schemaRegistryUrls,
           1000,
           providers,
           config

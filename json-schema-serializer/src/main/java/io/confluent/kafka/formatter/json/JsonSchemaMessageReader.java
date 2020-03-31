@@ -25,15 +25,12 @@ import org.everit.json.schema.ValidationException;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
 
 import io.confluent.kafka.formatter.SchemaMessageReader;
 import io.confluent.kafka.formatter.SchemaMessageSerializer;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
@@ -116,15 +113,8 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
   }
 
   @Override
-  protected ParsedSchema parseSchema(
-      SchemaRegistryClient schemaRegistry,
-      String schema,
-      List<SchemaReference> references
-  ) {
-    SchemaProvider provider = new JsonSchemaProvider();
-    provider.configure(Collections.singletonMap(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG,
-        schemaRegistry));
-    return provider.parseSchema(schema, references).get();
+  protected SchemaProvider getProvider() {
+    return new JsonSchemaProvider();
   }
 
   @Override

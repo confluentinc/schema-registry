@@ -23,11 +23,13 @@ import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
 
+import java.util.Collections;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaSerializer;
@@ -61,10 +63,12 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     JsonSchemaConverterConfig jsonSchemaConverterConfig = new JsonSchemaConverterConfig(configs);
 
     if (schemaRegistry == null) {
-      schemaRegistry =
-          new CachedSchemaRegistryClient(jsonSchemaConverterConfig.getSchemaRegistryUrls(),
+      schemaRegistry = new CachedSchemaRegistryClient(
+          jsonSchemaConverterConfig.getSchemaRegistryUrls(),
           jsonSchemaConverterConfig.getMaxSchemasPerSubject(),
-          configs
+          Collections.singletonList(new JsonSchemaProvider()),
+          configs,
+          jsonSchemaConverterConfig.requestHeaders()
       );
     }
 
