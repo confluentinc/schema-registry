@@ -2228,6 +2228,24 @@ public class AvroData {
       return schema;
     }
 
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      CyclicSchemaWrapper other = (CyclicSchemaWrapper) o;
+      return Objects.equals(optional, other.optional) && Objects.equals(schema, other.schema);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(optional) + Objects.hashCode(schema);
+    }
   }
 
   /**
