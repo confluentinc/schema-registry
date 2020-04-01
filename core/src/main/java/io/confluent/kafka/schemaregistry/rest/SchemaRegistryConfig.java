@@ -98,7 +98,7 @@ public class SchemaRegistryConfig extends RestConfig {
   /**
    * <code>kafkastore.update.handler</code>
    */
-  public static final String KAFKASTORE_UPDATE_HANDLER_CONFIG = "kafkastore.update.handler";
+  public static final String KAFKASTORE_UPDATE_HANDLERS_CONFIG = "kafkastore.update.handlers";
 
   /**
    * <code>master.eligibility</code>*
@@ -242,7 +242,7 @@ public class SchemaRegistryConfig extends RestConfig {
       + "that stores schema data.";
   protected static final String KAFKASTORE_TIMEOUT_DOC =
       "The timeout for an operation on the Kafka store";
-  protected static final String KAFKASTORE_UPDATE_HANDLER_DOC =
+  protected static final String KAFKASTORE_UPDATE_HANDLERS_DOC =
       "  A list of classes to use as StoreUpdateHandler. Implementing the interface "
           + "<code>StoreUpdateHandler</code> allows you to handle Kafka store update events.";
   protected static final String HOST_DOC =
@@ -408,8 +408,8 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC
     )
-    .define(KAFKASTORE_UPDATE_HANDLER_CONFIG, ConfigDef.Type.LIST, "",
-        ConfigDef.Importance.LOW, KAFKASTORE_UPDATE_HANDLER_DOC
+    .define(KAFKASTORE_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
+        ConfigDef.Importance.LOW, KAFKASTORE_UPDATE_HANDLERS_DOC
     )
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC

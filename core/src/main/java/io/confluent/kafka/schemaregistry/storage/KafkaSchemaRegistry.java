@@ -190,7 +190,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
       SchemaRegistryConfig config) throws SchemaRegistryException {
     List<SchemaUpdateHandler> customSchemaHandlers =
-        config.getConfiguredInstances(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLER_CONFIG,
+        config.getConfiguredInstances(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG,
             SchemaUpdateHandler.class);
     KafkaStoreMessageHandler storeHandler =
         new KafkaStoreMessageHandler(this, lookupCache, idGenerator);
