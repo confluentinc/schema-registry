@@ -2194,6 +2194,11 @@ public class AvroData {
       CyclicSchemaWrapper other = (CyclicSchemaWrapper) o;
       return Objects.equals(optional, other.optional) && Objects.equals(schema, other.schema);
     }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(optional) + Objects.hashCode(schema);
+    }
   }
 
   /**
