@@ -39,7 +39,7 @@ public class AvroSchema implements ParsedSchema {
       new SchemaValidatorBuilder().canReadStrategy().validateLatest();
 
   private final Schema schemaObj;
-  private final String canonicalString;
+  private String canonicalString;
   private final Integer version;
   private final List<SchemaReference> references;
   private final Map<String, String> resolvedReferences;
@@ -52,19 +52,13 @@ public class AvroSchema implements ParsedSchema {
                     List<SchemaReference> references,
                     Map<String, String> resolvedReferences,
                     Integer version) {
-    List<Schema> schemaRefs = new ArrayList<>();
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(false);
-    if (resolvedReferences != null) {
-      for (String schema : resolvedReferences.values()) {
-        Schema schemaRef = parser.parse(schema);
-        schemaRefs.add(schemaRef);
-      }
+    Schema.Parser parser = getParser();
+    for (String schema : resolvedReferences.values()) {
+      parser.parse(schema);
     }
     this.schemaObj = parser.parse(schemaString);
-    this.canonicalString = Schemas.toString(schemaObj, schemaRefs);
-    this.references = references;
-    this.resolvedReferences = resolvedReferences;
+    this.references = Collections.unmodifiableList(references);
+    this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.version = version;
   }
 
@@ -74,12 +68,42 @@ public class AvroSchema implements ParsedSchema {
 
   public AvroSchema(Schema schemaObj, Integer version) {
     this.schemaObj = schemaObj;
-    this.canonicalString = Schemas.toString(schemaObj, null);
-    this.version = version;
     this.references = Collections.emptyList();
     this.resolvedReferences = Collections.emptyMap();
+    this.version = version;
   }
 
+  private AvroSchema(
+      Schema schemaObj,
+      String canonicalString,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      Integer version
+  ) {
+    this.schemaObj = schemaObj;
+    this.canonicalString = canonicalString;
+    this.references = references;
+    this.resolvedReferences = resolvedReferences;
+    this.version = version;
+  }
+
+  public AvroSchema copy() {
+    return new AvroSchema(
+        this.schemaObj,
+        this.canonicalString,
+        this.references,
+        this.resolvedReferences,
+        this.version
+    );
+  }
+
+  protected Schema.Parser getParser() {
+    Schema.Parser parser = new Schema.Parser();
+    parser.setValidateDefaults(false);
+    return parser;
+  }
+
+  @Override
   public Schema rawSchema() {
     return schemaObj;
   }
@@ -99,6 +123,18 @@ public class AvroSchema implements ParsedSchema {
 
   @Override
   public String canonicalString() {
+    if (schemaObj == null) {
+      return null;
+    }
+    if (canonicalString == null) {
+      Schema.Parser parser = getParser();
+      List<Schema> schemaRefs = new ArrayList<>();
+      for (String schema : resolvedReferences.values()) {
+        Schema schemaRef = parser.parse(schema);
+        schemaRefs.add(schemaRef);
+      }
+      canonicalString = Schemas.toString(schemaObj, schemaRefs);
+    }
     return canonicalString;
   }
 
@@ -150,6 +186,6 @@ public class AvroSchema implements ParsedSchema {
 
   @Override
   public String toString() {
-    return canonicalString;
+    return canonicalString();
   }
 }

@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
+import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
+import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -28,22 +30,32 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 public class KafkaProtobufSerializer<T extends Message>
     extends AbstractKafkaProtobufSerializer<T> implements Serializer<T> {
 
+  private static int DEFAULT_CACHE_CAPACITY = 1000;
+
   private boolean isKey;
+  private LRUCache<Descriptor, ProtobufSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaProtobufSerializer() {
-
+    schemaCache = new LRUCache<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client) {
     schemaRegistry = client;
+    schemaCache = new LRUCache<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props) {
+    this(client, props, DEFAULT_CACHE_CAPACITY);
+  }
+
+  public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props,
+                                 int cacheCapacity) {
     schemaRegistry = client;
     configure(serializerConfig(props));
+    schemaCache = new LRUCache<>(cacheCapacity);
   }
 
   @Override
@@ -57,7 +69,11 @@ public class KafkaProtobufSerializer<T extends Message>
     if (record == null) {
       return null;
     }
-    ProtobufSchema schema = ProtobufSchemaUtils.getSchema(record);
+    ProtobufSchema schema = schemaCache.get(record.getDescriptorForType());
+    if (schema == null) {
+      schema = ProtobufSchemaUtils.getSchema(record);
+      schemaCache.put(record.getDescriptorForType(), schema);
+    }
     return serializeImpl(getSubjectName(topic, isKey, record, schema),
         topic, isKey, record, schema);
   }

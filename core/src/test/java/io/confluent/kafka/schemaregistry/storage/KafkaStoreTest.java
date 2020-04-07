@@ -464,53 +464,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testReplaceDeletedWithNonDeleted() throws Exception {
-    InMemoryCache<SchemaKey, SchemaValue> inMemoryStore = new InMemoryCache<>();
-
-    int id = 100;
-    SchemaKey schemaKey = new SchemaKey("subject", 1);
-    SchemaValue schemaValue =
-        new SchemaValue("subject", 1, id, "schemaString", false);
-
-    SchemaKey schemaKey2 = new SchemaKey("subject2", 1);
-    SchemaValue schemaValue2 =
-        new SchemaValue("subject2", 1, id, "schemaString", false);
-
-    inMemoryStore.put(schemaKey, schemaValue);
-    inMemoryStore.schemaRegistered(schemaKey, schemaValue);
-
-    inMemoryStore.put(schemaKey2, schemaValue2);
-    inMemoryStore.schemaRegistered(schemaKey2, schemaValue2);
-
-    schemaValue2.setDeleted(true);
-    inMemoryStore.schemaDeleted(schemaKey2, schemaValue2);
-
-    assertTrue(inMemoryStore.get(inMemoryStore.schemaKeyById(id)).isDeleted());
-
-    inMemoryStore.replaceMatchingDeletedWithNonDeletedOrRemove(s -> s.equals("subject2"));
-
-    SchemaValue newValue = inMemoryStore.get(inMemoryStore.schemaKeyById(id));
-    assertEquals("subject", newValue.getSubject());
-    assertFalse(newValue.isDeleted());
-  }
-
-  @Test
-  public void testReplaceDeletedWithNonDeletedAfterCompaction() throws Exception {
-    InMemoryCache<SchemaKey, SchemaValue> inMemoryStore = new InMemoryCache<>();
-
-    int id = 100;
-    SchemaKey schemaKey = new SchemaKey("subject", 1);
-    SchemaValue schemaValue =
-        new SchemaValue("subject", 1, id, "schemaString", true);
-
-    // After a compaction, the schema will not be registered but only deleted
-    inMemoryStore.put(schemaKey, schemaValue);
-    inMemoryStore.schemaDeleted(schemaKey, schemaValue);
-
-    inMemoryStore.replaceMatchingDeletedWithNonDeletedOrRemove(s -> s.equals("subject"));
-  }
-
-  @Test
   public void testKafkaStoreMessageHandlerSameIdDifferentDeletedSchema() throws Exception {
     Properties props = new Properties();
     props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
@@ -590,7 +543,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
             new InMemoryCache<>(), new IncrementalIdGenerator());
 
-    storeMessageHandler.handleUpdate(new DeleteSubjectKey("test"), null);
+    storeMessageHandler.handleUpdate(new DeleteSubjectKey("test"), null, null);
   }
 
   // Test no NPE happens when handling ClearSubjectKey with null value
@@ -609,6 +562,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
             new InMemoryCache<>(), new IncrementalIdGenerator());
 
-    storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null);
+    storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null, null);
   }
 }

@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.Objects;
 
@@ -37,6 +40,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
@@ -48,6 +52,8 @@ import io.confluent.kafka.schemaregistry.client.security.SslFactory;
  * Thread-safe Schema Registry Client with client side caching.
  */
 public class CachedSchemaRegistryClient implements SchemaRegistryClient {
+
+  private static final Logger log = LoggerFactory.getLogger(CachedSchemaRegistryClient.class);
 
   private final RestService restService;
   private final int identityMapCapacity;
@@ -185,6 +191,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
     SchemaProvider schemaProvider = providers.get(schemaType);
     if (schemaProvider == null) {
+      log.error("Invalid schema type " + schemaType);
       return Optional.empty();
     }
     return schemaProvider.parseSchema(schemaString, references);
@@ -211,7 +218,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     Optional<ParsedSchema> schema = parseSchema(
         restSchema.getSchemaType(), restSchema.getSchemaString(), restSchema.getReferences());
     return schema.orElseThrow(() ->
-        new IOException("Invalid schema " + restSchema.getSchemaString()));
+        new IOException("Invalid schema " + restSchema.getSchemaString()
+            + " of schema type " + restSchema.getSchemaType()));
   }
 
   private int getVersionFromRegistry(String subject, ParsedSchema schema)
@@ -288,6 +296,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException {
     return restService.getAllSubjectsById(id);
+  }
+
+  @Override
+  public Collection<SubjectVersion> getAllVersionsById(int id) throws IOException,
+      RestClientException {
+    return restService.getAllVersionsById(id);
   }
 
   @Override

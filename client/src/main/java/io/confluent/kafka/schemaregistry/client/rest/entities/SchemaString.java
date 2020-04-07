@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.google.common.annotations.VisibleForTesting;
 import io.swagger.annotations.ApiModelProperty;
@@ -28,6 +27,7 @@ import java.util.Collections;
 import java.util.List;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class SchemaString {
@@ -46,7 +46,7 @@ public class SchemaString {
   }
 
   public static SchemaString fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, SchemaString.class);
+    return JacksonMapper.INSTANCE.readValue(json, SchemaString.class);
   }
 
   @ApiModelProperty(value = "Schema type")
@@ -95,6 +95,6 @@ public class SchemaString {
   }
 
   public String toJson() throws IOException {
-    return new ObjectMapper().writeValueAsString(this);
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 }

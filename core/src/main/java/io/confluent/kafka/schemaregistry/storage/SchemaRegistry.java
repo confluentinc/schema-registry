@@ -29,6 +29,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   void init() throws SchemaRegistryException;
 
+  Set<String> schemaTypes();
+
   int register(String subject, Schema schema) throws SchemaRegistryException;
 
   default Schema getByVersion(String subject, int version, boolean returnDeletedSchema) {
@@ -44,14 +46,20 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   SchemaString get(int id) throws SchemaRegistryException;
 
-  Set<String> listSubjects() throws SchemaRegistryException;
+  default Set<String> listSubjects() throws SchemaRegistryException {
+    return listSubjects(false);
+  }
+
+  Set<String> listSubjects(boolean returnDeletedSubjects)
+          throws SchemaRegistryException;
 
   Iterator<Schema> getAllVersions(String subject, boolean filterDeletes)
       throws SchemaRegistryException;
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
 
-  List<Integer> deleteSubject(String subject) throws SchemaRegistryException;
+  List<Integer> deleteSubject(String subject, boolean permanentDelete)
+      throws SchemaRegistryException;
 
   Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException;
@@ -66,7 +74,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   void close();
 
-  void deleteSchemaVersion(String subject, Schema schema) throws SchemaRegistryException;
+  void deleteSchemaVersion(String subject, Schema schema,
+                           boolean permanentDelete) throws SchemaRegistryException;
 
   SchemaRegistryConfig config();
 }

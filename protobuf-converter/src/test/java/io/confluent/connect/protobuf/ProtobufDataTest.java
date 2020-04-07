@@ -20,6 +20,7 @@ import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.Descriptors;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.FloatValue;
@@ -115,11 +116,8 @@ public class ProtobufDataTest {
     schemaBuilder.name(message.getDescriptorForType().getName());
     schemaBuilder.field(VALUE_FIELD_NAME, fieldSchema);
     final Schema schema = schemaBuilder.build();
-    Struct expectedResult = null;
-    if (!message.equals(message.getDefaultInstanceForType())) {
-      expectedResult = new Struct(schema);
-      expectedResult.put(VALUE_FIELD_NAME, value);
-    }
+    Struct expectedResult = new Struct(schema);
+    expectedResult.put(VALUE_FIELD_NAME, value);
     return new SchemaAndValue(schema, expectedResult);
   }
 
@@ -146,12 +144,19 @@ public class ProtobufDataTest {
     message.addExperimentsActive("first experiment");
     message.addExperimentsActive("second experiment");
     message.setStatus(NestedTestProto.Status.INACTIVE);
-
+    NestedMessage.InnerMessage.Builder inner = NestedMessage.InnerMessage.newBuilder();
+    inner.setId("");
+    message.setInner(inner.build());
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
     java.util.Date date = sdf.parse("2017/09/18");
     Timestamp timestamp = Timestamps.fromMillis(date.getTime());
     message.setUpdatedAt(timestamp);
     message.putMapType("Hello", "World");
+    return message.build();
+  }
+
+  private NestedMessage createEmptyNestedTestProto() throws ParseException {
+    NestedMessage.Builder message = NestedMessage.newBuilder();
     return message.build();
   }
 
@@ -176,7 +181,7 @@ public class ProtobufDataTest {
         "other_id",
         SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
     );
-    complexTypeBuilder.field("some_val_0", someValBuilder.build());
+    complexTypeBuilder.field("some_val_0", someValBuilder.optional().build());
     complexTypeBuilder.field(
         "is_active",
         SchemaBuilder.bool().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3)).build()
@@ -190,6 +195,11 @@ public class ProtobufDataTest {
     innerMessageBuilder.field(
         "id",
       SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    innerMessageBuilder.field(
+        "ids",
+        SchemaBuilder.array(SchemaBuilder.int32().optional().build())
+            .optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
     );
     return innerMessageBuilder;
   }
@@ -219,7 +229,7 @@ public class ProtobufDataTest {
         "another_id",
         messageIdBuilder.optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3)).build()
     );
-    userIdBuilder.field("user_id_0", idBuilder.build());
+    userIdBuilder.field("user_id_0", idBuilder.optional().build());
     builder.field(
         "user_id",
         userIdBuilder.optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
@@ -243,7 +253,7 @@ public class ProtobufDataTest {
             .build()
     );
     builder.field("status",
-        SchemaBuilder.int32()
+        SchemaBuilder.string()
             .name("Status")
             .optional()
             .parameter(PROTOBUF_TYPE_TAG, String.valueOf(5))
@@ -301,8 +311,13 @@ public class ProtobufDataTest {
     experiments.add("second experiment");
     result.put("experiments_active", experiments);
 
-    result.put("status", 1); // INACTIVE
+    result.put("status", "INACTIVE");
     result.put("map_type", getTestKeyValueMap());
+
+    Struct inner = new Struct(schema.field("inner").schema());
+    inner.put("id", "");
+    inner.put("ids", new ArrayList<>());
+    result.put("inner", inner);
     return result;
   }
 
@@ -325,8 +340,27 @@ public class ProtobufDataTest {
     experiments.add("second experiment");
     result.put("experiments_active", experiments);
 
-    result.put("status", 1); // INACTIVE
+    result.put("status", "INACTIVE");
     result.put("map_type", getTestKeyValueMap());
+
+    Struct inner = new Struct(schema.field("inner").schema());
+    inner.put("id", "");
+    inner.put("ids", new ArrayList<>());
+    result.put("inner", inner);
+    return result;
+  }
+
+  private Struct getExpectedEmptyNestedTestProtoResult() throws ParseException {
+    Schema schema = getExpectedNestedTestProtoSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("is_active", false);
+
+    List<String> experiments = new ArrayList<>();
+    result.put("experiments_active", experiments);
+
+    result.put("status", "ACTIVE");
+    result.put("map_type", new HashMap<>());
+
     return result;
   }
 
@@ -412,6 +446,18 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testToConnectDataWithEmptyNestedProtobufMessage() throws Exception {
+    NestedMessage message = createEmptyNestedTestProto();
+    SchemaAndValue result = getSchemaAndValue(message);
+    Schema expectedSchema = getExpectedNestedTestProtoSchema();
+    assertSchemasEqual(expectedSchema, result.schema());
+    Struct expected = getExpectedEmptyNestedTestProtoResult();
+    assertSchemasEqual(expected.schema(), ((Struct) result.value()).schema());
+    assertEquals(expected.schema(), ((Struct) result.value()).schema());
+    assertEquals(expected, result.value());
+  }
+
+  @Test
   public void testToConnectDataDefaultOneOf() throws Exception {
     Schema schema = getComplexTypeSchemaBuilder().build();
     NestedTestProto.ComplexType message = createProtoDefaultOneOf();
@@ -430,11 +476,14 @@ public class ProtobufDataTest {
   }
 
   // Data Conversion tests
+
   @Test
   public void testToConnectNull() {
     ProtobufData protobufData = new ProtobufData();
     Schema schema = OPTIONAL_BOOLEAN_SCHEMA.schema();
     assertNull(protobufData.toConnectData(schema, null));
+
+    assertNull(protobufData.toConnectData((Schema) null, null));
   }
 
   @Test
@@ -623,6 +672,16 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testFromConnectDataWithEmptyNestedProtobufMessage() throws Exception {
+    NestedMessage nestedMessage = createEmptyNestedTestProto();
+    SchemaAndValue schemaAndValue = getSchemaAndValue(nestedMessage);
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+    Message message = NestedTestProto.NestedMessage.parseFrom(messageBytes);
+
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  @Test
   public void testFromConnectComplex() {
     Schema schema = SchemaBuilder.struct()
         .field("int8", SchemaBuilder.int8().defaultValue((byte) 2).doc("int8 field").build())
@@ -639,6 +698,14 @@ public class ProtobufDataTest {
         .field("mapNonStringKeys",
             SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build()
         )
+        .field("enum", SchemaBuilder.string()
+            .name("Status")
+            .optional()
+            .parameter(ProtobufData.PROTOBUF_TYPE_ENUM, "Status")
+            .parameter(ProtobufData.PROTOBUF_TYPE_ENUM_PREFIX + "ACTIVE", "0")
+            .parameter(ProtobufData.PROTOBUF_TYPE_ENUM_PREFIX + "INACTIVE", "1")
+            .build()
+        )
         .build();
     Struct struct = new Struct(schema).put("int8", (byte) 12)
         .put("int16", (short) 12)
@@ -651,7 +718,8 @@ public class ProtobufDataTest {
         .put("bytes", ByteBuffer.wrap("foo".getBytes()))
         .put("array", Arrays.asList("a", "b", "c"))
         .put("map", Collections.singletonMap("field", 1))
-        .put("mapNonStringKeys", Collections.singletonMap(1, 1));
+        .put("mapNonStringKeys", Collections.singletonMap(1, 1))
+        .put("enum", "INACTIVE");
 
     ProtobufSchemaAndValue convertedRecord = new ProtobufData().fromConnectData(schema, struct);
     ProtobufSchema protobufSchema = convertedRecord.getSchema();
@@ -690,10 +758,13 @@ public class ProtobufDataTest {
     assertEquals("string", fieldElem.getType());
     fieldElem = messageElem.getFields().get(10);
     assertEquals("map", fieldElem.getName());
-    assertEquals("ConnectDefault1.ConnectDefault2Entry", fieldElem.getType());
+    assertEquals("ConnectDefault2Entry", fieldElem.getType());
     fieldElem = messageElem.getFields().get(11);
     assertEquals("mapNonStringKeys", fieldElem.getName());
-    assertEquals("ConnectDefault1.ConnectDefault3Entry", fieldElem.getType());
+    assertEquals("ConnectDefault3Entry", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(12);
+    assertEquals("enum", fieldElem.getName());
+    assertEquals("Status", fieldElem.getType());
 
     Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
         .findFieldByName("int8");
@@ -732,8 +803,24 @@ public class ProtobufDataTest {
     assertEquals(1, dynamicMessage.getField(fieldDescriptor));
     fieldDescriptor = dynamicMessage.getDescriptorForType().findFieldByName("value");
     assertEquals(1, dynamicMessage.getField(fieldDescriptor));
+
+    fieldDescriptor = message.getDescriptorForType().findFieldByName("enum");
+    EnumValueDescriptor enumValueDescriptor =
+        (EnumValueDescriptor) message.getField(fieldDescriptor);
+    assertEquals("INACTIVE", enumValueDescriptor.getName());
   }
 
+  @Test
+  public void testFromConnectNull() throws Exception {
+    ProtobufData protobufData = new ProtobufData();
+    Schema schema = SchemaBuilder.struct().field(VALUE_FIELD_NAME, OPTIONAL_BOOLEAN_SCHEMA).build();
+    ProtobufSchemaAndValue converted = protobufData.fromConnectData(schema, null);
+    assertNull(converted.getValue());
+
+    converted = protobufData.fromConnectData(null, null);
+    assertNull(converted.getSchema());
+    assertNull(converted.getValue());
+  }
 
   @Test
   public void testFromConnectInt8() throws Exception {

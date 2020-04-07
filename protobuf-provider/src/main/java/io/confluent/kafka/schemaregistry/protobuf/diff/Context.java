@@ -16,15 +16,20 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
+import com.squareup.wire.schema.ProtoType;
+import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public class Context {
@@ -32,6 +37,8 @@ public class Context {
   private final Set<MessageElement> schemas;
   private final Set<String> originalEnums;
   private final Set<String> updateEnums;
+  private final Map<String, ProtoType> originalMaps;
+  private final Map<String, ProtoType> updateMaps;
   private final Deque<String> fullPath;
   private final List<Difference> diffs;
 
@@ -40,6 +47,8 @@ public class Context {
     this.schemas = Collections.newSetFromMap(new IdentityHashMap<>());
     this.originalEnums = new HashSet<>();
     this.updateEnums = new HashSet<>();
+    this.originalMaps = new HashMap<>();
+    this.updateMaps = new HashMap<>();
     this.fullPath = new ArrayDeque<>();
     this.diffs = new ArrayList<>();
   }
@@ -78,6 +87,22 @@ public class Context {
 
   public boolean containsEnum(final String name, final boolean isOriginal) {
     return isOriginal ? originalEnums.contains(name) : updateEnums.contains(name);
+  }
+
+  public void addMap(final String name,
+                     final FieldElement key,
+                     final FieldElement value,
+                     final boolean isOriginal) {
+    ProtoType type = ProtoType.get("map<" + key.getType() + ", " + value.getType() + ">");
+    if (isOriginal) {
+      originalMaps.put(name, type);
+    } else {
+      updateMaps.put(name, type);
+    }
+  }
+
+  public Optional<ProtoType> getMap(final String name, final boolean isOriginal) {
+    return Optional.ofNullable(isOriginal ? originalMaps.get(name) : updateMaps.get(name));
   }
 
   public PathScope enterPath(final String path) {

@@ -21,6 +21,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -36,8 +37,10 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -128,7 +131,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testSchemaDependencies() throws Exception {
+  public void testSchemaReferences() throws Exception {
     Map<String, String> schemas = getProtobufSchemaWithDependencies();
     String subject = "reference";
     registerAndVerifySchema(restApp.restClient, schemas.get("ref.proto"), 1, subject);
@@ -154,15 +157,74 @@ public class RestApiTest extends ClusterTestHarness {
     );
   }
 
+  @Test(expected = RestClientException.class)
+  public void testSchemaMissingReferences() throws Exception {
+    Map<String, String> schemas = getProtobufSchemaWithDependencies();
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemas.get("root.proto"));
+    request.setSchemaType(ProtobufSchema.TYPE);
+    request.setReferences(Collections.emptyList());
+    restApp.restClient.registerSchema(request, "referrer");
+  }
+
+  @Test
+  public void testBad() throws Exception {
+    String subject1 = "testTopic1";
+    List<String> allSubjects = new ArrayList<String>();
+
+    // test getAllSubjects with no existing data
+    assertEquals("Getting all subjects should return empty",
+        allSubjects,
+        restApp.restClient.getAllSubjects()
+    );
+
+    try {
+      registerAndVerifySchema(restApp.restClient, getBadSchema(), 1, subject1);
+      fail("Registering bad schema should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    try {
+      registerAndVerifySchema(restApp.restClient, getRandomProtobufSchemas(1).get(0),
+          Arrays.asList(new SchemaReference("bad", "bad", 100)), 1, subject1);
+      fail("Registering bad reference should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    // test getAllSubjects with existing data
+    assertEquals("Getting all subjects should match all registered subjects",
+        allSubjects,
+        restApp.restClient.getAllSubjects()
+    );
+  }
+
   public static void registerAndVerifySchema(
       RestService restService,
       String schemaString,
       int expectedId,
       String subject
   ) throws IOException, RestClientException {
+    registerAndVerifySchema(
+        restService, schemaString, Collections.emptyList(), expectedId, subject);
+  }
+
+  public static void registerAndVerifySchema(
+      RestService restService,
+      String schemaString,
+      List<SchemaReference> references,
+      int expectedId,
+      String subject
+  ) throws IOException, RestClientException {
     int registeredId = restService.registerSchema(schemaString,
         ProtobufSchema.TYPE,
-        Collections.emptyList(),
+        references,
         subject
     );
     Assert.assertEquals(
@@ -202,6 +264,15 @@ public class RestApiTest extends ClusterTestHarness {
             + "message ReferrerMessage {\n  string root_id = 1;\n  ReferencedMessage ref = 2;\n}\n";
     schemas.put("root.proto", schemaString);
     return schemas;
+  }
+
+  public static String getBadSchema() {
+    String schema =
+        "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n\n"
+            + "bad-message MyMessage {\n  string f"
+            + random.nextInt(Integer.MAX_VALUE)
+            + " = 1;\n  bool is_active = 2;\n}\n";
+    return schema;
   }
 }
 

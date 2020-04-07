@@ -24,9 +24,6 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ProtoParser;
 import org.junit.Test;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -48,8 +45,10 @@ public class SchemaDiffTest {
       final ObjectNode testCase = (ObjectNode) nodes.get(i);
       String originalSchema = testCase.get("original_schema").asText();
       String updateSchema = testCase.get("update_schema").asText();
-      ProtoFileElement original = ProtoParser.parse(Location.get("unknown"), originalSchema);
-      ProtoFileElement update = ProtoParser.parse(Location.get("unknown"), updateSchema);
+      ProtoFileElement original = ProtoParser.Companion.parse(
+          Location.get("unknown"), originalSchema);
+      ProtoFileElement update = ProtoParser.Companion.parse(
+          Location.get("unknown"), updateSchema);
       final ArrayNode changes = (ArrayNode) testCase.get("changes");
       boolean isCompatible = testCase.get("compatible").asBoolean();
       final List<String> errorMessages = new ArrayList<>();

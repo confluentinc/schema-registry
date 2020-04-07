@@ -6,6 +6,7 @@ package io.confluent.kafka.serializers.protobuf.test;
 
 option java_package = "io.confluent.kafka.serializers.protobuf.test";
 option java_outer_classname = "NestedTestProto";
+option java_multiple_files = false;
 
 message UserId {
     oneof user_id {
@@ -46,6 +47,16 @@ message NestedMessage {
     InnerMessage inner = 8;
 
     message InnerMessage {
-        string id = 1;
+        string id = 1 [json_name="id"];
+        repeated int32 ids = 2 [packed=true];
     }
+
+    enum InnerEnum {
+        option allow_alias = true;
+        ZERO = 0;
+        ALSO_ZERO = 0;
+    }
+
+    reserved 14, 15, 9 to 11;
+    reserved "foo", "bar";
 }

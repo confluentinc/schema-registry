@@ -32,12 +32,14 @@ import javax.ws.rs.QueryParam;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 
+import java.util.List;
 import java.util.Set;
 
 @Path("/schemas")
@@ -66,12 +68,13 @@ public class SchemasResource {
   public SchemaString getSchema(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @DefaultValue("") @QueryParam("format") String format,
       @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
     SchemaString schema = null;
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";
     try {
-      schema = schemaRegistry.get(id, fetchMaxId);
+      schema = schemaRegistry.get(id, format, fetchMaxId);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -95,7 +98,7 @@ public class SchemasResource {
       @PathParam("id") Integer id) {
     Set<String> subjects;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
-                          + id + " from the schema registry";
+        + id + " from the schema registry";
 
     try {
       subjects = schemaRegistry.listSubjectsForId(id);
@@ -111,5 +114,43 @@ public class SchemasResource {
     }
 
     return subjects;
+  }
+
+  @GET
+  @Path("/ids/{id}/versions")
+  @ApiOperation("Get all the subject-version pairs associated with the input ID.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Error code 40403 -- Schema not found\n"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  public List<SubjectVersion> getVersions(
+      @ApiParam(value = "Globally unique identifier of the schema", required = true)
+      @PathParam("id") Integer id) {
+    List<SubjectVersion> versions;
+    String errorMessage = "Error while retrieving all subjects associated with schema id "
+                          + id + " from the schema registry";
+
+    try {
+      versions = schemaRegistry.listVersionsForId(id);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+
+    if (versions == null) {
+      throw Errors.schemaNotFoundException();
+    }
+
+    return versions;
+  }
+
+  @GET
+  @Path("/types")
+  @ApiOperation("Get the schema types supported by this registry.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  public Set<String> getSchemaTypes() {
+    return schemaRegistry.schemaTypes();
   }
 }

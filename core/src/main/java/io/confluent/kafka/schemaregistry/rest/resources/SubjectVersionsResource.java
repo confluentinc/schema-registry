@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
@@ -50,6 +51,7 @@ import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
@@ -125,7 +127,7 @@ public class SubjectVersionsResource {
   @GET
   @Path("/{version}/schema")
   @PerformanceMetric("subjects.versions.get-schema.only")
-  @ApiOperation(value = "Get the avro schema for the specified version of this subject. "
+  @ApiOperation(value = "Get the schema for the specified version of this subject. "
       + "The unescaped schema only is returned.")
   @ApiResponses(value = {@ApiResponse(code = 404, message =
       "Error code 40401 -- Subject not found\n"
@@ -140,6 +142,40 @@ public class SubjectVersionsResource {
   }
 
   @GET
+  @Path("/{version}/referencedby")
+  @ApiOperation(value = "Get the schemas that reference the specified schema.")
+  @ApiResponses(value = {@ApiResponse(code = 404, message =
+      "Error code 40401 -- Subject not found\n"
+          + "Error code 40402 -- Version not found"), @ApiResponse(code = 422,
+      message = "Error code 42202 -- Invalid version"), @ApiResponse(code = 500,
+      message = "Error code 50001 -- Error in the backend data store")})
+  public List<Integer> getReferencedBy(
+      @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
+      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
+    VersionId versionId = null;
+    try {
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
+    }
+    String errorMessage = "Error while retrieving schemas that reference schema with subject "
+        + subject
+        + " and version "
+        + version
+        + " from the schema registry";
+    try {
+      return schemaRegistry.getReferencedBy(subject, versionId);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+  }
+
+  @GET
   @PerformanceMetric("subjects.versions.list")
   @ApiOperation(value = "Get a list of versions registered under the specified subject.")
   @ApiResponses(value = {
@@ -147,7 +183,8 @@ public class SubjectVersionsResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
   public List<Integer> listVersions(
       @ApiParam(value = "Name of the Subject", required = true)
-        @PathParam("subject") String subject) {
+        @PathParam("subject") String subject,
+      @QueryParam("deleted") boolean lookupDeletedSchema) {
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
@@ -155,7 +192,7 @@ public class SubjectVersionsResource {
                           + subject
                           + " exists in the registry";
     try {
-      if (!schemaRegistry.hasSubjects(subject)) {
+      if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
         throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {
@@ -166,8 +203,8 @@ public class SubjectVersionsResource {
     errorMessage = "Error while listing all versions for subject "
                    + subject;
     try {
-      //return only non-deleted versions for the subject
-      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject, false);
+      allSchemasForThisTopic = schemaRegistry.getAllVersions(subject,
+              lookupDeletedSchema);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -197,8 +234,8 @@ public class SubjectVersionsResource {
       + "the primary. If the primary is not available, the client will get an error code "
       + "indicating that the forwarding has failed.", response = RegisterSchemaResponse.class)
   @ApiResponses(value = {
-      @ApiResponse(code = 409, message = "Incompatible Avro schema"),
-      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid Avro schema"),
+      @ApiResponse(code = 409, message = "Incompatible schema"),
+      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid schema or schema type"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
           + "Error code 50002 -- Operation timed out\n"
           + "Error code 50003 -- Error while forwarding the request to the primary")})
@@ -209,6 +246,8 @@ public class SubjectVersionsResource {
         @PathParam("subject") String subjectName,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
+    log.info("Registering new schema: subject {}, version {}, id {}, type {}",
+             subjectName, request.getVersion(), request.getId(), request.getSchemaType());
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
@@ -225,7 +264,8 @@ public class SubjectVersionsResource {
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
     } catch (InvalidSchemaException e) {
-      throw Errors.invalidAvroException("Input schema is an invalid Avro schema", e);
+      throw Errors.invalidSchemaException("Either the input schema or"
+                                          + " one its references is invalid", e);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {
@@ -266,8 +306,12 @@ public class SubjectVersionsResource {
   public void deleteSchemaVersion(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
-      @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
+      @ApiParam(value = "Name of the Subject", required = true)
+        @PathParam("subject") String subject,
+      @ApiParam(value = VERSION_PARAM_DESC, required = true)
+        @PathParam("version") String version,
+      @QueryParam("permanent") boolean permanentDelete) {
+    log.info("Deleting schema version {} from subject {}", version, subject);
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
@@ -277,12 +321,19 @@ public class SubjectVersionsResource {
     Schema schema = null;
     String errorMessage =
             "Error while retrieving schema for subject "
-            + subject
-            + " with version "
-            + version
-            + " from the schema registry";
+                    + subject
+                    + " with version "
+                    + version
+                    + " from the schema registry";
     try {
-      schema = schemaRegistry.validateAndGetSchema(subject, versionId, false);
+      if (schemaRegistry.schemaVersionExists(subject, versionId, true)) {
+        if (!permanentDelete
+                && !schemaRegistry.schemaVersionExists(subject,
+                        versionId, false)) {
+          throw Errors.schemaVersionSoftDeletedException(subject, version);
+        }
+      }
+      schema = schemaRegistry.validateAndGetSchema(subject, versionId, true);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -291,10 +342,15 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
+
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-          headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject, schema);
+              headers, schemaRegistry.config().whitelistHeaders());
+      schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
+              schema, permanentDelete);
+    } catch (SchemaVersionNotSoftDeletedException e) {
+      throw Errors.schemaVersionNotSoftDeletedException(e.getSubject(),
+              e.getVersion());
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Delete Schema Version operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
@@ -304,6 +360,8 @@ public class SubjectVersionsResource {
       throw Errors
           .requestForwardingFailedException("Error while forwarding delete schema version request"
                                             + " to the master", e);
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (UnknownMasterException e) {
       throw Errors.unknownMasterException("Master not known.", e);
     } catch (SchemaRegistryException e) {

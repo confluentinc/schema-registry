@@ -22,9 +22,6 @@ import io.swagger.annotations.ApiResponses;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.HeaderParam;
@@ -77,7 +74,7 @@ public class CompatibilityResource {
   @ApiResponses(value = {
       @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
-      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid Avro schema\n"
+      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid schema or schema type\n"
           + "Error code 42202 -- Invalid version"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store") })
   @PerformanceMetric("compatibility.subjects.versions.verify")
@@ -93,11 +90,11 @@ public class CompatibilityResource {
           + "under the specified subject", required = true)@PathParam("version") String version,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
+    log.info("Testing schema subject {} compatibility between existing version {} and "
+             + "specified version {}, id {}, type {}",
+             subject, version, request.getVersion(), request.getId(), request.getSchemaType());
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
-    Map<String, String> headerProperties = new HashMap<String, String>();
-    headerProperties.put("Content-Type", contentType);
-    headerProperties.put("Accept", accept);
     boolean isCompatible = false;
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     String errorMessage = "Error while retrieving list of all subjects";
@@ -130,7 +127,7 @@ public class CompatibilityResource {
             schemaForSpecifiedVersion
         );
       } catch (InvalidSchemaException e) {
-        throw Errors.invalidAvroException("Invalid input schema " + request.getSchema(), e);
+        throw Errors.invalidSchemaException("Invalid input schema " + request.getSchema(), e);
       } catch (SchemaRegistryStoreException e) {
         throw Errors.storeException(
             "Error while getting compatibility level for subject " + subject, e);
@@ -155,7 +152,7 @@ public class CompatibilityResource {
 
   private void registerWithError(final String subject, final String errorMessage) {
     try {
-      if (!schemaRegistry.hasSubjects(subject)) {
+      if (!schemaRegistry.hasSubjects(subject, false)) {
         throw Errors.subjectNotFoundException(subject);
       }
     } catch (SchemaRegistryStoreException e) {

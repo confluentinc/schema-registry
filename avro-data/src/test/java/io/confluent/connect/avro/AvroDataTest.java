@@ -762,20 +762,26 @@ public class AvroDataTest {
   }
 
   private static org.apache.avro.Schema createDecimalSchema(boolean required, int precision) {
+    return createDecimalSchema(required, precision, TEST_SCALE);
+  }
+
+  private static org.apache.avro.Schema createDecimalSchema(boolean required, int precision, int scale) {
     org.apache.avro.Schema avroSchema
         = required ? org.apache.avro.SchemaBuilder.builder().bytesType() :
           org.apache.avro.SchemaBuilder.builder().unionOf().nullType().and().bytesType().endUnion();
     org.apache.avro.Schema decimalSchema = required ? avroSchema : avroSchema.getTypes().get(1);
-    decimalSchema.addProp("scale", 2);
+    decimalSchema.addProp("scale", scale);
     decimalSchema.addProp("precision", precision);
     decimalSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(1));
     ObjectNode avroParams = JsonNodeFactory.instance.objectNode();
-    avroParams.put("scale", "2");
-    avroParams.put(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, new Integer(precision).toString());
+    avroParams.put("scale", Integer.toString(scale));
+    avroParams.put(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, Integer.toString(precision));
     decimalSchema.addProp("connect.parameters", avroParams);
     decimalSchema.addProp("connect.name", "org.apache.kafka.connect.data.Decimal");
     decimalSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
-    org.apache.avro.LogicalTypes.decimal(precision, 2).addToSchema(decimalSchema);
+    if (scale >= 0 && scale <= precision) {
+      org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(decimalSchema);
+    }
 
     return avroSchema;
   }
@@ -822,6 +828,17 @@ public class AvroDataTest {
     org.apache.avro.LogicalTypes.timestampMillis().addToSchema(avroSchema);
     java.util.Date date = new java.util.Date();
     checkNonRecordConversionNew(avroSchema, date.getTime(), Timestamp.SCHEMA, date, avroData);
+  }
+
+  // Test to ensure that a decimal with a scale greater than its precision can be safely handled
+  @Test
+  public void testFromConnectLogicalDecimalScaleGreaterThanPrecision() {
+    int precision = 5;
+    int scale = 7;
+    BigDecimal testDecimal = new BigDecimal(new BigInteger("12358"), scale);
+    org.apache.avro.Schema avroSchema = createDecimalSchema(true, precision, scale);
+    checkNonRecordConversion(avroSchema, ByteBuffer.wrap(testDecimal.unscaledValue().toByteArray()), Decimal.builder(scale).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, Integer.toString(precision)).build(), testDecimal, avroData);
+    checkNonRecordConversionNull(Decimal.builder(scale).optional().build());
   }
 
   // test for old way of logical type handling
@@ -1090,6 +1107,11 @@ public class AvroDataTest {
   // corresponding Connect type.
 
   // Avro -> Connect: directly corresponding types
+
+  @Test
+  public void testToConnectNull() {
+    assertNull(avroData.toConnectData(null, null));
+  }
 
   @Test
   public void testToConnectBoolean() {
@@ -1494,7 +1516,7 @@ public class AvroDataTest {
   // Avro -> Connect: Avro types with no corresponding Connect type
 
   @Test(expected = DataException.class)
-  public void testToConnectNull() {
+  public void testToConnectNullType() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().nullType();
     // If we somehow did end up with a null schema and an actual value that let it get past the
     avroData.toConnectData(avroSchema, true);
@@ -1908,6 +1930,58 @@ public class AvroDataTest {
     Schema schema1 = avroData.toConnectSchema(avroSchema1);
     Schema schema2 = avroData.toConnectSchema(avroSchema2);
     assertEquals(schema1.parameters(), schema2.parameters());
+  }
+
+  @Test
+  public void testIntWithConnectDefault() {
+    final String s = "{"
+        + "  \"type\": \"record\","
+        + "  \"name\": \"SomeThing\","
+        + "  \"namespace\": \"com.acme.property\","
+        + "  \"fields\": ["
+        + "    {"
+        + "      \"name\": \"f\","
+        + "      \"type\": {"
+        + "        \"type\": \"int\","
+        + "        \"connect.default\": 42,"
+        + "        \"connect.version\": 1"
+        + "      }"
+        + "    }"
+        + "  ]"
+        + "}";
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(s);
+
+    AvroData avroData = new AvroData(0);
+    Schema schema = avroData.toConnectSchema(avroSchema);
+
+    assertEquals(42, schema.field("f").schema().defaultValue());
+  }
+
+  @Test
+  public void testLongWithConnectDefault() {
+    final String s = "{"
+        + "  \"type\": \"record\","
+        + "  \"name\": \"SomeThing\","
+        + "  \"namespace\": \"com.acme.property\","
+        + "  \"fields\": ["
+        + "    {"
+        + "      \"name\": \"f\","
+        + "      \"type\": {"
+        + "        \"type\": \"long\","
+        + "        \"connect.default\": 42,"
+        + "        \"connect.version\": 1"
+        + "      }"
+        + "    }"
+        + "  ]"
+        + "}";
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(s);
+
+    AvroData avroData = new AvroData(0);
+    Schema schema = avroData.toConnectSchema(avroSchema);
+
+    assertEquals(42L, schema.field("f").schema().defaultValue());
   }
 
   @Test

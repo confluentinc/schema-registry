@@ -15,8 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.rest;
 
-import com.criteo.glup.ExampleProtoCriteo;
-import com.criteo.glup.MetadataProto;
+import com.acme.glup.ExampleProtoAcme;
+import com.acme.glup.MetadataProto;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
@@ -108,8 +108,8 @@ public class RestApiSerializerTest extends ClusterTestHarness {
       .setCluster("mycluster")
       .setEnvironment("myenv")
       .build();
-  private static final ExampleProtoCriteo.ClickCas CLICK_CAS_MESSAGE =
-      ExampleProtoCriteo.ClickCas.newBuilder()
+  private static final ExampleProtoAcme.ClickCas CLICK_CAS_MESSAGE =
+      ExampleProtoAcme.ClickCas.newBuilder()
       .setGlupOrigin(ORIGIN_MESSAGE)
       .setPartition(PARTITION_MESSAGE)
       .setUid("myuid")
@@ -202,7 +202,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     KafkaProtobufDeserializer clickCasDeserializer = new KafkaProtobufDeserializer(
         schemaRegistry,
         new HashMap(clickCasDeserializerConfig),
-        ExampleProtoCriteo.ClickCas.class
+        ExampleProtoAcme.ClickCas.class
     );
 
     byte[] bytes;

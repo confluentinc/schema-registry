@@ -30,6 +30,20 @@ public class Errors {
   public static final String SCHEMA_NOT_FOUND_MESSAGE = "Schema not found";
   public static final String SCHEMA_NOT_FOUND_MESSAGE_FORMAT = "Schema %s not found";
   public static final int SCHEMA_NOT_FOUND_ERROR_CODE = 40403;
+  public static final String SUBJECT_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' was soft deleted."
+          + "Set permanent=true to delete permanently";
+  public static final int SUBJECT_SOFT_DELETED_ERROR_CODE = 40404;
+  public static final String SUBJECT_NOT_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' was not deleted "
+          + "first before being permanently deleted";
+  public static final int SUBJECT_NOT_SOFT_DELETED_ERROR_CODE = 40405;
+  public static final String SCHEMAVERSION_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' Version %s was soft deleted."
+          + "Set permanent=true to delete permanently";
+  public static final int SCHEMAVERSION_SOFT_DELETED_ERROR_CODE = 40406;
+  public static final String SCHEMAVERSION_NOT_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' Version %s was not deleted "
+          + "first before being permanently deleted";
+  public static final int SCHEMAVERSION_NOT_SOFT_DELETED_ERROR_CODE = 40407;
+
+
 
   // HTTP 409
   public static final int INCOMPATIBLE_SCHEMA_ERROR_CODE = Response.Status.CONFLICT.getStatusCode();
@@ -40,6 +54,7 @@ public class Errors {
   public static final int INVALID_COMPATIBILITY_LEVEL_ERROR_CODE = 42203;
   public static final int INVALID_MODE_ERROR_CODE = 42204;
   public static final int OPERATION_NOT_PERMITTED_ERROR_CODE = 42205;
+  public static final int REFERENCE_EXISTS_ERROR_CODE = 42206;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -51,6 +66,26 @@ public class Errors {
   public static RestException subjectNotFoundException(String subject) {
     return new RestNotFoundException(
         String.format(SUBJECT_NOT_FOUND_MESSAGE_FORMAT, subject), SUBJECT_NOT_FOUND_ERROR_CODE);
+  }
+
+  public static RestException subjectSoftDeletedException(String subject) {
+    return new RestNotFoundException(
+            String.format(SUBJECT_SOFT_DELETED_MESSAGE_FORMAT, subject), SUBJECT_SOFT_DELETED_ERROR_CODE);
+  }
+
+  public static RestException subjectNotSoftDeletedException(String subject) {
+    return new RestNotFoundException(
+            String.format(SUBJECT_NOT_SOFT_DELETED_MESSAGE_FORMAT, subject), SUBJECT_NOT_SOFT_DELETED_ERROR_CODE);
+  }
+
+  public static RestException schemaVersionSoftDeletedException(String subject, String version) {
+    return new RestNotFoundException(
+            String.format(SCHEMAVERSION_SOFT_DELETED_MESSAGE_FORMAT, subject, version), SCHEMAVERSION_SOFT_DELETED_ERROR_CODE);
+  }
+
+  public static RestException schemaVersionNotSoftDeletedException(String subject, String version) {
+    return new RestNotFoundException(
+            String.format(SCHEMAVERSION_NOT_SOFT_DELETED_MESSAGE_FORMAT, subject, version), SCHEMAVERSION_NOT_SOFT_DELETED_ERROR_CODE);
   }
 
   public static RestException versionNotFoundException(Integer id) {
@@ -70,14 +105,14 @@ public class Errors {
         String.format(SCHEMA_NOT_FOUND_MESSAGE_FORMAT, id), SCHEMA_NOT_FOUND_ERROR_CODE);
   }
 
-  public static RestIncompatibleAvroSchemaException incompatibleSchemaException(String message,
-                                                                                Throwable cause) {
-    return new RestIncompatibleAvroSchemaException(message,
-                                                   RestIncompatibleAvroSchemaException.DEFAULT_ERROR_CODE,
+  public static RestIncompatibleSchemaException incompatibleSchemaException(String message,
+                                                                            Throwable cause) {
+    return new RestIncompatibleSchemaException(message,
+                                                   RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
                                                    cause);
   }
 
-  public static RestInvalidSchemaException invalidAvroException(String message, Throwable cause) {
+  public static RestInvalidSchemaException invalidSchemaException(String message, Throwable cause) {
     return new RestInvalidSchemaException(message);
   }
 
@@ -99,6 +134,10 @@ public class Errors {
 
   public static RestOperationNotPermittedException operationNotPermittedException(String message) {
     return new RestOperationNotPermittedException(message);
+  }
+
+  public static RestReferenceExistsException referenceExistsException(String message) {
+    return new RestReferenceExistsException(message);
   }
 
   public static RestException requestForwardingFailedException(String message, Throwable cause) {

@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -30,11 +31,7 @@ import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
@@ -327,6 +324,12 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGetSchemaTypes() throws Exception {
+    assertEquals(new HashSet<>(Arrays.asList("AVRO", "JSON", "PROTOBUF")),
+        new HashSet<>(restApp.restClient.getSchemaTypes()));
+  }
+
+  @Test
   public void testListVersionsNonExistingSubject() throws Exception {
     try {
       restApp.restClient.getAllVersions("Invalid");
@@ -458,6 +461,80 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Schema references should be found",
         Collections.singletonList(ref),
         schemaString.getReferences());
+
+    List<Integer> refs = restApp.restClient.getReferencedBy("reference", 1);
+    assertEquals(2, refs.get(0).intValue());
+
+    try {
+      restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+          "reference",
+          String.valueOf(1)
+      );
+      fail("Deleting reference should fail with " + Errors.REFERENCE_EXISTS_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Reference found",
+          Errors.REFERENCE_EXISTS_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, "referrer", "1"));
+
+    refs = restApp.restClient.getReferencedBy("reference", 1);
+    assertTrue(refs.isEmpty());
+
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, "reference", "1"));
+  }
+
+  @Test(expected = RestClientException.class)
+  public void testSchemaMissingReferences() throws Exception {
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemas.get(1));
+    request.setReferences(Collections.emptyList());
+    restApp.restClient.registerSchema(request, "referrer");
+  }
+
+  @Test
+  public void testBad() throws Exception {
+    String subject1 = "testTopic1";
+    List<String> allSubjects = new ArrayList<String>();
+
+    // test getAllSubjects with no existing data
+    assertEquals("Getting all subjects should return empty",
+        allSubjects,
+        restApp.restClient.getAllSubjects()
+    );
+
+    try {
+      TestUtils.registerAndVerifySchema(restApp.restClient, TestUtils.getBadSchema(), 1, subject1);
+      fail("Registering bad schema should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    try {
+      TestUtils.registerAndVerifySchema(restApp.restClient,
+          TestUtils.getRandomCanonicalAvroString(1).get(0),
+          Arrays.asList(new SchemaReference("bad", "bad", 100)), 1, subject1);
+      fail("Registering bad reference should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    // test getAllSubjects with existing data
+    assertEquals("Getting all subjects should match all registered subjects",
+        allSubjects,
+        restApp.restClient.getAllSubjects()
+    );
   }
 
   @Test
@@ -517,6 +594,21 @@ public class RestApiTest extends ClusterTestHarness {
               Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
               rce.getErrorCode());
     }
+  }
+
+  @Test
+  public void testGetVersionsAssociatedWithSchemaId() throws Exception {
+    String subject1 = "testTopic1";
+    String subject2 = "testTopic2";
+
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject1);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject2);
+
+    List<SubjectVersion> associatedSubjects = restApp.restClient.getAllVersionsById(1);
+    assertEquals(associatedSubjects.size(), 2);
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
   }
 
   @Test
@@ -651,6 +743,124 @@ public class RestApiTest extends ClusterTestHarness {
     for (int i = 0; i < 2; i++) {
       TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
       assertEquals(Collections.singletonList(3), restApp.restClient.getAllVersions(subject));
+    }
+
+  }
+
+  @Test
+  public void testDeleteSchemaVersionPermanent() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    String subject = "test";
+
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
+
+    //permanent delete without soft delete first
+    try {
+      restApp.restClient
+              .deleteSchemaVersion
+                      (RestService.DEFAULT_REQUEST_PROPERTIES, subject,
+                              "2",
+                              true);
+      fail(String.format("Permanent deleting first time should throw schemaVersionNotSoftDeletedException"));
+    } catch (RestClientException rce) {
+      assertEquals("Schema version must be soft deleted first",
+              Errors.SCHEMAVERSION_NOT_SOFT_DELETED_ERROR_CODE,
+              rce.getErrorCode());
+    }
+
+    //soft delete
+    assertEquals("Deleting Schema Version Success", (Integer) 2, restApp.restClient
+            .deleteSchemaVersion
+                    (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2"));
+
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+    assertEquals(Arrays.asList(1,2), restApp.restClient.getAllVersions(
+            RestService.DEFAULT_REQUEST_PROPERTIES,
+            subject, true));
+    //soft delete again
+    try {
+      restApp.restClient
+              .deleteSchemaVersion
+                      (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
+      fail(String.format("Soft deleting second time should throw schemaVersionSoftDeletedException"));
+    } catch (RestClientException rce) {
+      assertEquals("Schema version already soft deleted",
+              Errors.SCHEMAVERSION_SOFT_DELETED_ERROR_CODE,
+              rce.getErrorCode());
+    }
+
+    try {
+      restApp.restClient.getVersion(subject, 2);
+      fail(String.format("Getting Version %s for subject %s should fail with %s", "2", subject,
+              Errors.VERSION_NOT_FOUND_ERROR_CODE));
+    } catch (RestClientException rce) {
+      assertEquals("Version not found",
+              Errors.VERSION_NOT_FOUND_ERROR_CODE,
+              rce.getErrorCode());
+    }
+
+      Schema schema = restApp.restClient.getVersion(subject, 2, true);
+      assertEquals("Lookup Version Match", (Integer) 2, schema.getVersion());
+
+    try {
+      RegisterSchemaRequest request = new RegisterSchemaRequest();
+      request.setSchema(schemas.get(1));
+      restApp.restClient.lookUpSubjectVersion(new HashMap<String, String>(), request, subject);
+      fail(String.format("Lookup Subject Version %s for subject %s should fail with %s", "2",
+              subject,
+              Errors.SCHEMA_NOT_FOUND_ERROR_CODE));
+    } catch (RestClientException rce) {
+      assertEquals("Schema not found",
+              Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
+              rce.getErrorCode());
+    }
+    // permanent delete
+    assertEquals("Deleting Schema Version Success", (Integer) 2, restApp.restClient
+            .deleteSchemaVersion
+                    (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2", true));
+    // GET after permanent delete should give exception
+    try {
+      restApp.restClient.getVersion(subject, 2, true);
+      fail(String.format("Getting Version %s for subject %s should fail with %s", "2", subject,
+              Errors.VERSION_NOT_FOUND_ERROR_CODE));
+    } catch (RestClientException rce) {
+      assertEquals("Version not found",
+              Errors.VERSION_NOT_FOUND_ERROR_CODE,
+              rce.getErrorCode());
+    }
+    //permanent delete again
+    try {
+      restApp.restClient.deleteSchemaVersion
+                      (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2", true);
+      fail(String.format("Getting Version %s for subject %s should fail with %s", "2", subject,
+              Errors.VERSION_NOT_FOUND_ERROR_CODE));
+    } catch (RestClientException rce) {
+      assertEquals("Version not found",
+              Errors.VERSION_NOT_FOUND_ERROR_CODE,
+              rce.getErrorCode());
+    }
+
+    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
+            .deleteSchemaVersion
+                    (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest"));
+
+    try {
+      List<Integer> versions = restApp.restClient.getAllVersions(subject);
+      fail("Getting all versions from non-existing subject1 should fail with "
+              + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
+              + " (subject not found). Got " + versions);
+    } catch (RestClientException rce) {
+      assertEquals("Should get a 404 status for non-existing subject",
+              Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+              rce.getErrorCode());
+    }
+
+    //re-register twice and versions should be same
+    //after permanent delete of 2, the new version coming up will be 2
+    for (int i = 0; i < 2; i++) {
+      TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
+      assertEquals(Collections.singletonList(2), restApp.restClient.getAllVersions(subject));
     }
 
   }
@@ -864,6 +1074,44 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testListSubjects() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    String subject1 = "test1";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject1);
+    String subject2 = "test2";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject2);;
+    List<String> expectedResponse = new ArrayList<>();
+    expectedResponse.add(subject2);
+    expectedResponse.add(subject1);
+    assertEquals("Current Subjects", expectedResponse,
+            restApp.restClient.getAllSubjects());
+    List<Integer> deletedResponse = new ArrayList<>();
+    deletedResponse.add(1);
+    assertEquals("Versions Deleted Match", deletedResponse,
+            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject2));
+
+    expectedResponse = new ArrayList<>();
+    expectedResponse.add(subject1);
+    assertEquals("Current Subjects", expectedResponse,
+            restApp.restClient.getAllSubjects());
+
+    expectedResponse = new ArrayList<>();
+    expectedResponse.add(subject2);
+    expectedResponse.add(subject1);
+    assertEquals("Current Subjects", expectedResponse,
+            restApp.restClient.getAllSubjects(true));
+
+    assertEquals("Versions Deleted Match", deletedResponse,
+            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES,
+                    subject2, true));
+
+    expectedResponse = new ArrayList<>();
+    expectedResponse.add(subject1);
+    assertEquals("Current Subjects", expectedResponse,
+            restApp.restClient.getAllSubjects());
+  }
+
+  @Test
   public void testDeleteSubjectBasic() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
@@ -881,6 +1129,80 @@ public class RestApiTest extends ClusterTestHarness {
       assertEquals("Subject Not Found", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
 
+  }
+
+  @Test
+  public void testDeleteSubjectException() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    String subject = "test";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
+    List<Integer> expectedResponse = new ArrayList<>();
+    expectedResponse.add(1);
+    expectedResponse.add(2);
+    assertEquals("Versions Deleted Match", expectedResponse,
+            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject));
+
+    Schema schema = restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, true );
+    assertEquals(1, (long)schema.getVersion());
+    schema = restApp.restClient.lookUpSubjectVersion(schemas.get(1), subject, true );
+    assertEquals(2, (long)schema.getVersion());
+
+    try {
+      restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject);
+      fail(String.format("Subject %s should not be found", subject));
+    } catch (RestClientException rce) {
+      assertEquals("Subject exists in soft deleted format.", Errors.SUBJECT_SOFT_DELETED_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+
+  @Test
+  public void testDeleteSubjectPermanent() throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
+    String subject = "test";
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
+    List<Integer> expectedResponse = new ArrayList<>();
+    expectedResponse.add(1);
+    expectedResponse.add(2);
+
+    try {
+      restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES,
+              subject,
+              true);
+      fail(String.format("Delete permanent should not succeed"));
+    } catch (RestClientException rce) {
+      assertEquals("Subject '%s' was not deleted first before permanent delete", Errors.SUBJECT_NOT_SOFT_DELETED_ERROR_CODE, rce.getErrorCode());
+    }
+
+    assertEquals("Versions Deleted Match", expectedResponse,
+            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject));
+
+    Schema schema = restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, true );
+    assertEquals(1, (long)schema.getVersion());
+    schema = restApp.restClient.lookUpSubjectVersion(schemas.get(1), subject, true );
+    assertEquals(2, (long)schema.getVersion());
+
+    assertEquals("Versions Deleted Match", expectedResponse,
+            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES,
+                    subject,
+                    true));
+    for (Integer i : expectedResponse) {
+      try {
+        restApp.restClient.lookUpSubjectVersion(schemas.get(i-i), subject, false);
+        fail(String.format("Subject %s should not be found", subject));
+      } catch (RestClientException rce) {
+        assertEquals("Subject Not Found", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+      }
+
+      try {
+        restApp.restClient.lookUpSubjectVersion(schemas.get(i-1), subject, true);
+        fail(String.format("Subject %s should not be found", subject));
+      } catch (RestClientException rce) {
+        assertEquals("Subject Not Found", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+      }
+    }
   }
 
   @Test

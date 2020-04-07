@@ -33,44 +33,41 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+
 public class AvroSchemaUtils {
 
   private static final EncoderFactory encoderFactory = EncoderFactory.get();
   private static final DecoderFactory decoderFactory = DecoderFactory.get();
-  private static final ObjectMapper jsonMapper = new ObjectMapper();
+  private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
   private static final Map<String, Schema> primitiveSchemas;
 
   static {
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(false);
     primitiveSchemas = new HashMap<>();
-    primitiveSchemas.put("Null", createPrimitiveSchema(parser, "null"));
-    primitiveSchemas.put("Boolean", createPrimitiveSchema(parser, "boolean"));
-    primitiveSchemas.put("Integer", createPrimitiveSchema(parser, "int"));
-    primitiveSchemas.put("Long", createPrimitiveSchema(parser, "long"));
-    primitiveSchemas.put("Float", createPrimitiveSchema(parser, "float"));
-    primitiveSchemas.put("Double", createPrimitiveSchema(parser, "double"));
-    primitiveSchemas.put("String", createPrimitiveSchema(parser, "string"));
-    primitiveSchemas.put("Bytes", createPrimitiveSchema(parser, "bytes"));
+    primitiveSchemas.put("Null", createPrimitiveSchema("null"));
+    primitiveSchemas.put("Boolean", createPrimitiveSchema("boolean"));
+    primitiveSchemas.put("Integer", createPrimitiveSchema("int"));
+    primitiveSchemas.put("Long", createPrimitiveSchema("long"));
+    primitiveSchemas.put("Float", createPrimitiveSchema("float"));
+    primitiveSchemas.put("Double", createPrimitiveSchema("double"));
+    primitiveSchemas.put("String", createPrimitiveSchema("string"));
+    primitiveSchemas.put("Bytes", createPrimitiveSchema("bytes"));
   }
 
-  private static Schema createPrimitiveSchema(Schema.Parser parser, String type) {
+  private static Schema createPrimitiveSchema(String type) {
     String schemaString = String.format("{\"type\" : \"%s\"}", type);
-    return parser.parse(schemaString);
+    return new AvroSchema(schemaString).rawSchema();
   }
 
   public static AvroSchema copyOf(AvroSchema schema) {
-    return new AvroSchema(schema.canonicalString(),
-        schema.references(),
-        schema.resolvedReferences(),
-        schema.version()
-    );
+    return schema.copy();
   }
 
   public static Map<String, Schema> getPrimitiveSchemas() {
@@ -139,22 +136,34 @@ public class AvroSchemaUtils {
     }
   }
 
+  public static Object toObject(String value, AvroSchema schema) throws IOException {
+    Schema rawSchema = schema.rawSchema();
+    DatumReader<Object> reader = new GenericDatumReader<Object>(rawSchema);
+    Object object = reader.read(null,
+        decoderFactory.jsonDecoder(rawSchema, value));
+    return object;
+  }
+
   public static byte[] toJson(Object value) throws IOException {
     if (value == null) {
       return null;
     }
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      Schema schema = getSchema(value);
-      JsonEncoder encoder = encoderFactory.jsonEncoder(schema, out);
-      DatumWriter<Object> writer = new GenericDatumWriter<Object>(schema);
-      // Some types require wrapping/conversion
-      Object wrappedValue = value;
-      if (value instanceof byte[]) {
-        wrappedValue = ByteBuffer.wrap((byte[]) value);
-      }
-      writer.write(wrappedValue, encoder);
-      encoder.flush();
+      toJson(value, out);
       return out.toByteArray();
     }
+  }
+
+  public static void toJson(Object value, OutputStream out) throws IOException {
+    Schema schema = getSchema(value);
+    JsonEncoder encoder = encoderFactory.jsonEncoder(schema, out);
+    DatumWriter<Object> writer = new GenericDatumWriter<>(schema);
+    // Some types require wrapping/conversion
+    Object wrappedValue = value;
+    if (value instanceof byte[]) {
+      wrappedValue = ByteBuffer.wrap((byte[]) value);
+    }
+    writer.write(wrappedValue, encoder);
+    encoder.flush();
   }
 }

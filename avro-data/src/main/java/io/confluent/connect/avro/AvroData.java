@@ -28,6 +28,7 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.util.internal.JacksonUtils;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -54,6 +55,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -61,12 +63,16 @@ import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.serializers.NonRecordContainer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
  * Utilities for converting between our runtime data format and Avro, and (de)serializing that data.
  */
 public class AvroData {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroData.class);
 
   public static final String NAMESPACE = "io.confluent.connect.avro";
   // Avro does not permit empty schema names, which might be the ideal default since we also are
@@ -380,7 +386,7 @@ public class AvroData {
     Object value = logicalValue;
     if (schema != null && schema.name() != null) {
       LogicalTypeConverter logicalConverter = TO_AVRO_LOGICAL_CONVERTERS.get(schema.name());
-      if (logicalConverter != null && logicalValue != null) {
+      if (logicalConverter != null) {
         value = logicalConverter.convert(schema, logicalValue);
       }
     }
@@ -897,6 +903,7 @@ public class AvroData {
         }
       }
 
+      boolean forceLegacyDecimal = false;
       // the new and correct way to handle logical types
       if (schema.name() != null) {
         if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
@@ -905,7 +912,24 @@ public class AvroData {
           int precision = precisionString == null ? CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT :
               Integer.parseInt(precisionString);
           int scale = scaleString == null ? 0 : Integer.parseInt(scaleString);
-          org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(baseSchema);
+          if (scale < 0 || scale > precision) {
+            log.trace(
+                "Scale and precision of {} and {} cannot be serialized as native Avro logical " 
+                    + "decimal type; reverting to legacy serialization method",
+                scale,
+                precision
+            );
+            // We cannot use the Avro Java library's support for the decimal logical type when the
+            // scale is either negative or greater than the precision as this violates the Avro spec
+            // and causes the Avro library to throw an exception, so we fall back in this case to
+            // using the legacy method for encoding decimal logical type information.
+            // Can't add a key/value pair with the CONNECT_AVRO_DECIMAL_PRECISION_PROP key to the
+            // schema's parameters since the parameters for Connect schemas are immutable, so we
+            // just track this in a local boolean variable instead.
+            forceLegacyDecimal = true;
+          } else {
+            org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(baseSchema);
+          }
         } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
           org.apache.avro.LogicalTypes.timeMillis().addToSchema(baseSchema);
         } else if (Timestamp.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
@@ -930,7 +954,8 @@ public class AvroData {
       // and name().
       if (schema.name() != null) {
         if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())
-            && schema.parameters().containsKey(CONNECT_AVRO_DECIMAL_PRECISION_PROP)) {
+            && (schema.parameters().containsKey(CONNECT_AVRO_DECIMAL_PRECISION_PROP)
+                || forceLegacyDecimal)) {
           baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DECIMAL);
         } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
           baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIME_MILLIS);
@@ -995,26 +1020,7 @@ public class AvroData {
 
     Object defaultVal = null;
     if (fieldSchema.defaultValue() != null) {
-      defaultVal = fieldSchema.defaultValue();
-
-      // If this is a logical, convert to the primitive form for the Avro default value
-      defaultVal = toAvroLogical(fieldSchema, defaultVal);
-
-      // Avro doesn't handle a few types that Connect uses, so convert those explicitly here
-      if (defaultVal instanceof Byte) {
-        // byte are mapped to integers in Avro
-        defaultVal = ((Byte) defaultVal).intValue();
-      } else if (defaultVal instanceof Short) {
-        // Shorts are mapped to integers in Avro
-        defaultVal = ((Short) defaultVal).intValue();
-      } else if (defaultVal instanceof ByteBuffer) {
-        // Avro doesn't handle ByteBuffer directly, but does handle 'byte[]'
-        // Copy the contents of the byte buffer without side effects on the buffer
-        ByteBuffer buffer = (ByteBuffer)defaultVal;
-        byte[] bytes = new byte[buffer.remaining()];
-        buffer.duplicate().get(bytes);
-        defaultVal = bytes;
-      }
+      defaultVal = defaultValueToConnect(fieldSchema, fieldSchema.defaultValue());
     } else if (fieldSchema.isOptional()) {
       defaultVal = JsonProperties.NULL_VALUE;
     }
@@ -1024,6 +1030,38 @@ public class AvroData {
         fieldSchema.doc(),
         defaultVal);
     fields.add(field);
+  }
+
+  private Object defaultValueToConnect(Schema fieldSchema, Object defaultVal) {
+    // If this is a logical, convert to the primitive form for the Avro default value
+    defaultVal = toAvroLogical(fieldSchema, defaultVal);
+
+    // Avro doesn't handle a few types that Connect uses, so convert those explicitly here
+    if (defaultVal instanceof Byte) {
+      // byte are mapped to integers in Avro
+      defaultVal = ((Byte) defaultVal).intValue();
+    } else if (defaultVal instanceof Short) {
+      // Shorts are mapped to integers in Avro
+      defaultVal = ((Short) defaultVal).intValue();
+    } else if (defaultVal instanceof ByteBuffer) {
+      // Avro doesn't handle ByteBuffer directly, but does handle 'byte[]'
+      // Copy the contents of the byte buffer without side effects on the buffer
+      ByteBuffer buffer = (ByteBuffer)defaultVal;
+      byte[] bytes = new byte[buffer.remaining()];
+      buffer.duplicate().get(bytes);
+      defaultVal = bytes;
+    } else if (defaultVal instanceof Struct) {
+      Struct struct = (Struct)defaultVal;
+      Map<String, Object> map = new LinkedHashMap<>();
+      for (Field field : struct.schema().fields()) {
+        Object object = struct.get(field);
+        if (object != null) {
+          map.put(field.name(), defaultValueToConnect(field.schema(), object));
+        }
+      }
+      defaultVal = map;
+    }
+    return defaultVal;
   }
 
   private static Object toAvroLogical(Schema schema, Object value) {
@@ -1428,6 +1466,16 @@ public class AvroData {
               throw new DataException(
                   "Did not find matching union field for data: " + value.toString());
             }
+          } else if (value instanceof Map) {
+            // Default values from Avro are returned as Map
+            Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
+            Struct result = new Struct(schema);
+            for (Field field : schema.fields()) {
+              Object convertedFieldValue =
+                  toConnectData(field.schema(), original.get(field.name()), toConnectContext);
+              result.put(field, convertedFieldValue);
+            }
+            return result;
           } else {
             IndexedRecord original = (IndexedRecord) value;
             Struct result = new Struct(schema);
@@ -1446,7 +1494,7 @@ public class AvroData {
           throw new DataException("Unknown Connect schema type: " + schema.type());
       }
 
-      if (schema != null && schema.name() != null && doLogicalConversion) {
+      if (schema.name() != null && doLogicalConversion) {
         LogicalTypeConverter logicalConverter = TO_CONNECT_LOGICAL_CONVERTERS.get(schema.name());
         if (logicalConverter != null) {
           converted = logicalConverter.convert(schema, converted);
@@ -1454,7 +1502,8 @@ public class AvroData {
       }
       return converted;
     } catch (ClassCastException e) {
-      throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
+      String schemaType = schema != null ? schema.type().toString() : "null";
+      throw new DataException("Invalid type for " + schemaType + ": " + value.getClass());
     }
   }
 
@@ -1747,7 +1796,7 @@ public class AvroData {
     }
 
     if (fieldDefaultVal == null) {
-      fieldDefaultVal = schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP);
+      fieldDefaultVal = JacksonUtils.toJsonNode(schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP));
     }
     if (fieldDefaultVal != null) {
       builder.defaultValue(
@@ -2145,6 +2194,24 @@ public class AvroData {
       return schema;
     }
 
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      CyclicSchemaWrapper other = (CyclicSchemaWrapper) o;
+      return Objects.equals(optional, other.optional) && Objects.equals(schema, other.schema);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(optional) + Objects.hashCode(schema);
+    }
   }
 
   /**

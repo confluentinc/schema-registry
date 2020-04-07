@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
@@ -66,6 +67,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProviderFactory;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 /**
  * Rest access layer for sending requests to the schema registry.
@@ -88,17 +90,26 @@ public class RestService implements Configurable {
   private static final TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
       new TypeReference<SchemaString>() {
       };
+  private static final TypeReference<List<String>> GET_SCHEMA_TYPES_TYPE =
+      new TypeReference<List<String>>() {
+      };
   private static final TypeReference<JsonNode> GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE =
       new TypeReference<JsonNode>() {
       };
   private static final TypeReference<Schema> GET_SCHEMA_BY_VERSION_RESPONSE_TYPE =
       new TypeReference<Schema>() {
       };
+  private static final TypeReference<List<Integer>> GET_REFERENCED_BY_RESPONSE_TYPE =
+      new TypeReference<List<Integer>>() {
+      };
   private static final TypeReference<List<Integer>> ALL_VERSIONS_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
       };
   private static final TypeReference<List<String>> ALL_TOPICS_RESPONSE_TYPE =
       new TypeReference<List<String>>() {
+      };
+  private static final TypeReference<List<SubjectVersion>> GET_VERSIONS_RESPONSE_TYPE =
+      new TypeReference<List<SubjectVersion>>() {
       };
   private static final TypeReference<CompatibilityCheckResponse>
       COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE =
@@ -133,7 +144,7 @@ public class RestService implements Configurable {
   private static final int HTTP_READ_TIMEOUT_MS = 60000;
 
   private static final int JSON_PARSE_ERROR_CODE = 50005;
-  private static ObjectMapper jsonDeserializer = new ObjectMapper();
+  private static ObjectMapper jsonDeserializer = JacksonMapper.INSTANCE;
 
   private static final String AUTHORIZATION_HEADER = "Authorization";
 
@@ -196,7 +207,10 @@ public class RestService implements Configurable {
     }
 
     String proxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
-    Integer proxyPort = (Integer) configs.get(SchemaRegistryClientConfig.PROXY_PORT);
+    Object proxyPortVal = configs.get(SchemaRegistryClientConfig.PROXY_PORT);
+    Integer proxyPort = proxyPortVal instanceof String
+                        ? Integer.valueOf((String) proxyPortVal)
+                        : (Integer) proxyPortVal;
 
     if (isValidProxyConfig(proxyHost, proxyPort)) {
       setProxy(proxyHost, proxyPort);
@@ -267,7 +281,11 @@ public class RestService implements Configurable {
       } else {
         ErrorMessage errorMessage;
         try (InputStream es = connection.getErrorStream()) {
-          errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
+          if (es != null) {
+            errorMessage = jsonDeserializer.readValue(es, ErrorMessage.class);
+          } else {
+            errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
+          }
         } catch (JsonProcessingException e) {
           errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, e.getMessage());
         }
@@ -644,6 +662,20 @@ public class RestService implements Configurable {
     return response;
   }
 
+  public List<String> getSchemaTypes() throws IOException, RestClientException {
+    return getSchemaTypes(DEFAULT_REQUEST_PROPERTIES);
+  }
+
+  public List<String> getSchemaTypes(Map<String, String> requestProperties)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/types");
+    String path = builder.toString();
+
+    List<String> response = httpRequest(path, "GET", null, requestProperties,
+        GET_SCHEMA_TYPES_TYPE);
+    return response;
+  }
+
   public Schema getVersion(String subject, int version) throws IOException, RestClientException {
     return getVersion(DEFAULT_REQUEST_PROPERTIES, subject, version, false);
   }
@@ -707,6 +739,22 @@ public class RestService implements Configurable {
     return response.toString();
   }
 
+  public List<Integer> getReferencedBy(String subject, int version) throws IOException,
+      RestClientException {
+    return getReferencedBy(DEFAULT_REQUEST_PROPERTIES, subject, version);
+  }
+
+  public List<Integer> getReferencedBy(Map<String, String> requestProperties,
+                                       String subject, int version)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/referencedby");
+    String path = builder.build(subject, version).toString();
+
+    List<Integer> response = httpRequest(path, "GET", null, requestProperties,
+        GET_REFERENCED_BY_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<Integer> getAllVersions(String subject)
       throws IOException, RestClientException {
     return getAllVersions(DEFAULT_REQUEST_PROPERTIES, subject);
@@ -723,9 +771,34 @@ public class RestService implements Configurable {
     return response;
   }
 
+  public List<Integer> getAllVersions(Map<String, String> requestProperties,
+                                      String subject,
+                                      boolean lookupDeletedSchema)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
+    builder.queryParam("deleted", lookupDeletedSchema);
+    String path = builder.build(subject).toString();
+
+    List<Integer> response = httpRequest(path, "GET", null, requestProperties,
+            ALL_VERSIONS_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<String> getAllSubjects()
       throws IOException, RestClientException {
     return getAllSubjects(DEFAULT_REQUEST_PROPERTIES);
+  }
+
+  public List<String> getAllSubjects(boolean deletedSubjects)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects");
+    builder.queryParam("deleted", deletedSubjects);
+    String path = builder.build().toString();
+    List<String> response = httpRequest(path,
+            "GET",
+            null, DEFAULT_REQUEST_PROPERTIES,
+            ALL_TOPICS_RESPONSE_TYPE);
+    return response;
   }
 
   public List<String> getAllSubjects(Map<String, String> requestProperties)
@@ -752,6 +825,23 @@ public class RestService implements Configurable {
     return response;
   }
 
+  public List<SubjectVersion> getAllVersionsById(int id)
+      throws IOException, RestClientException {
+    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, id);
+  }
+
+  public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
+                                                 int id)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/versions");
+    String path = builder.build(id).toString();
+
+    List<SubjectVersion> response = httpRequest(path, "GET", null, requestProperties,
+        GET_VERSIONS_RESPONSE_TYPE);
+
+    return response;
+  }
+
   public Integer deleteSchemaVersion(
       Map<String, String> requestProperties,
       String subject,
@@ -766,6 +856,22 @@ public class RestService implements Configurable {
     return response;
   }
 
+  public Integer deleteSchemaVersion(
+          Map<String, String> requestProperties,
+          String subject,
+          String version,
+          boolean permanentDelete
+  ) throws IOException,
+          RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}");
+    builder.queryParam("permanent", permanentDelete);
+    String path = builder.build(subject, version).toString();
+
+    Integer response = httpRequest(path, "DELETE", null, requestProperties,
+            DELETE_SUBJECT_VERSION_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<Integer> deleteSubject(
       Map<String, String> requestProperties,
       String subject
@@ -776,6 +882,21 @@ public class RestService implements Configurable {
 
     List<Integer> response = httpRequest(path, "DELETE", null, requestProperties,
                                          DELETE_SUBJECT_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<Integer> deleteSubject(
+          Map<String, String> requestProperties,
+          String subject,
+          boolean permanentDelete
+  ) throws IOException,
+          RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}");
+    builder.queryParam("permanent", permanentDelete);
+    String path = builder.build(subject).toString();
+
+    List<Integer> response = httpRequest(path, "DELETE", null, requestProperties,
+            DELETE_SUBJECT_RESPONSE_TYPE);
     return response;
   }
 

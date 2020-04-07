@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.json;
 
+import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -27,21 +28,32 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSerializer<T>
     implements Serializer<T> {
 
+  private static int DEFAULT_CACHE_CAPACITY = 1000;
+
   private boolean isKey;
+  private LRUCache<Class<?>, JsonSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaJsonSchemaSerializer() {
+    schemaCache = new LRUCache<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client) {
     schemaRegistry = client;
+    schemaCache = new LRUCache<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props) {
+    this(client, props, DEFAULT_CACHE_CAPACITY);
+  }
+
+  public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props,
+                                   int cacheCapacity) {
     schemaRegistry = client;
     configure(serializerConfig(props));
+    schemaCache = new LRUCache<>(cacheCapacity);
   }
 
   @Override
@@ -55,7 +67,16 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     if (record == null) {
       return null;
     }
-    JsonSchema schema = JsonSchemaUtils.getSchema(record);
+    JsonSchema schema;
+    if (JsonSchemaUtils.isEnvelope(record)) {
+      schema = JsonSchemaUtils.getSchema(record);
+    } else {
+      schema = schemaCache.get(record.getClass());
+      if (schema == null) {
+        schema = JsonSchemaUtils.getSchema(record);
+        schemaCache.put(record.getClass(), schema);
+      }
+    }
     Object value = JsonSchemaUtils.getValue(record);
     return serializeImpl(getSubjectName(topic, isKey, value, schema), (T) value, schema);
   }

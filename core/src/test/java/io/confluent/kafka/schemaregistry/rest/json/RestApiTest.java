@@ -21,6 +21,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -36,8 +37,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -154,6 +158,80 @@ public class RestApiTest extends ClusterTestHarness {
         Collections.singletonList(ref),
         schemaString.getReferences()
     );
+
+    List<Integer> refs = restApp.restClient.getReferencedBy("reference", 1);
+    assertEquals(2, refs.get(0).intValue());
+
+    try {
+      restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+          "reference",
+          String.valueOf(1)
+      );
+      fail("Deleting reference should fail with " + Errors.REFERENCE_EXISTS_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Reference found",
+          Errors.REFERENCE_EXISTS_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, "referrer", "1"));
+
+    refs = restApp.restClient.getReferencedBy("reference", 1);
+    assertTrue(refs.isEmpty());
+
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, "reference", "1"));
+  }
+
+  @Test(expected = RestClientException.class)
+  public void testSchemaMissingReferences() throws Exception {
+    Map<String, String> schemas = getJsonSchemaWithReferences();
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemas.get("main.json"));
+    request.setSchemaType(JsonSchema.TYPE);
+    request.setReferences(Collections.emptyList());
+    restApp.restClient.registerSchema(request, "referrer");
+  }
+
+  @Test
+  public void testBad() throws Exception {
+    String subject1 = "testTopic1";
+    List<String> allSubjects = new ArrayList<String>();
+
+    // test getAllSubjects with no existing data
+    assertEquals("Getting all subjects should return empty",
+        allSubjects,
+        restApp.restClient.getAllSubjects()
+    );
+
+    try {
+      registerAndVerifySchema(restApp.restClient, getBadSchema(), 1, subject1);
+      fail("Registering bad schema should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    try {
+      registerAndVerifySchema(restApp.restClient, getRandomJsonSchemas(1).get(0),
+          Arrays.asList(new SchemaReference("bad", "bad", 100)), 1, subject1);
+      fail("Registering bad reference should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    // test getAllSubjects with existing data
+    assertEquals("Getting all subjects should match all registered subjects",
+        allSubjects,
+        restApp.restClient.getAllSubjects()
+    );
   }
 
   public static void registerAndVerifySchema(
@@ -162,10 +240,21 @@ public class RestApiTest extends ClusterTestHarness {
       int expectedId,
       String subject
   ) throws IOException, RestClientException {
+    registerAndVerifySchema(
+        restService, schemaString, Collections.emptyList(), expectedId, subject);
+  }
+
+  public static void registerAndVerifySchema(
+      RestService restService,
+      String schemaString,
+      List<SchemaReference> references,
+      int expectedId,
+      String subject
+  ) throws IOException, RestClientException {
     int registeredId = restService.registerSchema(
         schemaString,
         JsonSchema.TYPE,
-        Collections.emptyList(),
+        references,
         subject
     );
     Assert.assertEquals(
@@ -227,6 +316,14 @@ public class RestApiTest extends ClusterTestHarness {
          */
     schemas.put("main.json", schemaString);
     return schemas;
+  }
+
+  public static String getBadSchema() {
+    String schema = "{\"type\":\"bad-object\",\"properties\":{\"f"
+        + random.nextInt(Integer.MAX_VALUE)
+        + "\":"
+        + "{\"type\":\"string\"}},\"additionalProperties\":false}";
+    return schema;
   }
 }
 

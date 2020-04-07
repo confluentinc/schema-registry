@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>5.5.0-SNAPSHOT</version>
+        <version>6.0.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
@@ -65,6 +65,7 @@
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
+        <module>benchmark</module>
     </modules>
 
     <properties>
@@ -75,9 +76,10 @@
         <podam.version>6.0.2.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
-        <protobuf.version>3.11.1</protobuf.version>
-	<wire.version>3.0.2</wire.version>
-	<swagger.version>1.5.24</swagger.version>
+        <json-schema.version>1.12.1</json-schema.version>
+        <protobuf.version>3.11.4</protobuf.version>
+        <wire.version>3.1.0</wire.version>
+        <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
     </properties>
 
     <repositories>
@@ -137,7 +139,7 @@
             <dependency>
                 <groupId>com.github.everit-org.json-schema</groupId>
                 <artifactId>org.everit.json.schema</artifactId>
-                <version>1.12.0</version>
+                <version>${json-schema.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.kjetland</groupId>
@@ -236,6 +238,11 @@
             </dependency>
             <dependency>
                 <groupId>io.confluent</groupId>
+                <artifactId>kafka-streams-protobuf-serde</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
                 <artifactId>kafka-connect-json-schema-converter</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -247,6 +254,11 @@
             <dependency>
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-json-schema-serializer</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-streams-json-schema-serde</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -326,6 +338,32 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>${spotbugs.plugin.version}</version>
+                <configuration>
+                    <xmlOutput>true</xmlOutput>
+                    <excludeFilterFile>findbugs/findbugs-exclude.xml</excludeFilterFile>
+                    <effort>Max</effort>
+                    <threshold>Max</threshold>
+                    <failOnError>true</failOnError>
+                    <includeTests>false</includeTests>
+                </configuration>
+                <executions>
+                    <!--
+                    Ensures that FindBugs inspects source code when project is compiled.
+                -->
+                    <execution>
+                        <id>analyze-compile</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
+
     </build>
 </project>

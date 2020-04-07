@@ -26,7 +26,7 @@ for dir in $base_dir/package-kafka-serde-tools/target/kafka-serde-tools-package-
 done
 
 
-DEFAULT_LINE_READER="--line-reader io.confluent.kafka.formatter.JsonSchemaMessageReader"
+DEFAULT_LINE_READER="--line-reader io.confluent.kafka.formatter.json.JsonSchemaMessageReader"
 
 DEFAULT_SCHEMA_REGISTRY_URL="--property schema.registry.url=http://localhost:8081"
 

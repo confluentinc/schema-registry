@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.protobuf;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 
@@ -26,17 +27,14 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+
 public class ProtobufSchemaUtils {
 
-  private static final ObjectMapper jsonMapper = new ObjectMapper();
+  private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
   public static ProtobufSchema copyOf(ProtobufSchema schema) {
-    return new ProtobufSchema(schema.canonicalString(),
-        schema.references(),
-        schema.resolvedReferences(),
-        schema.version(),
-        schema.name()
-    );
+    return schema.copy();
   }
 
   public static ProtobufSchema getSchema(Message message) {
@@ -46,9 +44,13 @@ public class ProtobufSchemaUtils {
   public static Object toObject(JsonNode value, ProtobufSchema schema) throws IOException {
     StringWriter out = new StringWriter();
     jsonMapper.writeValue(out, value);
-    String jsonString = out.toString();
+    return toObject(out.toString(), schema);
+  }
+
+  public static Object toObject(String value, ProtobufSchema schema)
+      throws InvalidProtocolBufferException {
     DynamicMessage.Builder message = schema.newMessageBuilder();
-    JsonFormat.parser().merge(jsonString, message);
+    JsonFormat.parser().merge(value, message);
     return message.build();
   }
 
@@ -56,7 +58,10 @@ public class ProtobufSchemaUtils {
     if (message == null) {
       return null;
     }
-    String jsonString = JsonFormat.printer().print(message);
+    String jsonString = JsonFormat.printer()
+        .includingDefaultValueFields()
+        .omittingInsignificantWhitespace()
+        .print(message);
     return jsonString.getBytes(StandardCharsets.UTF_8);
   }
 }

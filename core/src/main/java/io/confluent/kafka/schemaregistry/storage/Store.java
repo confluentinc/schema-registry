@@ -27,7 +27,7 @@ public interface Store<K, V> {
 
   public V get(K key) throws StoreException;
 
-  public void put(K key, V value) throws StoreException;
+  public V put(K key, V value) throws StoreException;
 
   /**
    * Iterator over keys in the specified range
@@ -41,7 +41,7 @@ public interface Store<K, V> {
 
   public void putAll(Map<K, V> entries) throws StoreException;
 
-  public void delete(K key) throws StoreException;
+  public V delete(K key) throws StoreException;
 
   public Iterator<K> getAllKeys() throws StoreException;
 

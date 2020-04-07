@@ -105,13 +105,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       ProtobufSchema schema = ((ProtobufSchema) schemaRegistry.getSchemaById(id));
       MessageIndexes indexes = MessageIndexes.readFrom(buffer);
       String name = schema.toMessageName(indexes);
-      schema = new ProtobufSchema(
-          schema.canonicalString(),
-          schema.references(),
-          schema.resolvedReferences(),
-          schema.version(),
-          name
-      );
+      schema = schema.copy(name);
       String subject = null;
       if (includeSchemaAndVersion) {
         subject = subjectName(topic, isKey, schema);
@@ -148,15 +142,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         // explicit from the Connector).
 
         Integer version = schemaVersion(topic, isKey, id, subject, schema, value);
-        return new ProtobufSchemaAndValue(
-            new ProtobufSchema(schema.canonicalString(),
-                schema.references(),
-                schema.resolvedReferences(),
-                version,
-                schema.name()
-            ),
-            value
-        );
+        return new ProtobufSchemaAndValue(schema.copy(version), value);
       }
 
       return value;
@@ -171,7 +157,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     String clsName = schema.fullName();
     if (clsName == null) {
       throw new SerializationException("If `derive.type` is true, then either "
-          + "`java_outer_classname` or `java_multiple_files` must be set "
+          + "`java_outer_classname` or `java_multiple_files = true` must be set "
           + "in the Protobuf schema");
     }
     try {

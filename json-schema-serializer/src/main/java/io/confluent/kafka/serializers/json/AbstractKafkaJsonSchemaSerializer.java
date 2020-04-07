@@ -37,7 +37,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
 
   protected boolean autoRegisterSchema;
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
-  protected boolean validate = true;
+  protected boolean validate;
 
   protected void configure(KafkaJsonSchemaSerializerConfig config) {
     configureClientProperties(config, new JsonSchemaProvider());

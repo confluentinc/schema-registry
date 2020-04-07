@@ -35,6 +35,7 @@ import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.json.DecimalFormat;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
@@ -49,17 +50,15 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
-import static io.confluent.connect.json.JsonSchemaConverter.CONNECT_TYPE_MAP;
-import static io.confluent.connect.json.JsonSchemaConverter.CONNECT_TYPE_PROP;
-import static io.confluent.connect.json.JsonSchemaConverter.JSON_TYPE_ENUM;
-import static io.confluent.connect.json.JsonSchemaConverter.JSON_TYPE_ONE_OF;
-import static io.confluent.connect.json.JsonSchemaConverter.KEY_FIELD;
-import static io.confluent.connect.json.JsonSchemaConverter.VALUE_FIELD;
+import static io.confluent.connect.json.JsonSchemaData.CONNECT_TYPE_MAP;
+import static io.confluent.connect.json.JsonSchemaData.CONNECT_TYPE_PROP;
+import static io.confluent.connect.json.JsonSchemaData.JSON_TYPE_ENUM;
+import static io.confluent.connect.json.JsonSchemaData.JSON_TYPE_ONE_OF;
+import static io.confluent.connect.json.JsonSchemaData.KEY_FIELD;
+import static io.confluent.connect.json.JsonSchemaData.VALUE_FIELD;
 import static org.apache.kafka.connect.data.Decimal.LOGICAL_NAME;
 import static org.apache.kafka.connect.data.Decimal.SCALE_FIELD;
 import static org.junit.Assert.assertArrayEquals;
@@ -79,18 +78,23 @@ public class JsonSchemaDataTest {
       .title("foo.bar")
       .build();
 
-  private JsonSchemaConverter jsonSchemaConverter = new JsonSchemaConverter();
+  private JsonSchemaData jsonSchemaData = new JsonSchemaData();
 
   public JsonSchemaDataTest() {
-    Map<String, Object> configs = new HashMap<>();
-    configs.put(JsonSchemaConverterConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://foo");
-    configs.put(JsonSchemaConverterConfig.SCHEMAS_CACHE_SIZE_CONFIG,
-        JsonSchemaConverterConfig.SCHEMAS_CACHE_SIZE_DEFAULT
-    );
-    jsonSchemaConverter.configure(configs, false);
   }
 
   // Connect -> JSON Schema
+
+  @Test
+  public void testFromConnectNull() throws Exception {
+    BooleanSchema booleanSchema = BooleanSchema.builder().build();
+    CombinedSchema expectedSchema =
+        CombinedSchema.oneOf(ImmutableList.of(NullSchema.INSTANCE, booleanSchema)).build();
+    Schema schema = Schema.OPTIONAL_BOOLEAN_SCHEMA;
+    checkNonObjectConversion(expectedSchema, NullNode.getInstance(), schema, null);
+
+    checkNonObjectConversion(null, null, (Schema) null, null);
+  }
 
   @Test
   public void testFromConnectBoolean() {
@@ -210,7 +214,35 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testFromConnectBase64Decimal() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.DECIMAL_FORMAT_CONFIG,
+                DecimalFormat.BASE64.name())));
+    NumberSchema schema = NumberSchema.builder()
+        .title("org.apache.kafka.connect.data.Decimal")
+        .unprocessedProperties(ImmutableMap.of("connect.type",
+            "bytes",
+            "connect.version",
+            1,
+            "connect.parameters",
+            ImmutableMap.of("scale", "2")
+        ))
+        .build();
+    checkNonObjectConversion(schema,
+        BinaryNode.valueOf(new byte[]{0, -100}),
+        Decimal.schema(2),
+        new BigDecimal(new BigInteger("156"), 2)
+    );
+    jsonSchemaData = new JsonSchemaData();
+  }
+
+  @Test
   public void testFromConnectNumericDecimal() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.DECIMAL_FORMAT_CONFIG,
+                DecimalFormat.NUMERIC.name())));
     NumberSchema schema = NumberSchema.builder()
         .title("org.apache.kafka.connect.data.Decimal")
         .unprocessedProperties(ImmutableMap.of("connect.type",
@@ -226,6 +258,31 @@ public class JsonSchemaDataTest {
         Decimal.schema(2),
         new BigDecimal(new BigInteger("156"), 2)
     );
+    jsonSchemaData = new JsonSchemaData();
+  }
+
+  @Test
+  public void testFromConnectNumericDecimalWithTrailingZeros() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.DECIMAL_FORMAT_CONFIG,
+                DecimalFormat.NUMERIC.name())));
+    NumberSchema schema = NumberSchema.builder()
+        .title("org.apache.kafka.connect.data.Decimal")
+        .unprocessedProperties(ImmutableMap.of("connect.type",
+            "bytes",
+            "connect.version",
+            1,
+            "connect.parameters",
+            ImmutableMap.of("scale", "4")
+        ))
+        .build();
+    checkNonObjectConversion(schema,
+        DecimalNode.valueOf(new BigDecimal("1.5600")),
+        Decimal.schema(4),
+        new BigDecimal(new BigInteger("15600"), 4)
+    );
+    jsonSchemaData = new JsonSchemaData();
   }
 
   @Test
@@ -303,19 +360,31 @@ public class JsonSchemaDataTest {
 
   @Test
   public void testFromNamedConnectMap() {
-    assertEquals(jsonSchemaConverter.fromConnectSchema(NAMED_MAP_SCHEMA), NAMED_JSON_MAP_SCHEMA);
+    assertEquals(
+        jsonSchemaData.fromConnectSchema(NAMED_MAP_SCHEMA).rawSchema(), NAMED_JSON_MAP_SCHEMA);
   }
 
   private void checkNonObjectConversion(
       org.everit.json.schema.Schema expectedSchema, Object expected, Schema schema, Object value
   ) {
-    JsonSchema jsonSchema = new JsonSchema(jsonSchemaConverter.fromConnectSchema(schema));
-    JsonNode jsonValue = jsonSchemaConverter.fromConnectData(schema, value);
-    assertEquals(expectedSchema, jsonSchema.rawSchema());
+    JsonSchema jsonSchema = jsonSchemaData.fromConnectSchema(schema);
+    JsonNode jsonValue = jsonSchemaData.fromConnectData(schema, value);
+    assertEquals(expectedSchema, jsonSchema != null ? jsonSchema.rawSchema() : null);
     assertEquals(expected, jsonValue);
   }
 
   // JSON Schema -> Connect: directly corresponding types
+
+  @Test
+  public void testToConnectNull() {
+    BooleanSchema booleanSchema = BooleanSchema.builder().build();
+    CombinedSchema schema =
+        CombinedSchema.oneOf(ImmutableList.of(NullSchema.INSTANCE, booleanSchema)).build();
+    Schema expectedSchema = Schema.OPTIONAL_BOOLEAN_SCHEMA;
+    checkNonObjectConversion(expectedSchema, null, schema, null);
+
+    checkNonObjectConversion((Schema) null, null, null, null);
+  }
 
   @Test
   public void testToConnectBoolean() {
@@ -643,6 +712,25 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectBase64Decimal() {
+    NumberSchema schema = NumberSchema.builder()
+        .title("org.apache.kafka.connect.data.Decimal")
+        .unprocessedProperties(ImmutableMap.of("connect.type",
+            "bytes",
+            "connect.parameters",
+            ImmutableMap.of("scale", "2")
+        ))
+        .build();
+    BigDecimal reference = new BigDecimal(new BigInteger("156"), 2);
+    Schema expectedSchema = SchemaBuilder.bytes()
+        .name(LOGICAL_NAME)
+        .parameter(SCALE_FIELD, Integer.toString(2))
+        .build();
+    checkNonObjectConversion(expectedSchema, reference, schema,
+        BinaryNode.valueOf(new byte[]{0, -100}));
+  }
+
+  @Test
   public void testToConnectNumericDecimal() {
     NumberSchema schema = NumberSchema.builder()
         .title("org.apache.kafka.connect.data.Decimal")
@@ -656,6 +744,24 @@ public class JsonSchemaDataTest {
     Schema expectedSchema = SchemaBuilder.bytes()
         .name(LOGICAL_NAME)
         .parameter(SCALE_FIELD, Integer.toString(2))
+        .build();
+    checkNonObjectConversion(expectedSchema, reference, schema, DecimalNode.valueOf(reference));
+  }
+
+  @Test
+  public void testToConnectNumericDecimalWithTrailingZeros() {
+    NumberSchema schema = NumberSchema.builder()
+        .title("org.apache.kafka.connect.data.Decimal")
+        .unprocessedProperties(ImmutableMap.of("connect.type",
+            "bytes",
+            "connect.parameters",
+            ImmutableMap.of("scale", "4")
+        ))
+        .build();
+    BigDecimal reference = new BigDecimal(new BigInteger("15600"), 4);
+    Schema expectedSchema = SchemaBuilder.bytes()
+        .name(LOGICAL_NAME)
+        .parameter(SCALE_FIELD, Integer.toString(4))
         .build();
     checkNonObjectConversion(expectedSchema, reference, schema, DecimalNode.valueOf(reference));
   }
@@ -715,6 +821,25 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectUnionSecondField() {
+    NumberSchema firstSchema = NumberSchema.builder()
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
+        .build();
+    NumberSchema secondSchema = NumberSchema.builder()
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int32"))
+        .build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.INT8_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.INT32_SCHEMA);
+    Schema expectedSchema = builder.build();
+
+    Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.1", 12);
+    checkNonObjectConversion(expectedSchema, expected, schema, IntNode.valueOf(12));
+  }
+
+  @Test
   public void testToConnectMapOptionalValue() {
     testToConnectMapOptional("some value");
   }
@@ -764,14 +889,14 @@ public class JsonSchemaDataTest {
 
   @Test
   public void testToNamedConnectMap() {
-    assertEquals(jsonSchemaConverter.toConnectSchema(NAMED_JSON_MAP_SCHEMA), NAMED_MAP_SCHEMA);
+    assertEquals(jsonSchemaData.toConnectSchema(NAMED_JSON_MAP_SCHEMA), NAMED_MAP_SCHEMA);
   }
 
   private void checkNonObjectConversion(
       Schema expectedSchema, Object expected, org.everit.json.schema.Schema schema, JsonNode value
   ) {
-    Schema connectSchema = jsonSchemaConverter.toConnectSchema(schema);
-    Object jsonValue = jsonSchemaConverter.toConnectData(connectSchema, value);
+    Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
+    Object jsonValue = jsonSchemaData.toConnectData(connectSchema, value);
     assertEquals(expectedSchema, connectSchema);
     if (expected instanceof byte[]) {
       assertArrayEquals((byte[]) expected, (byte[]) jsonValue);

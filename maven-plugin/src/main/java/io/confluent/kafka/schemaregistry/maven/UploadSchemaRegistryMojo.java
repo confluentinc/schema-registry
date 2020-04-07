@@ -29,9 +29,11 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -51,47 +53,61 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
 
   Map<String, ParsedSchema> schemas = new HashMap<>();
   Map<String, Integer> schemaVersions = new HashMap<>();
+  Set<String> subjectsProcessed = new HashSet<>();
+
+  int errors = 0;
+  int failures = 0;
 
   @Override
   public void execute() throws MojoExecutionException, MojoFailureException {
-    int errors = 0;
-    int failures = 0;
+    errors = 0;
+    failures = 0;
 
-    for (Map.Entry<String, File> kvp : subjects.entrySet()) {
-      getLog().debug(
-          String.format(
-              "Loading schema for subject(%s) from %s.",
-              kvp.getKey(),
-              kvp.getValue()
-          )
-      );
-
-      String schemaType = schemaTypes.getOrDefault(kvp.getKey(), AvroSchema.TYPE);
-      try {
-        List<SchemaReference> schemaReferences = getReferences(kvp.getKey(), schemaVersions);
-        String schemaString = readFile(kvp.getValue(), StandardCharsets.UTF_8);
-        Optional<ParsedSchema> schema = client().parseSchema(
-            schemaType, schemaString, schemaReferences);
-        if (schema.isPresent()) {
-          schemas.put(kvp.getKey(), schema.get());
-        } else {
-          getLog().error("Schema for " + kvp.getKey() + " could not be parsed.");
-          errors++;
-          continue;
-        }
-
-        boolean success = processSchema(kvp.getKey(), schema.get(), schemaVersions);
-        if (!success) {
-          failures++;
-        }
-      } catch (IOException | RestClientException ex) {
-        getLog().error("Exception thrown while processing " + kvp.getKey(), ex);
-        errors++;
-      }
+    for (String subject : subjects.keySet()) {
+      processSubject(subject);
     }
 
     Preconditions.checkState(errors == 0, "One or more exceptions were encountered.");
     Preconditions.checkState(failures == 0, failureMessage());
+  }
+
+  private void processSubject(String key) {
+    if (subjectsProcessed.contains(key)) {
+      return;
+    }
+
+    getLog().debug(String.format("Processing schema for subject(%s).", key));
+
+    String schemaType = schemaTypes.getOrDefault(key, AvroSchema.TYPE);
+    try {
+      List<SchemaReference> schemaReferences = getReferences(key, schemaVersions);
+      File file = subjects.get(key);
+      if (file == null) {
+        getLog().error("File for " + key + " could not be found.");
+        errors++;
+        return;
+      }
+      String schemaString = readFile(file, StandardCharsets.UTF_8);
+      Optional<ParsedSchema> schema = client().parseSchema(
+          schemaType, schemaString, schemaReferences);
+      if (schema.isPresent()) {
+        schemas.put(key, schema.get());
+      } else {
+        getLog().error("Schema for " + key + " could not be parsed.");
+        errors++;
+        return;
+      }
+
+      boolean success = processSchema(key, schema.get(), schemaVersions);
+      if (!success) {
+        failures++;
+      }
+    } catch (Exception ex) {
+      getLog().error("Exception thrown while processing " + key, ex);
+      errors++;
+    } finally {
+      subjectsProcessed.add(key);
+    }
   }
 
   protected abstract boolean processSchema(String subject,
@@ -108,9 +124,13 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     List<Reference> refs = references.getOrDefault(subject, Collections.emptyList());
     List<SchemaReference> result = new ArrayList<>();
     for (Reference ref : refs) {
+      // Process refs
+      processSubject(ref.subject);
+
       Integer version = ref.version != null ? ref.version : schemaVersions.get(ref.subject);
       if (version == null) {
-        throw new IllegalArgumentException("Could not retrieve version for subject " + ref.subject);
+        throw new IllegalArgumentException(
+            "Could not retrieve version for subject " + ref.subject);
       }
       result.add(new SchemaReference(ref.name, ref.subject, version));
     }
@@ -122,35 +142,4 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     return new String(encoded, encoding);
   }
 
-  public static class Reference {
-
-    public Reference(String name, String subject, Integer version) {
-      this.name = name;
-      this.subject = subject;
-      this.version = version;
-    }
-
-    @Parameter(required = true)
-    private String name;
-
-    @Parameter(required = true)
-    private String subject;
-
-    @Parameter(required = false)
-    private Integer version;
-
-    @Override
-    public String toString() {
-      return "SchemaReference{"
-          + "name='"
-          + name
-          + '\''
-          + ", subject='"
-          + subject
-          + '\''
-          + ", version="
-          + version
-          + '}';
-    }
-  }
 }

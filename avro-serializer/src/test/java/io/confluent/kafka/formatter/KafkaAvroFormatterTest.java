@@ -39,6 +39,7 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class KafkaAvroFormatterTest {
 
@@ -150,6 +151,7 @@ public class KafkaAvroFormatterTest {
         new AvroMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader, true);
     try {
       avroReader.readMessage();
+      fail("Registering an invalid schema should fail");
     } catch (SerializationException e) {
       assertTrue("The cause of the exception should be avro",
                  e.getCause() instanceof AvroRuntimeException);

@@ -20,6 +20,12 @@ import java.util.List;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+/**
+ * A parsed schema.
+ *
+ * <p>Implementations of this interface are instantiated by a corresponding
+ * {@link io.confluent.kafka.schemaregistry.SchemaProvider}.
+ */
 public interface ParsedSchema {
 
   /**
@@ -44,6 +50,18 @@ public interface ParsedSchema {
   String canonicalString();
 
   /**
+   * Returns a formatted string according to a type-specific format.
+   *
+   * @return the formatted string
+   */
+  default String formattedString(String format) {
+    if (format == null || format.trim().isEmpty()) {
+      return canonicalString();
+    }
+    throw new IllegalArgumentException("Format not supported: " + format);
+  }
+
+  /**
    * Returns a list of schema references.
    *
    * @return the schema references
@@ -51,7 +69,17 @@ public interface ParsedSchema {
   List<SchemaReference> references();
 
   /**
+   * Validates the schema and ensures all references are resolved properly.
+   * Throws an exception if the schema is not valid.
+   */
+  default void validate() {
+  }
+
+  /**
    * Checks the backward compatibility between this schema and the specified schema.
+   * <p/>
+   * Custom providers may choose to modify this schema during this check,
+   * to ensure that it is compatible with the specified schema.
    *
    * @param previousSchema previous schema
    * @return whether this schema is backward compatible with the previous schema
@@ -60,6 +88,9 @@ public interface ParsedSchema {
 
   /**
    * Checks the compatibility between this schema and the specified schemas.
+   * <p/>
+   * Custom providers may choose to modify this schema during this check,
+   * to ensure that it is compatible with the specified schemas.
    *
    * @param level the compatibility level
    * @param previousSchemas full schema history in chronological order
@@ -74,4 +105,11 @@ public interface ParsedSchema {
     }
     return CompatibilityChecker.checker(level).isCompatible(this, previousSchemas);
   }
+
+  /**
+   * Returns the underlying raw representation of the schema.
+   *
+   * @return the raw schema
+   */
+  Object rawSchema();
 }

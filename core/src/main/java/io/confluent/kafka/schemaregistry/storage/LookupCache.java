@@ -15,11 +15,11 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import java.util.Set;
+
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
-
-import java.util.List;
 
 /**
  * Internal interface that provides various indexed methods that help lookup the underlying schemas.
@@ -42,12 +42,20 @@ public interface LookupCache<K,V> extends Store<K,V> {
   SchemaIdAndSubjects schemaIdAndSubjects(Schema schema);
 
   /**
-   * Checks is a schema is registered in any subject.
+   * Checks if a schema is registered in any subject.
    *
    * @param schema schema object
    * @return true if the schema is already registered else false
    */
   boolean containsSchema(Schema schema);
+
+  /**
+   * Returns schemas that reference the given schema.
+   *
+   * @param schema schema object
+   * @return the ids of schemas that reference the given schema
+   */
+  Set<Integer> referencesSchema(SchemaKey schema);
 
   /**
    * Provides the {@link SchemaKey} for the provided schema id.
@@ -56,14 +64,6 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @return the {@link SchemaKey} if found, otherwise null.
    */
   SchemaKey schemaKeyById(Integer id);
-
-  /**
-   * Provides the list of {@link SchemaKey} that have been deleted for the registered {SchemaValue}
-   *
-   * @param schemaValue the SchemaValue being registered; never {@code null}
-   * @return the list of {@link SchemaKey} that have been marked to be deleted, can be null or empty
-   */
-  List<SchemaKey> deletedSchemaKeys(SchemaValue schemaValue);
 
   /**
    * Callback that is invoked when a schema is registered.
@@ -89,8 +89,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * Callback that is invoked when a schema is tombstoned.
    *
    * @param schemaKey   the tombstoned SchemaKey; never {@code null}
+   * @param schemaValue the tombstoned SchemaValue
    */
-  void schemaTombstoned(SchemaKey schemaKey);
+  void schemaTombstoned(SchemaKey schemaKey, SchemaValue schemaValue);
 
   /**
    * Retrieves the config for a subject.
@@ -120,7 +121,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param subject the subject, or null for all subjects
    * @return whether there exist matching schemas
    */
-  boolean hasSubjects(String subject) throws StoreException;
+  boolean hasSubjects(String subject, boolean lookupDeletedSubjects) throws StoreException;
 
   /**
    * Clears the cache of deleted schemas that match the given subject.

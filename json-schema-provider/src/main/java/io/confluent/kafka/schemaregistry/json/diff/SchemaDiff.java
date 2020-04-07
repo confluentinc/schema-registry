@@ -123,7 +123,7 @@ public class SchemaDiff {
           ctx.addDifferences(subctx.getDifferences());
           return;
         }
-      } else if (combinedSchema.getCriterion() == CombinedSchema.ONE_CRITERION
+      } else if (combinedSchema.getCriterion() == CombinedSchema.ANY_CRITERION
           || combinedSchema.getCriterion() == CombinedSchema.ONE_CRITERION) {
         for (Schema subschema : combinedSchema.getSubschemas()) {
           final Context subctx = ctx.getSubcontext();

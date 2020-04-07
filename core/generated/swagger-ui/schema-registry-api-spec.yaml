@@ -104,8 +104,8 @@ paths:
           description: "Error code 40401 -- Subject not found\nError code 40402 --\
             \ Version not found"
         422:
-          description: "Error code 42201 -- Invalid Avro schema\nError code 42202\
-            \ -- Invalid version"
+          description: "Error code 42201 -- Invalid schema or schema type\nError code\
+            \ 42202 -- Invalid version"
         500:
           description: "Error code 50001 -- Error in the backend data store"
   /config:
@@ -339,6 +339,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "format"
+        in: "query"
+        required: false
+        type: "string"
       - name: "fetchMaxId"
         in: "query"
         required: false
@@ -386,6 +390,63 @@ paths:
           description: "Error code 40403 -- Schema not found\n"
         500:
           description: "Error code 50001 -- Error in the backend data store\n"
+  /schemas/ids/{id}/versions:
+    get:
+      summary: "Get all the subject-version pairs associated with the input ID."
+      description: ""
+      operationId: "getVersions"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters:
+      - name: "id"
+        in: "path"
+        description: "Globally unique identifier of the schema"
+        required: true
+        type: "integer"
+        format: "int32"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/SubjectVersion"
+        404:
+          description: "Error code 40403 -- Schema not found\n"
+        500:
+          description: "Error code 50001 -- Error in the backend data store\n"
+  /schemas/types:
+    get:
+      summary: "Get the schema types supported by this registry."
+      description: ""
+      operationId: "getSchemaTypes"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters: []
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              type: "string"
+            uniqueItems: true
+        500:
+          description: "Error code 50001 -- Error in the backend data store\n"
   /subjects:
     get:
       summary: "Get a list of registered subjects."
@@ -400,7 +461,11 @@ paths:
       - "application/vnd.schemaregistry.v1+json"
       - "application/vnd.schemaregistry+json; qs=0.9"
       - "application/json; qs=0.5"
-      parameters: []
+      parameters:
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -472,6 +537,10 @@ paths:
         description: "the name of the subject"
         required: true
         type: "string"
+      - name: "permanent"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -504,6 +573,10 @@ paths:
         description: "Name of the Subject"
         required: true
         type: "string"
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -561,9 +634,9 @@ paths:
           schema:
             $ref: "#/definitions/RegisterSchemaResponse"
         409:
-          description: "Incompatible Avro schema"
+          description: "Incompatible schema"
         422:
-          description: "Error code 42201 -- Invalid Avro schema"
+          description: "Error code 42201 -- Invalid schema or schema type"
         500:
           description: "Error code 50001 -- Error in the backend data store\nError\
             \ code 50002 -- Operation timed out\nError code 50003 -- Error while forwarding\
@@ -646,6 +719,10 @@ paths:
           \ served."
         required: true
         type: "string"
+      - name: "permanent"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -659,10 +736,54 @@ paths:
           description: "Error code 42202 -- Invalid version"
         500:
           description: "Error code 50001 -- Error in the backend data store"
+  /subjects/{subject}/versions/{version}/referencedby:
+    get:
+      summary: "Get the schemas that reference the specified schema."
+      description: ""
+      operationId: "getReferencedBy"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters:
+      - name: "subject"
+        in: "path"
+        description: "Name of the Subject"
+        required: true
+        type: "string"
+      - name: "version"
+        in: "path"
+        description: "Version of the schema to be returned. Valid values for versionId\
+          \ are between [1,2^31-1] or the string \"latest\". \"latest\" returns the\
+          \ last registered schema under the specified subject. Note that there may\
+          \ be a new latest schema that gets registered right after this request is\
+          \ served."
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              type: "integer"
+              format: "int32"
+        404:
+          description: "Error code 40401 -- Subject not found\nError code 40402 --\
+            \ Version not found"
+        422:
+          description: "Error code 42202 -- Invalid version"
+        500:
+          description: "Error code 50001 -- Error in the backend data store"
   /subjects/{subject}/versions/{version}/schema:
     get:
-      summary: "Get the avro schema for the specified version of this subject. The\
-        \ unescaped schema only is returned."
+      summary: "Get the schema for the specified version of this subject. The unescaped\
+        \ schema only is returned."
       description: ""
       operationId: "getSchemaOnly"
       consumes:
@@ -852,3 +973,11 @@ definitions:
           type: "object"
       id:
         type: "string"
+  SubjectVersion:
+    type: "object"
+    properties:
+      subject:
+        type: "string"
+      version:
+        type: "integer"
+        format: "int32"

@@ -16,7 +16,6 @@
 
 package io.confluent.connect.protobuf;
 
-import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
@@ -24,11 +23,13 @@ import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
 
+import java.util.Collections;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
@@ -62,10 +63,12 @@ public class ProtobufConverter implements Converter {
     ProtobufConverterConfig protobufConverterConfig = new ProtobufConverterConfig(configs);
 
     if (schemaRegistry == null) {
-      schemaRegistry =
-          new CachedSchemaRegistryClient(protobufConverterConfig.getSchemaRegistryUrls(),
+      schemaRegistry = new CachedSchemaRegistryClient(
+          protobufConverterConfig.getSchemaRegistryUrls(),
           protobufConverterConfig.getMaxSchemasPerSubject(),
-          configs
+          Collections.singletonList(new ProtobufSchemaProvider()),
+          configs,
+          protobufConverterConfig.requestHeaders()
       );
     }
 
@@ -107,8 +110,8 @@ public class ProtobufConverter implements Converter {
         return SchemaAndValue.NULL;
       } else {
         Object object = deserialized.getValue();
-        if (object instanceof DynamicMessage) {
-          DynamicMessage message = (DynamicMessage) object;
+        if (object instanceof Message) {
+          Message message = (Message) object;
           return protobufData.toConnectData(deserialized.getSchema(), message);
         }
       }

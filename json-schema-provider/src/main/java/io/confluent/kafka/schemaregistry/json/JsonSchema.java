@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import com.google.common.annotations.VisibleForTesting;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.ValidationException;
 import org.everit.json.schema.loader.SchemaLoader;
@@ -34,6 +33,7 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Collections;
@@ -56,7 +56,9 @@ public class JsonSchema implements ParsedSchema {
 
   private static final Object NONE_MARKER = new Object();
 
-  private final Schema schemaObj;
+  private final JsonNode jsonNode;
+
+  private transient Schema schemaObj;
 
   private final Integer version;
 
@@ -64,15 +66,32 @@ public class JsonSchema implements ParsedSchema {
 
   private final Map<String, String> resolvedReferences;
 
-  private final ObjectMapper objectMapper = Jackson.newObjectMapper();
+  private transient String canonicalString;
 
-  @VisibleForTesting
-  public JsonSchema(JsonNode jsonNode) throws JsonProcessingException {
-    this(new ObjectMapper().writeValueAsString(jsonNode));
+  private transient int hashCode = NO_HASHCODE;
+
+  private static final int NO_HASHCODE = Integer.MIN_VALUE;
+
+  private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
+
+  public JsonSchema(JsonNode jsonNode) {
+    this(jsonNode, Collections.emptyList(), Collections.emptyMap(), null);
   }
 
   public JsonSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null);
+  }
+
+  public JsonSchema(
+      JsonNode jsonNode,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      Integer version
+  ) {
+    this.jsonNode = jsonNode;
+    this.version = version;
+    this.references = Collections.unmodifiableList(references);
+    this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
   }
 
   public JsonSchema(
@@ -81,22 +100,14 @@ public class JsonSchema implements ParsedSchema {
       Map<String, String> resolvedReferences,
       Integer version
   ) {
-    SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder();
-    if (resolvedReferences != null) {
-      try {
-        for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
-          builder.registerSchemaByURI(new URI(dep.getKey()), new JSONObject(dep.getValue()));
-        }
-      } catch (URISyntaxException e) {
-        throw new IllegalArgumentException("Invalid dependency name", e);
-      }
+    try {
+      this.jsonNode = objectMapper.readTree(schemaString);
+      this.version = version;
+      this.references = Collections.unmodifiableList(references);
+      this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
     }
-    builder.schemaJson(new JSONObject(schemaString));
-    SchemaLoader loader = builder.build();
-    this.schemaObj = loader.load().build();
-    this.version = version;
-    this.references = references;
-    this.resolvedReferences = resolvedReferences;
   }
 
   public JsonSchema(Schema schemaObj) {
@@ -104,13 +115,76 @@ public class JsonSchema implements ParsedSchema {
   }
 
   public JsonSchema(Schema schemaObj, Integer version) {
-    this.schemaObj = schemaObj;
-    this.version = version;
-    this.references = Collections.emptyList();
-    this.resolvedReferences = Collections.emptyMap();
+    try {
+      this.jsonNode = schemaObj != null ? objectMapper.readTree(schemaObj.toString()) : null;
+      this.schemaObj = schemaObj;
+      this.version = version;
+      this.references = Collections.emptyList();
+      this.resolvedReferences = Collections.emptyMap();
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Invalid JSON " + schemaObj.toString(), e);
+    }
   }
 
+  private JsonSchema(
+      JsonNode jsonNode,
+      Schema schemaObj,
+      Integer version,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      String canonicalString
+  ) {
+    this.jsonNode = jsonNode;
+    this.schemaObj = schemaObj;
+    this.version = version;
+    this.references = references;
+    this.resolvedReferences = resolvedReferences;
+    this.canonicalString = canonicalString;
+  }
+
+  public JsonSchema copy() {
+    return new JsonSchema(
+        this.jsonNode,
+        this.schemaObj,
+        this.version,
+        this.references,
+        this.resolvedReferences,
+        this.canonicalString
+    );
+  }
+
+  public JsonSchema copy(Integer version) {
+    return new JsonSchema(
+        this.jsonNode,
+        this.schemaObj,
+        version,
+        this.references,
+        this.resolvedReferences,
+        this.canonicalString
+    );
+  }
+
+  @Override
   public Schema rawSchema() {
+    if (jsonNode == null) {
+      return null;
+    }
+    if (schemaObj == null) {
+      try {
+        SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder();
+        for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+          builder.registerSchemaByURI(new URI(dep.getKey()), new JSONObject(dep.getValue()));
+        }
+        JSONObject jsonObject = objectMapper.treeToValue((jsonNode), JSONObject.class);
+        builder.schemaJson(jsonObject);
+        SchemaLoader loader = builder.build();
+        schemaObj = loader.load().build();
+      } catch (URISyntaxException e) {
+        throw new IllegalArgumentException("Invalid dependency name", e);
+      } catch (IOException e) {
+        throw new IllegalArgumentException("Invalid JSON", e);
+      }
+    }
     return schemaObj;
   }
 
@@ -121,12 +195,26 @@ public class JsonSchema implements ParsedSchema {
 
   @Override
   public String name() {
-    return schemaObj.getTitle();
+    return getString("title");
+  }
+
+  public String getString(String key) {
+    return jsonNode.has(key) ? jsonNode.get(key).asText() : null;
   }
 
   @Override
   public String canonicalString() {
-    return schemaObj.toString();
+    if (jsonNode == null) {
+      return null;
+    }
+    if (canonicalString == null) {
+      try {
+        canonicalString = objectMapper.writeValueAsString(jsonNode);
+      } catch (IOException e) {
+        throw new IllegalArgumentException("Invalid JSON", e);
+      }
+    }
+    return canonicalString;
   }
 
   public Integer version() {
@@ -140,6 +228,12 @@ public class JsonSchema implements ParsedSchema {
 
   public Map<String, String> resolvedReferences() {
     return resolvedReferences;
+  }
+
+  @Override
+  public void validate() {
+    // Access the raw schema since it is computed lazily
+    rawSchema();
   }
 
   public void validate(Object value) throws JsonProcessingException, ValidationException {
@@ -187,8 +281,8 @@ public class JsonSchema implements ParsedSchema {
       return false;
     }
     final List<Difference> differences = SchemaDiff.compare(
-        ((JsonSchema) previousSchema).schemaObj,
-        schemaObj
+        ((JsonSchema) previousSchema).rawSchema(),
+        rawSchema()
     );
     final List<Difference> incompatibleDiffs = differences.stream()
         .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
@@ -218,14 +312,17 @@ public class JsonSchema implements ParsedSchema {
       return false;
     }
     JsonSchema that = (JsonSchema) o;
-    return Objects.equals(schemaObj, that.schemaObj)
+    return Objects.equals(jsonNode, that.jsonNode)
         && Objects.equals(references, that.references)
         && Objects.equals(version, that.version);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaObj, references, version);
+    if (hashCode == NO_HASHCODE) {
+      hashCode = Objects.hash(jsonNode, references, version);
+    }
+    return hashCode;
   }
 
   @Override

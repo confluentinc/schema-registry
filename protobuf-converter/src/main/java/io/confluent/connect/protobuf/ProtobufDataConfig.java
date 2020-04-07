@@ -41,7 +41,7 @@ public class ProtobufDataConfig extends AbstractConfig {
     super(baseConfigDef(), props);
   }
 
-  public int getSchemasCacheSize() {
+  public int schemaCacheSize() {
     return this.getInt(SCHEMAS_CACHE_SIZE_CONFIG);
   }
 

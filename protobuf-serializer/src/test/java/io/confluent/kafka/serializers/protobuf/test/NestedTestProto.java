@@ -2794,21 +2794,143 @@ public final class NestedTestProto {
               io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.class, io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.Builder.class);
     }
 
+    /**
+     * Protobuf enum {@code io.confluent.kafka.serializers.protobuf.test.NestedMessage.InnerEnum}
+     */
+    public enum InnerEnum
+        implements com.google.protobuf.ProtocolMessageEnum {
+      /**
+       * <code>ZERO = 0;</code>
+       */
+      ZERO(0),
+      UNRECOGNIZED(-1),
+      ;
+
+      /**
+       * <code>ALSO_ZERO = 0;</code>
+       */
+      public static final InnerEnum ALSO_ZERO = ZERO;
+      /**
+       * <code>ZERO = 0;</code>
+       */
+      public static final int ZERO_VALUE = 0;
+      /**
+       * <code>ALSO_ZERO = 0;</code>
+       */
+      public static final int ALSO_ZERO_VALUE = 0;
+
+
+      public final int getNumber() {
+        if (this == UNRECOGNIZED) {
+          throw new java.lang.IllegalArgumentException(
+              "Can't get the number of an unknown enum value.");
+        }
+        return value;
+      }
+
+      /**
+       * @param value The numeric wire value of the corresponding enum entry.
+       * @return The enum associated with the given numeric wire value.
+       * @deprecated Use {@link #forNumber(int)} instead.
+       */
+      @java.lang.Deprecated
+      public static InnerEnum valueOf(int value) {
+        return forNumber(value);
+      }
+
+      /**
+       * @param value The numeric wire value of the corresponding enum entry.
+       * @return The enum associated with the given numeric wire value.
+       */
+      public static InnerEnum forNumber(int value) {
+        switch (value) {
+          case 0: return ZERO;
+          default: return null;
+        }
+      }
+
+      public static com.google.protobuf.Internal.EnumLiteMap<InnerEnum>
+          internalGetValueMap() {
+        return internalValueMap;
+      }
+      private static final com.google.protobuf.Internal.EnumLiteMap<
+          InnerEnum> internalValueMap =
+            new com.google.protobuf.Internal.EnumLiteMap<InnerEnum>() {
+              public InnerEnum findValueByNumber(int number) {
+                return InnerEnum.forNumber(number);
+              }
+            };
+
+      public final com.google.protobuf.Descriptors.EnumValueDescriptor
+          getValueDescriptor() {
+        return getDescriptor().getValues().get(ordinal());
+      }
+      public final com.google.protobuf.Descriptors.EnumDescriptor
+          getDescriptorForType() {
+        return getDescriptor();
+      }
+      public static final com.google.protobuf.Descriptors.EnumDescriptor
+          getDescriptor() {
+        return io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.getDescriptor().getEnumTypes().get(0);
+      }
+
+      private static final InnerEnum[] VALUES = {
+        ZERO, ALSO_ZERO, 
+      };
+
+      public static InnerEnum valueOf(
+          com.google.protobuf.Descriptors.EnumValueDescriptor desc) {
+        if (desc.getType() != getDescriptor()) {
+          throw new java.lang.IllegalArgumentException(
+            "EnumValueDescriptor is not for this type.");
+        }
+        if (desc.getIndex() == -1) {
+          return UNRECOGNIZED;
+        }
+        return VALUES[desc.getIndex()];
+      }
+
+      private final int value;
+
+      private InnerEnum(int value) {
+        this.value = value;
+      }
+
+      // @@protoc_insertion_point(enum_scope:io.confluent.kafka.serializers.protobuf.test.NestedMessage.InnerEnum)
+    }
+
     public interface InnerMessageOrBuilder extends
         // @@protoc_insertion_point(interface_extends:io.confluent.kafka.serializers.protobuf.test.NestedMessage.InnerMessage)
         com.google.protobuf.MessageOrBuilder {
 
       /**
-       * <code>string id = 1;</code>
+       * <code>string id = 1[json_name = "id"];</code>
        * @return The id.
        */
       java.lang.String getId();
       /**
-       * <code>string id = 1;</code>
+       * <code>string id = 1[json_name = "id"];</code>
        * @return The bytes for id.
        */
       com.google.protobuf.ByteString
           getIdBytes();
+
+      /**
+       * <code>repeated int32 ids = 2 [packed = true];</code>
+       * @return A list containing the ids.
+       */
+      java.util.List<java.lang.Integer> getIdsList();
+      /**
+       * <code>repeated int32 ids = 2 [packed = true];</code>
+       * @return The count of ids.
+       */
+      int getIdsCount();
+      /**
+       * <code>repeated int32 ids = 2 [packed = true];</code>
+       * @param index The index of the element to return.
+       * @return The ids at the given index.
+       */
+      int getIds(int index);
     }
     /**
      * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.NestedMessage.InnerMessage}
@@ -2824,6 +2946,7 @@ public final class NestedTestProto {
       }
       private InnerMessage() {
         id_ = "";
+        ids_ = emptyIntList();
       }
 
       @java.lang.Override
@@ -2846,6 +2969,7 @@ public final class NestedTestProto {
         if (extensionRegistry == null) {
           throw new java.lang.NullPointerException();
         }
+        int mutable_bitField0_ = 0;
         com.google.protobuf.UnknownFieldSet.Builder unknownFields =
             com.google.protobuf.UnknownFieldSet.newBuilder();
         try {
@@ -2860,6 +2984,27 @@ public final class NestedTestProto {
                 java.lang.String s = input.readStringRequireUtf8();
 
                 id_ = s;
+                break;
+              }
+              case 16: {
+                if (!((mutable_bitField0_ & 0x00000001) != 0)) {
+                  ids_ = newIntList();
+                  mutable_bitField0_ |= 0x00000001;
+                }
+                ids_.addInt(input.readInt32());
+                break;
+              }
+              case 18: {
+                int length = input.readRawVarint32();
+                int limit = input.pushLimit(length);
+                if (!((mutable_bitField0_ & 0x00000001) != 0) && input.getBytesUntilLimit() > 0) {
+                  ids_ = newIntList();
+                  mutable_bitField0_ |= 0x00000001;
+                }
+                while (input.getBytesUntilLimit() > 0) {
+                  ids_.addInt(input.readInt32());
+                }
+                input.popLimit(limit);
                 break;
               }
               default: {
@@ -2877,6 +3022,9 @@ public final class NestedTestProto {
           throw new com.google.protobuf.InvalidProtocolBufferException(
               e).setUnfinishedMessage(this);
         } finally {
+          if (((mutable_bitField0_ & 0x00000001) != 0)) {
+            ids_.makeImmutable(); // C
+          }
           this.unknownFields = unknownFields.build();
           makeExtensionsImmutable();
         }
@@ -2897,7 +3045,7 @@ public final class NestedTestProto {
       public static final int ID_FIELD_NUMBER = 1;
       private volatile java.lang.Object id_;
       /**
-       * <code>string id = 1;</code>
+       * <code>string id = 1[json_name = "id"];</code>
        * @return The id.
        */
       public java.lang.String getId() {
@@ -2913,7 +3061,7 @@ public final class NestedTestProto {
         }
       }
       /**
-       * <code>string id = 1;</code>
+       * <code>string id = 1[json_name = "id"];</code>
        * @return The bytes for id.
        */
       public com.google.protobuf.ByteString
@@ -2930,6 +3078,33 @@ public final class NestedTestProto {
         }
       }
 
+      public static final int IDS_FIELD_NUMBER = 2;
+      private com.google.protobuf.Internal.IntList ids_;
+      /**
+       * <code>repeated int32 ids = 2 [packed = true];</code>
+       * @return A list containing the ids.
+       */
+      public java.util.List<java.lang.Integer>
+          getIdsList() {
+        return ids_;
+      }
+      /**
+       * <code>repeated int32 ids = 2 [packed = true];</code>
+       * @return The count of ids.
+       */
+      public int getIdsCount() {
+        return ids_.size();
+      }
+      /**
+       * <code>repeated int32 ids = 2 [packed = true];</code>
+       * @param index The index of the element to return.
+       * @return The ids at the given index.
+       */
+      public int getIds(int index) {
+        return ids_.getInt(index);
+      }
+      private int idsMemoizedSerializedSize = -1;
+
       private byte memoizedIsInitialized = -1;
       @java.lang.Override
       public final boolean isInitialized() {
@@ -2944,8 +3119,16 @@ public final class NestedTestProto {
       @java.lang.Override
       public void writeTo(com.google.protobuf.CodedOutputStream output)
                           throws java.io.IOException {
+        getSerializedSize();
         if (!getIdBytes().isEmpty()) {
           com.google.protobuf.GeneratedMessageV3.writeString(output, 1, id_);
+        }
+        if (getIdsList().size() > 0) {
+          output.writeUInt32NoTag(18);
+          output.writeUInt32NoTag(idsMemoizedSerializedSize);
+        }
+        for (int i = 0; i < ids_.size(); i++) {
+          output.writeInt32NoTag(ids_.getInt(i));
         }
         unknownFields.writeTo(output);
       }
@@ -2958,6 +3141,20 @@ public final class NestedTestProto {
         size = 0;
         if (!getIdBytes().isEmpty()) {
           size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, id_);
+        }
+        {
+          int dataSize = 0;
+          for (int i = 0; i < ids_.size(); i++) {
+            dataSize += com.google.protobuf.CodedOutputStream
+              .computeInt32SizeNoTag(ids_.getInt(i));
+          }
+          size += dataSize;
+          if (!getIdsList().isEmpty()) {
+            size += 1;
+            size += com.google.protobuf.CodedOutputStream
+                .computeInt32SizeNoTag(dataSize);
+          }
+          idsMemoizedSerializedSize = dataSize;
         }
         size += unknownFields.getSerializedSize();
         memoizedSize = size;
@@ -2976,6 +3173,8 @@ public final class NestedTestProto {
 
         if (!getId()
             .equals(other.getId())) return false;
+        if (!getIdsList()
+            .equals(other.getIdsList())) return false;
         if (!unknownFields.equals(other.unknownFields)) return false;
         return true;
       }
@@ -2989,6 +3188,10 @@ public final class NestedTestProto {
         hash = (19 * hash) + getDescriptor().hashCode();
         hash = (37 * hash) + ID_FIELD_NUMBER;
         hash = (53 * hash) + getId().hashCode();
+        if (getIdsCount() > 0) {
+          hash = (37 * hash) + IDS_FIELD_NUMBER;
+          hash = (53 * hash) + getIdsList().hashCode();
+        }
         hash = (29 * hash) + unknownFields.hashCode();
         memoizedHashCode = hash;
         return hash;
@@ -3124,6 +3327,8 @@ public final class NestedTestProto {
           super.clear();
           id_ = "";
 
+          ids_ = emptyIntList();
+          bitField0_ = (bitField0_ & ~0x00000001);
           return this;
         }
 
@@ -3150,7 +3355,13 @@ public final class NestedTestProto {
         @java.lang.Override
         public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.InnerMessage buildPartial() {
           io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.InnerMessage result = new io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.InnerMessage(this);
+          int from_bitField0_ = bitField0_;
           result.id_ = id_;
+          if (((bitField0_ & 0x00000001) != 0)) {
+            ids_.makeImmutable();
+            bitField0_ = (bitField0_ & ~0x00000001);
+          }
+          result.ids_ = ids_;
           onBuilt();
           return result;
         }
@@ -3203,6 +3414,16 @@ public final class NestedTestProto {
             id_ = other.id_;
             onChanged();
           }
+          if (!other.ids_.isEmpty()) {
+            if (ids_.isEmpty()) {
+              ids_ = other.ids_;
+              bitField0_ = (bitField0_ & ~0x00000001);
+            } else {
+              ensureIdsIsMutable();
+              ids_.addAll(other.ids_);
+            }
+            onChanged();
+          }
           this.mergeUnknownFields(other.unknownFields);
           onChanged();
           return this;
@@ -3231,10 +3452,11 @@ public final class NestedTestProto {
           }
           return this;
         }
+        private int bitField0_;
 
         private java.lang.Object id_ = "";
         /**
-         * <code>string id = 1;</code>
+         * <code>string id = 1[json_name = "id"];</code>
          * @return The id.
          */
         public java.lang.String getId() {
@@ -3250,7 +3472,7 @@ public final class NestedTestProto {
           }
         }
         /**
-         * <code>string id = 1;</code>
+         * <code>string id = 1[json_name = "id"];</code>
          * @return The bytes for id.
          */
         public com.google.protobuf.ByteString
@@ -3267,7 +3489,7 @@ public final class NestedTestProto {
           }
         }
         /**
-         * <code>string id = 1;</code>
+         * <code>string id = 1[json_name = "id"];</code>
          * @param value The id to set.
          * @return This builder for chaining.
          */
@@ -3282,7 +3504,7 @@ public final class NestedTestProto {
           return this;
         }
         /**
-         * <code>string id = 1;</code>
+         * <code>string id = 1[json_name = "id"];</code>
          * @return This builder for chaining.
          */
         public Builder clearId() {
@@ -3292,7 +3514,7 @@ public final class NestedTestProto {
           return this;
         }
         /**
-         * <code>string id = 1;</code>
+         * <code>string id = 1[json_name = "id"];</code>
          * @param value The bytes for id to set.
          * @return This builder for chaining.
          */
@@ -3304,6 +3526,85 @@ public final class NestedTestProto {
   checkByteStringIsUtf8(value);
           
           id_ = value;
+          onChanged();
+          return this;
+        }
+
+        private com.google.protobuf.Internal.IntList ids_ = emptyIntList();
+        private void ensureIdsIsMutable() {
+          if (!((bitField0_ & 0x00000001) != 0)) {
+            ids_ = mutableCopy(ids_);
+            bitField0_ |= 0x00000001;
+           }
+        }
+        /**
+         * <code>repeated int32 ids = 2 [packed = true];</code>
+         * @return A list containing the ids.
+         */
+        public java.util.List<java.lang.Integer>
+            getIdsList() {
+          return ((bitField0_ & 0x00000001) != 0) ?
+                   java.util.Collections.unmodifiableList(ids_) : ids_;
+        }
+        /**
+         * <code>repeated int32 ids = 2 [packed = true];</code>
+         * @return The count of ids.
+         */
+        public int getIdsCount() {
+          return ids_.size();
+        }
+        /**
+         * <code>repeated int32 ids = 2 [packed = true];</code>
+         * @param index The index of the element to return.
+         * @return The ids at the given index.
+         */
+        public int getIds(int index) {
+          return ids_.getInt(index);
+        }
+        /**
+         * <code>repeated int32 ids = 2 [packed = true];</code>
+         * @param index The index to set the value at.
+         * @param value The ids to set.
+         * @return This builder for chaining.
+         */
+        public Builder setIds(
+            int index, int value) {
+          ensureIdsIsMutable();
+          ids_.setInt(index, value);
+          onChanged();
+          return this;
+        }
+        /**
+         * <code>repeated int32 ids = 2 [packed = true];</code>
+         * @param value The ids to add.
+         * @return This builder for chaining.
+         */
+        public Builder addIds(int value) {
+          ensureIdsIsMutable();
+          ids_.addInt(value);
+          onChanged();
+          return this;
+        }
+        /**
+         * <code>repeated int32 ids = 2 [packed = true];</code>
+         * @param values The ids to add.
+         * @return This builder for chaining.
+         */
+        public Builder addAllIds(
+            java.lang.Iterable<? extends java.lang.Integer> values) {
+          ensureIdsIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, ids_);
+          onChanged();
+          return this;
+        }
+        /**
+         * <code>repeated int32 ids = 2 [packed = true];</code>
+         * @return This builder for chaining.
+         */
+        public Builder clearIds() {
+          ids_ = emptyIntList();
+          bitField0_ = (bitField0_ & ~0x00000001);
           onChanged();
           return this;
         }
@@ -5011,7 +5312,7 @@ public final class NestedTestProto {
       "H\000B\t\n\007user_id\"\027\n\tMessageId\022\n\n\002id\030\001 \001(\t\"R" +
       "\n\013ComplexType\022\020\n\006one_id\030\001 \001(\tH\000\022\022\n\010other" +
       "_id\030\002 \001(\005H\000\022\021\n\tis_active\030\003 \001(\010B\n\n\010some_v" +
-      "al\"\315\004\n\rNestedMessage\022E\n\007user_id\030\001 \001(\01324." +
+      "al\"\250\005\n\rNestedMessage\022E\n\007user_id\030\001 \001(\01324." +
       "io.confluent.kafka.serializers.protobuf." +
       "test.UserId\022\021\n\tis_active\030\002 \001(\010\022\032\n\022experi" +
       "ments_active\030\003 \003(\t\022.\n\nupdated_at\030\004 \001(\0132\032" +
@@ -5025,10 +5326,12 @@ public final class NestedTestProto {
       " \001(\0132H.io.confluent.kafka.serializers.pr" +
       "otobuf.test.NestedMessage.InnerMessage\032." +
       "\n\014MapTypeEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001" +
-      "(\t:\0028\001\032\032\n\014InnerMessage\022\n\n\002id\030\001 \001(\t*\"\n\006St" +
-      "atus\022\n\n\006ACTIVE\020\000\022\014\n\010INACTIVE\020\001B?\n,io.con" +
-      "fluent.kafka.serializers.protobuf.testB\017" +
-      "NestedTestProtob\006proto3"
+      "(\t:\0028\001\032/\n\014InnerMessage\022\016\n\002id\030\001 \001(\tR\002id\022\017" +
+      "\n\003ids\030\002 \003(\005B\002\020\001\"(\n\tInnerEnum\022\010\n\004ZERO\020\000\022\r" +
+      "\n\tALSO_ZERO\020\000\032\002\020\001J\004\010\016\020\017J\004\010\017\020\020J\004\010\t\020\014R\003foo" +
+      "R\003bar*\"\n\006Status\022\n\n\006ACTIVE\020\000\022\014\n\010INACTIVE\020" +
+      "\001BA\n,io.confluent.kafka.serializers.prot" +
+      "obuf.testB\017NestedTestProtoP\000b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -5070,7 +5373,7 @@ public final class NestedTestProto {
     internal_static_io_confluent_kafka_serializers_protobuf_test_NestedMessage_InnerMessage_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_io_confluent_kafka_serializers_protobuf_test_NestedMessage_InnerMessage_descriptor,
-        new java.lang.String[] { "Id", });
+        new java.lang.String[] { "Id", "Ids", });
     com.google.protobuf.TimestampProto.getDescriptor();
   }
 

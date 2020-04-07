@@ -97,9 +97,9 @@ public class ProtobufData {
 
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
     fromConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.getSchemasCacheSize()));
+        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
     toConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.getSchemasCacheSize()));
+        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
   }
 
   /**
@@ -142,9 +142,6 @@ public class ProtobufData {
         case INT16:
         case INT32: {
           final int intValue = ((Number) value).intValue(); // Check for correct type
-          if (intValue == 0) {
-            return null;
-          }
           return intValue;
         }
 
@@ -155,40 +152,32 @@ public class ProtobufData {
           }
 
           final long longValue = ((Number) value).longValue(); // Check for correct type
-          if (longValue == 0L) {
-            return null;
-          }
           return longValue;
         }
 
         case FLOAT32: {
           final float floatValue = ((Number) value).floatValue(); // Check for correct type
-          if (floatValue == 0.0f) {
-            return null;
-          }
           return floatValue;
         }
 
         case FLOAT64: {
           final double doubleValue = ((Number) value).doubleValue(); // Check for correct type
-          if (doubleValue == 0.0d) {
-            return null;
-          }
           return doubleValue;
         }
 
         case BOOLEAN: {
           final Boolean boolValue = (Boolean) value; // Check for correct type
-          if (boolValue == false) {
-            return null;
-          }
           return boolValue;
         }
 
         case STRING: {
           final String stringValue = (String) value; // Check for correct type
-          if (stringValue.isEmpty()) {
-            return null;
+          if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
+            String enumType = schema.parameters().get(PROTOBUF_TYPE_ENUM);
+            String tag = schema.parameters().get(PROTOBUF_TYPE_ENUM_PREFIX + stringValue);
+            if (tag != null) {
+              return protobufSchema.getEnumValue(scope + enumType, Integer.parseInt(tag));
+            }
           }
           return stringValue;
         }
@@ -197,13 +186,13 @@ public class ProtobufData {
           final ByteBuffer bytesValue = value instanceof byte[]
                                         ? ByteBuffer.wrap((byte[]) value)
                                         : (ByteBuffer) value;
-          if (bytesValue.array().length == 0) {
-            return null;
-          }
           return ByteString.copyFrom(bytesValue);
         }
         case ARRAY:
           final Collection<?> listValue = (Collection<?>) value;
+          if (listValue.isEmpty()) {
+            return null;
+          }
           List<Object> newListValue = new ArrayList<>();
           for (Object o : listValue) {
             newListValue.add(fromConnectData(schema.valueSchema(), scope, o, protobufSchema));
@@ -299,7 +288,7 @@ public class ProtobufData {
     }
   }
 
-  private ProtobufSchema fromConnectSchema(Schema schema) {
+  public ProtobufSchema fromConnectSchema(Schema schema) {
     if (schema == null) {
       return null;
     }
@@ -312,7 +301,7 @@ public class ProtobufData {
       name = DEFAULT_SCHEMA_NAME + "1";
     }
     ProtobufSchema resultSchema =
-        new ProtobufSchema(dynamicSchemaFromConnectSchema(schema).getMessageDescriptor(
+        new ProtobufSchema(rawSchemaFromConnectSchema(schema).getMessageDescriptor(
         name));
     fromConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
@@ -321,12 +310,13 @@ public class ProtobufData {
   /*
    * DynamicSchema is used as a temporary helper class and should not be exposed in the API.
    */
-  private DynamicSchema dynamicSchemaFromConnectSchema(Schema rootElem) {
+  private DynamicSchema rawSchemaFromConnectSchema(Schema rootElem) {
     if (rootElem.type() != Schema.Type.STRUCT) {
       throw new IllegalArgumentException("Unsupported root schema of type " + rootElem.type());
     }
     try {
       DynamicSchema.Builder schema = DynamicSchema.newBuilder();
+      schema.setSyntax(ProtobufSchema.PROTO3);
       String name = getNameOrDefault(rootElem.name());
       schema.addMessageDefinition(messageDefinitionFromConnectSchema(schema, name, rootElem));
       return schema.build();
@@ -430,6 +420,7 @@ public class ProtobufData {
         message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
       } else if (type.equals(GOOGLE_PROTOBUF_TIMESTAMP_FULL_NAME)) {
         DynamicSchema.Builder timestampSchema = DynamicSchema.newBuilder();
+        timestampSchema.setSyntax(ProtobufSchema.PROTO3);
         timestampSchema.setName(GOOGLE_PROTOBUF_TIMESTAMP_LOCATION);
         timestampSchema.setPackage(GOOGLE_PROTOBUF_PACKAGE);
         timestampSchema.addMessageDefinition(timestampDefinition());
@@ -561,6 +552,9 @@ public class ProtobufData {
       case BOOLEAN:
         return FieldDescriptor.Type.BOOL.toString().toLowerCase();
       case STRING:
+        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
+          return schema.parameters().get(PROTOBUF_TYPE_ENUM);
+        }
         return FieldDescriptor.Type.STRING.toString().toLowerCase();
       case BYTES:
         return FieldDescriptor.Type.BYTES.toString().toLowerCase();
@@ -580,13 +574,12 @@ public class ProtobufData {
     return Timestamp.SCHEMA.name().equals(schema.name());
   }
 
-  public SchemaAndValue toConnectData(ProtobufSchema protobufSchema, DynamicMessage message) {
+  public SchemaAndValue toConnectData(ProtobufSchema protobufSchema, Message message) {
     if (message == null) {
       return SchemaAndValue.NULL;
     }
 
     Schema schema = toConnectSchema(protobufSchema);
-
     return new SchemaAndValue(schema, toConnectData(schema, message));
   }
 
@@ -598,7 +591,7 @@ public class ProtobufData {
         return null;
       }
       if (isProtobufTimestamp(schema)) {
-        DynamicMessage message = (DynamicMessage) value;
+        Message message = (Message) value;
 
         long seconds = 0L;
         int nanos = 0;
@@ -621,13 +614,7 @@ public class ProtobufData {
         case INT8:
         case INT16:
         case INT32:
-          if (value instanceof Number) {
-            converted = ((Number) value).intValue(); // Validate type
-          } else if (value instanceof Enum) {
-            converted = ((Enum) value).ordinal();
-          } else if (value instanceof EnumValueDescriptor) {
-            converted = ((EnumValueDescriptor) value).getNumber();
-          }
+          converted = ((Number) value).intValue();
           break;
         case INT64:
           long longValue;
@@ -639,21 +626,20 @@ public class ProtobufData {
           converted = longValue;
           break;
         case FLOAT32:
-          float floatValue = ((Number) value).floatValue(); // Validate type
-          converted = value;
+          converted = ((Number) value).floatValue();
           break;
         case FLOAT64:
-          double doubleValue = ((Number) value).doubleValue(); // Validate type
-          converted = value;
+          converted = ((Number) value).doubleValue();
           break;
         case BOOLEAN:
-          Boolean boolValue = (Boolean) value; // Validate type
-          converted = value;
+          converted = (Boolean) value;
           break;
         case STRING:
           if (value instanceof String) {
             converted = value;
-          } else if (value instanceof CharSequence) {
+          } else if (value instanceof CharSequence
+              || value instanceof Enum
+              || value instanceof EnumValueDescriptor) {
             converted = value.toString();
           } else {
             throw new DataException("Invalid class for string type, expecting String or "
@@ -686,9 +672,9 @@ public class ProtobufData {
         case MAP:
           final Schema keySchema = schema.keySchema();
           final Schema valueSchema = schema.valueSchema();
-          final Collection<DynamicMessage> map = (Collection<DynamicMessage>) value;
+          final Collection<? extends Message> map = (Collection<? extends Message>) value;
           final Map<Object, Object> newMap = new HashMap<>();
-          for (DynamicMessage message : map) {
+          for (Message message : map) {
             Descriptor descriptor = message.getDescriptorForType();
             Object elemKey = message.getField(descriptor.findFieldByName(KEY_FIELD));
             Object elemValue = message.getField(descriptor.findFieldByName(VALUE_FIELD));
@@ -697,21 +683,18 @@ public class ProtobufData {
           converted = newMap;
           break;
         case STRUCT:
-          final DynamicMessage message = (DynamicMessage) value; // Validate type
-          if (message.equals(message.getDefaultInstanceForType())) {
-            // Note: this is so that fields that are omitted are not set with the default values.
-            return null;
-          }
-
+          final Message message = (Message) value;
           final Struct struct = new Struct(schema.schema());
           final Descriptor descriptor = message.getDescriptorForType();
 
           for (OneofDescriptor oneOfDescriptor : descriptor.getOneofs()) {
-            FieldDescriptor fieldDescriptor = message.getOneofFieldDescriptor(oneOfDescriptor);
-            Object obj = message.getField(fieldDescriptor);
-            if (obj != null) {
-              setUnionField(schema, message, struct, oneOfDescriptor, fieldDescriptor);
-              break;
+            if (message.hasOneof(oneOfDescriptor)) {
+              FieldDescriptor fieldDescriptor = message.getOneofFieldDescriptor(oneOfDescriptor);
+              Object obj = message.getField(fieldDescriptor);
+              if (obj != null) {
+                setUnionField(schema, message, struct, oneOfDescriptor, fieldDescriptor);
+                break;
+              }
             }
           }
 
@@ -721,7 +704,11 @@ public class ProtobufData {
               // Already added field as oneof
               continue;
             }
-            setStructField(schema, message, struct, fieldDescriptor);
+            if (fieldDescriptor.getJavaType() != FieldDescriptor.JavaType.MESSAGE
+                || fieldDescriptor.isRepeated()
+                || message.hasField(fieldDescriptor)) {
+              setStructField(schema, message, struct, fieldDescriptor);
+            }
           }
 
           converted = struct;
@@ -768,7 +755,7 @@ public class ProtobufData {
     result.put(fieldName, toConnectData(field.schema(), obj));
   }
 
-  private Schema toConnectSchema(ProtobufSchema schema) {
+  public Schema toConnectSchema(ProtobufSchema schema) {
     if (schema == null) {
       return null;
     }
@@ -820,6 +807,7 @@ public class ProtobufData {
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
       builder.field(fieldDescriptor.getName(), toConnectSchema(fieldDescriptor));
     }
+    builder.optional();
     return builder.build();
   }
 
@@ -869,7 +857,7 @@ public class ProtobufData {
         break;
 
       case ENUM:
-        builder = SchemaBuilder.int32();
+        builder = SchemaBuilder.string();
         EnumDescriptor enumDescriptor = descriptor.getEnumType();
         builder.name(enumDescriptor.getName());
         builder.parameter(PROTOBUF_TYPE_ENUM, enumDescriptor.getName());

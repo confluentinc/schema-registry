@@ -15,30 +15,21 @@
 
 package io.confluent.kafka.formatter.protobuf;
 
-import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.google.protobuf.util.JsonFormat;
-import kafka.common.KafkaException;
-import kafka.common.MessageReader;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.config.ConfigException;
+import com.google.protobuf.Message;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
 
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.formatter.SchemaMessageReader;
+import io.confluent.kafka.formatter.SchemaMessageSerializer;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
 
 /**
@@ -59,19 +50,7 @@ import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
  * <p>In the shell, type in the following.
  * {"f1": "value1"}
  */
-public class ProtobufMessageReader extends AbstractKafkaProtobufSerializer
-    implements MessageReader {
-
-  private String topic = null;
-  private BufferedReader reader = null;
-  private Boolean parseKey = false;
-  private String keySeparator = "\t";
-  private boolean ignoreError = false;
-  private ProtobufSchema keySchema = null;
-  private ProtobufSchema valueSchema = null;
-  private String keySubject = null;
-  private String valueSubject = null;
-  private Serializer keySerializer;
+public class ProtobufMessageReader extends SchemaMessageReader<Message> {
 
   /**
    * Constructor needed by kafka console producer.
@@ -91,138 +70,28 @@ public class ProtobufMessageReader extends AbstractKafkaProtobufSerializer
       BufferedReader reader,
       boolean autoRegister
   ) {
-    this.schemaRegistry = schemaRegistryClient;
-    this.keySchema = keySchema;
-    this.valueSchema = valueSchema;
-    this.topic = topic;
-    this.keySubject = topic + "-key";
-    this.valueSubject = topic + "-value";
-    this.parseKey = parseKey;
-    this.reader = reader;
-    this.autoRegisterSchema = autoRegister;
+    super(schemaRegistryClient, keySchema, valueSchema, topic,
+        parseKey, reader, autoRegister);
   }
 
   @Override
-  public void init(java.io.InputStream inputStream, Properties props) {
-    topic = props.getProperty("topic");
-    if (props.containsKey("parse.key")) {
-      parseKey = props.getProperty("parse.key").trim().toLowerCase().equals("true");
-    }
-    if (props.containsKey("key.separator")) {
-      keySeparator = props.getProperty("key.separator");
-    }
-    if (props.containsKey("ignore.error")) {
-      ignoreError = props.getProperty("ignore.error").trim().toLowerCase().equals("true");
-    }
-    reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
-    String url = props.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
-    if (url == null) {
-      throw new ConfigException("Missing schema registry url!");
-    }
-
-    Map<String, Object> originals = getPropertiesMap(props);
-
-    schemaRegistry = new CachedSchemaRegistryClient(Collections.singletonList(url),
-        AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
-        Collections.singletonList(new ProtobufSchemaProvider()),
-        originals
-    );
-    if (!props.containsKey("value.schema")) {
-      throw new ConfigException("Must provide the Protobuf schema string in value.schema");
-    }
-    String valueSchemaString = props.getProperty("value.schema");
-    valueSchema = new ProtobufSchema(valueSchemaString);
-
-    keySerializer = getKeySerializer(props);
-
-    if (needsKeySchema()) {
-      if (!props.containsKey("key.schema")) {
-        throw new ConfigException("Must provide the Protobuf schema string in key.schema");
-      }
-      String keySchemaString = props.getProperty("key.schema");
-      keySchema = new ProtobufSchema(keySchemaString);
-    }
-    keySubject = topic + "-key";
-    valueSubject = topic + "-value";
-    if (props.containsKey("auto.register")) {
-      this.autoRegisterSchema = Boolean.parseBoolean(props.getProperty("auto.register").trim());
-    } else {
-      this.autoRegisterSchema = true;
-    }
-  }
-
-  private Serializer getKeySerializer(Properties props) throws ConfigException {
-    if (props.containsKey("key.serializer")) {
-      try {
-        return (Serializer) Class.forName((String) props.get("key.serializer")).newInstance();
-      } catch (Exception e) {
-        throw new ConfigException("Error initializing Key serializer", e);
-      }
-    } else {
-      return null;
-    }
-  }
-
-  private boolean needsKeySchema() {
-    return parseKey && keySerializer == null;
-  }
-
-  private Map<String, Object> getPropertiesMap(Properties props) {
-    Map<String, Object> originals = new HashMap<>();
-    for (final String name : props.stringPropertyNames()) {
-      originals.put(name, props.getProperty(name));
-    }
-    return originals;
+  protected SchemaMessageSerializer<Message> createSerializer(
+      SchemaRegistryClient schemaRegistryClient,
+      boolean autoRegister,
+      Serializer keySerializer
+  ) {
+    return new ProtobufMessageSerializer(schemaRegistryClient, autoRegister, keySerializer);
   }
 
   @Override
-  public ProducerRecord<byte[], byte[]> readMessage() {
-    try {
-      String line = reader.readLine();
-      if (line == null) {
-        return null;
-      }
-      if (!parseKey) {
-        DynamicMessage value = jsonToProtobuf(line, valueSchema);
-        byte[] serializedValue = serializeImpl(valueSubject, topic, false, value, valueSchema);
-        return new ProducerRecord<>(topic, serializedValue);
-      } else {
-        int keyIndex = line.indexOf(keySeparator);
-        if (keyIndex < 0) {
-          if (ignoreError) {
-            DynamicMessage value = jsonToProtobuf(line, valueSchema);
-            byte[] serializedValue = serializeImpl(valueSubject, topic, false, value, valueSchema);
-            return new ProducerRecord<>(topic, serializedValue);
-          } else {
-            throw new KafkaException("No key found in line " + line);
-          }
-        } else {
-          String keyString = line.substring(0, keyIndex);
-          String valueString = (keyIndex + keySeparator.length() > line.length())
-                               ? ""
-                               : line.substring(keyIndex + keySeparator.length());
-          byte[] serializedKey;
-          if (keySerializer != null) {
-            serializedKey = keySerializer.serialize(topic, keyString);
-          } else {
-            DynamicMessage key = jsonToProtobuf(keyString, keySchema);
-            serializedKey = serializeImpl(keySubject, topic, true, key, keySchema);
-          }
-          DynamicMessage value = jsonToProtobuf(valueString, valueSchema);
-          byte[] serializedValue = serializeImpl(valueSubject, topic, false, value, valueSchema);
-          return new ProducerRecord<>(topic, serializedKey, serializedValue);
-        }
-      }
-    } catch (IOException e) {
-      throw new KafkaException("Error reading from input", e);
-    }
+  protected SchemaProvider getProvider() {
+    return new ProtobufSchemaProvider();
   }
 
-  private DynamicMessage jsonToProtobuf(String jsonString, ProtobufSchema schema) {
+  @Override
+  protected Message readFrom(String jsonString, ParsedSchema schema) {
     try {
-      DynamicMessage.Builder message = schema.newMessageBuilder();
-      JsonFormat.parser().merge(jsonString, message);
-      return message.build();
+      return (Message) ProtobufSchemaUtils.toObject(jsonString, (ProtobufSchema) schema);
     } catch (InvalidProtocolBufferException e) {
       throw new SerializationException(String.format("Error deserializing json %s to Protobuf of "
               + "schema %s",
@@ -232,8 +101,38 @@ public class ProtobufMessageReader extends AbstractKafkaProtobufSerializer
     }
   }
 
-  @Override
-  public void close() {
-    // nothing to do
+  static class ProtobufMessageSerializer extends AbstractKafkaProtobufSerializer
+      implements SchemaMessageSerializer<Message> {
+
+    protected final Serializer keySerializer;
+
+    ProtobufMessageSerializer(
+        SchemaRegistryClient schemaRegistryClient, boolean autoRegister, Serializer keySerializer
+    ) {
+      this.schemaRegistry = schemaRegistryClient;
+      this.autoRegisterSchema = autoRegister;
+      this.keySerializer = keySerializer;
+    }
+
+    @Override
+    public Serializer getKeySerializer() {
+      return keySerializer;
+    }
+
+    @Override
+    public byte[] serializeKey(String topic, Object payload) {
+      return keySerializer.serialize(topic, payload);
+    }
+
+    @Override
+    public byte[] serialize(
+        String subject,
+        String topic,
+        boolean isKey,
+        Message object,
+        ParsedSchema schema
+    ) {
+      return super.serializeImpl(subject, topic, isKey, object, (ProtobufSchema) schema);
+    }
   }
 }

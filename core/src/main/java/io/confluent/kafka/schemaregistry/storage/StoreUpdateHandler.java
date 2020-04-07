@@ -30,7 +30,8 @@ public interface StoreUpdateHandler<K, V> {
    *
    * @param key   Key associated with the data
    * @param value Data written to the store
+   * @param oldValue the previous value associated with key, or null if there was no mapping for key
    */
-  public void handleUpdate(K key, V value);
+  public void handleUpdate(K key, V value, V oldValue);
 
 }

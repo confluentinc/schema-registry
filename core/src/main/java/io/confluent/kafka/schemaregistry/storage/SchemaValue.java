@@ -16,10 +16,12 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.google.common.annotations.VisibleForTesting;
 import org.hibernate.validator.constraints.NotEmpty;
 
@@ -31,7 +33,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue {
 
   @NotEmpty
@@ -122,6 +126,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   }
 
   @JsonProperty("schemaType")
+  @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
     return this.schemaType;
   }
@@ -181,7 +186,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     if (!this.id.equals(that.getId())) {
       return false;
     }
-    if (!this.schemaType.equals(that.getSchemaType())) {
+    if (schemaType != null ? !schemaType.equals(that.schemaType) : that.schemaType != null) {
       return false;
     }
     if (!this.references.equals(that.getReferences())) {
@@ -202,7 +207,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
     int result = subject.hashCode();
     result = 31 * result + version;
     result = 31 * result + id.intValue();
-    result = 31 * result + schemaType.hashCode();
+    result = 31 * result + (schemaType != null ? schemaType.hashCode() : 0);
     result = 31 * result + schema.hashCode();
     result = 31 * result + references.hashCode();
     result = 31 * result + (deleted ? 1 : 0);

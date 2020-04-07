@@ -44,45 +44,52 @@ public class JsonSchemaUtils {
     return result;
   }
 
+  public static boolean isEnvelope(Object object) {
+    if (object instanceof JsonNode) {
+      JsonNode jsonValue = (JsonNode) object;
+      return jsonValue.isObject() && jsonValue.has(ENVELOPE_SCHEMA_FIELD_NAME);
+    }
+    return false;
+  }
+
   public static JsonSchema copyOf(JsonSchema schema) {
-    return new JsonSchema(schema.canonicalString(),
-        schema.references(),
-        schema.resolvedReferences(),
-        schema.version()
-    );
+    return schema.copy();
   }
 
   public static JsonSchema getSchema(Object object) {
     if (object == null) {
       return null;
     }
-    if (object instanceof JsonNode) {
+    if (isEnvelope(object)) {
       JsonNode jsonValue = (JsonNode) object;
-      if (jsonValue.isObject() && jsonValue.has(ENVELOPE_SCHEMA_FIELD_NAME)) {
-        return new JsonSchema(jsonValue.get(ENVELOPE_SCHEMA_FIELD_NAME).toString());
-      }
+      return new JsonSchema(jsonValue.get(ENVELOPE_SCHEMA_FIELD_NAME));
     }
     JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4();  // allow nulls
     JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(jsonMapper, config);
     JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(object.getClass());
-    return new JsonSchema(jsonSchema.toString());
+    return new JsonSchema(jsonSchema);
   }
 
   public static Object getValue(Object object) {
     if (object == null) {
       return null;
     }
-    if (object instanceof JsonNode) {
+    if (isEnvelope(object)) {
       JsonNode jsonValue = (JsonNode) object;
-      if (jsonValue.isObject() && jsonValue.has(ENVELOPE_PAYLOAD_FIELD_NAME)) {
-        return jsonValue.get(ENVELOPE_PAYLOAD_FIELD_NAME);
-      }
+      return jsonValue.get(ENVELOPE_PAYLOAD_FIELD_NAME);
     }
     return object;
   }
 
   public static Object toObject(JsonNode value, JsonSchema schema) throws IOException {
-    schema.validate(value);
+    return toObject(value, schema, true);
+  }
+
+  public static Object toObject(JsonNode value, JsonSchema schema, boolean validate)
+      throws IOException {
+    if (validate) {
+      schema.validate(value);
+    }
     return value;
   }
 

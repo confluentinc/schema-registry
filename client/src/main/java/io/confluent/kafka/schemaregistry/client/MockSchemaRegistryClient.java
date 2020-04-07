@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -23,6 +26,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 import java.io.IOException;
@@ -42,6 +46,8 @@ import java.util.stream.Collectors;
  * thread safe. Schema data is stored in memory and is not persistent or shared across instances.
  */
 public class MockSchemaRegistryClient implements SchemaRegistryClient {
+
+  private static final Logger log = LoggerFactory.getLogger(MockSchemaRegistryClient.class);
 
   private static final String WILDCARD = "*";
 
@@ -89,6 +95,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
     SchemaProvider schemaProvider = providers.get(schemaType);
     if (schemaProvider == null) {
+      log.error("No provider found for schema type " + schemaType);
       return Optional.empty();
     }
     return schemaProvider.parseSchema(schemaString, references);
@@ -233,6 +240,18 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return idCache.entrySet().stream()
             .filter(entry -> entry.getValue().containsKey(id))
             .map(Map.Entry::getKey).collect(Collectors.toSet());
+  }
+
+  @Override
+  public Collection<SubjectVersion> getAllVersionsById(int id) throws IOException,
+      RestClientException {
+    return idCache.entrySet().stream()
+        .filter(entry -> entry.getValue().containsKey(id))
+        .map(e -> {
+          ParsedSchema schema = e.getValue().get(id);
+          int version = versionCache.get(e.getKey()).get(schema);
+          return new SubjectVersion(e.getKey(), version);
+        }).collect(Collectors.toList());
   }
 
   private int getLatestVersion(String subject)

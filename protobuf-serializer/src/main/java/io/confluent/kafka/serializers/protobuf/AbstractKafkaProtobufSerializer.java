@@ -105,6 +105,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean isKey,
       ProtobufSchema schema
   ) throws IOException, RestClientException {
+    if (schema.dependencies().isEmpty() || !schema.references().isEmpty()) {
+      // Dependencies already resolved
+      return schema;
+    }
     Schema s = resolveDependencies(schemaRegistry,
         autoRegisterSchema,
         strategy,
@@ -114,13 +118,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         schema.rawSchema(),
         schema.dependencies()
     );
-    return new ProtobufSchema(
-        schema.canonicalString(),
-        s.getReferences(),
-        schema.resolvedReferences(),
-        null,
-        schema.name()
-    );
+    return schema.copy(s.getReferences());
   }
 
   private static Schema resolveDependencies(

@@ -17,12 +17,12 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 /**
  * The identity of a schema registry instance. The master will store the json representation of its
@@ -52,14 +52,14 @@ public class SchemaRegistryIdentity {
   }
 
   public static SchemaRegistryIdentity fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, SchemaRegistryIdentity.class);
+    return JacksonMapper.INSTANCE.readValue(json, SchemaRegistryIdentity.class);
   }
 
   public static SchemaRegistryIdentity fromJson(ByteBuffer json) {
     try {
       byte[] jsonBytes = new byte[json.remaining()];
       json.get(jsonBytes);
-      return new ObjectMapper().readValue(jsonBytes, SchemaRegistryIdentity.class);
+      return JacksonMapper.INSTANCE.readValue(jsonBytes, SchemaRegistryIdentity.class);
     } catch (IOException e) {
       throw new IllegalArgumentException("Error deserializing identity information", e);
     }
@@ -170,12 +170,12 @@ public class SchemaRegistryIdentity {
   }
 
   public String toJson() throws IOException {
-    return new ObjectMapper().writeValueAsString(this);
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
   public ByteBuffer toJsonBytes() {
     try {
-      return ByteBuffer.wrap(new ObjectMapper().writeValueAsBytes(this));
+      return ByteBuffer.wrap(JacksonMapper.INSTANCE.writeValueAsBytes(this));
     } catch (IOException e) {
       throw new IllegalArgumentException("Error serializing identity information", e);
     }
