@@ -79,7 +79,7 @@
         <json-schema.version>1.12.1</json-schema.version>
         <protobuf.version>3.11.4</protobuf.version>
         <wire.version>3.1.0</wire.version>
-	<swagger.version>1.6.0</swagger.version>
+        <swagger.version>1.6.0</swagger.version>
         <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
     </properties>
 
