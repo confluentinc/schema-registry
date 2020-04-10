@@ -104,7 +104,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
    */
   public static final int MIN_VERSION = 1;
   public static final int MAX_VERSION = Integer.MAX_VALUE;
-  private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
+  protected static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
   private static final long DESCRIBE_CLUSTER_TIMEOUT_MS = 10000L;
 
@@ -250,6 +250,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   protected IdGenerator getIdentityGenerator() {
     return idGenerator;
+  }
+
+  public boolean isShutDownInProgress() {
+    return false;
   }
 
   /**
