@@ -42,6 +42,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Value;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +62,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
@@ -129,6 +131,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private Metrics metrics;
   private Sensor masterNodeSensor;
   private final Map<String, SchemaProvider> providers;
+  private AtomicBoolean shutDown = new AtomicBoolean(false);
+  private int shutDownDelayInSeconds;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -182,6 +186,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                            + " node where all register schema and config update requests are "
                            + "served.", configuredTags);
     this.masterNodeSensor.add(m, new Value());
+    try {
+      shutDownDelayInSeconds = config.getInt(config.SHUTDOWN_DELAY);
+    } catch (Exception ex) {
+      shutDownDelayInSeconds = 0;
+    }
+    Exit.addShutdownHook("SchemaRegistryShutdownHook", new Thread() {
+      public void run() {
+        try {
+          log.info("Shutdown Hook is running!");
+          setShutDownInProgress();
+          log.info("Sleeping for %d seconds before shutdown", shutDownDelayInSeconds);
+          Thread.sleep(shutDownDelayInSeconds * 1000);
+          log.info("Shutdown Hook finished");
+        } catch (InterruptedException ex) {
+          log.info("Exception in shutdown hook: %s", ex.toString());
+        }
+      }
+    });
   }
 
   private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
@@ -253,7 +275,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   public boolean isShutDownInProgress() {
-    return false;
+    return shutDown.get();
+  }
+
+  private void setShutDownInProgress() {
+    shutDown.set(true);
   }
 
   /**

@@ -338,6 +338,8 @@ public class SchemaRegistryConfig extends RestConfig {
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
+  public static final String SHUTDOWN_DELAY = "schema.registry.shutdown.delay";
+
   // TODO: move to Apache's ConfigDef
   private static final ConfigDef config;
 
