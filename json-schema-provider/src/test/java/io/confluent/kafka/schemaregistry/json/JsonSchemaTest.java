@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import org.everit.json.schema.ValidationException;
@@ -70,22 +71,28 @@ public class JsonSchemaTest {
 
   @Test
   public void testPrimitiveTypesToJsonSchema() throws Exception {
-    Object result = JsonSchemaUtils.toObject(null, createPrimitiveSchema("null"));
-    assertTrue(result == null);
+    Object envelope = JsonSchemaUtils.toObject(null, createPrimitiveSchema("null"));
+    JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
+    assertEquals(NullNode.getInstance(), result);
 
-    result = JsonSchemaUtils.toObject(jsonTree("true"), createPrimitiveSchema("boolean"));
+    envelope = JsonSchemaUtils.toObject(jsonTree("true"), createPrimitiveSchema("boolean"));
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(true, ((BooleanNode) result).asBoolean());
 
-    result = JsonSchemaUtils.toObject(jsonTree("false"), createPrimitiveSchema("boolean"));
+    envelope = JsonSchemaUtils.toObject(jsonTree("false"), createPrimitiveSchema("boolean"));
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(false, ((BooleanNode) result).asBoolean());
 
-    result = JsonSchemaUtils.toObject(jsonTree("12"), createPrimitiveSchema("number"));
+    envelope = JsonSchemaUtils.toObject(jsonTree("12"), createPrimitiveSchema("number"));
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(12, ((NumericNode) result).asInt());
 
-    result = JsonSchemaUtils.toObject(jsonTree("23.2"), createPrimitiveSchema("number"));
+    envelope = JsonSchemaUtils.toObject(jsonTree("23.2"), createPrimitiveSchema("number"));
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(23.2, ((NumericNode) result).asDouble(), 0.1);
 
-    result = JsonSchemaUtils.toObject(jsonTree("\"a string\""), createPrimitiveSchema("string"));
+    envelope = JsonSchemaUtils.toObject(jsonTree("\"a string\""), createPrimitiveSchema("string"));
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals("a string", ((TextNode) result).asText());
   }
 
@@ -98,7 +105,8 @@ public class JsonSchemaTest {
         + "    \"string\": \"string\"\n"
         + "}";
 
-    JsonNode result = (JsonNode) JsonSchemaUtils.toObject(jsonTree(json), recordSchema);
+    JsonNode envelope = (JsonNode) JsonSchemaUtils.toObject(jsonTree(json), recordSchema);
+    JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(true, result.get("null").isNull());
     assertEquals(true, result.get("boolean").booleanValue());
     assertEquals(12, result.get("number").intValue());
@@ -115,7 +123,8 @@ public class JsonSchemaTest {
         + "    \"badString\": \"string\"\n"
         + "}";
 
-    JsonNode result = (JsonNode) JsonSchemaUtils.toObject(jsonTree(json), recordSchema);
+    JsonNode envelope = (JsonNode) JsonSchemaUtils.toObject(jsonTree(json), recordSchema);
+    JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(true, result.get("null").isNull());
     assertEquals(true, result.get("boolean").booleanValue());
     assertEquals(12, result.get("number").intValue());
@@ -126,7 +135,8 @@ public class JsonSchemaTest {
   public void testArrayToJsonSchema() throws Exception {
     String json = "[\"one\", \"two\", \"three\"]";
 
-    Object result = JsonSchemaUtils.toObject(jsonTree(json), arraySchema);
+    Object envelope = JsonSchemaUtils.toObject(jsonTree(json), arraySchema);
+    JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     ArrayNode arrayNode = (ArrayNode) result;
     Iterator<JsonNode> elements = arrayNode.elements();
     List<String> strings = new ArrayList<String>();
@@ -138,10 +148,12 @@ public class JsonSchemaTest {
 
   @Test
   public void testUnionToJsonSchema() throws Exception {
-    Object result = JsonSchemaUtils.toObject(jsonTree("\"test\""), unionSchema);
+    Object envelope = JsonSchemaUtils.toObject(jsonTree("\"test\""), unionSchema);
+    JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals("test", ((TextNode) result).asText());
 
-    result = JsonSchemaUtils.toObject(jsonTree("12"), unionSchema);
+    envelope = JsonSchemaUtils.toObject(jsonTree("12"), unionSchema);
+    result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(12, ((NumericNode) result).asInt());
 
     try {
@@ -154,7 +166,8 @@ public class JsonSchemaTest {
 
   @Test
   public void testEnumToJsonSchema() throws Exception {
-    Object result = JsonSchemaUtils.toObject(jsonTree("\"red\""), enumSchema);
+    Object envelope = JsonSchemaUtils.toObject(jsonTree("\"red\""), enumSchema);
+    JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals("red", ((TextNode) result).asText());
 
     try {
