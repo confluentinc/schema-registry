@@ -31,6 +31,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import org.apache.avro.reflect.Nullable;
+import org.apache.kafka.clients.MetricUtils;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Value;
@@ -169,6 +171,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                                       MetricsReporter.class);
     String jmxPrefix = "kafka.schema.registry";
     reporters.add(new JmxReporter(jmxPrefix));
+    for (MetricsReporter reporter : reporters) {
+      MetricsContext metricsContext = new MetricsContext();
+      metricsContext.metadata().putAll(MetricUtils.getMetricsValues(config.originals()));
+      reporter.contextChange(metricsContext);
+    }
+
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
     this.masterNodeSensor = metrics.sensor("master-slave-role");
     this.providers = initProviders(config);
