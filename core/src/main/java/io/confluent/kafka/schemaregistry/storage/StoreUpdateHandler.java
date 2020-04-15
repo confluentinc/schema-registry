@@ -21,6 +21,8 @@ import java.util.Map;
 
 public interface StoreUpdateHandler<K, V> extends Configurable {
 
+  String SCHEMA_REGISTRY = "schemaRegistry";
+
   @Override
   default void configure(Map<String, ?> map) {
   }
