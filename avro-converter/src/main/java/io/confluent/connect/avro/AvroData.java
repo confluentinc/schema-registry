@@ -1461,11 +1461,19 @@ public class AvroData {
               valueRecordSchema = toConnectSchemaWithCycles(
                   valueRecord.getSchema(), true, null, null, toConnectContext);
             }
+
+            log.debug("valueRecordSchema: {}", valueRecordSchema);
             for (Field field : schema.fields()) {
               Schema fieldSchema = field.schema();
+              boolean instanceOfAvroSchemaTypeForSimpleSchema =
+                      isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value);
+              boolean schemaEquals = valueRecordSchema != null
+                      && schemaEquals(valueRecordSchema, fieldSchema);
 
-              if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value)
-                  || (valueRecordSchema != null && schemaEquals(valueRecordSchema, fieldSchema))) {
+              log.debug(
+                    "fieldSchema: {} instanceOfAvroSchemaTypeForSimpleSchema: {} schemaEquals: {}",
+                    fieldSchema, instanceOfAvroSchemaTypeForSimpleSchema, schemaEquals);
+              if (instanceOfAvroSchemaTypeForSimpleSchema || schemaEquals) {
                 converted = new Struct(schema).put(
                     unionMemberFieldName(fieldSchema),
                     toConnectData(fieldSchema, value, toConnectContext));
