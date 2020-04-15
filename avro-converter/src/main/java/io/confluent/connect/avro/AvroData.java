@@ -16,6 +16,13 @@
 
 package io.confluent.connect.avro;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.serializers.NonRecordContainer;
+
 import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -37,12 +44,12 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
-import org.codehaus.jackson.JsonNode;
-import org.codehaus.jackson.node.ArrayNode;
-import org.codehaus.jackson.node.IntNode;
-import org.codehaus.jackson.node.JsonNodeFactory;
+
 import org.codehaus.jackson.node.NumericNode;
-import org.codehaus.jackson.node.ObjectNode;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -59,10 +66,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-
-import io.confluent.kafka.serializers.NonRecordContainer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 
 /**
@@ -1462,7 +1465,7 @@ public class AvroData {
                   valueRecord.getSchema(), true, null, null, toConnectContext);
             }
 
-            log.debug("valueRecordSchema: {}", valueRecordSchema);
+            log.debug("valueRecordSchema: {}", schemaToString(valueRecordSchema, new HashSet<>()));
             for (Field field : schema.fields()) {
               Schema fieldSchema = field.schema();
               boolean instanceOfAvroSchemaTypeForSimpleSchema =
@@ -1472,11 +1475,12 @@ public class AvroData {
 
               log.debug(
                     "fieldSchema: {} instanceOfAvroSchemaTypeForSimpleSchema: {} schemaEquals: {}",
-                    fieldSchema, instanceOfAvroSchemaTypeForSimpleSchema, schemaEquals);
+                    schemaToString(fieldSchema, new HashSet<>()),
+                    instanceOfAvroSchemaTypeForSimpleSchema, schemaEquals);
               if (instanceOfAvroSchemaTypeForSimpleSchema || schemaEquals) {
                 converted = new Struct(schema).put(
-                    unionMemberFieldName(fieldSchema),
-                    toConnectData(fieldSchema, value, toConnectContext));
+                        unionMemberFieldName(fieldSchema),
+                        toConnectData(fieldSchema, value, toConnectContext));
                 break;
               }
             }
@@ -2240,5 +2244,54 @@ public class AvroData {
       this.cycleReferences = new IdentityHashMap<>();
     }
 
+  }
+
+  private static String schemaToString(Schema schema, Collection<Schema> visited) {
+    if (schema == null) {
+      return "null";
+    } else if (!visited.add(schema)) {
+      return schema.toString();
+    } else {
+      return schema + " ConnectSchema{"
+              + "type=" + schema.type()
+              + ", optional=" + schema.isOptional()
+              + ", defaultValue=" + schema.defaultValue()
+              + ", fields=" + fieldsToString(getSchemaFields(schema), visited)
+              + ", name='" + schema.name() + '\''
+              + ", version=" + schema.version()
+              + ", doc='" + schema.doc() + '\''
+              + ", parameters=" + schema.parameters()
+              + '}';
+    }
+  }
+
+  private static List<Field> getSchemaFields(Schema schema) {
+    try {
+      return schema.fields();
+    } catch (DataException e) {
+      return null;
+    }
+  }
+
+  private static String fieldsToString(List<Field> fields, Collection<Schema> visited) {
+    if (fields == null) {
+      return "null";
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("[");
+    for (Field field : fields) {
+      sb.append(fieldToString(field, visited));
+      sb.append(", ");
+    }
+    sb.append("]");
+    return sb.toString();
+  }
+
+  private static String fieldToString(Field field, Collection<Schema> visited) {
+    return field == null ? "null" : "Field{"
+            + "name=" + field.name()
+            + ", index=" + field.index()
+            + ", schema=" + schemaToString(field.schema(), visited)
+            + "}";
   }
 }
