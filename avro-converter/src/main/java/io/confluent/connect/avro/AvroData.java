@@ -63,6 +63,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -1468,10 +1469,16 @@ public class AvroData {
             log.debug("valueRecordSchema: {}", schemaToString(valueRecordSchema, new HashSet<>()));
             for (Field field : schema.fields()) {
               Schema fieldSchema = field.schema();
+
+              String debugName = "com.bmo.mdm.avro.Person";
+              boolean verboseLog = valueRecordSchema != null && fieldSchema != null
+                      && debugName.equals(valueRecordSchema.name())
+                      && debugName.equals(fieldSchema.name());
+
               boolean instanceOfAvroSchemaTypeForSimpleSchema =
                       isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value);
               boolean schemaEquals = valueRecordSchema != null
-                      && schemaEquals(valueRecordSchema, fieldSchema);
+                      && schemaEquals(valueRecordSchema, fieldSchema, verboseLog, "schema");
 
               log.debug(
                     "fieldSchema: {} instanceOfAvroSchemaTypeForSimpleSchema: {} schemaEquals: {}",
@@ -2097,26 +2104,104 @@ public class AvroData {
     }
   }
 
-  private static boolean schemaEquals(Schema src, Schema that) {
+  private enum CompareType {
+    EQUALS,
+    DEEP_EQUALS,
+    FIELDS_EQUALS,
+    SCHEMA_EQUALS
+  }
+
+  private static boolean compareObjects(Object one, Object two, CompareType type, boolean verbose,
+                                        String path) {
+    if (type == CompareType.EQUALS) {
+      return Objects.equals(one, two);
+    } else if (type == CompareType.DEEP_EQUALS) {
+      return Objects.deepEquals(one, two);
+    } else if (type == CompareType.FIELDS_EQUALS) {
+      return fieldListEquals((List<Field>) one, (List<Field>) two, verbose, path);
+    } else {
+      assert type == CompareType.SCHEMA_EQUALS;
+      return schemaEquals((Schema) one, (Schema) two, verbose, path);
+    }
+  }
+
+  private static boolean compareAndLog(Object one, Object two, CompareType type, boolean verbose,
+                                       String path) {
+    if (compareObjects(one, two, type, verbose, path)) {
+      return true;
+    }
+    if (verbose) {
+      log.debug("MISMATCH at {}", path);
+    }
+    return false;
+  }
+
+  private static boolean fieldListEquals(List<Field> one, List<Field> two, boolean verbose,
+                                         String path) {
+    if (one == two) {
+      return true;
+    } else if (one == null || two == null) {
+      return false;
+    } else {
+      ListIterator<Field> itOne = one.listIterator();
+      ListIterator<Field> itTwo = two.listIterator();
+      int idx = 0;
+      while (itOne.hasNext() && itTwo.hasNext()) {
+        if (!fieldEquals(itOne.next(), itTwo.next(), verbose, path + "[" + (idx++) + "]")) {
+          return false;
+        }
+      }
+      return itOne.hasNext() == itTwo.hasNext();
+    }
+  }
+
+  private static boolean fieldEquals(Field one, Field two, boolean verbose, String path) {
+    if (one == two) {
+      return true;
+    } else if (one == null || two == null) {
+      return false;
+    } else if (one.getClass() != two.getClass()) {
+      return false;
+    } else {
+      return compareAndLog(one.index(), two.index(), CompareType.EQUALS, verbose, path + ".index")
+        && compareAndLog(one.name(), two.name(), CompareType.EQUALS, verbose, path + ".name")
+        && compareAndLog(one.schema(), two.schema(), CompareType.SCHEMA_EQUALS, verbose,
+                    path + ".schema");
+    }
+  }
+
+  private static boolean schemaEquals(Schema src, Schema that, boolean verbose, String path) {
     if (src == null || that == null) {
+      if (src != that && verbose) {
+        log.debug("MISMATCH Null check: {}", path);
+      }
       return src == that;
     }
-    boolean equals = Objects.equals(src.isOptional(), that.isOptional())
-        && Objects.equals(src.version(), that.version())
-        && Objects.equals(src.name(), that.name())
-        && Objects.equals(src.doc(), that.doc())
-        && Objects.equals(src.type(), that.type())
-        && Objects.deepEquals(src.defaultValue(), that.defaultValue())
-        && Objects.equals(src.fields(), that.fields())
-        && Objects.equals(src.parameters(), that.parameters());
+
+    boolean equals = compareAndLog(src.isOptional(), that.isOptional(), CompareType.EQUALS, verbose,
+                              path + ".optional")
+            && compareAndLog(src.version(), that.version(), CompareType.EQUALS, verbose,
+                        path + ".version")
+            && compareAndLog(src.name(), that.name(), CompareType.EQUALS, verbose, path + ".name")
+            && compareAndLog(src.doc(), that.doc(), CompareType.EQUALS, verbose, path + ".doc")
+            && compareAndLog(src.type(), that.type(), CompareType.EQUALS, verbose, path + ".type")
+            && compareAndLog(src.defaultValue(), that.defaultValue(), CompareType.DEEP_EQUALS,
+                             verbose, path + ".defaultValue")
+            && compareAndLog(src.fields(), that.fields(), CompareType.FIELDS_EQUALS,
+                             verbose, path + ".fields")
+            && compareAndLog(src.parameters(), that.parameters(), CompareType.EQUALS,
+                             verbose, path + ".parameters");
 
     switch (src.type()) {
       case ARRAY:
-        return equals && schemaEquals(src.valueSchema(), that.valueSchema());
+        return equals && compareAndLog(src.valueSchema(), that.valueSchema(),
+                                       CompareType.SCHEMA_EQUALS, verbose, path + ".valueSchema");
       case MAP:
         return equals
-            && schemaEquals(src.valueSchema(), that.valueSchema())
-            && schemaEquals(src.keySchema(), that.keySchema());
+                && compareAndLog(src.valueSchema(), that.valueSchema(), CompareType.SCHEMA_EQUALS,
+                                 verbose, path + ".valueSchema")
+                && compareAndLog(src.keySchema(), that.keySchema(), CompareType.SCHEMA_EQUALS,
+                                 verbose, path + ".keySchema");
       default:
         return equals;
     }
