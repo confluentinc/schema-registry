@@ -1478,7 +1478,8 @@ public class AvroData {
               boolean instanceOfAvroSchemaTypeForSimpleSchema =
                       isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value);
               boolean schemaEquals = valueRecordSchema != null
-                      && schemaEquals(valueRecordSchema, fieldSchema, verboseLog, "schema");
+                      && schemaEquals(valueRecordSchema, fieldSchema, verboseLog, "schema",
+                                      new HashMap<>());
 
               log.debug(
                     "fieldSchema: {} instanceOfAvroSchemaTypeForSimpleSchema: {} schemaEquals: {}",
@@ -2112,22 +2113,22 @@ public class AvroData {
   }
 
   private static boolean compareObjects(Object one, Object two, CompareType type, boolean verbose,
-                                        String path) {
+                                        String path, Map<SchemaPair, Boolean> cache) {
     if (type == CompareType.EQUALS) {
       return Objects.equals(one, two);
     } else if (type == CompareType.DEEP_EQUALS) {
       return Objects.deepEquals(one, two);
     } else if (type == CompareType.FIELDS_EQUALS) {
-      return fieldListEquals((List<Field>) one, (List<Field>) two, verbose, path);
+      return fieldListEquals((List<Field>) one, (List<Field>) two, verbose, path, cache);
     } else {
       assert type == CompareType.SCHEMA_EQUALS;
-      return schemaEquals((Schema) one, (Schema) two, verbose, path);
+      return schemaEquals((Schema) one, (Schema) two, verbose, path, cache);
     }
   }
 
   private static boolean compareAndLog(Object one, Object two, CompareType type, boolean verbose,
-                                       String path) {
-    if (compareObjects(one, two, type, verbose, path)) {
+                                       String path, Map<SchemaPair, Boolean> cache) {
+    if (compareObjects(one, two, type, verbose, path, cache)) {
       return true;
     }
     if (verbose) {
@@ -2137,7 +2138,7 @@ public class AvroData {
   }
 
   private static boolean fieldListEquals(List<Field> one, List<Field> two, boolean verbose,
-                                         String path) {
+                                         String path, Map<SchemaPair, Boolean> cache) {
     if (one == two) {
       return true;
     } else if (one == null || two == null) {
@@ -2147,7 +2148,7 @@ public class AvroData {
       ListIterator<Field> itTwo = two.listIterator();
       int idx = 0;
       while (itOne.hasNext() && itTwo.hasNext()) {
-        if (!fieldEquals(itOne.next(), itTwo.next(), verbose, path + "[" + (idx++) + "]")) {
+        if (!fieldEquals(itOne.next(), itTwo.next(), verbose, path + "[" + (idx++) + "]", cache)) {
           return false;
         }
       }
@@ -2155,7 +2156,8 @@ public class AvroData {
     }
   }
 
-  private static boolean fieldEquals(Field one, Field two, boolean verbose, String path) {
+  private static boolean fieldEquals(Field one, Field two, boolean verbose, String path,
+                                     Map<SchemaPair, Boolean> cache) {
     if (one == two) {
       return true;
     } else if (one == null || two == null) {
@@ -2165,15 +2167,45 @@ public class AvroData {
       return false;
     } else {
       return compareAndLog(one.getClass(), two.getClass(), CompareType.EQUALS, verbose,
-              path + ".class")
-        && compareAndLog(one.index(), two.index(), CompareType.EQUALS, verbose, path + ".index")
-        && compareAndLog(one.name(), two.name(), CompareType.EQUALS, verbose, path + ".name")
+              path + ".class", cache)
+        && compareAndLog(one.index(), two.index(), CompareType.EQUALS, verbose, path + ".index",
+                         cache)
+        && compareAndLog(one.name(), two.name(), CompareType.EQUALS, verbose, path + ".name", cache)
         && compareAndLog(one.schema(), two.schema(), CompareType.SCHEMA_EQUALS, verbose,
-                    path + ".schema");
+                    path + ".schema", cache);
     }
   }
 
-  private static boolean schemaEquals(Schema src, Schema that, boolean verbose, String path) {
+  private static class SchemaPair {
+    public Schema one;
+    public Schema two;
+
+    public SchemaPair(Schema one, Schema two) {
+      this.one = one;
+      this.two = two;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      SchemaPair that = (SchemaPair) o;
+      return Objects.equals(one, that.one)
+              && Objects.equals(two, that.two);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(one, two);
+    }
+  }
+
+  private static boolean schemaEquals(Schema src, Schema that, boolean verbose, String path,
+                                      Map<SchemaPair, Boolean> cache) {
     if (src == that) {
       return true;
     } else if (src == null || that == null) {
@@ -2183,34 +2215,52 @@ public class AvroData {
       return false;
     }
 
+    SchemaPair sp = new SchemaPair(src, that);
+    Boolean cacheHit = cache.get(sp);
+    if (cacheHit == null) {
+      // If we hit the cache again downstream, avoids infinite recursion.
+      cache.put(sp, false);
+    } else {
+      return cacheHit;
+    }
+
     boolean equals = compareAndLog(src.isOptional(), that.isOptional(), CompareType.EQUALS, verbose,
-                              path + ".optional")
+                              path + ".optional", cache)
             && compareAndLog(src.version(), that.version(), CompareType.EQUALS, verbose,
-                        path + ".version")
-            && compareAndLog(src.name(), that.name(), CompareType.EQUALS, verbose, path + ".name")
-            && compareAndLog(src.doc(), that.doc(), CompareType.EQUALS, verbose, path + ".doc")
-            && compareAndLog(src.type(), that.type(), CompareType.EQUALS, verbose, path + ".type")
+                        path + ".version", cache)
+            && compareAndLog(src.name(), that.name(), CompareType.EQUALS, verbose, path + ".name",
+                             cache)
+            && compareAndLog(src.doc(), that.doc(), CompareType.EQUALS, verbose, path + ".doc",
+                             cache)
+            && compareAndLog(src.type(), that.type(), CompareType.EQUALS, verbose, path + ".type",
+                             cache)
             && compareAndLog(src.defaultValue(), that.defaultValue(), CompareType.DEEP_EQUALS,
-                             verbose, path + ".defaultValue")
+                             verbose, path + ".defaultValue", cache)
             && compareAndLog(src.parameters(), that.parameters(), CompareType.EQUALS,
-                             verbose, path + ".parameters");
+                             verbose, path + ".parameters", cache);
 
     switch (src.type()) {
       case STRUCT:
-        return equals && compareAndLog(src.fields(), that.fields(), CompareType.FIELDS_EQUALS,
-                                       verbose, path + ".fields");
+        equals = equals && compareAndLog(src.fields(), that.fields(), CompareType.FIELDS_EQUALS,
+                                       verbose, path + ".fields", cache);
+        break;
       case ARRAY:
-        return equals && compareAndLog(src.valueSchema(), that.valueSchema(),
-                                       CompareType.SCHEMA_EQUALS, verbose, path + ".valueSchema");
+        equals = equals && compareAndLog(src.valueSchema(), that.valueSchema(),
+                                         CompareType.SCHEMA_EQUALS, verbose, path + ".valueSchema",
+                                         cache);
+        break;
       case MAP:
-        return equals
+        equals = equals
                 && compareAndLog(src.valueSchema(), that.valueSchema(), CompareType.SCHEMA_EQUALS,
-                                 verbose, path + ".valueSchema")
+                                 verbose, path + ".valueSchema", cache)
                 && compareAndLog(src.keySchema(), that.keySchema(), CompareType.SCHEMA_EQUALS,
-                                 verbose, path + ".keySchema");
+                                 verbose, path + ".keySchema", cache);
+        break;
       default:
-        return equals;
+        break;
     }
+    cache.put(sp, equals);
+    return equals;
   }
 
   private static class CyclicSchemaWrapper implements Schema {
