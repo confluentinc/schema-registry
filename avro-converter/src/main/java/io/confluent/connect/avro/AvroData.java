@@ -2131,7 +2131,7 @@ public class AvroData {
       return true;
     }
     if (verbose) {
-      log.debug("MISMATCH at {}", path);
+      log.debug("MISMATCH at {}: {} vs {}", path, one, two);
     }
     return false;
   }
@@ -2159,11 +2159,14 @@ public class AvroData {
     if (one == two) {
       return true;
     } else if (one == null || two == null) {
-      return false;
-    } else if (one.getClass() != two.getClass()) {
+      if (verbose) {
+        log.debug("MISMATCH Field null check at {}: {} vs {}", path, one, two);
+      }
       return false;
     } else {
-      return compareAndLog(one.index(), two.index(), CompareType.EQUALS, verbose, path + ".index")
+      return compareAndLog(one.getClass(), two.getClass(), CompareType.EQUALS, verbose,
+              path + ".class")
+        && compareAndLog(one.index(), two.index(), CompareType.EQUALS, verbose, path + ".index")
         && compareAndLog(one.name(), two.name(), CompareType.EQUALS, verbose, path + ".name")
         && compareAndLog(one.schema(), two.schema(), CompareType.SCHEMA_EQUALS, verbose,
                     path + ".schema");
@@ -2171,11 +2174,13 @@ public class AvroData {
   }
 
   private static boolean schemaEquals(Schema src, Schema that, boolean verbose, String path) {
-    if (src == null || that == null) {
-      if (src != that && verbose) {
-        log.debug("MISMATCH Null check: {}", path);
+    if (src == that) {
+      return true;
+    } else if (src == null || that == null) {
+      if (verbose) {
+        log.debug("MISMATCH Null check at {}: {} vs {}", path, src, that);
       }
-      return src == that;
+      return false;
     }
 
     boolean equals = compareAndLog(src.isOptional(), that.isOptional(), CompareType.EQUALS, verbose,
@@ -2187,12 +2192,13 @@ public class AvroData {
             && compareAndLog(src.type(), that.type(), CompareType.EQUALS, verbose, path + ".type")
             && compareAndLog(src.defaultValue(), that.defaultValue(), CompareType.DEEP_EQUALS,
                              verbose, path + ".defaultValue")
-            && compareAndLog(src.fields(), that.fields(), CompareType.FIELDS_EQUALS,
-                             verbose, path + ".fields")
             && compareAndLog(src.parameters(), that.parameters(), CompareType.EQUALS,
                              verbose, path + ".parameters");
 
     switch (src.type()) {
+      case STRUCT:
+        return equals && compareAndLog(src.fields(), that.fields(), CompareType.FIELDS_EQUALS,
+                                       verbose, path + ".fields");
       case ARRAY:
         return equals && compareAndLog(src.valueSchema(), that.valueSchema(),
                                        CompareType.SCHEMA_EQUALS, verbose, path + ".valueSchema");
