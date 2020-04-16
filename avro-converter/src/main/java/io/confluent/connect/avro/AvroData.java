@@ -2098,8 +2098,10 @@ public class AvroData {
   }
 
   private static boolean schemaEquals(Schema src, Schema that) {
-    boolean equals = Objects.equals(src.isOptional(), that.isOptional())
-        && Objects.equals(src.version(), that.version())
+    if (src == null || that == null) {
+      return src == that;
+    }
+    boolean equals = Objects.equals(src.version(), that.version())
         && Objects.equals(src.name(), that.name())
         && Objects.equals(src.doc(), that.doc())
         && Objects.equals(src.type(), that.type())
@@ -2109,7 +2111,7 @@ public class AvroData {
 
     switch (src.type()) {
       case ARRAY:
-        return equals && Objects.equals(src.valueSchema(), that.valueSchema());
+        return equals && schemaEquals(src.valueSchema(), that.valueSchema());
       case MAP:
         return equals
             && Objects.equals(src.valueSchema(), that.valueSchema())
