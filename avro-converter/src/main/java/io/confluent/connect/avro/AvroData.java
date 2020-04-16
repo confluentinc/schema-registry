@@ -2256,12 +2256,30 @@ public class AvroData {
               + "type=" + schema.type()
               + ", optional=" + schema.isOptional()
               + ", defaultValue=" + schema.defaultValue()
+              + ", defaultValueClassName=" + getClassName(schema.defaultValue())
               + ", fields=" + fieldsToString(getSchemaFields(schema), visited)
               + ", name='" + schema.name() + '\''
               + ", version=" + schema.version()
               + ", doc='" + schema.doc() + '\''
               + ", parameters=" + schema.parameters()
+              + ", valueSchema=" + schemaToString(getValueSchema(schema), visited)
               + '}';
+    }
+  }
+
+  private static String getClassName(Object o) {
+    if (o == null) {
+      return "null";
+    } else {
+      return o.getClass().getName();
+    }
+  }
+
+  private static Schema getValueSchema(Schema schema) {
+    try {
+      return schema.valueSchema();
+    } catch (DataException e) {
+      return null;
     }
   }
 
