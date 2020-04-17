@@ -2094,35 +2094,6 @@ public class AvroData {
     }
   }
 
-  private enum CompareType {
-    EQUALS,
-    DEEP_EQUALS,
-    FIELDS_EQUALS,
-    SCHEMA_EQUALS
-  }
-
-  private static boolean compareObjects(Object one, Object two, CompareType type,
-                                        Map<SchemaPair, Boolean> cache) {
-    if (type == CompareType.EQUALS) {
-      return Objects.equals(one, two);
-    } else if (type == CompareType.DEEP_EQUALS) {
-      return Objects.deepEquals(one, two);
-    } else if (type == CompareType.FIELDS_EQUALS) {
-      return fieldListEquals((List<Field>) one, (List<Field>) two, cache);
-    } else {
-      assert type == CompareType.SCHEMA_EQUALS;
-      return schemaEquals((Schema) one, (Schema) two, cache);
-    }
-  }
-
-  private static boolean compareAndLog(Object one, Object two, CompareType type,
-                                       Map<SchemaPair, Boolean> cache) {
-    if (compareObjects(one, two, type, cache)) {
-      return true;
-    }
-    return false;
-  }
-
   private static boolean fieldListEquals(List<Field> one, List<Field> two,
                                          Map<SchemaPair, Boolean> cache) {
     if (one == two) {
@@ -2147,10 +2118,10 @@ public class AvroData {
     } else if (one == null || two == null) {
       return false;
     } else {
-      return compareAndLog(one.getClass(), two.getClass(), CompareType.EQUALS, cache)
-        && compareAndLog(one.index(), two.index(), CompareType.EQUALS,cache)
-        && compareAndLog(one.name(), two.name(), CompareType.EQUALS, cache)
-        && compareAndLog(one.schema(), two.schema(), CompareType.SCHEMA_EQUALS, cache);
+      return one.getClass() == two.getClass()
+              && Objects.equals(one.index(), two.index())
+              && Objects.equals(one.name(), two.name())
+              && schemaEquals(one.schema(), two.schema(), cache);
     }
   }
 
@@ -2199,30 +2170,25 @@ public class AvroData {
       return cacheHit;
     }
 
-    boolean equals = compareAndLog(src.isOptional(), that.isOptional(), CompareType.EQUALS, cache)
-            && compareAndLog(src.version(), that.version(), CompareType.EQUALS, cache)
-            && compareAndLog(src.name(), that.name(), CompareType.EQUALS, cache)
-            && compareAndLog(src.doc(), that.doc(), CompareType.EQUALS, cache)
-            && compareAndLog(src.type(), that.type(), CompareType.EQUALS, cache)
-            && compareAndLog(src.defaultValue(), that.defaultValue(), CompareType.DEEP_EQUALS,
-                             cache)
-            && compareAndLog(src.parameters(), that.parameters(), CompareType.EQUALS, cache);
+    boolean equals = Objects.equals(src.isOptional(), that.isOptional())
+            && Objects.equals(src.version(), that.version())
+            && Objects.equals(src.name(), that.name())
+            && Objects.equals(src.doc(), that.doc())
+            && Objects.equals(src.type(), that.type())
+            && Objects.deepEquals(src.defaultValue(), that.defaultValue())
+            && Objects.equals(src.parameters(), that.parameters());
 
     switch (src.type()) {
       case STRUCT:
-        equals = equals && compareAndLog(src.fields(), that.fields(), CompareType.FIELDS_EQUALS,
-                                         cache);
+        equals = equals && fieldListEquals(src.fields(), that.fields(), cache);
         break;
       case ARRAY:
-        equals = equals && compareAndLog(src.valueSchema(), that.valueSchema(),
-                                         CompareType.SCHEMA_EQUALS,cache);
+        equals = equals && schemaEquals(src.valueSchema(), that.valueSchema(), cache);
         break;
       case MAP:
         equals = equals
-                && compareAndLog(src.valueSchema(), that.valueSchema(), CompareType.SCHEMA_EQUALS,
-                                 cache)
-                && compareAndLog(src.keySchema(), that.keySchema(), CompareType.SCHEMA_EQUALS,
-                                 cache);
+                && schemaEquals(src.valueSchema(), that.valueSchema(), cache)
+                && schemaEquals(src.keySchema(), that.keySchema(), cache);
         break;
       default:
         break;
