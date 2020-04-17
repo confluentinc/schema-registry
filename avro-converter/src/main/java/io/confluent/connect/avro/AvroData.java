@@ -1466,7 +1466,6 @@ public class AvroData {
                   valueRecord.getSchema(), true, null, null, toConnectContext);
             }
 
-            log.debug("valueRecordSchema: {}", schemaToString(valueRecordSchema, new HashSet<>()));
             for (Field field : schema.fields()) {
               Schema fieldSchema = field.schema();
 
@@ -1475,10 +1474,6 @@ public class AvroData {
               boolean schemaEquals = valueRecordSchema != null
                       && schemaEquals(valueRecordSchema, fieldSchema, new HashMap<>());
 
-              log.debug(
-                    "fieldSchema: {} instanceOfAvroSchemaTypeForSimpleSchema: {} schemaEquals: {}",
-                    schemaToString(fieldSchema, new HashSet<>()),
-                    instanceOfAvroSchemaTypeForSimpleSchema, schemaEquals);
               if (instanceOfAvroSchemaTypeForSimpleSchema || schemaEquals) {
                 converted = new Struct(schema).put(
                         unionMemberFieldName(fieldSchema),
@@ -2137,7 +2132,6 @@ public class AvroData {
     } else {
       ListIterator<Field> itOne = one.listIterator();
       ListIterator<Field> itTwo = two.listIterator();
-      int idx = 0;
       while (itOne.hasNext() && itTwo.hasNext()) {
         if (!fieldEquals(itOne.next(), itTwo.next(), cache)) {
           return false;
@@ -2362,72 +2356,5 @@ public class AvroData {
       this.cycleReferences = new IdentityHashMap<>();
     }
 
-  }
-
-  private static String schemaToString(Schema schema, Collection<Schema> visited) {
-    if (schema == null) {
-      return "null";
-    } else if (!visited.add(schema)) {
-      return schema.toString();
-    } else {
-      return schema + " ConnectSchema{"
-              + "type=" + schema.type()
-              + ", optional=" + schema.isOptional()
-              + ", defaultValue=" + schema.defaultValue()
-              + ", defaultValueClassName=" + getClassName(schema.defaultValue())
-              + ", fields=" + fieldsToString(getSchemaFields(schema), visited)
-              + ", name='" + schema.name() + '\''
-              + ", version=" + schema.version()
-              + ", doc='" + schema.doc() + '\''
-              + ", parameters=" + schema.parameters()
-              + ", valueSchema=" + schemaToString(getValueSchema(schema), visited)
-              + '}';
-    }
-  }
-
-  private static String getClassName(Object o) {
-    if (o == null) {
-      return "null";
-    } else {
-      return o.getClass().getName();
-    }
-  }
-
-  private static Schema getValueSchema(Schema schema) {
-    try {
-      return schema.valueSchema();
-    } catch (DataException e) {
-      return null;
-    }
-  }
-
-  private static List<Field> getSchemaFields(Schema schema) {
-    try {
-      return schema.fields();
-    } catch (DataException e) {
-      return null;
-    }
-  }
-
-  private static String fieldsToString(List<Field> fields, Collection<Schema> visited) {
-    if (fields == null) {
-      return "null";
-    }
-    StringBuilder sb = new StringBuilder();
-    sb.append("[");
-    for (Field field : fields) {
-      sb.append(fieldToString(field, visited));
-      sb.append(", ");
-    }
-    sb.append("]");
-    return sb.toString();
-  }
-
-  private static String fieldToString(Field field, Collection<Schema> visited) {
-    return field == null ? "null" : "Field{"
-            + "name=" + field.name()
-            + ", index=" + field.index()
-            + ", schema=" + schemaToString(field.schema(), visited)
-            + "}";
   }
 }
