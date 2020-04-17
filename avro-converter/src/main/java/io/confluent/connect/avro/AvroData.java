@@ -1469,8 +1469,7 @@ public class AvroData {
             for (Field field : schema.fields()) {
               Schema fieldSchema = field.schema();
               if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value)
-                  || (valueRecordSchema != null && schemaEquals(valueRecordSchema, fieldSchema,
-                                                                new HashMap<>()))) {
+                  || (valueRecordSchema != null && schemaEquals(valueRecordSchema, fieldSchema))) {
                 converted = new Struct(schema).put(
                     unionMemberFieldName(fieldSchema),
                     toConnectData(fieldSchema, value, toConnectContext));
@@ -2149,6 +2148,10 @@ public class AvroData {
     }
   }
 
+  private static boolean schemaEquals(Schema src, Schema that) {
+    return schemaEquals(src, that, new HashMap<>());
+  }
+
   private static boolean schemaEquals(Schema src, Schema that, Map<SchemaPair, Boolean> cache) {
     if (src == that) {
       return true;
@@ -2156,13 +2159,12 @@ public class AvroData {
       return false;
     }
 
+    // Add a temporary value to the cache to avoid cycles. As long as we recurse only at the end of
+    // the method, we can safely default to true here. The cache is updated at the end of the method
+    // with the actual comparison result.
     SchemaPair sp = new SchemaPair(src, that);
-    Boolean cacheHit = cache.get(sp);
-    if (cacheHit == null) {
-      // As long as we recurse into schemaEquals at the end of the method, we should be safe to
-      // default to true here.
-      cache.put(sp, true);
-    } else {
+    Boolean cacheHit = cache.putIfAbsent(sp, true);
+    if (cacheHit != null) {
       return cacheHit;
     }
 
