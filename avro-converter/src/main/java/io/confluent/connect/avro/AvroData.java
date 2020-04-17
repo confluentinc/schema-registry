@@ -1468,16 +1468,12 @@ public class AvroData {
 
             for (Field field : schema.fields()) {
               Schema fieldSchema = field.schema();
-
-              boolean instanceOfAvroSchemaTypeForSimpleSchema =
-                      isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value);
-              boolean schemaEquals = valueRecordSchema != null
-                      && schemaEquals(valueRecordSchema, fieldSchema, new HashMap<>());
-
-              if (instanceOfAvroSchemaTypeForSimpleSchema || schemaEquals) {
+              if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value)
+                  || (valueRecordSchema != null && schemaEquals(valueRecordSchema, fieldSchema,
+                                                                new HashMap<>()))) {
                 converted = new Struct(schema).put(
-                        unionMemberFieldName(fieldSchema),
-                        toConnectData(fieldSchema, value, toConnectContext));
+                    unionMemberFieldName(fieldSchema),
+                    toConnectData(fieldSchema, value, toConnectContext));
                 break;
               }
             }
@@ -2171,12 +2167,12 @@ public class AvroData {
     }
 
     boolean equals = Objects.equals(src.isOptional(), that.isOptional())
-            && Objects.equals(src.version(), that.version())
-            && Objects.equals(src.name(), that.name())
-            && Objects.equals(src.doc(), that.doc())
-            && Objects.equals(src.type(), that.type())
-            && Objects.deepEquals(src.defaultValue(), that.defaultValue())
-            && Objects.equals(src.parameters(), that.parameters());
+        && Objects.equals(src.version(), that.version())
+        && Objects.equals(src.name(), that.name())
+        && Objects.equals(src.doc(), that.doc())
+        && Objects.equals(src.type(), that.type())
+        && Objects.deepEquals(src.defaultValue(), that.defaultValue())
+        && Objects.equals(src.parameters(), that.parameters());
 
     switch (src.type()) {
       case STRUCT:
