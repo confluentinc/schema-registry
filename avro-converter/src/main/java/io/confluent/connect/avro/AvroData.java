@@ -2218,9 +2218,11 @@ public class AvroData {
     SchemaPair sp = new SchemaPair(src, that);
     Boolean cacheHit = cache.get(sp);
     if (cacheHit == null) {
-      // If we hit the cache again downstream, avoids infinite recursion.
-      cache.put(sp, false);
+      // As long as we recurse into schemaEquals at the end of the method, we should be safe to
+      // default to true here.
+      cache.put(sp, true);
     } else {
+      log.debug("CACHEHIT {}: {} vs {}", cacheHit, src, that);
       return cacheHit;
     }
 
