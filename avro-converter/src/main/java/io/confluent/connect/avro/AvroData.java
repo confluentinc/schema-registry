@@ -1473,8 +1473,7 @@ public class AvroData {
               boolean instanceOfAvroSchemaTypeForSimpleSchema =
                       isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value);
               boolean schemaEquals = valueRecordSchema != null
-                      && schemaEquals(valueRecordSchema, fieldSchema, "schema",
-                                      new HashMap<>());
+                      && schemaEquals(valueRecordSchema, fieldSchema, new HashMap<>());
 
               log.debug(
                     "fieldSchema: {} instanceOfAvroSchemaTypeForSimpleSchema: {} schemaEquals: {}",
@@ -2108,29 +2107,29 @@ public class AvroData {
   }
 
   private static boolean compareObjects(Object one, Object two, CompareType type,
-                                        String path, Map<SchemaPair, Boolean> cache) {
+                                        Map<SchemaPair, Boolean> cache) {
     if (type == CompareType.EQUALS) {
       return Objects.equals(one, two);
     } else if (type == CompareType.DEEP_EQUALS) {
       return Objects.deepEquals(one, two);
     } else if (type == CompareType.FIELDS_EQUALS) {
-      return fieldListEquals((List<Field>) one, (List<Field>) two, path, cache);
+      return fieldListEquals((List<Field>) one, (List<Field>) two, cache);
     } else {
       assert type == CompareType.SCHEMA_EQUALS;
-      return schemaEquals((Schema) one, (Schema) two, path, cache);
+      return schemaEquals((Schema) one, (Schema) two, cache);
     }
   }
 
   private static boolean compareAndLog(Object one, Object two, CompareType type,
-                                       String path, Map<SchemaPair, Boolean> cache) {
-    if (compareObjects(one, two, type, path, cache)) {
+                                       Map<SchemaPair, Boolean> cache) {
+    if (compareObjects(one, two, type, cache)) {
       return true;
     }
     return false;
   }
 
   private static boolean fieldListEquals(List<Field> one, List<Field> two,
-                                         String path, Map<SchemaPair, Boolean> cache) {
+                                         Map<SchemaPair, Boolean> cache) {
     if (one == two) {
       return true;
     } else if (one == null || two == null) {
@@ -2140,7 +2139,7 @@ public class AvroData {
       ListIterator<Field> itTwo = two.listIterator();
       int idx = 0;
       while (itOne.hasNext() && itTwo.hasNext()) {
-        if (!fieldEquals(itOne.next(), itTwo.next(), path + "[" + (idx++) + "]", cache)) {
+        if (!fieldEquals(itOne.next(), itTwo.next(), cache)) {
           return false;
         }
       }
@@ -2148,21 +2147,16 @@ public class AvroData {
     }
   }
 
-  private static boolean fieldEquals(Field one, Field two, String path,
-                                     Map<SchemaPair, Boolean> cache) {
+  private static boolean fieldEquals(Field one, Field two, Map<SchemaPair, Boolean> cache) {
     if (one == two) {
       return true;
     } else if (one == null || two == null) {
-
       return false;
     } else {
-      return compareAndLog(one.getClass(), two.getClass(), CompareType.EQUALS,
-              path + ".class", cache)
-        && compareAndLog(one.index(), two.index(), CompareType.EQUALS, path + ".index",
-                         cache)
-        && compareAndLog(one.name(), two.name(), CompareType.EQUALS, path + ".name", cache)
-        && compareAndLog(one.schema(), two.schema(), CompareType.SCHEMA_EQUALS,
-              path + ".schema", cache);
+      return compareAndLog(one.getClass(), two.getClass(), CompareType.EQUALS, cache)
+        && compareAndLog(one.index(), two.index(), CompareType.EQUALS,cache)
+        && compareAndLog(one.name(), two.name(), CompareType.EQUALS, cache)
+        && compareAndLog(one.schema(), two.schema(), CompareType.SCHEMA_EQUALS, cache);
     }
   }
 
@@ -2194,8 +2188,7 @@ public class AvroData {
     }
   }
 
-  private static boolean schemaEquals(Schema src, Schema that, String path,
-                                      Map<SchemaPair, Boolean> cache) {
+  private static boolean schemaEquals(Schema src, Schema that, Map<SchemaPair, Boolean> cache) {
     if (src == that) {
       return true;
     } else if (src == null || that == null) {
@@ -2212,37 +2205,30 @@ public class AvroData {
       return cacheHit;
     }
 
-    boolean equals = compareAndLog(src.isOptional(), that.isOptional(), CompareType.EQUALS,
-                              path + ".optional", cache)
-            && compareAndLog(src.version(), that.version(), CompareType.EQUALS,
-                        path + ".version", cache)
-            && compareAndLog(src.name(), that.name(), CompareType.EQUALS,path + ".name",
-                             cache)
-            && compareAndLog(src.doc(), that.doc(), CompareType.EQUALS, path + ".doc",
-                             cache)
-            && compareAndLog(src.type(), that.type(), CompareType.EQUALS, path + ".type",
-                             cache)
+    boolean equals = compareAndLog(src.isOptional(), that.isOptional(), CompareType.EQUALS, cache)
+            && compareAndLog(src.version(), that.version(), CompareType.EQUALS, cache)
+            && compareAndLog(src.name(), that.name(), CompareType.EQUALS, cache)
+            && compareAndLog(src.doc(), that.doc(), CompareType.EQUALS, cache)
+            && compareAndLog(src.type(), that.type(), CompareType.EQUALS, cache)
             && compareAndLog(src.defaultValue(), that.defaultValue(), CompareType.DEEP_EQUALS,
-                      path + ".defaultValue", cache)
-            && compareAndLog(src.parameters(), that.parameters(), CompareType.EQUALS,
-                      path + ".parameters", cache);
+                             cache)
+            && compareAndLog(src.parameters(), that.parameters(), CompareType.EQUALS, cache);
 
     switch (src.type()) {
       case STRUCT:
         equals = equals && compareAndLog(src.fields(), that.fields(), CompareType.FIELDS_EQUALS,
-                                       path + ".fields", cache);
+                                         cache);
         break;
       case ARRAY:
         equals = equals && compareAndLog(src.valueSchema(), that.valueSchema(),
-                                         CompareType.SCHEMA_EQUALS, path + ".valueSchema",
-                                         cache);
+                                         CompareType.SCHEMA_EQUALS,cache);
         break;
       case MAP:
         equals = equals
                 && compareAndLog(src.valueSchema(), that.valueSchema(), CompareType.SCHEMA_EQUALS,
-                                 path + ".valueSchema", cache)
+                                 cache)
                 && compareAndLog(src.keySchema(), that.keySchema(), CompareType.SCHEMA_EQUALS,
-                                 path + ".keySchema", cache);
+                                 cache);
         break;
       default:
         break;
