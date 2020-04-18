@@ -1461,9 +1461,9 @@ public class AvroData {
               valueRecordSchema = toConnectSchemaWithCycles(
                   valueRecord.getSchema(), true, null, null, toConnectContext);
             }
-
             for (Field field : schema.fields()) {
               Schema fieldSchema = field.schema();
+
               if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value)
                   || (valueRecordSchema != null && schemaEquals(valueRecordSchema, fieldSchema))) {
                 converted = new Struct(schema).put(
