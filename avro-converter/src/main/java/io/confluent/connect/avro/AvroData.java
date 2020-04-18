@@ -16,13 +16,6 @@
 
 package io.confluent.connect.avro;
 
-import org.codehaus.jackson.JsonNode;
-import org.codehaus.jackson.node.ArrayNode;
-import org.codehaus.jackson.node.IntNode;
-import org.codehaus.jackson.node.JsonNodeFactory;
-import org.codehaus.jackson.node.ObjectNode;
-import io.confluent.kafka.serializers.NonRecordContainer;
-
 import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -44,12 +37,12 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
-
+import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.node.ArrayNode;
+import org.codehaus.jackson.node.IntNode;
+import org.codehaus.jackson.node.JsonNodeFactory;
 import org.codehaus.jackson.node.NumericNode;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import org.codehaus.jackson.node.ObjectNode;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -68,6 +61,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import io.confluent.kafka.serializers.NonRecordContainer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Utilities for converting between our runtime data format and Avro, and (de)serializing that data.
