@@ -87,6 +87,7 @@ public class TestCompatibilitySchemaRegistryMojo extends SchemaRegistryMojo {
             String.format("Exception thrown while registering subject(%s)", kvp.getKey()),
             e
         );
+        errorCount++;
       }
     }
 

@@ -82,6 +82,50 @@ public class AvroCompatibilityTest {
       + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"bar\"}]}";
 
 
+  private final String schemaString9 = "{\n" +
+          "    \"name\": \"Record1\",\n" +
+          "    \"type\": \"record\",\n" +
+          "    \"fields\": [\n" +
+          "        {\"name\": \"foo\", \"type\": \"string\"},\n" +
+          "        {\"name\": \"bar\", \"type\": \"string\"},\n" +
+          "        {\n" +
+          "            \"name\": \"Baz\",\n" +
+          "            \"type\": {\n" +
+          "                        \"type\" : \"record\",\n" +
+          "                        \"name\" : \"Record2\",\n" +
+          "                        \"fields\" : [\n" +
+          "                            {\"name\": \"str\", \"type\": \"string\"},\n" +
+          "                            {\"name\": \"str2\", \"type\": \"string\"}\n" +
+          "                        ]\n" +
+          "                    }\n" +
+          "        }\n" +
+          "    ]\n" +
+          "}    ";
+
+  private final Schema nestedSchemaWithString = AvroUtils.parseSchema(schemaString9).schemaObj;
+
+  private final String schemaString10 = "{\n" +
+          "    \"name\": \"Record1\",\n" +
+          "    \"type\": \"record\",\n" +
+          "    \"fields\": [\n" +
+          "        {\"name\": \"foo\", \"type\": \"string\"},\n" +
+          "        {\"name\": \"bar\", \"type\": \"string\"},\n" +
+          "        {\n" +
+          "            \"name\": \"Baz\",\n" +
+          "            \"type\": {\n" +
+          "                        \"type\" : \"record\",\n" +
+          "                        \"name\" : \"Record2\",\n" +
+          "                        \"fields\" : [\n" +
+          "                            {\"name\": \"str\", \"type\": \"string\"},\n" +
+          "                            {\"name\": \"str2\", \"type\": \"string\"}\n" +
+          "                        ]\n" +
+          "                    }\n" +
+          "        }\n" +
+          "    ]\n" +
+          "}    ";
+
+  private final Schema nestedSchemaWithInt = AvroUtils.parseSchema(schemaString10).schemaObj;
+
   @Test
   public void testBadDefaultNull() {
     assertNotNull(AvroUtils.parseSchema(badDefaultNullString));

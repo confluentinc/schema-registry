@@ -39,6 +39,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private static final String WILDCARD = "*";
 
+  private boolean unaccessible = false;
+
   private String defaultCompatibility = "BACKWARD";
   private final Map<String, Map<Schema, Integer>> schemaCache;
   private final Map<Schema, Integer> schemaIdCache;

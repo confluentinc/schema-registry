@@ -43,23 +43,9 @@ public class TestCompatibilitySchemaRegistryMojoTest extends SchemaRegistryTest 
   @Test
   public void register() throws IOException, MojoFailureException, MojoExecutionException, RestClientException {
     Map<String, Boolean> expectedVersions = new LinkedHashMap<>();
-
     Map<String, File> subjectToFile = new LinkedHashMap<>();
     for (int i = 0; i < 100; i++) {
-      String keySubject = String.format("TestSubject%03d-Key", i);
-      String valueSubject = String.format("TestSubject%03d-Value", i);
-      Schema keySchema = Schema.create(Schema.Type.STRING);
-      Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
-      this.mojo.client().register(keySubject, keySchema);
-      this.mojo.client().register(valueSubject, valueSchema);
-      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
-      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
-      writeSchema(keySchemaFile, keySchema);
-      writeSchema(valueSchemaFile, valueSchema);
-      subjectToFile.put(keySubject, keySchemaFile);
-      expectedVersions.put(keySubject, true);
-      subjectToFile.put(valueSubject, valueSchemaFile);
-      expectedVersions.put(valueSubject, true);
+      registerSchemas(i, subjectToFile, expectedVersions);
     }
 
     this.mojo.subjects = subjectToFile;
@@ -159,5 +145,70 @@ public class TestCompatibilitySchemaRegistryMojoTest extends SchemaRegistryTest 
     }
 
     Assert.assertThat(this.mojo.schemaCompatibility, IsEqual.equalTo(expectedVersions));
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void badSchemaRegistryIOException() throws IOException, MojoFailureException, MojoExecutionException, RestClientException {
+
+    this.mojo.client(new IOExceptionThrowingSchemaRegistryClient());
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    Map<String, Boolean> expectedVersions = new LinkedHashMap<>();
+    registerSchemas(1, subjectToFile, expectedVersions);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void badSchemaRegistryRestClientException() throws IOException, MojoFailureException, MojoExecutionException, RestClientException {
+
+    this.mojo.client(new RestClientExceptionThrowingSchemaRegistryClient());
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    Map<String, Boolean> expectedVersions = new LinkedHashMap<>();
+    registerSchemas(1, subjectToFile, expectedVersions);
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+
+  }
+
+  /**
+   * Reuseable Code for Creating a Schema
+   * @param subjectNumber The Number to append to the Subject Name
+   * @param subjectToFile A Map of string to Files
+   * @param expectedVersions A Map of String to Successful Updates
+   * @throws IOException Thrown On an Error on the Response Payload
+   * @throws RestClientException Thrown when we cammpt access the server
+   *
+   */
+  private void registerSchemas(Integer subjectNumber, Map<String, File> subjectToFile, Map<String, Boolean> expectedVersions) throws IOException, RestClientException{
+    String keySubject = String.format("TestSubject%03d-Key", subjectNumber);
+    String valueSubject = String.format("TestSubject%03d-Value", subjectNumber);
+    Schema keySchema = Schema.create(Schema.Type.STRING);
+    Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+    this.mojo.client().register(keySubject, keySchema);
+    this.mojo.client().register(valueSubject, valueSchema);
+    File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
+    File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
+    writeSchema(keySchemaFile, keySchema);
+    writeSchema(valueSchemaFile, valueSchema);
+    subjectToFile.put(keySubject, keySchemaFile);
+    expectedVersions.put(keySubject, true);
+    subjectToFile.put(valueSubject, valueSchemaFile);
+    expectedVersions.put(valueSubject, true);
+  }
+
+
+  class IOExceptionThrowingSchemaRegistryClient extends MockSchemaRegistryClient {
+    @Override
+    public boolean testCompatibility(String subject, Schema newSchema) throws IOException, RestClientException {
+      throw new IOException();
+    }
+  }
+
+  class RestClientExceptionThrowingSchemaRegistryClient extends MockSchemaRegistryClient {
+    @Override
+    public boolean testCompatibility(String subject, Schema newSchema) throws IOException, RestClientException {
+      throw new IOException();
+    }
   }
 }
