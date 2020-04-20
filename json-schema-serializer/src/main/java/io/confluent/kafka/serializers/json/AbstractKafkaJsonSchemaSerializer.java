@@ -50,7 +50,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected KafkaJsonSchemaSerializerConfig serializerConfig(Map<String, ?> props) {
     try {
       return new KafkaJsonSchemaSerializerConfig(props);
-    } catch (io.confluent.common.config.ConfigException e) {
+    } catch (ConfigException e) {
       throw new ConfigException(e.getMessage());
     }
   }

@@ -17,7 +17,7 @@ package io.confluent.kafka.serializers.json;
 
 import java.util.Map;
 
-import io.confluent.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 
 public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeConfig {

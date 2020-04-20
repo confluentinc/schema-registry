@@ -23,6 +23,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.HashSet;
@@ -32,7 +34,6 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 
-import io.confluent.common.config.AbstractConfig;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 import io.confluent.rest.RestConfig;
@@ -524,8 +525,23 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private final CompatibilityLevel compatibilityType;
 
+  private static Properties getPropsFromFile(String propsFile) throws RestConfigException {
+    Properties props = new Properties();
+    if (propsFile == null) {
+      return props;
+    }
+
+    try (FileInputStream propStream = new FileInputStream(propsFile)) {
+      props.load(propStream);
+    } catch (IOException e) {
+      throw new RestConfigException("Couldn't load properties from " + propsFile, e);
+    }
+
+    return props;
+  }
+
   public SchemaRegistryConfig(String propsFile) throws RestConfigException {
-    this(AbstractConfig.getPropsFromFile(propsFile));
+    this(getPropsFromFile(propsFile));
   }
 
   public SchemaRegistryConfig(Properties props) throws RestConfigException {

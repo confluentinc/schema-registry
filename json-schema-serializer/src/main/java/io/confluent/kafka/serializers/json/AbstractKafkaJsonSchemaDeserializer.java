@@ -64,7 +64,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected KafkaJsonSchemaDeserializerConfig deserializerConfig(Map<String, ?> props) {
     try {
       return new KafkaJsonSchemaDeserializerConfig(props);
-    } catch (io.confluent.common.config.ConfigException e) {
+    } catch (ConfigException e) {
       throw new ConfigException(e.getMessage());
     }
   }

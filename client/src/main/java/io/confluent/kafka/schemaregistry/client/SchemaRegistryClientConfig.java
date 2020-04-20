@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
-import io.confluent.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef;
 
 public class SchemaRegistryClientConfig {
 
