@@ -19,8 +19,8 @@ package io.confluent.connect.protobuf;
 import java.util.HashMap;
 import java.util.Map;
 
-import io.confluent.common.config.AbstractConfig;
-import io.confluent.common.config.ConfigDef;
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
 
 public class ProtobufDataConfig extends AbstractConfig {
 

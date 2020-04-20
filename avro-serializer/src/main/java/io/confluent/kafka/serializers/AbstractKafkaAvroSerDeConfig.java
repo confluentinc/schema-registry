@@ -18,7 +18,7 @@ package io.confluent.kafka.serializers;
 
 import java.util.Map;
 
-import io.confluent.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 

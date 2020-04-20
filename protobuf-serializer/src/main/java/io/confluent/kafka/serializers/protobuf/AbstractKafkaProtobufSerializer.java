@@ -53,7 +53,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected KafkaProtobufSerializerConfig serializerConfig(Map<String, ?> props) {
     try {
       return new KafkaProtobufSerializerConfig(props);
-    } catch (io.confluent.common.config.ConfigException e) {
+    } catch (ConfigException e) {
       throw new ConfigException(e.getMessage());
     }
   }

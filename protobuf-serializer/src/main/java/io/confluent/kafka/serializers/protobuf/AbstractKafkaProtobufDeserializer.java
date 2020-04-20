@@ -64,7 +64,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected KafkaProtobufDeserializerConfig deserializerConfig(Map<String, ?> props) {
     try {
       return new KafkaProtobufDeserializerConfig(props);
-    } catch (io.confluent.common.config.ConfigException e) {
+    } catch (ConfigException e) {
       throw new ConfigException(e.getMessage());
     }
   }
