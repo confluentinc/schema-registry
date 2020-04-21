@@ -200,15 +200,15 @@ public class TestCompatibilitySchemaRegistryMojoTest extends SchemaRegistryTest 
 
   class IOExceptionThrowingSchemaRegistryClient extends MockSchemaRegistryClient {
     @Override
-    public boolean testCompatibility(String subject, Schema newSchema) throws IOException, RestClientException {
+    public boolean testCompatibility(String subject, Schema newSchema) throws IOException {
       throw new IOException();
     }
   }
 
   class RestClientExceptionThrowingSchemaRegistryClient extends MockSchemaRegistryClient {
     @Override
-    public boolean testCompatibility(String subject, Schema newSchema) throws IOException, RestClientException {
-      throw new IOException();
+    public boolean testCompatibility(String subject, Schema newSchema) throws RestClientException {
+      throw new RestClientException();
     }
   }
 }
