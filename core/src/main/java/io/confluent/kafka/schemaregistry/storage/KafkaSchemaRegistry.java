@@ -872,7 +872,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences());
   }
 
-  private ParsedSchema parseSchema(
+  public ParsedSchema parseSchema(
       String schemaType,
       String schema,
       List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
