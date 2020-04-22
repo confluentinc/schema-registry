@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry;
 
 import java.util.List;
+import java.util.Objects;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
@@ -112,4 +113,13 @@ public interface ParsedSchema {
    * @return the raw schema
    */
   Object rawSchema();
+
+  /**
+   * Returns whether the underlying raw representations are equal.
+   *
+   * @return whether the underlying raw representations are equal
+   */
+  default boolean deepEquals(ParsedSchema schema) {
+    return Objects.equals(rawSchema(), schema.rawSchema());
+  }
 }
