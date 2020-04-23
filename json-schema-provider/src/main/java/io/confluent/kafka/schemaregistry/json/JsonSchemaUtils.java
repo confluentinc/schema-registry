@@ -15,11 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
+import com.kjetland.jackson.jsonSchema.JsonSchemaDraft;
 import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
 
 import java.io.IOException;
@@ -64,9 +66,19 @@ public class JsonSchemaUtils {
       JsonNode jsonValue = (JsonNode) object;
       return new JsonSchema(jsonValue.get(ENVELOPE_SCHEMA_FIELD_NAME));
     }
-    JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4();  // allow nulls
+    Class cls = object.getClass();
+    JsonInclude include = (JsonInclude) cls.getAnnotation(JsonInclude.class);
+    JsonInclude.Include value = include != null ? include.value() : null;
+    boolean ignoreNulls = value == JsonInclude.Include.NON_NULL
+            || value == JsonInclude.Include.NON_ABSENT
+            || value == JsonInclude.Include.NON_EMPTY
+            || value == JsonInclude.Include.NON_DEFAULT;
+    JsonSchemaConfig config = ignoreNulls
+            ? JsonSchemaConfig.vanillaJsonSchemaDraft4()
+            : JsonSchemaConfig.nullableJsonSchemaDraft4(); // allow nulls
+    config = config.withJsonSchemaDraft(JsonSchemaDraft.DRAFT_07);
     JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(jsonMapper, config);
-    JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(object.getClass());
+    JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(cls);
     return new JsonSchema(jsonSchema);
   }
 

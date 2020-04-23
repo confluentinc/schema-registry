@@ -458,6 +458,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       boolean isCompatible = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions);
       // Allow schema providers to modify the schema during compatibility checks
       schema.setSchema(parsedSchema.canonicalString());
+      schema.setReferences(parsedSchema.references());
 
       if (isCompatible) {
         // assign a guid and put the schema in the kafka store
@@ -841,6 +842,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throw new InvalidSchemaException(errMsg, e);
     }
     schema.setSchema(parsedSchema.canonicalString());
+    schema.setReferences(parsedSchema.references());
     return parsedSchema;
   }
 
