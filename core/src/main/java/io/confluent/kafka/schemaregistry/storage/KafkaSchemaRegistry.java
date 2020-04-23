@@ -866,8 +866,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     final String type = schemaType;
     ParsedSchema parsedSchema = provider.parseSchema(schema, references)
-        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
-            + " of type " + type));
+            .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
+                    + " with refs " + references + " of type " + type));
     return parsedSchema;
   }
 
