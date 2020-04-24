@@ -44,6 +44,7 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Value;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -175,6 +176,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       MetricsContext metricsContext = new MetricsContext();
       metricsContext.metadata().put(MetricUtils.METRICS_CONTEXT_NAMESPACE_KEY, jmxPrefix);
       metricsContext.metadata().putAll(MetricUtils.getMetricsValues(config.originals()));
+      metricsContext.metadata().put(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_TYPE, "SCHEMAREGISTRY");
+      metricsContext.metadata().put(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
+      metricsContext.metadata().put(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
       reporter.contextChange(metricsContext);
     }
 
