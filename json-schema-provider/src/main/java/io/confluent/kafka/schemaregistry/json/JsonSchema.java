@@ -164,6 +164,10 @@ public class JsonSchema implements ParsedSchema {
     );
   }
 
+  public JsonNode toJsonNode() {
+    return jsonNode;
+  }
+
   @Override
   public Schema rawSchema() {
     if (jsonNode == null) {

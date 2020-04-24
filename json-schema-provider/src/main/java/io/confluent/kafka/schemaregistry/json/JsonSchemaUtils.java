@@ -30,12 +30,14 @@ import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 
 public class JsonSchemaUtils {
 
-  private static final Object NONE_MARKER = new Object();
-
   private static final ObjectMapper jsonMapper = Jackson.newObjectMapper();
 
   static final String ENVELOPE_SCHEMA_FIELD_NAME = "schema";
   static final String ENVELOPE_PAYLOAD_FIELD_NAME = "payload";
+
+  public static ObjectNode envelope(JsonSchema schema, JsonNode payload) {
+    return envelope(schema.toJsonNode(), payload);
+  }
 
   public static ObjectNode envelope(JsonNode schema, JsonNode payload) {
     ObjectNode result = JsonNodeFactory.instance.objectNode();
@@ -90,7 +92,7 @@ public class JsonSchemaUtils {
     if (validate) {
       schema.validate(value);
     }
-    return value;
+    return envelope(schema, value);
   }
 
   public static byte[] toJson(Object value) throws IOException {

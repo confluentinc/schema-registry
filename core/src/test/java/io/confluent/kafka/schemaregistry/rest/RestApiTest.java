@@ -32,6 +32,8 @@ import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.junit.Test;
 
 import java.util.*;
+import java.net.URL;
+import java.net.HttpURLConnection;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
@@ -1277,6 +1279,58 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException rce) {
       fail("The operation shouldn't have failed");
     }
+  }
+
+  @Test
+  public void testHttpResponseHeaders() throws Exception {
+    String baseUrl = restApp.restClient.getBaseUrls().current();
+    String requestUrl = buildRequestUrl(baseUrl, "/v1/metadata/id");
+    HttpURLConnection connection = null;
+    try {
+      URL url = new URL(requestUrl);
+      connection = (HttpURLConnection) url.openConnection();
+      connection.setConnectTimeout(60000);
+      connection.setReadTimeout(60000);
+      connection.setRequestMethod("GET");
+      connection.setDoInput(true);
+
+      Map<String,List<String>> httpResponseHeaders = connection.getHeaderFields();
+      assertNotNull(matchHeaderValue(httpResponseHeaders,
+              "X-XSS-Protection", "1; mode=block"));
+      assertNotNull(matchHeaderValue(httpResponseHeaders,
+              "Cache-Control",
+              "no-cache, no-store, must-revalidate"));
+      assertNull(matchHeaderValue(httpResponseHeaders,
+              "Strict-Transport-Security", "max-age=31536000"));
+    } finally {
+      if (connection != null) {
+        connection.disconnect();
+      }
+    }
+  }
+
+  protected Properties getSchemaRegistryProperties() {
+    Properties schemaRegistryProps = new Properties();
+    schemaRegistryProps.put("response.http.headers.config",
+            "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");
+    return schemaRegistryProps;
+  }
+
+  private String matchHeaderValue(Map<String, List<String>> responseHeaders,
+                                  String headerName, String expectedHeaderValue) {
+    if (responseHeaders.isEmpty() || responseHeaders.get(headerName) == null)
+      return null;
+
+    return responseHeaders.get(headerName)
+            .stream()
+            .filter(value -> expectedHeaderValue.equals(value.trim()))
+            .findAny()
+            .orElse(null);
+  }
+
+  private String buildRequestUrl(String baseUrl, String path) {
+    // Join base URL and path, collapsing any duplicate forward slash delimiters
+    return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
 }
 
