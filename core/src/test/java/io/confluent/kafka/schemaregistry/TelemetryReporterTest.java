@@ -77,12 +77,6 @@ public class TelemetryReporterTest extends ClusterTestHarness {
 
     props.setProperty(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_CLUSTER_ID, "foobar");
 
-    // TODO:  Move type alongside cluster.id in code
-    props.setProperty(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_TYPE, "SCHEMAREGISTRY");
-    // TODO:  Move type alongside cluster.id in code
-    props.setProperty(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_VERSION,
-        AppInfoParser.getVersion());
-
     props.setProperty(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_PREFIX + "region", "test");
     props.setProperty(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_PREFIX + "pkc", "pkc-bar");
     return props;
