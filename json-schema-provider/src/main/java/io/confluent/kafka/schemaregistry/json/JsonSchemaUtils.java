@@ -77,14 +77,22 @@ public class JsonSchemaUtils {
       return new JsonSchema(jsonValue.get(ENVELOPE_SCHEMA_FIELD_NAME));
     }
     Class<?> cls = object.getClass();
-    if (client != null && cls.isAnnotationPresent(Schema.class)) {
+    if (cls.isAnnotationPresent(Schema.class)) {
       Schema schema = (Schema) cls.getAnnotation(Schema.class);
       List<SchemaReference> references = Arrays.stream(schema.refs())
               .map(ref -> new SchemaReference(ref.name(), ref.subject(), ref.version()))
               .collect(Collectors.toList());
-      return (JsonSchema) client.parseSchema(JsonSchema.TYPE, schema.value(), references)
-              .orElseThrow(() -> new IOException("Invalid schema " + schema.value()
-                      + " with refs " + references));
+      if (client == null) {
+        if (!references.isEmpty()) {
+          throw new IllegalArgumentException("Cannot resolve schema " + schema.value()
+                  + " with refs " + references);
+        }
+        return new JsonSchema(schema.value());
+      } else {
+        return (JsonSchema) client.parseSchema(JsonSchema.TYPE, schema.value(), references)
+                .orElseThrow(() -> new IOException("Invalid schema " + schema.value()
+                        + " with refs " + references));
+      }
     }
     JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4(); // allow nulls
     config = config.withJsonSchemaDraft(JsonSchemaDraft.DRAFT_07);

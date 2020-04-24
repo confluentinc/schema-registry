@@ -30,13 +30,16 @@ import java.util.Properties;
 import java.util.Random;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 
 import static org.junit.Assert.assertEquals;
@@ -162,6 +165,14 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> refs = restApp.restClient.getReferencedBy("reference", 1);
     assertEquals(2, refs.get(0).intValue());
 
+    CachedSchemaRegistryClient schemaRegistryClient =
+            new CachedSchemaRegistryClient(restApp.restClient, 10, new HashMap<>());
+    SchemaHolder holder = new SchemaHolder();
+    JsonSchema schema = JsonSchemaUtils.getSchema(holder, schemaRegistryClient);
+    Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
+            JsonSchema.TYPE, schema.references(), "referrer", false);
+    assertEquals("Registered schema should be found", 2, registeredSchema.getId().intValue());
+
     try {
       restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
           "reference",
@@ -184,6 +195,15 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
             (RestService.DEFAULT_REQUEST_PROPERTIES, "reference", "1"));
+  }
+
+  @io.confluent.kafka.schemaregistry.annotations.Schema(value="{\"type\":\"object\","
+          + "\"properties\":{\"Ref\":"
+          + "{\"$ref\":\"ref.json#/definitions/ExternalType\"}},\"additionalProperties\":false}",
+          refs={@io.confluent.kafka.schemaregistry.annotations.SchemaReference(
+                  name="ref.json", subject="reference")})
+  static class SchemaHolder {
+      // This is a dummy schema holder to be used for its annotations
   }
 
   @Test(expected = RestClientException.class)

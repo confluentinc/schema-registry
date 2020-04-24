@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.rest.protobuf;
 
+import com.google.protobuf.ByteString;
+import com.google.protobuf.Descriptors;
+import com.google.protobuf.Message;
+import com.google.protobuf.UnknownFieldSet;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -31,13 +35,17 @@ import java.util.Random;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.serializers.protobuf.test.Ref;
+import io.confluent.kafka.serializers.protobuf.test.Root;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -155,6 +163,13 @@ public class RestApiTest extends ClusterTestHarness {
         Collections.singletonList(ref),
         schemaString.getReferences()
     );
+
+    Root.ReferrerMessage referrer = Root.ReferrerMessage.newBuilder().build();
+    ProtobufSchema schema = ProtobufSchemaUtils.getSchema(referrer);
+    schema = schema.copy(Collections.singletonList(ref));
+    Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
+            ProtobufSchema.TYPE, schema.references(), "referrer", false);
+    assertEquals("Registered schema should be found", 2, registeredSchema.getId().intValue());
   }
 
   @Test(expected = RestClientException.class)
@@ -261,7 +276,8 @@ public class RestApiTest extends ClusterTestHarness {
     String schemaString =
         "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n\n"
             + "import \"ref.proto\";\n\n"
-            + "message ReferrerMessage {\n  string root_id = 1;\n  ReferencedMessage ref = 2;\n}\n";
+            + "message ReferrerMessage {\n  string root_id = 1;\n"
+            + "  .io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;\n}\n";
     schemas.put("root.proto", schemaString);
     return schemas;
   }

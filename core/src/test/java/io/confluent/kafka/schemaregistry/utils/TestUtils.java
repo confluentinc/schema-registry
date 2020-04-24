@@ -158,16 +158,16 @@ public class TestUtils {
   public static List<String> getAvroSchemaWithReferences() {
     List<String> schemas = new ArrayList<>();
     String reference = "{\"type\":\"record\","
-        + "\"name\":\"subrecord\","
+        + "\"name\":\"Subrecord\","
         + "\"namespace\":\"otherns\","
         + "\"fields\":"
         + "[{\"name\":\"field2\",\"type\":\"string\"}]}";
     schemas.add(reference);
     String schemaString = "{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
+        + "\"name\":\"MyRecord\","
         + "\"namespace\":\"ns\","
         + "\"fields\":"
-        + "[{\"name\":\"field1\",\"type\":\"otherns.subrecord\"}]}";
+        + "[{\"name\":\"field1\",\"type\":\"otherns.Subrecord\"}]}";
     schemas.add(schemaString);
     return schemas;
   }
