@@ -454,6 +454,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
           undeletedVersions.add(undeletedSchema);
         }
       }
+      Collections.reverse(undeletedVersions);
 
       boolean isCompatible = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions);
       // Allow schema providers to modify the schema during compatibility checks

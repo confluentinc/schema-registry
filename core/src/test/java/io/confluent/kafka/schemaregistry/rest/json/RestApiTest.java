@@ -165,8 +165,9 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> refs = restApp.restClient.getReferencedBy("reference", 1);
     assertEquals(2, refs.get(0).intValue());
 
-    CachedSchemaRegistryClient schemaRegistryClient =
-            new CachedSchemaRegistryClient(restApp.restClient, 10, new HashMap<>());
+    CachedSchemaRegistryClient schemaRegistryClient = new CachedSchemaRegistryClient(
+            restApp.restClient, 10,
+            Collections.singletonList(new JsonSchemaProvider()), new HashMap<>(), null);
     SchemaHolder holder = new SchemaHolder();
     JsonSchema schema = JsonSchemaUtils.getSchema(holder, schemaRegistryClient);
     Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
