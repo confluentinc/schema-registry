@@ -56,6 +56,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -63,7 +64,6 @@ import java.util.Set;
 import io.confluent.kafka.serializers.NonRecordContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 /**
  * Utilities for converting between our runtime data format and Avro, and (de)serializing that data.
@@ -2091,26 +2091,110 @@ public class AvroData {
     }
   }
 
+  private static boolean fieldListEquals(List<Field> one, List<Field> two,
+                                         Map<SchemaPair, Boolean> cache) {
+    if (one == two) {
+      return true;
+    } else if (one == null || two == null) {
+      return false;
+    } else {
+      ListIterator<Field> itOne = one.listIterator();
+      ListIterator<Field> itTwo = two.listIterator();
+      while (itOne.hasNext() && itTwo.hasNext()) {
+        if (!fieldEquals(itOne.next(), itTwo.next(), cache)) {
+          return false;
+        }
+      }
+      return itOne.hasNext() == itTwo.hasNext();
+    }
+  }
+
+  private static boolean fieldEquals(Field one, Field two, Map<SchemaPair, Boolean> cache) {
+    if (one == two) {
+      return true;
+    } else if (one == null || two == null) {
+      return false;
+    } else {
+      return one.getClass() == two.getClass()
+              && Objects.equals(one.index(), two.index())
+              && Objects.equals(one.name(), two.name())
+              && schemaEquals(one.schema(), two.schema(), cache);
+    }
+  }
+
+  private static class SchemaPair {
+    public Schema one;
+    public Schema two;
+
+    public SchemaPair(Schema one, Schema two) {
+      this.one = one;
+      this.two = two;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      SchemaPair that = (SchemaPair) o;
+      return Objects.equals(one, that.one)
+              && Objects.equals(two, that.two);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(one, two);
+    }
+  }
+
   private static boolean schemaEquals(Schema src, Schema that) {
+    return schemaEquals(src, that, new HashMap<>());
+  }
+
+  private static boolean schemaEquals(Schema src, Schema that, Map<SchemaPair, Boolean> cache) {
+    if (src == that) {
+      return true;
+    } else if (src == null || that == null) {
+      return false;
+    }
+
+    // Add a temporary value to the cache to avoid cycles. As long as we recurse only at the end of
+    // the method, we can safely default to true here. The cache is updated at the end of the method
+    // with the actual comparison result.
+    SchemaPair sp = new SchemaPair(src, that);
+    Boolean cacheHit = cache.putIfAbsent(sp, true);
+    if (cacheHit != null) {
+      return cacheHit;
+    }
+
     boolean equals = Objects.equals(src.isOptional(), that.isOptional())
         && Objects.equals(src.version(), that.version())
         && Objects.equals(src.name(), that.name())
         && Objects.equals(src.doc(), that.doc())
         && Objects.equals(src.type(), that.type())
         && Objects.deepEquals(src.defaultValue(), that.defaultValue())
-        && Objects.equals(src.fields(), that.fields())
         && Objects.equals(src.parameters(), that.parameters());
 
     switch (src.type()) {
+      case STRUCT:
+        equals = equals && fieldListEquals(src.fields(), that.fields(), cache);
+        break;
       case ARRAY:
-        return equals && Objects.equals(src.valueSchema(), that.valueSchema());
+        equals = equals && schemaEquals(src.valueSchema(), that.valueSchema(), cache);
+        break;
       case MAP:
-        return equals
-            && Objects.equals(src.valueSchema(), that.valueSchema())
-            && Objects.equals(src.keySchema(), that.keySchema());
+        equals = equals
+                && schemaEquals(src.valueSchema(), that.valueSchema(), cache)
+                && schemaEquals(src.keySchema(), that.keySchema(), cache);
+        break;
       default:
-        return equals;
+        break;
     }
+    cache.put(sp, equals);
+    return equals;
   }
 
   private static class CyclicSchemaWrapper implements Schema {
