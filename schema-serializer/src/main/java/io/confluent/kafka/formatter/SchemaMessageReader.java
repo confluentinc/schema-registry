@@ -21,6 +21,7 @@ import kafka.common.KafkaException;
 import kafka.common.MessageReader;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -43,6 +44,7 @@ import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 
@@ -114,10 +116,6 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
         Collections.singletonList(getProvider()),
         originals
     );
-    String valueSchemaString = getSchemaString(props, false);
-    List<SchemaReference> valueRefs = getSchemaReferences(props, false);
-    valueSchema = parseSchema(schemaRegistry, valueSchemaString, valueRefs);
-
     Serializer keySerializer = getKeySerializer(props);
 
     keySubject = topic + "-key";
@@ -133,10 +131,9 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       this.serializer = createSerializer(schemaRegistry, autoRegisterSchema, keySerializer);
     }
 
+    valueSchema = getSchema(schemaRegistry, props, false);
     if (needsKeySchema()) {
-      String keySchemaString = getSchemaString(props, true);
-      List<SchemaReference> keyRefs = getSchemaReferences(props, true);
-      keySchema = parseSchema(schemaRegistry, keySchemaString, keyRefs);
+      keySchema = getSchema(schemaRegistry, props, true);
     }
   }
 
@@ -153,6 +150,38 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     return provider.parseSchema(schema, references).get();
   }
 
+  private ParsedSchema getSchema(SchemaRegistryClient schemaRegistry,
+                                 Properties props,
+                                 boolean isKey) {
+    ParsedSchema schema = getSchemaById(schemaRegistry, props, isKey);
+    if (schema != null) {
+      return schema;
+    }
+    String schemaString = getSchemaString(props, isKey);
+    List<SchemaReference> refs = getSchemaReferences(props, isKey);
+    return parseSchema(schemaRegistry, schemaString, refs);
+  }
+
+  private ParsedSchema getSchemaById(SchemaRegistryClient schemaRegistry,
+                                     Properties props,
+                                     boolean isKey) {
+    String propKeyId = isKey ? "key.schema.id" : "value.schema.id";
+    int schemaId = 0;
+    try {
+      if (props.containsKey(propKeyId)) {
+        schemaId = Integer.parseInt(props.getProperty(propKeyId));
+        return schemaRegistry.getSchemaById(schemaId);
+      }
+      return null;
+    } catch (NumberFormatException e) {
+      throw new SerializationException(
+          String.format("Error parsing %s as int", propKeyId), e);
+    } catch (RestClientException | IOException e) {
+      throw new SerializationException(
+          String.format("Error retrieving schema for id %d", schemaId), e);
+    }
+  }
+
   private String getSchemaString(Properties props, boolean isKey) {
     String propKeyRaw = isKey ? "key.schema" : "value.schema";
     String propKeyFile = isKey ? "key.schema.file" : "value.schema.file";
@@ -167,7 +196,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       }
     } else {
       throw new ConfigException("Must provide the " + (isKey ? "key" : "value")
-                                + " schema in either " + propKeyRaw + " or " + propKeyFile);
+                                + " schema in either " + propKeyRaw
+                                + ", " + propKeyRaw + ".id, or " + propKeyFile);
     }
   }
 
