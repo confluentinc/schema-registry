@@ -1222,11 +1222,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throws SchemaRegistryException {
 
     CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
-    if (compatibility == CompatibilityLevel.NONE) {
-      // optimization to avoid parsing schemas
-      return true;
-    }
-
     return parsedSchema.isCompatible(compatibility, previousSchemas);
   }
 
