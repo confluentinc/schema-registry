@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 
@@ -32,9 +33,10 @@ public interface StoreUpdateHandler<K, V> extends Configurable {
    *
    * @param key   Key associated with the data
    * @param value Data written to the store
+   * @param offset Offset of record
    * @param timestamp Timestamp of record
    */
-  default boolean validateUpdate(K key, V value, long timestamp) {
+  default boolean validateUpdate(K key, V value, TopicPartition tp, long offset, long timestamp) {
     return true;
   }
 
@@ -44,8 +46,9 @@ public interface StoreUpdateHandler<K, V> extends Configurable {
    * @param key   Key associated with the data
    * @param value Data written to the store
    * @param oldValue the previous value associated with key, or null if there was no mapping for key
+   * @param offset Offset of record
    * @param timestamp Timestamp of record
    */
-  void handleUpdate(K key, V value, V oldValue, long timestamp);
+  void handleUpdate(K key, V value, V oldValue, TopicPartition tp, long offset, long timestamp);
 
 }

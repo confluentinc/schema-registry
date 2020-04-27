@@ -186,8 +186,11 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                       + ","
                       + message
                       + ") to the local store");
+            TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+            long offset = record.offset();
             long timestamp = record.timestamp();
-            boolean valid = this.storeUpdateHandler.validateUpdate(messageKey, message, timestamp);
+            boolean valid = this.storeUpdateHandler.validateUpdate(
+                    messageKey, message, tp, offset, timestamp);
             if (valid) {
               V oldMessage;
               if (message == null) {
@@ -195,7 +198,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
               } else {
                 oldMessage = localStore.put(messageKey, message);
               }
-              this.storeUpdateHandler.handleUpdate(messageKey, message, oldMessage, timestamp);
+              this.storeUpdateHandler.handleUpdate(
+                      messageKey, message, oldMessage, tp, offset, timestamp);
             } else {
               if (localStore.get(messageKey) == null) {
                 try {

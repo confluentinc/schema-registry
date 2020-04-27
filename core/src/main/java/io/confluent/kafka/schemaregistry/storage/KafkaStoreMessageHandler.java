@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +45,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
    * @param key   Key associated with the data
    * @param value Data written to the store
    */
-  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value, long timestamp) {
+  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
+                                TopicPartition tp, long offset, long timestamp) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
       if (schemaObj != null) {
@@ -79,6 +81,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   public void handleUpdate(SchemaRegistryKey key,
                            SchemaRegistryValue value,
                            SchemaRegistryValue oldValue,
+                           TopicPartition tp,
+                           long offset,
                            long timestamp) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,

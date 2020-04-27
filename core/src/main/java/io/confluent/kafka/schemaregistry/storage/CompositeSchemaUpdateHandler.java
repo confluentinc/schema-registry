@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,9 +37,10 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
    * @param key   Key associated with the data
    * @param value Data written to the store
    */
-  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value, long timestamp) {
+  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
+                                TopicPartition tp, long offset, long timestamp) {
     for (SchemaUpdateHandler handler : handlers) {
-      boolean valid = handler.validateUpdate(key, value, timestamp);
+      boolean valid = handler.validateUpdate(key, value, tp, offset, timestamp);
       if (!valid) {
         return false;
       }
@@ -56,9 +58,11 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
   public void handleUpdate(SchemaRegistryKey key,
                            SchemaRegistryValue value,
                            SchemaRegistryValue oldValue,
+                           TopicPartition tp,
+                           long offset,
                            long timestamp) {
     for (SchemaUpdateHandler handler : handlers) {
-      handler.handleUpdate(key, value, oldValue, timestamp);
+      handler.handleUpdate(key, value, oldValue, tp, offset, timestamp);
     }
   }
 }
