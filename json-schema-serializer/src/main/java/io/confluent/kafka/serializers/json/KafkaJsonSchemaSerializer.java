@@ -17,8 +17,10 @@
 package io.confluent.kafka.serializers.json;
 
 import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.io.IOException;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -69,16 +71,24 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     }
     JsonSchema schema;
     if (JsonSchemaUtils.isEnvelope(record)) {
-      schema = JsonSchemaUtils.getSchema(record);
+      schema = getSchema(record);
     } else {
       schema = schemaCache.get(record.getClass());
       if (schema == null) {
-        schema = JsonSchemaUtils.getSchema(record);
+        schema = getSchema(record);
         schemaCache.put(record.getClass(), schema);
       }
     }
     Object value = JsonSchemaUtils.getValue(record);
     return serializeImpl(getSubjectName(topic, isKey, value, schema), (T) value, schema);
+  }
+
+  private JsonSchema getSchema(T record) {
+    try {
+      return JsonSchemaUtils.getSchema(record, schemaRegistry);
+    } catch (IOException e) {
+      throw new SerializationException(e);
+    }
   }
 
   @Override

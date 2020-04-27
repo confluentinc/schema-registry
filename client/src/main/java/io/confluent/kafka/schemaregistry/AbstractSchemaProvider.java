@@ -64,6 +64,10 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
               + "\" and version "
               + reference.getVersion());
         }
+        if (reference.getVersion() == -1) {
+          // Update the version with the latest
+          reference.setVersion(schema.getVersion());
+        }
         resolveReferences(schema.getReferences(), schemas);
         schemas.put(reference.getName(), schema.getSchema());
       }

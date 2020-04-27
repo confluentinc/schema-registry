@@ -142,8 +142,8 @@
             </dependency>
             <dependency>
                 <groupId>com.kjetland</groupId>
-                <artifactId>mbknor-jackson-jsonschema_2.12</artifactId>
-                <version>1.0.36</version>
+                <artifactId>mbknor-jackson-jsonschema_${kafka.scala.version}</artifactId>
+                <version>1.0.39</version>
             </dependency>
             <dependency>
                 <groupId>uk.co.jemos.podam</groupId>

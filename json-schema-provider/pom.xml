@@ -52,7 +52,7 @@
         </dependency>
         <dependency>
             <groupId>com.kjetland</groupId>
-            <artifactId>mbknor-jackson-jsonschema_2.12</artifactId>
+            <artifactId>mbknor-jackson-jsonschema_${kafka.scala.version}</artifactId>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
