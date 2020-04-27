@@ -217,9 +217,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     SchemaString restSchema = restService.getId(id);
     Optional<ParsedSchema> schema = parseSchema(
         restSchema.getSchemaType(), restSchema.getSchemaString(), restSchema.getReferences());
-    return schema.orElseThrow(() ->
-        new IOException("Invalid schema " + restSchema.getSchemaString()
-            + " of schema type " + restSchema.getSchemaType()));
+    return schema.orElseThrow(() -> new IOException("Invalid schema " + restSchema.getSchemaString()
+            + " with refs " + restSchema.getReferences()
+            + " of type " + restSchema.getSchemaType()));
   }
 
   private int getVersionFromRegistry(String subject, ParsedSchema schema)

@@ -415,6 +415,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       // Ensure cache is up-to-date before any potential writes
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
 
+      ParsedSchema parsedSchema = canonicalizeSchema(schema);
+
       // see if the schema to be registered already exists
       int schemaId = schema.getId();
       SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
@@ -434,26 +436,35 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
       // determine the latest version of the schema in the subject
       List<SchemaValue> allVersions = getAllSchemaValues(subject);
+      Collections.reverse(allVersions);
 
       List<SchemaValue> deletedVersions = new ArrayList<>();
-      List<SchemaValue> undeletedVersions = new ArrayList<>();
+      List<ParsedSchema> undeletedVersions = new ArrayList<>();
       int newVersion = MIN_VERSION;
       for (SchemaValue schemaValue : allVersions) {
-        newVersion = schemaValue.getVersion() + 1;
+        newVersion = Math.max(newVersion, schemaValue.getVersion() + 1);
         if (schemaValue.isDeleted()) {
           deletedVersions.add(schemaValue);
         } else {
-          undeletedVersions.add(schemaValue);
+          ParsedSchema undeletedSchema = parseSchema(getSchemaEntityFromSchemaValue(schemaValue));
+          if (parsedSchema.references().isEmpty()
+              && !undeletedSchema.references().isEmpty()
+              && parsedSchema.deepEquals(undeletedSchema)) {
+            // This handles the case where a schema is sent with all references resolved
+            return schemaValue.getId();
+          }
+          undeletedVersions.add(undeletedSchema);
         }
       }
+      Collections.reverse(undeletedVersions);
 
-      List<Schema> undeletedSchemasList = undeletedVersions.stream()
-          .map(s -> getSchemaEntityFromSchemaValue(s))
-          .collect(Collectors.toList());
+      boolean isCompatible = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions);
+      // Allow schema providers to modify the schema during compatibility checks
+      schema.setSchema(parsedSchema.canonicalString());
+      schema.setReferences(parsedSchema.references());
 
-      canonicalizeSchema(schema);
-      // assign a guid and put the schema in the kafka store
-      if (isCompatible(subject, schema, undeletedSchemasList)) {
+      if (isCompatible) {
+        // assign a guid and put the schema in the kafka store
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
         }
@@ -703,7 +714,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
    */
   public Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
-    canonicalizeSchema(schema);
+    ParsedSchema parsedSchema = canonicalizeSchema(schema);
     SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
     if (schemaIdAndSubjects != null) {
       if (schemaIdAndSubjects.hasSubject(subject)
@@ -716,14 +727,26 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                                            schema.getReferences(),
                                            schema.getSchema());
         return matchingSchema;
-      } else {
-        // this schema was never registered under the input subject
-        return null;
       }
-    } else {
-      // this schema was never registered in the registry under any subject
-      return null;
     }
+
+    List<SchemaValue> allVersions = getAllSchemaValues(subject);
+    Collections.reverse(allVersions);
+
+    for (SchemaValue schemaValue : allVersions) {
+      if (!schemaValue.isDeleted()) {
+        Schema undeleted = getSchemaEntityFromSchemaValue(schemaValue);
+        ParsedSchema undeletedSchema = parseSchema(undeleted);
+        if (parsedSchema.references().isEmpty()
+            && !undeletedSchema.references().isEmpty()
+            && parsedSchema.deepEquals(undeletedSchema)) {
+          // This handles the case where a schema is sent with all references resolved
+          return undeleted;
+        }
+      }
+    }
+
+    return null;
   }
 
   private int forwardRegisterRequestToMaster(String subject, Schema schema,
@@ -837,7 +860,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private void canonicalizeSchema(Schema schema) throws InvalidSchemaException {
+  private ParsedSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
     if (schema == null
         || schema.getSchema() == null
         || schema.getSchema().trim().isEmpty()) {
@@ -853,6 +876,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throw new InvalidSchemaException(errMsg, e);
     }
     schema.setSchema(parsedSchema.canonicalString());
+    schema.setReferences(parsedSchema.references());
+    return parsedSchema;
   }
 
   private ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
@@ -875,8 +900,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     final String type = schemaType;
     ParsedSchema parsedSchema = provider.parseSchema(schema, references)
-        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
-            + " of type " + type));
+            .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
+                    + " with refs " + references + " of type " + type));
     return parsedSchema;
   }
 
@@ -1228,23 +1253,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throw new InvalidSchemaException("Previous schema not provided");
     }
 
-    CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
-    if (compatibility == CompatibilityLevel.NONE) {
-      // optimization to avoid parsing schemas
-      return true;
-    }
-
     List<ParsedSchema> prevParsedSchemas = new ArrayList<>(previousSchemas.size());
     for (Schema previousSchema : previousSchemas) {
       ParsedSchema prevParsedSchema = parseSchema(previousSchema);
       prevParsedSchemas.add(prevParsedSchema);
     }
 
-    ParsedSchema parsedSchema = parseSchema(newSchema);
-    boolean isCompatible = parsedSchema.isCompatible(compatibility, prevParsedSchemas);
-    // Allow schema providers to modify the schema during compatibility checks
-    newSchema.setSchema(parsedSchema.canonicalString());
-    return isCompatible;
+    return isCompatibleWithPrevious(subject, parseSchema(newSchema), prevParsedSchemas);
+  }
+
+  private boolean isCompatibleWithPrevious(String subject,
+                                           ParsedSchema parsedSchema,
+                                           List<ParsedSchema> previousSchemas)
+      throws SchemaRegistryException {
+
+    CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
+    return parsedSchema.isCompatible(compatibility, previousSchemas);
   }
 
   private void deleteMode(String subject) throws StoreException {

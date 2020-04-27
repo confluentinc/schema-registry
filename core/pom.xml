@@ -248,7 +248,28 @@
                     <mainClass>io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain</mainClass>
                 </configuration>
             </plugin>
-
+            <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                        <configuration>
+                            <testSourceDirectory>${project.basedir}/src/test/avro</testSourceDirectory>
+                            <imports>
+                                <import>${project.basedir}/src/test/avro/subrecord.avsc</import>
+                            </imports>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.github.os72</groupId>
+                <artifactId>protoc-jar-maven-plugin</artifactId>
+            </plugin>
             <plugin>
                 <groupId>com.github.kongchen</groupId>
                 <artifactId>swagger-maven-plugin</artifactId>

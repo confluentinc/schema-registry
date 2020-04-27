@@ -16,6 +16,8 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -449,7 +451,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemas.get(1));
-    SchemaReference ref = new SchemaReference("otherns.subrecord", "reference", 1);
+    SchemaReference ref = new SchemaReference("otherns.Subrecord", "reference", 1);
     request.setReferences(Collections.singletonList(ref));
     int registeredId = restApp.restClient.registerSchema(request, "referrer");
     assertEquals("Registering a new schema should succeed", 2, registeredId);
@@ -466,6 +468,13 @@ public class RestApiTest extends ClusterTestHarness {
 
     List<Integer> refs = restApp.restClient.getReferencedBy("reference", 1);
     assertEquals(2, refs.get(0).intValue());
+
+    ns.MyRecord myrecord = new ns.MyRecord();
+    AvroSchema schema = new AvroSchema(AvroSchemaUtils.getSchema(myrecord));
+    // Note that we pass an empty list of refs since SR will perform a deep equality check
+    Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
+            AvroSchema.TYPE, Collections.emptyList(), "referrer", false);
+    assertEquals("Registered schema should be found", 2, registeredSchema.getId().intValue());
 
     try {
       restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
