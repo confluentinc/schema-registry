@@ -461,7 +461,11 @@ paths:
       - "application/vnd.schemaregistry.v1+json"
       - "application/vnd.schemaregistry+json; qs=0.9"
       - "application/json; qs=0.5"
-      parameters: []
+      parameters:
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -533,6 +537,10 @@ paths:
         description: "the name of the subject"
         required: true
         type: "string"
+      - name: "permanent"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -565,6 +573,10 @@ paths:
         description: "Name of the Subject"
         required: true
         type: "string"
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -707,6 +719,10 @@ paths:
           \ served."
         required: true
         type: "string"
+      - name: "permanent"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
