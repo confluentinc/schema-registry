@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
@@ -78,4 +79,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
                            boolean permanentDelete) throws SchemaRegistryException;
 
   SchemaRegistryConfig config();
+
+  // Can be used to pass values between extensions
+  Map<String, Object> properties();
 }

@@ -99,6 +99,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private static final long DESCRIBE_CLUSTER_TIMEOUT_MS = 10000L;
 
   private final SchemaRegistryConfig config;
+  private final Map<String, Object> props;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
@@ -126,6 +127,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throw new SchemaRegistryException("Schema registry configuration is null");
     }
     this.config = config;
+    this.props = new HashMap<>();
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     SchemeAndPort schemeAndPort = getSchemeAndPortForIdentity(
         config.getInt(SchemaRegistryConfig.PORT_CONFIG),
@@ -1383,6 +1385,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   @Override
   public SchemaRegistryConfig config() {
     return config;
+  }
+
+  @Override
+  public Map<String, Object> properties() {
+    return props;
   }
 
   public HostnameVerifier getHostnameVerifier() throws SchemaRegistryStoreException {
