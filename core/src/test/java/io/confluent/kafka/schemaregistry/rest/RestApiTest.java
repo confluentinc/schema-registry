@@ -37,7 +37,6 @@ import java.util.*;
 import java.net.URL;
 import java.net.HttpURLConnection;
 
-
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
 import static org.junit.Assert.assertEquals;
