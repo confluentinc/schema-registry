@@ -2367,16 +2367,22 @@ public class AvroDataTest {
             "  ]\n" +
             "}\n";
 
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+            .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+            .build();
+    AvroData graphAvroData = new AvroData(avroDataConfig);
+
     // Use the generated Connect schema
-    org.apache.avro.Schema schema = avroData.fromConnectSchema(avroData.toConnectSchema(
+    org.apache.avro.Schema schema = graphAvroData.fromConnectSchema(graphAvroData.toConnectSchema(
             new org.apache.avro.Schema.Parser().parse(schemaStr)));
 
+    Integer version = 1;
+
     GenericRecord person = getUnionCycleRecord(schema);
-    SchemaAndValue sv = avroData.toConnectData(schema, person);
+    SchemaAndValue sv = graphAvroData.toConnectData(schema, person, version);
 
-    assertEquals(sv, avroData.toConnectData(schema, getUnionCycleRecord(schema)));
-
-    assertEquals(person, avroData.fromConnectData(sv.schema(), sv.value()));
+    assertEquals(sv, graphAvroData.toConnectData(schema, getUnionCycleRecord(schema), version));
+    assertEquals(person, graphAvroData.fromConnectData(sv.schema(), sv.value()));
   }
 
   private GenericRecord getUnionCycleRecord(org.apache.avro.Schema connectSchema) {
