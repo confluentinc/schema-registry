@@ -1522,7 +1522,10 @@ public class AvroData {
     Schema cachedSchema = toConnectSchemaCache.get(schemaAndVersion);
     if (cachedSchema != null) {
       if (schema.getType() == org.apache.avro.Schema.Type.RECORD) {
-          toConnectContext.cycleReferences.put(schema, new CyclicSchemaWrapper(cachedSchema));
+        // cycleReferences is only populated with record type schemas. We need to initialize it here
+        // with the top-level record schema, as would happen if we did not hit the cache. This
+        // schema has the version information set, thus it properly works with schemaEquals.
+        toConnectContext.cycleReferences.put(schema, new CyclicSchemaWrapper(cachedSchema));
       }
       return cachedSchema;
     }
