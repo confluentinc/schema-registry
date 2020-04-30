@@ -16,6 +16,7 @@
 
 package io.confluent.connect.avro;
 
+import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -43,6 +44,8 @@ import org.codehaus.jackson.node.IntNode;
 import org.codehaus.jackson.node.JsonNodeFactory;
 import org.codehaus.jackson.node.NumericNode;
 import org.codehaus.jackson.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -60,10 +63,6 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-
-import io.confluent.kafka.serializers.NonRecordContainer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Utilities for converting between our runtime data format and Avro, and (de)serializing that data.
@@ -1522,6 +1521,9 @@ public class AvroData {
     AvroSchemaAndVersion schemaAndVersion = new AvroSchemaAndVersion(schema, version);
     Schema cachedSchema = toConnectSchemaCache.get(schemaAndVersion);
     if (cachedSchema != null) {
+      if (schema.getType() == org.apache.avro.Schema.Type.RECORD) {
+          toConnectContext.cycleReferences.put(schema, new CyclicSchemaWrapper(cachedSchema));
+      }
       return cachedSchema;
     }
 
