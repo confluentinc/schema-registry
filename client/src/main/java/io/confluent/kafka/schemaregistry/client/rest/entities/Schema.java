@@ -32,8 +32,8 @@ public class Schema implements Comparable<Schema> {
   private String subject;
   private Integer version;
   private Integer id;
-  private String schemaType = AvroSchema.TYPE;
-  private List<SchemaReference> references = Collections.emptyList();
+  private String schemaType;
+  private List<SchemaReference> references;
   private String schema;
 
   @JsonCreator
