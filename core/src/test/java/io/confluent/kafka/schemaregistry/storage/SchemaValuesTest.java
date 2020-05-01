@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import org.junit.Test;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
@@ -48,7 +49,7 @@ public class SchemaValuesTest {
     assertSchemaValue(subject, version, 1,
                       "{\"type\":\"record\",\"name\":\"myrecord\","
                       + "\"fields\":[{\"name\":\"f1067572235\",\"type\":\"string\"}]}",
-                      false, schemaValue);
+                      AvroSchema.TYPE, false, schemaValue);
 
   }
 
@@ -74,7 +75,7 @@ public class SchemaValuesTest {
     assertSchemaValue(subject, version, 1,
                       "{\"type\":\"record\",\"name\":\"myrecord\","
                       + "\"fields\":[{\"name\":\"f1067572235\",\"type\":\"string\"}]}",
-                      false, schemaValue);
+                      AvroSchema.TYPE, false, schemaValue);
 
   }
 
@@ -100,7 +101,7 @@ public class SchemaValuesTest {
     assertSchemaValue(subject, version, 1,
                       "{\"type\":\"record\",\"name\":\"myrecord\","
                       + "\"fields\":[{\"name\":\"f1067572235\",\"type\":\"string\"}]}",
-                      true, schemaValue);
+                      AvroSchema.TYPE,true, schemaValue);
 
   }
 
@@ -129,14 +130,14 @@ public class SchemaValuesTest {
   }
 
   private void assertSchemaValue(String subject, int version, int schemaId,
-                                 String schema, boolean deleted, SchemaValue schemaValue) {
-
+                                 String schema, String type, boolean deleted,
+                                 SchemaValue schemaValue) {
     assertNotNull("Not Null", schemaValue);
     assertEquals("Subject Matches", subject, schemaValue.getSubject());
     assertEquals("Version matches", (Integer) version, schemaValue.getVersion());
     assertEquals("SchemaId matches", (Integer) schemaId, schemaValue.getId());
     assertEquals("Schema Matches", schema, schemaValue.getSchema());
+    assertEquals("Type matches", type, schemaValue.getSchemaType());
     assertEquals("Delete Flag Matches", deleted, schemaValue.isDeleted());
-
   }
 }
