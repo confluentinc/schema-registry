@@ -128,7 +128,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
 
   @JsonProperty("schemaType")
   public void setSchemaType(String schemaType) {
-    this.schemaType = schemaType;
+    this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
   }
 
   @JsonProperty("references")
