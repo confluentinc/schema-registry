@@ -198,7 +198,10 @@ public class RestApiTest extends ClusterTestHarness {
             (RestService.DEFAULT_REQUEST_PROPERTIES, "reference", "1"));
   }
 
-  @io.confluent.kafka.schemaregistry.annotations.Schema(value="{\"type\":\"object\","
+  @io.confluent.kafka.schemaregistry.annotations.Schema(value="{"
+          + "\"$id\": \"https://acme.com/referrer.json\","
+          + "\"$schema\": \"http://json-schema.org/draft-07/schema#\","
+          + "\"type\":\"object\","
           + "\"properties\":{\"Ref\":"
           + "{\"$ref\":\"ref.json#/definitions/ExternalType\"}},\"additionalProperties\":false}",
           refs={@io.confluent.kafka.schemaregistry.annotations.SchemaReference(
@@ -306,35 +309,12 @@ public class RestApiTest extends ClusterTestHarness {
     String reference = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
         + "{\"ExternalType\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},"
         + "\"additionalProperties\":false}}}";
-        /*
-        String reference = "{\n  \"type\": \"object\",\n"
-            + "  \"additionalProperties\": false,\n"
-            + "  \"definitions\": {\n"
-            + "    \"ExternalType\": {\n"
-            + "      \"type\": \"object\",\n"
-            + "      \"additionalProperties\": false,\n"
-            + "      \"properties\": {\n"
-            + "        \"name\": {\n"
-            + "          \"type\": \"string\"\n"
-            + "        }\n"
-            + "      }\n"
-            + "    }\n"
-            + "  }\n"
-            + "}\n";
-         */
     schemas.put("ref.json", new JsonSchema(reference).canonicalString());
-    String schemaString = "{\"type\":\"object\",\"properties\":{\"Ref\":"
+    String schemaString = "{"
+        + "\"$id\": \"https://acme.com/referrer.json\","
+        + "\"$schema\": \"http://json-schema.org/draft-07/schema#\","
+        + "\"type\":\"object\",\"properties\":{\"Ref\":"
         + "{\"$ref\":\"ref.json#/definitions/ExternalType\"}},\"additionalProperties\":false}";
-        /*
-        String schemaString = "{\n  \"type\": \"object\",\n"
-            + "  \"additionalProperties\": false,\n"
-            + "  \"properties\": {\n"
-            + "    \"Ref\": {\n"
-            + "      \"$ref\": \"ref.json#/definitions/ExternalType\"\n"
-            + "    }\n"
-            + "  }\n"
-            + "}\n";
-         */
     schemas.put("main.json", schemaString);
     return schemas;
   }

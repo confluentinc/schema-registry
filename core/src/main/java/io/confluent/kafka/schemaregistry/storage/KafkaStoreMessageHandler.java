@@ -110,7 +110,7 @@ public class KafkaStoreMessageHandler
           lookupCache.schemaDeleted(schemaKey, schemaValue);
         }
       } catch (StoreException e) {
-        log.error("Failed to delete subject {} in the local cache", subject);
+        log.error("Failed to delete subject {} in the local cache", subject, e);
       }
     }
   }
@@ -120,7 +120,7 @@ public class KafkaStoreMessageHandler
     try {
       lookupCache.clearSubjects(subject);
     } catch (StoreException e) {
-      log.error("Failed to clear subject {} in the local cache", subject);
+      log.error("Failed to clear subject {} in the local cache", subject, e);
     }
   }
 
