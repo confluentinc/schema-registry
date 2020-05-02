@@ -28,6 +28,8 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.ValidationException;
 import org.everit.json.schema.loader.SchemaLoader;
+import org.everit.json.schema.loader.SpecificationVersion;
+import org.everit.json.schema.loader.internal.ReferenceResolver;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -35,7 +37,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +54,8 @@ public class JsonSchema implements ParsedSchema {
   private static final Logger log = LoggerFactory.getLogger(JsonSchemaProvider.class);
 
   public static final String TYPE = "JSON";
+
+  private static final String SCHEMA_KEYWORD = "$schema";
 
   private static final Object NONE_MARKER = new Object();
 
@@ -175,16 +178,32 @@ public class JsonSchema implements ParsedSchema {
     }
     if (schemaObj == null) {
       try {
-        SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder();
+        // Extract the $schema to use for determining the id keyword
+        SpecificationVersion spec = SpecificationVersion.DRAFT_7;
+        if (jsonNode.has(SCHEMA_KEYWORD)) {
+          String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
+          if (schema != null) {
+            spec = SpecificationVersion.lookupByMetaSchemaUrl(schema)
+                    .orElse(SpecificationVersion.DRAFT_7);
+          }
+        }
+        // Extract the $id to use for resolving relative $ref URIs
+        URI idUri = null;
+        if (jsonNode.has(spec.idKeyword())) {
+          String id = jsonNode.get(spec.idKeyword()).asText();
+          if (id != null) {
+            idUri = ReferenceResolver.resolve((URI) null, id);
+          }
+        }
+        SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder().draftV7Support();
         for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
-          builder.registerSchemaByURI(new URI(dep.getKey()), new JSONObject(dep.getValue()));
+          URI child = ReferenceResolver.resolve(idUri, dep.getKey());
+          builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
         }
         JSONObject jsonObject = objectMapper.treeToValue((jsonNode), JSONObject.class);
         builder.schemaJson(jsonObject);
         SchemaLoader loader = builder.build();
         schemaObj = loader.load().build();
-      } catch (URISyntaxException e) {
-        throw new IllegalArgumentException("Invalid dependency name", e);
       } catch (IOException e) {
         throw new IllegalArgumentException("Invalid JSON", e);
       }

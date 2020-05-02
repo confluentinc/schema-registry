@@ -872,7 +872,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       parsedSchema.validate();
     } catch (Exception e) {
       String errMsg = "Invalid schema " + schema;
-      log.error(errMsg);
+      log.error(errMsg, e);
       throw new InvalidSchemaException(errMsg, e);
     }
     schema.setSchema(parsedSchema.canonicalString());
