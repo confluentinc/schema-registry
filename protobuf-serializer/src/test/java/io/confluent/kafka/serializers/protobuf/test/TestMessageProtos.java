@@ -15,7 +15,7 @@ public final class TestMessageProtos {
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
   public interface TestMessageOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:TestMessage)
+      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.serializers.protobuf.test.TestMessage)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -115,11 +115,11 @@ public final class TestMessageProtos {
     long getTestUint64();
   }
   /**
-   * Protobuf type {@code TestMessage}
+   * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.TestMessage}
    */
   public  static final class TestMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
-      // @@protoc_insertion_point(message_implements:TestMessage)
+      // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.TestMessage)
       TestMessageOrBuilder {
   private static final long serialVersionUID = 0L;
     // Use TestMessage.newBuilder() to construct.
@@ -258,13 +258,13 @@ public final class TestMessageProtos {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_TestMessage_descriptor;
+      return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_descriptor;
     }
 
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_TestMessage_fieldAccessorTable
+      return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.class, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder.class);
     }
@@ -764,21 +764,21 @@ public final class TestMessageProtos {
       return builder;
     }
     /**
-     * Protobuf type {@code TestMessage}
+     * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.TestMessage}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:TestMessage)
+        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.serializers.protobuf.test.TestMessage)
         io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_TestMessage_descriptor;
+        return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_descriptor;
       }
 
       @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_TestMessage_fieldAccessorTable
+        return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.class, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder.class);
       }
@@ -837,7 +837,7 @@ public final class TestMessageProtos {
       @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_TestMessage_descriptor;
+        return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_descriptor;
       }
 
       @java.lang.Override
@@ -1506,10 +1506,10 @@ public final class TestMessageProtos {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:TestMessage)
+      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.serializers.protobuf.test.TestMessage)
     }
 
-    // @@protoc_insertion_point(class_scope:TestMessage)
+    // @@protoc_insertion_point(class_scope:io.confluent.kafka.serializers.protobuf.test.TestMessage)
     private static final io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage();
@@ -1547,10 +1547,10 @@ public final class TestMessageProtos {
   }
 
   private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_TestMessage_descriptor;
+    internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-      internal_static_TestMessage_fieldAccessorTable;
+      internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -1560,29 +1560,30 @@ public final class TestMessageProtos {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\017TestProto.proto\032 google/protobuf/descr" +
-      "iptor.proto\"\310\002\n\013TestMessage\022\023\n\013test_stri" +
-      "ng\030\001 \001(\t\022\021\n\ttest_bool\030\002 \001(\010\022\022\n\ntest_byte" +
-      "s\030\003 \001(\014\022\023\n\013test_double\030\004 \001(\001\022\022\n\ntest_flo" +
-      "at\030\005 \001(\002\022\024\n\014test_fixed32\030\006 \001(\007\022\024\n\014test_f" +
-      "ixed64\030\007 \001(\006\022\022\n\ntest_int32\030\010 \001(\005\022\022\n\ntest" +
-      "_int64\030\t \001(\003\022\025\n\rtest_sfixed32\030\n \001(\017\022\025\n\rt" +
-      "est_sfixed64\030\013 \001(\020\022\023\n\013test_sint32\030\014 \001(\021\022" +
-      "\023\n\013test_sint64\030\r \001(\022\022\023\n\013test_uint32\030\016 \001(" +
-      "\r\022\023\n\013test_uint64\030\017 \001(\004BA\n,io.confluent.k" +
-      "afka.serializers.protobuf.testB\021TestMess" +
-      "ageProtosb\006proto3"
+      "\n\017TestProto.proto\022,io.confluent.kafka.se" +
+      "rializers.protobuf.test\032 google/protobuf" +
+      "/descriptor.proto\"\310\002\n\013TestMessage\022\023\n\013tes" +
+      "t_string\030\001 \001(\t\022\021\n\ttest_bool\030\002 \001(\010\022\022\n\ntes" +
+      "t_bytes\030\003 \001(\014\022\023\n\013test_double\030\004 \001(\001\022\022\n\nte" +
+      "st_float\030\005 \001(\002\022\024\n\014test_fixed32\030\006 \001(\007\022\024\n\014" +
+      "test_fixed64\030\007 \001(\006\022\022\n\ntest_int32\030\010 \001(\005\022\022" +
+      "\n\ntest_int64\030\t \001(\003\022\025\n\rtest_sfixed32\030\n \001(" +
+      "\017\022\025\n\rtest_sfixed64\030\013 \001(\020\022\023\n\013test_sint32\030" +
+      "\014 \001(\021\022\023\n\013test_sint64\030\r \001(\022\022\023\n\013test_uint3" +
+      "2\030\016 \001(\r\022\023\n\013test_uint64\030\017 \001(\004BA\n,io.confl" +
+      "uent.kafka.serializers.protobuf.testB\021Te" +
+      "stMessageProtosb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
           com.google.protobuf.DescriptorProtos.getDescriptor(),
         });
-    internal_static_TestMessage_descriptor =
+    internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_TestMessage_fieldAccessorTable = new
+    internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_TestMessage_descriptor,
+        internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_descriptor,
         new java.lang.String[] { "TestString", "TestBool", "TestBytes", "TestDouble", "TestFloat", "TestFixed32", "TestFixed64", "TestInt32", "TestInt64", "TestSfixed32", "TestSfixed64", "TestSint32", "TestSint64", "TestUint32", "TestUint64", });
     com.google.protobuf.DescriptorProtos.getDescriptor();
   }
