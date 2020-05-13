@@ -825,7 +825,7 @@ public class JsonSchemaDataTest {
   }
 
   @Test(expected = IllegalArgumentException.class)
-  public void testToConnectEnumIntInAllOf() {
+  public void testToConnectIntEnumInAllOfIsInvalid() {
     NumberSchema numberSchema = NumberSchema.builder().build();
     EnumSchema enumSchema = EnumSchema.builder()
         .possibleValue(1)
