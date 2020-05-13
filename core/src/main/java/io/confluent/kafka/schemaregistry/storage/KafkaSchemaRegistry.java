@@ -210,11 +210,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return new InMemoryCache<SchemaRegistryKey, SchemaRegistryValue>();
   }
 
-  protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache() {
+  public LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache() {
     return lookupCache;
   }
 
-  protected Serializer<SchemaRegistryKey, SchemaRegistryValue> getSerializer() {
+  public Serializer<SchemaRegistryKey, SchemaRegistryValue> getSerializer() {
     return serializer;
   }
 
@@ -229,7 +229,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return idGenerator;
   }
 
-  protected IdGenerator getIdentityGenerator() {
+  public IdGenerator getIdentityGenerator() {
     return idGenerator;
   }
 
