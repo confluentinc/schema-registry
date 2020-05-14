@@ -18,14 +18,12 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import javax.validation.constraints.Min;
 import java.util.Objects;
 
 public class SchemaReference implements Comparable<SchemaReference> {
 
   private String name;
   private String subject;
-  @Min(1)
   private Integer version;
 
   @JsonCreator

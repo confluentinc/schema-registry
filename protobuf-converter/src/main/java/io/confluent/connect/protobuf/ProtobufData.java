@@ -26,7 +26,6 @@ import com.google.protobuf.Descriptors.OneofDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.Timestamps;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -240,7 +239,7 @@ public class ProtobufData {
             for (Field field : schema.fields()) {
               Object object = struct.get(field);
               if (object != null) {
-                return Pair.of(field.name(),
+                return new Pair(field.name(),
                     fromConnectData(field.schema(), scope, object, protobufSchema)
                 );
               }
@@ -285,6 +284,50 @@ public class ProtobufData {
       }
     } catch (ClassCastException e) {
       throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
+    }
+  }
+
+  static class Pair<K, V> {
+    private K key;
+    private V value;
+
+    public Pair(K key, V value) {
+      this.key = key;
+      this.value = value;
+    }
+
+    public K getKey() {
+      return key;
+    }
+
+    public V getValue() {
+      return value;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      Pair<?, ?> pair = (Pair<?, ?>) o;
+      return Objects.equals(key, pair.key)
+          && Objects.equals(value, pair.value);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(key, value);
+    }
+
+    @Override
+    public String toString() {
+      return "Pair{"
+          + "key=" + key
+          + ", value=" + value
+          + '}';
     }
   }
 

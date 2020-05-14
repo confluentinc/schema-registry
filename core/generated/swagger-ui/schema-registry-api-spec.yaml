@@ -944,7 +944,6 @@ definitions:
       version:
         type: "integer"
         format: "int32"
-        minimum: 1
   SchemaString:
     type: "object"
     properties:
