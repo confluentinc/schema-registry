@@ -32,7 +32,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -370,7 +369,7 @@ public class RestService implements Configurable {
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
 
-  @VisibleForTesting
+  // Visible for testing
   public Schema lookUpSubjectVersion(String schemaString, String subject)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
@@ -400,7 +399,7 @@ public class RestService implements Configurable {
     return schema;
   }
 
-  @VisibleForTesting
+  // Visible for testing
   public Schema lookUpSubjectVersion(String schemaString,
                                      String subject,
                                      boolean lookupDeletedSchema)
@@ -441,7 +440,7 @@ public class RestService implements Configurable {
     return schema;
   }
 
-  @VisibleForTesting
+  // Visible for testing
   public int registerSchema(String schemaString, String subject)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
@@ -459,7 +458,7 @@ public class RestService implements Configurable {
     return registerSchema(request, subject);
   }
 
-  @VisibleForTesting
+  // Visible for testing
   public int registerSchema(String schemaString, String subject, int version, int id)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
@@ -501,7 +500,7 @@ public class RestService implements Configurable {
     return response.getId();
   }
 
-  @VisibleForTesting
+  // Visible for testing
   public boolean testCompatibility(String schemaString, String subject, String version)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();

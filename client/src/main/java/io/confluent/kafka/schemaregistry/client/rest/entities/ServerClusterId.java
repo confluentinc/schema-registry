@@ -17,9 +17,9 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.ImmutableMap;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -33,7 +33,7 @@ public class ServerClusterId {
 
   @JsonCreator
   public ServerClusterId(@JsonProperty("scope") final Map<String, Object> scope) {
-    this.scope = ImmutableMap.copyOf(Objects.requireNonNull(scope, "scope"));
+    this.scope = Collections.unmodifiableMap(Objects.requireNonNull(scope, "scope"));
   }
 
   public String getId() {
@@ -45,12 +45,13 @@ public class ServerClusterId {
   }
 
   public static ServerClusterId of(String kafkaClusterId, String schemaRegistryClusterId) {
-    return new ServerClusterId(ImmutableMap.of(
-        "path", Collections.emptyList(),
-        "clusters", ImmutableMap.of(
-            KAFKA_CLUSTER, kafkaClusterId,
-            SCHEMA_REGISTRY_CLUSTER, schemaRegistryClusterId)
-    ));
+    Map<String, Object> clusters = new HashMap<>();
+    clusters.put(KAFKA_CLUSTER, kafkaClusterId);
+    clusters.put(SCHEMA_REGISTRY_CLUSTER, schemaRegistryClusterId);
+    Map<String, Object> serverClusterId = new HashMap<>();
+    serverClusterId.put("path", Collections.emptyList());
+    serverClusterId.put("clusters", Collections.unmodifiableMap(clusters));
+    return new ServerClusterId(Collections.unmodifiableMap(serverClusterId));
   }
 
   @Override

@@ -79,6 +79,7 @@
         <json-schema.version>1.12.1</json-schema.version>
         <protobuf.version>3.11.4</protobuf.version>
         <wire.version>3.1.0</wire.version>
+        <swagger.version>1.6.0</swagger.version>
         <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
     </properties>
 
@@ -100,6 +101,11 @@
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro</artifactId>
                 <version>${avro.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>${guava.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.protobuf</groupId>
@@ -128,6 +134,11 @@
             </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson.datatype</groupId>
+                <artifactId>jackson-datatype-joda</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.datatype</groupId>
                 <artifactId>jackson-datatype-jsr310</artifactId>
                 <version>${jackson.version}</version>
             </dependency>
@@ -150,6 +161,16 @@
                 <groupId>uk.co.jemos.podam</groupId>
                 <artifactId>podam</artifactId>
                 <version>${podam.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger</groupId>
+                <artifactId>swagger-annotations</artifactId>
+                <version>${swagger.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger</groupId>
+                <artifactId>swagger-core</artifactId>
+                <version>${swagger.version}</version>
             </dependency>
 
             <!--children-->
@@ -244,6 +265,11 @@
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-streams-json-schema-serde</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>javax.ws.rs</groupId>
+                <artifactId>javax.ws.rs-api</artifactId>
+                <version>2.1.1</version>
             </dependency>
             <dependency>
                 <groupId>javax.xml.ws</groupId>
