@@ -24,27 +24,43 @@ import org.apache.kafka.common.config.ConfigDef;
 
 public class ProtobufDataConfig extends AbstractConfig {
 
+  public static final String ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG =
+      "enhanced.protobuf.schema.support";
+  public static final boolean ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DEFAULT = false;
+  public static final String ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DOC =
+      "Toggle for enabling/disabling enhanced protobuf schema support: "
+          + "package name preservation";
+
   public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.config";
   public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
   public static final String SCHEMAS_CACHE_SIZE_DOC = "Size of the converted schemas cache";
 
   public static ConfigDef baseConfigDef() {
-    return new ConfigDef().define(SCHEMAS_CACHE_SIZE_CONFIG,
-        ConfigDef.Type.INT,
-        SCHEMAS_CACHE_SIZE_DEFAULT,
-        ConfigDef.Importance.LOW,
-        SCHEMAS_CACHE_SIZE_DOC
-    );
+    return new ConfigDef()
+        .define(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DEFAULT,
+            ConfigDef.Importance.MEDIUM,
+            ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DOC)
+        .define(SCHEMAS_CACHE_SIZE_CONFIG,
+            ConfigDef.Type.INT,
+            SCHEMAS_CACHE_SIZE_DEFAULT,
+            ConfigDef.Importance.LOW,
+            SCHEMAS_CACHE_SIZE_DOC
+        );
   }
 
   public ProtobufDataConfig(Map<?, ?> props) {
     super(baseConfigDef(), props);
   }
 
+  public boolean isEnhancedProtobufSchemaSupport() {
+    return this.getBoolean(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG);
+  }
+
   public int schemaCacheSize() {
     return this.getInt(SCHEMAS_CACHE_SIZE_CONFIG);
   }
-
 
   public static class Builder {
 
