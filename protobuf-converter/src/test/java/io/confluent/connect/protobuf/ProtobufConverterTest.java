@@ -79,8 +79,12 @@ public class ProtobufConverterTest {
   }
 
   private Schema getTestMessageSchema() {
+    return getTestMessageSchema("TestMessage");
+  }
+
+  private Schema getTestMessageSchema(String name) {
     final SchemaBuilder builder = SchemaBuilder.struct();
-    builder.name("TestMessage");
+    builder.name(name);
     builder.field(
         "test_string",
         SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
@@ -145,7 +149,11 @@ public class ProtobufConverterTest {
   }
 
   private Struct getTestMessageStruct(String messageText, int messageInt) {
-    Schema schema = getTestMessageSchema();
+    return getTestMessageStruct("TestMessage", messageText, messageInt);
+  }
+
+  private Struct getTestMessageStruct(String schemaName, String messageText, int messageInt) {
+    Schema schema = getTestMessageSchema(schemaName);
     Struct result = new Struct(schema.schema());
     result.put("test_string", messageText);
     result.put("test_bool", false);
@@ -203,6 +211,20 @@ public class ProtobufConverterTest {
   }
 
   @Test
+  public void testFromConnectDataForValueWithNamespace() {
+    final byte[] expected = HELLO_WORLD_MESSAGE.toByteArray();
+
+    converter.configure(SR_CONFIG, false);
+    String fullName = "io.confluent.kafka.serializers.protobuf.test.TestMessage";
+    byte[] result = converter.fromConnectData("my-topic",
+        getTestMessageSchema(fullName),
+        getTestMessageStruct(fullName, TEST_MSG_STRING, 123)
+    );
+
+    assertArrayEquals(expected, Arrays.copyOfRange(result, PROTOBUF_BYTES_START, result.length));
+  }
+
+  @Test
   public void testToConnectDataForKey() throws Exception {
     converter.configure(SR_CONFIG, true);
     // extra byte for message index
@@ -227,6 +249,25 @@ public class ProtobufConverterTest {
 
     SchemaAndValue expected = new SchemaAndValue(getTestMessageSchema(),
         getTestMessageStruct(TEST_MSG_STRING, 123)
+    );
+
+    assertEquals(expected, result);
+  }
+
+  @Test
+  public void testToConnectDataForValueWithNamespace() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    configs.put(ProtobufDataConfig.ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG, true);
+    converter.configure(configs, false);
+    // extra byte for message index
+    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0}, HELLO_WORLD_MESSAGE.toByteArray());
+    schemaRegistry.register("my-topic-value", new ProtobufSchema(TestMessage.getDescriptor()));
+    SchemaAndValue result = converter.toConnectData("my-topic", input);
+
+    String fullName = "io.confluent.kafka.serializers.protobuf.test.TestMessage";
+    SchemaAndValue expected = new SchemaAndValue(getTestMessageSchema(fullName),
+        getTestMessageStruct(fullName, TEST_MSG_STRING, 123)
     );
 
     assertEquals(expected, result);
