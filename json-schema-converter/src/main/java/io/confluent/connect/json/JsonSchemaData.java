@@ -865,6 +865,8 @@ public class JsonSchemaData {
       String name = null;
       if (criterion == CombinedSchema.ONE_CRITERION) {
         name = JSON_TYPE_ONE_OF;
+      } else if (criterion == CombinedSchema.ALL_CRITERION) {
+        return allOfToConnectSchema(combinedSchema, version, forceOptional);
       } else {
         throw new IllegalArgumentException("Unsupported criterion: " + criterion);
       }
@@ -972,6 +974,27 @@ public class JsonSchemaData {
 
     Schema result = builder.build();
     return result;
+  }
+
+  private Schema allOfToConnectSchema(
+      CombinedSchema combinedSchema, Integer version, boolean forceOptional) {
+    boolean foundStringSchema = false;
+    EnumSchema enumSchema = null;
+    for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
+      if (subSchema instanceof StringSchema) {
+        foundStringSchema = true;
+      } else if (subSchema instanceof EnumSchema) {
+        enumSchema = (EnumSchema) subSchema;
+      }
+    }
+    if (enumSchema != null) {
+      if (foundStringSchema) {
+        return toConnectSchema(enumSchema, version, forceOptional);
+      } else {
+        throw new IllegalArgumentException("Only string enum is supported");
+      }
+    }
+    throw new IllegalArgumentException("Unsupported criterion: " + combinedSchema.getCriterion());
   }
 
   private interface JsonToConnectTypeConverter {

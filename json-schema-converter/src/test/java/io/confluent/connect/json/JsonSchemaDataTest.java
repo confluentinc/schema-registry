@@ -31,6 +31,8 @@ import com.fasterxml.jackson.databind.node.ShortNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -799,6 +801,48 @@ public class JsonSchemaDataTest {
         .build();
 
     checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
+  }
+
+  @Test
+  public void testToConnectEnumInAllOf() {
+    StringSchema stringSchema = StringSchema.builder().build();
+    EnumSchema enumSchema = EnumSchema.builder()
+        .possibleValue("one")
+        .possibleValue("two")
+        .possibleValue("three")
+        .build();
+    List<org.everit.json.schema.Schema> schemas = new ArrayList<>();
+    schemas.add(stringSchema);
+    schemas.add(enumSchema);
+    CombinedSchema schema = CombinedSchema.allOf(schemas).build();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
+        .parameter(JSON_TYPE_ENUM + ".one", "one")
+        .parameter(JSON_TYPE_ENUM + ".two", "two")
+        .parameter(JSON_TYPE_ENUM + ".three", "three")
+        .build();
+
+    checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testToConnectIntEnumInAllOfIsInvalid() {
+    NumberSchema numberSchema = NumberSchema.builder().build();
+    EnumSchema enumSchema = EnumSchema.builder()
+        .possibleValue(1)
+        .possibleValue(2)
+        .possibleValue(3)
+        .build();
+    List<org.everit.json.schema.Schema> schemas = new ArrayList<>();
+    schemas.add(numberSchema);
+    schemas.add(enumSchema);
+    CombinedSchema schema = CombinedSchema.allOf(schemas).build();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
+        .parameter(JSON_TYPE_ENUM + ".1", "1")
+        .parameter(JSON_TYPE_ENUM + ".2", "2")
+        .parameter(JSON_TYPE_ENUM + ".3", "3")
+        .build();
+
+    checkNonObjectConversion(expectedSchema, 1, schema, IntNode.valueOf(1));
   }
 
   @Test
