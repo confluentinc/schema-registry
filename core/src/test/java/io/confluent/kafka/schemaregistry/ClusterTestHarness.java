@@ -41,7 +41,8 @@ import kafka.utils.TestUtils;
 import kafka.zk.EmbeddedZookeeper;
 import scala.Option;
 import scala.Option$;
-import scala.collection.JavaConversions;
+import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 /**
  * Test harness to run against a real, local Kafka cluster and REST proxy. This is essentially
@@ -150,7 +151,7 @@ public abstract class ClusterTestHarness {
 
     brokerList =
         TestUtils.getBrokerListStrFromServers(
-            JavaConversions.asScalaBuffer(servers),
+            JavaConverters.asScalaBuffer(servers),
             getSecurityProtocol()
         );
 

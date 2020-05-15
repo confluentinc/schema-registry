@@ -27,9 +27,10 @@ import org.junit.Before;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
-import scala.collection.JavaConversions;
-import scala.collection.Seq;
+import scala.collection.JavaConverters;
 import scala.collection.immutable.List;
+import scala.collection.immutable.Seq;
+import scala.jdk.javaapi.CollectionConverters;
 
 import javax.security.auth.login.Configuration;
 import java.io.File;
@@ -69,14 +70,14 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     // create a JAAS file.
     Option<File> serverKeytabOption = Option.apply(serverKeytab);
     Option<File> clientKeytabOption = Option.apply(clientKeytab);
-    List<String> serverSaslMechanisms = JavaConversions.asScalaBuffer(Arrays.asList("GSSAPI")).toList();
+    List<String> serverSaslMechanisms = JavaConverters.asScalaBuffer(Arrays.asList("GSSAPI")).toList();
     Option<String> clientSaslMechanism = Option.apply("GSSAPI");
 
     java.util.List<JaasTestUtils.JaasSection> jaasSections = new ArrayList<>();
     jaasSections.add(JaasTestUtils.kafkaServerSection(JaasTestUtils.KafkaServerContextName(), serverSaslMechanisms, serverKeytabOption));
     jaasSections.add(JaasTestUtils.kafkaClientSection(clientSaslMechanism, clientKeytabOption));
-    jaasSections.addAll(JavaConversions.asJavaCollection(JaasTestUtils.zkSections()));
-    String jaasFilePath = JaasTestUtils.writeJaasContextsToFile(JavaConversions.asScalaBuffer(jaasSections).toSeq()).getAbsolutePath();
+    jaasSections.addAll(CollectionConverters.asJavaCollection(JaasTestUtils.zkSections()));
+    String jaasFilePath = JaasTestUtils.writeJaasContextsToFile(JavaConverters.asScalaBuffer(jaasSections).toSeq()).getAbsolutePath();
 
     log.info("Using KDC home: " + kdcHome.getAbsolutePath());
     kdc = new MiniKdc(kdcProps, kdcHome);
@@ -95,9 +96,9 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   }
 
   private void createPrincipal(File keytab, String principalNoRealm) throws Exception {
-    Seq<String> principals = scala.collection.JavaConversions.asScalaBuffer(
+    Seq<String> principals = JavaConverters.asScalaBuffer(
             Arrays.asList(principalNoRealm)
-    ).seq();
+    ).toList();
     kdc.createPrincipal(keytab, principals);
   }
 
