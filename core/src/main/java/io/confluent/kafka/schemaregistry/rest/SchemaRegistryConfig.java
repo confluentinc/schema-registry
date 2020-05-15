@@ -40,7 +40,7 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
 import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
-import scala.collection.JavaConversions;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES;
@@ -638,7 +638,7 @@ public class SchemaRegistryConfig extends RestConfig {
   static List<String> brokersToEndpoints(List<Broker> brokers) {
     final List<String> endpoints = new LinkedList<>();
     for (Broker broker : brokers) {
-      for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints())) {
+      for (EndPoint ep : CollectionConverters.asJavaCollection(broker.endPoints())) {
         String
             hostport =
             ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
