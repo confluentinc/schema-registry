@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetricUtils;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.KafkaException;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
@@ -99,7 +101,11 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           MetricsReporter.class
       );
       reporters.add(new JmxReporter(JMX_PREFIX));
-
+      for (MetricsReporter reporter : reporters) {
+        MetricsContext metricsContext = new MetricsContext();
+        metricsContext.metadata().putAll(MetricUtils.getMetricsValues(config.originals()));
+        reporter.contextChange(metricsContext);
+      }
       Time time = Time.SYSTEM;
 
       ClientConfig clientConfig = new ClientConfig(config.originalsWithPrefix("kafkastore."),

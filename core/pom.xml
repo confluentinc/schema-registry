@@ -215,6 +215,19 @@
             <groupId>io.swagger</groupId>
             <artifactId>swagger-core</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>confluent-metrics</artifactId>
+            <version>${ce.kafka.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>confluent-metrics</artifactId>
+            <version>${ce.kafka.version}</version>
+            <classifier>test</classifier>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
