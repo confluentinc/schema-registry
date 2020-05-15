@@ -15,58 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
-import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
-import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
-import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
-import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
-import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
-import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
-import org.apache.avro.reflect.Nullable;
-import org.apache.kafka.clients.MetricUtils;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Value;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.SystemTime;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
-
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -80,6 +30,20 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
+import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
+import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
+import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
 import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
@@ -97,8 +61,42 @@ import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
+import org.apache.avro.reflect.Nullable;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
+import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Value;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.SystemTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.HostnameVerifier;
+import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaRegistry {
 
@@ -132,6 +130,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private Metrics metrics;
   private Sensor masterNodeSensor;
   private final Map<String, SchemaProvider> providers;
+
+  public static final String RESOURCE_LABEL_PREFIX = "resource.";
+  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
+  public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
+  public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
+  public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
+  public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -173,12 +178,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     String jmxPrefix = "kafka.schema.registry";
     reporters.add(new JmxReporter(jmxPrefix));
     for (MetricsReporter reporter : reporters) {
-      MetricsContext metricsContext = new MetricsContext();
-      metricsContext.metadata().put(MetricUtils.METRICS_CONTEXT_NAMESPACE_KEY, jmxPrefix);
-      metricsContext.metadata().putAll(MetricUtils.getMetricsValues(config.originals()));
-      metricsContext.metadata().put(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_TYPE, "SCHEMAREGISTRY");
-      metricsContext.metadata().put(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
-      metricsContext.metadata().put(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+      MetricsContext metricsContext = new KafkaMetricsContext(jmxPrefix, config.originals());
+      metricsContext.metadata().put(
+              KafkaMetricsContext.METRICS_CONTEXT_PREFIX + RESOURCE_LABEL_TYPE,  "SCHEMAREGISTRY");
+      metricsContext.metadata().put(
+              KafkaMetricsContext.METRICS_CONTEXT_PREFIX + RESOURCE_LABEL_VERSION,
+              AppInfoParser.getVersion());
+      metricsContext.metadata().put(
+              KafkaMetricsContext.METRICS_CONTEXT_PREFIX + RESOURCE_LABEL_COMMIT_ID,
+              AppInfoParser.getCommitId());
       reporter.contextChange(metricsContext);
     }
 

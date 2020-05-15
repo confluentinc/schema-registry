@@ -15,17 +15,25 @@
 
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.MasterElector;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.MetricUtils;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
@@ -49,15 +57,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.MasterElector;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryRebalanceListener {
 
@@ -100,10 +99,9 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
           MetricsReporter.class
       );
-      reporters.add(new JmxReporter(JMX_PREFIX));
+      reporters.add(new JmxReporter());
       for (MetricsReporter reporter : reporters) {
-        MetricsContext metricsContext = new MetricsContext();
-        metricsContext.metadata().putAll(MetricUtils.getMetricsValues(config.originals()));
+        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
         reporter.contextChange(metricsContext);
       }
       Time time = Time.SYSTEM;

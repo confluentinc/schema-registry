@@ -1,36 +1,36 @@
 package io.confluent.kafka.schemaregistry;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.shaded.io.opencensus.proto.metrics.v1.Metric;
+import io.confluent.shaded.io.opencensus.proto.resource.v1.Resource;
 import io.confluent.telemetry.ConfluentTelemetryConfig;
-import io.confluent.telemetry.TelemetryResourceType;
 import io.confluent.telemetry.exporter.kafka.KafkaExporterConfig;
 import io.confluent.telemetry.provider.SchemaRegistryProvider;
 import io.confluent.telemetry.serde.OpencensusMetricsProto;
 import io.confluent.telemetry.serde.ProtoToFlatJson;
-import io.confluent.shaded.io.opencensus.proto.metrics.v1.Metric;
-import io.confluent.shaded.io.opencensus.proto.resource.v1.Resource;
-import java.time.Duration;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Properties;
 import junit.framework.TestCase;
-import org.apache.kafka.clients.MetricUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Properties;
+
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class TelemetryReporterTest extends ClusterTestHarness {
@@ -75,10 +75,13 @@ public class TelemetryReporterTest extends ClusterTestHarness {
     props.setProperty(ConfluentTelemetryConfig.WHITELIST_CONFIG, "");
     props.setProperty(ConfluentTelemetryConfig.DEBUG_ENABLED, "true");
 
-    props.setProperty(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_CLUSTER_ID, "foobar");
+    props.setProperty(KafkaMetricsContext.METRICS_CONTEXT_PREFIX +
+                      KafkaSchemaRegistry.RESOURCE_LABEL_CLUSTER_ID, "foobar");
 
-    props.setProperty(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_PREFIX + "region", "test");
-    props.setProperty(MetricUtils.METRICS_CONTEXT_RESOURCE_LABEL_PREFIX + "pkc", "pkc-bar");
+    props.setProperty(KafkaMetricsContext.METRICS_CONTEXT_PREFIX +
+                      KafkaSchemaRegistry.RESOURCE_LABEL_PREFIX + "region", "test");
+    props.setProperty(KafkaMetricsContext.METRICS_CONTEXT_PREFIX +
+                      KafkaSchemaRegistry.RESOURCE_LABEL_PREFIX + "pkc", "pkc-bar");
     return props;
   }
 
@@ -109,9 +112,9 @@ public class TelemetryReporterTest extends ClusterTestHarness {
 
         // Check that the labels from the config are present.
         TestCase.assertEquals(
-            resourceLabels.get(TelemetryResourceType.SCHEMAREGISTRY.prefixLabel("region")), "test");
+            resourceLabels.get("schemaregistry.region"), "test");
         TestCase.assertEquals(
-            resourceLabels.get(TelemetryResourceType.SCHEMAREGISTRY.prefixLabel("pkc")), "pkc-bar");
+            resourceLabels.get("schemaregistry.pkc"), "pkc-bar");
 
         if (m.getMetricDescriptor().getName().startsWith(SchemaRegistryProvider.DOMAIN)) {
           srMetricsPresent = true;
