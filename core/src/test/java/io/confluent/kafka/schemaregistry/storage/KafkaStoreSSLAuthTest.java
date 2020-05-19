@@ -43,14 +43,14 @@ public class KafkaStoreSSLAuthTest extends SSLClusterTestHarness {
 
   @Test
   public void testInitialization() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(bootstrapServers,
             clientSslConfigs, requireSSLClientAuth());
     kafkaStore.close();
   }
 
   @Test(expected = StoreInitializationException.class)
   public void testInitializationWithoutClientAuth() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(bootstrapServers,
             clientSslConfigs, false);
     kafkaStore.close();
 
@@ -59,7 +59,7 @@ public class KafkaStoreSSLAuthTest extends SSLClusterTestHarness {
 
   @Test(expected = StoreInitializationException.class)
   public void testDoubleInitialization() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(bootstrapServers,
             clientSslConfigs, requireSSLClientAuth());
     try {
       kafkaStore.init();
@@ -70,7 +70,7 @@ public class KafkaStoreSSLAuthTest extends SSLClusterTestHarness {
 
   @Test
   public void testSimplePut() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(bootstrapServers,
             clientSslConfigs, requireSSLClientAuth());
     String key = "Kafka";
     String value = "Rocks";

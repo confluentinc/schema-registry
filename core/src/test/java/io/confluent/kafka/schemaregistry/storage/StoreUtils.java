@@ -57,7 +57,7 @@ public class StoreUtils {
    * or ZooKeeper SASL individually, the other must have SASL enabled.
    */
   public static KafkaStore<String, String> createAndInitSASLStoreInstance(
-          String zkConnect)
+          String bootstrapServers)
       throws RestConfigException, StoreInitializationException, SchemaRegistryException {
     Properties props = new Properties();
 
@@ -67,14 +67,14 @@ public class StoreUtils {
     props.put(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG, false);
 
     Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
-    return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
+    return createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, props);
   }
 
   /**
    * Get a new instance of an SSL KafkaStore and initialize it.
    */
   public static KafkaStore<String, String> createAndInitSSLKafkaStoreInstance(
-          String zkConnect, Map<String, Object> sslConfigs, boolean requireSSLClientAuth)
+          String bootstrapServers, Map<String, Object> sslConfigs, boolean requireSSLClientAuth)
       throws RestConfigException, StoreInitializationException, SchemaRegistryException {
     Properties props = new Properties();
 
@@ -94,7 +94,7 @@ public class StoreUtils {
     }
 
     Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
-    return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
+    return createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, props);
   }
 
   /**

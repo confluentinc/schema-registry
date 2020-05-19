@@ -96,7 +96,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
   // TODO: This requires fix for https://issues.apache.org/jira/browse/KAFKA-1788
 //  @Test
 //  public void testPutRetries() throws InterruptedException {
-//    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
+//    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(bootstrapServers,
 //                                                                                       zkClient);
 //    String key = "Kafka";
 //    String value = "Rocks";
