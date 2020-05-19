@@ -179,14 +179,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     reporters.add(new JmxReporter(jmxPrefix));
     for (MetricsReporter reporter : reporters) {
       MetricsContext metricsContext = new KafkaMetricsContext(jmxPrefix, config.originals());
-      metricsContext.metadata().put(
-              KafkaMetricsContext.METRICS_CONTEXT_PREFIX + RESOURCE_LABEL_TYPE,  "SCHEMAREGISTRY");
-      metricsContext.metadata().put(
-              KafkaMetricsContext.METRICS_CONTEXT_PREFIX + RESOURCE_LABEL_VERSION,
-              AppInfoParser.getVersion());
-      metricsContext.metadata().put(
-              KafkaMetricsContext.METRICS_CONTEXT_PREFIX + RESOURCE_LABEL_COMMIT_ID,
-              AppInfoParser.getCommitId());
+      metricsContext.metadata().put(RESOURCE_LABEL_TYPE,  "SCHEMAREGISTRY");
+      metricsContext.metadata().put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
+      metricsContext.metadata().put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
       reporter.contextChange(metricsContext);
     }
 

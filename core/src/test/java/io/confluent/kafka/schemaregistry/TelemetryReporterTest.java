@@ -82,6 +82,7 @@ public class TelemetryReporterTest extends ClusterTestHarness {
                       KafkaSchemaRegistry.RESOURCE_LABEL_PREFIX + "region", "test");
     props.setProperty(KafkaMetricsContext.METRICS_CONTEXT_PREFIX +
                       KafkaSchemaRegistry.RESOURCE_LABEL_PREFIX + "pkc", "pkc-bar");
+    props.setProperty("schema.registry.service.id", "yolo");
     return props;
   }
 
@@ -89,7 +90,7 @@ public class TelemetryReporterTest extends ClusterTestHarness {
   public void testMetricsReporter() {
     long startMs = System.currentTimeMillis();
     boolean srMetricsPresent = false;
-    while (System.currentTimeMillis() - startMs < 20000) {
+    while (!srMetricsPresent && System.currentTimeMillis() - startMs < 20000) {
       ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(200));
       for (ConsumerRecord<byte[], byte[]> record : records) {
 
