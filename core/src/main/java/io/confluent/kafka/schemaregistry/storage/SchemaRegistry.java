@@ -78,6 +78,10 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   void deleteSchemaVersion(String subject, Schema schema,
                            boolean permanentDelete) throws SchemaRegistryException;
 
+  default String tenant() {
+    return "default";
+  }
+
   SchemaRegistryConfig config();
 
   // Can be used to pass values between extensions
