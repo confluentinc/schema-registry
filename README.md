@@ -42,8 +42,7 @@ Quickstart API Usage examples
 -----------------------------
 
 The following assumes you have Kafka and an [instance of the Schema Registry](https://docs.confluent.io/current/schema-registry/installation/index.html)
-running using the default settings. These examples are also included as [API Usage examples](https://docs.confluent.io/current/schema-registry/using.html) on
-[docs.confluent.io](https://docs.confluent.io/current/).
+running using the default settings. These examples, and more, are also available at [API Usage examples](https://docs.confluent.io/current/schema-registry/using.html) on [docs.confluent.io](https://docs.confluent.io/current/).
 
 ```bash
 # Register a new version of a schema under the subject "Kafka-key"
