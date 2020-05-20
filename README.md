@@ -124,6 +124,41 @@ with Maven.
 This project uses the [Google Java code style](https://google.github.io/styleguide/javaguide.html)
 to keep code clean and consistent.
 
+To build:
+
+```bash
+mvn compile
+```
+
+To run the unit and integration tests:
+
+```bash
+mvn test
+```
+
+To run an instance of Schema Registry against a local Kafka cluster (using the default configuration included with Kafka):
+
+```bash
+mvn exec:java
+```
+
+To create a packaged version, optionally skipping the tests:
+
+```bash
+mvn package [-DskipTests]
+```
+
+This will produce a version ready for production in `package/target/kafka-schema-registry-package-$VERSION-package` containing a
+directory layout similar to the packaged binary versions.
+
+You can also produce a standalone fat JAR using the `standalone` profile:
+
+```bash
+mvn package -P standalone [-DskipTests]
+```
+
+This generates `package/target/kafka-schema-registry-package-$VERSION-standalone.jar`, which includes all the dependencies as well.
+
 OpenAPI Spec
 ------------
 
@@ -133,6 +168,8 @@ on `compile` phase.
 
 Contribute
 ----------
+
+Thanks for helping us to make Schema Registry even better!
 
 - Source Code: https://github.com/confluentinc/schema-registry
 - Issue Tracker: https://github.com/confluentinc/schema-registry/issues
