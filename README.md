@@ -8,6 +8,23 @@ evolution of schemas according to the configured compatibility setting. It
 provides serializers that plug into Kafka clients that handle schema storage and
 retrieval for Kafka messages that are sent in the Avro format.
 
+This README includes the following sections:
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+<!-- generated with [DocToc](https://github.com/thlorenz/doctoc), see the link for install and instructions for use -->
+
+- [Documentation](#documentation)
+- [Quickstart API Usage examples](#quickstart-api-usage-examples)
+- [Installation](#installation)
+- [Deployment](#deployment)
+- [Development](#development)
+- [OpenAPI Spec](#openapi-spec)
+- [Contribute](#contribute)
+- [License](#license)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 Documentation
 -------------
 
