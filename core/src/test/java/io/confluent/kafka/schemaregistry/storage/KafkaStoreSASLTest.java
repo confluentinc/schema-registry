@@ -26,13 +26,13 @@ import static org.junit.Assert.fail;
 public class KafkaStoreSASLTest extends SASLClusterTestHarness {
   @Test
   public void testInitialization() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(bootstrapServers);
     kafkaStore.close();
   }
 
   @Test(expected = StoreInitializationException.class)
   public void testDoubleInitialization() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(bootstrapServers);
     try {
       kafkaStore.init();
     } finally {
@@ -42,7 +42,7 @@ public class KafkaStoreSASLTest extends SASLClusterTestHarness {
 
   @Test
   public void testSimplePut() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(bootstrapServers);
     String key = "Kafka";
     String value = "Rocks";
     try {
