@@ -164,7 +164,7 @@ To create a packaged version, optionally skipping the tests:
 mvn package [-DskipTests]
 ```
 
-This will produce a version ready for production in `package/target/kafka-schema-registry-package-$VERSION-package` containing a
+This produces a version ready for production in `package/target/kafka-schema-registry-package-$VERSION-package` containing a
 directory layout similar to the packaged binary versions.
 
 You can also produce a standalone fat JAR using the `standalone` profile:
