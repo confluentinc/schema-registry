@@ -316,6 +316,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         masterElector = new KafkaGroupMasterElector(config, myIdentity, this);
       } else {
         log.info("Joining schema registry with Zookeeper-based coordination");
+        log.warn("*****************************************************************************");
+        log.warn("Zookeeper-based coordination is deprecated and will be removed in the future.");
+        log.warn("Please switch to Kafka-based coordination with "
+            + "\"kafkastore.bootstrap.servers\".");
+        log.warn("*****************************************************************************");
         masterElector = new ZookeeperMasterElector(config, myIdentity, this);
       }
       masterElector.init();

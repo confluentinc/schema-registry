@@ -61,6 +61,7 @@ public class SchemaRegistryConfig extends RestConfig {
   @Deprecated
   public static final String KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT = "PLAINTEXT";
 
+  @Deprecated
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   public static final String KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG = "kafkastore.bootstrap.servers";
   public static final String KAFKASTORE_GROUP_ID_CONFIG = "kafkastore.group.id";

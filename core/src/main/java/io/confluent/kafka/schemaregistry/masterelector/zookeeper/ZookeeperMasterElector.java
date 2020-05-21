@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.storage.MasterAwareSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 
+@Deprecated
 public class ZookeeperMasterElector implements MasterElector {
 
   private static final Logger log = LoggerFactory.getLogger(ZookeeperMasterElector.class);
