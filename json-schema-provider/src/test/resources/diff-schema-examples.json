@@ -312,7 +312,7 @@
     "compatible": true
   },
   {
-    "description": "Detect changes to enum schema",
+    "description": "Detect incompatible changes to enum schema",
     "original_schema": {
       "allOf": [
         {
@@ -338,9 +338,41 @@
       ]
     },
     "changes": [
-      "ENUM_ARRAY_CHANGED #/allOf/1/enum"
+      "COMBINED_SUBSCHEMAS_CHANGED #/"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect compatible changes to enum schema",
+    "original_schema": {
+      "allOf": [
+        {
+          "type": "string"
+        },
+        {
+          "enum": [
+            "red"
+          ]
+        }
+      ]
+    },
+    "update_schema": {
+      "allOf": [
+        {
+          "enum": [
+            "red",
+            "blue"
+          ]
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "changes": [
+      "ENUM_ARRAY_EXTENDED #/allOf/0/enum"
+    ],
+    "compatible": true
   },
   {
     "description": "Detect changes to type array",
@@ -377,7 +409,7 @@
       ]
     },
     "changes": [
-      "TYPE_CHANGED #/oneOf/0"
+      "COMBINED_SUBSCHEMAS_CHANGED #/"
     ],
     "compatible": false
   },
@@ -396,15 +428,14 @@
           "type": "number"
         },
         {
-          "type": "number"
+          "type": "string"
         }
       ]
     },
     "changes": [
-      "SUM_TYPE_EXTENDED #/",
-      "TYPE_CHANGED #/oneOf/0"
+      "SUM_TYPE_EXTENDED #/"
     ],
-    "compatible": false
+    "compatible": true
   },
   {
     "description": "Detect changes to remove properties",
@@ -566,7 +597,7 @@
       ]
     },
     "changes": [
-      "TYPE_CHANGED #/oneOf/0/properties/foo"
+      "COMBINED_SUBSCHEMAS_CHANGED #/"
     ],
     "compatible": false
   },
@@ -1164,10 +1195,10 @@
     "update_schema": {
       "oneOf": [
         {
-          "type": "number"
+          "type": "string"
         },
         {
-          "type": "string"
+          "type": "number"
         }
       ]
     },
