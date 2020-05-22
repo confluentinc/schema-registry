@@ -96,7 +96,7 @@
       }
     },
     "changes": [
-      "COMBINED_SUBSCHEMAS_CHANGED #/properties/prop1"
+      "COMBINED_TYPE_SUBSCHEMAS_CHANGED #/properties/prop1"
     ],
     "compatible": false
   },

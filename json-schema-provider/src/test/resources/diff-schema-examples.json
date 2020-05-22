@@ -338,7 +338,7 @@
       ]
     },
     "changes": [
-      "COMBINED_SUBSCHEMAS_CHANGED #/"
+      "COMBINED_TYPE_SUBSCHEMAS_CHANGED #/"
     ],
     "compatible": false
   },
@@ -409,7 +409,7 @@
       ]
     },
     "changes": [
-      "COMBINED_SUBSCHEMAS_CHANGED #/"
+      "COMBINED_TYPE_SUBSCHEMAS_CHANGED #/"
     ],
     "compatible": false
   },
@@ -597,7 +597,7 @@
       ]
     },
     "changes": [
-      "COMBINED_SUBSCHEMAS_CHANGED #/"
+      "COMBINED_TYPE_SUBSCHEMAS_CHANGED #/"
     ],
     "compatible": false
   },
