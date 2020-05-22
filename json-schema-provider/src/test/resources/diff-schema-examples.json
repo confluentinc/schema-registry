@@ -370,7 +370,7 @@
       ]
     },
     "changes": [
-      "ENUM_ARRAY_EXTENDED #/allOf/0/enum"
+      "ENUM_ARRAY_EXTENDED #/allOf/1/enum"
     ],
     "compatible": true
   },

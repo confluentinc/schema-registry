@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.json.diff;
 import io.confluent.kafka.schemaregistry.json.utils.Edge;
 import io.confluent.kafka.schemaregistry.json.utils.MaximumCardinalityMatch;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.everit.json.schema.CombinedSchema;
@@ -40,8 +41,8 @@ class CombinedSchemaDiff {
       ctx.addDifference(COMPOSITION_METHOD_CHANGED);
     } else {
       // Use sets to collapse duplicate entries
-      final Set<Schema> originalSubschemas = new HashSet<>(original.getSubschemas());
-      final Set<Schema> updateSubschemas = new HashSet<>(update.getSubschemas());
+      final Set<Schema> originalSubschemas = new LinkedHashSet<>(original.getSubschemas());
+      final Set<Schema> updateSubschemas = new LinkedHashSet<>(update.getSubschemas());
       int originalSize = originalSubschemas.size();
       int updateSize = updateSubschemas.size();
       if (originalSize < updateSize) {
