@@ -17,6 +17,9 @@
 package io.confluent.connect.protobuf;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.protobuf.Descriptors.Descriptor;
+import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -56,6 +59,10 @@ public class ProtobufConverterTest {
   private static final int PROTOBUF_BYTES_START = 6; // extra byte for message index
   private static final String TEST_MSG_STRING = "Hello World";
   private static final TestMessage HELLO_WORLD_MESSAGE = TestMessage.newBuilder()
+      .setTestString(TEST_MSG_STRING)
+      .setTestInt32(123)
+      .build();
+  private static final TestMessage2 HELLO_WORLD_MESSAGE2 = TestMessage2.newBuilder()
       .setTestString(TEST_MSG_STRING)
       .setTestInt32(123)
       .build();
@@ -229,7 +236,7 @@ public class ProtobufConverterTest {
     converter.configure(SR_CONFIG, true);
     // extra byte for message index
     final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0}, HELLO_WORLD_MESSAGE.toByteArray());
-    schemaRegistry.register("my-topic-key", new ProtobufSchema(TestMessage.getDescriptor()));
+    schemaRegistry.register("my-topic-key", getSchema(TestMessage.getDescriptor()));
     SchemaAndValue result = converter.toConnectData("my-topic", input);
 
     SchemaAndValue expected = new SchemaAndValue(getTestMessageSchema(),
@@ -240,15 +247,45 @@ public class ProtobufConverterTest {
   }
 
   @Test
+  public void testToConnectDataForKeyWithSecondMessage() throws Exception {
+    converter.configure(SR_CONFIG, true);
+    // extra bytes for message index
+    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 2, 2}, HELLO_WORLD_MESSAGE2.toByteArray());
+    schemaRegistry.register("my-topic-key", getSchema(TestMessage2.getDescriptor()));
+    SchemaAndValue result = converter.toConnectData("my-topic", input);
+
+    SchemaAndValue expected = new SchemaAndValue(getTestMessageSchema("TestMessage2"),
+        getTestMessageStruct("TestMessage2", TEST_MSG_STRING, 123)
+    );
+
+    assertEquals(expected, result);
+  }
+
+  @Test
   public void testToConnectDataForValue() throws Exception {
     converter.configure(SR_CONFIG, false);
     // extra byte for message index
     final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0}, HELLO_WORLD_MESSAGE.toByteArray());
-    schemaRegistry.register("my-topic-value", new ProtobufSchema(TestMessage.getDescriptor()));
+    schemaRegistry.register("my-topic-value", getSchema(TestMessage.getDescriptor()));
     SchemaAndValue result = converter.toConnectData("my-topic", input);
 
     SchemaAndValue expected = new SchemaAndValue(getTestMessageSchema(),
         getTestMessageStruct(TEST_MSG_STRING, 123)
+    );
+
+    assertEquals(expected, result);
+  }
+
+  @Test
+  public void testToConnectDataForValueWithSecondMessage() throws Exception {
+    converter.configure(SR_CONFIG, false);
+    // extra bytes for message index
+    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 2, 2}, HELLO_WORLD_MESSAGE2.toByteArray());
+    schemaRegistry.register("my-topic-value", getSchema(TestMessage2.getDescriptor()));
+    SchemaAndValue result = converter.toConnectData("my-topic", input);
+
+    SchemaAndValue expected = new SchemaAndValue(getTestMessageSchema("TestMessage2"),
+        getTestMessageStruct("TestMessage2", TEST_MSG_STRING, 123)
     );
 
     assertEquals(expected, result);
@@ -262,7 +299,7 @@ public class ProtobufConverterTest {
     converter.configure(configs, false);
     // extra byte for message index
     final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0}, HELLO_WORLD_MESSAGE.toByteArray());
-    schemaRegistry.register("my-topic-value", new ProtobufSchema(TestMessage.getDescriptor()));
+    schemaRegistry.register("my-topic-value", getSchema(TestMessage.getDescriptor()));
     SchemaAndValue result = converter.toConnectData("my-topic", input);
 
     String fullName = "io.confluent.kafka.serializers.protobuf.test.TestMessage";
@@ -516,16 +553,16 @@ public class ProtobufConverterTest {
     KeyValue.KeyValueMessage keyValueMessage2 = kvBuilder2.setKey(15).setValue("bar").build();
 
     String subjectSuffix = isKey ? "key" : "value";
-    ProtobufSchema schema = new ProtobufSchema(keyValueMessage.getDescriptorForType());
+    ProtobufSchema schema = getSchema(keyValueMessage.getDescriptorForType());
     ReferenceSubjectNameStrategy strategy = new DefaultReferenceSubjectNameStrategy();
     schema = KafkaProtobufSerializer.resolveDependencies(
         schemaRegistry, true, strategy, "topic1", isKey, schema);
     schemaRegistry.register("topic1-" + subjectSuffix, schema);
-    schema = new ProtobufSchema(keyMessage.getDescriptorForType());
+    schema = getSchema(keyMessage.getDescriptorForType());
     schema = KafkaProtobufSerializer.resolveDependencies(
         schemaRegistry, true, strategy, "topic2", isKey, schema);
     schemaRegistry.register("topic2-" + subjectSuffix, schema);
-    schema = new ProtobufSchema(keyValueMessage2.getDescriptorForType());
+    schema = getSchema(keyValueMessage2.getDescriptorForType());
     schema = KafkaProtobufSerializer.resolveDependencies(
         schemaRegistry, true, strategy, "topic2", isKey, schema);
     schemaRegistry.register("topic2-" + subjectSuffix, schema);
@@ -543,6 +580,11 @@ public class ProtobufConverterTest {
 
     converted2 = converter.toConnectData("topic2", serializedRecord2);
     assertEquals(2L, (long) converted2.schema().version());
+  }
+
+  private static ProtobufSchema getSchema(Descriptor descriptor) {
+    // Return a schema as Schema Registry would see it
+    return new ProtobufSchema(new ProtobufSchema(descriptor).toString());
   }
 
   private static byte[] concat(byte[] first, byte[] second) {
