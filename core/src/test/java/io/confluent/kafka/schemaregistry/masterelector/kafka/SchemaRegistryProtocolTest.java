@@ -20,13 +20,20 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
+import static org.junit.Assert.assertNotNull;
+
 public class SchemaRegistryProtocolTest {
 
   @Test
-  public void testDeserialization() {
+  public void testDeserializeWithUnknownProperties() {
+    String json = "{\"error\":0," +
+            "\"master\":\"master\"," +
+            "\"master_identity\":null," +
+            "\"unknown_property\":null," +
+            "\"version\":1}";
+    ByteBuffer byteBuffer = ByteBuffer.wrap(json.getBytes());
     SchemaRegistryProtocol.Assignment assignment =
-            new SchemaRegistryProtocol.Assignment((short) 0, "master", null);
-    ByteBuffer bytes = assignment.toJsonBytes();
-    assert bytes != null;
+            SchemaRegistryProtocol.Assignment.fromJson(byteBuffer);
+    assertNotNull(assignment);
   }
 }
