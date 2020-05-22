@@ -175,9 +175,8 @@ public class MetricsContainer {
   }
 
   private static String getCommitId() {
-    try {
-      String fileName = "schema-registry-app.properties";
-      InputStream manifestFile = MetricsContainer.class.getResourceAsStream(fileName);
+    String fileName = "schema-registry-app.properties";
+    try (InputStream manifestFile = MetricsContainer.class.getResourceAsStream(fileName)) {
       if (manifestFile != null) {
         Properties props = new Properties();
         props.load(manifestFile);
