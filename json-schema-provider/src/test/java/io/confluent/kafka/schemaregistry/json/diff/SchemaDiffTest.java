@@ -35,11 +35,20 @@ import static org.junit.Assert.assertThat;
 
 public class SchemaDiffTest {
 
-  @SuppressWarnings("unchecked")
   @Test
   public void checkJsonSchemaCompatibility() {
     final JSONArray testCases = new JSONArray(readFile("diff-schema-examples.json"));
+    checkJsonSchemaCompatibility(testCases);
+  }
 
+  @Test
+  public void checkJsonSchemaCompatibilityForCombinedSchemas() {
+    final JSONArray testCases = new JSONArray(readFile("diff-combined-schema-examples.json"));
+    checkJsonSchemaCompatibility(testCases);
+  }
+
+  @SuppressWarnings("unchecked")
+  private void checkJsonSchemaCompatibility(JSONArray testCases) {
     for (final Object testCaseObject : testCases) {
       final JSONObject testCase = (JSONObject) testCaseObject;
       final Schema original = SchemaLoader.load(testCase.getJSONObject("original_schema"));
