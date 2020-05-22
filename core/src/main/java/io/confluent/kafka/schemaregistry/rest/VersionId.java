@@ -34,9 +34,6 @@ public class VersionId {
       } catch (NumberFormatException nfe) {
         throw new InvalidVersionException(version);
       }
-      if (this.version == -1) {
-        throw new InvalidVersionException(version);
-      }
       assertValidVersion();
     }
   }

@@ -221,7 +221,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           } catch (StoreException se) {
             log.error("Failed to add record from the Kafka topic"
                       + topic
-                      + " the local store");
+                      + " the local store", se);
           }
         }
       }
@@ -232,7 +232,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           "Consumer threw RecordTooLargeException. A schema has been written that "
           + "exceeds the default maximum fetch size.", rtle);
     } catch (RuntimeException e) {
-      log.error("KafkaStoreReader thread has died for an unknown reason.");
+      log.error("KafkaStoreReader thread has died for an unknown reason.", e);
       throw new RuntimeException(e);
     }
   }

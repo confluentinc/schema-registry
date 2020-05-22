@@ -15,7 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
+import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
+import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,7 +113,7 @@ public class KafkaStoreMessageHandler
           lookupCache.schemaDeleted(schemaKey, schemaValue);
         }
       } catch (StoreException e) {
-        log.error("Failed to delete subject {} in the local cache", subject);
+        log.error("Failed to delete subject {} in the local cache", subject, e);
       }
     }
   }
@@ -120,13 +123,14 @@ public class KafkaStoreMessageHandler
     try {
       lookupCache.clearSubjects(subject);
     } catch (StoreException e) {
-      log.error("Failed to clear subject {} in the local cache", subject);
+      log.error("Failed to clear subject {} in the local cache", subject, e);
     }
   }
 
   private void handleSchemaUpdate(SchemaKey schemaKey,
                                   SchemaValue schemaValue,
                                   SchemaValue oldSchemaValue) {
+    final MetricsContainer metricsContainer = schemaRegistry.getMetricsContainer();
     if (schemaValue != null) {
       // If the schema is marked to be deleted, we store it in an internal datastructure
       // that holds all deleted schema keys for an id.
@@ -136,14 +140,31 @@ public class KafkaStoreMessageHandler
       // consumers should be able to access the schemas by id. This is guaranteed when the schema is
       // re-registered again and hence we can tombstone the record.
       if (schemaValue.isDeleted()) {
-        this.lookupCache.schemaDeleted(schemaKey, schemaValue);
+        lookupCache.schemaDeleted(schemaKey, schemaValue);
+        updateMetrics(metricsContainer.getSchemasDeleted(),
+                      metricsContainer.getSchemasDeleted(getSchemaType(schemaValue)));
       } else {
         // Update the maximum id seen so far
         idGenerator.schemaRegistered(schemaKey, schemaValue);
         lookupCache.schemaRegistered(schemaKey, schemaValue);
+        updateMetrics(metricsContainer.getSchemasCreated(),
+                      metricsContainer.getSchemasCreated(getSchemaType(schemaValue)));
       }
     } else {
       lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
+      updateMetrics(metricsContainer.getSchemasDeleted(),
+                    metricsContainer.getSchemasDeleted(getSchemaType(oldSchemaValue)));
+    }
+  }
+
+  private static String getSchemaType(SchemaValue schemaValue) {
+    return schemaValue.getSchemaType() == null ? AvroSchema.TYPE : schemaValue.getSchemaType();
+  }
+
+  private static void updateMetrics(SchemaRegistryMetric total, SchemaRegistryMetric perType) {
+    total.increment();
+    if (perType != null) {
+      perType.increment();
     }
   }
 }

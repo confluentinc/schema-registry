@@ -16,7 +16,6 @@ package io.confluent.kafka.schemaregistry;
 
 import io.confluent.common.utils.IntegrationTest;
 import kafka.utils.CoreUtils;
-import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
@@ -41,7 +40,7 @@ import kafka.utils.TestUtils;
 import kafka.zk.EmbeddedZookeeper;
 import scala.Option;
 import scala.Option$;
-import scala.collection.JavaConversions;
+import scala.collection.JavaConverters;
 
 /**
  * Test harness to run against a real, local Kafka cluster and REST proxy. This is essentially
@@ -150,7 +149,7 @@ public abstract class ClusterTestHarness {
 
     brokerList =
         TestUtils.getBrokerListStrFromServers(
-            JavaConversions.asScalaBuffer(servers),
+            JavaConverters.asScalaBuffer(servers),
             getSecurityProtocol()
         );
 

@@ -40,17 +40,17 @@ public final class DependencyTestProto {
     boolean getIsActive();
 
     /**
-     * <code>.TestMessage test_messsage = 3;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
      * @return Whether the testMesssage field is set.
      */
     boolean hasTestMesssage();
     /**
-     * <code>.TestMessage test_messsage = 3;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
      * @return The testMesssage.
      */
     io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage getTestMesssage();
     /**
-     * <code>.TestMessage test_messsage = 3;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
      */
     io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder getTestMesssageOrBuilder();
   }
@@ -198,21 +198,21 @@ public final class DependencyTestProto {
     public static final int TEST_MESSSAGE_FIELD_NUMBER = 3;
     private io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage testMesssage_;
     /**
-     * <code>.TestMessage test_messsage = 3;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
      * @return Whether the testMesssage field is set.
      */
     public boolean hasTestMesssage() {
       return testMesssage_ != null;
     }
     /**
-     * <code>.TestMessage test_messsage = 3;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
      * @return The testMesssage.
      */
     public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage getTestMesssage() {
       return testMesssage_ == null ? io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.getDefaultInstance() : testMesssage_;
     }
     /**
-     * <code>.TestMessage test_messsage = 3;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
      */
     public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder getTestMesssageOrBuilder() {
       return getTestMesssage();
@@ -734,14 +734,14 @@ public final class DependencyTestProto {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder> testMesssageBuilder_;
       /**
-       * <code>.TestMessage test_messsage = 3;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
        * @return Whether the testMesssage field is set.
        */
       public boolean hasTestMesssage() {
         return testMesssageBuilder_ != null || testMesssage_ != null;
       }
       /**
-       * <code>.TestMessage test_messsage = 3;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
        * @return The testMesssage.
        */
       public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage getTestMesssage() {
@@ -752,7 +752,7 @@ public final class DependencyTestProto {
         }
       }
       /**
-       * <code>.TestMessage test_messsage = 3;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
        */
       public Builder setTestMesssage(io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage value) {
         if (testMesssageBuilder_ == null) {
@@ -768,7 +768,7 @@ public final class DependencyTestProto {
         return this;
       }
       /**
-       * <code>.TestMessage test_messsage = 3;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
        */
       public Builder setTestMesssage(
           io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder builderForValue) {
@@ -782,7 +782,7 @@ public final class DependencyTestProto {
         return this;
       }
       /**
-       * <code>.TestMessage test_messsage = 3;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
        */
       public Builder mergeTestMesssage(io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage value) {
         if (testMesssageBuilder_ == null) {
@@ -800,7 +800,7 @@ public final class DependencyTestProto {
         return this;
       }
       /**
-       * <code>.TestMessage test_messsage = 3;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
        */
       public Builder clearTestMesssage() {
         if (testMesssageBuilder_ == null) {
@@ -814,7 +814,7 @@ public final class DependencyTestProto {
         return this;
       }
       /**
-       * <code>.TestMessage test_messsage = 3;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
        */
       public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder getTestMesssageBuilder() {
         
@@ -822,7 +822,7 @@ public final class DependencyTestProto {
         return getTestMesssageFieldBuilder().getBuilder();
       }
       /**
-       * <code>.TestMessage test_messsage = 3;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
        */
       public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder getTestMesssageOrBuilder() {
         if (testMesssageBuilder_ != null) {
@@ -833,7 +833,7 @@ public final class DependencyTestProto {
         }
       }
       /**
-       * <code>.TestMessage test_messsage = 3;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_messsage = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder> 
@@ -918,12 +918,13 @@ public final class DependencyTestProto {
       "\n\031DependencyTestProto.proto\022,io.confluen" +
       "t.kafka.serializers.protobuf.test\032\025Neste" +
       "dTestProto.proto\032\025PublicTestProto.proto\"" +
-      "\240\001\n\021DependencyMessage\022S\n\016nested_message\030" +
+      "\315\001\n\021DependencyMessage\022S\n\016nested_message\030" +
       "\001 \001(\0132;.io.confluent.kafka.serializers.p" +
       "rotobuf.test.NestedMessage\022\021\n\tis_active\030" +
-      "\002 \001(\010\022#\n\rtest_messsage\030\003 \001(\0132\014.TestMessa" +
-      "geB.\n,io.confluent.kafka.serializers.pro" +
-      "tobuf.testb\006proto3"
+      "\002 \001(\010\022P\n\rtest_messsage\030\003 \001(\01329.io.conflu" +
+      "ent.kafka.serializers.protobuf.test.Test" +
+      "MessageB.\n,io.confluent.kafka.serializer" +
+      "s.protobuf.testb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

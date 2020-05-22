@@ -16,6 +16,8 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -32,6 +34,8 @@ import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.junit.Test;
 
 import java.util.*;
+import java.net.URL;
+import java.net.HttpURLConnection;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
@@ -447,7 +451,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemas.get(1));
-    SchemaReference ref = new SchemaReference("otherns.subrecord", "reference", 1);
+    SchemaReference ref = new SchemaReference("otherns.Subrecord", "reference", 1);
     request.setReferences(Collections.singletonList(ref));
     int registeredId = restApp.restClient.registerSchema(request, "referrer");
     assertEquals("Registering a new schema should succeed", 2, registeredId);
@@ -464,6 +468,13 @@ public class RestApiTest extends ClusterTestHarness {
 
     List<Integer> refs = restApp.restClient.getReferencedBy("reference", 1);
     assertEquals(2, refs.get(0).intValue());
+
+    ns.MyRecord myrecord = new ns.MyRecord();
+    AvroSchema schema = new AvroSchema(AvroSchemaUtils.getSchema(myrecord));
+    // Note that we pass an empty list of refs since SR will perform a deep equality check
+    Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
+            AvroSchema.TYPE, Collections.emptyList(), "referrer", false);
+    assertEquals("Registered schema should be found", 2, registeredSchema.getId().intValue());
 
     try {
       restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
@@ -1277,6 +1288,58 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException rce) {
       fail("The operation shouldn't have failed");
     }
+  }
+
+  @Test
+  public void testHttpResponseHeaders() throws Exception {
+    String baseUrl = restApp.restClient.getBaseUrls().current();
+    String requestUrl = buildRequestUrl(baseUrl, "/v1/metadata/id");
+    HttpURLConnection connection = null;
+    try {
+      URL url = new URL(requestUrl);
+      connection = (HttpURLConnection) url.openConnection();
+      connection.setConnectTimeout(60000);
+      connection.setReadTimeout(60000);
+      connection.setRequestMethod("GET");
+      connection.setDoInput(true);
+
+      Map<String,List<String>> httpResponseHeaders = connection.getHeaderFields();
+      assertNotNull(matchHeaderValue(httpResponseHeaders,
+              "X-XSS-Protection", "1; mode=block"));
+      assertNotNull(matchHeaderValue(httpResponseHeaders,
+              "Cache-Control",
+              "no-cache, no-store, must-revalidate"));
+      assertNull(matchHeaderValue(httpResponseHeaders,
+              "Strict-Transport-Security", "max-age=31536000"));
+    } finally {
+      if (connection != null) {
+        connection.disconnect();
+      }
+    }
+  }
+
+  protected Properties getSchemaRegistryProperties() {
+    Properties schemaRegistryProps = new Properties();
+    schemaRegistryProps.put("response.http.headers.config",
+            "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");
+    return schemaRegistryProps;
+  }
+
+  private String matchHeaderValue(Map<String, List<String>> responseHeaders,
+                                  String headerName, String expectedHeaderValue) {
+    if (responseHeaders.isEmpty() || responseHeaders.get(headerName) == null)
+      return null;
+
+    return responseHeaders.get(headerName)
+            .stream()
+            .filter(value -> expectedHeaderValue.equals(value.trim()))
+            .findAny()
+            .orElse(null);
+  }
+
+  private String buildRequestUrl(String baseUrl, String path) {
+    // Join base URL and path, collapsing any duplicate forward slash delimiters
+    return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
 }
 

@@ -57,14 +57,14 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
         failUnknownProperties
     );
-    this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
+    this.validate = config.getBoolean(KafkaJsonSchemaDeserializerConfig.FAIL_INVALID_SCHEMA);
     this.typeProperty = config.getString(KafkaJsonSchemaDeserializerConfig.TYPE_PROPERTY);
   }
 
   protected KafkaJsonSchemaDeserializerConfig deserializerConfig(Map<String, ?> props) {
     try {
       return new KafkaJsonSchemaDeserializerConfig(props);
-    } catch (io.confluent.common.config.ConfigException e) {
+    } catch (ConfigException e) {
       throw new ConfigException(e.getMessage());
     }
   }

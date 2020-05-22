@@ -29,7 +29,7 @@ import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
+@Deprecated
 public class ZookeeperIdGenerator implements IdGenerator {
 
   public static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 20;

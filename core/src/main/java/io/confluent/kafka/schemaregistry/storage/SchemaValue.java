@@ -18,22 +18,17 @@ package io.confluent.kafka.schemaregistry.storage;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.constraints.Min;
-import javax.ws.rs.DefaultValue;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue {
@@ -68,14 +63,14 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
   public SchemaValue(@JsonProperty("subject") String subject,
                      @JsonProperty("version") Integer version,
                      @JsonProperty("id") Integer id,
-                     @JsonProperty("schemaType") @DefaultValue("AVRO") String schemaType,
+                     @JsonProperty("schemaType") String schemaType,
                      @JsonProperty("references") List<SchemaReference> references,
                      @JsonProperty("schema") String schema,
                      @JsonProperty("deleted") boolean deleted) {
     this.subject = subject;
     this.version = version;
     this.id = id;
-    this.schemaType = schemaType;
+    this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
     this.references = references != null ? references : Collections.emptyList();
     this.schema = schema;
     this.deleted = deleted;
@@ -133,7 +128,7 @@ public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue
 
   @JsonProperty("schemaType")
   public void setSchemaType(String schemaType) {
-    this.schemaType = schemaType;
+    this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
   }
 
   @JsonProperty("references")

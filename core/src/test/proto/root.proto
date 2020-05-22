@@ -1,0 +1,10 @@
+syntax = "proto3";
+package io.confluent.kafka.serializers.protobuf.test;
+
+import "ref.proto";
+
+message ReferrerMessage {
+    string root_id = 1;
+    ReferencedMessage ref = 2;
+}
+

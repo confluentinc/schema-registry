@@ -15,37 +15,61 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
+import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
+import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
-import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
+import io.confluent.kafka.schemaregistry.id.IdGenerator;
+import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
+import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
+import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.rest.VersionId;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
+import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
+import io.confluent.rest.Application;
+import io.confluent.rest.RestConfig;
+import io.confluent.rest.exceptions.RestException;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Value;
-import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.HostnameVerifier;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -62,40 +86,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
-
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
-import io.confluent.kafka.schemaregistry.client.security.SslFactory;
-import io.confluent.kafka.schemaregistry.id.IdGenerator;
-import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
-import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
-import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
-import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
-import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.rest.VersionId;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
-import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import io.confluent.rest.Application;
-import io.confluent.rest.RestConfig;
-import io.confluent.rest.exceptions.RestException;
-
-import javax.net.ssl.HostnameVerifier;
 
 public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaRegistry {
 
@@ -126,8 +116,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private SslFactory sslFactory;
   private IdGenerator idGenerator = null;
   private MasterElector masterElector = null;
-  private Metrics metrics;
-  private Sensor masterNodeSensor;
+  private final MetricsContainer metricsContainer;
   private final Map<String, SchemaProvider> providers;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
@@ -157,31 +146,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.defaultMode = Mode.READWRITE;
+    this.metricsContainer = new MetricsContainer(config);
+    this.providers = initProviders(config);
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
-    MetricConfig metricConfig =
-        new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
-            .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
-                        TimeUnit.MILLISECONDS);
-    List<MetricsReporter> reporters =
-        config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                                      MetricsReporter.class);
-    String jmxPrefix = "kafka.schema.registry";
-    reporters.add(new JmxReporter(jmxPrefix));
-    this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
-    this.masterNodeSensor = metrics.sensor("master-slave-role");
-    this.providers = initProviders(config);
-
-    Map<String, String> configuredTags = Application.parseListToMap(
-        config.getList(RestConfig.METRICS_TAGS_CONFIG)
-    );
-    MetricName
-        m = new MetricName("master-slave-role", "master-slave-role",
-                           "1.0 indicates the node is the active master in the cluster and is the"
-                           + " node where all register schema and config update requests are "
-                           + "served.", configuredTags);
-    this.masterNodeSensor.add(m, new Value());
   }
 
   private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
@@ -201,6 +170,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
             schemaProviderConfigs);
     // Allow custom providers to override default providers
     registerProviders(providerMap, customSchemaProviders);
+    metricsContainer.getCustomSchemaProviderCount().set(customSchemaProviders.size());
     return providerMap;
   }
 
@@ -252,6 +222,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return idGenerator;
   }
 
+  public MetricsContainer getMetricsContainer() {
+    return metricsContainer;
+  }
+
   /**
    * A Schema Registry instance's identity is in part the port it listens on. Currently the port can
    * either be configured via the deprecated `port` configuration, or via the `listeners`
@@ -300,6 +274,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         masterElector = new KafkaGroupMasterElector(config, myIdentity, this);
       } else {
         log.info("Joining schema registry with Zookeeper-based coordination");
+        log.warn("*****************************************************************************");
+        log.warn("Zookeeper-based coordination is deprecated and will be removed in the future.");
+        log.warn("Please switch to Kafka-based coordination with "
+            + "\"kafkastore.bootstrap.servers\".");
+        log.warn("*****************************************************************************");
         masterElector = new ZookeeperMasterElector(config, myIdentity, this);
       }
       masterElector.init();
@@ -374,7 +353,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
         idGenerator.init();
       }
-      masterNodeSensor.record(isMaster() ? 1.0 : 0.0);
+      metricsContainer.getIsMaster().set(isMaster() ? 1 : 0);
     } finally {
       kafkaStore.masterLock().unlock();
     }
@@ -415,6 +394,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       // Ensure cache is up-to-date before any potential writes
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
 
+      ParsedSchema parsedSchema = canonicalizeSchema(schema);
+
       // see if the schema to be registered already exists
       int schemaId = schema.getId();
       SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
@@ -434,26 +415,35 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
       // determine the latest version of the schema in the subject
       List<SchemaValue> allVersions = getAllSchemaValues(subject);
+      Collections.reverse(allVersions);
 
       List<SchemaValue> deletedVersions = new ArrayList<>();
-      List<SchemaValue> undeletedVersions = new ArrayList<>();
+      List<ParsedSchema> undeletedVersions = new ArrayList<>();
       int newVersion = MIN_VERSION;
       for (SchemaValue schemaValue : allVersions) {
-        newVersion = schemaValue.getVersion() + 1;
+        newVersion = Math.max(newVersion, schemaValue.getVersion() + 1);
         if (schemaValue.isDeleted()) {
           deletedVersions.add(schemaValue);
         } else {
-          undeletedVersions.add(schemaValue);
+          ParsedSchema undeletedSchema = parseSchema(getSchemaEntityFromSchemaValue(schemaValue));
+          if (parsedSchema.references().isEmpty()
+              && !undeletedSchema.references().isEmpty()
+              && parsedSchema.deepEquals(undeletedSchema)) {
+            // This handles the case where a schema is sent with all references resolved
+            return schemaValue.getId();
+          }
+          undeletedVersions.add(undeletedSchema);
         }
       }
+      Collections.reverse(undeletedVersions);
 
-      List<Schema> undeletedSchemasList = undeletedVersions.stream()
-          .map(s -> getSchemaEntityFromSchemaValue(s))
-          .collect(Collectors.toList());
+      boolean isCompatible = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions);
+      // Allow schema providers to modify the schema during compatibility checks
+      schema.setSchema(parsedSchema.canonicalString());
+      schema.setReferences(parsedSchema.references());
 
-      canonicalizeSchema(schema);
-      // assign a guid and put the schema in the kafka store
-      if (isCompatible(subject, schema, undeletedSchemasList)) {
+      if (isCompatible) {
+        // assign a guid and put the schema in the kafka store
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
         }
@@ -703,7 +693,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
    */
   public Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
-    canonicalizeSchema(schema);
+    ParsedSchema parsedSchema = canonicalizeSchema(schema);
     SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
     if (schemaIdAndSubjects != null) {
       if (schemaIdAndSubjects.hasSubject(subject)
@@ -716,14 +706,26 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                                            schema.getReferences(),
                                            schema.getSchema());
         return matchingSchema;
-      } else {
-        // this schema was never registered under the input subject
-        return null;
       }
-    } else {
-      // this schema was never registered in the registry under any subject
-      return null;
     }
+
+    List<SchemaValue> allVersions = getAllSchemaValues(subject);
+    Collections.reverse(allVersions);
+
+    for (SchemaValue schemaValue : allVersions) {
+      if (!schemaValue.isDeleted()) {
+        Schema undeleted = getSchemaEntityFromSchemaValue(schemaValue);
+        ParsedSchema undeletedSchema = parseSchema(undeleted);
+        if (parsedSchema.references().isEmpty()
+            && !undeletedSchema.references().isEmpty()
+            && parsedSchema.deepEquals(undeletedSchema)) {
+          // This handles the case where a schema is sent with all references resolved
+          return undeleted;
+        }
+      }
+    }
+
+    return null;
   }
 
   private int forwardRegisterRequestToMaster(String subject, Schema schema,
@@ -837,7 +839,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private void canonicalizeSchema(Schema schema) throws InvalidSchemaException {
+  private ParsedSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
     if (schema == null
         || schema.getSchema() == null
         || schema.getSchema().trim().isEmpty()) {
@@ -849,10 +851,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       parsedSchema.validate();
     } catch (Exception e) {
       String errMsg = "Invalid schema " + schema;
-      log.error(errMsg);
+      log.error(errMsg, e);
       throw new InvalidSchemaException(errMsg, e);
     }
     schema.setSchema(parsedSchema.canonicalString());
+    schema.setReferences(parsedSchema.references());
+    return parsedSchema;
   }
 
   private ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
@@ -875,8 +879,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     final String type = schemaType;
     ParsedSchema parsedSchema = provider.parseSchema(schema, references)
-        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
-            + " of type " + type));
+            .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
+                    + " with refs " + references + " of type " + type));
     return parsedSchema;
   }
 
@@ -1228,23 +1232,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throw new InvalidSchemaException("Previous schema not provided");
     }
 
-    CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
-    if (compatibility == CompatibilityLevel.NONE) {
-      // optimization to avoid parsing schemas
-      return true;
-    }
-
     List<ParsedSchema> prevParsedSchemas = new ArrayList<>(previousSchemas.size());
     for (Schema previousSchema : previousSchemas) {
       ParsedSchema prevParsedSchema = parseSchema(previousSchema);
       prevParsedSchemas.add(prevParsedSchema);
     }
 
-    ParsedSchema parsedSchema = parseSchema(newSchema);
-    boolean isCompatible = parsedSchema.isCompatible(compatibility, prevParsedSchemas);
-    // Allow schema providers to modify the schema during compatibility checks
-    newSchema.setSchema(parsedSchema.canonicalString());
-    return isCompatible;
+    return isCompatibleWithPrevious(subject, parseSchema(newSchema), prevParsedSchemas);
+  }
+
+  private boolean isCompatibleWithPrevious(String subject,
+                                           ParsedSchema parsedSchema,
+                                           List<ParsedSchema> previousSchemas)
+      throws SchemaRegistryException {
+
+    CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);
+    return parsedSchema.isCompatible(compatibility, previousSchemas);
   }
 
   private void deleteMode(String subject) throws StoreException {

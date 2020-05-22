@@ -26,7 +26,6 @@ import com.google.protobuf.Descriptors.OneofDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.Timestamps;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -83,6 +82,7 @@ public class ProtobufData {
 
   private final Cache<Schema, ProtobufSchema> fromConnectSchemaCache;
   private final Cache<ProtobufSchema, Schema> toConnectSchemaCache;
+  private boolean enhancedSchemaSupport;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -100,6 +100,7 @@ public class ProtobufData {
         new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
     toConnectSchemaCache =
         new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
+    this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
   }
 
   /**
@@ -240,7 +241,7 @@ public class ProtobufData {
             for (Field field : schema.fields()) {
               Object object = struct.get(field);
               if (object != null) {
-                return Pair.of(field.name(),
+                return new Pair(field.name(),
                     fromConnectData(field.schema(), scope, object, protobufSchema)
                 );
               }
@@ -288,6 +289,50 @@ public class ProtobufData {
     }
   }
 
+  static class Pair<K, V> {
+    private K key;
+    private V value;
+
+    public Pair(K key, V value) {
+      this.key = key;
+      this.value = value;
+    }
+
+    public K getKey() {
+      return key;
+    }
+
+    public V getValue() {
+      return value;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      Pair<?, ?> pair = (Pair<?, ?>) o;
+      return Objects.equals(key, pair.key)
+          && Objects.equals(value, pair.value);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(key, value);
+    }
+
+    @Override
+    public String toString() {
+      return "Pair{"
+          + "key=" + key
+          + ", value=" + value
+          + '}';
+    }
+  }
+
   public ProtobufSchema fromConnectSchema(Schema schema) {
     if (schema == null) {
       return null;
@@ -317,12 +362,34 @@ public class ProtobufData {
     try {
       DynamicSchema.Builder schema = DynamicSchema.newBuilder();
       schema.setSyntax(ProtobufSchema.PROTO3);
-      String name = getNameOrDefault(rootElem.name());
+      String fullName = getNameOrDefault(rootElem.name());
+      String[] split = splitName(fullName);
+      String namespace = split[0];
+      String name = split[1];
+      if (namespace != null) {
+        schema.setPackage(namespace);
+      }
       schema.addMessageDefinition(messageDefinitionFromConnectSchema(schema, name, rootElem));
       return schema.build();
     } catch (Descriptors.DescriptorValidationException e) {
       throw new IllegalStateException(e);
     }
+  }
+
+  /**
+   * Split a full dotted-syntax name into a namespace and a single-component name.
+   */
+  private static String[] splitName(String fullName) {
+    String[] result = new String[2];
+    int indexLastDot = fullName.lastIndexOf('.');
+    if (indexLastDot >= 0) {
+      result[0] = fullName.substring(0, indexLastDot);
+      result[1] = fullName.substring(indexLastDot + 1);
+    } else {
+      result[0] = null;
+      result[1] = fullName;
+    }
+    return result;
   }
 
   private MessageDefinition messageDefinitionFromConnectSchema(
@@ -778,7 +845,8 @@ public class ProtobufData {
           .name(name);
     }
     SchemaBuilder builder = SchemaBuilder.struct();
-    builder.name(descriptor.getName());
+    String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
+    builder.name(name);
     List<OneofDescriptor> oneOfDescriptors = descriptor.getOneofs();
     for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
       String unionName = oneOfDescriptor.getName() + "_" + oneOfDescriptor.getIndex();

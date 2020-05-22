@@ -15,14 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import org.junit.Test;
-
-import java.util.Iterator;
-
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import org.junit.Test;
+
+import java.util.Iterator;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;

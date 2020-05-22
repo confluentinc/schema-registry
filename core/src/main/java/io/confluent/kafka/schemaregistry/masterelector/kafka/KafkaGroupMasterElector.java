@@ -15,6 +15,14 @@
 
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.MasterElector;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
@@ -47,15 +55,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.MasterElector;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryRebalanceListener {
 
@@ -167,7 +166,8 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           time,
           retryBackoffMs,
           myIdentity,
-          this
+          this,
+          schemaRegistry.getMetricsContainer().getNodeCountMetric()
       );
 
       AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());

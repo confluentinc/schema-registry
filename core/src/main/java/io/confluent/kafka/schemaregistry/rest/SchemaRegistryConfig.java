@@ -23,6 +23,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.HashSet;
@@ -32,14 +34,13 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 
-import io.confluent.common.config.AbstractConfig;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
 import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
-import scala.collection.JavaConversions;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES;
@@ -60,6 +61,7 @@ public class SchemaRegistryConfig extends RestConfig {
   @Deprecated
   public static final String KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT = "PLAINTEXT";
 
+  @Deprecated
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   public static final String KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG = "kafkastore.bootstrap.servers";
   public static final String KAFKASTORE_GROUP_ID_CONFIG = "kafkastore.group.id";
@@ -524,8 +526,23 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private final CompatibilityLevel compatibilityType;
 
+  private static Properties getPropsFromFile(String propsFile) throws RestConfigException {
+    Properties props = new Properties();
+    if (propsFile == null) {
+      return props;
+    }
+
+    try (FileInputStream propStream = new FileInputStream(propsFile)) {
+      props.load(propStream);
+    } catch (IOException e) {
+      throw new RestConfigException("Couldn't load properties from " + propsFile, e);
+    }
+
+    return props;
+  }
+
   public SchemaRegistryConfig(String propsFile) throws RestConfigException {
-    this(AbstractConfig.getPropsFromFile(propsFile));
+    this(getPropsFromFile(propsFile));
   }
 
   public SchemaRegistryConfig(Properties props) throws RestConfigException {
@@ -622,7 +639,7 @@ public class SchemaRegistryConfig extends RestConfig {
   static List<String> brokersToEndpoints(List<Broker> brokers) {
     final List<String> endpoints = new LinkedList<>();
     for (Broker broker : brokers) {
-      for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints())) {
+      for (EndPoint ep : CollectionConverters.asJavaCollection(broker.endPoints())) {
         String
             hostport =
             ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
