@@ -110,6 +110,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       if (includeSchemaAndVersion) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(id, schema, subject, isKey);
+        schema = schema.copy(name);
       }
 
       int length = buffer.limit() - 1 - idSize;
