@@ -24,7 +24,7 @@ import java.util.Set;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.Schema;
 
-import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.COMBINED_SUBSCHEMAS_CHANGED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.COMBINED_TYPE_SUBSCHEMAS_CHANGED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.COMPOSITION_METHOD_CHANGED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PRODUCT_TYPE_EXTENDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PRODUCT_TYPE_NARROWED;
@@ -85,7 +85,7 @@ class CombinedSchemaDiff {
       if (matching.size() < Math.min(originalSize, updateSize)) {
         // Did not find a matching that covers the smaller partition,
         // ensure the result is incompatible
-        ctx.addDifference(COMBINED_SUBSCHEMAS_CHANGED);
+        ctx.addDifference(COMBINED_TYPE_SUBSCHEMAS_CHANGED);
       }
     }
   }
