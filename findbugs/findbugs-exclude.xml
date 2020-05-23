@@ -91,6 +91,11 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
     </Match>
 
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.metrics.MetricsContainer"/>
+        <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
+    </Match>
+
     <!-- exclude generated code -->
     <Match>
         <Class name="~io.confluent.schemaregistry.benchmark.generated.*"/>
@@ -98,6 +103,10 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
 
     <Match>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+    </Match>
+
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE"/>
     </Match>
 
     <!-- false positive in Java 11, see https://github.com/spotbugs/spotbugs/issues/756 -->

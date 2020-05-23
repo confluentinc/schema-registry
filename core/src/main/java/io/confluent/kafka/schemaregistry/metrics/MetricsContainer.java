@@ -175,14 +175,20 @@ public class MetricsContainer {
   }
 
   private static String getCommitId() {
-    String fileName = "schema-registry-app.properties";
+    final String defaultValue = "Unknown";
+
+    String fileName = "/schema-registry-app.properties";
     try (InputStream propFile = MetricsContainer.class.getResourceAsStream(fileName)) {
-      Properties props = new Properties();
-      props.load(propFile);
-      return props.getProperty("application.commitId", "Unknown").trim();
+      if (propFile != null) {
+        Properties props = new Properties();
+        props.load(propFile);
+        return props.getProperty("application.commitId", defaultValue).trim();
+      } else {
+        log.error("Cannot find properties file");
+      }
     } catch (IOException e) {
       log.warn("Cannot parse properties file", e);
     }
-    return "Unknown";
+    return defaultValue;
   }
 }
