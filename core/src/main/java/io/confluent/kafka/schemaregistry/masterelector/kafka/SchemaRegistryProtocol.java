@@ -15,13 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 /**
  * This class implements the protocol for Schema Registry instances in a Kafka group. It includes
@@ -47,6 +47,7 @@ class SchemaRegistryProtocol {
     return Assignment.fromJson(buffer);
   }
 
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static class Assignment {
     public static final int CURRENT_VERSION = 1;
 
