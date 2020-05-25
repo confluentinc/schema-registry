@@ -70,6 +70,7 @@ public class TelemetryReporterTest extends ClusterTestHarness {
         new ByteArrayDeserializer());
   }
 
+  @Override
   protected Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
@@ -107,6 +108,7 @@ public class TelemetryReporterTest extends ClusterTestHarness {
     while (!srMetricsPresent && System.currentTimeMillis() - startMs < 90000) {
       ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(200));
       for (ConsumerRecord<byte[], byte[]> record : records) {
+        log.error("Processing record at offset {}", record.offset());
         // Verify that the message de-serializes successfully
         Metric m = null;
         try {
@@ -120,14 +122,20 @@ public class TelemetryReporterTest extends ClusterTestHarness {
 
         // Check the resource labels are present
         Resource resource = m.getResource();
-        TestCase.assertEquals("schemaregistry", resource.getType());
-        // TestCase.assertEquals("kafka.schema.registry", resource.getType());
+        final String type = resource.getType();
+        assertTrue("schemaregistry".equals(type) || "kafka.schema.registry".equals(type));
+        log.error("Record has type: {}", type);
+
+        //TestCase.assertEquals("schemaregistry", resource.getType());
+        //TestCase.assertEquals("kafka.schema.registry", resource.getType());
 
         Map<String, String> resourceLabels = resource.getLabelsMap();
 
+        log.error("Resource label map: {}", resourceLabels);
+
         // Check that the labels from the config are present.
-        TestCase.assertEquals("test", resourceLabels.get("schemaregistry.region"));
-        TestCase.assertEquals("pkc-bar", resourceLabels.get("schemaregistry.pkc"));
+        TestCase.assertEquals("test", resourceLabels.get(type + ".region"));
+        TestCase.assertEquals("pkc-bar", resourceLabels.get(type + ".pkc"));
 
         if (m.getMetricDescriptor().getName().startsWith(SchemaRegistryProvider.DOMAIN)) {
           srMetricsPresent = true;

@@ -17,7 +17,6 @@ package io.confluent.kafka.schemaregistry;
 
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
@@ -68,7 +67,7 @@ public class RestApp {
     prop.put(SchemaRegistryConfig.SCHEMA_COMPATIBILITY_CONFIG, compatibilityType);
     prop.put(SchemaRegistryConfig.MASTER_ELIGIBILITY, masterEligibility);
 
-    prop.put("metrics.jmx.prefix", MetricsContainer.JMX_PREFIX);
+    prop.put("metrics.jmx.prefix", "kafka.schema.registry");
     prop.put("metrics.context.resource.version", "version1");
     prop.put("resource.version", "version2");
   }

@@ -21,16 +21,17 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -210,7 +211,9 @@ public class MetricsContainer {
 
   @NotNull
   private static MetricsContext getMetricsContext(SchemaRegistryConfig config) {
-    Map<String, Object> metadata = config.originals();
+    Map<String, Object> metadata =
+            true ? config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX) :
+                    config.originals();
     metadata.put(RESOURCE_LABEL_TYPE,  "SCHEMAREGISTRY");
     metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
     metadata.put(RESOURCE_LABEL_COMMIT_ID, getCommitId());
