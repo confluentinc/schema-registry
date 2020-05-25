@@ -50,7 +50,6 @@ public class MetricsContainer {
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
-  private final String commitId;
 
   private final SchemaRegistryMetric isMasterNode;
   private final SchemaRegistryMetric nodeCount;
@@ -79,7 +78,6 @@ public class MetricsContainer {
   public MetricsContainer(SchemaRegistryConfig config) {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
-    this.commitId = getCommitId();
 
     MetricConfig metricConfig =
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -215,7 +213,7 @@ public class MetricsContainer {
     Map<String, Object> metadata = config.originals();
     metadata.put(RESOURCE_LABEL_TYPE,  "SCHEMAREGISTRY");
     metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
-    metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+    metadata.put(RESOURCE_LABEL_COMMIT_ID, getCommitId());
 
     return new KafkaMetricsContext(JMX_PREFIX, metadata);
   }
