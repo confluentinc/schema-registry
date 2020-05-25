@@ -102,9 +102,10 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
   protected SchemaMessageSerializer<Object> createSerializer(
       SchemaRegistryClient schemaRegistryClient,
       boolean autoRegister,
+      boolean useLatest,
       Serializer keySerializer
   ) {
-    return new AvroMessageSerializer(schemaRegistryClient, autoRegister, keySerializer);
+    return new AvroMessageSerializer(schemaRegistryClient, autoRegister, useLatest, keySerializer);
   }
 
   @Override
@@ -136,10 +137,12 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
     protected final Serializer keySerializer;
 
     AvroMessageSerializer(
-        SchemaRegistryClient schemaRegistryClient, boolean autoRegister, Serializer keySerializer
+        SchemaRegistryClient schemaRegistryClient,
+        boolean autoRegister, boolean useLatest, Serializer keySerializer
     ) {
       this.schemaRegistry = schemaRegistryClient;
       this.autoRegisterSchema = autoRegister;
+      this.useLatestVersion = useLatest;
       this.keySerializer = keySerializer;
     }
 

@@ -78,9 +78,11 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
   protected SchemaMessageSerializer<Message> createSerializer(
       SchemaRegistryClient schemaRegistryClient,
       boolean autoRegister,
+      boolean useLatest,
       Serializer keySerializer
   ) {
-    return new ProtobufMessageSerializer(schemaRegistryClient, autoRegister, keySerializer);
+    return new ProtobufMessageSerializer(
+        schemaRegistryClient, autoRegister, useLatest, keySerializer);
   }
 
   @Override
@@ -107,10 +109,12 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
     protected final Serializer keySerializer;
 
     ProtobufMessageSerializer(
-        SchemaRegistryClient schemaRegistryClient, boolean autoRegister, Serializer keySerializer
+        SchemaRegistryClient schemaRegistryClient,
+        boolean autoRegister, boolean useLatest, Serializer keySerializer
     ) {
       this.schemaRegistry = schemaRegistryClient;
       this.autoRegisterSchema = autoRegister;
+      this.useLatestVersion = useLatest;
       this.keySerializer = keySerializer;
     }
 

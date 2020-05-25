@@ -16,8 +16,12 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import java.util.Objects;
+import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -44,11 +48,14 @@ public abstract class AbstractKafkaSchemaSerDe {
 
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int idSize = 4;
+  private static int DEFAULT_CACHE_CAPACITY = 1000;
   private static final String MOCK_URL_PREFIX = "mock://";
 
   protected SchemaRegistryClient schemaRegistry;
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
+  private LRUCache<SubjectSchema, ParsedSchema> latestVersions =
+      new LRUCache<>(DEFAULT_CACHE_CAPACITY);
   protected boolean useSchemaReflection;
 
 
@@ -166,11 +173,74 @@ public abstract class AbstractKafkaSchemaSerDe {
     return schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 
+  protected ParsedSchema lookupLatestVersion(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
+    SubjectSchema ss = new SubjectSchema(subject, schema);
+    ParsedSchema latestVersion = latestVersions.get(ss);
+    if (latestVersion == null) {
+      SchemaMetadata schemaMetadata = schemaRegistry.getLatestSchemaMetadata(subject);
+      Optional<ParsedSchema> optSchema =
+          schemaRegistry.parseSchema(
+              schemaMetadata.getSchemaType(),
+              schemaMetadata.getSchema(),
+              schemaMetadata.getReferences());
+      latestVersion = optSchema.orElseThrow(
+          () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
+              + " with refs " + schemaMetadata.getReferences()
+              + " of type " + schemaMetadata.getSchemaType()));
+      // Sanity check by testing latest is backward compatibility with schema
+      // Don't test for forward compatibility so unions can be handled properly
+      if (!latestVersion.isBackwardCompatible(schema)) {
+        throw new IOException("Incompatible schema " + schemaMetadata.getSchema()
+            + " with refs " + schemaMetadata.getReferences()
+            + " of type " + schemaMetadata.getSchemaType());
+      }
+      latestVersions.put(ss, latestVersion);
+    }
+    return latestVersion;
+  }
+
   protected ByteBuffer getByteBuffer(byte[] payload) {
     ByteBuffer buffer = ByteBuffer.wrap(payload);
     if (buffer.get() != MAGIC_BYTE) {
       throw new SerializationException("Unknown magic byte!");
     }
     return buffer;
+  }
+
+  static class SubjectSchema {
+    private String subject;
+    private ParsedSchema schema;
+
+    public SubjectSchema(String subject, ParsedSchema schema) {
+      this.subject = subject;
+      this.schema = schema;
+    }
+
+    public String getSubject() {
+      return subject;
+    }
+
+    public ParsedSchema getSchema() {
+      return schema;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      SubjectSchema that = (SubjectSchema) o;
+      return subject.equals(that.subject)
+          && schema.equals(that.schema);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(subject, schema);
+    }
   }
 }
