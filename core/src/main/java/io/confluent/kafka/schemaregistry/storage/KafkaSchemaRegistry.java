@@ -50,6 +50,7 @@ import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
 import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
+import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
@@ -65,7 +66,6 @@ import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -73,7 +73,6 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.SystemTime;
@@ -81,6 +80,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.HostnameVerifier;
+import javax.ws.rs.HEAD;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -127,8 +127,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private SslFactory sslFactory;
   private IdGenerator idGenerator = null;
   private MasterElector masterElector = null;
-  private Metrics metrics;
-  private Sensor masterNodeSensor;
+  private final MetricsContainer metricsContainer;
   private final Map<String, SchemaProvider> providers;
 
   public static final String RESOURCE_LABEL_PREFIX = "resource.";
@@ -165,9 +164,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.defaultMode = Mode.READWRITE;
+    this.metricsContainer = new MetricsContainer(config);
+    this.providers = initProviders(config);
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
+    /*
+<<<<<<<HEAD
     MetricConfig metricConfig =
         new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
             .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
@@ -198,6 +201,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
                            + " node where all register schema and config update requests are "
                            + "served.", configuredTags);
     this.masterNodeSensor.add(m, new Value());
+=======
+>>>>>>> schema-registry-metrics */
   }
 
   private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
@@ -217,6 +222,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
             schemaProviderConfigs);
     // Allow custom providers to override default providers
     registerProviders(providerMap, customSchemaProviders);
+    metricsContainer.getCustomSchemaProviderCount().set(customSchemaProviders.size());
     return providerMap;
   }
 
@@ -266,6 +272,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   protected IdGenerator getIdentityGenerator() {
     return idGenerator;
+  }
+
+  public MetricsContainer getMetricsContainer() {
+    return metricsContainer;
   }
 
   /**
@@ -395,7 +405,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
         idGenerator.init();
       }
-      masterNodeSensor.record(isMaster() ? 1.0 : 0.0);
+      metricsContainer.getIsMaster().set(isMaster() ? 1 : 0);
     } finally {
       kafkaStore.masterLock().unlock();
     }

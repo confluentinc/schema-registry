@@ -171,7 +171,8 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
           time,
           retryBackoffMs,
           myIdentity,
-          this
+          this,
+          schemaRegistry.getMetricsContainer().getNodeCountMetric()
       );
 
       AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());

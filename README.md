@@ -8,6 +8,23 @@ evolution of schemas according to the configured compatibility setting. It
 provides serializers that plug into Kafka clients that handle schema storage and
 retrieval for Kafka messages that are sent in the Avro format.
 
+This README includes the following sections:
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+<!-- generated with [DocToc](https://github.com/thlorenz/doctoc), see the link for install and instructions for use -->
+
+- [Documentation](#documentation)
+- [Quickstart API Usage examples](#quickstart-api-usage-examples)
+- [Installation](#installation)
+- [Deployment](#deployment)
+- [Development](#development)
+- [OpenAPI Spec](#openapi-spec)
+- [Contribute](#contribute)
+- [License](#license)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 Documentation
 -------------
 
@@ -25,8 +42,7 @@ Quickstart API Usage examples
 -----------------------------
 
 The following assumes you have Kafka and an [instance of the Schema Registry](https://docs.confluent.io/current/schema-registry/installation/index.html)
-running using the default settings. These examples are also included as [API Usage examples](https://docs.confluent.io/current/schema-registry/using.html) on
-[docs.confluent.io](https://docs.confluent.io/current/).
+running using the default settings. These examples, and more, are also available at [API Usage examples](https://docs.confluent.io/current/schema-registry/using.html) on [docs.confluent.io](https://docs.confluent.io/current/).
 
 ```bash
 # Register a new version of a schema under the subject "Kafka-key"
@@ -124,6 +140,41 @@ with Maven.
 This project uses the [Google Java code style](https://google.github.io/styleguide/javaguide.html)
 to keep code clean and consistent.
 
+To build:
+
+```bash
+mvn compile
+```
+
+To run the unit and integration tests:
+
+```bash
+mvn test
+```
+
+To run an instance of Schema Registry against a local Kafka cluster (using the default configuration included with Kafka):
+
+```bash
+mvn exec:java
+```
+
+To create a packaged version, optionally skipping the tests:
+
+```bash
+mvn package [-DskipTests]
+```
+
+This produces a version ready for production in `package/target/kafka-schema-registry-package-$VERSION-package` containing a
+directory layout similar to the packaged binary versions.
+
+You can also produce a standalone fat JAR using the `standalone` profile:
+
+```bash
+mvn package -P standalone [-DskipTests]
+```
+
+This generates `package/target/kafka-schema-registry-package-$VERSION-standalone.jar`, which includes all the dependencies as well.
+
 OpenAPI Spec
 ------------
 
@@ -133,6 +184,8 @@ on `compile` phase.
 
 Contribute
 ----------
+
+Thanks for helping us to make Schema Registry even better!
 
 - Source Code: https://github.com/confluentinc/schema-registry
 - Issue Tracker: https://github.com/confluentinc/schema-registry/issues

@@ -15,8 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import java.util.Map;
-
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
+import io.confluent.kafka.schemaregistry.rest.filters.RestCallMetricFilter;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ConfigResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ModeResource;
@@ -25,24 +26,21 @@ import io.confluent.kafka.schemaregistry.rest.resources.SchemasResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ServerMetadataResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
+import io.confluent.rest.Application;
+import io.confluent.rest.RestConfigException;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.resource.ResourceCollection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.core.Configurable;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
-
-import javax.ws.rs.core.Configurable;
-
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
-import io.confluent.rest.Application;
-import io.confluent.rest.RestConfigException;
 
 public class SchemaRegistryRestApplication extends Application<SchemaRegistryConfig> {
 
@@ -105,6 +103,9 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new CompatibilityResource(schemaRegistry));
     config.register(new ModeResource(schemaRegistry));
     config.register(new ServerMetadataResource(schemaRegistry, schemaRegistryConfig));
+    config.register(new RestCallMetricFilter(
+            schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
+            schemaRegistry.getMetricsContainer().getApiCallsFailure()));
 
     if (schemaRegistryResourceExtensions != null) {
       try {

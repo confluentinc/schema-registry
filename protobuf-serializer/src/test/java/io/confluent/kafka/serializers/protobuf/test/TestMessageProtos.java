@@ -1546,11 +1546,1548 @@ public final class TestMessageProtos {
 
   }
 
+  public interface TestMessage2OrBuilder extends
+      // @@protoc_insertion_point(interface_extends:io.confluent.kafka.serializers.protobuf.test.TestMessage2)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>string test_string = 1;</code>
+     * @return The testString.
+     */
+    java.lang.String getTestString();
+    /**
+     * <code>string test_string = 1;</code>
+     * @return The bytes for testString.
+     */
+    com.google.protobuf.ByteString
+        getTestStringBytes();
+
+    /**
+     * <code>bool test_bool = 2;</code>
+     * @return The testBool.
+     */
+    boolean getTestBool();
+
+    /**
+     * <code>bytes test_bytes = 3;</code>
+     * @return The testBytes.
+     */
+    com.google.protobuf.ByteString getTestBytes();
+
+    /**
+     * <code>double test_double = 4;</code>
+     * @return The testDouble.
+     */
+    double getTestDouble();
+
+    /**
+     * <code>float test_float = 5;</code>
+     * @return The testFloat.
+     */
+    float getTestFloat();
+
+    /**
+     * <code>fixed32 test_fixed32 = 6;</code>
+     * @return The testFixed32.
+     */
+    int getTestFixed32();
+
+    /**
+     * <code>fixed64 test_fixed64 = 7;</code>
+     * @return The testFixed64.
+     */
+    long getTestFixed64();
+
+    /**
+     * <code>int32 test_int32 = 8;</code>
+     * @return The testInt32.
+     */
+    int getTestInt32();
+
+    /**
+     * <code>int64 test_int64 = 9;</code>
+     * @return The testInt64.
+     */
+    long getTestInt64();
+
+    /**
+     * <code>sfixed32 test_sfixed32 = 10;</code>
+     * @return The testSfixed32.
+     */
+    int getTestSfixed32();
+
+    /**
+     * <code>sfixed64 test_sfixed64 = 11;</code>
+     * @return The testSfixed64.
+     */
+    long getTestSfixed64();
+
+    /**
+     * <code>sint32 test_sint32 = 12;</code>
+     * @return The testSint32.
+     */
+    int getTestSint32();
+
+    /**
+     * <code>sint64 test_sint64 = 13;</code>
+     * @return The testSint64.
+     */
+    long getTestSint64();
+
+    /**
+     * <code>uint32 test_uint32 = 14;</code>
+     * @return The testUint32.
+     */
+    int getTestUint32();
+
+    /**
+     * <code>uint64 test_uint64 = 15;</code>
+     * @return The testUint64.
+     */
+    long getTestUint64();
+  }
+  /**
+   * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.TestMessage2}
+   */
+  public  static final class TestMessage2 extends
+      com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.TestMessage2)
+      TestMessage2OrBuilder {
+  private static final long serialVersionUID = 0L;
+    // Use TestMessage2.newBuilder() to construct.
+    private TestMessage2(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private TestMessage2() {
+      testString_ = "";
+      testBytes_ = com.google.protobuf.ByteString.EMPTY;
+    }
+
+    @java.lang.Override
+    @SuppressWarnings({"unused"})
+    protected java.lang.Object newInstance(
+        UnusedPrivateParameter unused) {
+      return new TestMessage2();
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return this.unknownFields;
+    }
+    private TestMessage2(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            case 10: {
+              java.lang.String s = input.readStringRequireUtf8();
+
+              testString_ = s;
+              break;
+            }
+            case 16: {
+
+              testBool_ = input.readBool();
+              break;
+            }
+            case 26: {
+
+              testBytes_ = input.readBytes();
+              break;
+            }
+            case 33: {
+
+              testDouble_ = input.readDouble();
+              break;
+            }
+            case 45: {
+
+              testFloat_ = input.readFloat();
+              break;
+            }
+            case 53: {
+
+              testFixed32_ = input.readFixed32();
+              break;
+            }
+            case 57: {
+
+              testFixed64_ = input.readFixed64();
+              break;
+            }
+            case 64: {
+
+              testInt32_ = input.readInt32();
+              break;
+            }
+            case 72: {
+
+              testInt64_ = input.readInt64();
+              break;
+            }
+            case 85: {
+
+              testSfixed32_ = input.readSFixed32();
+              break;
+            }
+            case 89: {
+
+              testSfixed64_ = input.readSFixed64();
+              break;
+            }
+            case 96: {
+
+              testSint32_ = input.readSInt32();
+              break;
+            }
+            case 104: {
+
+              testSint64_ = input.readSInt64();
+              break;
+            }
+            case 112: {
+
+              testUint32_ = input.readUInt32();
+              break;
+            }
+            case 120: {
+
+              testUint64_ = input.readUInt64();
+              break;
+            }
+            default: {
+              if (!parseUnknownField(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        this.unknownFields = unknownFields.build();
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_descriptor;
+    }
+
+    @java.lang.Override
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2.class, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2.Builder.class);
+    }
+
+    public static final int TEST_STRING_FIELD_NUMBER = 1;
+    private volatile java.lang.Object testString_;
+    /**
+     * <code>string test_string = 1;</code>
+     * @return The testString.
+     */
+    public java.lang.String getTestString() {
+      java.lang.Object ref = testString_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        testString_ = s;
+        return s;
+      }
+    }
+    /**
+     * <code>string test_string = 1;</code>
+     * @return The bytes for testString.
+     */
+    public com.google.protobuf.ByteString
+        getTestStringBytes() {
+      java.lang.Object ref = testString_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        testString_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int TEST_BOOL_FIELD_NUMBER = 2;
+    private boolean testBool_;
+    /**
+     * <code>bool test_bool = 2;</code>
+     * @return The testBool.
+     */
+    public boolean getTestBool() {
+      return testBool_;
+    }
+
+    public static final int TEST_BYTES_FIELD_NUMBER = 3;
+    private com.google.protobuf.ByteString testBytes_;
+    /**
+     * <code>bytes test_bytes = 3;</code>
+     * @return The testBytes.
+     */
+    public com.google.protobuf.ByteString getTestBytes() {
+      return testBytes_;
+    }
+
+    public static final int TEST_DOUBLE_FIELD_NUMBER = 4;
+    private double testDouble_;
+    /**
+     * <code>double test_double = 4;</code>
+     * @return The testDouble.
+     */
+    public double getTestDouble() {
+      return testDouble_;
+    }
+
+    public static final int TEST_FLOAT_FIELD_NUMBER = 5;
+    private float testFloat_;
+    /**
+     * <code>float test_float = 5;</code>
+     * @return The testFloat.
+     */
+    public float getTestFloat() {
+      return testFloat_;
+    }
+
+    public static final int TEST_FIXED32_FIELD_NUMBER = 6;
+    private int testFixed32_;
+    /**
+     * <code>fixed32 test_fixed32 = 6;</code>
+     * @return The testFixed32.
+     */
+    public int getTestFixed32() {
+      return testFixed32_;
+    }
+
+    public static final int TEST_FIXED64_FIELD_NUMBER = 7;
+    private long testFixed64_;
+    /**
+     * <code>fixed64 test_fixed64 = 7;</code>
+     * @return The testFixed64.
+     */
+    public long getTestFixed64() {
+      return testFixed64_;
+    }
+
+    public static final int TEST_INT32_FIELD_NUMBER = 8;
+    private int testInt32_;
+    /**
+     * <code>int32 test_int32 = 8;</code>
+     * @return The testInt32.
+     */
+    public int getTestInt32() {
+      return testInt32_;
+    }
+
+    public static final int TEST_INT64_FIELD_NUMBER = 9;
+    private long testInt64_;
+    /**
+     * <code>int64 test_int64 = 9;</code>
+     * @return The testInt64.
+     */
+    public long getTestInt64() {
+      return testInt64_;
+    }
+
+    public static final int TEST_SFIXED32_FIELD_NUMBER = 10;
+    private int testSfixed32_;
+    /**
+     * <code>sfixed32 test_sfixed32 = 10;</code>
+     * @return The testSfixed32.
+     */
+    public int getTestSfixed32() {
+      return testSfixed32_;
+    }
+
+    public static final int TEST_SFIXED64_FIELD_NUMBER = 11;
+    private long testSfixed64_;
+    /**
+     * <code>sfixed64 test_sfixed64 = 11;</code>
+     * @return The testSfixed64.
+     */
+    public long getTestSfixed64() {
+      return testSfixed64_;
+    }
+
+    public static final int TEST_SINT32_FIELD_NUMBER = 12;
+    private int testSint32_;
+    /**
+     * <code>sint32 test_sint32 = 12;</code>
+     * @return The testSint32.
+     */
+    public int getTestSint32() {
+      return testSint32_;
+    }
+
+    public static final int TEST_SINT64_FIELD_NUMBER = 13;
+    private long testSint64_;
+    /**
+     * <code>sint64 test_sint64 = 13;</code>
+     * @return The testSint64.
+     */
+    public long getTestSint64() {
+      return testSint64_;
+    }
+
+    public static final int TEST_UINT32_FIELD_NUMBER = 14;
+    private int testUint32_;
+    /**
+     * <code>uint32 test_uint32 = 14;</code>
+     * @return The testUint32.
+     */
+    public int getTestUint32() {
+      return testUint32_;
+    }
+
+    public static final int TEST_UINT64_FIELD_NUMBER = 15;
+    private long testUint64_;
+    /**
+     * <code>uint64 test_uint64 = 15;</code>
+     * @return The testUint64.
+     */
+    public long getTestUint64() {
+      return testUint64_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    @java.lang.Override
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    @java.lang.Override
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (!getTestStringBytes().isEmpty()) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 1, testString_);
+      }
+      if (testBool_ != false) {
+        output.writeBool(2, testBool_);
+      }
+      if (!testBytes_.isEmpty()) {
+        output.writeBytes(3, testBytes_);
+      }
+      if (testDouble_ != 0D) {
+        output.writeDouble(4, testDouble_);
+      }
+      if (testFloat_ != 0F) {
+        output.writeFloat(5, testFloat_);
+      }
+      if (testFixed32_ != 0) {
+        output.writeFixed32(6, testFixed32_);
+      }
+      if (testFixed64_ != 0L) {
+        output.writeFixed64(7, testFixed64_);
+      }
+      if (testInt32_ != 0) {
+        output.writeInt32(8, testInt32_);
+      }
+      if (testInt64_ != 0L) {
+        output.writeInt64(9, testInt64_);
+      }
+      if (testSfixed32_ != 0) {
+        output.writeSFixed32(10, testSfixed32_);
+      }
+      if (testSfixed64_ != 0L) {
+        output.writeSFixed64(11, testSfixed64_);
+      }
+      if (testSint32_ != 0) {
+        output.writeSInt32(12, testSint32_);
+      }
+      if (testSint64_ != 0L) {
+        output.writeSInt64(13, testSint64_);
+      }
+      if (testUint32_ != 0) {
+        output.writeUInt32(14, testUint32_);
+      }
+      if (testUint64_ != 0L) {
+        output.writeUInt64(15, testUint64_);
+      }
+      unknownFields.writeTo(output);
+    }
+
+    @java.lang.Override
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (!getTestStringBytes().isEmpty()) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, testString_);
+      }
+      if (testBool_ != false) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBoolSize(2, testBool_);
+      }
+      if (!testBytes_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(3, testBytes_);
+      }
+      if (testDouble_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(4, testDouble_);
+      }
+      if (testFloat_ != 0F) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeFloatSize(5, testFloat_);
+      }
+      if (testFixed32_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeFixed32Size(6, testFixed32_);
+      }
+      if (testFixed64_ != 0L) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeFixed64Size(7, testFixed64_);
+      }
+      if (testInt32_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(8, testInt32_);
+      }
+      if (testInt64_ != 0L) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt64Size(9, testInt64_);
+      }
+      if (testSfixed32_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeSFixed32Size(10, testSfixed32_);
+      }
+      if (testSfixed64_ != 0L) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeSFixed64Size(11, testSfixed64_);
+      }
+      if (testSint32_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeSInt32Size(12, testSint32_);
+      }
+      if (testSint64_ != 0L) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeSInt64Size(13, testSint64_);
+      }
+      if (testUint32_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(14, testUint32_);
+      }
+      if (testUint64_ != 0L) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeUInt64Size(15, testUint64_);
+      }
+      size += unknownFields.getSerializedSize();
+      memoizedSize = size;
+      return size;
+    }
+
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2)) {
+        return super.equals(obj);
+      }
+      io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 other = (io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2) obj;
+
+      if (!getTestString()
+          .equals(other.getTestString())) return false;
+      if (getTestBool()
+          != other.getTestBool()) return false;
+      if (!getTestBytes()
+          .equals(other.getTestBytes())) return false;
+      if (java.lang.Double.doubleToLongBits(getTestDouble())
+          != java.lang.Double.doubleToLongBits(
+              other.getTestDouble())) return false;
+      if (java.lang.Float.floatToIntBits(getTestFloat())
+          != java.lang.Float.floatToIntBits(
+              other.getTestFloat())) return false;
+      if (getTestFixed32()
+          != other.getTestFixed32()) return false;
+      if (getTestFixed64()
+          != other.getTestFixed64()) return false;
+      if (getTestInt32()
+          != other.getTestInt32()) return false;
+      if (getTestInt64()
+          != other.getTestInt64()) return false;
+      if (getTestSfixed32()
+          != other.getTestSfixed32()) return false;
+      if (getTestSfixed64()
+          != other.getTestSfixed64()) return false;
+      if (getTestSint32()
+          != other.getTestSint32()) return false;
+      if (getTestSint64()
+          != other.getTestSint64()) return false;
+      if (getTestUint32()
+          != other.getTestUint32()) return false;
+      if (getTestUint64()
+          != other.getTestUint64()) return false;
+      if (!unknownFields.equals(other.unknownFields)) return false;
+      return true;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + TEST_STRING_FIELD_NUMBER;
+      hash = (53 * hash) + getTestString().hashCode();
+      hash = (37 * hash) + TEST_BOOL_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+          getTestBool());
+      hash = (37 * hash) + TEST_BYTES_FIELD_NUMBER;
+      hash = (53 * hash) + getTestBytes().hashCode();
+      hash = (37 * hash) + TEST_DOUBLE_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getTestDouble()));
+      hash = (37 * hash) + TEST_FLOAT_FIELD_NUMBER;
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
+          getTestFloat());
+      hash = (37 * hash) + TEST_FIXED32_FIELD_NUMBER;
+      hash = (53 * hash) + getTestFixed32();
+      hash = (37 * hash) + TEST_FIXED64_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          getTestFixed64());
+      hash = (37 * hash) + TEST_INT32_FIELD_NUMBER;
+      hash = (53 * hash) + getTestInt32();
+      hash = (37 * hash) + TEST_INT64_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          getTestInt64());
+      hash = (37 * hash) + TEST_SFIXED32_FIELD_NUMBER;
+      hash = (53 * hash) + getTestSfixed32();
+      hash = (37 * hash) + TEST_SFIXED64_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          getTestSfixed64());
+      hash = (37 * hash) + TEST_SINT32_FIELD_NUMBER;
+      hash = (53 * hash) + getTestSint32();
+      hash = (37 * hash) + TEST_SINT64_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          getTestSint64());
+      hash = (37 * hash) + TEST_UINT32_FIELD_NUMBER;
+      hash = (53 * hash) + getTestUint32();
+      hash = (37 * hash) + TEST_UINT64_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          getTestUint64());
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    @java.lang.Override
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    @java.lang.Override
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.TestMessage2}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:io.confluent.kafka.serializers.protobuf.test.TestMessage2)
+        io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2OrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_descriptor;
+      }
+
+      @java.lang.Override
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2.class, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2.Builder.class);
+      }
+
+      // Construct using io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+        }
+      }
+      @java.lang.Override
+      public Builder clear() {
+        super.clear();
+        testString_ = "";
+
+        testBool_ = false;
+
+        testBytes_ = com.google.protobuf.ByteString.EMPTY;
+
+        testDouble_ = 0D;
+
+        testFloat_ = 0F;
+
+        testFixed32_ = 0;
+
+        testFixed64_ = 0L;
+
+        testInt32_ = 0;
+
+        testInt64_ = 0L;
+
+        testSfixed32_ = 0;
+
+        testSfixed64_ = 0L;
+
+        testSint32_ = 0;
+
+        testSint64_ = 0L;
+
+        testUint32_ = 0;
+
+        testUint64_ = 0L;
+
+        return this;
+      }
+
+      @java.lang.Override
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_descriptor;
+      }
+
+      @java.lang.Override
+      public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 getDefaultInstanceForType() {
+        return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2.getDefaultInstance();
+      }
+
+      @java.lang.Override
+      public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 build() {
+        io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      @java.lang.Override
+      public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 buildPartial() {
+        io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 result = new io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2(this);
+        result.testString_ = testString_;
+        result.testBool_ = testBool_;
+        result.testBytes_ = testBytes_;
+        result.testDouble_ = testDouble_;
+        result.testFloat_ = testFloat_;
+        result.testFixed32_ = testFixed32_;
+        result.testFixed64_ = testFixed64_;
+        result.testInt32_ = testInt32_;
+        result.testInt64_ = testInt64_;
+        result.testSfixed32_ = testSfixed32_;
+        result.testSfixed64_ = testSfixed64_;
+        result.testSint32_ = testSint32_;
+        result.testSint64_ = testSint64_;
+        result.testUint32_ = testUint32_;
+        result.testUint64_ = testUint64_;
+        onBuilt();
+        return result;
+      }
+
+      @java.lang.Override
+      public Builder clone() {
+        return super.clone();
+      }
+      @java.lang.Override
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          java.lang.Object value) {
+        return super.setField(field, value);
+      }
+      @java.lang.Override
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return super.clearField(field);
+      }
+      @java.lang.Override
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return super.clearOneof(oneof);
+      }
+      @java.lang.Override
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, java.lang.Object value) {
+        return super.setRepeatedField(field, index, value);
+      }
+      @java.lang.Override
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          java.lang.Object value) {
+        return super.addRepeatedField(field, value);
+      }
+      @java.lang.Override
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2) {
+          return mergeFrom((io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 other) {
+        if (other == io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2.getDefaultInstance()) return this;
+        if (!other.getTestString().isEmpty()) {
+          testString_ = other.testString_;
+          onChanged();
+        }
+        if (other.getTestBool() != false) {
+          setTestBool(other.getTestBool());
+        }
+        if (other.getTestBytes() != com.google.protobuf.ByteString.EMPTY) {
+          setTestBytes(other.getTestBytes());
+        }
+        if (other.getTestDouble() != 0D) {
+          setTestDouble(other.getTestDouble());
+        }
+        if (other.getTestFloat() != 0F) {
+          setTestFloat(other.getTestFloat());
+        }
+        if (other.getTestFixed32() != 0) {
+          setTestFixed32(other.getTestFixed32());
+        }
+        if (other.getTestFixed64() != 0L) {
+          setTestFixed64(other.getTestFixed64());
+        }
+        if (other.getTestInt32() != 0) {
+          setTestInt32(other.getTestInt32());
+        }
+        if (other.getTestInt64() != 0L) {
+          setTestInt64(other.getTestInt64());
+        }
+        if (other.getTestSfixed32() != 0) {
+          setTestSfixed32(other.getTestSfixed32());
+        }
+        if (other.getTestSfixed64() != 0L) {
+          setTestSfixed64(other.getTestSfixed64());
+        }
+        if (other.getTestSint32() != 0) {
+          setTestSint32(other.getTestSint32());
+        }
+        if (other.getTestSint64() != 0L) {
+          setTestSint64(other.getTestSint64());
+        }
+        if (other.getTestUint32() != 0) {
+          setTestUint32(other.getTestUint32());
+        }
+        if (other.getTestUint64() != 0L) {
+          setTestUint64(other.getTestUint64());
+        }
+        this.mergeUnknownFields(other.unknownFields);
+        onChanged();
+        return this;
+      }
+
+      @java.lang.Override
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+
+      private java.lang.Object testString_ = "";
+      /**
+       * <code>string test_string = 1;</code>
+       * @return The testString.
+       */
+      public java.lang.String getTestString() {
+        java.lang.Object ref = testString_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          testString_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <code>string test_string = 1;</code>
+       * @return The bytes for testString.
+       */
+      public com.google.protobuf.ByteString
+          getTestStringBytes() {
+        java.lang.Object ref = testString_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          testString_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <code>string test_string = 1;</code>
+       * @param value The testString to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestString(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        testString_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string test_string = 1;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestString() {
+        
+        testString_ = getDefaultInstance().getTestString();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string test_string = 1;</code>
+       * @param value The bytes for testString to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestStringBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        
+        testString_ = value;
+        onChanged();
+        return this;
+      }
+
+      private boolean testBool_ ;
+      /**
+       * <code>bool test_bool = 2;</code>
+       * @return The testBool.
+       */
+      public boolean getTestBool() {
+        return testBool_;
+      }
+      /**
+       * <code>bool test_bool = 2;</code>
+       * @param value The testBool to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestBool(boolean value) {
+        
+        testBool_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>bool test_bool = 2;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestBool() {
+        
+        testBool_ = false;
+        onChanged();
+        return this;
+      }
+
+      private com.google.protobuf.ByteString testBytes_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <code>bytes test_bytes = 3;</code>
+       * @return The testBytes.
+       */
+      public com.google.protobuf.ByteString getTestBytes() {
+        return testBytes_;
+      }
+      /**
+       * <code>bytes test_bytes = 3;</code>
+       * @param value The testBytes to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestBytes(com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        testBytes_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>bytes test_bytes = 3;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestBytes() {
+        
+        testBytes_ = getDefaultInstance().getTestBytes();
+        onChanged();
+        return this;
+      }
+
+      private double testDouble_ ;
+      /**
+       * <code>double test_double = 4;</code>
+       * @return The testDouble.
+       */
+      public double getTestDouble() {
+        return testDouble_;
+      }
+      /**
+       * <code>double test_double = 4;</code>
+       * @param value The testDouble to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestDouble(double value) {
+        
+        testDouble_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>double test_double = 4;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestDouble() {
+        
+        testDouble_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private float testFloat_ ;
+      /**
+       * <code>float test_float = 5;</code>
+       * @return The testFloat.
+       */
+      public float getTestFloat() {
+        return testFloat_;
+      }
+      /**
+       * <code>float test_float = 5;</code>
+       * @param value The testFloat to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestFloat(float value) {
+        
+        testFloat_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>float test_float = 5;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestFloat() {
+        
+        testFloat_ = 0F;
+        onChanged();
+        return this;
+      }
+
+      private int testFixed32_ ;
+      /**
+       * <code>fixed32 test_fixed32 = 6;</code>
+       * @return The testFixed32.
+       */
+      public int getTestFixed32() {
+        return testFixed32_;
+      }
+      /**
+       * <code>fixed32 test_fixed32 = 6;</code>
+       * @param value The testFixed32 to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestFixed32(int value) {
+        
+        testFixed32_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>fixed32 test_fixed32 = 6;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestFixed32() {
+        
+        testFixed32_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private long testFixed64_ ;
+      /**
+       * <code>fixed64 test_fixed64 = 7;</code>
+       * @return The testFixed64.
+       */
+      public long getTestFixed64() {
+        return testFixed64_;
+      }
+      /**
+       * <code>fixed64 test_fixed64 = 7;</code>
+       * @param value The testFixed64 to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestFixed64(long value) {
+        
+        testFixed64_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>fixed64 test_fixed64 = 7;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestFixed64() {
+        
+        testFixed64_ = 0L;
+        onChanged();
+        return this;
+      }
+
+      private int testInt32_ ;
+      /**
+       * <code>int32 test_int32 = 8;</code>
+       * @return The testInt32.
+       */
+      public int getTestInt32() {
+        return testInt32_;
+      }
+      /**
+       * <code>int32 test_int32 = 8;</code>
+       * @param value The testInt32 to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestInt32(int value) {
+        
+        testInt32_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>int32 test_int32 = 8;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestInt32() {
+        
+        testInt32_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private long testInt64_ ;
+      /**
+       * <code>int64 test_int64 = 9;</code>
+       * @return The testInt64.
+       */
+      public long getTestInt64() {
+        return testInt64_;
+      }
+      /**
+       * <code>int64 test_int64 = 9;</code>
+       * @param value The testInt64 to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestInt64(long value) {
+        
+        testInt64_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>int64 test_int64 = 9;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestInt64() {
+        
+        testInt64_ = 0L;
+        onChanged();
+        return this;
+      }
+
+      private int testSfixed32_ ;
+      /**
+       * <code>sfixed32 test_sfixed32 = 10;</code>
+       * @return The testSfixed32.
+       */
+      public int getTestSfixed32() {
+        return testSfixed32_;
+      }
+      /**
+       * <code>sfixed32 test_sfixed32 = 10;</code>
+       * @param value The testSfixed32 to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestSfixed32(int value) {
+        
+        testSfixed32_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>sfixed32 test_sfixed32 = 10;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestSfixed32() {
+        
+        testSfixed32_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private long testSfixed64_ ;
+      /**
+       * <code>sfixed64 test_sfixed64 = 11;</code>
+       * @return The testSfixed64.
+       */
+      public long getTestSfixed64() {
+        return testSfixed64_;
+      }
+      /**
+       * <code>sfixed64 test_sfixed64 = 11;</code>
+       * @param value The testSfixed64 to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestSfixed64(long value) {
+        
+        testSfixed64_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>sfixed64 test_sfixed64 = 11;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestSfixed64() {
+        
+        testSfixed64_ = 0L;
+        onChanged();
+        return this;
+      }
+
+      private int testSint32_ ;
+      /**
+       * <code>sint32 test_sint32 = 12;</code>
+       * @return The testSint32.
+       */
+      public int getTestSint32() {
+        return testSint32_;
+      }
+      /**
+       * <code>sint32 test_sint32 = 12;</code>
+       * @param value The testSint32 to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestSint32(int value) {
+        
+        testSint32_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>sint32 test_sint32 = 12;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestSint32() {
+        
+        testSint32_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private long testSint64_ ;
+      /**
+       * <code>sint64 test_sint64 = 13;</code>
+       * @return The testSint64.
+       */
+      public long getTestSint64() {
+        return testSint64_;
+      }
+      /**
+       * <code>sint64 test_sint64 = 13;</code>
+       * @param value The testSint64 to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestSint64(long value) {
+        
+        testSint64_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>sint64 test_sint64 = 13;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestSint64() {
+        
+        testSint64_ = 0L;
+        onChanged();
+        return this;
+      }
+
+      private int testUint32_ ;
+      /**
+       * <code>uint32 test_uint32 = 14;</code>
+       * @return The testUint32.
+       */
+      public int getTestUint32() {
+        return testUint32_;
+      }
+      /**
+       * <code>uint32 test_uint32 = 14;</code>
+       * @param value The testUint32 to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestUint32(int value) {
+        
+        testUint32_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>uint32 test_uint32 = 14;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestUint32() {
+        
+        testUint32_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private long testUint64_ ;
+      /**
+       * <code>uint64 test_uint64 = 15;</code>
+       * @return The testUint64.
+       */
+      public long getTestUint64() {
+        return testUint64_;
+      }
+      /**
+       * <code>uint64 test_uint64 = 15;</code>
+       * @param value The testUint64 to set.
+       * @return This builder for chaining.
+       */
+      public Builder setTestUint64(long value) {
+        
+        testUint64_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>uint64 test_uint64 = 15;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearTestUint64() {
+        
+        testUint64_ = 0L;
+        onChanged();
+        return this;
+      }
+      @java.lang.Override
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return super.setUnknownFields(unknownFields);
+      }
+
+      @java.lang.Override
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return super.mergeUnknownFields(unknownFields);
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:io.confluent.kafka.serializers.protobuf.test.TestMessage2)
+    }
+
+    // @@protoc_insertion_point(class_scope:io.confluent.kafka.serializers.protobuf.test.TestMessage2)
+    private static final io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2();
+    }
+
+    public static io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<TestMessage2>
+        PARSER = new com.google.protobuf.AbstractParser<TestMessage2>() {
+      @java.lang.Override
+      public TestMessage2 parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        return new TestMessage2(input, extensionRegistry);
+      }
+    };
+
+    public static com.google.protobuf.Parser<TestMessage2> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<TestMessage2> getParserForType() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -1570,9 +3107,17 @@ public final class TestMessageProtos {
       "\n\ntest_int64\030\t \001(\003\022\025\n\rtest_sfixed32\030\n \001(" +
       "\017\022\025\n\rtest_sfixed64\030\013 \001(\020\022\023\n\013test_sint32\030" +
       "\014 \001(\021\022\023\n\013test_sint64\030\r \001(\022\022\023\n\013test_uint3" +
-      "2\030\016 \001(\r\022\023\n\013test_uint64\030\017 \001(\004BA\n,io.confl" +
-      "uent.kafka.serializers.protobuf.testB\021Te" +
-      "stMessageProtosb\006proto3"
+      "2\030\016 \001(\r\022\023\n\013test_uint64\030\017 \001(\004\"\311\002\n\014TestMes" +
+      "sage2\022\023\n\013test_string\030\001 \001(\t\022\021\n\ttest_bool\030" +
+      "\002 \001(\010\022\022\n\ntest_bytes\030\003 \001(\014\022\023\n\013test_double" +
+      "\030\004 \001(\001\022\022\n\ntest_float\030\005 \001(\002\022\024\n\014test_fixed" +
+      "32\030\006 \001(\007\022\024\n\014test_fixed64\030\007 \001(\006\022\022\n\ntest_i" +
+      "nt32\030\010 \001(\005\022\022\n\ntest_int64\030\t \001(\003\022\025\n\rtest_s" +
+      "fixed32\030\n \001(\017\022\025\n\rtest_sfixed64\030\013 \001(\020\022\023\n\013" +
+      "test_sint32\030\014 \001(\021\022\023\n\013test_sint64\030\r \001(\022\022\023" +
+      "\n\013test_uint32\030\016 \001(\r\022\023\n\013test_uint64\030\017 \001(\004" +
+      "BA\n,io.confluent.kafka.serializers.proto" +
+      "buf.testB\021TestMessageProtosb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -1584,6 +3129,12 @@ public final class TestMessageProtos {
     internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_descriptor,
+        new java.lang.String[] { "TestString", "TestBool", "TestBytes", "TestDouble", "TestFloat", "TestFixed32", "TestFixed64", "TestInt32", "TestInt64", "TestSfixed32", "TestSfixed64", "TestSint32", "TestSint64", "TestUint32", "TestUint64", });
+    internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_descriptor =
+      getDescriptor().getMessageTypes().get(1);
+    internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_descriptor,
         new java.lang.String[] { "TestString", "TestBool", "TestBytes", "TestDouble", "TestFloat", "TestFixed32", "TestFixed64", "TestInt32", "TestInt64", "TestSfixed32", "TestSfixed64", "TestSint32", "TestSint64", "TestUint32", "TestUint64", });
     com.google.protobuf.DescriptorProtos.getDescriptor();
   }

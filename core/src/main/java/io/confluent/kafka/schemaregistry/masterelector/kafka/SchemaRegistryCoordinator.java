@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
+import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
@@ -50,23 +51,25 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   private final SchemaRegistryIdentity identity;
   private SchemaRegistryProtocol.Assignment assignmentSnapshot;
   private final SchemaRegistryRebalanceListener listener;
+  private final SchemaRegistryMetric nodeCountMetric;
 
   /**
    * Initialize the coordination manager.
    */
   public SchemaRegistryCoordinator(
-      LogContext logContext,
-      ConsumerNetworkClient client,
-      String groupId,
-      int rebalanceTimeoutMs,
-      int sessionTimeoutMs,
-      int heartbeatIntervalMs,
-      Metrics metrics,
-      String metricGrpPrefix,
-      Time time,
-      long retryBackoffMs,
-      SchemaRegistryIdentity identity,
-      SchemaRegistryRebalanceListener listener) {
+          LogContext logContext,
+          ConsumerNetworkClient client,
+          String groupId,
+          int rebalanceTimeoutMs,
+          int sessionTimeoutMs,
+          int heartbeatIntervalMs,
+          Metrics metrics,
+          String metricGrpPrefix,
+          Time time,
+          long retryBackoffMs,
+          SchemaRegistryIdentity identity,
+          SchemaRegistryRebalanceListener listener,
+          SchemaRegistryMetric nodeCountMetric) {
     super(
         new GroupRebalanceConfig(
             sessionTimeoutMs,
@@ -86,6 +89,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     this.identity = identity;
     this.assignmentSnapshot = null;
     this.listener = listener;
+    this.nodeCountMetric = nodeCountMetric;
   }
 
   @Override
@@ -161,6 +165,10 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     }
 
     log.debug("Member information: {}", memberConfigs);
+
+    if (nodeCountMetric != null) {
+      nodeCountMetric.set(memberConfigs.size());
+    }
 
     // Compute the leader as the master-eligible member with the "smallest" (lexicographically) ID.
     // This doesn't guarantee a member will stay master until it leaves the group, but should
