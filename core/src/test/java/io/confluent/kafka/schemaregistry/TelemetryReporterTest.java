@@ -74,7 +74,7 @@ public class TelemetryReporterTest extends ClusterTestHarness {
     props.setProperty(ConfluentTelemetryConfig.COLLECT_INTERVAL_CONFIG, "500");
     props.setProperty(ConfluentTelemetryConfig.WHITELIST_CONFIG, "");
     props.setProperty(ConfluentTelemetryConfig.DEBUG_ENABLED, "true");
-
+/*
     props.setProperty(KafkaMetricsContext.METRICS_CONTEXT_PREFIX +
                       KafkaSchemaRegistry.RESOURCE_LABEL_CLUSTER_ID, "foobar");
 
@@ -82,6 +82,8 @@ public class TelemetryReporterTest extends ClusterTestHarness {
                       KafkaSchemaRegistry.RESOURCE_LABEL_PREFIX + "region", "test");
     props.setProperty(KafkaMetricsContext.METRICS_CONTEXT_PREFIX +
                       KafkaSchemaRegistry.RESOURCE_LABEL_PREFIX + "pkc", "pkc-bar");
+
+ */
     props.setProperty("schema.registry.service.id", "yolo");
     return props;
   }

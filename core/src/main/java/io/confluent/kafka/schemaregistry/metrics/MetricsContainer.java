@@ -29,6 +29,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.metrics.MetricsContext;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,9 +83,9 @@ public class MetricsContainer {
     reporters.add(new JmxReporter(JMX_PREFIX));
     for (MetricsReporter reporter : reporters) {
       MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
-      metricsContext.metadata().put(RESOURCE_LABEL_TYPE,  "SCHEMAREGISTRY");
-      metricsContext.metadata().put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
-      metricsContext.metadata().put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+      metricsContext.metadata().put("RESOURCE_LABEL_TYPE",  "SCHEMAREGISTRY");
+      metricsContext.metadata().put("RESOURCE_LABEL_VERSION", AppInfoParser.getVersion());
+      metricsContext.metadata().put("RESOURCE_LABEL_COMMIT_ID", AppInfoParser.getCommitId());
       reporter.contextChange(metricsContext);
     }
 
