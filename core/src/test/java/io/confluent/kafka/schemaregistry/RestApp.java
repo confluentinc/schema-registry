@@ -15,16 +15,16 @@
 package io.confluent.kafka.schemaregistry;
 
 
-import org.eclipse.jetty.server.Server;
-
-import java.util.Properties;
-
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
+import org.eclipse.jetty.server.Server;
+
+import java.util.Properties;
 
 public class RestApp {
 
@@ -67,6 +67,10 @@ public class RestApp {
     prop.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
     prop.put(SchemaRegistryConfig.SCHEMA_COMPATIBILITY_CONFIG, compatibilityType);
     prop.put(SchemaRegistryConfig.MASTER_ELIGIBILITY, masterEligibility);
+
+    prop.put("metrics.jmx.prefix", MetricsContainer.JMX_PREFIX);
+    prop.put("metrics.context.resource.version", "version1");
+    prop.put("resource.version", "version2");
   }
 
   public void start() throws Exception {

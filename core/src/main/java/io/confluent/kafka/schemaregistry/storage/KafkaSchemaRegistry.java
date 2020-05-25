@@ -119,13 +119,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private final MetricsContainer metricsContainer;
   private final Map<String, SchemaProvider> providers;
 
-  public static final String RESOURCE_LABEL_PREFIX = "resource.";
-  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
-  public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
-  public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
-  public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
-  public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
-
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
       throws SchemaRegistryException {
@@ -158,40 +151,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
-    /*
-<<<<<<<HEAD
-    MetricConfig metricConfig =
-        new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
-            .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
-                        TimeUnit.MILLISECONDS);
-    List<MetricsReporter> reporters =
-        config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                                      MetricsReporter.class);
-    String jmxPrefix = "kafka.schema.registry";
-    reporters.add(new JmxReporter(jmxPrefix));
-    for (MetricsReporter reporter : reporters) {
-      MetricsContext metricsContext = new KafkaMetricsContext(jmxPrefix, config.originals());
-      metricsContext.metadata().put(RESOURCE_LABEL_TYPE,  "SCHEMAREGISTRY");
-      metricsContext.metadata().put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
-      metricsContext.metadata().put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
-      reporter.contextChange(metricsContext);
-    }
-
-    this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
-    this.masterNodeSensor = metrics.sensor("master-slave-role");
-    this.providers = initProviders(config);
-
-    Map<String, String> configuredTags = Application.parseListToMap(
-        config.getList(RestConfig.METRICS_TAGS_CONFIG)
-    );
-    MetricName
-        m = new MetricName("master-slave-role", "master-slave-role",
-                           "1.0 indicates the node is the active master in the cluster and is the"
-                           + " node where all register schema and config update requests are "
-                           + "served.", configuredTags);
-    this.masterNodeSensor.add(m, new Value());
-=======
->>>>>>> schema-registry-metrics */
   }
 
   private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {

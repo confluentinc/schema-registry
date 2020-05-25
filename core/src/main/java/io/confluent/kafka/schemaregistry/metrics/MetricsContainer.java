@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +46,7 @@ public class MetricsContainer {
 
   private static final Logger log = LoggerFactory.getLogger(MetricsContainer.class);
 
-  private static final String JMX_PREFIX = "kafka.schema.registry";
+  public static final String JMX_PREFIX = "kafka.schema.registry";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
@@ -68,6 +69,13 @@ public class MetricsContainer {
   private final SchemaRegistryMetric jsonSchemasDeleted;
   private final SchemaRegistryMetric protobufSchemasDeleted;
 
+  public static final String RESOURCE_LABEL_PREFIX = "resource.";
+  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
+  public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
+  public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
+  public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
+  public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
+
   public MetricsContainer(SchemaRegistryConfig config) {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
@@ -80,16 +88,16 @@ public class MetricsContainer {
     List<MetricsReporter> reporters =
             config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
-    reporters.add(new JmxReporter(JMX_PREFIX));
+    final JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+    reporters.add(jmxReporter);
+
+    MetricsContext metricsContext = getMetricsContext(config);
+
     for (MetricsReporter reporter : reporters) {
-      MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
-      metricsContext.metadata().put("RESOURCE_LABEL_TYPE",  "SCHEMAREGISTRY");
-      metricsContext.metadata().put("RESOURCE_LABEL_VERSION", AppInfoParser.getVersion());
-      metricsContext.metadata().put("RESOURCE_LABEL_COMMIT_ID", AppInfoParser.getCommitId());
       reporter.contextChange(metricsContext);
     }
 
-    this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
+    this.metrics = new Metrics(metricConfig, reporters, new SystemTime(), metricsContext);
 
     this.isMasterNode = createMetric("master-slave-role",
             "1.0 indicates the node is the active master in the cluster and is the"
@@ -200,5 +208,15 @@ public class MetricsContainer {
       log.warn("Cannot parse properties file", e);
     }
     return defaultValue;
+  }
+
+  @NotNull
+  private static MetricsContext getMetricsContext(SchemaRegistryConfig config) {
+    Map<String, Object> metadata = config.originals();
+    metadata.put(RESOURCE_LABEL_TYPE,  "SCHEMAREGISTRY");
+    metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
+    metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+
+    return new KafkaMetricsContext(JMX_PREFIX, metadata);
   }
 }
