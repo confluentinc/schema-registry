@@ -161,7 +161,7 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
         Object object,
         ParsedSchema schema
     ) {
-      return super.serializeImpl(subject, object);
+      return super.serializeImpl(subject, object, (AvroSchema) schema);
     }
   }
 }
