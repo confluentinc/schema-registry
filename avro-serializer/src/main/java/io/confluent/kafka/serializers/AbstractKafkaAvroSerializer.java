@@ -40,10 +40,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
+  protected boolean useLatestVersion;
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
     autoRegisterSchema = config.autoRegisterSchema();
+    useLatestVersion = config.useLatestVersion();
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -70,6 +72,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema: ";
         id = schemaRegistry.register(subject, schema);
+      } else if (useLatestVersion) {
+        restClientErrorMsg = "Error retrieving latest version: ";
+        schema = (AvroSchema) lookupLatestVersion(subject, schema);
+        id = schemaRegistry.getId(subject, schema);
       } else {
         restClientErrorMsg = "Error retrieving Avro schema: ";
         id = schemaRegistry.getId(subject, schema);
