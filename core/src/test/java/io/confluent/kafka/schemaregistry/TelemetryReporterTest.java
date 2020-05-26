@@ -92,9 +92,6 @@ public class TelemetryReporterTest extends ClusterTestHarness {
     props.setProperty(CommonClientConfigs.METRICS_CONTEXT_PREFIX +
                       MetricsContainer.RESOURCE_LABEL_PREFIX + "pkc", "pkc-bar");
 
-    props.setProperty("producer.retries", "3");
-
-    props.setProperty("schema.registry.service.id", "yolo");
     return props;
   }
 
