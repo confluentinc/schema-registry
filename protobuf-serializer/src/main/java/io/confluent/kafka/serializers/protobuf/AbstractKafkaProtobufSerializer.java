@@ -42,11 +42,13 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
 
   protected boolean autoRegisterSchema;
+  protected boolean useLatestVersion;
   protected ReferenceSubjectNameStrategy referenceSubjectNameStrategy;
 
   protected void configure(KafkaProtobufSerializerConfig config) {
     configureClientProperties(config, new ProtobufSchemaProvider());
     this.autoRegisterSchema = config.autoRegisterSchema();
+    this.useLatestVersion = config.useLatestVersion();
     this.referenceSubjectNameStrategy = config.referenceSubjectNameStrategyInstance();
   }
 
@@ -77,6 +79,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
         id = schemaRegistry.register(subject, schema);
+      } else if (useLatestVersion) {
+        restClientErrorMsg = "Error retrieving latest version: ";
+        schema = (ProtobufSchema) lookupLatestVersion(subject, schema);
+        id = schemaRegistry.getId(subject, schema);
       } else {
         restClientErrorMsg = "Error retrieving Protobuf schema: ";
         id = schemaRegistry.getId(subject, schema);
