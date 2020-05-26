@@ -76,7 +76,7 @@ public class KafkaProtobufFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
         new ProtobufMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
-            true);
+            true, false);
     ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
 
     byte[] serializedValue = message.value();
@@ -102,7 +102,7 @@ public class KafkaProtobufFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
         new ProtobufMessageReader(schemaRegistry, null, enumSchema, "topic1", false, reader,
-            true);
+            true, false);
     ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
 
     byte[] serializedValue = message.value();
@@ -129,7 +129,7 @@ public class KafkaProtobufFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
         new ProtobufMessageReader(schemaRegistry, keySchema, recordSchema, "topic1", true, reader,
-            true);
+            true, false);
     ProducerRecord<byte[], byte[]> message = protobufReader.readMessage();
 
     byte[] serializedKey = message.key();
@@ -154,7 +154,7 @@ public class KafkaProtobufFormatterTest {
         new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
     ProtobufMessageReader protobufReader =
         new ProtobufMessageReader(schemaRegistry, null, recordSchema, "topic1", false, reader,
-            true);
+            true, false);
     try {
       protobufReader.readMessage();
       fail("Registering an invalid schema should fail");

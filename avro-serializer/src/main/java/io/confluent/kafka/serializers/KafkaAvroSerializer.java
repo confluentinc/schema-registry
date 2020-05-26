@@ -55,10 +55,9 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
     if (record == null) {
       return null;
     }
-    return serializeImpl(
-        getSubjectName(topic, isKey, record,
-            new AvroSchema(AvroSchemaUtils.getSchema(record, useSchemaReflection))),
-            record);
+    AvroSchema schema = new AvroSchema(AvroSchemaUtils.getSchema(record, useSchemaReflection));
+    return serializeImpl(getSubjectName(topic, isKey, record, schema),
+        record, schema);
   }
 
   @Override

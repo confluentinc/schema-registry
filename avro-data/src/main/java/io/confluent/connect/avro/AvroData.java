@@ -333,6 +333,10 @@ public class AvroData {
    */
   public Object fromConnectData(Schema schema, Object value) {
     org.apache.avro.Schema avroSchema = fromConnectSchema(schema);
+    return fromConnectData(schema, avroSchema, value);
+  }
+
+  protected Object fromConnectData(Schema schema, org.apache.avro.Schema avroSchema, Object value) {
     return fromConnectData(schema, avroSchema, value, true, false, enhancedSchemaSupport);
   }
 

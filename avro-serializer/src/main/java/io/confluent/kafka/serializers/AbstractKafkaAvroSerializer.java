@@ -33,7 +33,6 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import kafka.utils.VerifiableProperties;
 
@@ -41,10 +40,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
+  protected boolean useLatestVersion;
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
     autoRegisterSchema = config.autoRegisterSchema();
+    useLatestVersion = config.useLatestVersion();
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -55,8 +56,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     return new KafkaAvroSerializerConfig(props.props());
   }
 
-  protected byte[] serializeImpl(String subject, Object object) throws SerializationException {
-    Schema schema = null;
+  protected byte[] serializeImpl(
+      String subject, Object object, AvroSchema schema) throws SerializationException {
     // null needs to treated specially since the client most likely just wants to send
     // an individual null value instead of making the subject a null type. Also, null in
     // Kafka has a special meaning for deletion in a topic with the compact retention policy.
@@ -68,13 +69,16 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     String restClientErrorMsg = "";
     try {
       int id;
-      schema = AvroSchemaUtils.getSchema(object, useSchemaReflection);
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema: ";
-        id = schemaRegistry.register(subject, new AvroSchema(schema));
+        id = schemaRegistry.register(subject, schema);
+      } else if (useLatestVersion) {
+        restClientErrorMsg = "Error retrieving latest version: ";
+        schema = (AvroSchema) lookupLatestVersion(subject, schema);
+        id = schemaRegistry.getId(subject, schema);
       } else {
         restClientErrorMsg = "Error retrieving Avro schema: ";
-        id = schemaRegistry.getId(subject, new AvroSchema(schema));
+        id = schemaRegistry.getId(subject, schema);
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
@@ -88,12 +92,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
             value =
             object instanceof NonRecordContainer ? ((NonRecordContainer) object).getValue()
                                                  : object;
+        Schema rawSchema = schema.rawSchema();
         if (value instanceof SpecificRecord) {
-          writer = new SpecificDatumWriter<>(schema);
+          writer = new SpecificDatumWriter<>(rawSchema);
         } else if (useSchemaReflection) {
-          writer = new ReflectDatumWriter<>(schema);
+          writer = new ReflectDatumWriter<>(rawSchema);
         } else {
-          writer = new GenericDatumWriter<>(schema);
+          writer = new GenericDatumWriter<>(rawSchema);
         }
         writer.write(value, encoder);
         encoder.flush();

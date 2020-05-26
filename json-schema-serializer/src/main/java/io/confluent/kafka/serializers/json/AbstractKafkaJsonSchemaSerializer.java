@@ -36,12 +36,14 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafkaSchemaSerDe {
 
   protected boolean autoRegisterSchema;
+  protected boolean useLatestVersion;
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected boolean validate;
 
   protected void configure(KafkaJsonSchemaSerializerConfig config) {
     configureClientProperties(config, new JsonSchemaProvider());
     this.autoRegisterSchema = config.autoRegisterSchema();
+    this.useLatestVersion = config.useLatestVersion();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);
     this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
     this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
@@ -74,6 +76,10 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering JSON schema: ";
         id = schemaRegistry.register(subject, schema);
+      } else if (useLatestVersion) {
+        restClientErrorMsg = "Error retrieving latest version: ";
+        schema = (JsonSchema) lookupLatestVersion(subject, schema);
+        id = schemaRegistry.getId(subject, schema);
       } else {
         restClientErrorMsg = "Error retrieving JSON schema: ";
         id = schemaRegistry.getId(subject, schema);
