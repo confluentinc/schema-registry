@@ -129,7 +129,7 @@ public class MetricsContainer {
     return nodeCount;
   }
 
-  public SchemaRegistryMetric getIsMaster() {
+  public SchemaRegistryMetric isMaster() {
     return isMasterNode;
   }
 

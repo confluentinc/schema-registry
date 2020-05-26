@@ -353,7 +353,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
         idGenerator.init();
       }
-      metricsContainer.getIsMaster().set(isMaster() ? 1 : 0);
+      metricsContainer.isMaster().set(isMaster() ? 1 : 0);
     } finally {
       kafkaStore.masterLock().unlock();
     }
