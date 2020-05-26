@@ -92,10 +92,11 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
       String topic,
       boolean parseKey,
       BufferedReader reader,
-      boolean autoRegister
+      boolean autoRegister,
+      boolean useLatest
   ) {
     super(schemaRegistryClient, new AvroSchema(keySchema), new AvroSchema(valueSchema), topic,
-        parseKey, reader, autoRegister);
+        parseKey, reader, autoRegister, useLatest);
   }
 
   @Override

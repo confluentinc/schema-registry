@@ -68,10 +68,11 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
       String topic,
       boolean parseKey,
       BufferedReader reader,
-      boolean autoRegister
+      boolean autoRegister,
+      boolean useLatest
   ) {
     super(schemaRegistryClient, keySchema, valueSchema, topic,
-        parseKey, reader, autoRegister);
+        parseKey, reader, autoRegister, useLatest);
   }
 
   @Override

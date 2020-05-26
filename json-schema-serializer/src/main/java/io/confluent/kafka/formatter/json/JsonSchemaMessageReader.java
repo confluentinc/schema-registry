@@ -97,10 +97,11 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
       String topic,
       boolean parseKey,
       BufferedReader reader,
-      boolean autoRegister
+      boolean autoRegister,
+      boolean useLatest
   ) {
     super(schemaRegistryClient, keySchema, valueSchema, topic,
-        parseKey, reader, autoRegister);
+        parseKey, reader, autoRegister, useLatest);
   }
 
   @Override

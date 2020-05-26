@@ -72,7 +72,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
    */
   public SchemaMessageReader(
       SchemaRegistryClient schemaRegistryClient, ParsedSchema keySchema, ParsedSchema valueSchema,
-      String topic, boolean parseKey, BufferedReader reader, boolean autoRegister
+      String topic, boolean parseKey, BufferedReader reader, boolean autoRegister, boolean useLatest
   ) {
     this.keySchema = keySchema;
     this.valueSchema = valueSchema;
@@ -81,7 +81,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     this.valueSubject = topic + "-value";
     this.parseKey = parseKey;
     this.reader = reader;
-    this.serializer = createSerializer(schemaRegistryClient, autoRegister, false, null);
+    this.serializer = createSerializer(schemaRegistryClient, autoRegister, useLatest, null);
   }
 
   protected abstract SchemaMessageSerializer<T> createSerializer(
