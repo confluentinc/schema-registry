@@ -65,15 +65,15 @@ public class MetricsTest extends ClusterTestHarness {
 
   @Test
   public void testApiCallMetrics() throws Exception {
-    String subject1 = "testTopic1";
+    String subject = "testTopic1";
     int schemaCount = 3;
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(schemaCount);
 
-    // test registering and verifying new schemas in subject1
+    // test registering and verifying new schemas in subject
     int schemaIdCounter = 1;
     for (int i = 0; i < schemaCount; i++) {
       String schema = schemas.get(i);
-      TestUtils.registerAndVerifySchema(restApp.restClient, schema, schemaIdCounter++, subject1);
+      TestUtils.registerAndVerifySchema(restApp.restClient, schema, schemaIdCounter++, subject);
     }
 
     // We perform two operations (register & get) for each schema
