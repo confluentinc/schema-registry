@@ -77,6 +77,9 @@ public class ValidateSchemaRegistryMojoTest extends SchemaRegistryTest {
       if (i % 7 == 0) {
         writeMalformedFile(keySchemaFile);
         writeMalformedFile(valueSchemaFile);
+      } else {
+        writeSchema(keySchemaFile, keySchema);
+        writeSchema(valueSchemaFile, valueSchema);
       }
       subjectToFile.put(keySubject, keySchemaFile);
       expectedVersions.put(keySubject, version);
