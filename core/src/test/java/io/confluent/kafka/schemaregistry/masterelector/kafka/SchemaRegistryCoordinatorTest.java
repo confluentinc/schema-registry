@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.masterelector.kafka;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
@@ -45,9 +47,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -127,7 +126,8 @@ public class SchemaRegistryCoordinatorTest {
         time,
         retryBackoffMs,
         LEADER_INFO,
-        rebalanceListener
+        rebalanceListener,
+        null
     );
   }
 
