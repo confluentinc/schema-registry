@@ -33,6 +33,7 @@ public interface StoreUpdateHandler<K, V> extends Configurable {
    *
    * @param key   Key associated with the data
    * @param value Data written to the store
+   * @param tp Topic-partition
    * @param offset Offset of record
    * @param timestamp Timestamp of record
    */
@@ -46,9 +47,17 @@ public interface StoreUpdateHandler<K, V> extends Configurable {
    * @param key   Key associated with the data
    * @param value Data written to the store
    * @param oldValue the previous value associated with key, or null if there was no mapping for key
+   * @param tp Topic-partition
    * @param offset Offset of record
    * @param timestamp Timestamp of record
    */
   void handleUpdate(K key, V value, V oldValue, TopicPartition tp, long offset, long timestamp);
 
+  /**
+   * Invoked after a batch of updates.
+   *
+   * @param count batch count
+   */
+  default void checkpoint(int count) {
+  }
 }

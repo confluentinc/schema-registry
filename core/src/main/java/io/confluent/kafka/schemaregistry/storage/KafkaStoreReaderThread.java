@@ -230,6 +230,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           }
         }
       }
+      storeUpdateHandler.checkpoint(records.count());
     } catch (WakeupException we) {
       // do nothing because the thread is closing -- see shutdown()
     } catch (RecordTooLargeException rtle) {
