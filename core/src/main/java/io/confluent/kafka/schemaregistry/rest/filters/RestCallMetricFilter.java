@@ -20,7 +20,6 @@ import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerResponseContext;
 import javax.ws.rs.container.ContainerResponseFilter;
-import javax.ws.rs.core.Response;
 import java.io.IOException;
 
 public class RestCallMetricFilter implements ContainerResponseFilter {
@@ -36,12 +35,16 @@ public class RestCallMetricFilter implements ContainerResponseFilter {
   @Override
   public void filter(ContainerRequestContext containerRequestContext,
                      ContainerResponseContext containerResponseContext) throws IOException {
-    final Response.Status.Family family = containerResponseContext.getStatusInfo().getFamily();
-    if (family == Response.Status.Family.SUCCESSFUL) {
-      metricSucceeded.increment();
-    } else if (family == Response.Status.Family.SERVER_ERROR
-            || family == Response.Status.Family.CLIENT_ERROR) {
-      metricFailed.increment();
+    switch (containerResponseContext.getStatusInfo().getFamily()) {
+      case SUCCESSFUL:
+        metricSucceeded.increment();
+        break;
+      case CLIENT_ERROR:
+      case SERVER_ERROR:
+        metricFailed.increment();
+        break;
+      default:
+        break;
     }
   }
 }

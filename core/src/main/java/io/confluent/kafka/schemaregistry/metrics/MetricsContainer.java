@@ -51,6 +51,7 @@ public class MetricsContainer {
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
+  private final String commitId;
 
   private final SchemaRegistryMetric isMasterNode;
   private final SchemaRegistryMetric nodeCount;
@@ -79,6 +80,7 @@ public class MetricsContainer {
   public MetricsContainer(SchemaRegistryConfig config) {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
+    this.commitId = getCommitId();
 
     MetricConfig metricConfig =
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -87,6 +89,7 @@ public class MetricsContainer {
     List<MetricsReporter> reporters =
             config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
+
     final JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
     reporters.add(jmxReporter);
 
@@ -146,7 +149,7 @@ public class MetricsContainer {
     return nodeCount;
   }
 
-  public SchemaRegistryMetric getIsMaster() {
+  public SchemaRegistryMetric isMaster() {
     return isMasterNode;
   }
 

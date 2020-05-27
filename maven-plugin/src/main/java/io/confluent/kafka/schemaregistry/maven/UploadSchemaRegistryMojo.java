@@ -129,8 +129,10 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
 
       Integer version = ref.version != null ? ref.version : schemaVersions.get(ref.subject);
       if (version == null) {
-        throw new IllegalArgumentException(
-            "Could not retrieve version for subject " + ref.subject);
+        getLog().warn(
+            String.format("Version not specified for ref with name '%s' and subject '%s', "
+                + "using latest version", ref.name, ref.subject));
+        version = -1;
       }
       result.add(new SchemaReference(ref.name, ref.subject, version));
     }
