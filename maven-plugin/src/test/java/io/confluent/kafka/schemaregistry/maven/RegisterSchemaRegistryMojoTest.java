@@ -32,7 +32,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest{
+public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
   RegisterSchemaRegistryMojo mojo;
 
   @Before

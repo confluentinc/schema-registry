@@ -27,7 +27,7 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.junit.Before;
 import org.junit.Test;
 
-public class ValidateSchemaRegistryMojoTest extends SchemaRegistryTest{
+public class ValidateSchemaRegistryMojoTest extends SchemaRegistryTest {
   ValidateSchemaRegistryMojo mojo;
 
   @Before
