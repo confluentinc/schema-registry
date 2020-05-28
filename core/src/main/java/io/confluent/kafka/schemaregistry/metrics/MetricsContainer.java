@@ -92,6 +92,7 @@ public class MetricsContainer {
 
     final JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
     reporters.add(jmxReporter);
+    // reporters.add(new TelemetryReporter()); // TODO is this needed ?
 
     MetricsContext metricsContext = getMetricsContext(config);
 

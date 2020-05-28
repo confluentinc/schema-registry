@@ -16,14 +16,11 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,9 +30,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
-@Category({IntegrationTest.class})
 public class TelemetryReporterTest extends ClusterTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(TelemetryReporterTest.class);
@@ -95,26 +90,21 @@ public class TelemetryReporterTest extends ClusterTestHarness {
     return props;
   }
 
-  @Test
+  @Test(timeout = 20000)
   public void testMetricsReporter() throws Exception {
-    long startMs = System.currentTimeMillis();
-    boolean srMetricsPresent = false;
     TestUtils.registerAndVerifySchema(restApp.restClient,
             TestUtils.getRandomCanonicalAvroString(1).get(0), 1, "testTopic");
     log.error("************ Broker list: {} *************", brokerList);
-    while (!srMetricsPresent && System.currentTimeMillis() - startMs < 90000) {
+    boolean srMetricsPresent = false;
+    while (!srMetricsPresent) {
       ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(200));
       for (ConsumerRecord<byte[], byte[]> record : records) {
         log.error("Processing record at offset {}", record.offset());
         // Verify that the message de-serializes successfully
-        Metric m = null;
-        try {
-          m = this.serde.deserializer().deserialize(record.topic(), record.headers(), record.value());
-        } catch (SerializationException e) {
-          fail("failed to deserialize message " + e.getMessage());
-        }
+        Metric m = serde.deserializer().deserialize(record.topic(), record.headers(), record.value());
 
         System.out.println(new ProtoToFlatJson().deserialize("topic", m.toByteArray()));
+
         // Verify labels
 
         // Check the resource labels are present
@@ -122,9 +112,6 @@ public class TelemetryReporterTest extends ClusterTestHarness {
         final String type = resource.getType();
         assertTrue("schemaregistry".equals(type) || "kafka.schema.registry".equals(type));
         log.error("Record has type: {}", type);
-
-        //TestCase.assertEquals("schemaregistry", resource.getType());
-        //TestCase.assertEquals("kafka.schema.registry", resource.getType());
 
         Map<String, String> resourceLabels = resource.getLabelsMap();
 
@@ -139,7 +126,6 @@ public class TelemetryReporterTest extends ClusterTestHarness {
         }
       }
     }
-    assertTrue(srMetricsPresent);
   }
 
 }
