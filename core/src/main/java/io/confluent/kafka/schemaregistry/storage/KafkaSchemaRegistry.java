@@ -156,7 +156,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
-    Map<String, Object> schemaProviderConfigs = new HashMap<>();
+    Map<String, Object> schemaProviderConfigs =
+        config.originalsWithPrefix(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG);
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
@@ -191,7 +192,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
       SchemaRegistryConfig config) throws SchemaRegistryException {
-    Map<String, Object> handlerConfigs = new HashMap<>();
+    Map<String, Object> handlerConfigs =
+        config.originalsWithPrefix(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG);
     handlerConfigs.put(StoreUpdateHandler.SCHEMA_REGISTRY, this);
     List<SchemaUpdateHandler> customSchemaHandlers =
         config.getConfiguredInstances(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG,

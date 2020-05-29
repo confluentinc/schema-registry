@@ -15,12 +15,14 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import java.io.Closeable;
+import java.io.IOException;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 
-public interface StoreUpdateHandler<K, V> extends Configurable {
+public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
 
   String SCHEMA_REGISTRY = "schemaRegistry";
 
@@ -59,5 +61,9 @@ public interface StoreUpdateHandler<K, V> extends Configurable {
    * @param count batch count
    */
   default void checkpoint(int count) {
+  }
+
+  @Override
+  default void close() throws IOException {
   }
 }

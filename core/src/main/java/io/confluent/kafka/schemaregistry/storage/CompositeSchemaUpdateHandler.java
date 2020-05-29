@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import java.io.IOException;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +64,13 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
                            long timestamp) {
     for (SchemaUpdateHandler handler : handlers) {
       handler.handleUpdate(key, value, oldValue, tp, offset, timestamp);
+    }
+  }
+
+  @Override
+  public void close() throws IOException {
+    for (SchemaUpdateHandler handler : handlers) {
+      handler.close();
     }
   }
 }
