@@ -15,15 +15,33 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-public interface StoreUpdateHandler<K, V> {
+import java.io.Closeable;
+import java.io.IOException;
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.TopicPartition;
+
+import java.util.Map;
+
+public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
+
+  String SCHEMA_REGISTRY = "schemaRegistry";
+
+  @Override
+  default void configure(Map<String, ?> map) {
+  }
 
   /**
    * Invoked before every new K,V pair written to the store
    *
    * @param key   Key associated with the data
    * @param value Data written to the store
+   * @param tp Topic-partition
+   * @param offset Offset of record
+   * @param timestamp Timestamp of record
    */
-  public boolean validateUpdate(K key, V value);
+  default boolean validateUpdate(K key, V value, TopicPartition tp, long offset, long timestamp) {
+    return true;
+  }
 
   /**
    * Invoked on every new K,V pair written to the store
@@ -31,7 +49,21 @@ public interface StoreUpdateHandler<K, V> {
    * @param key   Key associated with the data
    * @param value Data written to the store
    * @param oldValue the previous value associated with key, or null if there was no mapping for key
+   * @param tp Topic-partition
+   * @param offset Offset of record
+   * @param timestamp Timestamp of record
    */
-  public void handleUpdate(K key, V value, V oldValue);
+  void handleUpdate(K key, V value, V oldValue, TopicPartition tp, long offset, long timestamp);
 
+  /**
+   * Invoked after a batch of updates.
+   *
+   * @param count batch count
+   */
+  default void checkpoint(int count) {
+  }
+
+  @Override
+  default void close() throws IOException {
+  }
 }

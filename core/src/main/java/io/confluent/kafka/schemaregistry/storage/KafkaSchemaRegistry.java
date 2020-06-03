@@ -99,6 +99,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private static final long DESCRIBE_CLUSTER_TIMEOUT_MS = 10000L;
 
   private final SchemaRegistryConfig config;
+  private final Map<String, Object> props;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
@@ -126,6 +127,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throw new SchemaRegistryException("Schema registry configuration is null");
     }
     this.config = config;
+    this.props = new HashMap<>();
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     SchemeAndPort schemeAndPort = getSchemeAndPortForIdentity(
         config.getInt(SchemaRegistryConfig.PORT_CONFIG),
@@ -154,7 +156,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   private Map<String, SchemaProvider> initProviders(SchemaRegistryConfig config) {
-    Map<String, Object> schemaProviderConfigs = new HashMap<>();
+    Map<String, Object> schemaProviderConfigs =
+        config.originalsWithPrefix(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG);
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
@@ -162,7 +165,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     for (SchemaProvider provider : defaultSchemaProviders) {
       provider.configure(schemaProviderConfigs);
     }
-    Map<String ,SchemaProvider> providerMap = new HashMap<>();
+    Map<String, SchemaProvider> providerMap = new HashMap<>();
     registerProviders(providerMap, defaultSchemaProviders);
     List<SchemaProvider> customSchemaProviders =
         config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
@@ -189,9 +192,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
       SchemaRegistryConfig config) throws SchemaRegistryException {
+    Map<String, Object> handlerConfigs =
+        config.originalsWithPrefix(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG);
+    handlerConfigs.put(StoreUpdateHandler.SCHEMA_REGISTRY, this);
+    List<SchemaUpdateHandler> customSchemaHandlers =
+        config.getConfiguredInstances(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG,
+            SchemaUpdateHandler.class,
+            handlerConfigs);
+    KafkaStoreMessageHandler storeHandler =
+        new KafkaStoreMessageHandler(this, lookupCache, idGenerator);
+    customSchemaHandlers.add(storeHandler);
     return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
         config,
-        new KafkaStoreMessageHandler(this, lookupCache, idGenerator),
+        new CompositeSchemaUpdateHandler(customSchemaHandlers),
         this.serializer, lookupCache, new NoopKey());
   }
 
@@ -199,11 +212,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return new InMemoryCache<SchemaRegistryKey, SchemaRegistryValue>();
   }
 
-  protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache() {
+  public LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache() {
     return lookupCache;
   }
 
-  protected Serializer<SchemaRegistryKey, SchemaRegistryValue> getSerializer() {
+  public Serializer<SchemaRegistryKey, SchemaRegistryValue> getSerializer() {
     return serializer;
   }
 
@@ -218,7 +231,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return idGenerator;
   }
 
-  protected IdGenerator getIdentityGenerator() {
+  public IdGenerator getIdentityGenerator() {
     return idGenerator;
   }
 
@@ -863,7 +876,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences());
   }
 
-  private ParsedSchema parseSchema(
+  public ParsedSchema parseSchema(
       String schemaType,
       String schema,
       List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
@@ -1374,6 +1387,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   @Override
   public SchemaRegistryConfig config() {
     return config;
+  }
+
+  @Override
+  public Map<String, Object> properties() {
+    return props;
   }
 
   public HostnameVerifier getHostnameVerifier() throws SchemaRegistryStoreException {
