@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.exceptions;
 import io.confluent.rest.exceptions.RestServerErrorException;
 
 /**
- * Indicates a problem while forwarding the request to the master node in a schema
+ * Indicates a problem while forwarding the request to the leader node in a schema
  * registry cluster
  */
 public class RestRequestForwardingException extends RestServerErrorException {

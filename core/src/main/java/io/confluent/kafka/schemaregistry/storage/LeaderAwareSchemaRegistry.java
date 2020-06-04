@@ -21,10 +21,10 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 
 /**
  * Internal interface for schema registry implementations. Used as a restricted interface for
- * MasterElectors to interact with.
+ * LeaderElectors to interact with.
  */
-public interface MasterAwareSchemaRegistry {
-  void setMaster(SchemaRegistryIdentity newMaster) throws SchemaRegistryTimeoutException,
+public interface LeaderAwareSchemaRegistry {
+  void setLeader(SchemaRegistryIdentity newLeader) throws SchemaRegistryTimeoutException,
       SchemaRegistryStoreException, IdGenerationException;
 
 }

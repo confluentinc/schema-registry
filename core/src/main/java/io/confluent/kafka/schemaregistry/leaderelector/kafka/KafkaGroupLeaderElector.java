@@ -13,7 +13,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.masterelector.kafka;
+package io.confluent.kafka.schemaregistry.leaderelector.kafka;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
@@ -21,7 +21,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.MasterElector;
+import io.confluent.kafka.schemaregistry.storage.LeaderElector;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
@@ -56,9 +56,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryRebalanceListener {
+public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryRebalanceListener {
 
-  private static final Logger log = LoggerFactory.getLogger(KafkaGroupMasterElector.class);
+  private static final Logger log = LoggerFactory.getLogger(KafkaGroupLeaderElector.class);
 
   private static final AtomicInteger SR_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
   private static final String JMX_PREFIX = "kafka.schema.registry";
@@ -76,7 +76,7 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
   private ExecutorService executor;
   private CountDownLatch joinedLatch = new CountDownLatch(1);
 
-  public KafkaGroupMasterElector(SchemaRegistryConfig config,
+  public KafkaGroupLeaderElector(SchemaRegistryConfig config,
                                  SchemaRegistryIdentity myIdentity,
                                  KafkaSchemaRegistry schemaRegistry
   ) throws SchemaRegistryInitializationException {
@@ -225,18 +225,18 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
 
   @Override
   public void onAssigned(SchemaRegistryProtocol.Assignment assignment, int generation) {
-    log.info("Finished rebalance with master election result: {}", assignment);
+    log.info("Finished rebalance with leader election result: {}", assignment);
     try {
       switch (assignment.error()) {
         case SchemaRegistryProtocol.Assignment.NO_ERROR:
-          if (assignment.masterIdentity() == null) {
+          if (assignment.leaderIdentity() == null) {
             log.error(
-                "No master eligible schema registry instances joined the schema registry group. "
+                "No leader eligible schema registry instances joined the schema registry group. "
                 + "Rebalancing was successful and this instance can serve reads, but no writes "
                 + "can be processed."
             );
           }
-          schemaRegistry.setMaster(assignment.masterIdentity());
+          schemaRegistry.setLeader(assignment.leaderIdentity());
           joinedLatch.countDown();
           break;
         case SchemaRegistryProtocol.Assignment.DUPLICATE_URLS:
@@ -251,11 +251,11 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
                                           + "coordination protocol");
       }
     } catch (SchemaRegistryException e) {
-      // This shouldn't be possible with this implementation. The exceptions from setMaster come
+      // This shouldn't be possible with this implementation. The exceptions from setLeader come
       // from it calling nextRange in this class, but this implementation doesn't require doing
       // any IO, so the errors that can occur in the ZK implementation should not be possible here.
       log.error(
-          "Error when updating master, we will not be able to forward requests to the master",
+          "Error when updating leader, we will not be able to forward requests to the leader",
           e
       );
     }
@@ -265,13 +265,13 @@ public class KafkaGroupMasterElector implements MasterElector, SchemaRegistryReb
   public void onRevoked() {
     log.info("Rebalance started");
     try {
-      schemaRegistry.setMaster(null);
+      schemaRegistry.setLeader(null);
     } catch (SchemaRegistryException e) {
-      // This shouldn't be possible with this implementation. The exceptions from setMaster come
+      // This shouldn't be possible with this implementation. The exceptions from setLeader come
       // from it calling nextRange in this class, but this implementation doesn't require doing
       // any IO, so the errors that can occur in the ZK implementation should not be possible here.
       log.error(
-          "Error when updating master, we will not be able to forward requests to the master",
+          "Error when updating leader, we will not be able to forward requests to the leader",
           e
       );
     }

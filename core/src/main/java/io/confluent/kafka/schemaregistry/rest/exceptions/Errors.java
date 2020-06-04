@@ -60,7 +60,7 @@ public class Errors {
   public static final int STORE_ERROR_CODE = 50001;
   public static final int OPERATION_TIMEOUT_ERROR_CODE = 50002;
   public static final int REQUEST_FORWARDING_FAILED_ERROR_CODE = 50003;
-  public static final int UNKNOWN_MASTER_ERROR_CODE = 50004;
+  public static final int UNKNOWN_LEADER_ERROR_CODE = 50004;
   // 50005 is used by the RestService to indicate a JSON Parse Error
 
   public static RestException subjectNotFoundException(String subject) {
@@ -144,7 +144,7 @@ public class Errors {
     return new RestRequestForwardingException(message, cause);
   }
 
-  public static RestException unknownMasterException(String message, Throwable cause) {
-    return new RestUnknownMasterException(message, cause);
+  public static RestException unknownLeaderException(String message, Throwable cause) {
+    return new RestUnknownLeaderException(message, cause);
   }
 }

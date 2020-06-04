@@ -13,7 +13,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.masterelector.kafka;
+package io.confluent.kafka.schemaregistry.leaderelector.kafka;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
@@ -182,8 +182,8 @@ public class SchemaRegistryCoordinatorTest {
     assertEquals(0, rebalanceListener.revokedCount);
     assertEquals(1, rebalanceListener.assignedCount);
     assertFalse(rebalanceListener.assignments.get(0).failed());
-    assertEquals(consumerId, rebalanceListener.assignments.get(0).master());
-    assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).masterIdentity());
+    assertEquals(consumerId, rebalanceListener.assignments.get(0).leader());
+    assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).leaderIdentity());
   }
 
   @Test
@@ -221,8 +221,8 @@ public class SchemaRegistryCoordinatorTest {
     assertEquals(1, rebalanceListener.assignedCount);
     // No leader isn't considered a failure
     assertFalse(rebalanceListener.assignments.get(0).failed());
-    assertNull(rebalanceListener.assignments.get(0).master());
-    assertNull(rebalanceListener.assignments.get(0).masterIdentity());
+    assertNull(rebalanceListener.assignments.get(0).leader());
+    assertNull(rebalanceListener.assignments.get(0).leaderIdentity());
   }
 
   @Test
@@ -259,8 +259,8 @@ public class SchemaRegistryCoordinatorTest {
     assertEquals(0, rebalanceListener.revokedCount);
     assertEquals(1, rebalanceListener.assignedCount);
     assertTrue(rebalanceListener.assignments.get(0).failed());
-    assertNull(rebalanceListener.assignments.get(0).master());
-    assertNull(rebalanceListener.assignments.get(0).masterIdentity());
+    assertNull(rebalanceListener.assignments.get(0).leader());
+    assertNull(rebalanceListener.assignments.get(0).leaderIdentity());
   }
 
   @Test
@@ -293,8 +293,8 @@ public class SchemaRegistryCoordinatorTest {
     assertEquals(0, rebalanceListener.revokedCount);
     assertEquals(1, rebalanceListener.assignedCount);
     assertFalse(rebalanceListener.assignments.get(0).failed());
-    assertEquals(LEADER_ID, rebalanceListener.assignments.get(0).master());
-    assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).masterIdentity());
+    assertEquals(LEADER_ID, rebalanceListener.assignments.get(0).leader());
+    assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).leaderIdentity());
   }
 
   private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
@@ -304,11 +304,11 @@ public class SchemaRegistryCoordinatorTest {
   private JoinGroupResponse joinGroupLeaderResponse(
       int generationId,
       String memberId,
-      Map<String, SchemaRegistryIdentity> memberMasterEligibility,
+      Map<String, SchemaRegistryIdentity> memberLeaderEligibility,
       Errors error
   ) {
     List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
-    for (Map.Entry<String, SchemaRegistryIdentity> configStateEntry : memberMasterEligibility.entrySet()) {
+    for (Map.Entry<String, SchemaRegistryIdentity> configStateEntry : memberLeaderEligibility.entrySet()) {
       SchemaRegistryIdentity memberIdentity = configStateEntry.getValue();
       ByteBuffer buf = SchemaRegistryProtocol.serializeMetadata(memberIdentity);
       metadata.add(new JoinGroupResponseData.JoinGroupResponseMember()
@@ -342,12 +342,12 @@ public class SchemaRegistryCoordinatorTest {
 
   private SyncGroupResponse syncGroupResponse(
       short assignmentError,
-      String master,
-      SchemaRegistryIdentity masterIdentity,
+      String leader,
+      SchemaRegistryIdentity leaderIdentity,
       Errors error
   ) {
     SchemaRegistryProtocol.Assignment assignment = new SchemaRegistryProtocol.Assignment(
-        assignmentError, master, masterIdentity
+        assignmentError, leader, leaderIdentity
     );
     ByteBuffer buf = SchemaRegistryProtocol.serializeAssignment(assignment);
     return new SyncGroupResponse(new SyncGroupResponseData()

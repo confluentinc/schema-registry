@@ -118,7 +118,7 @@ public class TestUtils {
     int registeredId = restService.registerSchema(schemaString, subject);
     assertEquals("Registering a new schema should succeed", expectedId, registeredId);
 
-    // the newly registered schema should be immediately readable on the master
+    // the newly registered schema should be immediately readable on the leader
     assertEquals("Registered schema should be found",
             schemaString,
             restService.getId(expectedId).getSchemaString());
@@ -135,7 +135,7 @@ public class TestUtils {
     );
     assertEquals("Registering a new schema should succeed", expectedId, registeredId);
 
-    // the newly registered schema should be immediately readable on the master
+    // the newly registered schema should be immediately readable on the leader
     assertEquals("Registered schema should be found",
         schemaString,
         restService.getId(expectedId).getSchemaString());

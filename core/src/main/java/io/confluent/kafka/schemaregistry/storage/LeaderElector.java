@@ -20,7 +20,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitialization
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 
-public interface MasterElector {
+public interface LeaderElector {
 
   void init() throws SchemaRegistryTimeoutException, SchemaRegistryStoreException,
       SchemaRegistryInitializationException, IdGenerationException;

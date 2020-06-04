@@ -56,7 +56,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
-import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
+import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
@@ -275,13 +275,13 @@ public class SubjectVersionsResource {
                                   + " to the Kafka store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-                                                    + " to the master", e);
+                                                    + " to the leader", e);
     } catch (IncompatibleSchemaException e) {
       throw Errors.incompatibleSchemaException("Schema being registered is incompatible with an"
                                                + " earlier schema for subject "
                                                + "\"" + subjectName + "\"", e);
-    } catch (UnknownMasterException e) {
-      throw Errors.unknownMasterException("Master not known.", e);
+    } catch (UnknownLeaderException e) {
+      throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while registering schema", e);
     }
@@ -360,11 +360,11 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors
           .requestForwardingFailedException("Error while forwarding delete schema version request"
-                                            + " to the master", e);
+                                            + " to the leader", e);
     } catch (ReferenceExistsException e) {
       throw Errors.referenceExistsException(e.getMessage());
-    } catch (UnknownMasterException e) {
-      throw Errors.unknownMasterException("Master not known.", e);
+    } catch (UnknownLeaderException e) {
+      throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
     }

@@ -13,27 +13,20 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.exceptions;
+package io.confluent.kafka.schemaregistry.leaderelector.kafka;
 
 /**
- * Indicates that the node that is asked to serve the request is not the current master and
- * is not aware of the master node to forward the request to
+ * Listener for rebalance events in the Kafka group.
  */
-public class UnknownMasterException extends SchemaRegistryException {
+interface SchemaRegistryRebalanceListener {
+  /**
+   * Invoked when a new assignment is created by joining the schema registry group. This is
+   * invoked for both successful and unsuccessful assignments.
+   */
+  void onAssigned(SchemaRegistryProtocol.Assignment assignment, int generation);
 
-  public UnknownMasterException(String message, Throwable cause) {
-    super(message, cause);
-  }
-
-  public UnknownMasterException(String message) {
-    super(message);
-  }
-
-  public UnknownMasterException(Throwable cause) {
-    super(cause);
-  }
-
-  public UnknownMasterException() {
-    super();
-  }
+  /**
+   * Invoked when a rebalance operation starts, revoking leadership
+   */
+  void onRevoked();
 }

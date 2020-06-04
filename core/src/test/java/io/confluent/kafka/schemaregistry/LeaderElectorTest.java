@@ -49,7 +49,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(Parameterized.class)
-public class MasterElectorTest extends ClusterTestHarness {
+public class LeaderElectorTest extends ClusterTestHarness {
 
   @Parameters(name = "{0}")
   public static Collection<Object[]> data() {
@@ -98,7 +98,7 @@ public class MasterElectorTest extends ClusterTestHarness {
     final String configSubject = "configTopic";
     List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(4);
 
-    // Since master selection depends on the lexicographic ordering of members, we need to make
+    // Since leader selection depends on the lexicographic ordering of members, we need to make
     // sure the first instance gets a lower port.
     int port1 = choosePort();
     int port2 = choosePort();
@@ -119,84 +119,84 @@ public class MasterElectorTest extends ClusterTestHarness {
                                          zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                          CompatibilityLevel.NONE.name, true, null);
     restApp2.start();
-    assertTrue("Schema registry instance 1 should be the master", restApp1.isMaster());
-    assertFalse("Schema registry instance 2 shouldn't be the master", restApp2.isMaster());
-    assertEquals("Instance 2's master should be instance 1",
-                 restApp1.myIdentity(), restApp2.masterIdentity());
+    assertTrue("Schema registry instance 1 should be the leader", restApp1.isLeader());
+    assertFalse("Schema registry instance 2 shouldn't be the leader", restApp2.isLeader());
+    assertEquals("Instance 2's leader should be instance 1",
+                 restApp1.myIdentity(), restApp2.leaderIdentity());
 
-    // test registering a schema to the master and finding it on the expected version
+    // test registering a schema to the leader and finding it on the expected version
     final String firstSchema = avroSchemas.get(0);
     final int firstSchemaExpectedId = 1;
     TestUtils.registerAndVerifySchema(restApp1.restClient, firstSchema, firstSchemaExpectedId,
                                       subject);
-    // the newly registered schema should be eventually readable on the non-master
+    // the newly registered schema should be eventually readable on the non-leader
     verifyIdAndSchema(restApp2.restClient, firstSchemaExpectedId, firstSchema,
-                      "Registered schema should be found on the non-master");
+                      "Registered schema should be found on the non-leader");
 
-    // test registering a schema to the non-master and finding it on the expected version
+    // test registering a schema to the non-leader and finding it on the expected version
     final String secondSchema = avroSchemas.get(1);
     final int secondSchemaExpectedId = 2;
     final int secondSchemaExpectedVersion = 2;
-    assertEquals("Registering a new schema to the non-master should succeed",
+    assertEquals("Registering a new schema to the non-leader should succeed",
             secondSchemaExpectedId,
             restApp2.restClient.registerSchema(secondSchema, subject));
 
-    // the newly registered schema should be immediately readable on the master using the id
-    assertEquals("Registered schema should be found on the master",
+    // the newly registered schema should be immediately readable on the leader using the id
+    assertEquals("Registered schema should be found on the leader",
             secondSchema,
             restApp1.restClient.getId(secondSchemaExpectedId).getSchemaString());
 
-    // the newly registered schema should be immediately readable on the master using the version
-    assertEquals("Registered schema should be found on the master",
+    // the newly registered schema should be immediately readable on the leader using the version
+    assertEquals("Registered schema should be found on the leader",
             secondSchema,
             restApp1.restClient.getVersion(subject,
                     secondSchemaExpectedVersion).getSchema());
 
-    // the newly registered schema should be eventually readable on the non-master
+    // the newly registered schema should be eventually readable on the non-leader
     verifyIdAndSchema(restApp2.restClient, secondSchemaExpectedId, secondSchema,
-                      "Registered schema should be found on the non-master");
+                      "Registered schema should be found on the non-leader");
 
-    // test registering an existing schema to the master
-    assertEquals("Registering an existing schema to the master should return its id",
+    // test registering an existing schema to the leader
+    assertEquals("Registering an existing schema to the leader should return its id",
                  secondSchemaExpectedId,
                  restApp1.restClient.registerSchema(secondSchema, subject));
 
-    // test registering an existing schema to the non-master
-    assertEquals("Registering an existing schema to the non-master should return its id",
+    // test registering an existing schema to the non-leader
+    assertEquals("Registering an existing schema to the non-leader should return its id",
             secondSchemaExpectedId,
             restApp2.restClient.registerSchema(secondSchema, subject));
 
-    // update config to master
+    // update config to leader
     restApp1.restClient
         .updateCompatibility(CompatibilityLevel.FORWARD.name, configSubject);
-    assertEquals("New compatibility level should be FORWARD on the master",
+    assertEquals("New compatibility level should be FORWARD on the leader",
                  FORWARD.name,
                  restApp1.restClient.getConfig(configSubject).getCompatibilityLevel());
 
-    // the new config should be eventually readable on the non-master
+    // the new config should be eventually readable on the non-leader
     waitUntilCompatibilityLevelSet(restApp2.restClient, configSubject,
                                    CompatibilityLevel.FORWARD.name,
-                                   "New compatibility level should be FORWARD on the non-master");
+                                   "New compatibility level should be FORWARD on the non-leader");
 
-    // update config to non-master
+    // update config to non-leader
     restApp2.restClient
         .updateCompatibility(CompatibilityLevel.NONE.name, configSubject);
-    assertEquals("New compatibility level should be NONE on the master",
+    assertEquals("New compatibility level should be NONE on the leader",
                  NONE.name,
                  restApp1.restClient.getConfig(configSubject).getCompatibilityLevel());
 
-    // the new config should be eventually readable on the non-master
+    // the new config should be eventually readable on the non-leader
     waitUntilCompatibilityLevelSet(restApp2.restClient, configSubject,
                                    CompatibilityLevel.NONE.name,
-                                   "New compatibility level should be NONE on the non-master");
+                                   "New compatibility level should be NONE on the non-leader");
 
-    // fake an incorrect master and registration should fail
-    restApp1.setMaster(null);
+    // fake an incorrect leader and registration should fail
+    restApp1.setLeader(null);
     int statusCodeFromRestApp1 = 0;
     final String failedSchema = "{\"type\":\"string\"}";;
     try {
       restApp1.restClient.registerSchema(failedSchema, subject);
-      fail("Registration should fail on the master");
+      fail("Registration should fail on the leader");
     } catch (RestClientException e) {
       // this is expected.
       statusCodeFromRestApp1 = e.getStatus();
@@ -205,23 +205,23 @@ public class MasterElectorTest extends ClusterTestHarness {
     int statusCodeFromRestApp2 = 0;
     try {
       restApp2.restClient.registerSchema(failedSchema, subject);
-      fail("Registration should fail on the non-master");
+      fail("Registration should fail on the non-leader");
     } catch (RestClientException e) {
       // this is expected.
       statusCodeFromRestApp2 = e.getStatus();
     }
 
-    assertEquals("Status code from a non-master rest app for register schema should be 500",
+    assertEquals("Status code from a non-leader rest app for register schema should be 500",
                  500, statusCodeFromRestApp1);
-    assertEquals("Error code from the master and the non-master should be the same",
+    assertEquals("Error code from the leader and the non-leader should be the same",
                  statusCodeFromRestApp1, statusCodeFromRestApp2);
 
-    // update config should fail if master is not available
+    // update config should fail if leader is not available
     int updateConfigStatusCodeFromRestApp1 = 0;
     try {
       restApp1.restClient.updateCompatibility(CompatibilityLevel.FORWARD.name,
               configSubject);
-      fail("Update config should fail on the master");
+      fail("Update config should fail on the leader");
     } catch (RestClientException e) {
       // this is expected.
       updateConfigStatusCodeFromRestApp1 = e.getStatus();
@@ -231,26 +231,26 @@ public class MasterElectorTest extends ClusterTestHarness {
     try {
       restApp2.restClient.updateCompatibility(CompatibilityLevel.FORWARD.name,
               configSubject);
-      fail("Update config should fail on the non-master");
+      fail("Update config should fail on the non-leader");
     } catch (RestClientException e) {
       // this is expected.
       updateConfigStatusCodeFromRestApp2 = e.getStatus();
     }
 
-    assertEquals("Status code from a non-master rest app for update config should be 500",
+    assertEquals("Status code from a non-leader rest app for update config should be 500",
                  500, updateConfigStatusCodeFromRestApp1);
-    assertEquals("Error code from the master and the non-master should be the same",
+    assertEquals("Error code from the leader and the non-leader should be the same",
                  updateConfigStatusCodeFromRestApp1, updateConfigStatusCodeFromRestApp2);
 
-    // test registering an existing schema to the non-master when the master is not available
-    assertEquals("Registering an existing schema to the non-master should return its id",
+    // test registering an existing schema to the non-leader when the leader is not available
+    assertEquals("Registering an existing schema to the non-leader should return its id",
             secondSchemaExpectedId,
             restApp2.restClient.registerSchema(secondSchema, subject));
 
-    // set the correct master identity back
-    restApp1.setMaster(restApp1.myIdentity());
+    // set the correct leader identity back
+    restApp1.setLeader(restApp1.myIdentity());
 
-    // registering a schema to the master
+    // registering a schema to the leader
     final String thirdSchema = avroSchemas.get(2);
     final int thirdSchemaExpectedVersion = 3;
     final int thirdSchemaExpectedId;
@@ -259,33 +259,33 @@ public class MasterElectorTest extends ClusterTestHarness {
     } else {
       thirdSchemaExpectedId = secondSchemaExpectedId + 1;
     }
-    assertEquals("Registering a new schema to the master should succeed",
+    assertEquals("Registering a new schema to the leader should succeed",
             thirdSchemaExpectedId,
             restApp1.restClient.registerSchema(thirdSchema, subject));
 
-    // stop schema registry instance 1; instance 2 should become the new master
+    // stop schema registry instance 1; instance 2 should become the new leader
     restApp1.stop();
     Callable<Boolean> condition = new Callable<Boolean>() {
       @Override
       public Boolean call() throws Exception {
-        return restApp2.isMaster();
+        return restApp2.isLeader();
       }
     };
     TestUtils.waitUntilTrue(condition, 15000,
-                            "Schema registry instance 2 should become the master");
+                            "Schema registry instance 2 should become the leader");
 
-    // the latest version should be immediately available on the new master using the id
-    assertEquals("Latest version should be found on the new master",
+    // the latest version should be immediately available on the new leader using the id
+    assertEquals("Latest version should be found on the new leader",
             thirdSchema,
             restApp2.restClient.getId(thirdSchemaExpectedId).getSchemaString());
 
-    // the latest version should be immediately available on the new master using the version
-    assertEquals("Latest version should be found on the new master",
+    // the latest version should be immediately available on the new leader using the version
+    assertEquals("Latest version should be found on the new leader",
             thirdSchema,
             restApp2.restClient.getVersion(subject,
                     thirdSchemaExpectedVersion).getSchema());
 
-    // register a schema to the new master
+    // register a schema to the new leader
     final String fourthSchema = avroSchemas.get(3);
     final int fourthSchemaExpectedId;
     if (electorType == "zookeeper") {
@@ -303,214 +303,214 @@ public class MasterElectorTest extends ClusterTestHarness {
 
   @Test
   /**
-   * Trigger reelection with both a master cluster and slave cluster present.
-   * Ensure that nodes in slave cluster are never elected master.
+   * Trigger reelection with both a leader cluster and follower cluster present.
+   * Ensure that nodes in follower cluster are never elected leader.
    */
-  public void testSlaveIsNeverMaster() throws Exception {
-    int numSlaves = 2;
-    int numMasters = 30;
+  public void testFollowerIsNeverLeader() throws Exception {
+    int numFollowers = 2;
+    int numLeaders = 30;
 
-    Set<RestApp> slaveApps = new HashSet<RestApp>();
-    RestApp aSlave = null;
-    for (int i = 0; i < numSlaves; i++) {
-      RestApp slave = new RestApp(choosePort(),
+    Set<RestApp> followerApps = new HashSet<RestApp>();
+    RestApp aFollower = null;
+    for (int i = 0; i < numFollowers; i++) {
+      RestApp follower = new RestApp(choosePort(),
                                   zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                   CompatibilityLevel.NONE.name, false, null);
-      slaveApps.add(slave);
-      slave.start();
-      aSlave = slave;
+      followerApps.add(follower);
+      follower.start();
+      aFollower = follower;
     }
     // Sanity check
-    assertNotNull(aSlave);
+    assertNotNull(aFollower);
 
-    // Check that nothing in the slave cluster points to a master
-    for (RestApp slave: slaveApps) {
-      assertFalse("No slave should be master.", slave.isMaster());
-      assertNull("No master should be present in a slave cluster.", slave.masterIdentity());
+    // Check that nothing in the follower cluster points to a leader
+    for (RestApp follower : followerApps) {
+      assertFalse("No follower should be leader.", follower.isLeader());
+      assertNull("No follower should be present in a follower cluster.", follower.leaderIdentity());
     }
 
-    // It should not be possible to set a slave node as master
+    // It should not be possible to set a follower node as leader
     try {
-      aSlave.setMaster(aSlave.myIdentity());
+      aFollower.setLeader(aFollower.myIdentity());
     } catch (IllegalStateException e) {
       // This is expected
     }
-    assertFalse("Should not be able to set a slave to be master.", aSlave.isMaster());
-    assertNull("There should be no master present.", aSlave.masterIdentity());
+    assertFalse("Should not be able to set a follower to be leader.", aFollower.isLeader());
+    assertNull("There should be no leader present.", aFollower.leaderIdentity());
 
-    // Make a master-eligible 'cluster'
-    final Set<RestApp> masterApps = new HashSet<RestApp>();
-    for (int i = 0; i < numMasters; i++) {
-      RestApp master = new RestApp(choosePort(),
+    // Make a leader-eligible 'cluster'
+    final Set<RestApp> leaderApps = new HashSet<RestApp>();
+    for (int i = 0; i < numLeaders; i++) {
+      RestApp leader = new RestApp(choosePort(),
                                    zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                    CompatibilityLevel.NONE.name, true, null);
-      masterApps.add(master);
-      master.start();
-      waitUntilMasterElectionCompletes(masterApps);
+      leaderApps.add(leader);
+      leader.start();
+      waitUntilLeaderElectionCompletes(leaderApps);
     }
 
-    // Kill the current master and wait for reelection until no masters are left
-    while (masterApps.size() > 0) {
-      RestApp reportedMaster = checkOneMaster(masterApps);
-      masterApps.remove(reportedMaster);
+    // Kill the current leader and wait for reelection until no leaders are left
+    while (leaderApps.size() > 0) {
+      RestApp reportedLeader = checkOneLeader(leaderApps);
+      leaderApps.remove(reportedLeader);
 
-      checkMasterIdentity(slaveApps, reportedMaster.myIdentity());
-      checkMasterIdentity(masterApps, reportedMaster.myIdentity());
-      checkNoneIsMaster(slaveApps);
+      checkLeaderIdentity(followerApps, reportedLeader.myIdentity());
+      checkLeaderIdentity(leaderApps, reportedLeader.myIdentity());
+      checkNoneIsLeader(followerApps);
 
-      reportedMaster.stop();
-      waitUntilMasterElectionCompletes(masterApps);
+      reportedLeader.stop();
+      waitUntilLeaderElectionCompletes(leaderApps);
     }
 
-    // All masters are now dead
-    checkNoneIsMaster(slaveApps);
-    checkNoneIsMaster(masterApps);
+    // All leaders are now dead
+    checkNoneIsLeader(followerApps);
+    checkNoneIsLeader(leaderApps);
 
-    for (RestApp slave: slaveApps) {
-      slave.stop();
+    for (RestApp follower : followerApps) {
+      follower.stop();
     }
   }
 
   @Test
   /**
-   * Test registration of schemas and fetching by id when a 'master cluster' and 'slave cluster' is
-   * present. (Slave cluster == all nodes have masterEligibility false)
+   * Test registration of schemas and fetching by id when a 'leader cluster' and 'follower cluster'
+   * is present. (follwer cluster == all nodes have leaderEligibility false)
    *
-   * If only slaves are alive, registration should fail. If both slave and master cluster are
+   * If only followers are alive, registration should fail. If both follower and leader cluster are
    * alive, registration should succeed.
    *
    * Fetching by id should succeed in all configurations.
    */
-  public void testRegistrationOnMasterSlaveClusters() throws Exception {
-    int numSlaves = 4;
-    int numMasters = 4;
+  public void testRegistrationOnLeaderFollowerClusters() throws Exception {
+    int numFollowers = 4;
+    int numLeaders = 4;
     int numSchemas = 5;
     String subject = "testSubject";
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(numSchemas);
     List<Integer> ids = new ArrayList<Integer>();
 
-    Set<RestApp> slaveApps = new HashSet<RestApp>();
-    RestApp aSlave = null;
-    for (int i = 0; i < numSlaves; i++) {
-      RestApp slave = new RestApp(choosePort(),
+    Set<RestApp> followerApps = new HashSet<RestApp>();
+    RestApp aFollower = null;
+    for (int i = 0; i < numFollowers; i++) {
+      RestApp follower = new RestApp(choosePort(),
                                   zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                   CompatibilityLevel.NONE.name, false, null);
-      slaveApps.add(slave);
-      slave.start();
-      aSlave = slave;
+      followerApps.add(follower);
+      follower.start();
+      aFollower = follower;
     }
     // Sanity check
-    assertNotNull(aSlave);
+    assertNotNull(aFollower);
 
-    // Try to register schemas to a slave - should fail
+    // Try to register schemas to a follower - should fail
     boolean successfullyRegistered = false;
     try {
-      aSlave.restClient.registerSchema(schemas.get(0), subject);
+      aFollower.restClient.registerSchema(schemas.get(0), subject);
       successfullyRegistered = true;
     } catch (RestClientException e) {
       // registration should fail
     }
-    assertFalse("Should not be possible to register with no masters present.",
+    assertFalse("Should not be possible to register with no leaders present.",
                 successfullyRegistered);
 
-    // Make a master-eligible 'cluster'
-    final Set<RestApp> masterApps = new HashSet<RestApp>();
-    RestApp aMaster = null;
-    for (int i = 0; i < numMasters; i++) {
-      RestApp master = new RestApp(choosePort(),
+    // Make a leader-eligible 'cluster'
+    final Set<RestApp> leaderApps = new HashSet<RestApp>();
+    RestApp aLeader = null;
+    for (int i = 0; i < numLeaders; i++) {
+      RestApp leader = new RestApp(choosePort(),
                                    zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
                                    CompatibilityLevel.NONE.name, true, null);
-      masterApps.add(master);
-      master.start();
-      aMaster = master;
+      leaderApps.add(leader);
+      leader.start();
+      aLeader = leader;
     }
-    assertNotNull(aMaster);
+    assertNotNull(aLeader);
 
-    // Try to register to a master cluster node - should succeed
+    // Try to register to a leader cluster node - should succeed
     try {
       for (String schema : schemas) {
-        ids.add(aMaster.restClient.registerSchema(schema, subject));
+        ids.add(aLeader.restClient.registerSchema(schema, subject));
       }
     } catch (RestClientException e) {
-      fail("It should be possible to register schemas when a master cluster is present.");
+      fail("It should be possible to register schemas when a leader cluster is present.");
     }
 
-    // Try to register to a slave cluster node - should succeed
+    // Try to register to a follower cluster node - should succeed
     String anotherSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {
-      ids.add(aSlave.restClient.registerSchema(anotherSchema, subject));
+      ids.add(aFollower.restClient.registerSchema(anotherSchema, subject));
     } catch (RestClientException e) {
-      fail("Should be possible register a schema through slave cluster.");
+      fail("Should be possible register a schema through follower cluster.");
     }
 
     // Verify all ids can be fetched
     try {
       for (int id: ids) {
-        waitUntilIdExists(aSlave.restClient, id,
-                          String.format("Should be possible to fetch id %d from this slave.", id));
-        waitUntilIdExists(aMaster.restClient, id,
-                          String.format("Should be possible to fetch id %d from this master.", id));
+        waitUntilIdExists(aFollower.restClient, id,
+                          String.format("Should be possible to fetch id %d from this follower.", id));
+        waitUntilIdExists(aLeader.restClient, id,
+                          String.format("Should be possible to fetch id %d from this leader.", id));
 
-        SchemaString slaveResponse = aSlave.restClient.getId(id);
-        SchemaString masterResponse = aMaster.restClient.getId(id);
+        SchemaString followerResponse = aFollower.restClient.getId(id);
+        SchemaString leaderResponse = aLeader.restClient.getId(id);
         assertEquals(
-            "Master and slave responded with different schemas when queried with the same id.",
-            slaveResponse.getSchemaString(), masterResponse.getSchemaString());
+            "Leader and follower responded with different schemas when queried with the same id.",
+            followerResponse.getSchemaString(), leaderResponse.getSchemaString());
       }
     } catch (RestClientException e) {
       fail("Expected ids were not found in the schema registry.");
     }
 
-    // Stop everything in the master cluster
-    while (masterApps.size() > 0) {
-      RestApp master = findMaster(masterApps);
-      masterApps.remove(master);
-      master.stop();
-      waitUntilMasterElectionCompletes(masterApps);
+    // Stop everything in the leader cluster
+    while (leaderApps.size() > 0) {
+      RestApp leader = findLeader(leaderApps);
+      leaderApps.remove(leader);
+      leader.stop();
+      waitUntilLeaderElectionCompletes(leaderApps);
     }
 
     // Try to register a new schema - should fail
     anotherSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     successfullyRegistered = false;
     try {
-      aSlave.restClient.registerSchema(anotherSchema, subject);
+      aFollower.restClient.registerSchema(anotherSchema, subject);
       successfullyRegistered = true;
     } catch (RestClientException e) {
       // should fail
     }
-    assertFalse("Should not be possible to register with no masters present.",
+    assertFalse("Should not be possible to register with no leaders present.",
                 successfullyRegistered);
 
-    // Try fetching preregistered ids from slaves - should succeed
+    // Try fetching preregistered ids from followers - should succeed
     try {
 
       for (int id: ids) {
-        SchemaString schemaString = aSlave.restClient.getId(id);
+        SchemaString schemaString = aFollower.restClient.getId(id);
       }
-      List<Integer> versions = aSlave.restClient.getAllVersions(subject);
+      List<Integer> versions = aFollower.restClient.getAllVersions(subject);
       assertEquals("Number of ids should match number of versions.", ids.size(), versions.size());
     } catch (RestClientException e) {
-      fail("Should be possible to fetch registered schemas even with no masters present.");
+      fail("Should be possible to fetch registered schemas even with no leaders present.");
     }
 
-    for (RestApp slave: slaveApps) {
-      slave.stop();
+    for (RestApp follower : followerApps) {
+      follower.stop();
     }
   }
 
   @Test
   /**
-   * Test import mode and registration of schemas with version and id when a 'master cluster' and
-   * 'slave cluster' is present. (Slave cluster == all nodes have masterEligibility false)
+   * Test import mode and registration of schemas with version and id when a 'leader cluster' and
+   * 'follower cluster' is present. (Follower cluster == all nodes have leaderEligibility false)
    *
-   * If only slaves are alive, registration should fail. If both slave and master cluster are
+   * If only followers are alive, registration should fail. If both follower and leader cluster are
    * alive, registration should succeed.
    *
    * Fetching by id should succeed in all configurations.
    */
-  public void testImportOnMasterSlaveClusters() throws Exception {
-    int numSlaves = 4;
-    int numMasters = 4;
+  public void testImportOnLeaderFollowerClusters() throws Exception {
+    int numFollowers = 4;
+    int numLeaders = 4;
     int numSchemas = 5;
     String subject = "testSubject";
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(numSchemas);
@@ -520,127 +520,127 @@ public class MasterElectorTest extends ClusterTestHarness {
     int newId = 100000;
     int newVersion = 100;
 
-    Set<RestApp> slaveApps = new HashSet<RestApp>();
-    RestApp aSlave = null;
-    for (int i = 0; i < numSlaves; i++) {
-      RestApp slave = new RestApp(choosePort(),
+    Set<RestApp> followerApps = new HashSet<RestApp>();
+    RestApp aFollower = null;
+    for (int i = 0; i < numFollowers; i++) {
+      RestApp follower = new RestApp(choosePort(),
           zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
           CompatibilityLevel.NONE.name, false, props);
-      slaveApps.add(slave);
-      slave.start();
-      aSlave = slave;
+      followerApps.add(follower);
+      follower.start();
+      aFollower = follower;
     }
     // Sanity check
-    assertNotNull(aSlave);
+    assertNotNull(aFollower);
 
-    // Try to register schemas to a slave - should fail
+    // Try to register schemas to a follower - should fail
     boolean successfullyRegistered = false;
     try {
-      aSlave.restClient.registerSchema(schemas.get(0), subject, newVersion++, newId++);
+      aFollower.restClient.registerSchema(schemas.get(0), subject, newVersion++, newId++);
       successfullyRegistered = true;
     } catch (RestClientException e) {
       // registration should fail
     }
-    assertFalse("Should not be possible to register with no masters present.",
+    assertFalse("Should not be possible to register with no leaders present.",
         successfullyRegistered);
 
-    // Make a master-eligible 'cluster'
-    final Set<RestApp> masterApps = new HashSet<RestApp>();
-    RestApp aMaster = null;
-    for (int i = 0; i < numMasters; i++) {
-      RestApp master = new RestApp(choosePort(),
+    // Make a leader-eligible 'cluster'
+    final Set<RestApp> leaderApps = new HashSet<RestApp>();
+    RestApp aLeader = null;
+    for (int i = 0; i < numLeaders; i++) {
+      RestApp leader = new RestApp(choosePort(),
           zkConnect(), bootstrapServers(), KAFKASTORE_TOPIC,
           CompatibilityLevel.NONE.name, true, props);
-      masterApps.add(master);
-      master.start();
-      aMaster = master;
+      leaderApps.add(leader);
+      leader.start();
+      aLeader = leader;
     }
-    assertNotNull(aMaster);
+    assertNotNull(aLeader);
 
     // Enter import mode
     try {
-      aMaster.restClient.setMode(Mode.IMPORT.toString());
+      aLeader.restClient.setMode(Mode.IMPORT.toString());
     } catch (RestClientException e) {
-      fail("It should be possible to set mode when a master cluster is present.");
+      fail("It should be possible to set mode when a leader cluster is present.");
     }
 
-    // Try to register to a master cluster node - should succeed
+    // Try to register to a leader cluster node - should succeed
     try {
       for (String schema : schemas) {
-        ids.add(aMaster.restClient.registerSchema(schema, subject, newVersion++, newId++));
+        ids.add(aLeader.restClient.registerSchema(schema, subject, newVersion++, newId++));
       }
     } catch (RestClientException e) {
-      fail("It should be possible to register schemas when a master cluster is present. "
+      fail("It should be possible to register schemas when a leader cluster is present. "
           + "Error: " + e.getMessage());
     }
 
-    // Try to register to a slave cluster node - should succeed
+    // Try to register to a follower cluster node - should succeed
     String anotherSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {
-      ids.add(aSlave.restClient.registerSchema(anotherSchema, subject, newVersion++, newId++));
+      ids.add(aFollower.restClient.registerSchema(anotherSchema, subject, newVersion++, newId++));
     } catch (RestClientException e) {
-      fail("Should be possible register a schema through slave cluster.");
+      fail("Should be possible register a schema through follower cluster.");
     }
 
     // Verify all ids can be fetched
     try {
       for (int id: ids) {
-        waitUntilIdExists(aSlave.restClient, id,
-            String.format("Should be possible to fetch id %d from this slave.", id));
-        waitUntilIdExists(aMaster.restClient, id,
-            String.format("Should be possible to fetch id %d from this master.", id));
+        waitUntilIdExists(aFollower.restClient, id,
+            String.format("Should be possible to fetch id %d from this follower.", id));
+        waitUntilIdExists(aLeader.restClient, id,
+            String.format("Should be possible to fetch id %d from this leader.", id));
 
-        SchemaString slaveResponse = aSlave.restClient.getId(id);
-        SchemaString masterResponse = aMaster.restClient.getId(id);
+        SchemaString followerResponse = aFollower.restClient.getId(id);
+        SchemaString leaderResponse = aLeader.restClient.getId(id);
         assertEquals(
-            "Master and slave responded with different schemas when queried with the same id.",
-            slaveResponse.getSchemaString(), masterResponse.getSchemaString());
+            "Leader and follower responded with different schemas when queried with the same id.",
+            followerResponse.getSchemaString(), leaderResponse.getSchemaString());
       }
     } catch (RestClientException e) {
       fail("Expected ids were not found in the schema registry.");
     }
 
-    // Stop everything in the master cluster
-    while (masterApps.size() > 0) {
-      RestApp master = findMaster(masterApps);
-      masterApps.remove(master);
-      master.stop();
-      waitUntilMasterElectionCompletes(masterApps);
+    // Stop everything in the leader cluster
+    while (leaderApps.size() > 0) {
+      RestApp leader = findLeader(leaderApps);
+      leaderApps.remove(leader);
+      leader.stop();
+      waitUntilLeaderElectionCompletes(leaderApps);
     }
 
     // Try to register a new schema - should fail
     anotherSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     successfullyRegistered = false;
     try {
-      aSlave.restClient.registerSchema(anotherSchema, subject, newVersion++, newId++);
+      aFollower.restClient.registerSchema(anotherSchema, subject, newVersion++, newId++);
       successfullyRegistered = true;
     } catch (RestClientException e) {
       // should fail
     }
-    assertFalse("Should not be possible to register with no masters present.",
+    assertFalse("Should not be possible to register with no leaders present.",
         successfullyRegistered);
 
-    // Try fetching preregistered ids from slaves - should succeed
+    // Try fetching preregistered ids from followers - should succeed
     try {
 
       for (int id: ids) {
-        SchemaString schemaString = aSlave.restClient.getId(id);
+        SchemaString schemaString = aFollower.restClient.getId(id);
       }
-      List<Integer> versions = aSlave.restClient.getAllVersions(subject);
+      List<Integer> versions = aFollower.restClient.getAllVersions(subject);
       assertEquals("Number of ids should match number of versions.", ids.size(), versions.size());
     } catch (RestClientException e) {
-      fail("Should be possible to fetch registered schemas even with no masters present.");
+      fail("Should be possible to fetch registered schemas even with no leaders present.");
     }
 
-    for (RestApp slave: slaveApps) {
-      slave.stop();
+    for (RestApp follower : followerApps) {
+      follower.stop();
     }
   }
 
-  /** Return the first node which reports itself as master, or null if none does. */
-  private static RestApp findMaster(Collection<RestApp> cluster) {
+  /** Return the first node which reports itself as leader, or null if none does. */
+  private static RestApp findLeader(Collection<RestApp> cluster) {
     for (RestApp restApp: cluster) {
-      if (restApp.isMaster()) {
+      if (restApp.isLeader()) {
         return restApp;
       }
     }
@@ -648,20 +648,20 @@ public class MasterElectorTest extends ClusterTestHarness {
     return null;
   }
 
-  /** Verify that no node in cluster reports itself as master. */
-  private static void checkNoneIsMaster(Collection<RestApp> cluster) {
-    assertNull("Expected none of the nodes in this cluster to report itself as master.", findMaster(cluster));
+  /** Verify that no node in cluster reports itself as leader. */
+  private static void checkNoneIsLeader(Collection<RestApp> cluster) {
+    assertNull("Expected none of the nodes in this cluster to report itself as leader.", findLeader(cluster));
   }
 
-  /** Verify that all nodes agree on the expected master identity. */
-  private static void checkMasterIdentity(Collection<RestApp> cluster,
-                                          SchemaRegistryIdentity expectedMasterIdentity) {
+  /** Verify that all nodes agree on the expected leader identity. */
+  private static void checkLeaderIdentity(Collection<RestApp> cluster,
+                                          SchemaRegistryIdentity expectedLeaderIdentity) {
     for (RestApp restApp: cluster) {
       for (int i = 0; i < 3; i++) {
-        SchemaRegistryIdentity masterIdentity = restApp.masterIdentity();
-        // There can be some latency in all the nodes picking up the new master from ZK so we need
+        SchemaRegistryIdentity leaderIdentity = restApp.leaderIdentity();
+        // There can be some latency in all the nodes picking up the new leader from ZK so we need
         // to allow for some retries here.
-        if (masterIdentity == null) {
+        if (leaderIdentity == null) {
           try {
             Thread.sleep(1000);
           } catch (InterruptedException e) {
@@ -669,61 +669,61 @@ public class MasterElectorTest extends ClusterTestHarness {
           }
           continue;
         }
-        assertEquals("Each master identity should be " + expectedMasterIdentity,
-                     expectedMasterIdentity, masterIdentity);
+        assertEquals("Each leader identity should be " + expectedLeaderIdentity,
+            expectedLeaderIdentity, leaderIdentity);
       }
     }
   }
 
   /**
-   * Return set of identities of all nodes reported as master. Expect this to be a set of
+   * Return set of identities of all nodes reported as leader. Expect this to be a set of
    * size 1 unless there is some pathological behavior.
    */
-  private static Set<SchemaRegistryIdentity> getMasterIdentities(Collection<RestApp> cluster) {
-    Set<SchemaRegistryIdentity> masterIdentities = new HashSet<SchemaRegistryIdentity>();
+  private static Set<SchemaRegistryIdentity> getLeaderIdentities(Collection<RestApp> cluster) {
+    Set<SchemaRegistryIdentity> leaderIdentities = new HashSet<SchemaRegistryIdentity>();
     for (RestApp app: cluster) {
-      if (app != null && app.masterIdentity() != null) {
-        masterIdentities.add(app.masterIdentity());
+      if (app != null && app.leaderIdentity() != null) {
+        leaderIdentities.add(app.leaderIdentity());
       }
     }
 
-    return masterIdentities;
+    return leaderIdentities;
   }
 
   /**
-   * Check that exactly one RestApp in the cluster reports itself as master.
+   * Check that exactly one RestApp in the cluster reports itself as leader.
    */
-  private static RestApp checkOneMaster(Collection<RestApp> cluster) {
-    int masterCount = 0;
-    RestApp master = null;
+  private static RestApp checkOneLeader(Collection<RestApp> cluster) {
+    int leaderCount = 0;
+    RestApp leader = null;
     for (RestApp restApp: cluster) {
-      if (restApp.isMaster()) {
-        masterCount++;
-        master = restApp;
+      if (restApp.isLeader()) {
+        leaderCount++;
+        leader = restApp;
       }
     }
 
-    assertEquals("Expected one master but found " + masterCount, 1, masterCount);
-    return master;
+    assertEquals("Expected one leader but found " + leaderCount, 1, leaderCount);
+    return leader;
   }
 
-  private void waitUntilMasterElectionCompletes(final Collection<RestApp> cluster) {
+  private void waitUntilLeaderElectionCompletes(final Collection<RestApp> cluster) {
     if (cluster == null || cluster.size() == 0) {
       return;
     }
 
-    Callable<Boolean> newMasterElected = new Callable<Boolean>() {
+    Callable<Boolean> newLeaderElected = new Callable<Boolean>() {
       @Override
       public Boolean call() throws Exception {
-        boolean hasMaster = findMaster(cluster) != null;
-        // Check that new master identity has propagated to all nodes
-        boolean oneReportedMaster = getMasterIdentities(cluster).size() == 1;
+        boolean hasLeader = findLeader(cluster) != null;
+        // Check that new leader identity has propagated to all nodes
+        boolean oneReportedLeader = getLeaderIdentities(cluster).size() == 1;
 
-        return hasMaster && oneReportedMaster;
+        return hasLeader && oneReportedLeader;
       }
     };
     TestUtils.waitUntilTrue(
-        newMasterElected, 15000, "A node should have been elected master by now.");
+        newLeaderElected, 15000, "A node should have been elected leader by now.");
   }
 
   private void waitUntilIdExists(final RestService restService, final int expectedId, String errorMsg) {

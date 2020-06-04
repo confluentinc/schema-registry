@@ -43,13 +43,13 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
-import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
+import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
 import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
-import io.confluent.kafka.schemaregistry.masterelector.kafka.KafkaGroupMasterElector;
-import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
+import io.confluent.kafka.schemaregistry.leaderelector.kafka.KafkaGroupLeaderElector;
+import io.confluent.kafka.schemaregistry.leaderelector.zookeeper.ZookeeperLeaderElector;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
@@ -87,7 +87,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
-public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaRegistry {
+public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaRegistry {
 
   /**
    * Schema versions under a particular subject are indexed from MIN_VERSION.
@@ -110,13 +110,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
   private final int kafkaStoreMaxRetries;
-  private final boolean isEligibleForMasterElector;
+  private final boolean isEligibleForLeaderElector;
   private final boolean allowModeChanges;
-  private SchemaRegistryIdentity masterIdentity;
-  private RestService masterRestService;
+  private SchemaRegistryIdentity leaderIdentity;
+  private RestService leaderRestService;
   private SslFactory sslFactory;
   private IdGenerator idGenerator = null;
-  private MasterElector masterElector = null;
+  private LeaderElector leaderElector = null;
   private final MetricsContainer metricsContainer;
   private final Map<String, SchemaProvider> providers;
 
@@ -128,16 +128,20 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
     this.config = config;
     this.props = new HashMap<>();
+    Boolean leaderEligibility = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
+    if (leaderEligibility == null) {
+      leaderEligibility = config.getBoolean(SchemaRegistryConfig.LEADER_ELIGIBILITY);
+    }
+    this.isEligibleForLeaderElector = leaderEligibility;
     String host = config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG);
     SchemeAndPort schemeAndPort = getSchemeAndPortForIdentity(
         config.getInt(SchemaRegistryConfig.PORT_CONFIG),
         config.getList(RestConfig.LISTENERS_CONFIG),
         config.interInstanceProtocol()
     );
-    this.isEligibleForMasterElector = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
     this.myIdentity = new SchemaRegistryIdentity(host, schemeAndPort.port,
-        isEligibleForMasterElector, schemeAndPort.scheme);
+        isEligibleForLeaderElector, schemeAndPort.scheme);
     this.sslFactory =
         new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(config.values()));
     this.kafkaStoreTimeoutMs =
@@ -284,7 +288,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     try {
       if (config.useKafkaCoordination()) {
         log.info("Joining schema registry with Kafka-based coordination");
-        masterElector = new KafkaGroupMasterElector(config, myIdentity, this);
+        leaderElector = new KafkaGroupLeaderElector(config, myIdentity, this);
       } else {
         log.info("Joining schema registry with Zookeeper-based coordination");
         log.warn("*****************************************************************************");
@@ -292,12 +296,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         log.warn("Please switch to Kafka-based coordination with "
             + "\"kafkastore.bootstrap.servers\".");
         log.warn("*****************************************************************************");
-        masterElector = new ZookeeperMasterElector(config, myIdentity, this);
+        leaderElector = new ZookeeperLeaderElector(config, myIdentity, this);
       }
-      masterElector.init();
+      leaderElector.init();
     } catch (SchemaRegistryStoreException e) {
       throw new SchemaRegistryInitializationException(
-          "Error electing master while initializing schema registry", e);
+          "Error electing leader while initializing schema registry", e);
     } catch (SchemaRegistryTimeoutException e) {
       throw new SchemaRegistryInitializationException(e);
     }
@@ -307,58 +311,58 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return kafkaStore.initialized();
   }
 
-  public boolean isMaster() {
-    kafkaStore.masterLock().lock();
+  public boolean isLeader() {
+    kafkaStore.leaderLock().lock();
     try {
-      if (masterIdentity != null && masterIdentity.equals(myIdentity)) {
+      if (leaderIdentity != null && leaderIdentity.equals(myIdentity)) {
         return true;
       } else {
         return false;
       }
     } finally {
-      kafkaStore.masterLock().unlock();
+      kafkaStore.leaderLock().unlock();
     }
   }
 
   /**
-   * 'Inform' this SchemaRegistry instance which SchemaRegistry is the current master.
-   * If this instance is set as the new master, ensure it is up-to-date with data in
+   * 'Inform' this SchemaRegistry instance which SchemaRegistry is the current leader.
+   * If this instance is set as the new leader, ensure it is up-to-date with data in
    * the kafka store, and tell Zookeeper to allocate the next batch of schema IDs.
    *
-   * @param newMaster Identity of the current master. null means no master is alive.
+   * @param newLeader Identity of the current leader. null means no leader is alive.
    */
   @Override
-  public void setMaster(@Nullable SchemaRegistryIdentity newMaster)
+  public void setLeader(@Nullable SchemaRegistryIdentity newLeader)
       throws SchemaRegistryTimeoutException, SchemaRegistryStoreException, IdGenerationException {
-    log.debug("Setting the master to " + newMaster);
+    log.debug("Setting the leader to " + newLeader);
 
-    // Only schema registry instances eligible for master can be set to master
-    if (newMaster != null && !newMaster.getMasterEligibility()) {
+    // Only schema registry instances eligible for leader can be set to leader
+    if (newLeader != null && !newLeader.getLeaderEligibility()) {
       throw new IllegalStateException(
-          "Tried to set an ineligible node to master: " + newMaster);
+          "Tried to set an ineligible node to leader: " + newLeader);
     }
 
-    kafkaStore.masterLock().lock();
+    kafkaStore.leaderLock().lock();
     try {
-      SchemaRegistryIdentity previousMaster = masterIdentity;
-      masterIdentity = newMaster;
+      SchemaRegistryIdentity previousLeader = leaderIdentity;
+      leaderIdentity = newLeader;
 
-      if (masterIdentity == null) {
-        masterRestService = null;
+      if (leaderIdentity == null) {
+        leaderRestService = null;
       } else {
-        masterRestService = new RestService(masterIdentity.getUrl());
+        leaderRestService = new RestService(leaderIdentity.getUrl());
         if (sslFactory != null && sslFactory.sslContext() != null) {
-          masterRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
-          masterRestService.setHostnameVerifier(getHostnameVerifier());
+          leaderRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
+          leaderRestService.setHostnameVerifier(getHostnameVerifier());
         }
       }
 
-      if (masterIdentity != null && !masterIdentity.equals(previousMaster) && isMaster()) {
-        // The new master may not know the exact last offset in the Kafka log. So, mark the
+      if (leaderIdentity != null && !leaderIdentity.equals(previousLeader) && isLeader()) {
+        // The new leader may not know the exact last offset in the Kafka log. So, mark the
         // last offset invalid here
         kafkaStore.markLastWrittenOffsetInvalid();
-        //ensure the new master catches up with the offsets before it gets nextid and assigns
-        // master
+        //ensure the new leader catches up with the offsets before it gets nextid and assigns
+        // leader
         try {
           kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
         } catch (StoreException e) {
@@ -366,9 +370,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
         }
         idGenerator.init();
       }
-      metricsContainer.isMaster().set(isMaster() ? 1 : 0);
+      metricsContainer.isLeader().set(isLeader() ? 1 : 0);
     } finally {
-      kafkaStore.masterLock().unlock();
+      kafkaStore.leaderLock().unlock();
     }
   }
 
@@ -381,15 +385,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   }
 
   /**
-   * Return the identity of the SchemaRegistry that this instance thinks is current master.
-   * Any request that requires writing new data gets forwarded to the master.
+   * Return the identity of the SchemaRegistry that this instance thinks is current leader.
+   * Any request that requires writing new data gets forwarded to the leader.
    */
-  public SchemaRegistryIdentity masterIdentity() {
-    kafkaStore.masterLock().lock();
+  public SchemaRegistryIdentity leaderIdentity() {
+    kafkaStore.leaderLock().lock();
     try {
-      return masterIdentity;
+      return leaderIdentity;
     } finally {
-      kafkaStore.masterLock().unlock();
+      kafkaStore.leaderLock().unlock();
     }
   }
 
@@ -541,14 +545,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
     kafkaStore.lockFor(subject).lock();
     try {
-      if (isMaster()) {
+      if (isLeader()) {
         return register(subject, schema);
       } else {
-        // forward registering request to the master
-        if (masterIdentity != null) {
-          return forwardRegisterRequestToMaster(subject, schema, headerProperties);
+        // forward registering request to the leader
+        if (leaderIdentity != null) {
+          return forwardRegisterRequestToLeader(subject, schema, headerProperties);
         } else {
-          throw new UnknownMasterException("Register schema request failed since master is "
+          throw new UnknownLeaderException("Register schema request failed since leader is "
                                            + "unknown");
         }
       }
@@ -606,15 +610,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
     kafkaStore.lockFor(subject).lock();
     try {
-      if (isMaster()) {
+      if (isLeader()) {
         deleteSchemaVersion(subject, schema, permanentDelete);
       } else {
-        // forward registering request to the master
-        if (masterIdentity != null) {
-          forwardDeleteSchemaVersionRequestToMaster(headerProperties, subject,
+        // forward registering request to the leader
+        if (leaderIdentity != null) {
+          forwardDeleteSchemaVersionRequestToLeader(headerProperties, subject,
                   schema.getVersion(), permanentDelete);
         } else {
-          throw new UnknownMasterException("Register schema request failed since master is "
+          throw new UnknownLeaderException("Register schema request failed since leader is "
                                            + "unknown");
         }
       }
@@ -681,16 +685,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       boolean permanentDelete) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
-      if (isMaster()) {
+      if (isLeader()) {
         return deleteSubject(subject, permanentDelete);
       } else {
-        // forward registering request to the master
-        if (masterIdentity != null) {
-          return forwardDeleteSubjectRequestToMaster(requestProperties,
+        // forward registering request to the leader
+        if (leaderIdentity != null) {
+          return forwardDeleteSubjectRequestToLeader(requestProperties,
                   subject,
                   permanentDelete);
         } else {
-          throw new UnknownMasterException("Register schema request failed since master is "
+          throw new UnknownLeaderException("Register schema request failed since leader is "
                                            + "unknown");
         }
       }
@@ -741,10 +745,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     return null;
   }
 
-  private int forwardRegisterRequestToMaster(String subject, Schema schema,
+  private int forwardRegisterRequestToLeader(String subject, Schema schema,
                                              Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
-    final UrlList baseUrl = masterRestService.getBaseUrls();
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     RegisterSchemaRequest registerSchemaRequest = new RegisterSchemaRequest();
     registerSchemaRequest.setSchema(schema.getSchema());
@@ -754,7 +758,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     log.debug(String.format("Forwarding registering schema request %s to %s",
                             registerSchemaRequest, baseUrl));
     try {
-      int id = masterRestService.registerSchema(headerProperties, registerSchemaRequest, subject);
+      int id = leaderRestService.registerSchema(headerProperties, registerSchemaRequest, subject);
       return id;
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
@@ -766,18 +770,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private void forwardUpdateCompatibilityLevelRequestToMaster(
+  private void forwardUpdateCompatibilityLevelRequestToLeader(
       String subject, CompatibilityLevel compatibilityLevel,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
-    UrlList baseUrl = masterRestService.getBaseUrls();
+    UrlList baseUrl = leaderRestService.getBaseUrls();
 
     ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
     configUpdateRequest.setCompatibilityLevel(compatibilityLevel.name);
     log.debug(String.format("Forwarding update config request %s to %s",
                             configUpdateRequest, baseUrl));
     try {
-      masterRestService.updateConfig(headerProperties, configUpdateRequest, subject);
+      leaderRestService.updateConfig(headerProperties, configUpdateRequest, subject);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the update config request %s to %s",
@@ -788,17 +792,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private void forwardDeleteSchemaVersionRequestToMaster(
+  private void forwardDeleteSchemaVersionRequestToLeader(
       Map<String, String> headerProperties,
       String subject,
       Integer version,
       boolean permanentDelete) throws SchemaRegistryRequestForwardingException {
-    UrlList baseUrl = masterRestService.getBaseUrls();
+    UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding deleteSchemaVersion schema version request %s-%s to %s",
                             subject, version, baseUrl));
     try {
-      masterRestService.deleteSchemaVersion(headerProperties, subject,
+      leaderRestService.deleteSchemaVersion(headerProperties, subject,
               String.valueOf(version), permanentDelete);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
@@ -810,16 +814,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private List<Integer> forwardDeleteSubjectRequestToMaster(
+  private List<Integer> forwardDeleteSubjectRequestToLeader(
       Map<String, String> requestProperties,
       String subject,
       boolean permanentDelete) throws SchemaRegistryRequestForwardingException {
-    UrlList baseUrl = masterRestService.getBaseUrls();
+    UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding delete subject request for  %s to %s",
                             subject, baseUrl));
     try {
-      return masterRestService.deleteSubject(requestProperties, subject, permanentDelete);
+      return leaderRestService.deleteSubject(requestProperties, subject, permanentDelete);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
@@ -830,18 +834,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     }
   }
 
-  private void forwardSetModeRequestToMaster(
+  private void forwardSetModeRequestToLeader(
       String subject, Mode mode,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
-    UrlList baseUrl = masterRestService.getBaseUrls();
+    UrlList baseUrl = leaderRestService.getBaseUrls();
 
     ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
     modeUpdateRequest.setMode(mode.name());
     log.debug(String.format("Forwarding update mode request %s to %s",
         modeUpdateRequest, baseUrl));
     try {
-      masterRestService.setMode(headerProperties, modeUpdateRequest, subject);
+      leaderRestService.setMode(headerProperties, modeUpdateRequest, subject);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the update mode request %s to %s",
@@ -1146,13 +1150,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public void close() {
     log.info("Shutting down schema registry");
     kafkaStore.close();
-    if (masterElector != null) {
-      masterElector.close();
+    if (leaderElector != null) {
+      leaderElector.close();
     }
   }
 
   public void updateCompatibilityLevel(String subject, CompatibilityLevel newCompatibilityLevel)
-      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownMasterException {
+      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
     if (getModeInScope(subject) == Mode.READONLY) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
@@ -1171,18 +1175,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   public void updateConfigOrForward(String subject, CompatibilityLevel newCompatibilityLevel,
                                     Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
-             UnknownMasterException, OperationNotPermittedException {
+      UnknownLeaderException, OperationNotPermittedException {
     kafkaStore.lockFor(subject).lock();
     try {
-      if (isMaster()) {
+      if (isLeader()) {
         updateCompatibilityLevel(subject, newCompatibilityLevel);
       } else {
-        // forward update config request to the master
-        if (masterIdentity != null) {
-          forwardUpdateCompatibilityLevelRequestToMaster(subject, newCompatibilityLevel,
+        // forward update config request to the leader
+        if (leaderIdentity != null) {
+          forwardUpdateCompatibilityLevelRequestToLeader(subject, newCompatibilityLevel,
                                                          headerProperties);
         } else {
-          throw new UnknownMasterException("Update config request failed since master is "
+          throw new UnknownLeaderException("Update config request failed since leader is "
                                            + "unknown");
         }
       }
@@ -1308,17 +1312,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
   public void setModeOrForward(String subject, Mode mode, Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
-      OperationNotPermittedException, UnknownMasterException {
+      OperationNotPermittedException, UnknownLeaderException {
     kafkaStore.lockFor(subject).lock();
     try {
-      if (isMaster()) {
+      if (isLeader()) {
         setMode(subject, mode);
       } else {
-        // forward update mode request to the master
-        if (masterIdentity != null) {
-          forwardSetModeRequestToMaster(subject, mode, headerProperties);
+        // forward update mode request to the leader
+        if (leaderIdentity != null) {
+          forwardSetModeRequestToLeader(subject, mode, headerProperties);
         } else {
-          throw new UnknownMasterException("Update mode request failed since master is "
+          throw new UnknownLeaderException("Update mode request failed since leader is "
               + "unknown");
         }
       }

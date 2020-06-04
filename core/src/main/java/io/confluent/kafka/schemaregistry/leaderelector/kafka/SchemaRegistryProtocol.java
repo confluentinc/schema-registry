@@ -13,7 +13,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.masterelector.kafka;
+package io.confluent.kafka.schemaregistry.leaderelector.kafka;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -60,16 +60,16 @@ class SchemaRegistryProtocol {
 
     private final int version;
     private final short error;
-    private final String master;
-    private final SchemaRegistryIdentity masterIdentity;
+    private final String leader;
+    private final SchemaRegistryIdentity leaderIdentity;
 
     public Assignment(@JsonProperty("error") short error,
-                      @JsonProperty("master") String master,
-                      @JsonProperty("master_identity") SchemaRegistryIdentity masterIdentity) {
+                      @JsonProperty("master") String leader,
+                      @JsonProperty("master_identity") SchemaRegistryIdentity leaderIdentity) {
       this.version = CURRENT_VERSION;
       this.error = error;
-      this.master = master;
-      this.masterIdentity = masterIdentity;
+      this.leader = leader;
+      this.leaderIdentity = leaderIdentity;
     }
 
     public static Assignment fromJson(ByteBuffer json) {
@@ -93,13 +93,13 @@ class SchemaRegistryProtocol {
     }
 
     @JsonProperty("master")
-    public String master() {
-      return master;
+    public String leader() {
+      return leader;
     }
 
     @JsonProperty("master_identity")
-    public SchemaRegistryIdentity masterIdentity() {
-      return masterIdentity;
+    public SchemaRegistryIdentity leaderIdentity() {
+      return leaderIdentity;
     }
 
     public boolean failed() {
@@ -119,8 +119,8 @@ class SchemaRegistryProtocol {
       return "Assignment{"
              + "version=" + version
              + ", error=" + error
-             + ", master='" + master + '\''
-             + ", masterIdentity=" + masterIdentity
+             + ", leader='" + leader + '\''
+             + ", leaderIdentity=" + leaderIdentity
              + '}';
     }
   }
