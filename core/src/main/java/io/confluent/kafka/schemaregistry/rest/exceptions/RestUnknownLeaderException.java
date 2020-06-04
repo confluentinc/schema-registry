@@ -16,21 +16,21 @@
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
 /**
- * Indicates that the node that is asked to serve the request is not the current master and
- * is not aware of the master node to forward the request to
+ * Indicates that the node that is asked to serve the request is not the current leader and
+ * is not aware of the leader node to forward the request to
  */
 
 import io.confluent.rest.exceptions.RestServerErrorException;
 
-public class RestUnknownMasterException extends RestServerErrorException {
+public class RestUnknownLeaderException extends RestServerErrorException {
 
-  private static final int ERROR_CODE = Errors.UNKNOWN_MASTER_ERROR_CODE;
+  private static final int ERROR_CODE = Errors.UNKNOWN_LEADER_ERROR_CODE;
 
-  public RestUnknownMasterException(String message) {
+  public RestUnknownLeaderException(String message) {
     super(message, ERROR_CODE);
   }
 
-  public RestUnknownMasterException(String message, Throwable cause) {
+  public RestUnknownLeaderException(String message, Throwable cause) {
     super(message, ERROR_CODE, cause);
   }
 }

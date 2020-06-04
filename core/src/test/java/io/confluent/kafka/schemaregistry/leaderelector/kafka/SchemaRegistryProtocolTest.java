@@ -14,7 +14,7 @@
  * limitations under the License.
  **/
 
-package io.confluent.kafka.schemaregistry.masterelector.kafka;
+package io.confluent.kafka.schemaregistry.leaderelector.kafka;
 
 import org.junit.Test;
 

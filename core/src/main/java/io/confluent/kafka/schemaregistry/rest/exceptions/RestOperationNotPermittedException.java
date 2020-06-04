@@ -16,8 +16,8 @@
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
 /**
- * Indicates that the node that is asked to serve the request is not the current master and
- * is not aware of the master node to forward the request to
+ * Indicates that the node that is asked to serve the request is not the current leader and
+ * is not aware of the leader node to forward the request to
  */
 
 import io.confluent.rest.exceptions.RestConstraintViolationException;

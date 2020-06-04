@@ -44,7 +44,7 @@ import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedExcepti
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.UnknownMasterException;
+import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
@@ -104,11 +104,11 @@ public class ConfigResource {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update compatibility level", e);
-    } catch (UnknownMasterException e) {
-      throw Errors.unknownMasterException("Failed to update compatibility level", e);
+    } catch (UnknownLeaderException e) {
+      throw Errors.unknownLeaderException("Failed to update compatibility level", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
-                                                    + " to the master", e);
+                                                    + " to the leader", e);
     }
     if (!subjects.contains(subject)) {
       log.debug("Updated compatibility level for unregistered subject " + subject + " to "
@@ -172,11 +172,11 @@ public class ConfigResource {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update compatibility level", e);
-    } catch (UnknownMasterException e) {
-      throw Errors.unknownMasterException("Failed to update compatibility level", e);
+    } catch (UnknownLeaderException e) {
+      throw Errors.unknownLeaderException("Failed to update compatibility level", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
-                                                    + " to the master", e);
+                                                    + " to the leader", e);
     }
 
     return request;

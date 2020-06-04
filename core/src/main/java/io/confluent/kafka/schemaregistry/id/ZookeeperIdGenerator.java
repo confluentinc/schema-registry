@@ -17,7 +17,7 @@ package io.confluent.kafka.schemaregistry.id;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
-import io.confluent.kafka.schemaregistry.masterelector.zookeeper.ZookeeperMasterElector;
+import io.confluent.kafka.schemaregistry.leaderelector.zookeeper.ZookeeperLeaderElector;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
@@ -34,7 +34,7 @@ public class ZookeeperIdGenerator implements IdGenerator {
 
   public static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 20;
   public static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
-  private static final Logger log = LoggerFactory.getLogger(ZookeeperMasterElector.class);
+  private static final Logger log = LoggerFactory.getLogger(ZookeeperLeaderElector.class);
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_WRITE_RETRY_BACKOFF_MS = 50;
 
   private ZkUtils zkUtils;
@@ -121,7 +121,7 @@ public class ZookeeperIdGenerator implements IdGenerator {
               String.valueOf(nextIdBatchUpperBound));
           return nextIdBatchLowerBound;
         } catch (ZkNodeExistsException ignore) {
-          // A zombie master may have created this zk node after the initial existence check
+          // A zombie leader may have created this zk node after the initial existence check
           // Ignore and try again
         }
       } else { // ZOOKEEPER_SCHEMA_ID_COUNTER exists
@@ -166,10 +166,10 @@ public class ZookeeperIdGenerator implements IdGenerator {
 
         // conditionally update the zookeeper path with the upper bound of the new id batch.
         // newSchemaIdCounterDataVersion < 0 indicates a failed conditional update.
-        // Most probable cause is the existence of another master which tries to do the same
+        // Most probable cause is the existence of another leader which tries to do the same
         // counter batch allocation at the same time. If this happens, re-read the value and
-        // continue until one master is determined to be the zombie master.
-        // NOTE: The handling of multiple masters is still a TODO
+        // continue until one leader is determined to be the zombie leader.
+        // NOTE: The handling of multiple leaders is still a TODO
         int newSchemaIdCounterDataVersion =
             (Integer) zkUtils.conditionalUpdatePersistentPath(
                 ZOOKEEPER_SCHEMA_ID_COUNTER,

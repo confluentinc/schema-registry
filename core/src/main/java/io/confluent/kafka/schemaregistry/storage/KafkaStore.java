@@ -483,7 +483,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.lastWrittenOffset = lastOffset;
   }
 
-  public Lock masterLock() {
+  public Lock leaderLock() {
     return lock;
   }
 
