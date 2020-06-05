@@ -15,10 +15,12 @@
  */
 package io.confluent.kafka.serializers;
 
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.example.ExtendedWidget;
 import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -104,23 +106,33 @@ public class KafkaAvroSerializerTest {
             schemaRegistry, new VerifiableProperties(reflectionDecoderProps));
   }
 
-  private IndexedRecord createAvroRecord() {
+  private Schema createUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
-                        "\"name\": \"User\"," +
-                        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
+        "\"name\": \"User\"," +
+        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
+  private IndexedRecord createUserRecord() {
+    Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
     return avroRecord;
   }
 
-  private IndexedRecord createAccountRecord() {
+  private Schema createAccountSchema() {
     String accountSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
-                           "\"name\": \"Account\"," +
-                           "\"fields\": [{\"name\": \"accountNumber\", \"type\": \"string\"}]}";
+        "\"name\": \"Account\"," +
+        "\"fields\": [{\"name\": \"accountNumber\", \"type\": \"string\"}]}";
     Schema.Parser parser = new Schema.Parser();
     Schema schema = parser.parse(accountSchema);
+    return schema;
+  }
+
+  private IndexedRecord createAccountRecord() {
+    Schema schema = createAccountSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("accountNumber", "0123456789");
     return avroRecord;
@@ -154,7 +166,7 @@ public class KafkaAvroSerializerTest {
   @Test
   public void testKafkaAvroSerializer() {
     byte[] bytes;
-    IndexedRecord avroRecord = createAvroRecord();
+    IndexedRecord avroRecord = createUserRecord();
     bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
     assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
@@ -205,7 +217,7 @@ public class KafkaAvroSerializerTest {
         false
     );
     avroSerializer.configure(configs, false);
-    IndexedRecord avroRecord = createAvroRecord();
+    IndexedRecord avroRecord = createUserRecord();
     avroSerializer.serialize(topic, avroRecord);
   }
 
@@ -218,7 +230,7 @@ public class KafkaAvroSerializerTest {
         false
     );
     avroSerializer.configure(configs, false);
-    IndexedRecord avroRecord = createAvroRecord();
+    IndexedRecord avroRecord = createUserRecord();
     schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
@@ -234,7 +246,7 @@ public class KafkaAvroSerializerTest {
         TopicRecordNameStrategy.class.getName()
     );
     avroSerializer.configure(configs, false);
-    IndexedRecord record1 = createAvroRecord();
+    IndexedRecord record1 = createUserRecord();
     IndexedRecord record2 = createAccountRecord();
     byte[] bytes1 = avroSerializer.serialize(topic, record1);
     byte[] bytes2 = avroSerializer.serialize(topic, record2);
@@ -254,6 +266,41 @@ public class KafkaAvroSerializerTest {
     );
     avroSerializer.configure(configs, false);
     avroSerializer.serialize(topic, "a string should not be allowed");
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithMultiTypeUnion() throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    schemaRegistry.register("user", new AvroSchema(createUserSchema()));
+    schemaRegistry.register("account", new AvroSchema(createAccountSchema()));
+    schemaRegistry.register(topic + "-value",
+        new AvroSchema("[ \"example.avro.User\", \"example.avro.Account\" ]",
+            ImmutableList.of(
+                new SchemaReference("example.avro.User", "user", 1),
+                new SchemaReference("example.avro.Account", "account", 1)
+            ),
+            ImmutableMap.of(
+                "example.avro.User",
+                createUserSchema().toString(),
+                "example.avro.Account",
+                createAccountSchema().toString()
+            ),
+            null
+        ));
+    avroSerializer.configure(configs, false);
+    IndexedRecord record1 = createUserRecord();
+    IndexedRecord record2 = createAccountRecord();
+    byte[] bytes1 = avroSerializer.serialize(topic, record1);
+    byte[] bytes2 = avroSerializer.serialize(topic, record2);
+    assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
+    assertEquals(record2, avroDeserializer.deserialize(topic, bytes2));
   }
 
   @Test
@@ -428,7 +475,7 @@ public class KafkaAvroSerializerTest {
   public void testKafkaAvroSerializerNonexistantReflectionRecord() {
     byte[] bytes;
 
-    IndexedRecord avroRecord = createAvroRecord();
+    IndexedRecord avroRecord = createUserRecord();
     bytes = avroSerializer.serialize(topic, avroRecord);
 
     try {
