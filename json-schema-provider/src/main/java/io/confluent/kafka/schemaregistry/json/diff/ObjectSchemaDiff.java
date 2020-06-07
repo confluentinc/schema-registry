@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
+import java.util.Map;
+import java.util.regex.Pattern;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.Schema;
 
@@ -41,15 +43,19 @@ import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_PR
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_PROPERTIES_DECREASED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_PROPERTIES_INCREASED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_PROPERTIES_REMOVED;
-import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.OPTIONAL_PROPERTY_ADDED_TO_CLOSED_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_ATTRIBUTE_ADDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_ATTRIBUTE_REMOVED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_ATTRIBUTE_WITH_DEFAULT_ADDED;
-import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_PROPERTY_ADDED_TO_CLOSED_CONTENT_MODEL;
-import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_CLOSED_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_UNOPEN_CONTENT_MODEL;
 
 public class ObjectSchemaDiff {
   static void compare(final Context ctx, final ObjectSchema original, final ObjectSchema update) {
@@ -175,23 +181,59 @@ public class ObjectSchemaDiff {
           if (updateSchema == null) {
             // We only consider the content model of the update
             // since we can only remove properties if the update is an open content model
-            ctx.addDifference(isOpenContentModel(update)
-                              ? PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL
-                              : PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+            if (isOpenContentModel(update)) {
+              // compatible
+              ctx.addDifference(PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL);
+            } else {
+              Schema schemaFromPartial = schemaFromPartiallyOpenContentModel(update, propertyKey);
+              if (schemaFromPartial != null) {
+                final Context subctx = ctx.getSubcontext();
+                SchemaDiff.compare(subctx, originalSchema, schemaFromPartial);
+                ctx.addDifferences(subctx.getDifferences());
+                if (subctx.isCompatible()) {
+                  // compatible
+                  ctx.addDifference(PROPERTY_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+                } else {
+                  // incompatible
+                  ctx.addDifference(PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+                }
+              } else {
+                // incompatible
+                ctx.addDifference(PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+              }
+            }
           } else if (originalSchema == null) {
             // We only consider the content model of the original
             // since we can only add properties if the original is a closed content model
             if (isOpenContentModel(original)) {
+              // incompatible
               ctx.addDifference(PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
             } else {
+              Schema schemaFromPartial = schemaFromPartiallyOpenContentModel(original, propertyKey);
+              if (schemaFromPartial != null) {
+                final Context subctx = ctx.getSubcontext();
+                SchemaDiff.compare(subctx, schemaFromPartial, updateSchema);
+                ctx.addDifferences(subctx.getDifferences());
+                if (subctx.isCompatible()) {
+                  // compatible
+                  ctx.addDifference(PROPERTY_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+                } else {
+                  // incompatible
+                  ctx.addDifference(PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+                }
+              }
+              // The following checks are for both closed and partially open content models.
               if (update.getRequiredProperties().contains(propertyKey)) {
                 if (update.getPropertySchemas().get(propertyKey).hasDefaultValue()) {
-                  ctx.addDifference(REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_CLOSED_CONTENT_MODEL);
+                  // compatible
+                  ctx.addDifference(REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_UNOPEN_CONTENT_MODEL);
                 } else {
-                  ctx.addDifference(REQUIRED_PROPERTY_ADDED_TO_CLOSED_CONTENT_MODEL);
+                  // incompatible
+                  ctx.addDifference(REQUIRED_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL);
                 }
               } else {
-                ctx.addDifference(OPTIONAL_PROPERTY_ADDED_TO_CLOSED_CONTENT_MODEL);
+                // compatible
+                ctx.addDifference(OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL);
               }
             }
           } else {
@@ -227,6 +269,19 @@ public class ObjectSchemaDiff {
   }
 
   private static boolean isOpenContentModel(final ObjectSchema schema) {
-    return schema.getPatternProperties().size() > 0 || schema.permitsAdditionalProperties();
+    return schema.getPatternProperties().size() == 0
+        && schema.getSchemaOfAdditionalProperties() == null
+        && schema.permitsAdditionalProperties();
+  }
+
+  private static Schema schemaFromPartiallyOpenContentModel(
+      final ObjectSchema schema, final String propertyKey) {
+    for (Map.Entry<Pattern, Schema> entry : schema.getPatternProperties().entrySet()) {
+      Pattern pattern = entry.getKey();
+      if (pattern.matcher(propertyKey).find()) {
+        return entry.getValue();
+      }
+    }
+    return schema.getSchemaOfAdditionalProperties();
   }
 }
