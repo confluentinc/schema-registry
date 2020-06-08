@@ -502,12 +502,12 @@
       "additionalProperties": false
     },
     "changes": [
-      "OPTIONAL_PROPERTY_ADDED_TO_CLOSED_CONTENT_MODEL #/properties/bar"
+      "OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL #/properties/bar"
     ],
     "compatible": true
   },
   {
-    "description": "Detect property added to open content model",
+    "description": "Detect property added to partially open content model 1",
     "original_schema": {
       "properties": {
         "foo": {
@@ -529,7 +529,7 @@
         "foo": {
           "type": "string"
         },
-        "bar": {
+        "I_123": {
           "type": "number"
         }
       },
@@ -544,9 +544,241 @@
       }
     },
     "changes": [
-      "PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL #/properties/bar"
+      "TYPE_EXTENDED #/properties/I_123",
+      "PROPERTY_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/properties/I_123",
+      "OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL #/properties/I_123"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect property added to partially open content model 2",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": { "type": "string" }
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": { "type": "string" }
+    },
+    "changes": [
+      "PROPERTY_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/properties/bar",
+      "OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL #/properties/bar"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect property added to partially open content model 3",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": { "type": "string" }
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": { "type": "string" }
+    },
+    "changes": [
+      "TYPE_CHANGED #/properties/bar",
+      "PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/properties/bar",
+      "OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL #/properties/bar"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect property added to partially open content model 4",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": { "type": "string" }
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "bar"
+      ],
+      "additionalProperties": { "type": "string" }
+    },
+    "changes": [
+      "PROPERTY_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/properties/bar",
+      "REQUIRED_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL #/properties/bar"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect property removed from partially open content model 1",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "I_123": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^S_": {
+          "type": "string"
+        },
+        "^I_": {
+          "type": "number"
+        }
+      }
+    },
+    "changes": [
+      "TYPE_EXTENDED #/properties/I_123",
+      "PROPERTY_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/properties/I_123"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect property removed from partially open content model 2",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": { "type": "string" }
+    },
+    "changes": [
+      "PROPERTY_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/properties/bar",
+      "ADDITIONAL_PROPERTIES_ADDED #/additionalProperties"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect property removed from partially open content model 3",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": { "type": "string" }
+    },
+    "changes": [
+      "TYPE_CHANGED #/properties/bar",
+      "PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/properties/bar",
+      "ADDITIONAL_PROPERTIES_ADDED #/additionalProperties"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect property removed from partially open content model 4",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "oneOf": [{"type":"null"},{"type":"string"}]
+        }
+      },
+      "additionalProperties": false
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": { "oneOf": [{"type":"null"},{"type":"string"}] }
+    },
+    "changes": [
+      "PROPERTY_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/properties/bar",
+      "ADDITIONAL_PROPERTIES_ADDED #/additionalProperties"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect property removed from partially open content model 5",
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": { "oneOf": [{"type":"null"},{"type":"string"}] }
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/properties/bar",
+      "PROPERTY_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/properties/bar",
+      "ADDITIONAL_PROPERTIES_ADDED #/additionalProperties"
+    ],
+    "compatible": true
   },
   {
     "description": "Detect property added to open content model",
@@ -927,7 +1159,180 @@
       "type": "array"
     },
     "changes": [
-      "ITEMS_REMOVED_FROM_OPEN_CONTENT_MODEL #/"
+      "ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL #/items/0",
+      "ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL #/items/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect item added to partially open content model 1",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": { "type": "string" }
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": { "type": "string" }
+    },
+    "changes": [
+      "ITEM_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/2"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect item added to partially open content model 2",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": { "type": "string" }
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": { "type": "string" }
+    },
+    "changes": [
+      "TYPE_CHANGED #/items/2",
+      "ITEM_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/2"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect item removed from partially open content model 1",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": { "type": "string" }
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": { "type": "string" }
+    },
+    "changes": [
+      "ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/2"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect item removed from partially open content model 2",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "oneOf": [{"type":"null"},{"type":"string"}]
+        }
+      ],
+      "additionalItems": { "oneOf": [{"type":"null"},{"type":"string"}] }
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": { "oneOf": [{"type":"null"},{"type":"string"}] }
+    },
+    "changes": [
+      "ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/2"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect item removed from partially open content model 3",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": { "type": "string" }
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": { "type": "string" }
+    },
+    "changes": [
+      "TYPE_CHANGED #/items/2",
+      "ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/2"
     ],
     "compatible": false
   },
