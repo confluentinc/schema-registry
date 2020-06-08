@@ -36,8 +36,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -47,8 +45,6 @@ import java.util.Properties;
 import static org.junit.Assert.assertTrue;
 
 public class TelemetryReporterTest extends ClusterTestHarness {
-
-  private static final Logger log = LoggerFactory.getLogger(TelemetryReporterTest.class);
 
   public TelemetryReporterTest() {
     super(1, true);
@@ -74,7 +70,8 @@ public class TelemetryReporterTest extends ClusterTestHarness {
     Properties properties = new Properties();
     properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
     properties.put(ConsumerConfig.GROUP_ID_CONFIG, "telemetry-metric-reporter-consumer");
-    // The metric topic may not be there initially. So, we need to refresh metadata more frequently to pick it up once created.
+    // The metric topic may not be there initially. So, we need to refresh metadata more frequently
+    // to pick it up once created.
     properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "400");
     return new KafkaConsumer<>(properties, new ByteArrayDeserializer(),
         new ByteArrayDeserializer());
@@ -94,7 +91,8 @@ public class TelemetryReporterTest extends ClusterTestHarness {
 
     props.setProperty(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG, "500");
 
-    props.setProperty(CommonClientConfigs.METRICS_CONTEXT_PREFIX + MetricsContainer.RESOURCE_LABEL_CLUSTER_ID, "foobar1");
+    props.setProperty(CommonClientConfigs.METRICS_CONTEXT_PREFIX
+                      + MetricsContainer.RESOURCE_LABEL_CLUSTER_ID, "foobar1");
     props.setProperty(MetricsContainer.RESOURCE_LABEL_CLUSTER_ID, "foobar2");
 
     props.setProperty(CommonClientConfigs.METRICS_CONTEXT_PREFIX +
@@ -109,12 +107,10 @@ public class TelemetryReporterTest extends ClusterTestHarness {
   public void testMetricsReporter() throws Exception {
     TestUtils.registerAndVerifySchema(restApp.restClient,
             TestUtils.getRandomCanonicalAvroString(1).get(0), 1, "testTopic");
-    log.error("************ Broker list: {} *************", brokerList);
     boolean srMetricsPresent = false;
     while (!srMetricsPresent) {
       ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(200));
       for (ConsumerRecord<byte[], byte[]> record : records) {
-        log.error("Processing record at offset {}", record.offset());
         // Verify that the message de-serializes successfully
         Metric m = serde.deserializer().deserialize(record.topic(), record.headers(), record.value());
 
@@ -127,8 +123,6 @@ public class TelemetryReporterTest extends ClusterTestHarness {
         assertTrue("schemaregistry".equals(resource.getType()));
 
         Map<String, String> resourceLabels = resource.getLabelsMap();
-
-        log.error("Resource label map: {}", resourceLabels);
 
         // Check that the labels from the config are present.
         TestCase.assertEquals("test", resourceLabels.get("schemaregistry.region"));
