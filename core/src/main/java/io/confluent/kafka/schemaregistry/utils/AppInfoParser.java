@@ -27,39 +27,29 @@ public class AppInfoParser {
   private static final Logger log = LoggerFactory.getLogger(AppInfoParser.class);
 
   public static String getCommitId() {
-    final String defaultValue = "Unknown";
-
-    String fileName = "/schema-registry-app.properties";
-    try (InputStream propFile = AppInfoParser.class.getResourceAsStream(fileName)) {
-      if (propFile != null) {
-        Properties props = new Properties();
-        props.load(propFile);
-        return props.getProperty("application.commitId", defaultValue).trim();
-      } else {
-        log.error("Cannot find properties file");
-      }
-    } catch (IOException e) {
-      log.warn("Cannot parse properties file", e);
-    }
-    return defaultValue;
+    return readAppProperty("application.commitId", "Unknown");
   }
 
   public static String getVersion() {
-    final String defaultValue = "Unknown";
+    return readAppProperty("application.version", "Unknown");
+  }
 
+  private static String readAppProperty(String propertyName, String defaultValue) {
     String fileName = "/schema-registry-app.properties";
+    String propertyValue = defaultValue;
     try (InputStream propFile = AppInfoParser.class.getResourceAsStream(fileName)) {
       if (propFile != null) {
         Properties props = new Properties();
         props.load(propFile);
-        return props.getProperty("application.version", defaultValue).trim();
+        propertyValue = props.getProperty(propertyName, defaultValue).trim();
       } else {
         log.error("Cannot find properties file");
       }
     } catch (IOException e) {
       log.warn("Cannot parse properties file", e);
     }
-    return defaultValue;
+    log.error("{} -> {}", propertyName, propertyValue);
+    return propertyValue;
   }
 
 }

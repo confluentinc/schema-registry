@@ -68,8 +68,6 @@ public class RestApp {
     prop.put(SchemaRegistryConfig.LEADER_ELIGIBILITY, leaderEligibility);
 
     prop.put("metrics.jmx.prefix", "kafka.schema.registry");
-    prop.put("metrics.context.resource.version", "version1");
-    prop.put("resource.version", "version2");
   }
 
   public void start() throws Exception {
