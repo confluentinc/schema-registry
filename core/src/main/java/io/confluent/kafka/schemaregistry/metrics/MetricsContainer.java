@@ -70,7 +70,7 @@ public class MetricsContainer {
   private final SchemaRegistryMetric jsonSchemasDeleted;
   private final SchemaRegistryMetric protobufSchemasDeleted;
 
-  private final TelemetryReporter telemetryReporter;
+  private final MetricsReporter telemetryReporter;
   private final MetricsContext metricsContext;
 
   public MetricsContainer(SchemaRegistryConfig config) {
@@ -81,9 +81,9 @@ public class MetricsContainer {
             config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
 
+    telemetryReporter = getTelemetryReporter(reporters);
+
     reporters.add(new JmxReporter(JMX_PREFIX));
-    telemetryReporter = new TelemetryReporter();
-    reporters.add(telemetryReporter);
 
     for (MetricsReporter reporter : reporters) {
       reporter.configure(config.originals());
@@ -135,6 +135,15 @@ public class MetricsContainer {
             "Number of deleted Protobuf schemas");
   }
 
+  private MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
+    for (MetricsReporter reporter : reporters) {
+      if (reporter instanceof TelemetryReporter) {
+        return reporter;
+      }
+    }
+    return null;
+  }
+
   private SchemaRegistryMetric createMetric(String name, String metricDescription) {
     return createMetric(name, name, name, metricDescription);
   }
@@ -154,10 +163,12 @@ public class MetricsContainer {
   }
 
   public void setLeader(boolean leader) {
-    if (leader) {
-      telemetryReporter.contextChange(metricsContext);
-    } else {
-      telemetryReporter.close();
+    if (telemetryReporter != null) {
+      if (leader) {
+        telemetryReporter.contextChange(metricsContext);
+      } else {
+        telemetryReporter.close();
+      }
     }
   }
 
