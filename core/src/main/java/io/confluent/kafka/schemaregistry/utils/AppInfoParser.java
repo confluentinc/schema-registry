@@ -48,7 +48,6 @@ public class AppInfoParser {
     } catch (IOException e) {
       log.warn("Cannot parse properties file", e);
     }
-    log.error("{} -> {}", propertyName, propertyValue);
     return propertyValue;
   }
 

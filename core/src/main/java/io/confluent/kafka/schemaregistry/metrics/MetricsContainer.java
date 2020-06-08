@@ -73,6 +73,8 @@ public class MetricsContainer {
   public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
+  private final TelemetryReporter telemetryReporter;
+  private final MetricsContext metricsContext;
 
   public MetricsContainer(SchemaRegistryConfig config) {
     this.configuredTags =
@@ -87,13 +89,14 @@ public class MetricsContainer {
                     MetricsReporter.class);
 
     reporters.add(new JmxReporter(JMX_PREFIX));
-    reporters.add(new TelemetryReporter());
+    telemetryReporter = new TelemetryReporter();
+    reporters.add(telemetryReporter);
 
     for (MetricsReporter reporter : reporters) {
       reporter.configure(config.originals());
     }
 
-    MetricsContext metricsContext = getMetricsContext(config);
+    metricsContext = getMetricsContext(config);
 
     for (MetricsReporter reporter : reporters) {
       reporter.contextChange(metricsContext);
@@ -151,6 +154,14 @@ public class MetricsContainer {
 
   public SchemaRegistryMetric isLeader() {
     return isLeaderNode;
+  }
+
+  public void setLeader(boolean leader) {
+    if (leader) {
+      telemetryReporter.contextChange(metricsContext);
+    } else {
+      telemetryReporter.close();
+    }
   }
 
   public SchemaRegistryMetric getApiCallsSuccess() {
