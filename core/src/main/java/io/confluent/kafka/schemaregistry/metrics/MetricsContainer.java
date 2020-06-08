@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -30,7 +31,6 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.SystemTime;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -195,24 +195,6 @@ public class MetricsContainer {
     }
   }
 
-  private static String getCommitId() {
-    final String defaultValue = "Unknown";
-
-    String fileName = "/schema-registry-app.properties";
-    try (InputStream propFile = MetricsContainer.class.getResourceAsStream(fileName)) {
-      if (propFile != null) {
-        Properties props = new Properties();
-        props.load(propFile);
-        return props.getProperty("application.commitId", defaultValue).trim();
-      } else {
-        log.error("Cannot find properties file");
-      }
-    } catch (IOException e) {
-      log.warn("Cannot parse properties file", e);
-    }
-    return defaultValue;
-  }
-
   @NotNull
   private static MetricsContext getMetricsContext(SchemaRegistryConfig config) {
     Map<String, Object> metadata =
@@ -220,7 +202,7 @@ public class MetricsContainer {
                     config.originals();
     metadata.put(RESOURCE_LABEL_TYPE,  "SCHEMAREGISTRY");
     metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
-    metadata.put(RESOURCE_LABEL_COMMIT_ID, getCommitId());
+    metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
 
     return new KafkaMetricsContext(JMX_PREFIX, metadata);
   }

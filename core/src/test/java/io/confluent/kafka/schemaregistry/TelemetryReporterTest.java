@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry;
 
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import io.confluent.shaded.io.opencensus.proto.metrics.v1.Metric;
 import io.confluent.shaded.io.opencensus.proto.resource.v1.Resource;
@@ -23,7 +24,6 @@ import io.confluent.telemetry.ConfluentTelemetryConfig;
 import io.confluent.telemetry.exporter.kafka.KafkaExporterConfig;
 import io.confluent.telemetry.provider.SchemaRegistryProvider;
 import io.confluent.telemetry.serde.OpencensusMetricsProto;
-import io.confluent.telemetry.serde.ProtoToFlatJson;
 import junit.framework.TestCase;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -93,7 +93,6 @@ public class TelemetryReporterTest extends ClusterTestHarness {
 
     props.setProperty(CommonClientConfigs.METRICS_CONTEXT_PREFIX
                       + MetricsContainer.RESOURCE_LABEL_CLUSTER_ID, "foobar1");
-    props.setProperty(MetricsContainer.RESOURCE_LABEL_CLUSTER_ID, "foobar2");
 
     props.setProperty(CommonClientConfigs.METRICS_CONTEXT_PREFIX +
                       MetricsContainer.RESOURCE_LABEL_PREFIX + "region", "test");
@@ -114,10 +113,6 @@ public class TelemetryReporterTest extends ClusterTestHarness {
         // Verify that the message de-serializes successfully
         Metric m = serde.deserializer().deserialize(record.topic(), record.headers(), record.value());
 
-        System.out.println(new ProtoToFlatJson().deserialize("topic", m.toByteArray()));
-
-        // Verify labels
-
         // Check the resource labels are present
         Resource resource = m.getResource();
         assertTrue("schemaregistry".equals(resource.getType()));
@@ -127,6 +122,9 @@ public class TelemetryReporterTest extends ClusterTestHarness {
         // Check that the labels from the config are present.
         TestCase.assertEquals("test", resourceLabels.get("schemaregistry.region"));
         TestCase.assertEquals("pkc-bar", resourceLabels.get("schemaregistry.pkc"));
+        TestCase.assertEquals("_schemas", resourceLabels.get("schemaregistry.topic"));
+        TestCase.assertEquals(AppInfoParser.getCommitId(),
+                              resourceLabels.get("schemaregistry.commit.id"));
 
         if (m.getMetricDescriptor().getName().startsWith(SchemaRegistryProvider.DOMAIN)) {
           srMetricsPresent = true;
