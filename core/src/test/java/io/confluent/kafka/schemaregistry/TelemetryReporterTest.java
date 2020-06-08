@@ -125,6 +125,8 @@ public class TelemetryReporterTest extends ClusterTestHarness {
         TestCase.assertEquals("_schemas", resourceLabels.get("schemaregistry.topic"));
         TestCase.assertEquals(AppInfoParser.getCommitId(),
                               resourceLabels.get("schemaregistry.commit.id"));
+        TestCase.assertEquals(AppInfoParser.getVersion(),
+                              resourceLabels.get("schemaregistry.version"));
 
         if (m.getMetricDescriptor().getName().startsWith(SchemaRegistryProvider.DOMAIN)) {
           srMetricsPresent = true;
