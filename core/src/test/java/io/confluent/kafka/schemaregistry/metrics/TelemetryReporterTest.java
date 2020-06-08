@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.metrics;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import io.confluent.shaded.io.opencensus.proto.metrics.v1.Metric;
@@ -109,11 +108,11 @@ public class TelemetryReporterTest extends ClusterTestHarness {
     while (!srMetricsPresent) {
       ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(200));
       for (ConsumerRecord<byte[], byte[]> record : records) {
-        // Verify that the message de-serializes successfully
-        Metric m = serde.deserializer().deserialize(record.topic(), record.headers(), record.value());
+        Metric metric = serde.deserializer().deserialize(record.topic(), record.headers(),
+                                                         record.value());
 
         // Check the resource labels are present
-        Resource resource = m.getResource();
+        Resource resource = metric.getResource();
         assertTrue("schemaregistry".equals(resource.getType()));
 
         Map<String, String> resourceLabels = resource.getLabelsMap();
@@ -122,12 +121,13 @@ public class TelemetryReporterTest extends ClusterTestHarness {
         TestCase.assertEquals("test", resourceLabels.get("schemaregistry.region"));
         TestCase.assertEquals("pkc-bar", resourceLabels.get("schemaregistry.pkc"));
         TestCase.assertEquals("_schemas", resourceLabels.get("schemaregistry.topic"));
+        TestCase.assertEquals("SCHEMAREGISTRY", resourceLabels.get("schemaregistry.type"));
         TestCase.assertEquals(AppInfoParser.getCommitId(),
                               resourceLabels.get("schemaregistry.commit.id"));
         TestCase.assertEquals(AppInfoParser.getVersion(),
                               resourceLabels.get("schemaregistry.version"));
 
-        if (m.getMetricDescriptor().getName().startsWith(SchemaRegistryProvider.DOMAIN)) {
+        if (metric.getMetricDescriptor().getName().startsWith(SchemaRegistryProvider.DOMAIN)) {
           srMetricsPresent = true;
         }
       }

@@ -34,8 +34,6 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
 import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -43,9 +41,14 @@ import java.util.concurrent.TimeUnit;
 
 public class MetricsContainer {
 
-  private static final Logger log = LoggerFactory.getLogger(MetricsContainer.class);
-
   public static final String JMX_PREFIX = "kafka.schema.registry";
+
+  public static final String RESOURCE_LABEL_PREFIX = "resource.";
+  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
+  public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
+  public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
+  public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
+  public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
@@ -67,12 +70,6 @@ public class MetricsContainer {
   private final SchemaRegistryMetric jsonSchemasDeleted;
   private final SchemaRegistryMetric protobufSchemasDeleted;
 
-  public static final String RESOURCE_LABEL_PREFIX = "resource.";
-  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
-  public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
-  public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
-  public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
-  public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
   private final TelemetryReporter telemetryReporter;
   private final MetricsContext metricsContext;
 
