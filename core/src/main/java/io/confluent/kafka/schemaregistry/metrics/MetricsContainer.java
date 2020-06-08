@@ -36,11 +36,8 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 public class MetricsContainer {
@@ -80,7 +77,7 @@ public class MetricsContainer {
   public MetricsContainer(SchemaRegistryConfig config) {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
-    this.commitId = getCommitId();
+    this.commitId = AppInfoParser.getCommitId();
 
     MetricConfig metricConfig =
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
