@@ -85,7 +85,10 @@ public class SchemaDiff {
     changes.add(Type.UNIQUE_ITEMS_REMOVED);
     changes.add(Type.ADDITIONAL_ITEMS_ADDED);
     changes.add(Type.ADDITIONAL_ITEMS_EXTENDED);
-    changes.add(Type.ITEMS_ADDED_TO_CLOSED_CONTENT_MODEL);
+    changes.add(Type.ITEM_ADDED_TO_CLOSED_CONTENT_MODEL);
+    changes.add(Type.ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL);
+    changes.add(Type.ITEM_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+    changes.add(Type.ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
 
     changes.add(Type.ENUM_ARRAY_EXTENDED);
 
