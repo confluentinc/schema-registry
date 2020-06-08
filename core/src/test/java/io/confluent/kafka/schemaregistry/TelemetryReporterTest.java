@@ -80,8 +80,6 @@ public class TelemetryReporterTest extends ClusterTestHarness {
   @Override
   protected Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
-    props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-        "io.confluent.telemetry.reporter.TelemetryReporter");
     props.setProperty(KafkaExporterConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
     props.setProperty("bootstrap.servers", brokerList);
     props.setProperty(KafkaExporterConfig.TOPIC_REPLICAS_CONFIG, "1");

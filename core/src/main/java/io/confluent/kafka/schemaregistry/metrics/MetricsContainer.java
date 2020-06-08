@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
+import io.confluent.telemetry.reporter.TelemetryReporter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
@@ -48,7 +49,6 @@ public class MetricsContainer {
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
-  private final String commitId;
 
   private final SchemaRegistryMetric isLeaderNode;
   private final SchemaRegistryMetric nodeCount;
@@ -77,7 +77,6 @@ public class MetricsContainer {
   public MetricsContainer(SchemaRegistryConfig config) {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
-    this.commitId = AppInfoParser.getCommitId();
 
     MetricConfig metricConfig =
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -87,9 +86,12 @@ public class MetricsContainer {
             config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
 
-    final JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
-    reporters.add(jmxReporter);
-    // reporters.add(new TelemetryReporter()); // TODO is this needed ?
+    reporters.add(new JmxReporter(JMX_PREFIX));
+    reporters.add(new TelemetryReporter());
+
+    for (MetricsReporter reporter : reporters) {
+      reporter.configure(config.originals());
+    }
 
     MetricsContext metricsContext = getMetricsContext(config);
 
