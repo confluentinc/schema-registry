@@ -77,10 +77,6 @@ public class MetricsContainer {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
 
-    MetricConfig metricConfig =
-            new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
-                    .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
-                            TimeUnit.MILLISECONDS);
     List<MetricsReporter> reporters =
             config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
@@ -99,6 +95,10 @@ public class MetricsContainer {
       reporter.contextChange(metricsContext);
     }
 
+    MetricConfig metricConfig =
+            new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
+                    .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
+                            TimeUnit.MILLISECONDS);
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime(), metricsContext);
 
     this.isLeaderNode = createMetric("master-slave-role",
