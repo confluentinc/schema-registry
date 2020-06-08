@@ -1,3 +1,18 @@
+/*
+ * Copyright 2020 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
 package io.confluent.kafka.schemaregistry;
 
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
@@ -109,17 +124,15 @@ public class TelemetryReporterTest extends ClusterTestHarness {
 
         // Check the resource labels are present
         Resource resource = m.getResource();
-        final String type = resource.getType();
-        assertTrue("schemaregistry".equals(type) || "kafka.schema.registry".equals(type));
-        log.error("Record has type: {}", type);
+        assertTrue("schemaregistry".equals(resource.getType()));
 
         Map<String, String> resourceLabels = resource.getLabelsMap();
 
         log.error("Resource label map: {}", resourceLabels);
 
         // Check that the labels from the config are present.
-        TestCase.assertEquals("test", resourceLabels.get(type + ".region"));
-        TestCase.assertEquals("pkc-bar", resourceLabels.get(type + ".pkc"));
+        TestCase.assertEquals("test", resourceLabels.get("schemaregistry.region"));
+        TestCase.assertEquals("pkc-bar", resourceLabels.get("schemaregistry.pkc"));
 
         if (m.getMetricDescriptor().getName().startsWith(SchemaRegistryProvider.DOMAIN)) {
           srMetricsPresent = true;
