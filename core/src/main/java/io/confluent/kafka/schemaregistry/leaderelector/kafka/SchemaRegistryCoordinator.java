@@ -13,7 +13,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.masterelector.kafka;
+package io.confluent.kafka.schemaregistry.leaderelector.kafka;
 
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
@@ -151,7 +151,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
 
   @Override
   protected Map<String, ByteBuffer> performAssignment(
-      String kafkaLeaderId, // Kafka group "leader" who does assignment, *not* the SR master
+      String kafkaLeaderId, // Kafka group "leader" who does assignment, *not* the SR leader
       String protocol,
       List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata
   ) {
@@ -170,22 +170,22 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
       nodeCountMetric.set(memberConfigs.size());
     }
 
-    // Compute the leader as the master-eligible member with the "smallest" (lexicographically) ID.
-    // This doesn't guarantee a member will stay master until it leaves the group, but should
-    // usually keep the master assigned to the same member across rebalances.
-    SchemaRegistryIdentity masterIdentity = null;
-    String masterKafkaId = null;
+    // Compute the leader as the leader-eligible member with the "smallest" (lexicographically) ID.
+    // This doesn't guarantee a member will stay leader until it leaves the group, but should
+    // usually keep the leader assigned to the same member across rebalances.
+    SchemaRegistryIdentity leaderIdentity = null;
+    String leaderKafkaId = null;
     Set<String> urls = new HashSet<>();
     for (Map.Entry<String, SchemaRegistryIdentity> entry : memberConfigs.entrySet()) {
       String kafkaMemberId = entry.getKey();
       SchemaRegistryIdentity memberIdentity = entry.getValue();
       urls.add(memberIdentity.getUrl());
-      boolean eligible = memberIdentity.getMasterEligibility();
-      boolean smallerIdentity = masterIdentity == null
-                                || memberIdentity.getUrl().compareTo(masterIdentity.getUrl()) < 0;
+      boolean eligible = memberIdentity.getLeaderEligibility();
+      boolean smallerIdentity = leaderIdentity == null
+                                || memberIdentity.getUrl().compareTo(leaderIdentity.getUrl()) < 0;
       if (eligible && smallerIdentity) {
-        masterKafkaId = kafkaMemberId;
-        masterIdentity = memberIdentity;
+        leaderKafkaId = kafkaMemberId;
+        leaderIdentity = memberIdentity;
       }
     }
     short error = SchemaRegistryProtocol.Assignment.NO_ERROR;
@@ -202,7 +202,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
     // All members currently receive the same assignment information since it is just the leader ID
     Map<String, ByteBuffer> groupAssignment = new HashMap<>();
     SchemaRegistryProtocol.Assignment assignment
-        = new SchemaRegistryProtocol.Assignment(error, masterKafkaId, masterIdentity);
+        = new SchemaRegistryProtocol.Assignment(error, leaderKafkaId, leaderIdentity);
     log.debug("Assignment: {}", assignment);
     for (String member : memberConfigs.keySet()) {
       groupAssignment.put(member, SchemaRegistryProtocol.serializeAssignment(assignment));

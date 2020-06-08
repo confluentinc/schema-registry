@@ -12,7 +12,7 @@
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.masterelector.zookeeper;
+package io.confluent.kafka.schemaregistry.leaderelector.zookeeper;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.RestApp;
@@ -31,9 +31,9 @@ import java.util.concurrent.Callable;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-// Tests that are specific to the ZookeeperMasterElector. See MasterElectorTest for general tests
-// covering all MasterElectors
-public class ZookeeperMasterElectorTest extends ClusterTestHarness {
+// Tests that are specific to the ZookeeperLeaderElector. See LeaderElectorTest for general tests
+// covering all LeaderElectors
+public class ZookeeperLeaderElectorTest extends ClusterTestHarness {
   private static final int ID_BATCH_SIZE =
       ZookeeperIdGenerator.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE;
   private static final String ZK_ID_COUNTER_PATH =
@@ -83,11 +83,11 @@ public class ZookeeperMasterElectorTest extends ClusterTestHarness {
     Callable<Boolean> electionComplete = new Callable<Boolean>() {
       @Override
       public Boolean call() throws Exception {
-        return restApp2.isMaster();
+        return restApp2.isLeader();
       }
     };
     TestUtils.waitUntilTrue(electionComplete, 15000,
-                            "Schema registry instance 2 should become the master");
+                            "Schema registry instance 2 should become the leader");
     // Reelection should have triggered zk id to update to the next batch
     assertEquals("Zk counter is not the expected value.",
                  2 * ID_BATCH_SIZE, getZkIdCounter(zkUtils));

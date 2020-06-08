@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2020 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,33 +16,28 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
-import org.apache.avro.Schema;
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.MojoFailureException;
-import org.hamcrest.core.IsEqual;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.apache.avro.Schema;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
+import org.junit.Before;
+import org.junit.Test;
 
-public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
-  RegisterSchemaRegistryMojo mojo;
+public class ValidateSchemaRegistryMojoTest extends SchemaRegistryTest {
+  ValidateSchemaRegistryMojo mojo;
 
   @Before
   public void createMojo(){
-    this.mojo = new RegisterSchemaRegistryMojo();
+    this.mojo = new ValidateSchemaRegistryMojo();
     this.mojo.client(new MockSchemaRegistryClient());
   }
 
   @Test
-  public void register() throws IOException, MojoFailureException, MojoExecutionException {
+  public void validate() throws IOException, MojoFailureException, MojoExecutionException {
     Map<String, Integer> expectedVersions = new LinkedHashMap<>();
 
     Map<String, File> subjectToFile = new LinkedHashMap<>();
@@ -64,8 +59,6 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
 
     this.mojo.subjects = subjectToFile;
     this.mojo.execute();
-
-    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
   }
 
   @Test(expected = IllegalStateException.class)

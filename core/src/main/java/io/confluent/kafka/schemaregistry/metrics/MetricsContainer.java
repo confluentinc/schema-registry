@@ -50,7 +50,7 @@ public class MetricsContainer {
   private final Map<String, String> configuredTags;
   private final String commitId;
 
-  private final SchemaRegistryMetric isMasterNode;
+  private final SchemaRegistryMetric isLeaderNode;
   private final SchemaRegistryMetric nodeCount;
 
   private final SchemaRegistryMetric schemasCreated;
@@ -99,8 +99,8 @@ public class MetricsContainer {
 
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime(), metricsContext);
 
-    this.isMasterNode = createMetric("master-slave-role",
-            "1.0 indicates the node is the active master in the cluster and is the"
+    this.isLeaderNode = createMetric("master-slave-role",
+            "1.0 indicates the node is the active leader in the cluster and is the"
             + " node where all register schema and config update requests are "
             + "served.");
     this.nodeCount = createMetric("node-count", "Number of Schema Registry nodes in the cluster");
@@ -147,8 +147,8 @@ public class MetricsContainer {
     return nodeCount;
   }
 
-  public SchemaRegistryMetric isMaster() {
-    return isMasterNode;
+  public SchemaRegistryMetric isLeader() {
+    return isLeaderNode;
   }
 
   public SchemaRegistryMetric getApiCallsSuccess() {

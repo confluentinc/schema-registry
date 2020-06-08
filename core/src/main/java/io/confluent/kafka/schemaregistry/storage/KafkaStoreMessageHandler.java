@@ -20,19 +20,15 @@ import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-public class KafkaStoreMessageHandler
-    implements StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> {
+public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
-  private final ExecutorService tombstoneExecutor;
   private IdGenerator idGenerator;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
@@ -41,7 +37,6 @@ public class KafkaStoreMessageHandler
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
-    this.tombstoneExecutor = Executors.newSingleThreadExecutor();
   }
 
   /**
@@ -50,7 +45,8 @@ public class KafkaStoreMessageHandler
    * @param key   Key associated with the data
    * @param value Data written to the store
    */
-  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
+  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
+                                TopicPartition tp, long offset, long timestamp) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
       if (schemaObj != null) {
@@ -84,7 +80,10 @@ public class KafkaStoreMessageHandler
   @Override
   public void handleUpdate(SchemaRegistryKey key,
                            SchemaRegistryValue value,
-                           SchemaRegistryValue oldValue) {
+                           SchemaRegistryValue oldValue,
+                           TopicPartition tp,
+                           long offset,
+                           long timestamp) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
           (SchemaValue) value,
@@ -132,13 +131,6 @@ public class KafkaStoreMessageHandler
                                   SchemaValue oldSchemaValue) {
     final MetricsContainer metricsContainer = schemaRegistry.getMetricsContainer();
     if (schemaValue != null) {
-      // If the schema is marked to be deleted, we store it in an internal datastructure
-      // that holds all deleted schema keys for an id.
-      // Whenever we encounter a new schema for a subject, we check to see if the same schema
-      // (same id) was deleted for the subject ever. If so, we tombstone those delete keys.
-      // This helps optimize the storage. The main reason we only allow soft deletes in SR is that
-      // consumers should be able to access the schemas by id. This is guaranteed when the schema is
-      // re-registered again and hence we can tombstone the record.
       if (schemaValue.isDeleted()) {
         lookupCache.schemaDeleted(schemaKey, schemaValue);
         updateMetrics(metricsContainer.getSchemasDeleted(),

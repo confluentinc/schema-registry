@@ -13,10 +13,10 @@
               files="SchemaRegistryCoordinator.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|KafkaGroupMasterElector|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|JsonSchemaConverter|MetricsContainer).java"/>
+              files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|RestService|Errors|SchemaRegistryRestApplication|KafkaSchemaRegistry|KafkaStore|AvroConverter|AvroData|KafkaGroupLeaderElector|ProtobufSchema|ProtobufData|JsonSchemaData|InMemoryCache|SchemaMessageReader|JsonSchemaConverter|MetricsContainer).java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData|KafkaGroupMasterElector).java"/>
+              files="(RestService|KafkaSchemaRegistry|KafkaStore|KafkaStoreReaderThread|AvroData|KafkaGroupLeaderElector).java"/>
 
     <suppress checks="LineLength"
               files="(Errors|AvroMessageReader).java"/>
@@ -28,7 +28,7 @@
               files="(AvroData|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|ProtobufData|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AvroData|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|ProtobufSchema).java"/>
+              files="(AvroData|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema).java"/>
 
     <suppress checks="MethodLength"
               files="AvroData.java"/>

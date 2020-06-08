@@ -13,23 +13,27 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.rest.exceptions;
-
-import io.confluent.rest.exceptions.RestServerErrorException;
+package io.confluent.kafka.schemaregistry.exceptions;
 
 /**
- * Indicates a problem while forwarding the request to the leader node in a schema
- * registry cluster
+ * Indicates that the node that is asked to serve the request is not the current leader and
+ * is not aware of the leader node to forward the request to
  */
-public class RestRequestForwardingException extends RestServerErrorException {
+public class UnknownLeaderException extends SchemaRegistryException {
 
-  private static final int ERROR_CODE = Errors.REQUEST_FORWARDING_FAILED_ERROR_CODE;
-
-  public RestRequestForwardingException(String message) {
-    super(message, ERROR_CODE);
+  public UnknownLeaderException(String message, Throwable cause) {
+    super(message, cause);
   }
 
-  public RestRequestForwardingException(String message, Throwable cause) {
-    super(message, ERROR_CODE, cause);
+  public UnknownLeaderException(String message) {
+    super(message);
+  }
+
+  public UnknownLeaderException(Throwable cause) {
+    super(cause);
+  }
+
+  public UnknownLeaderException() {
+    super();
   }
 }

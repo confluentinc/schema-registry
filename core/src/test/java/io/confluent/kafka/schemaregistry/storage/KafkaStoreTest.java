@@ -543,7 +543,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
             new InMemoryCache<>(), new IncrementalIdGenerator());
 
-    storeMessageHandler.handleUpdate(new DeleteSubjectKey("test"), null, null);
+    storeMessageHandler.handleUpdate(new DeleteSubjectKey("test"), null, null, null, 0L, 0L);
   }
 
   // Test no NPE happens when handling ClearSubjectKey with null value
@@ -562,6 +562,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
             new InMemoryCache<>(), new IncrementalIdGenerator());
 
-    storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null, null);
+    storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null, null, null, 0L, 0L);
   }
 }

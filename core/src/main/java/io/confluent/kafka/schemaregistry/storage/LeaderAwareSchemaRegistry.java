@@ -16,14 +16,15 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 
-public interface MasterElector {
+/**
+ * Internal interface for schema registry implementations. Used as a restricted interface for
+ * LeaderElectors to interact with.
+ */
+public interface LeaderAwareSchemaRegistry {
+  void setLeader(SchemaRegistryIdentity newLeader) throws SchemaRegistryTimeoutException,
+      SchemaRegistryStoreException, IdGenerationException;
 
-  void init() throws SchemaRegistryTimeoutException, SchemaRegistryStoreException,
-      SchemaRegistryInitializationException, IdGenerationException;
-
-  void close();
 }

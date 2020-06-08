@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import org.apache.kafka.common.TopicPartition;
+
 public class StringMessageHandler implements StoreUpdateHandler<String, String> {
 
   /**
@@ -22,8 +24,10 @@ public class StringMessageHandler implements StoreUpdateHandler<String, String> 
    *
    * @param key   Key associated with the data
    * @param value Data written to the store
+   * @param timestamp Timestamp of record
    */
-  public boolean validateUpdate(String key, String value) {
+  public boolean validateUpdate(String key, String value,
+                                TopicPartition tp, long offset, long timestamp) {
     return true;
   }
 
@@ -32,9 +36,11 @@ public class StringMessageHandler implements StoreUpdateHandler<String, String> 
    *
    * @param key   Key associated with the data
    * @param value Data written to the store
+   * @param timestamp Timestamp of record
    */
   @Override
-  public void handleUpdate(String key, String value, String oldValue) {
+  public void handleUpdate(String key, String value, String oldValue,
+                           TopicPartition tp, long offset, long timestamp) {
 
   }
 }

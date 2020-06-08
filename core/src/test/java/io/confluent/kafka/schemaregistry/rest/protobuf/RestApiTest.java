@@ -153,7 +153,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Registering a new schema should succeed", 2, registeredId);
 
     SchemaString schemaString = restApp.restClient.getId(2);
-    // the newly registered schema should be immediately readable on the master
+    // the newly registered schema should be immediately readable on the leader
     assertEquals("Registered schema should be found",
         schemas.get("root.proto"),
         schemaString.getSchemaString()

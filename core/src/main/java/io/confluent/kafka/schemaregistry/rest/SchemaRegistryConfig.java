@@ -95,12 +95,18 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>kafkastore.init.timeout.ms</code>
    */
   public static final String KAFKASTORE_INIT_TIMEOUT_CONFIG = "kafkastore.init.timeout.ms";
+  /**
+   * <code>kafkastore.update.handler</code>
+   */
+  public static final String KAFKASTORE_UPDATE_HANDLERS_CONFIG = "kafkastore.update.handlers";
 
   /**
-   * <code>master.eligibility</code>*
+   * <code>leader.eligibility</code>*
    */
+  @Deprecated
   public static final String MASTER_ELIGIBILITY = "master.eligibility";
-  public static final boolean DEFAULT_MASTER_ELIGIBILITY = true;
+  public static final String LEADER_ELIGIBILITY = "leader.eligibility";
+  public static final boolean DEFAULT_LEADER_ELIGIBILITY = true;
   /**
    * <code>mode.mutability</code>*
    */
@@ -185,7 +191,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
   protected static final String SCHEMAREGISTRY_GROUP_ID_DOC =
       "Use this setting to override the group.id for the Kafka group used when Kafka is used for "
-      + "master election.\n"
+      + "leader election.\n"
       + "Without this configuration, group.id will be \"schema-registry\". If you want to run "
       + "more than one schema registry cluster against a single Kafka cluster you should make "
       + "this setting unique for each cluster.";
@@ -199,7 +205,7 @@ public class SchemaRegistryConfig extends RestConfig {
       + "The effect of this setting depends on whether you specify `kafkastore.connection.url`."
       + "\n"
       + "If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these "
-      + "bootstrap servers will be used both to coordinate schema registry instances (master "
+      + "bootstrap servers will be used both to coordinate schema registry instances (leader "
       + "election) and store schema data."
       + "\n"
       + "If `kafkastore.connection.url` is specified, then this setting is used to control how "
@@ -238,6 +244,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + "that stores schema data.";
   protected static final String KAFKASTORE_TIMEOUT_DOC =
       "The timeout for an operation on the Kafka store";
+  protected static final String KAFKASTORE_UPDATE_HANDLERS_DOC =
+      "  A list of classes to use as StoreUpdateHandler. Implementing the interface "
+          + "<code>StoreUpdateHandler</code> allows you to handle Kafka store update events.";
   protected static final String HOST_DOC =
       "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
@@ -260,11 +269,11 @@ public class SchemaRegistryConfig extends RestConfig {
       + "forward_transitive (new schema is forward compatible with all previous versions), "
       + "full_transitive (new schema is backward and forward compatible with all previous "
       + "versions)";
-  protected static final String MASTER_ELIGIBILITY_DOC =
-      "If true, this node can participate in master election. In a multi-colo setup, turn this off "
-      + "for clusters in the slave data center.";
+  protected static final String LEADER_ELIGIBILITY_DOC =
+      "If true, this node can participate in leader election. In a multi-colo setup, turn this off "
+      + "for clusters in the follower data center.";
   protected static final String MODE_MUTABILITY_DOC =
-      "If true, this node will allow mode changes if it is the master.";
+      "If true, this node will allow mode changes if it is the leader.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
@@ -326,14 +335,14 @@ public class SchemaRegistryConfig extends RestConfig {
       "  A list of classpath resources containing static resources to serve using the default "
           + "servlet.";
   protected static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC =
-      "The protocol used while making calls between the instances of schema registry. The slave "
-      + "to master node calls for writes and deletes will use the specified protocol. The default "
+      "The protocol used while making calls between the instances of schema registry. The follower "
+      + "to leader node calls for writes and deletes will use the specified protocol. The default "
       + "value would be `http`. When `https` is set, `ssl.keystore.` and "
       + "`ssl.truststore.` configs are used while making the call. The "
       + "schema.registry.inter.instance.protocol name is deprecated; prefer using "
       + "inter.instance.protocol instead.";
   private static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
-      = "A list of ``http`` headers to forward from slave to master, "
+      = "A list of ``http`` headers to forward from follower to leader, "
       + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
 
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
@@ -401,6 +410,9 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC
     )
+    .define(KAFKASTORE_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
+        ConfigDef.Importance.LOW, KAFKASTORE_UPDATE_HANDLERS_DOC
+    )
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC
     )
@@ -416,8 +428,11 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(ZOOKEEPER_SET_ACL_CONFIG, ConfigDef.Type.BOOLEAN, ZOOKEEPER_SET_ACL_DEFAULT,
         ConfigDef.Importance.HIGH, ZOOKEEPER_SET_ACL_DOC
     )
-    .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY,
-        ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC
+    .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, null,
+        ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
+    )
+    .define(LEADER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELIGIBILITY,
+        ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC

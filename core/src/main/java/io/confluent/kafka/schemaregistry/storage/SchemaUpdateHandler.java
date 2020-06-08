@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2020 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -15,16 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
-
-/**
- * Internal interface for schema registry implementations. Used as a restricted interface for
- * MasterElectors to interact with.
- */
-public interface MasterAwareSchemaRegistry {
-  void setMaster(SchemaRegistryIdentity newMaster) throws SchemaRegistryTimeoutException,
-      SchemaRegistryStoreException, IdGenerationException;
-
+public interface SchemaUpdateHandler
+    extends StoreUpdateHandler<SchemaRegistryKey, SchemaRegistryValue> {
 }

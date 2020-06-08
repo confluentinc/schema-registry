@@ -13,20 +13,17 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.masterelector.kafka;
+package io.confluent.kafka.schemaregistry.storage;
 
-/**
- * Listener for rebalance events in the Kafka group.
- */
-interface SchemaRegistryRebalanceListener {
-  /**
-   * Invoked when a new assignment is created by joining the schema registry group. This is
-   * invoked for both successful and unsuccessful assignments.
-   */
-  void onAssigned(SchemaRegistryProtocol.Assignment assignment, int generation);
+import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitializationException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 
-  /**
-   * Invoked when a rebalance operation starts, revoking leadership
-   */
-  void onRevoked();
+public interface LeaderElector {
+
+  void init() throws SchemaRegistryTimeoutException, SchemaRegistryStoreException,
+      SchemaRegistryInitializationException, IdGenerationException;
+
+  void close();
 }
