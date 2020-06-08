@@ -30,8 +30,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AvroSchema implements ParsedSchema {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroSchema.class);
 
   public static final String TYPE = "AVRO";
 
@@ -161,6 +165,9 @@ public class AvroSchema implements ParsedSchema {
           Collections.singleton(((AvroSchema) previousSchema).schemaObj));
       return true;
     } catch (SchemaValidationException e) {
+      return false;
+    } catch (Exception e) {
+      log.error("Unexpected exception during compatibility check", e);
       return false;
     }
   }
