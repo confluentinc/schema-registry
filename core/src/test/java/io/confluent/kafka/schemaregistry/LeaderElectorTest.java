@@ -785,8 +785,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
       TestUtils.waitUntilTrue(() -> {
         for (Collection<RestApp> collection : apps) {
           for (RestApp app : collection) {
-            if (count != app.restApp.schemaRegistry().getMetricsContainer().getNodeCountMetric()
-                    .get()) {
+            if (app.restApp.schemaRegistry().getMetricsContainer().getNodeCountMetric().get()
+                    != count) {
               return false;
             }
           }
