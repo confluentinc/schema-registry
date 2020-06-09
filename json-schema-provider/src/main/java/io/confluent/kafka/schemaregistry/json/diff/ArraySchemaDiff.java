@@ -27,10 +27,14 @@ import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ADDITI
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ADDITIONAL_ITEMS_EXTENDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ADDITIONAL_ITEMS_NARROWED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ADDITIONAL_ITEMS_REMOVED;
-import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEMS_ADDED_TO_CLOSED_CONTENT_MODEL;
-import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEMS_ADDED_TO_OPEN_CONTENT_MODEL;
-import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEMS_REMOVED_FROM_CLOSED_CONTENT_MODEL;
-import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEMS_REMOVED_FROM_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_ADDED_TO_CLOSED_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_REMOVED_FROM_CLOSED_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_ITEMS_ADDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_ITEMS_DECREASED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_ITEMS_INCREASED;
@@ -124,22 +128,66 @@ public class ArraySchemaDiff {
     int originalSize = originalSchemas.size();
     int updateSize = updateSchemas.size();
 
-    if (originalSize < updateSize) {
-      ctx.addDifference(original.permitsAdditionalItems()
-                        ? ITEMS_ADDED_TO_OPEN_CONTENT_MODEL
-                        : ITEMS_ADDED_TO_CLOSED_CONTENT_MODEL);
-    } else if (originalSize > updateSize) {
-      ctx.addDifference(original.permitsAdditionalItems()
-                        ? ITEMS_REMOVED_FROM_OPEN_CONTENT_MODEL
-                        : ITEMS_REMOVED_FROM_CLOSED_CONTENT_MODEL);
-    }
-
     final Iterator<Schema> originalIterator = originalSchemas.iterator();
     final Iterator<Schema> updateIterator = updateSchemas.iterator();
     int index = 0;
     while (originalIterator.hasNext() && index < Math.min(originalSize, updateSize)) {
       try (Context.PathScope pathScope = ctx.enterPath("items/" + index)) {
         SchemaDiff.compare(ctx, originalIterator.next(), updateIterator.next());
+      }
+      index++;
+    }
+    while (originalIterator.hasNext()) {
+      try (Context.PathScope pathScope = ctx.enterPath("items/" + index)) {
+        Schema originalSchema = originalIterator.next();
+        if (isOpenContentModel(update)) {
+          // compatible
+          ctx.addDifference(ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL);
+        } else {
+          Schema schemaFromPartial = schemaFromPartiallyOpenContentModel(update);
+          if (schemaFromPartial != null) {
+            final Context subctx = ctx.getSubcontext();
+            SchemaDiff.compare(subctx, originalSchema, schemaFromPartial);
+            ctx.addDifferences(subctx.getDifferences());
+            if (subctx.isCompatible()) {
+              // compatible
+              ctx.addDifference(ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+            } else {
+              // incompatible
+              ctx.addDifference(ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+            }
+          } else {
+            // incompatible
+            ctx.addDifference(ITEM_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+          }
+        }
+      }
+      index++;
+    }
+    while (updateIterator.hasNext()) {
+      try (Context.PathScope pathScope = ctx.enterPath("items/" + index)) {
+        Schema updateSchema = updateIterator.next();
+        if (isOpenContentModel(original)) {
+          // incompatible
+          ctx.addDifference(ITEM_ADDED_TO_OPEN_CONTENT_MODEL);
+        } else {
+          Schema schemaFromPartial = schemaFromPartiallyOpenContentModel(original);
+          if (schemaFromPartial != null) {
+            final Context subctx = ctx.getSubcontext();
+            SchemaDiff.compare(subctx, schemaFromPartial, updateSchema);
+            ctx.addDifferences(subctx.getDifferences());
+            if (subctx.isCompatible()) {
+              // compatible
+              ctx.addDifference(ITEM_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+            } else {
+              // incompatible
+              ctx.addDifference(ITEM_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+            }
+          } else {
+            // compatible
+            ctx.addDifference(ITEM_ADDED_TO_CLOSED_CONTENT_MODEL);
+          }
+        }
       }
       index++;
     }
@@ -151,5 +199,14 @@ public class ArraySchemaDiff {
     try (Context.PathScope pathScope = ctx.enterPath("items")) {
       SchemaDiff.compare(ctx, original.getAllItemSchema(), update.getAllItemSchema());
     }
+  }
+
+  private static boolean isOpenContentModel(final ArraySchema schema) {
+    return schema.getSchemaOfAdditionalItems() == null
+        && schema.permitsAdditionalItems();
+  }
+
+  private static Schema schemaFromPartiallyOpenContentModel(final ArraySchema schema) {
+    return schema.getSchemaOfAdditionalItems();
   }
 }
