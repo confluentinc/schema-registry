@@ -66,8 +66,6 @@ public class RestApp {
     prop.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, kafkaTopic);
     prop.put(SchemaRegistryConfig.SCHEMA_COMPATIBILITY_CONFIG, compatibilityType);
     prop.put(SchemaRegistryConfig.LEADER_ELIGIBILITY, leaderEligibility);
-
-    prop.put("metrics.jmx.prefix", "kafka.schema.registry");
   }
 
   public void start() throws Exception {
