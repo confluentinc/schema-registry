@@ -14,6 +14,14 @@
  */
 package io.confluent.kafka.schemaregistry;
 
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.storage.Mode;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
+import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -29,15 +37,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Callable;
-
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.Mode;
-import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
@@ -57,10 +56,12 @@ public class LeaderElectorTest extends ClusterTestHarness {
         {
             "kafka",
             0, // reservation size, i.e. how many IDs are reserved and potentially discarded
+            true
         },
         {
             "zookeeper",
-            ZookeeperIdGenerator.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE
+            ZookeeperIdGenerator.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE,
+            false
         }
     });
   }
@@ -69,6 +70,8 @@ public class LeaderElectorTest extends ClusterTestHarness {
   public String electorType;
   @Parameter(1)
   public int reservationBatchSize;
+  @Parameter(2)
+  public boolean checkNodeCountMetric;
 
   private String zkConnect() {
     switch (electorType) {
@@ -347,6 +350,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
       leaderApps.add(leader);
       leader.start();
       waitUntilLeaderElectionCompletes(leaderApps);
+      checkNodeCountMetric(leaderApps, followerApps);
     }
 
     // Kill the current leader and wait for reelection until no leaders are left
@@ -360,6 +364,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
 
       reportedLeader.stop();
       waitUntilLeaderElectionCompletes(leaderApps);
+      checkNodeCountMetric(leaderApps, followerApps);
     }
 
     // All leaders are now dead
@@ -772,5 +777,17 @@ public class LeaderElectorTest extends ClusterTestHarness {
     }
 
     assertEquals(errMsg, expectedSchemaString, schemaString);
+  }
+
+  private void checkNodeCountMetric(Collection<RestApp> ... apps) {
+    if (checkNodeCountMetric) {
+      long count = Arrays.stream(apps).map(x -> x.size()).reduce(0, Integer::sum);
+      for (Collection<RestApp> collection : apps) {
+        for (RestApp app : collection) {
+          assertEquals(count,
+                  app.restApp.schemaRegistry().getMetricsContainer().getNodeCountMetric().get());
+        }
+      }
+    }
   }
 }
