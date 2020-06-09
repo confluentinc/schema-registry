@@ -149,11 +149,8 @@ public class MetricsContainer {
     return nodeCount;
   }
 
-  public SchemaRegistryMetric isLeader() {
-    return isLeaderNode;
-  }
-
   public void setLeader(boolean leader) {
+    isLeaderNode.set(leader ? 1 : 0);
     if (telemetryReporter != null) {
       if (leader) {
         telemetryReporter.contextChange(metricsContext);
