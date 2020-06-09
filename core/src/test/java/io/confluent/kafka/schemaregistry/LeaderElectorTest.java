@@ -710,5 +710,4 @@ public class LeaderElectorTest extends ClusterTestHarness {
 
     assertEquals(errMsg, expectedSchemaString, schemaString);
   }
-
 }
