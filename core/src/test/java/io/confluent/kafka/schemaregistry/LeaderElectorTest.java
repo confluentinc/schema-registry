@@ -349,13 +349,13 @@ public class LeaderElectorTest extends ClusterTestHarness {
                                    CompatibilityLevel.NONE.name, true, null);
       leaderApps.add(leader);
       leader.start();
-      waitUntilLeaderElectionCompletes(leaderApps);
+      TestUtils.waitUntilLeaderElectionCompletes(leaderApps);
       checkNodeCountMetric(leaderApps, followerApps);
     }
 
     // Kill the current leader and wait for reelection until no leaders are left
     while (leaderApps.size() > 0) {
-      RestApp reportedLeader = checkOneLeader(leaderApps);
+      RestApp reportedLeader = TestUtils.checkOneLeader(leaderApps);
       leaderApps.remove(reportedLeader);
 
       checkLeaderIdentity(followerApps, reportedLeader.myIdentity());
@@ -363,7 +363,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
       checkNoneIsLeader(followerApps);
 
       reportedLeader.stop();
-      waitUntilLeaderElectionCompletes(leaderApps);
+      TestUtils.waitUntilLeaderElectionCompletes(leaderApps);
       checkNodeCountMetric(leaderApps, followerApps);
     }
 
@@ -468,10 +468,10 @@ public class LeaderElectorTest extends ClusterTestHarness {
 
     // Stop everything in the leader cluster
     while (leaderApps.size() > 0) {
-      RestApp leader = findLeader(leaderApps);
+      RestApp leader = TestUtils.findLeader(leaderApps);
       leaderApps.remove(leader);
       leader.stop();
-      waitUntilLeaderElectionCompletes(leaderApps);
+      TestUtils.waitUntilLeaderElectionCompletes(leaderApps);
     }
 
     // Try to register a new schema - should fail
@@ -607,10 +607,10 @@ public class LeaderElectorTest extends ClusterTestHarness {
 
     // Stop everything in the leader cluster
     while (leaderApps.size() > 0) {
-      RestApp leader = findLeader(leaderApps);
+      RestApp leader = TestUtils.findLeader(leaderApps);
       leaderApps.remove(leader);
       leader.stop();
-      waitUntilLeaderElectionCompletes(leaderApps);
+      TestUtils.waitUntilLeaderElectionCompletes(leaderApps);
     }
 
     // Try to register a new schema - should fail
@@ -642,20 +642,9 @@ public class LeaderElectorTest extends ClusterTestHarness {
     }
   }
 
-  /** Return the first node which reports itself as leader, or null if none does. */
-  private static RestApp findLeader(Collection<RestApp> cluster) {
-    for (RestApp restApp: cluster) {
-      if (restApp.isLeader()) {
-        return restApp;
-      }
-    }
-
-    return null;
-  }
-
   /** Verify that no node in cluster reports itself as leader. */
   private static void checkNoneIsLeader(Collection<RestApp> cluster) {
-    assertNull("Expected none of the nodes in this cluster to report itself as leader.", findLeader(cluster));
+    assertNull("Expected none of the nodes in this cluster to report itself as leader.", TestUtils.findLeader(cluster));
   }
 
   /** Verify that all nodes agree on the expected leader identity. */
@@ -678,57 +667,6 @@ public class LeaderElectorTest extends ClusterTestHarness {
             expectedLeaderIdentity, leaderIdentity);
       }
     }
-  }
-
-  /**
-   * Return set of identities of all nodes reported as leader. Expect this to be a set of
-   * size 1 unless there is some pathological behavior.
-   */
-  private static Set<SchemaRegistryIdentity> getLeaderIdentities(Collection<RestApp> cluster) {
-    Set<SchemaRegistryIdentity> leaderIdentities = new HashSet<SchemaRegistryIdentity>();
-    for (RestApp app: cluster) {
-      if (app != null && app.leaderIdentity() != null) {
-        leaderIdentities.add(app.leaderIdentity());
-      }
-    }
-
-    return leaderIdentities;
-  }
-
-  /**
-   * Check that exactly one RestApp in the cluster reports itself as leader.
-   */
-  private static RestApp checkOneLeader(Collection<RestApp> cluster) {
-    int leaderCount = 0;
-    RestApp leader = null;
-    for (RestApp restApp: cluster) {
-      if (restApp.isLeader()) {
-        leaderCount++;
-        leader = restApp;
-      }
-    }
-
-    assertEquals("Expected one leader but found " + leaderCount, 1, leaderCount);
-    return leader;
-  }
-
-  private void waitUntilLeaderElectionCompletes(final Collection<RestApp> cluster) {
-    if (cluster == null || cluster.size() == 0) {
-      return;
-    }
-
-    Callable<Boolean> newLeaderElected = new Callable<Boolean>() {
-      @Override
-      public Boolean call() throws Exception {
-        boolean hasLeader = findLeader(cluster) != null;
-        // Check that new leader identity has propagated to all nodes
-        boolean oneReportedLeader = getLeaderIdentities(cluster).size() == 1;
-
-        return hasLeader && oneReportedLeader;
-      }
-    };
-    TestUtils.waitUntilTrue(
-        newLeaderElected, 15000, "A node should have been elected leader by now.");
   }
 
   private void waitUntilIdExists(final RestService restService, final int expectedId, String errorMsg) {
