@@ -56,12 +56,10 @@ public class LeaderElectorTest extends ClusterTestHarness {
         {
             "kafka",
             0, // reservation size, i.e. how many IDs are reserved and potentially discarded
-            true
         },
         {
             "zookeeper",
-            ZookeeperIdGenerator.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE,
-            false
+            ZookeeperIdGenerator.ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE
         }
     });
   }
@@ -70,8 +68,6 @@ public class LeaderElectorTest extends ClusterTestHarness {
   public String electorType;
   @Parameter(1)
   public int reservationBatchSize;
-  @Parameter(2)
-  public boolean checkNodeCountMetric;
 
   private String zkConnect() {
     switch (electorType) {
@@ -350,7 +346,6 @@ public class LeaderElectorTest extends ClusterTestHarness {
       leaderApps.add(leader);
       leader.start();
       TestUtils.waitUntilLeaderElectionCompletes(leaderApps);
-      checkNodeCountMetric(leaderApps, followerApps);
     }
 
     // Kill the current leader and wait for reelection until no leaders are left
@@ -364,7 +359,6 @@ public class LeaderElectorTest extends ClusterTestHarness {
 
       reportedLeader.stop();
       TestUtils.waitUntilLeaderElectionCompletes(leaderApps);
-      checkNodeCountMetric(leaderApps, followerApps);
     }
 
     // All leaders are now dead
@@ -717,20 +711,4 @@ public class LeaderElectorTest extends ClusterTestHarness {
     assertEquals(errMsg, expectedSchemaString, schemaString);
   }
 
-  private void checkNodeCountMetric(final Collection<RestApp> ... apps) {
-    if (checkNodeCountMetric) {
-      final long count = Arrays.stream(apps).map(x -> x.size()).reduce(0, Integer::sum);
-      TestUtils.waitUntilTrue(() -> {
-        for (Collection<RestApp> collection : apps) {
-          for (RestApp app : collection) {
-            if (app.restApp.schemaRegistry().getMetricsContainer().getNodeCountMetric().get()
-                    != count) {
-              return false;
-            }
-          }
-        }
-        return true;
-      }, 3000, "Metrics should have been updated by now");
-    }
-  }
 }
