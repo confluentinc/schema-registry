@@ -41,7 +41,7 @@ public class NodeCountMetricTest extends ClusterTestHarness {
       follower.start();
     }
 
-    // Make a leader-eligible 'cluster'
+    // Make a leader-eligible cluster, wait for reelection and verify metric
     Set<RestApp> leaderApps = new HashSet<>();
     for (int i = 0; i < numLeaders; i++) {
       RestApp leader = new RestApp(choosePort(),
@@ -53,7 +53,7 @@ public class NodeCountMetricTest extends ClusterTestHarness {
       checkNodeCountMetric(leaderApps, followerApps);
     }
 
-    // Kill the current leader and wait for reelection until no leaders are left
+    // Kill the current leader, wait for reelection and verify metric until no leaders are left
     while (!leaderApps.isEmpty()) {
       RestApp reportedLeader = TestUtils.checkOneLeader(leaderApps);
       leaderApps.remove(reportedLeader);
