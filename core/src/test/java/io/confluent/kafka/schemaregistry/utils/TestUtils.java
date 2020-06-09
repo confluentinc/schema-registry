@@ -14,21 +14,22 @@
  */
 package io.confluent.kafka.schemaregistry.utils;
 
-import org.apache.avro.Protocol;
-import org.apache.avro.Schema;
-import org.apache.avro.Schemas;
-
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.Callable;
 
 import static org.junit.Assert.assertEquals;
@@ -181,4 +182,65 @@ public class TestUtils {
     return schemaString;
   }
 
+  /** Return the first node which reports itself as leader, or null if none does. */
+  public static RestApp findLeader(Collection<RestApp> cluster) {
+    for (RestApp restApp: cluster) {
+      if (restApp.isLeader()) {
+        return restApp;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Return set of identities of all nodes reported as leader. Expect this to be a set of
+   * size 1 unless there is some pathological behavior.
+   */
+  public static Set<SchemaRegistryIdentity> getLeaderIdentities(Collection<RestApp> cluster) {
+    Set<SchemaRegistryIdentity> leaderIdentities = new HashSet<SchemaRegistryIdentity>();
+    for (RestApp app: cluster) {
+      if (app != null && app.leaderIdentity() != null) {
+        leaderIdentities.add(app.leaderIdentity());
+      }
+    }
+
+    return leaderIdentities;
+  }
+
+  public static void waitUntilLeaderElectionCompletes(final Collection<RestApp> cluster) {
+    if (cluster == null || cluster.size() == 0) {
+      return;
+    }
+
+    Callable<Boolean> newLeaderElected = new Callable<Boolean>() {
+      @Override
+      public Boolean call() throws Exception {
+        boolean hasLeader = findLeader(cluster) != null;
+        // Check that new leader identity has propagated to all nodes
+        boolean oneReportedLeader = getLeaderIdentities(cluster).size() == 1;
+
+        return hasLeader && oneReportedLeader;
+      }
+    };
+    waitUntilTrue(
+        newLeaderElected, 15000, "A node should have been elected leader by now.");
+  }
+
+  /**
+   * Check that exactly one RestApp in the cluster reports itself as leader.
+   */
+  public static RestApp checkOneLeader(Collection<RestApp> cluster) {
+    int leaderCount = 0;
+    RestApp leader = null;
+    for (RestApp restApp: cluster) {
+      if (restApp.isLeader()) {
+        leaderCount++;
+        leader = restApp;
+      }
+    }
+
+    assertEquals("Expected one leader but found " + leaderCount, 1, leaderCount);
+    return leader;
+  }
 }
