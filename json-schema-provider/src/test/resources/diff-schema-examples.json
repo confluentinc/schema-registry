@@ -312,6 +312,32 @@
     "compatible": true
   },
   {
+    "description": "Detect compatible change to not schema",
+    "original_schema": {
+      "not":  { "type": "number" }
+    },
+    "update_schema": {
+      "not":  { "type": "integer" }
+    },
+    "changes": [
+      "NOT_TYPE_NARROWED #/not"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible change to not schema",
+    "original_schema": {
+      "not":  { "type": "integer" }
+    },
+    "update_schema": {
+      "not":  { "type": "number" }
+    },
+    "changes": [
+      "NOT_TYPE_EXTENDED #/not"
+    ],
+    "compatible": false
+  },
+  {
     "description": "Detect incompatible changes to enum schema",
     "original_schema": {
       "allOf": [
