@@ -135,15 +135,6 @@ public class MetricsContainer {
             "Number of deleted Protobuf schemas");
   }
 
-  private MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
-    for (MetricsReporter reporter : reporters) {
-      if (reporter instanceof TelemetryReporter) {
-        return reporter;
-      }
-    }
-    return null;
-  }
-
   private SchemaRegistryMetric createMetric(String name, String metricDescription) {
     return createMetric(name, name, name, metricDescription);
   }
@@ -211,6 +202,17 @@ public class MetricsContainer {
       default:
         return null;
     }
+  }
+
+  private MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
+    for (MetricsReporter reporter : reporters) {
+      if (reporter instanceof TelemetryReporter) {
+        return reporter;
+      }
+    }
+    MetricsReporter reporter = new TelemetryReporter();
+    reporters.add(reporter);
+    return reporter;
   }
 
   @NotNull
