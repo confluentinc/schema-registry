@@ -130,6 +130,7 @@ class SchemaRegistryProtocol {
              + ", error=" + error
              + ", leader='" + leader + '\''
              + ", leaderIdentity=" + leaderIdentity
+             + ", nodes=" + nodes
              + '}';
     }
   }
