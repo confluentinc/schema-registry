@@ -346,8 +346,10 @@ public class SchemaRegistryCoordinatorTest {
       SchemaRegistryIdentity leaderIdentity,
       Errors error
   ) {
+    List<SchemaRegistryIdentity> nodes = new ArrayList<>();
+    nodes.add(leaderIdentity);
     SchemaRegistryProtocol.Assignment assignment = new SchemaRegistryProtocol.Assignment(
-        assignmentError, leader, leaderIdentity
+        assignmentError, leader, leaderIdentity, nodes
     );
     ByteBuffer buf = SchemaRegistryProtocol.serializeAssignment(assignment);
     return new SyncGroupResponse(new SyncGroupResponseData()
