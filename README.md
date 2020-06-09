@@ -1,4 +1,4 @@
-Schema Registry
+Schema Registry - hello world
 ================
 
 Schema Registry provides a serving layer for your metadata. It provides a
