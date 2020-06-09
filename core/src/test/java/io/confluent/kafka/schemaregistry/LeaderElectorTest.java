@@ -779,15 +779,20 @@ public class LeaderElectorTest extends ClusterTestHarness {
     assertEquals(errMsg, expectedSchemaString, schemaString);
   }
 
-  private void checkNodeCountMetric(Collection<RestApp> ... apps) {
+  private void checkNodeCountMetric(final Collection<RestApp> ... apps) {
     if (checkNodeCountMetric) {
-      long count = Arrays.stream(apps).map(x -> x.size()).reduce(0, Integer::sum);
-      for (Collection<RestApp> collection : apps) {
-        for (RestApp app : collection) {
-          assertEquals(count,
-                  app.restApp.schemaRegistry().getMetricsContainer().getNodeCountMetric().get());
+      final long count = Arrays.stream(apps).map(x -> x.size()).reduce(0, Integer::sum);
+      TestUtils.waitUntilTrue(() -> {
+        for (Collection<RestApp> collection : apps) {
+          for (RestApp app : collection) {
+            if (count != app.restApp.schemaRegistry().getMetricsContainer().getNodeCountMetric()
+                    .get()) {
+              return false;
+            }
+          }
         }
-      }
+        return true;
+      }, 3000, "Metrics should have been updated by now");
     }
   }
 }
