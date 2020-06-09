@@ -148,7 +148,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
   ) {
     assignmentSnapshot = SchemaRegistryProtocol.deserializeAssignment(memberAssignment);
     listener.onAssigned(assignmentSnapshot, generation);
-    if (nodeCountMetric != null) {
+    if (nodeCountMetric != null && assignmentSnapshot.nodes() != null) {
       nodeCountMetric.set(assignmentSnapshot.nodes().size());
     }
   }
