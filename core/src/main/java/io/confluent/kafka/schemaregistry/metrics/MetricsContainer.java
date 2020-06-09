@@ -220,7 +220,7 @@ public class MetricsContainer {
     Map<String, Object> metadata =
             true ? config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX) :
                     config.originals();
-    metadata.put(RESOURCE_LABEL_TYPE,  "SCHEMAREGISTRY");
+    metadata.put(RESOURCE_LABEL_TYPE,  "schemaregistry");
     metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
     metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
 

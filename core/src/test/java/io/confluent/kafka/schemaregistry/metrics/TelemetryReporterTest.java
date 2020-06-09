@@ -121,7 +121,7 @@ public class TelemetryReporterTest extends ClusterTestHarness {
         TestCase.assertEquals("test", resourceLabels.get("schemaregistry.region"));
         TestCase.assertEquals("pkc-bar", resourceLabels.get("schemaregistry.pkc"));
         TestCase.assertEquals("_schemas", resourceLabels.get("schemaregistry.topic"));
-        TestCase.assertEquals("SCHEMAREGISTRY", resourceLabels.get("schemaregistry.type"));
+        TestCase.assertEquals("schemaregistry", resourceLabels.get("schemaregistry.type"));
         TestCase.assertEquals(AppInfoParser.getCommitId(),
                               resourceLabels.get("schemaregistry.commit.id"));
         TestCase.assertEquals(AppInfoParser.getVersion(),
