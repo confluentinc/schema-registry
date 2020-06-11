@@ -17,9 +17,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.annotations.ApiOperation;
@@ -59,16 +57,9 @@ public class ServerMetadataResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
   @PerformanceMetric("metadata.id")
   public ServerClusterId getClusterId() {
-    final String errorMessage = "Error while retrieving cluster information";
-
-    try {
-      String kafkaClusterId = schemaRegistry.getKafkaClusterId();
-      String schemaRegistryClusterId =
-              schemaRegistryConfig.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
-      return ServerClusterId.of(kafkaClusterId, schemaRegistryClusterId);
-    } catch (SchemaRegistryException e) {
-      log.debug(errorMessage, e);
-      throw Errors.schemaRegistryException(errorMessage, e);
-    }
+    String kafkaClusterId = schemaRegistry.getKafkaClusterId();
+    String schemaRegistryClusterId =
+            schemaRegistryConfig.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
+    return ServerClusterId.of(kafkaClusterId, schemaRegistryClusterId);
   }
 }

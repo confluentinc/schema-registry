@@ -119,6 +119,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private LeaderElector leaderElector = null;
   private final MetricsContainer metricsContainer;
   private final Map<String, SchemaProvider> providers;
+  private final String kafkaClusterId;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -152,7 +153,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.defaultMode = Mode.READWRITE;
-    this.metricsContainer = new MetricsContainer(config);
+    this.kafkaClusterId = kafkaClusterId(config);
+    this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
     this.providers = initProviders(config);
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
@@ -1195,21 +1197,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public String getKafkaClusterId() throws SchemaRegistryException {
+  private String kafkaClusterId(SchemaRegistryConfig config) throws SchemaRegistryException {
     Properties adminClientProps = new Properties();
     KafkaStore.addSchemaRegistryConfigsToClientProperties(config, adminClientProps);
     adminClientProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapBrokers());
 
-    String kafkaClusterId;
     try (AdminClient adminClient = AdminClient.create(adminClientProps)) {
-      kafkaClusterId = adminClient
+      return adminClient
               .describeCluster()
               .clusterId()
               .get(DESCRIBE_CLUSTER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       throw new SchemaRegistryException("Failed to get Kafka cluster ID", e);
     }
+  }
 
+  public String getKafkaClusterId() {
     return kafkaClusterId;
   }
 

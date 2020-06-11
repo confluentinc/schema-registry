@@ -33,7 +33,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.Map;
@@ -44,7 +43,6 @@ public class MetricsContainer {
   public static final String JMX_PREFIX = "kafka.schema.registry";
 
   public static final String RESOURCE_LABEL_PREFIX = "resource.";
-  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
   public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
   public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
@@ -73,7 +71,7 @@ public class MetricsContainer {
   private final MetricsReporter telemetryReporter;
   private final MetricsContext metricsContext;
 
-  public MetricsContainer(SchemaRegistryConfig config) {
+  public MetricsContainer(SchemaRegistryConfig config, String kafkaClusterId) {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
 
@@ -89,7 +87,7 @@ public class MetricsContainer {
       reporter.configure(config.originals());
     }
 
-    metricsContext = getMetricsContext(config);
+    metricsContext = getMetricsContext(config, kafkaClusterId);
 
     for (MetricsReporter reporter : reporters) {
       reporter.contextChange(metricsContext);
@@ -212,11 +210,14 @@ public class MetricsContainer {
     return reporter;
   }
 
-  @NotNull
-  private static MetricsContext getMetricsContext(SchemaRegistryConfig config) {
+  private static MetricsContext getMetricsContext(SchemaRegistryConfig config,
+                                                  String kafkaClusterId) {
     Map<String, Object> metadata =
-            true ? config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX) :
-                    config.originals();
+            config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
+
+    String clusterId = String.format("%s-%s", kafkaClusterId,
+            config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG));
+    metadata.put(RESOURCE_LABEL_CLUSTER_ID, clusterId);
     metadata.put(RESOURCE_LABEL_TYPE,  "schemaregistry");
     metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
     metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());

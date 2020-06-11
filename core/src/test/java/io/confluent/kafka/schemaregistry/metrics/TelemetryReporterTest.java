@@ -89,9 +89,6 @@ public class TelemetryReporterTest extends ClusterTestHarness {
 
     props.setProperty(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG, "500");
 
-    props.setProperty(CommonClientConfigs.METRICS_CONTEXT_PREFIX
-                      + MetricsContainer.RESOURCE_LABEL_CLUSTER_ID, "foobar1");
-
     props.setProperty(CommonClientConfigs.METRICS_CONTEXT_PREFIX +
                       MetricsContainer.RESOURCE_LABEL_PREFIX + "region", "test");
     props.setProperty(CommonClientConfigs.METRICS_CONTEXT_PREFIX +
