@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
+import io.confluent.telemetry.ConfluentTelemetryConfig;
 import io.confluent.telemetry.reporter.TelemetryReporter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -214,6 +215,7 @@ public class MetricsContainer {
                                                   String kafkaClusterId) {
     Map<String, Object> metadata =
             config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
+    metadata.putAll(config.originalsWithPrefix(ConfluentTelemetryConfig.PREFIX));
 
     String clusterId = String.format("%s-%s", kafkaClusterId,
             config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG));
