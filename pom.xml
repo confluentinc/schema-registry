@@ -81,7 +81,6 @@
         <wire.version>3.1.0</wire.version>
         <swagger.version>1.6.0</swagger.version>
         <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
-        <kafka.version>6.0.0-ce-SNAPSHOT</kafka.version>
     </properties>
 
     <repositories>
