@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import io.confluent.shaded.io.opencensus.proto.metrics.v1.Metric;
 import io.confluent.shaded.io.opencensus.proto.resource.v1.Resource;
 import io.confluent.telemetry.ConfluentTelemetryConfig;
+import io.confluent.telemetry.exporter.ExporterConfig;
 import io.confluent.telemetry.exporter.kafka.KafkaExporterConfig;
 import io.confluent.telemetry.provider.SchemaRegistryProvider;
 import io.confluent.telemetry.serde.OpencensusMetricsProto;
@@ -36,9 +37,12 @@ import org.apache.kafka.common.serialization.Serde;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
@@ -49,6 +53,8 @@ public class TelemetryReporterTest extends ClusterTestHarness {
   public TelemetryReporterTest() {
     super(1, true);
   }
+
+  private static final Logger log = LoggerFactory.getLogger(TelemetryReporterTest.class);
 
   protected KafkaConsumer<byte[], byte[]> consumer;
   protected Serde<Metric> serde = new OpencensusMetricsProto();
@@ -80,9 +86,10 @@ public class TelemetryReporterTest extends ClusterTestHarness {
   @Override
   protected Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
-    props.setProperty(KafkaExporterConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+
+    props.putAll(getExporterConfig());
+
     props.setProperty("bootstrap.servers", brokerList);
-    props.setProperty(KafkaExporterConfig.TOPIC_REPLICAS_CONFIG, "1");
     props.setProperty(ConfluentTelemetryConfig.COLLECT_INTERVAL_CONFIG, "500");
     props.setProperty(ConfluentTelemetryConfig.WHITELIST_CONFIG, "");
     props.setProperty(ConfluentTelemetryConfig.DEBUG_ENABLED, "true");
@@ -95,6 +102,27 @@ public class TelemetryReporterTest extends ClusterTestHarness {
                       MetricsContainer.RESOURCE_LABEL_PREFIX + "pkc", "pkc-bar");
 
     return props;
+  }
+
+  private Map<String, String> getExporterConfig() {
+    Map<String, String> config = new HashMap<>();
+
+    String exporterName = "_test";
+    String prefix = ConfluentTelemetryConfig.PREFIX_EXPORTER + exporterName + '.';
+
+    config.put(prefix + ExporterConfig.ENABLED_CONFIG, "true");
+    config.put(prefix + ExporterConfig.TYPE_CONFIG, ExporterConfig.ExporterType.kafka.name());
+    config.put(prefix + KafkaExporterConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+    config.put(prefix + KafkaExporterConfig.PREFIX_PRODUCER + CommonClientConfigs.CLIENT_ID_CONFIG,
+               "confluent-telemetry-reporter-local-producer-test");
+    config.put(prefix + KafkaExporterConfig.PREFIX_PRODUCER
+            + KafkaExporterConfig.TOPIC_REPLICAS_CONFIG, "1");
+
+    // Need to disable the default local exporter.
+    config.put(ConfluentTelemetryConfig.PREFIX_EXPORTER
+            + ConfluentTelemetryConfig.EXPORTER_LOCAL_NAME + "." + ExporterConfig.ENABLED_CONFIG,
+            "false");
+    return config;
   }
 
   @Test(timeout = 20000)
