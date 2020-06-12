@@ -46,6 +46,7 @@ import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.StringSchema;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.math.BigDecimal;
@@ -947,5 +948,48 @@ public class JsonSchemaDataTest {
     } else {
       assertEquals(expected, jsonValue);
     }
+  }
+
+  @Ignore
+  @Test
+  public void testRecursiveSchema() {
+    String recursiveSchema = "{\n"
+        + "  \"title\": \"cyclic - DefaultCyclic\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"definitions\": {\n"
+        + "    \"DefaultCyclic_106\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"properties\": {\n"
+        + "        \"id\": {\n"
+        + "          \"type\": \"integer\"\n"
+        + "        },\n"
+        + "        \"me\": {\n"
+        + "          \"type\": \"object\",\n"
+        + "          \"$ref\": \"#/definitions/DefaultCyclic_106\"\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"additionalProperties\": false,\n"
+        + "      \"required\": [\n"
+        + "        \"id\"\n"
+        + "      ]\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"properties\": {\n"
+        + "    \"id\": {\n"
+        + "      \"type\": \"integer\"\n"
+        + "    },\n"
+        + "    \"me\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"$ref\": \"#/definitions/DefaultCyclic_106\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"required\": [\n"
+        + "    \"id\"\n"
+        + "  ],\n"
+        + "  \"additionalProperties\": false\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(recursiveSchema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    jsonSchemaData.toConnectSchema(jsonSchema);
   }
 }

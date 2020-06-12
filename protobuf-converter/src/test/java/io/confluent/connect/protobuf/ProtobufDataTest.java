@@ -20,7 +20,10 @@ import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.Descriptors;
+import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor.Type;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.FloatValue;
@@ -32,6 +35,8 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
+import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
+import io.confluent.connect.protobuf.test.RecursiveKeyValue;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -984,5 +989,59 @@ public class ProtobufDataTest {
     Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
         .findFieldByName(VALUE_FIELD_NAME);
     assertEquals(ByteString.copyFrom(value), message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testToConnectRecursiveSchema() {
+    ProtobufSchema protobufSchema = new ProtobufSchema(
+        RecursiveKeyValue.RecursiveKeyValueMessage.getDescriptor());
+    ProtobufData protobufData = new ProtobufData();
+    Schema expected = getRecursiveSchema();
+    Schema actual = protobufData.toConnectSchema(protobufSchema);
+    assertEquals(expected.field("key"), actual.field("key"));
+    assertEquals(expected.field("value"), actual.field("value"));
+    Schema expectedNested = expected.field("key_value").schema();
+    Schema actualNested = actual.field("key_value").schema();
+    assertEquals(expectedNested.name(), actualNested.name());
+    assertEquals(expectedNested.type(), actualNested.type());
+    assertEquals(expectedNested.parameters(), actualNested.parameters());
+  }
+
+  @Test
+  public void testFromConnectRecursiveSchema() {
+    Descriptor expected = RecursiveKeyValue.RecursiveKeyValueMessage.getDescriptor();
+    ProtobufData protobufData = new ProtobufData();
+    ProtobufSchema protobufSchema = protobufData.fromConnectSchema(getRecursiveSchema());
+    Descriptor actual = protobufSchema.toDescriptor();
+    FieldDescriptor expectedKey = expected.findFieldByName("key");
+    FieldDescriptor expectedValue = expected.findFieldByName("value");
+    FieldDescriptor expectedKeyValue = expected.findFieldByName("key_value");
+    FieldDescriptor actualKey = actual.findFieldByName("key");
+    FieldDescriptor actualValue = actual.findFieldByName("value");
+    FieldDescriptor actualKeyValue = actual.findFieldByName("key_value");
+    assertEquals(expectedKey.getType(), actualKey.getType());
+    assertEquals(expectedKey.getNumber(), actualKey.getNumber());
+    assertEquals(expectedValue.getType(), actualValue.getType());
+    assertEquals(expectedValue.getNumber(), actualValue.getNumber());
+    assertEquals(actual, actualKeyValue.getMessageType());  // Checks recursive reference
+    assertEquals(expectedKeyValue.getNumber(), actualKeyValue.getNumber());
+  }
+
+  private Schema getRecursiveSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("RecursiveKeyValueMessage");
+    schemaBuilder.field("key",
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    schemaBuilder.field("value",
+        SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    schemaBuilder.field("key_value",
+        new SchemaWrapper(schemaBuilder)
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(10))
+            .build()
+    );
+    return schemaBuilder.build();
   }
 }
