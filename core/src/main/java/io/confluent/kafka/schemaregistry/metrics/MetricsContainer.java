@@ -24,8 +24,10 @@ import io.confluent.rest.RestConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
@@ -77,7 +79,13 @@ public class MetricsContainer {
     List<MetricsReporter> reporters =
             config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
-    reporters.add(new JmxReporter(JMX_PREFIX));
+    reporters.add(new JmxReporter());
+
+    MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX);
+
+    for (MetricsReporter reporter : reporters) {
+      reporter.contextChange(metricsContext);
+    }
 
     this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
 
