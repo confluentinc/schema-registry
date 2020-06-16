@@ -22,8 +22,6 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
-import io.confluent.telemetry.ConfluentTelemetryConfig;
-import io.confluent.telemetry.reporter.TelemetryReporter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
@@ -35,6 +33,8 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -48,6 +48,9 @@ public class MetricsContainer {
   public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
+
+  private static final String TELEMETRY_REPORTER_CLASS =
+          "io.confluent.telemetry.reporter.TelemetryReporter";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
@@ -76,9 +79,8 @@ public class MetricsContainer {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
 
-    List<MetricsReporter> reporters =
-            config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                    MetricsReporter.class);
+    List<MetricsReporter> reporters = config.getConfiguredInstances(getMetricReporterConfig(config),
+            MetricsReporter.class, Collections.emptyMap());
 
     telemetryReporter = getTelemetryReporter(reporters);
 
@@ -196,22 +198,33 @@ public class MetricsContainer {
     }
   }
 
-  private MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
+  private static List<String> getMetricReporterConfig(SchemaRegistryConfig config) {
+    List<String> classes = new ArrayList<>(config.getList(
+            ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG));
+    try {
+      if (!classes.contains(TELEMETRY_REPORTER_CLASS)) {
+        Class.forName(TELEMETRY_REPORTER_CLASS);
+        classes.add(TELEMETRY_REPORTER_CLASS);
+      }
+    } catch (ClassNotFoundException cnfe) {
+      // Ignore
+    }
+    return classes;
+  }
+
+  private static MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
     for (MetricsReporter reporter : reporters) {
-      if (reporter instanceof TelemetryReporter) {
+      if (reporter.getClass().getName().equals(TELEMETRY_REPORTER_CLASS)) {
         return reporter;
       }
     }
-    MetricsReporter reporter = new TelemetryReporter();
-    reporters.add(reporter);
-    return reporter;
+    return null;
   }
 
   private static MetricsContext getMetricsContext(SchemaRegistryConfig config,
                                                   String kafkaClusterId) {
     Map<String, Object> metadata =
             config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
-    metadata.putAll(config.originalsWithPrefix(ConfluentTelemetryConfig.PREFIX));
 
     String clusterId = String.format("%s-%s", kafkaClusterId,
             config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG));
