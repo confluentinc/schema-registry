@@ -66,6 +66,11 @@ public class ProtobufConverterTest {
       .setTestString(TEST_MSG_STRING)
       .setTestInt32(123)
       .build();
+  private static final TestMessage2 HELLO_WORLD_MESSAGE_NESTED = TestMessage2.newBuilder()
+      .setTestString(TEST_MSG_STRING)
+      .setTestInt32(123)
+      .setTestMessage(HELLO_WORLD_MESSAGE)
+      .build();
 
   private static final Map<String, ?> SR_CONFIG = Collections.singletonMap(
       AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
@@ -90,6 +95,10 @@ public class ProtobufConverterTest {
   }
 
   private Schema getTestMessageSchema(String name) {
+    return getTestMessageSchemaBuilder(name).version(1).build();
+  }
+
+  private SchemaBuilder getTestMessageSchemaBuilder(String name) {
     final SchemaBuilder builder = SchemaBuilder.struct();
     builder.name(name);
     builder.field(
@@ -152,7 +161,7 @@ public class ProtobufConverterTest {
         "test_uint64",
         SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(15)).build()
     );
-    return builder.version(1).build();
+    return builder;
   }
 
   private Struct getTestMessageStruct(String messageText, int messageInt) {
@@ -161,6 +170,10 @@ public class ProtobufConverterTest {
 
   private Struct getTestMessageStruct(String schemaName, String messageText, int messageInt) {
     Schema schema = getTestMessageSchema(schemaName);
+    return getTestMessageStruct(schema, messageText, messageInt);
+  }
+
+  private Struct getTestMessageStruct(Schema schema, String messageText, int messageInt) {
     Struct result = new Struct(schema.schema());
     result.put("test_string", messageText);
     result.put("test_bool", false);
@@ -232,6 +245,33 @@ public class ProtobufConverterTest {
   }
 
   @Test
+  public void testFromConnectDataForValueWithNamespaceNested() {
+    final byte[] expected = HELLO_WORLD_MESSAGE_NESTED.toByteArray();
+
+    converter.configure(SR_CONFIG, false);
+    String fullName = "io.confluent.kafka.serializers.protobuf.test.TestMessage2";
+    Schema nested = getTestMessageSchemaBuilder(
+        "io.confluent.kafka.serializers.protobuf.test.TestMessage")
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(16))
+        .build();
+    SchemaBuilder builder = getTestMessageSchemaBuilder(fullName);
+    builder.field(
+        "test_message",
+        nested
+    );
+    Schema schema = builder.version(1).build();
+    Struct struct = getTestMessageStruct(schema, TEST_MSG_STRING, 123);
+    struct.put("test_message", getTestMessageStruct(nested, TEST_MSG_STRING, 123));
+    byte[] result = converter.fromConnectData("my-topic",
+        schema,
+        struct
+    );
+
+    assertArrayEquals(expected, Arrays.copyOfRange(result, PROTOBUF_BYTES_START, result.length));
+  }
+
+  @Test
   public void testToConnectDataForKey() throws Exception {
     converter.configure(SR_CONFIG, true);
     // extra byte for message index
@@ -254,9 +294,18 @@ public class ProtobufConverterTest {
     schemaRegistry.register("my-topic-key", getSchema(TestMessage2.getDescriptor()));
     SchemaAndValue result = converter.toConnectData("my-topic", input);
 
-    SchemaAndValue expected = new SchemaAndValue(getTestMessageSchema("TestMessage2"),
-        getTestMessageStruct("TestMessage2", TEST_MSG_STRING, 123)
+    SchemaBuilder builder = getTestMessageSchemaBuilder("TestMessage2");
+    builder.field(
+        "test_message",
+        getTestMessageSchemaBuilder("TestMessage")
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(16))
+            .build()
     );
+    Schema schema = builder.version(1).build();
+    Struct struct = getTestMessageStruct(schema, TEST_MSG_STRING, 123);
+    struct.put("test_message", null);
+    SchemaAndValue expected = new SchemaAndValue(schema, struct);
 
     assertEquals(expected, result);
   }
@@ -284,9 +333,18 @@ public class ProtobufConverterTest {
     schemaRegistry.register("my-topic-value", getSchema(TestMessage2.getDescriptor()));
     SchemaAndValue result = converter.toConnectData("my-topic", input);
 
-    SchemaAndValue expected = new SchemaAndValue(getTestMessageSchema("TestMessage2"),
-        getTestMessageStruct("TestMessage2", TEST_MSG_STRING, 123)
+    SchemaBuilder builder = getTestMessageSchemaBuilder("TestMessage2");
+    builder.field(
+        "test_message",
+        getTestMessageSchemaBuilder("TestMessage")
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(16))
+            .build()
     );
+    Schema schema = builder.version(1).build();
+    Struct struct = getTestMessageStruct(schema, TEST_MSG_STRING, 123);
+    struct.put("test_message", null);
+    SchemaAndValue expected = new SchemaAndValue(schema, struct);
 
     assertEquals(expected, result);
   }
@@ -306,6 +364,37 @@ public class ProtobufConverterTest {
     SchemaAndValue expected = new SchemaAndValue(getTestMessageSchema(fullName),
         getTestMessageStruct(fullName, TEST_MSG_STRING, 123)
     );
+
+    assertEquals(expected, result);
+  }
+
+  @Test
+  public void testToConnectDataForValueWithNamespaceNested() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    configs.put(ProtobufDataConfig.ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG, true);
+    converter.configure(configs, false);
+    // extra bytes for message index
+    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 2, 2},
+        HELLO_WORLD_MESSAGE_NESTED.toByteArray());
+    schemaRegistry.register("my-topic-value", getSchema(TestMessage2.getDescriptor()));
+    SchemaAndValue result = converter.toConnectData("my-topic", input);
+
+    String fullName = "io.confluent.kafka.serializers.protobuf.test.TestMessage2";
+    Schema nested = getTestMessageSchemaBuilder(
+        "io.confluent.kafka.serializers.protobuf.test.TestMessage")
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(16))
+        .build();
+    SchemaBuilder builder = getTestMessageSchemaBuilder(fullName);
+    builder.field(
+        "test_message",
+        nested
+    );
+    Schema schema = builder.version(1).build();
+    Struct struct = getTestMessageStruct(schema, TEST_MSG_STRING, 123);
+    struct.put("test_message", getTestMessageStruct(nested, TEST_MSG_STRING, 123));
+    SchemaAndValue expected = new SchemaAndValue(schema, struct);
 
     assertEquals(expected, result);
   }
