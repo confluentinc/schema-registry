@@ -201,7 +201,7 @@ public class ProtobufData {
           return newListValue;
         case MAP:
           final Map<?, ?> mapValue = (Map<?, ?>) value;
-          String mapName = getNameOrDefault(schema.name());
+          String mapName = getUnqualifiedName(schema.name());
           String scopedMapName = scope + ProtobufSchema.toMapEntry(mapName);
           List<Message> newMapValue = new ArrayList<>();
           for (Map.Entry<?, ?> mapEntry : mapValue.entrySet()) {
@@ -248,7 +248,7 @@ public class ProtobufData {
             }
             throw new DataException("Cannot find non-null field");
           } else {
-            String scopedStructName = scope + getNameOrDefault(structName);
+            String scopedStructName = scope + getUnqualifiedName(structName);
             DynamicMessage.Builder messageBuilder =
                 protobufSchema.newMessageBuilder(scopedStructName);
             if (messageBuilder == null) {
@@ -376,22 +376,6 @@ public class ProtobufData {
     }
   }
 
-  /**
-   * Split a full dotted-syntax name into a namespace and a single-component name.
-   */
-  private static String[] splitName(String fullName) {
-    String[] result = new String[2];
-    int indexLastDot = fullName.lastIndexOf('.');
-    if (indexLastDot >= 0) {
-      result[0] = fullName.substring(0, indexLastDot);
-      result[1] = fullName.substring(indexLastDot + 1);
-    } else {
-      result[0] = null;
-      result[1] = fullName;
-    }
-    return result;
-  }
-
   private MessageDefinition messageDefinitionFromConnectSchema(
       DynamicSchema.Builder schema, String name, Schema messageElem
   ) {
@@ -470,7 +454,8 @@ public class ProtobufData {
       if (fieldSchema.type() == Schema.Type.STRUCT) {
         String fieldSchemaName = fieldSchema.name();
         if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
-          String unionName = fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length());
+          String unionName =
+              getUnqualifiedName(fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length()));
           oneofDefinitionFromConnectSchema(schema, message, fieldSchema, unionName);
           return null;
         } else {
@@ -590,7 +575,8 @@ public class ProtobufData {
       DynamicSchema.Builder schema,
       Schema enumElem
   ) {
-    EnumDefinition.Builder enumer = EnumDefinition.newBuilder(enumElem.name());
+    String enumName = getUnqualifiedName(enumElem.name());
+    EnumDefinition.Builder enumer = EnumDefinition.newBuilder(enumName);
     for (Map.Entry<String, String> entry : enumElem.parameters().entrySet()) {
       if (entry.getKey().startsWith(PROTOBUF_TYPE_ENUM_PREFIX)) {
         String name = entry.getKey().substring(PROTOBUF_TYPE_ENUM_PREFIX.length());
@@ -629,9 +615,9 @@ public class ProtobufData {
         // Array should not occur here
         throw new IllegalArgumentException("Array cannot be nested");
       case MAP:
-        return ProtobufSchema.toMapEntry(getNameOrDefault(schema.name()));
+        return ProtobufSchema.toMapEntry(getUnqualifiedName(schema.name()));
       case STRUCT:
-        return getNameOrDefault(schema.name());
+        return getUnqualifiedName(schema.name());
       default:
         throw new DataException("Unknown schema type: " + schema.type());
     }
@@ -981,6 +967,35 @@ public class ProtobufData {
         && fieldDescriptors.size() == 2
         && fieldDescriptors.get(0).getName().equals(KEY_FIELD)
         && fieldDescriptors.get(1).getName().equals(VALUE_FIELD);
+  }
+
+  /**
+   * Split a full dotted-syntax name into a namespace and a single-component name.
+   */
+  private static String[] splitName(String fullName) {
+    String[] result = new String[2];
+    int indexLastDot = fullName.lastIndexOf('.');
+    if (indexLastDot >= 0) {
+      result[0] = fullName.substring(0, indexLastDot);
+      result[1] = fullName.substring(indexLastDot + 1);
+    } else {
+      result[0] = null;
+      result[1] = fullName;
+    }
+    return result;
+  }
+
+  /**
+   * Strip the namespace from a name.
+   */
+  private String getUnqualifiedName(String name) {
+    String fullName = getNameOrDefault(name);
+    int indexLastDot = fullName.lastIndexOf('.');
+    if (indexLastDot >= 0) {
+      return fullName.substring(indexLastDot + 1);
+    } else {
+      return fullName;
+    }
   }
 
   private String getNameOrDefault(String name) {

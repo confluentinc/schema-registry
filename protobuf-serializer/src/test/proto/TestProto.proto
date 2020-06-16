@@ -41,4 +41,5 @@ message TestMessage2 {
     sint64 test_sint64 = 13;
     uint32 test_uint32 = 14;
     uint64 test_uint64 = 15;
+    TestMessage test_message = 16;
 }
