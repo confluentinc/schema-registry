@@ -33,8 +33,10 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
@@ -97,14 +99,15 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
           MetricsReporter.class
       );
-      reporters.add(new JmxReporter(JMX_PREFIX));
+      reporters.add(new JmxReporter());
+      MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
 
       Time time = Time.SYSTEM;
 
       ClientConfig clientConfig = new ClientConfig(config.originalsWithPrefix("kafkastore."),
           false);
 
-      this.metrics = new Metrics(metricConfig, reporters, time);
+      this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
       this.retryBackoffMs = clientConfig.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
       String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
       LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
