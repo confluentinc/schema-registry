@@ -26,6 +26,9 @@ import com.google.protobuf.Descriptors.OneofDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.Timestamps;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Set;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -345,9 +348,9 @@ public class ProtobufData {
     if (name == null) {
       name = DEFAULT_SCHEMA_NAME + "1";
     }
-    ProtobufSchema resultSchema =
-        new ProtobufSchema(rawSchemaFromConnectSchema(schema).getMessageDescriptor(
-        name));
+    ProtobufSchema resultSchema = new ProtobufSchema(
+        rawSchemaFromConnectSchema(schema).getMessageDescriptor(name)
+    );
     fromConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
   }
@@ -369,7 +372,9 @@ public class ProtobufData {
       if (namespace != null) {
         schema.setPackage(namespace);
       }
-      schema.addMessageDefinition(messageDefinitionFromConnectSchema(schema, name, rootElem));
+      FromConnectContext ctx = new FromConnectContext();
+      ctx.add(fullName);
+      schema.addMessageDefinition(messageDefinitionFromConnectSchema(ctx, schema, name, rootElem));
       return schema.build();
     } catch (Descriptors.DescriptorValidationException e) {
       throw new IllegalStateException(e);
@@ -377,7 +382,7 @@ public class ProtobufData {
   }
 
   private MessageDefinition messageDefinitionFromConnectSchema(
-      DynamicSchema.Builder schema, String name, Schema messageElem
+      FromConnectContext ctx, DynamicSchema.Builder schema, String name, Schema messageElem
   ) {
     MessageDefinition.Builder message = MessageDefinition.newBuilder(name);
     int index = 1;
@@ -387,6 +392,7 @@ public class ProtobufData {
           .get(PROTOBUF_TYPE_TAG) : null;
       int tag = fieldTag != null ? Integer.parseInt(fieldTag) : index++;
       FieldDefinition fieldDef = fieldDefinitionFromConnectSchema(
+          ctx,
           schema,
           message,
           fieldSchema,
@@ -406,6 +412,7 @@ public class ProtobufData {
   }
 
   private void oneofDefinitionFromConnectSchema(
+      FromConnectContext ctx,
       DynamicSchema.Builder schema,
       MessageDefinition.Builder message,
       Schema unionElem,
@@ -418,6 +425,7 @@ public class ProtobufData {
           .get(PROTOBUF_TYPE_TAG) : null;
       int tag = fieldTag != null ? Integer.parseInt(fieldTag) : 0;
       FieldDefinition fieldDef = fieldDefinitionFromConnectSchema(
+          ctx,
           schema,
           message,
           field.schema(),
@@ -436,6 +444,7 @@ public class ProtobufData {
   }
 
   private FieldDefinition fieldDefinitionFromConnectSchema(
+      FromConnectContext ctx,
       DynamicSchema.Builder schema,
       MessageDefinition.Builder message,
       Schema fieldSchema,
@@ -456,17 +465,22 @@ public class ProtobufData {
         if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
           String unionName =
               getUnqualifiedName(fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length()));
-          oneofDefinitionFromConnectSchema(schema, message, fieldSchema, unionName);
+          oneofDefinitionFromConnectSchema(ctx, schema, message, fieldSchema, unionName);
           return null;
         } else {
-          message.addMessageDefinition(messageDefinitionFromConnectSchema(
-              schema,
-              type,
-              fieldSchema
-          ));
+          if (!ctx.contains(fieldSchemaName)) {
+            ctx.add(fieldSchemaName);
+            message.addMessageDefinition(messageDefinitionFromConnectSchema(
+                ctx,
+                schema,
+                type,
+                fieldSchema
+            ));
+          }
         }
       } else if (fieldSchema.type() == Schema.Type.MAP) {
-        message.addMessageDefinition(mapDefinitionFromConnectSchema(schema, type, fieldSchema));
+        message.addMessageDefinition(
+            mapDefinitionFromConnectSchema(ctx, schema, type, fieldSchema));
       } else if (fieldSchema.parameters() != null && fieldSchema.parameters()
           .containsKey(PROTOBUF_TYPE_ENUM)) {
         message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
@@ -549,10 +563,11 @@ public class ProtobufData {
   }
 
   private MessageDefinition mapDefinitionFromConnectSchema(
-      DynamicSchema.Builder schema, String name, Schema mapElem
+      FromConnectContext ctx, DynamicSchema.Builder schema, String name, Schema mapElem
   ) {
     MessageDefinition.Builder map = MessageDefinition.newBuilder(name);
     FieldDefinition key = fieldDefinitionFromConnectSchema(
+        ctx,
         schema,
         map,
         mapElem.keySchema(),
@@ -561,6 +576,7 @@ public class ProtobufData {
     );
     map.addField(key.getLabel(), key.getType(), key.getName(), key.getNum(), key.getDefaultVal());
     FieldDefinition val = fieldDefinitionFromConnectSchema(
+        ctx,
         schema,
         map,
         mapElem.valueSchema(),
@@ -816,27 +832,31 @@ public class ProtobufData {
     if (cachedSchema != null) {
       return cachedSchema;
     }
-    Schema resultSchema = toConnectSchema(schema.toDescriptor(), schema.version()).build();
+    SchemaBuilder builder = SchemaBuilder.struct();
+    Descriptor descriptor = schema.toDescriptor();
+    ToConnectContext ctx = new ToConnectContext();
+    ctx.put(descriptor.getFullName(), builder);
+    Schema resultSchema = toConnectSchema(ctx, builder, descriptor, schema.version()).build();
     toConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
   }
 
-  private SchemaBuilder toConnectSchema(Descriptor descriptor, Integer version) {
+  private SchemaBuilder toConnectSchema(
+      ToConnectContext ctx, SchemaBuilder builder, Descriptor descriptor, Integer version) {
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     if (isMapDescriptor(descriptor, fieldDescriptors)) {
       String name = ProtobufSchema.toMapField(descriptor.getName());
-      return SchemaBuilder.map(toConnectSchema(fieldDescriptors.get(0)),
-          toConnectSchema(fieldDescriptors.get(1))
+      return SchemaBuilder.map(toConnectSchema(ctx, fieldDescriptors.get(0)),
+          toConnectSchema(ctx, fieldDescriptors.get(1))
       )
           .name(name);
     }
-    SchemaBuilder builder = SchemaBuilder.struct();
     String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
     builder.name(name);
     List<OneofDescriptor> oneOfDescriptors = descriptor.getOneofs();
     for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
       String unionName = oneOfDescriptor.getName() + "_" + oneOfDescriptor.getIndex();
-      builder.field(unionName, toConnectSchema(oneOfDescriptor));
+      builder.field(unionName, toConnectSchema(ctx, oneOfDescriptor));
     }
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
       OneofDescriptor oneOfDescriptor = fieldDescriptor.getContainingOneof();
@@ -844,7 +864,7 @@ public class ProtobufData {
         // Already added field as oneof
         continue;
       }
-      builder.field(fieldDescriptor.getName(), toConnectSchema(fieldDescriptor));
+      builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
     }
 
     if (version != null) {
@@ -854,18 +874,18 @@ public class ProtobufData {
     return builder;
   }
 
-  private Schema toConnectSchema(OneofDescriptor descriptor) {
+  private Schema toConnectSchema(ToConnectContext ctx, OneofDescriptor descriptor) {
     SchemaBuilder builder = SchemaBuilder.struct();
     builder.name(PROTOBUF_TYPE_UNION_PREFIX + descriptor.getName());
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
-      builder.field(fieldDescriptor.getName(), toConnectSchema(fieldDescriptor));
+      builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
     }
     builder.optional();
     return builder.build();
   }
 
-  private Schema toConnectSchema(FieldDescriptor descriptor) {
+  private Schema toConnectSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
     SchemaBuilder builder;
 
     switch (descriptor.getType()) {
@@ -928,7 +948,15 @@ public class ProtobufData {
           break;
         }
 
-        builder = toConnectSchema(descriptor.getMessageType(), null);
+        String fullName = descriptor.getMessageType().getFullName();
+        builder = ctx.get(fullName);
+        if (builder != null) {
+          builder = new SchemaWrapper(builder);
+        } else {
+          builder = SchemaBuilder.struct();
+          ctx.put(fullName, builder);
+          builder = toConnectSchema(ctx, builder, descriptor.getMessageType(), null);
+        }
         break;
       }
 
@@ -1002,5 +1030,175 @@ public class ProtobufData {
     return name != null && !name.isEmpty()
            ? name
            : DEFAULT_SCHEMA_NAME + (++defaultSchemaNameIndex);
+  }
+
+  /**
+   * Wraps a SchemaBuilder but overrides the parameters.
+   * Parameters are used to specify the field tags.
+   */
+  static class SchemaWrapper extends SchemaBuilder {
+
+    private final SchemaBuilder builder;
+    private final Map<String, String> parameters;
+
+    public SchemaWrapper(SchemaBuilder builder) {
+      super(Type.STRUCT);
+      this.builder = builder;
+      this.parameters = new LinkedHashMap<>();
+    }
+
+    @Override
+    public boolean isOptional() {
+      return builder.isOptional();
+    }
+
+    @Override
+    public SchemaBuilder optional() {
+      return builder.optional();
+    }
+
+    @Override
+    public SchemaBuilder required() {
+      return builder.required();
+    }
+
+    @Override
+    public Object defaultValue() {
+      return builder.defaultValue();
+    }
+
+    @Override
+    public SchemaBuilder defaultValue(Object value) {
+      return builder.defaultValue(value);
+    }
+
+    @Override
+    public String name() {
+      return builder.name();
+    }
+
+    @Override
+    public SchemaBuilder name(String name) {
+      return builder.name(name);
+    }
+
+    @Override
+    public Integer version() {
+      return builder.version();
+    }
+
+    @Override
+    public SchemaBuilder version(Integer version) {
+      return builder.version(version);
+    }
+
+    @Override
+    public String doc() {
+      return builder.doc();
+    }
+
+    @Override
+    public SchemaBuilder doc(String doc) {
+      return builder.doc(doc);
+    }
+
+    @Override
+    public Map<String, String> parameters() {
+      return parameters;
+    }
+
+    @Override
+    public SchemaBuilder parameters(Map<String, String> props) {
+      parameters.putAll(props);
+      return this;
+    }
+
+    @Override
+    public SchemaBuilder parameter(String propertyName, String propertyValue) {
+      parameters.put(propertyName, propertyValue);
+      return this;
+    }
+
+    @Override
+    public Type type() {
+      return builder.type();
+    }
+
+    @Override
+    public List<Field> fields() {
+      return builder.fields();
+    }
+
+    @Override
+    public Field field(String fieldName) {
+      return builder.field(fieldName);
+    }
+
+    @Override
+    public SchemaBuilder field(String fieldName, Schema fieldSchema) {
+      return builder.field(fieldName, fieldSchema);
+    }
+
+    @Override
+    public Schema keySchema() {
+      return builder.keySchema();
+    }
+
+    @Override
+    public Schema valueSchema() {
+      return builder.valueSchema();
+    }
+
+    @Override
+    public Schema build() {
+      // Don't create a ConnectSchema
+      return this;
+    }
+
+    @Override
+    public Schema schema() {
+      // Don't create a ConnectSchema
+      return this;
+    }
+  }
+
+  /**
+   * Class that holds the context for performing {@code toConnectSchema}
+   */
+  private static class ToConnectContext {
+    private final Map<String, SchemaBuilder> messageToStructMap;
+
+    public ToConnectContext() {
+      this.messageToStructMap = new HashMap<>();
+    }
+
+    public SchemaBuilder get(String messageName) {
+      return messageToStructMap.get(messageName);
+    }
+
+    public void put(String messageName, SchemaBuilder builder) {
+      messageToStructMap.put(messageName, builder);
+    }
+  }
+
+  /**
+   * Class that holds the context for performing {@code fromConnectSchema}
+   */
+  private static class FromConnectContext {
+    private final Set<String> structNames;
+
+    public FromConnectContext() {
+      this.structNames = new HashSet<>();
+    }
+
+    public boolean contains(String structName) {
+      return structName != null ? structNames.contains(structName) : false;
+    }
+
+    public void add(String structName) {
+      if (structName != null) {
+        structNames.add(structName);
+      }
+    }
   }
 }
