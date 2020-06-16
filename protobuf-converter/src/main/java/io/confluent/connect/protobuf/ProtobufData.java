@@ -985,7 +985,7 @@ public class ProtobufData {
   }
 
   /**
-   * Strip the namespace for a name.
+   * Strip the namespace from a name.
    */
   private String unqualifyName(String name) {
     String fullName = getNameOrDefault(name);
