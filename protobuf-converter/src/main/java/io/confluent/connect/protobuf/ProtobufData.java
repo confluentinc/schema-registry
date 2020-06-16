@@ -201,7 +201,7 @@ public class ProtobufData {
           return newListValue;
         case MAP:
           final Map<?, ?> mapValue = (Map<?, ?>) value;
-          String mapName = unqualifyName(schema.name());
+          String mapName = getUnqualifiedName(schema.name());
           String scopedMapName = scope + ProtobufSchema.toMapEntry(mapName);
           List<Message> newMapValue = new ArrayList<>();
           for (Map.Entry<?, ?> mapEntry : mapValue.entrySet()) {
@@ -248,7 +248,7 @@ public class ProtobufData {
             }
             throw new DataException("Cannot find non-null field");
           } else {
-            String scopedStructName = scope + unqualifyName(structName);
+            String scopedStructName = scope + getUnqualifiedName(structName);
             DynamicMessage.Builder messageBuilder =
                 protobufSchema.newMessageBuilder(scopedStructName);
             if (messageBuilder == null) {
@@ -454,7 +454,8 @@ public class ProtobufData {
       if (fieldSchema.type() == Schema.Type.STRUCT) {
         String fieldSchemaName = fieldSchema.name();
         if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
-          String unionName = fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length());
+          String unionName =
+              getUnqualifiedName(fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length()));
           oneofDefinitionFromConnectSchema(schema, message, fieldSchema, unionName);
           return null;
         } else {
@@ -574,7 +575,7 @@ public class ProtobufData {
       DynamicSchema.Builder schema,
       Schema enumElem
   ) {
-    String enumName = unqualifyName(enumElem.name());
+    String enumName = getUnqualifiedName(enumElem.name());
     EnumDefinition.Builder enumer = EnumDefinition.newBuilder(enumName);
     for (Map.Entry<String, String> entry : enumElem.parameters().entrySet()) {
       if (entry.getKey().startsWith(PROTOBUF_TYPE_ENUM_PREFIX)) {
@@ -614,9 +615,9 @@ public class ProtobufData {
         // Array should not occur here
         throw new IllegalArgumentException("Array cannot be nested");
       case MAP:
-        return ProtobufSchema.toMapEntry(unqualifyName(schema.name()));
+        return ProtobufSchema.toMapEntry(getUnqualifiedName(schema.name()));
       case STRUCT:
-        return unqualifyName(schema.name());
+        return getUnqualifiedName(schema.name());
       default:
         throw new DataException("Unknown schema type: " + schema.type());
     }
@@ -987,7 +988,7 @@ public class ProtobufData {
   /**
    * Strip the namespace from a name.
    */
-  private String unqualifyName(String name) {
+  private String getUnqualifiedName(String name) {
     String fullName = getNameOrDefault(name);
     int indexLastDot = fullName.lastIndexOf('.');
     if (indexLastDot >= 0) {
