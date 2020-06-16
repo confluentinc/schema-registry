@@ -90,10 +90,6 @@ public class MetricsContainer {
 
     metricsContext = getMetricsContext(config, kafkaClusterId);
 
-    for (MetricsReporter reporter : reporters) {
-      reporter.contextChange(metricsContext);
-    }
-
     MetricConfig metricConfig =
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),

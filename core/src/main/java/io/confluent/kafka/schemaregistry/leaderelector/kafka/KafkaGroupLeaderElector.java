@@ -100,16 +100,14 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           MetricsReporter.class
       );
       reporters.add(new JmxReporter());
-      for (MetricsReporter reporter : reporters) {
-        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
-        reporter.contextChange(metricsContext);
-      }
+      MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
+
       Time time = Time.SYSTEM;
 
       ClientConfig clientConfig = new ClientConfig(config.originalsWithPrefix("kafkastore."),
           false);
 
-      this.metrics = new Metrics(metricConfig, reporters, time);
+      this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
       this.retryBackoffMs = clientConfig.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
       String groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
       LogContext logContext = new LogContext("[Schema registry clientId=" + clientId + ", groupId="
