@@ -24,12 +24,16 @@ import org.apache.avro.SchemaValidatorBuilder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @deprecated  Use {@link io.confluent.kafka.schemaregistry.CompatibilityChecker} instead
  */
 @Deprecated
 public class AvroCompatibilityChecker {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroCompatibilityChecker.class);
 
   // Check if the new schema can be used to read data produced by the previous schema
   private static final SchemaValidator BACKWARD_VALIDATOR =
@@ -101,6 +105,9 @@ public class AvroCompatibilityChecker {
       Collections.reverse(previousSchemasCopy);
       validator.validate(newSchema, previousSchemasCopy);
     } catch (SchemaValidationException e) {
+      return false;
+    } catch (Exception e) {
+      log.error("Unexpected exception during compatibility check", e);
       return false;
     }
 

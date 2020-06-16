@@ -24,6 +24,8 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -33,6 +35,7 @@ import java.util.List;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.protobuf.diff.ResourceLoader;
 
+import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.PROTO3;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -244,7 +247,6 @@ public class ProtobufSchemaTest {
     assertEquals("SPADES", resultRecord.getField(fd).toString());
   }
 
-
   @Test
   public void testRecordToJson() throws Exception {
     DynamicMessage.Builder builder = recordSchema.newMessageBuilder();
@@ -393,6 +395,22 @@ public class ProtobufSchemaTest {
     assertTrue(schema2.isCompatible(
         CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)));
     assertEquals(schema2, schema3);
+  }
+
+  @Test
+  public void testDefaultOmittedInProto3String() throws Exception {
+    MessageDefinition.Builder message = MessageDefinition.newBuilder("msg1");
+    message.addField(null, "string", "field1", 1, "defaultVal");
+    DynamicSchema.Builder schema = DynamicSchema.newBuilder();
+    schema.setSyntax(PROTO3);
+    schema.addMessageDefinition(message.build());
+    ProtobufSchema protobufSchema =
+        new ProtobufSchema(schema.build().getMessageDescriptor("msg1"));
+    assertEquals("syntax = \"proto3\";\n"
+        + "\n"
+        + "message msg1 {\n"
+        + "  string field1 = 1;\n"
+        + "}\n", protobufSchema.toString());
   }
 
   private static JsonNode jsonTree(String jsonData) {

@@ -1645,6 +1645,21 @@ public final class TestMessageProtos {
      * @return The testUint64.
      */
     long getTestUint64();
+
+    /**
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+     * @return Whether the testMessage field is set.
+     */
+    boolean hasTestMessage();
+    /**
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+     * @return The testMessage.
+     */
+    io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage getTestMessage();
+    /**
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+     */
+    io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder getTestMessageOrBuilder();
   }
   /**
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.TestMessage2}
@@ -1767,6 +1782,19 @@ public final class TestMessageProtos {
             case 120: {
 
               testUint64_ = input.readUInt64();
+              break;
+            }
+            case 130: {
+              io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder subBuilder = null;
+              if (testMessage_ != null) {
+                subBuilder = testMessage_.toBuilder();
+              }
+              testMessage_ = input.readMessage(io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(testMessage_);
+                testMessage_ = subBuilder.buildPartial();
+              }
+
               break;
             }
             default: {
@@ -1977,6 +2005,29 @@ public final class TestMessageProtos {
       return testUint64_;
     }
 
+    public static final int TEST_MESSAGE_FIELD_NUMBER = 16;
+    private io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage testMessage_;
+    /**
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+     * @return Whether the testMessage field is set.
+     */
+    public boolean hasTestMessage() {
+      return testMessage_ != null;
+    }
+    /**
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+     * @return The testMessage.
+     */
+    public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage getTestMessage() {
+      return testMessage_ == null ? io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.getDefaultInstance() : testMessage_;
+    }
+    /**
+     * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+     */
+    public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder getTestMessageOrBuilder() {
+      return getTestMessage();
+    }
+
     private byte memoizedIsInitialized = -1;
     @java.lang.Override
     public final boolean isInitialized() {
@@ -2035,6 +2086,9 @@ public final class TestMessageProtos {
       }
       if (testUint64_ != 0L) {
         output.writeUInt64(15, testUint64_);
+      }
+      if (testMessage_ != null) {
+        output.writeMessage(16, getTestMessage());
       }
       unknownFields.writeTo(output);
     }
@@ -2104,6 +2158,10 @@ public final class TestMessageProtos {
         size += com.google.protobuf.CodedOutputStream
           .computeUInt64Size(15, testUint64_);
       }
+      if (testMessage_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(16, getTestMessage());
+      }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
@@ -2151,6 +2209,11 @@ public final class TestMessageProtos {
           != other.getTestUint32()) return false;
       if (getTestUint64()
           != other.getTestUint64()) return false;
+      if (hasTestMessage() != other.hasTestMessage()) return false;
+      if (hasTestMessage()) {
+        if (!getTestMessage()
+            .equals(other.getTestMessage())) return false;
+      }
       if (!unknownFields.equals(other.unknownFields)) return false;
       return true;
     }
@@ -2200,6 +2263,10 @@ public final class TestMessageProtos {
       hash = (37 * hash) + TEST_UINT64_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           getTestUint64());
+      if (hasTestMessage()) {
+        hash = (37 * hash) + TEST_MESSAGE_FIELD_NUMBER;
+        hash = (53 * hash) + getTestMessage().hashCode();
+      }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -2363,6 +2430,12 @@ public final class TestMessageProtos {
 
         testUint64_ = 0L;
 
+        if (testMessageBuilder_ == null) {
+          testMessage_ = null;
+        } else {
+          testMessage_ = null;
+          testMessageBuilder_ = null;
+        }
         return this;
       }
 
@@ -2404,6 +2477,11 @@ public final class TestMessageProtos {
         result.testSint64_ = testSint64_;
         result.testUint32_ = testUint32_;
         result.testUint64_ = testUint64_;
+        if (testMessageBuilder_ == null) {
+          result.testMessage_ = testMessage_;
+        } else {
+          result.testMessage_ = testMessageBuilder_.build();
+        }
         onBuilt();
         return result;
       }
@@ -2497,6 +2575,9 @@ public final class TestMessageProtos {
         }
         if (other.getTestUint64() != 0L) {
           setTestUint64(other.getTestUint64());
+        }
+        if (other.hasTestMessage()) {
+          mergeTestMessage(other.getTestMessage());
         }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
@@ -3025,6 +3106,125 @@ public final class TestMessageProtos {
         onChanged();
         return this;
       }
+
+      private io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage testMessage_;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder> testMessageBuilder_;
+      /**
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+       * @return Whether the testMessage field is set.
+       */
+      public boolean hasTestMessage() {
+        return testMessageBuilder_ != null || testMessage_ != null;
+      }
+      /**
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+       * @return The testMessage.
+       */
+      public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage getTestMessage() {
+        if (testMessageBuilder_ == null) {
+          return testMessage_ == null ? io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.getDefaultInstance() : testMessage_;
+        } else {
+          return testMessageBuilder_.getMessage();
+        }
+      }
+      /**
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+       */
+      public Builder setTestMessage(io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage value) {
+        if (testMessageBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          testMessage_ = value;
+          onChanged();
+        } else {
+          testMessageBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+       */
+      public Builder setTestMessage(
+          io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder builderForValue) {
+        if (testMessageBuilder_ == null) {
+          testMessage_ = builderForValue.build();
+          onChanged();
+        } else {
+          testMessageBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+       */
+      public Builder mergeTestMessage(io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage value) {
+        if (testMessageBuilder_ == null) {
+          if (testMessage_ != null) {
+            testMessage_ =
+              io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.newBuilder(testMessage_).mergeFrom(value).buildPartial();
+          } else {
+            testMessage_ = value;
+          }
+          onChanged();
+        } else {
+          testMessageBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+       */
+      public Builder clearTestMessage() {
+        if (testMessageBuilder_ == null) {
+          testMessage_ = null;
+          onChanged();
+        } else {
+          testMessage_ = null;
+          testMessageBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+       */
+      public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder getTestMessageBuilder() {
+        
+        onChanged();
+        return getTestMessageFieldBuilder().getBuilder();
+      }
+      /**
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+       */
+      public io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder getTestMessageOrBuilder() {
+        if (testMessageBuilder_ != null) {
+          return testMessageBuilder_.getMessageOrBuilder();
+        } else {
+          return testMessage_ == null ?
+              io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.getDefaultInstance() : testMessage_;
+        }
+      }
+      /**
+       * <code>.io.confluent.kafka.serializers.protobuf.test.TestMessage test_message = 16;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder> 
+          getTestMessageFieldBuilder() {
+        if (testMessageBuilder_ == null) {
+          testMessageBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder, io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessageOrBuilder>(
+                  getTestMessage(),
+                  getParentForChildren(),
+                  isClean());
+          testMessage_ = null;
+        }
+        return testMessageBuilder_;
+      }
       @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -3107,7 +3307,7 @@ public final class TestMessageProtos {
       "\n\ntest_int64\030\t \001(\003\022\025\n\rtest_sfixed32\030\n \001(" +
       "\017\022\025\n\rtest_sfixed64\030\013 \001(\020\022\023\n\013test_sint32\030" +
       "\014 \001(\021\022\023\n\013test_sint64\030\r \001(\022\022\023\n\013test_uint3" +
-      "2\030\016 \001(\r\022\023\n\013test_uint64\030\017 \001(\004\"\311\002\n\014TestMes" +
+      "2\030\016 \001(\r\022\023\n\013test_uint64\030\017 \001(\004\"\232\003\n\014TestMes" +
       "sage2\022\023\n\013test_string\030\001 \001(\t\022\021\n\ttest_bool\030" +
       "\002 \001(\010\022\022\n\ntest_bytes\030\003 \001(\014\022\023\n\013test_double" +
       "\030\004 \001(\001\022\022\n\ntest_float\030\005 \001(\002\022\024\n\014test_fixed" +
@@ -3116,8 +3316,10 @@ public final class TestMessageProtos {
       "fixed32\030\n \001(\017\022\025\n\rtest_sfixed64\030\013 \001(\020\022\023\n\013" +
       "test_sint32\030\014 \001(\021\022\023\n\013test_sint64\030\r \001(\022\022\023" +
       "\n\013test_uint32\030\016 \001(\r\022\023\n\013test_uint64\030\017 \001(\004" +
-      "BA\n,io.confluent.kafka.serializers.proto" +
-      "buf.testB\021TestMessageProtosb\006proto3"
+      "\022O\n\014test_message\030\020 \001(\01329.io.confluent.ka" +
+      "fka.serializers.protobuf.test.TestMessag" +
+      "eBA\n,io.confluent.kafka.serializers.prot" +
+      "obuf.testB\021TestMessageProtosb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -3135,7 +3337,7 @@ public final class TestMessageProtos {
     internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage2_descriptor,
-        new java.lang.String[] { "TestString", "TestBool", "TestBytes", "TestDouble", "TestFloat", "TestFixed32", "TestFixed64", "TestInt32", "TestInt64", "TestSfixed32", "TestSfixed64", "TestSint32", "TestSint64", "TestUint32", "TestUint64", });
+        new java.lang.String[] { "TestString", "TestBool", "TestBytes", "TestDouble", "TestFloat", "TestFixed32", "TestFixed64", "TestInt32", "TestInt64", "TestSfixed32", "TestSfixed64", "TestSint32", "TestSint64", "TestUint32", "TestUint64", "TestMessage", });
     com.google.protobuf.DescriptorProtos.getDescriptor();
   }
 

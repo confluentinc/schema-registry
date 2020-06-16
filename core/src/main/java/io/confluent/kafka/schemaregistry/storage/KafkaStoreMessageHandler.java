@@ -144,8 +144,6 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       }
     } else {
       lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
-      updateMetrics(metricsContainer.getSchemasDeleted(),
-                    metricsContainer.getSchemasDeleted(getSchemaType(oldSchemaValue)));
     }
   }
 

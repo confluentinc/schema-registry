@@ -19,6 +19,7 @@ import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
+import org.everit.json.schema.NotSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
@@ -72,9 +73,11 @@ public class SchemaDiff {
     changes.add(Type.MIN_PROPERTIES_REMOVED);
     changes.add(Type.ADDITIONAL_PROPERTIES_ADDED);
     changes.add(Type.ADDITIONAL_PROPERTIES_EXTENDED);
-    changes.add(Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_CLOSED_CONTENT_MODEL);
-    changes.add(Type.OPTIONAL_PROPERTY_ADDED_TO_CLOSED_CONTENT_MODEL);
+    changes.add(Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_UNOPEN_CONTENT_MODEL);
+    changes.add(Type.OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL);
     changes.add(Type.PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
 
     changes.add(Type.MAX_ITEMS_INCREASED);
     changes.add(Type.MAX_ITEMS_REMOVED);
@@ -83,12 +86,16 @@ public class SchemaDiff {
     changes.add(Type.UNIQUE_ITEMS_REMOVED);
     changes.add(Type.ADDITIONAL_ITEMS_ADDED);
     changes.add(Type.ADDITIONAL_ITEMS_EXTENDED);
-    changes.add(Type.ITEMS_ADDED_TO_CLOSED_CONTENT_MODEL);
+    changes.add(Type.ITEM_ADDED_TO_CLOSED_CONTENT_MODEL);
+    changes.add(Type.ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL);
+    changes.add(Type.ITEM_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+    changes.add(Type.ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
 
     changes.add(Type.ENUM_ARRAY_EXTENDED);
 
     changes.add(Type.PRODUCT_TYPE_NARROWED);
     changes.add(Type.SUM_TYPE_EXTENDED);
+    changes.add(Type.NOT_TYPE_NARROWED);
 
     COMPATIBLE_CHANGES = Collections.unmodifiableSet(changes);
   }
@@ -176,6 +183,8 @@ public class SchemaDiff {
           EnumSchemaDiff.compare(ctx, (EnumSchema) original, (EnumSchema) update);
         } else if (original instanceof CombinedSchema) {
           CombinedSchemaDiff.compare(ctx, (CombinedSchema) original, (CombinedSchema) update);
+        } else if (original instanceof NotSchema) {
+          NotSchemaDiff.compare(ctx, (NotSchema) original, (NotSchema) update);
         } else if (original instanceof ObjectSchema) {
           ObjectSchemaDiff.compare(ctx, (ObjectSchema) original, (ObjectSchema) update);
         } else if (original instanceof ArraySchema) {
