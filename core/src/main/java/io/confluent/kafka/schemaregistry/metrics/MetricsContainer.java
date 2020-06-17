@@ -210,13 +210,10 @@ public class MetricsContainer {
     try {
       if (Boolean.TRUE.equals(config.getBoolean(TELEMETRY_ENABLED_CONFIG))
               && !classes.contains(TELEMETRY_REPORTER_CLASS)) {
-        Class.forName(TELEMETRY_REPORTER_CLASS);
         classes.add(TELEMETRY_REPORTER_CLASS);
       }
     } catch (ConfigException ce) {
       // Ignore
-    } catch (ClassNotFoundException cnfe) {
-      log.error("Could not find TelemetryReporter class", cnfe);
     }
     return classes;
   }
