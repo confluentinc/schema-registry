@@ -216,7 +216,7 @@ public class MetricsContainer {
     } catch (ConfigException ce) {
       // Ignore
     } catch (ClassNotFoundException cnfe) {
-      log.warn("Could not find TelemetryReporter class");
+      log.error("Could not find TelemetryReporter class", cnfe);
     }
     return classes;
   }
