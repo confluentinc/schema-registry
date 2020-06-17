@@ -25,6 +25,7 @@ import io.confluent.rest.RestConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -32,6 +33,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,8 +52,11 @@ public class MetricsContainer {
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
 
+  private static final Logger log = LoggerFactory.getLogger(MetricsReporter.class);
+
   private static final String TELEMETRY_REPORTER_CLASS =
           "io.confluent.telemetry.reporter.TelemetryReporter";
+  private static final String TELEMETRY_ENABLED_CONFIG = "confluent.telemetry.enabled";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
@@ -202,12 +208,15 @@ public class MetricsContainer {
     List<String> classes = new ArrayList<>(config.getList(
             ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG));
     try {
-      if (!classes.contains(TELEMETRY_REPORTER_CLASS)) {
+      if (Boolean.TRUE.equals(config.getBoolean(TELEMETRY_ENABLED_CONFIG))
+              && !classes.contains(TELEMETRY_REPORTER_CLASS)) {
         Class.forName(TELEMETRY_REPORTER_CLASS);
         classes.add(TELEMETRY_REPORTER_CLASS);
       }
-    } catch (ClassNotFoundException cnfe) {
+    } catch (ConfigException ce) {
       // Ignore
+    } catch (ClassNotFoundException cnfe) {
+      log.warn("Could not find TelemetryReporter class");
     }
     return classes;
   }
