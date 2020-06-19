@@ -208,8 +208,10 @@ public class MetricsContainer {
   private static List<String> getMetricReporterConfig(SchemaRegistryConfig config) {
     List<String> classes = new ArrayList<>(config.getList(
             ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG));
+
+    log.debug("Config originals: {}", config.originalProperties());
     try {
-      if (Boolean.FALSE.equals(config.getBoolean(TELEMETRY_ENABLED_CONFIG))) {
+      if (Boolean.FALSE.equals(config.originals().get(TELEMETRY_ENABLED_CONFIG))) {
         log.warn("Telemetry is disabled");
       } else if (classes.contains(TELEMETRY_REPORTER_CLASS)) {
         log.warn("Already have telemetry reporter class");
@@ -218,7 +220,7 @@ public class MetricsContainer {
         classes.add(TELEMETRY_REPORTER_CLASS);
       }
     } catch (ConfigException ce) {
-      // Ignore
+      log.warn("Could not get config option", ce);
     }
     return classes;
   }
