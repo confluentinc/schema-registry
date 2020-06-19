@@ -23,6 +23,7 @@ import io.swagger.annotations.ApiModelProperty;
 import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.util.Objects;
 
 public class ConfigUpdateRequest {
 
@@ -47,5 +48,22 @@ public class ConfigUpdateRequest {
 
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    ConfigUpdateRequest that = (ConfigUpdateRequest) o;
+    return Objects.equals(compatibilityLevel, that.compatibilityLevel);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(compatibilityLevel);
   }
 }
