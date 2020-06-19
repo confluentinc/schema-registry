@@ -27,6 +27,7 @@ import java.util.List;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class SchemaString {
@@ -95,5 +96,25 @@ public class SchemaString {
 
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    SchemaString that = (SchemaString) o;
+    return Objects.equals(schemaType, that.schemaType)
+        && Objects.equals(schemaString, that.schemaString)
+        && Objects.equals(references, that.references)
+        && Objects.equals(maxId, that.maxId);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(schemaType, schemaString, references, maxId);
   }
 }
