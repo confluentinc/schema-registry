@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
+import io.confluent.telemetry.reporter.TelemetryReporter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
@@ -208,8 +209,12 @@ public class MetricsContainer {
     List<String> classes = new ArrayList<>(config.getList(
             ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG));
     try {
-      if (Boolean.TRUE.equals(config.getBoolean(TELEMETRY_ENABLED_CONFIG))
-              && !classes.contains(TELEMETRY_REPORTER_CLASS)) {
+      if (Boolean.FALSE.equals(config.getBoolean(TELEMETRY_ENABLED_CONFIG))) {
+        log.warn("Telemetry is disabled");
+      } else if (classes.contains(TELEMETRY_REPORTER_CLASS)) {
+        log.warn("Already have telemetry reporter class");
+      } else {
+        log.warn("Adding telemetry reporter class");
         classes.add(TELEMETRY_REPORTER_CLASS);
       }
     } catch (ConfigException ce) {
@@ -220,7 +225,7 @@ public class MetricsContainer {
 
   private static MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
     for (MetricsReporter reporter : reporters) {
-      if (reporter.getClass().getName().equals(TELEMETRY_REPORTER_CLASS)) {
+      if (reporter.getClass().equals(TelemetryReporter.class)) {
         return reporter;
       }
     }
