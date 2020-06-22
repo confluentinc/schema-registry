@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCr
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SslConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -213,6 +214,10 @@ public class RestService implements Configurable {
 
     if (isValidProxyConfig(proxyHost, proxyPort)) {
       setProxy(proxyHost, proxyPort);
+    }
+    String endpointIdentificationAlgorithm = (String)configs.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
+    if (endpointIdentificationAlgorithm.trim().isEmpty()) {
+      setHostnameVerifier((hostname, session) -> true);
     }
   }
 
