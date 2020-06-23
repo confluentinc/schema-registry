@@ -19,10 +19,13 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -33,22 +36,30 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 public class MetricsContainer {
 
-  private static final Logger log = LoggerFactory.getLogger(MetricsContainer.class);
+  public static final String JMX_PREFIX = "kafka.schema.registry";
 
-  private static final String JMX_PREFIX = "kafka.schema.registry";
+  public static final String RESOURCE_LABEL_PREFIX = "resource.";
+  public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
+  public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
+  public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
+  public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
+
+  private static final Logger log = LoggerFactory.getLogger(MetricsReporter.class);
+
+  private static final String TELEMETRY_REPORTER_CLASS =
+          "io.confluent.telemetry.reporter.TelemetryReporter";
+  private static final String TELEMETRY_ENABLED_CONFIG = "confluent.telemetry.enabled";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
-  private final String commitId;
 
   private final SchemaRegistryMetric isLeaderNode;
   private final SchemaRegistryMetric nodeCount;
@@ -67,27 +78,31 @@ public class MetricsContainer {
   private final SchemaRegistryMetric jsonSchemasDeleted;
   private final SchemaRegistryMetric protobufSchemasDeleted;
 
-  public MetricsContainer(SchemaRegistryConfig config) {
+  private final MetricsReporter telemetryReporter;
+  private final MetricsContext metricsContext;
+
+  public MetricsContainer(SchemaRegistryConfig config, String kafkaClusterId) {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
-    this.commitId = getCommitId();
+
+    List<MetricsReporter> reporters = config.getConfiguredInstances(getMetricReporterConfig(config),
+            MetricsReporter.class, Collections.emptyMap());
+
+    telemetryReporter = getTelemetryReporter(reporters);
+
+    reporters.add(new JmxReporter());
+
+    for (MetricsReporter reporter : reporters) {
+      reporter.configure(config.originals());
+    }
+
+    metricsContext = getMetricsContext(config, kafkaClusterId);
 
     MetricConfig metricConfig =
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                             TimeUnit.MILLISECONDS);
-    List<MetricsReporter> reporters =
-            config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                    MetricsReporter.class);
-    reporters.add(new JmxReporter());
-
-    MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX);
-
-    for (MetricsReporter reporter : reporters) {
-      reporter.contextChange(metricsContext);
-    }
-
-    this.metrics = new Metrics(metricConfig, reporters, new SystemTime());
+    this.metrics = new Metrics(metricConfig, reporters, new SystemTime(), metricsContext);
 
     this.isLeaderNode = createMetric("master-slave-role",
             "1.0 indicates the node is the active leader in the cluster and is the"
@@ -137,8 +152,15 @@ public class MetricsContainer {
     return nodeCount;
   }
 
-  public SchemaRegistryMetric isLeader() {
-    return isLeaderNode;
+  public void setLeader(boolean leader) {
+    isLeaderNode.set(leader ? 1 : 0);
+    if (telemetryReporter != null) {
+      if (leader) {
+        telemetryReporter.contextChange(metricsContext);
+      } else {
+        telemetryReporter.close();
+      }
+    }
   }
 
   public SchemaRegistryMetric getApiCallsSuccess() {
@@ -182,21 +204,41 @@ public class MetricsContainer {
     }
   }
 
-  private static String getCommitId() {
-    final String defaultValue = "Unknown";
-
-    String fileName = "/schema-registry-app.properties";
-    try (InputStream propFile = MetricsContainer.class.getResourceAsStream(fileName)) {
-      if (propFile != null) {
-        Properties props = new Properties();
-        props.load(propFile);
-        return props.getProperty("application.commitId", defaultValue).trim();
-      } else {
-        log.error("Cannot find properties file");
+  private static List<String> getMetricReporterConfig(SchemaRegistryConfig config) {
+    List<String> classes = new ArrayList<>(config.getList(
+            ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG));
+    try {
+      if (Boolean.TRUE.equals(config.getBoolean(TELEMETRY_ENABLED_CONFIG))
+              && !classes.contains(TELEMETRY_REPORTER_CLASS)) {
+        classes.add(TELEMETRY_REPORTER_CLASS);
       }
-    } catch (IOException e) {
-      log.warn("Cannot parse properties file", e);
+    } catch (ConfigException ce) {
+      // Ignore
     }
-    return defaultValue;
+    return classes;
+  }
+
+  private static MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
+    for (MetricsReporter reporter : reporters) {
+      if (reporter.getClass().getName().equals(TELEMETRY_REPORTER_CLASS)) {
+        return reporter;
+      }
+    }
+    return null;
+  }
+
+  private static MetricsContext getMetricsContext(SchemaRegistryConfig config,
+                                                  String kafkaClusterId) {
+    Map<String, Object> metadata =
+            config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
+
+    String clusterId = String.format("%s-%s", kafkaClusterId,
+            config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG));
+    metadata.put(RESOURCE_LABEL_CLUSTER_ID, clusterId);
+    metadata.put(RESOURCE_LABEL_TYPE,  "schemaregistry");
+    metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
+    metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+
+    return new KafkaMetricsContext(JMX_PREFIX, metadata);
   }
 }

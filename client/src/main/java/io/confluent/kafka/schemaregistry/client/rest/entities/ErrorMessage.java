@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Objects;
 
 /**
  * Generic JSON error message.
@@ -50,5 +51,23 @@ public class ErrorMessage {
   @JsonProperty
   public void setMessage(String message) {
     this.message = message;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    ErrorMessage that = (ErrorMessage) o;
+    return errorCode == that.errorCode
+        && Objects.equals(message, that.message);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(errorCode, message);
   }
 }
