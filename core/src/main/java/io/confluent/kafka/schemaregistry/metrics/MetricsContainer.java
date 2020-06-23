@@ -48,6 +48,7 @@ public class MetricsContainer {
 
   public static final String RESOURCE_LABEL_PREFIX = "resource.";
   public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
+  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
   public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
@@ -232,9 +233,9 @@ public class MetricsContainer {
     Map<String, Object> metadata =
             config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
 
-    String clusterId = String.format("%s-%s", kafkaClusterId,
+    metadata.put(RESOURCE_LABEL_CLUSTER_ID, kafkaClusterId);
+    metadata.put(RESOURCE_LABEL_GROUP_ID,
             config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG));
-    metadata.put(RESOURCE_LABEL_CLUSTER_ID, clusterId);
     metadata.put(RESOURCE_LABEL_TYPE,  "schemaregistry");
     metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
     metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
