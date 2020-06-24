@@ -26,7 +26,6 @@ import io.confluent.telemetry.reporter.TelemetryReporter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -58,7 +57,6 @@ public class MetricsContainer {
 
   private static final String TELEMETRY_REPORTER_CLASS =
           "io.confluent.telemetry.reporter.TelemetryReporter";
-  private static final String TELEMETRY_ENABLED_CONFIG = "confluent.telemetry.enabled";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
@@ -209,19 +207,14 @@ public class MetricsContainer {
   private static List<String> getMetricReporterConfig(SchemaRegistryConfig config) {
     List<String> classes = new ArrayList<>(config.getList(
             ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG));
-
     log.debug("Config originals: {}", config.originalProperties());
-    try {
-      if (!Boolean.TRUE.equals(config.originals().get(TELEMETRY_ENABLED_CONFIG))) {
-        log.warn("Telemetry reporter is disabled");
-      } else if (classes.contains(TELEMETRY_REPORTER_CLASS)) {
-        log.warn("Already have telemetry reporter class");
-      } else {
-        log.warn("Adding telemetry reporter class");
-        classes.add(TELEMETRY_REPORTER_CLASS);
-      }
-    } catch (ConfigException ce) {
-      log.warn("Could not get config option", ce);
+    if (!config.getBoolean(SchemaRegistryConfig.TELEMETRY_REPORTER_ENABLED_CONFIG)) {
+      log.warn("Telemetry reporter is disabled");
+    } else if (classes.contains(TELEMETRY_REPORTER_CLASS)) {
+      log.warn("Already have telemetry reporter class");
+    } else {
+      log.warn("Adding telemetry reporter class");
+      classes.add(TELEMETRY_REPORTER_CLASS);
     }
     return classes;
   }
