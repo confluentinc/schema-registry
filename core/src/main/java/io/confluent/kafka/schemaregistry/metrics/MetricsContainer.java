@@ -54,7 +54,7 @@ public class MetricsContainer {
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
 
-  private static final Logger log = LoggerFactory.getLogger(MetricsReporter.class);
+  private static final Logger log = LoggerFactory.getLogger(MetricsContainer.class);
 
   private static final String TELEMETRY_REPORTER_CLASS =
           "io.confluent.telemetry.reporter.TelemetryReporter";
@@ -212,9 +212,12 @@ public class MetricsContainer {
 
     log.debug("Config originals: {}", config.originalProperties());
     try {
-      if (Boolean.TRUE.equals(config.originals().get(TELEMETRY_ENABLED_CONFIG))
-              && !classes.contains(TELEMETRY_REPORTER_CLASS)) {
-
+      if (!Boolean.TRUE.equals(config.originals().get(TELEMETRY_ENABLED_CONFIG))) {
+        log.warn("Telemetry reporter is disabled");
+      } else if (classes.contains(TELEMETRY_REPORTER_CLASS)) {
+        log.warn("Already have telemetry reporter class");
+      } else {
+        log.warn("Adding telemetry reporter class");
         classes.add(TELEMETRY_REPORTER_CLASS);
       }
     } catch (ConfigException ce) {
