@@ -22,6 +22,9 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import org.junit.Test;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import java.lang.management.ManagementFactory;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -37,6 +40,15 @@ public class MetricsTest extends ClusterTestHarness {
   public void setUp() throws Exception {
     super.setUp();
     container = restApp.restApp.schemaRegistry().getMetricsContainer();
+  }
+
+  @Test
+  public void testLeaderFollowerMetric() throws Exception {
+    MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+    ObjectName leaderFollowerMetricName =
+            new ObjectName("kafka.schema.registry:type=master-slave-role");
+    assertEquals(1.0,
+            mBeanServer.getAttribute(leaderFollowerMetricName, "master-slave-role"));
   }
 
   @Test

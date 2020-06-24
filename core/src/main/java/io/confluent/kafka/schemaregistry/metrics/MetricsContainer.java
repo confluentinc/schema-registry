@@ -53,8 +53,11 @@ public class MetricsContainer {
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
 
+<<<<<<< HEAD
   private static final Logger log = LoggerFactory.getLogger(MetricsContainer.class);
 
+=======
+>>>>>>> 6.0.x
   private static final String TELEMETRY_REPORTER_CLASS =
           "io.confluent.telemetry.reporter.TelemetryReporter";
 
@@ -236,7 +239,7 @@ public class MetricsContainer {
     metadata.put(RESOURCE_LABEL_CLUSTER_ID, kafkaClusterId);
     metadata.put(RESOURCE_LABEL_GROUP_ID,
             config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG));
-    metadata.put(RESOURCE_LABEL_TYPE,  "schemaregistry");
+    metadata.put(RESOURCE_LABEL_TYPE,  "schema_registry");
     metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
     metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
 
