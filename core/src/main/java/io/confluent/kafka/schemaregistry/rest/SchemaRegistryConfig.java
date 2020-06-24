@@ -185,7 +185,7 @@ public class SchemaRegistryConfig extends RestConfig {
       "schema.registry.inter.instance.protocol";
   public static final String INTER_INSTANCE_PROTOCOL_CONFIG =
       "inter.instance.protocol";
-  private static final String INTER_INSTANCE_HEADERS_WHITELIST_CONFIG =
+  public static final String INTER_INSTANCE_HEADERS_WHITELIST_CONFIG =
       "inter.instance.headers.whitelist";
 
   public static final String TELEMETRY_REPORTER_ENABLED_CONFIG = "confluent.telemetry.enabled";
@@ -342,10 +342,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "`ssl.truststore.` configs are used while making the call. The "
       + "schema.registry.inter.instance.protocol name is deprecated; prefer using "
       + "inter.instance.protocol instead.";
-  private static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
+  protected static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
       = "A list of ``http`` headers to forward from follower to leader, "
       + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
-  public static final String TELEMETRY_REPORTER_ENABLED_DOC =
+  protected static final String TELEMETRY_REPORTER_ENABLED_DOC =
           "If true, enables sending telemetry data";
 
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
