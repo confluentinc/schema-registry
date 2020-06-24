@@ -209,7 +209,7 @@ public class MetricsContainer {
     List<String> classes = new ArrayList<>(config.getList(
             ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG));
     try {
-      if (Boolean.TRUE.equals(config.getBoolean(TELEMETRY_ENABLED_CONFIG))
+      if (Boolean.TRUE.equals(config.originals().get(TELEMETRY_ENABLED_CONFIG))
               && !classes.contains(TELEMETRY_REPORTER_CLASS)) {
         classes.add(TELEMETRY_REPORTER_CLASS);
       }
