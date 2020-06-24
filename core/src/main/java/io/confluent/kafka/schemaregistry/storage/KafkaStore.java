@@ -313,7 +313,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
   @Override
   public V get(K key) throws StoreException {
-    assertInitialized();
+    // Allow reads during intialization, such as referenced schemas
     return localStore.get(key);
   }
 
