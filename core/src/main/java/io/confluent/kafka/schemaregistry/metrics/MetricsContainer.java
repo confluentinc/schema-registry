@@ -236,7 +236,7 @@ public class MetricsContainer {
     metadata.put(RESOURCE_LABEL_CLUSTER_ID, kafkaClusterId);
     metadata.put(RESOURCE_LABEL_GROUP_ID,
             config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG));
-    metadata.put(RESOURCE_LABEL_TYPE,  "schemaregistry");
+    metadata.put(RESOURCE_LABEL_TYPE,  "schema_registry");
     metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
     metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
 
