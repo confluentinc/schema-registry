@@ -22,7 +22,6 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
-import io.confluent.telemetry.reporter.TelemetryReporter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
@@ -221,7 +220,7 @@ public class MetricsContainer {
 
   private static MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
     for (MetricsReporter reporter : reporters) {
-      if (reporter.getClass().equals(TelemetryReporter.class)) {
+      if (reporter.getClass().getName().equals(TELEMETRY_REPORTER_CLASS)) {
         return reporter;
       }
     }
