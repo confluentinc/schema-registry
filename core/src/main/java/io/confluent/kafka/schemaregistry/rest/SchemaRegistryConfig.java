@@ -15,6 +15,12 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.utils.ZkUtils;
+import io.confluent.rest.RestConfig;
+import io.confluent.rest.RestConfigException;
+import kafka.cluster.Broker;
+import kafka.cluster.EndPoint;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.JaasUtils;
@@ -22,6 +28,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.jdk.javaapi.CollectionConverters;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -34,17 +41,9 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.utils.ZkUtils;
-import io.confluent.rest.RestConfig;
-import io.confluent.rest.RestConfigException;
-import kafka.cluster.Broker;
-import kafka.cluster.EndPoint;
-import scala.jdk.javaapi.CollectionConverters;
-
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES;
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class SchemaRegistryConfig extends RestConfig {
 
@@ -188,6 +187,8 @@ public class SchemaRegistryConfig extends RestConfig {
       "inter.instance.protocol";
   private static final String INTER_INSTANCE_HEADERS_WHITELIST_CONFIG =
       "inter.instance.headers.whitelist";
+
+  public static final String TELEMETRY_REPORTER_ENABLED_CONFIG = "confluent.telemetry.enabled";
 
   protected static final String SCHEMAREGISTRY_GROUP_ID_DOC =
       "Use this setting to override the group.id for the Kafka group used when Kafka is used for "
@@ -344,10 +345,13 @@ public class SchemaRegistryConfig extends RestConfig {
   private static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
       = "A list of ``http`` headers to forward from follower to leader, "
       + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
+  public static final String TELEMETRY_REPORTER_ENABLED_DOC =
+          "If true, enables sending telemetry data";
 
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
+  private static final boolean TELEMETRY_REPORTER_ENABLED_DEFAULT = false;
 
   // TODO: move to Apache's ConfigDef
   private static final ConfigDef config;
@@ -536,7 +540,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
     .define(INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,
-            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
+            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
+    .define(TELEMETRY_REPORTER_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+            TELEMETRY_REPORTER_ENABLED_DEFAULT, ConfigDef.Importance.LOW,
+            TELEMETRY_REPORTER_ENABLED_DOC);
   }
 
   private final CompatibilityLevel compatibilityType;
