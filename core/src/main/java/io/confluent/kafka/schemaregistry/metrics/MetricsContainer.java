@@ -91,7 +91,7 @@ public class MetricsContainer {
 
     telemetryReporter = getTelemetryReporter(reporters);
 
-    reporters.add(new JmxReporter(JMX_PREFIX));
+    reporters.add(new JmxReporter());
 
     for (MetricsReporter reporter : reporters) {
       reporter.configure(config.originals());
