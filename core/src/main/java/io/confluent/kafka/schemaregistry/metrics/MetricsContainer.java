@@ -53,11 +53,8 @@ public class MetricsContainer {
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
 
-<<<<<<< HEAD
   private static final Logger log = LoggerFactory.getLogger(MetricsContainer.class);
 
-=======
->>>>>>> 6.0.x
   private static final String TELEMETRY_REPORTER_CLASS =
           "io.confluent.telemetry.reporter.TelemetryReporter";
 
