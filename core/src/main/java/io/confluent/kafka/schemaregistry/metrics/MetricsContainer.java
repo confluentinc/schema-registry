@@ -32,8 +32,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -51,8 +49,6 @@ public class MetricsContainer {
   public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
-
-  private static final Logger log = LoggerFactory.getLogger(MetricsContainer.class);
 
   private static final String TELEMETRY_REPORTER_CLASS =
           "io.confluent.telemetry.reporter.TelemetryReporter";
@@ -206,13 +202,8 @@ public class MetricsContainer {
   private static List<String> getMetricReporterConfig(SchemaRegistryConfig config) {
     List<String> classes = new ArrayList<>(config.getList(
             ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG));
-    log.debug("Config originals: {}", config.originalProperties());
-    if (!config.getBoolean(SchemaRegistryConfig.TELEMETRY_REPORTER_ENABLED_CONFIG)) {
-      log.warn("Telemetry reporter is disabled");
-    } else if (classes.contains(TELEMETRY_REPORTER_CLASS)) {
-      log.warn("Already have telemetry reporter class");
-    } else {
-      log.warn("Adding telemetry reporter class");
+    if (config.getBoolean(SchemaRegistryConfig.TELEMETRY_REPORTER_ENABLED_CONFIG)
+            && !classes.contains(TELEMETRY_REPORTER_CLASS)) {
       classes.add(TELEMETRY_REPORTER_CLASS);
     }
     return classes;
