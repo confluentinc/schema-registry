@@ -338,11 +338,12 @@ public class RestService implements Configurable {
     }
   }
 
-  private <T> T httpRequest(String path,
-                            String method,
-                            byte[] requestBodyData,
-                            Map<String, String> requestProperties,
-                            TypeReference<T> responseFormat)
+  // Allow subclasses to call
+  protected <T> T httpRequest(String path,
+                              String method,
+                              byte[] requestBodyData,
+                              Map<String, String> requestProperties,
+                              TypeReference<T> responseFormat)
       throws IOException, RestClientException {
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
       String baseUrl = baseUrls.current();
