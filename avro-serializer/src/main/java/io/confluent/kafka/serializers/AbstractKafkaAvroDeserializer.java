@@ -44,6 +44,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
+  private final Map<String, DatumReader<?>> datumReaderCache = new ConcurrentHashMap<>();
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
@@ -170,18 +171,24 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   protected DatumReader<?> getDatumReader(Schema writerSchema, Schema readerSchema) {
     // normalize reader schema
-    readerSchema = getReaderSchema(writerSchema, readerSchema);
-    boolean writerSchemaIsPrimitive =
-        AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
-    if (writerSchemaIsPrimitive) {
-      return new GenericDatumReader<>(writerSchema, readerSchema);
-    } else if (useSchemaReflection) {
-      return new ReflectDatumReader<>(writerSchema, readerSchema);
-    } else if (useSpecificAvroReader) {
-      return new SpecificDatumReader<>(writerSchema, readerSchema);
-    } else {
-      return new GenericDatumReader<>(writerSchema, readerSchema);
-    }
+    final Schema finalReaderSchema = getReaderSchema(writerSchema, readerSchema);
+    String schemaCacheKeyName = (writerSchema.getFullName().equals(finalReaderSchema.getFullName()))
+            ? writerSchema.getFullName()
+            : writerSchema.getFullName() + finalReaderSchema.getFullName();
+
+    return datumReaderCache.computeIfAbsent(schemaCacheKeyName, schema -> {
+      boolean writerSchemaIsPrimitive =
+              AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
+      if (writerSchemaIsPrimitive) {
+        return new GenericDatumReader<>(writerSchema, finalReaderSchema);
+      } else if (useSchemaReflection) {
+        return new ReflectDatumReader<>(writerSchema, finalReaderSchema);
+      } else if (useSpecificAvroReader) {
+        return new SpecificDatumReader<>(writerSchema, finalReaderSchema);
+      } else {
+        return new GenericDatumReader<>(writerSchema, finalReaderSchema);
+      }
+    });
   }
 
   /**
