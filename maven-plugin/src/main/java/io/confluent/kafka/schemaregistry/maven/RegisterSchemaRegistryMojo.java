@@ -16,7 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
-import com.google.inject.internal.util.Preconditions;
+import com.google.common.base.Preconditions;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
