@@ -218,6 +218,7 @@ public class RestService {
       } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
         return null;
       } else {
+        log.error("DEBUG: response code {}", responseCode);
         InputStream es = connection.getErrorStream();
         ErrorMessage errorMessage;
         try {
