@@ -193,7 +193,8 @@ public abstract class AbstractKafkaSchemaSerDe {
       if (!latestVersion.isBackwardCompatible(schema)) {
         throw new IOException("Incompatible schema " + schemaMetadata.getSchema()
             + " with refs " + schemaMetadata.getReferences()
-            + " of type " + schemaMetadata.getSchemaType());
+            + " of type " + schemaMetadata.getSchemaType()
+            + " for schema " + schema.canonicalString());
       }
       latestVersions.put(ss, latestVersion);
     }

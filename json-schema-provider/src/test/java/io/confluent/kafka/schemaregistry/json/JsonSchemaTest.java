@@ -238,6 +238,27 @@ public class JsonSchemaTest {
     assertEquals(JsonNodeFactory.instance.textNode("three"), result.get(2));
   }
 
+  @Test
+  public void testSchemaWithOneofs() throws Exception {
+    TestObj testObj = new TestObj();
+    String actual = JsonSchemaUtils.getSchema(testObj).toString();
+    String expected = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\","
+        + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
+        + "\"properties\":{\"prop\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},"
+        + "{\"type\":\"string\"}]}}}";
+    assertEquals(expected, actual);
+  }
+
+  @Test
+  public void testSchemaWithoutOneofs() throws Exception {
+    TestObj testObj = new TestObj();
+    String actual = JsonSchemaUtils.getSchema(testObj, false, null).toString();
+    String expected = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\","
+        + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
+        + "\"properties\":{\"prop\":{\"type\":\"string\"}}}";
+    assertEquals(expected, actual);
+  }
+
   private static JsonSchema createPrimitiveSchema(String type) {
     String schemaString = String.format("{\"type\" : \"%s\"}", type);
     return new JsonSchema(schemaString);
@@ -251,4 +272,11 @@ public class JsonSchemaTest {
     }
   }
 
+  static class TestObj {
+    private String prop;
+
+    public String getProp() {
+      return prop;
+    }
+  }
 }
