@@ -42,7 +42,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
   protected boolean useLatestVersion;
-  private final Map<String, DatumWriter<Object>> datumWriterCache = new ConcurrentHashMap<>();
+  private final Map<Schema, DatumWriter<Object>> datumWriterCache = new ConcurrentHashMap<>();
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
@@ -95,7 +95,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
             object instanceof NonRecordContainer ? ((NonRecordContainer) object).getValue()
                                                  : object;
         final Schema rawSchema = schema.rawSchema();
-        writer = datumWriterCache.computeIfAbsent(rawSchema.getFullName(), v -> {
+        writer = datumWriterCache.computeIfAbsent(rawSchema, v -> {
           if (value instanceof SpecificRecord) {
             return new SpecificDatumWriter<>(rawSchema);
           } else if (useSchemaReflection) {

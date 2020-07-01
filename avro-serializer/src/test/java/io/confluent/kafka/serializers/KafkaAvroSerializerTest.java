@@ -22,6 +22,7 @@ import io.confluent.kafka.example.Widget;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -338,6 +339,41 @@ public class KafkaAvroSerializerTest {
     assertEquals("testUser", deserializeProjection.get("name").toString());
     //Age field was hidden by projection
     assertNull(deserializeProjection.get("age"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerSupportsSchemaEvolution() throws IOException, RestClientException {
+    final String fieldToDelete = "fieldToDelete";
+    final String newOptionalField = "newOptionalField";
+
+    Schema schemaV1 = SchemaBuilder
+            .record("SchemaEvolution")
+            .namespace("example.avro")
+            .fields()
+            .requiredString(fieldToDelete)
+            .endRecord();
+    Schema schemaV2 = SchemaBuilder
+            .record("SchemaEvolution")
+            .namespace("example.avro")
+            .fields()
+            .nullableString(newOptionalField, "optional")
+            .endRecord();
+
+    AvroSchema avroSchemaV1 = new AvroSchema(schemaV1);
+    AvroSchema avroSchemaV2 = new AvroSchema(schemaV2);
+    assertTrue("Schema V2 should be backwards compatible", avroSchemaV2.isBackwardCompatible(avroSchemaV1));
+
+    GenericRecord recordV1 = new GenericData.Record(avroSchemaV1.rawSchema());
+    recordV1.put(fieldToDelete, "present");
+
+    byte[] bytes = avroSerializer.serialize(topic, recordV1);
+    GenericRecord genericRecordV2 = (GenericRecord) avroDeserializer.deserialize(topic, bytes, avroSchemaV2.rawSchema());
+
+    // In version 2 of the schema, newOptionalField field has a non-null default value
+    assertNotNull("Optional field should have a non-null default value", genericRecordV2.get(newOptionalField));
+
+    // In version 2 of the schema, the fieldToDelete field is gone
+    assertNull("Field was removed in schema V2 but is still present", genericRecordV2.get(fieldToDelete));
   }
 
   @Test
