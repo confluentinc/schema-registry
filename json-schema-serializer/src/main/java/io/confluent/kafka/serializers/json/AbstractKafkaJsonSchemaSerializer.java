@@ -38,6 +38,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected boolean autoRegisterSchema;
   protected boolean useLatestVersion;
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
+  protected boolean oneofForNullables;
   protected boolean validate;
 
   protected void configure(KafkaJsonSchemaSerializerConfig config) {
@@ -46,6 +47,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.useLatestVersion = config.useLatestVersion();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);
     this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
+    this.oneofForNullables = config.getBoolean(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES);
     this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
   }
 

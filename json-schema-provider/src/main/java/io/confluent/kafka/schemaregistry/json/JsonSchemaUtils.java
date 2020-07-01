@@ -27,7 +27,9 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.annotations.Schema;
@@ -70,7 +72,13 @@ public class JsonSchemaUtils {
   }
 
   public static JsonSchema getSchema(Object object, SchemaRegistryClient client)
-          throws IOException {
+      throws IOException {
+    return getSchema(object, true, client);
+  }
+
+  public static JsonSchema getSchema(
+      Object object, boolean useOneOfForNullables, SchemaRegistryClient client)
+      throws IOException {
     if (object == null) {
       return null;
     }
@@ -96,11 +104,38 @@ public class JsonSchemaUtils {
                         + " with refs " + references));
       }
     }
-    JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4(); // allow nulls
+    JsonSchemaConfig config = getConfig(useOneOfForNullables);
     config = config.withJsonSchemaDraft(JsonSchemaDraft.DRAFT_07);
     JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(jsonMapper, config);
     JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(cls);
     return new JsonSchema(jsonSchema);
+  }
+
+  private static JsonSchemaConfig getConfig(boolean useOneOfForNullables) {
+    if (useOneOfForNullables) {
+      return JsonSchemaConfig.nullableJsonSchemaDraft4();  // allow nulls
+    } else {
+      final JsonSchemaConfig vanilla = JsonSchemaConfig.vanillaJsonSchemaDraft4();
+      return JsonSchemaConfig.create(
+          vanilla.autoGenerateTitleForProperties(),
+          Optional.empty(),
+          true,
+          false,
+          vanilla.usePropertyOrdering(),
+          vanilla.hidePolymorphismTypeProperty(),
+          vanilla.disableWarnings(),
+          vanilla.useMinLengthForNotNull(),
+          vanilla.useTypeIdForDefinitionName(),
+          Collections.emptyMap(),
+          vanilla.useMultipleEditorSelectViaProperty(),
+          Collections.emptySet(),
+          Collections.emptyMap(),
+          Collections.emptyMap(),
+          vanilla.subclassesResolver(),
+          vanilla.failOnUnknownProperties(),
+          null
+      );
+    }
   }
 
   public static Object getValue(Object object) {
