@@ -27,6 +27,11 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   public static final String FAIL_INVALID_SCHEMA_DOC = "Whether to fail deserialization if the "
       + "payload does not match the schema";
 
+  public static final String ONEOF_FOR_NULLABLES = "json.oneof.for.nullables";
+  public static final boolean ONEOF_FOR_NULLABLES_DEFAULT = true;
+  public static final String ONEOF_FOR_NULLABLES_DOC = "Whether JSON schemas derived from objects "
+      + "will use oneOf for nullable fields";
+
   public static final String JSON_INDENT_OUTPUT = "json.indent.output";
   public static final boolean JSON_INDENT_OUTPUT_DEFAULT = false;
   public static final String JSON_INDENT_OUTPUT_DOC = "Whether JSON output should be indented "
@@ -40,6 +45,11 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
         FAIL_INVALID_SCHEMA_DEFAULT,
         ConfigDef.Importance.MEDIUM,
         FAIL_INVALID_SCHEMA_DOC
+    ).define(ONEOF_FOR_NULLABLES,
+        ConfigDef.Type.BOOLEAN,
+        ONEOF_FOR_NULLABLES_DEFAULT,
+        ConfigDef.Importance.MEDIUM,
+        ONEOF_FOR_NULLABLES_DOC
     ).define(JSON_INDENT_OUTPUT,
         ConfigDef.Type.BOOLEAN,
         JSON_INDENT_OUTPUT_DEFAULT,
