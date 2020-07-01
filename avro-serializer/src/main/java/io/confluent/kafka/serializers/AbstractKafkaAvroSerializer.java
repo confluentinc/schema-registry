@@ -30,6 +30,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -41,6 +42,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
   protected boolean useLatestVersion;
+  private final Map<Schema, DatumWriter<Object>> datumWriterCache = new ConcurrentHashMap<>();
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
@@ -92,14 +94,16 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
             value =
             object instanceof NonRecordContainer ? ((NonRecordContainer) object).getValue()
                                                  : object;
-        Schema rawSchema = schema.rawSchema();
-        if (value instanceof SpecificRecord) {
-          writer = new SpecificDatumWriter<>(rawSchema);
-        } else if (useSchemaReflection) {
-          writer = new ReflectDatumWriter<>(rawSchema);
-        } else {
-          writer = new GenericDatumWriter<>(rawSchema);
-        }
+        final Schema rawSchema = schema.rawSchema();
+        writer = datumWriterCache.computeIfAbsent(rawSchema, v -> {
+          if (value instanceof SpecificRecord) {
+            return new SpecificDatumWriter<>(rawSchema);
+          } else if (useSchemaReflection) {
+            return new ReflectDatumWriter<>(rawSchema);
+          } else {
+            return new GenericDatumWriter<>(rawSchema);
+          }
+        });
         writer.write(value, encoder);
         encoder.flush();
       }
