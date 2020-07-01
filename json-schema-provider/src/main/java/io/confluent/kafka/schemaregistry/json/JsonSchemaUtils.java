@@ -77,7 +77,7 @@ public class JsonSchemaUtils {
   }
 
   public static JsonSchema getSchema(
-      Object object, boolean useOneOfForNullables, SchemaRegistryClient client)
+      Object object, boolean useOneofForNullables, SchemaRegistryClient client)
       throws IOException {
     if (object == null) {
       return null;
@@ -104,15 +104,15 @@ public class JsonSchemaUtils {
                         + " with refs " + references));
       }
     }
-    JsonSchemaConfig config = getConfig(useOneOfForNullables);
+    JsonSchemaConfig config = getConfig(useOneofForNullables);
     config = config.withJsonSchemaDraft(JsonSchemaDraft.DRAFT_07);
     JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(jsonMapper, config);
     JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(cls);
     return new JsonSchema(jsonSchema);
   }
 
-  private static JsonSchemaConfig getConfig(boolean useOneOfForNullables) {
-    if (useOneOfForNullables) {
+  private static JsonSchemaConfig getConfig(boolean useOneofForNullables) {
+    if (useOneofForNullables) {
       return JsonSchemaConfig.nullableJsonSchemaDraft4();  // allow nulls
     } else {
       final JsonSchemaConfig vanilla = JsonSchemaConfig.vanillaJsonSchemaDraft4();
