@@ -37,6 +37,7 @@ import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
 import io.confluent.connect.protobuf.test.RecursiveKeyValue;
+import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -425,7 +426,11 @@ public class ProtobufDataTest {
         message.toByteArray()
     );
     ProtobufData protobufData = new ProtobufData();
-    return protobufData.toConnectData(protobufSchema, dynamicMessage);
+    SchemaAndValue schemaAndValue = protobufData.toConnectData(protobufSchema, dynamicMessage);
+    if (schemaAndValue.schema() != null) {
+      ConnectSchema.validateValue(schemaAndValue.schema(), schemaAndValue.value());
+    }
+    return schemaAndValue;
   }
 
   @Test
