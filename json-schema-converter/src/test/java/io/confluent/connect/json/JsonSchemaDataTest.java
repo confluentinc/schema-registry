@@ -33,6 +33,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -857,8 +858,8 @@ public class JsonSchemaDataTest {
     CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
         .build();
     SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
-    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.INT8_SCHEMA);
-    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.INT16_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_INT8_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.OPTIONAL_INT16_SCHEMA);
     Schema expectedSchema = builder.build();
 
     Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.0", (byte) 12);
@@ -876,8 +877,8 @@ public class JsonSchemaDataTest {
     CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
         .build();
     SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
-    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.INT8_SCHEMA);
-    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.INT32_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_INT8_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.OPTIONAL_INT32_SCHEMA);
     Schema expectedSchema = builder.build();
 
     Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.1", 12);
@@ -942,6 +943,9 @@ public class JsonSchemaDataTest {
   ) {
     Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
     Object jsonValue = jsonSchemaData.toConnectData(connectSchema, value);
+    if (connectSchema != null) {
+      ConnectSchema.validateValue(connectSchema, jsonValue);
+    }
     assertEquals(expectedSchema, connectSchema);
     if (expected instanceof byte[]) {
       assertArrayEquals((byte[]) expected, (byte[]) jsonValue);

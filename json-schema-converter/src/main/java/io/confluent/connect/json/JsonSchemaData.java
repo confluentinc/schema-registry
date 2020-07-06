@@ -891,7 +891,7 @@ public class JsonSchemaData {
           builder.optional();
         } else {
           String subFieldName = name + ".field." + index++;
-          builder.field(subFieldName, toConnectSchema(subSchema));
+          builder.field(subFieldName, toConnectSchema(subSchema, null, true));
         }
       }
     } else if (jsonSchema instanceof ArraySchema) {
