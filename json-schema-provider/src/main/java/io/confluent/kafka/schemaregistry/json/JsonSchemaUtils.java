@@ -161,6 +161,15 @@ public class JsonSchemaUtils {
     return envelope(schema, value);
   }
 
+  public static Object toObject(String value, JsonSchema schema) throws IOException {
+    return toObject(value, schema, true);
+  }
+
+  public static Object toObject(String value, JsonSchema schema, boolean validate)
+      throws IOException {
+    return toObject(jsonMapper.readTree(value), schema, validate);
+  }
+
   public static byte[] toJson(Object value) throws IOException {
     if (value == null) {
       return null;
