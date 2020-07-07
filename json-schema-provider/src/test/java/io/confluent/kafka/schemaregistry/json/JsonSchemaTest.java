@@ -71,27 +71,27 @@ public class JsonSchemaTest {
 
   @Test
   public void testPrimitiveTypesToJsonSchema() throws Exception {
-    Object envelope = JsonSchemaUtils.toObject(null, createPrimitiveSchema("null"));
+    Object envelope = JsonSchemaUtils.toObject((String) null, createPrimitiveSchema("null"));
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(NullNode.getInstance(), result);
 
-    envelope = JsonSchemaUtils.toObject(jsonTree("true"), createPrimitiveSchema("boolean"));
+    envelope = JsonSchemaUtils.toObject("true", createPrimitiveSchema("boolean"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(true, ((BooleanNode) result).asBoolean());
 
-    envelope = JsonSchemaUtils.toObject(jsonTree("false"), createPrimitiveSchema("boolean"));
+    envelope = JsonSchemaUtils.toObject("false", createPrimitiveSchema("boolean"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(false, ((BooleanNode) result).asBoolean());
 
-    envelope = JsonSchemaUtils.toObject(jsonTree("12"), createPrimitiveSchema("number"));
+    envelope = JsonSchemaUtils.toObject("12", createPrimitiveSchema("number"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(12, ((NumericNode) result).asInt());
 
-    envelope = JsonSchemaUtils.toObject(jsonTree("23.2"), createPrimitiveSchema("number"));
+    envelope = JsonSchemaUtils.toObject("23.2", createPrimitiveSchema("number"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(23.2, ((NumericNode) result).asDouble(), 0.1);
 
-    envelope = JsonSchemaUtils.toObject(jsonTree("\"a string\""), createPrimitiveSchema("string"));
+    envelope = JsonSchemaUtils.toObject("\"a string\"", createPrimitiveSchema("string"));
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals("a string", ((TextNode) result).asText());
   }
@@ -105,7 +105,7 @@ public class JsonSchemaTest {
         + "    \"string\": \"string\"\n"
         + "}";
 
-    JsonNode envelope = (JsonNode) JsonSchemaUtils.toObject(jsonTree(json), recordSchema);
+    JsonNode envelope = (JsonNode) JsonSchemaUtils.toObject(json, recordSchema);
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(true, result.get("null").isNull());
     assertEquals(true, result.get("boolean").booleanValue());
@@ -123,7 +123,7 @@ public class JsonSchemaTest {
         + "    \"badString\": \"string\"\n"
         + "}";
 
-    JsonNode envelope = (JsonNode) JsonSchemaUtils.toObject(jsonTree(json), recordSchema);
+    JsonNode envelope = (JsonNode) JsonSchemaUtils.toObject(json, recordSchema);
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(true, result.get("null").isNull());
     assertEquals(true, result.get("boolean").booleanValue());
@@ -135,7 +135,7 @@ public class JsonSchemaTest {
   public void testArrayToJsonSchema() throws Exception {
     String json = "[\"one\", \"two\", \"three\"]";
 
-    Object envelope = JsonSchemaUtils.toObject(jsonTree(json), arraySchema);
+    Object envelope = JsonSchemaUtils.toObject(json, arraySchema);
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     ArrayNode arrayNode = (ArrayNode) result;
     Iterator<JsonNode> elements = arrayNode.elements();
@@ -148,16 +148,16 @@ public class JsonSchemaTest {
 
   @Test
   public void testUnionToJsonSchema() throws Exception {
-    Object envelope = JsonSchemaUtils.toObject(jsonTree("\"test\""), unionSchema);
+    Object envelope = JsonSchemaUtils.toObject("\"test\"", unionSchema);
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals("test", ((TextNode) result).asText());
 
-    envelope = JsonSchemaUtils.toObject(jsonTree("12"), unionSchema);
+    envelope = JsonSchemaUtils.toObject("12", unionSchema);
     result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals(12, ((NumericNode) result).asInt());
 
     try {
-      JsonSchemaUtils.toObject(jsonTree("-1"), unionSchema);
+      JsonSchemaUtils.toObject("-1", unionSchema);
       fail("Trying to use negative number should fail");
     } catch (Exception e) {
       // expected
@@ -166,12 +166,12 @@ public class JsonSchemaTest {
 
   @Test
   public void testEnumToJsonSchema() throws Exception {
-    Object envelope = JsonSchemaUtils.toObject(jsonTree("\"red\""), enumSchema);
+    Object envelope = JsonSchemaUtils.toObject("\"red\"", enumSchema);
     JsonNode result = (JsonNode) JsonSchemaUtils.getValue(envelope);
     assertEquals("red", ((TextNode) result).asText());
 
     try {
-      JsonSchemaUtils.toObject(jsonTree("\"yellow\""), enumSchema);
+      JsonSchemaUtils.toObject("\"yellow\"", enumSchema);
       fail("Trying to use non-enum should fail");
     } catch (Exception e) {
       // expected
@@ -262,14 +262,6 @@ public class JsonSchemaTest {
   private static JsonSchema createPrimitiveSchema(String type) {
     String schemaString = String.format("{\"type\" : \"%s\"}", type);
     return new JsonSchema(schemaString);
-  }
-
-  private static JsonNode jsonTree(String jsonData) {
-    try {
-      return objectMapper.readTree(jsonData);
-    } catch (Exception e) {
-      throw new RuntimeException("Failed to parse JSON", e);
-    }
   }
 
   static class TestObj {
