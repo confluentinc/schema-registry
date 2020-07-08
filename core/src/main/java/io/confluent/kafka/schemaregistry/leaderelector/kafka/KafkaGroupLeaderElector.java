@@ -141,8 +141,10 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           clientConfig.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
           clientConfig.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
           clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+          clientConfig.getInt(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+          clientConfig.getInt(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
           ClientDnsLookup.forConfig(
-              clientConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+          clientConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
           time,
           true,
           new ApiVersions(),
