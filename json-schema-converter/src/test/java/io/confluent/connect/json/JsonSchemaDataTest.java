@@ -868,8 +868,7 @@ public class JsonSchemaDataTest {
 
   @Test
   public void testToConnectUnionSecondField() {
-    NumberSchema firstSchema = NumberSchema.builder()
-        .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
+    StringSchema firstSchema = StringSchema.builder()
         .build();
     NumberSchema secondSchema = NumberSchema.builder()
         .unprocessedProperties(Collections.singletonMap("connect.type", "int32"))
@@ -877,12 +876,50 @@ public class JsonSchemaDataTest {
     CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
         .build();
     SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
-    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_INT8_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_STRING_SCHEMA);
     builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.OPTIONAL_INT32_SCHEMA);
     Schema expectedSchema = builder.build();
 
     Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.1", 12);
     checkNonObjectConversion(expectedSchema, expected, schema, IntNode.valueOf(12));
+  }
+
+  @Test
+  public void testToConnectUnionDifferentIntegralType() {
+    StringSchema firstSchema = StringSchema.builder()
+        .build();
+    NumberSchema secondSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_STRING_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.OPTIONAL_INT64_SCHEMA);
+    Schema expectedSchema = builder.build();
+
+    Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.1", 123L);
+    // Pass an IntNode instead of a LongNode
+    checkNonObjectConversion(expectedSchema, expected, schema, IntNode.valueOf(123));
+  }
+
+  @Test
+  public void testToConnectUnionDifferentNumericType() {
+    StringSchema firstSchema = StringSchema.builder()
+        .build();
+    NumberSchema secondSchema = NumberSchema.builder()
+        .requiresNumber(true)
+        .build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_STRING_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.OPTIONAL_FLOAT64_SCHEMA);
+    Schema expectedSchema = builder.build();
+
+    Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.1", (double) 123);
+    // Pass an IntNode instead of a DoubleNode
+    checkNonObjectConversion(expectedSchema, expected, schema, IntNode.valueOf(123));
   }
 
   @Test
