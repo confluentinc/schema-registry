@@ -868,8 +868,7 @@ public class JsonSchemaDataTest {
 
   @Test
   public void testToConnectUnionSecondField() {
-    NumberSchema firstSchema = NumberSchema.builder()
-        .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
+    StringSchema firstSchema = StringSchema.builder()
         .build();
     NumberSchema secondSchema = NumberSchema.builder()
         .unprocessedProperties(Collections.singletonMap("connect.type", "int32"))
@@ -877,7 +876,7 @@ public class JsonSchemaDataTest {
     CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
         .build();
     SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
-    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_INT8_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_STRING_SCHEMA);
     builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.OPTIONAL_INT32_SCHEMA);
     Schema expectedSchema = builder.build();
 
