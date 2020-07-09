@@ -142,7 +142,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           clientConfig.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
           clientConfig.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
               10000L ,
-              12000L ,
+              127000L ,
           ClientDnsLookup.forConfig(
           clientConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
           time,
