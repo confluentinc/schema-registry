@@ -86,6 +86,9 @@ public class RestService implements Configurable {
   private static final TypeReference<ModeGetResponse> GET_MODE_RESPONSE_TYPE =
       new TypeReference<ModeGetResponse>() {
       };
+  private static final TypeReference<List<Schema>> GET_SCHEMAS_RESPONSE_TYPE =
+      new TypeReference<List<Schema>>() {
+      };
   private static final TypeReference<SchemaString> GET_SCHEMA_BY_ID_RESPONSE_TYPE =
       new TypeReference<SchemaString>() {
       };
@@ -636,6 +639,35 @@ public class RestService implements Configurable {
     ModeGetResponse mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
     return mode;
+  }
+
+  public List<Schema> getSchemas(
+      String subjectPrefix,
+      boolean lookupDeletedSchema,
+      boolean latestOnly)
+      throws IOException, RestClientException {
+    return getSchemas(DEFAULT_REQUEST_PROPERTIES,
+        subjectPrefix, lookupDeletedSchema, latestOnly, 0, -1);
+  }
+
+  public List<Schema> getSchemas(Map<String, String> requestProperties,
+      String subjectPrefix,
+      boolean lookupDeletedSchema,
+      boolean latestOnly,
+      int offset,
+      int limit)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas");
+    builder.queryParam("subjectPrefix", subjectPrefix);
+    builder.queryParam("deleted", lookupDeletedSchema);
+    builder.queryParam("latestOnly", latestOnly);
+    builder.queryParam("offset", offset);
+    builder.queryParam("limit", limit);
+    String path = builder.build().toString();
+
+    List<Schema> response = httpRequest(path, "GET", null, requestProperties,
+        GET_SCHEMAS_RESPONSE_TYPE);
+    return response;
   }
 
   public SchemaString getId(int id) throws IOException, RestClientException {
