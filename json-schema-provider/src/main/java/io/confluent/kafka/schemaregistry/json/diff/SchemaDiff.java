@@ -40,6 +40,7 @@ public class SchemaDiff {
   static {
     Set<Difference.Type> changes = new HashSet<>();
 
+    changes.add(Type.ID_CHANGED);
     changes.add(Type.DESCRIPTION_CHANGED);
     changes.add(Type.TITLE_CHANGED);
     changes.add(Type.DEFAULT_CHANGED);

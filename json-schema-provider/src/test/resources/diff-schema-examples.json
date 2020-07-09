@@ -10,7 +10,7 @@
     "changes": [
       "ID_CHANGED #/"
     ],
-    "compatible": false
+    "compatible": true
   },
   {
     "description": "Detect changes to title",
