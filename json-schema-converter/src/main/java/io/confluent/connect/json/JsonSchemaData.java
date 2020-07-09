@@ -202,7 +202,7 @@ public class JsonSchemaData {
         return value.isIntegralNumber();
       case FLOAT32:
       case FLOAT64:
-        return value.isFloatingPointNumber();
+        return value.isNumber();
       case BOOLEAN:
         return value.isBoolean();
       case STRING:
