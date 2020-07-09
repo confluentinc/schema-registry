@@ -886,6 +886,25 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectUnionDifferentIntegralType() {
+    StringSchema firstSchema = StringSchema.builder()
+        .build();
+    NumberSchema secondSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_STRING_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.OPTIONAL_INT64_SCHEMA);
+    Schema expectedSchema = builder.build();
+
+    Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.1", 123L);
+    // Pass an IntNode instead of a LongNode
+    checkNonObjectConversion(expectedSchema, expected, schema, IntNode.valueOf(123));
+  }
+
+  @Test
   public void testToConnectMapOptionalValue() {
     testToConnectMapOptional("some value");
   }

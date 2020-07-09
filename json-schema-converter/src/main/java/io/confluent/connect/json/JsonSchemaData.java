@@ -197,15 +197,12 @@ public class JsonSchemaData {
     switch (fieldSchema.type()) {
       case INT8:
       case INT16:
-        return value.isShort();
       case INT32:
-        return value.isInt();
       case INT64:
-        return value.isLong();
+        return value.isIntegralNumber();
       case FLOAT32:
-        return value.isFloat();
       case FLOAT64:
-        return value.isDouble();
+        return value.isFloatingPointNumber();
       case BOOLEAN:
         return value.isBoolean();
       case STRING:
