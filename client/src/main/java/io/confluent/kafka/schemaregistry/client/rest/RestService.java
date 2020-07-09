@@ -647,22 +647,28 @@ public class RestService implements Configurable {
       boolean latestOnly)
       throws IOException, RestClientException {
     return getSchemas(DEFAULT_REQUEST_PROPERTIES,
-        subjectPrefix, lookupDeletedSchema, latestOnly, 0, -1);
+        subjectPrefix, lookupDeletedSchema, latestOnly, null, null);
   }
 
   public List<Schema> getSchemas(Map<String, String> requestProperties,
       String subjectPrefix,
       boolean lookupDeletedSchema,
       boolean latestOnly,
-      int offset,
-      int limit)
+      Integer offset,
+      Integer limit)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas");
-    builder.queryParam("subjectPrefix", subjectPrefix);
+    if (subjectPrefix != null) {
+      builder.queryParam("subjectPrefix", subjectPrefix);
+    }
     builder.queryParam("deleted", lookupDeletedSchema);
     builder.queryParam("latestOnly", latestOnly);
-    builder.queryParam("offset", offset);
-    builder.queryParam("limit", limit);
+    if (offset != null) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit != null) {
+      builder.queryParam("limit", limit);
+    }
     String path = builder.build().toString();
 
     List<Schema> response = httpRequest(path, "GET", null, requestProperties,
