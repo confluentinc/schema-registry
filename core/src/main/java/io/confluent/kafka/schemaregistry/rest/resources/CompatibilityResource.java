@@ -20,6 +20,7 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
+import java.util.Collections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -118,33 +119,24 @@ public class CompatibilityResource {
         request.getReferences(),
         request.getSchema()
     );
-    validateSchema(schema);
-    if (schemaForSpecifiedVersion == null) {
-      if (versionId.isLatest()) {
-        isCompatible = true;
-        compatibilityCheckResponse.setIsCompatible(isCompatible);
-        asyncResponse.resume(compatibilityCheckResponse);
-      } else {
-        throw Errors.versionNotFoundException(versionId.getVersionId());
-      }
-    } else {
-      try {
-        isCompatible = schemaRegistry.isCompatible(
-            subject, schema,
-            schemaForSpecifiedVersion
-        );
-      } catch (InvalidSchemaException e) {
-        throw Errors.invalidSchemaException(e);
-      } catch (SchemaRegistryStoreException e) {
-        throw Errors.storeException(
-            "Error while getting compatibility level for subject " + subject, e);
-      } catch (SchemaRegistryException e) {
-        throw Errors.schemaRegistryException(
-            "Error while getting compatibility level for subject " + subject, e);
-      }
-      compatibilityCheckResponse.setIsCompatible(isCompatible);
-      asyncResponse.resume(compatibilityCheckResponse);
+    try {
+      isCompatible = schemaRegistry.isCompatible(
+          subject, schema,
+          schemaForSpecifiedVersion != null
+              ? Collections.singletonList(schemaForSpecifiedVersion)
+              : Collections.emptyList()
+      );
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(
+          "Error while getting compatibility level for subject " + subject, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(
+          "Error while getting compatibility level for subject " + subject, e);
     }
+    compatibilityCheckResponse.setIsCompatible(isCompatible);
+    asyncResponse.resume(compatibilityCheckResponse);
   }
 
   private static VersionId parseVersionId(String version) {
@@ -155,13 +147,5 @@ public class CompatibilityResource {
       throw Errors.invalidVersionException(e.getMessage());
     }
     return versionId;
-  }
-
-  private void validateSchema(Schema schema) {
-    try {
-      schemaRegistry.canonicalizeSchema(schema);
-    } catch (InvalidSchemaException e) {
-      throw Errors.invalidSchemaException(e);
-    }
   }
 }
