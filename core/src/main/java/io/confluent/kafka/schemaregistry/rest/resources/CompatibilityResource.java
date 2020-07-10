@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
@@ -97,7 +98,6 @@ public class CompatibilityResource {
     // a special version
     boolean isCompatible = false;
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
-    String errorMessage = "Error while retrieving list of all subjects";
     Schema schemaForSpecifiedVersion = null;
     VersionId versionId = parseVersionId(version);
     try {
@@ -110,7 +110,7 @@ public class CompatibilityResource {
                                   + subject + " and version "
                                   + versionId.getVersionId(), e);
     }
-    registerWithError(subject, errorMessage);
+    validateSchema(subject, request);
     if (schemaForSpecifiedVersion == null) {
       if (versionId.isLatest()) {
         isCompatible = true;
@@ -127,7 +127,7 @@ public class CompatibilityResource {
             schemaForSpecifiedVersion
         );
       } catch (InvalidSchemaException e) {
-        throw Errors.invalidSchemaException("Invalid input schema " + request.getSchema(), e);
+        throw Errors.invalidSchemaException(e);
       } catch (SchemaRegistryStoreException e) {
         throw Errors.storeException(
             "Error while getting compatibility level for subject " + subject, e);
@@ -150,15 +150,19 @@ public class CompatibilityResource {
     return versionId;
   }
 
-  private void registerWithError(final String subject, final String errorMessage) {
+  private void validateSchema(String subject, RegisterSchemaRequest request) {
     try {
-      if (!schemaRegistry.hasSubjects(subject, false)) {
-        throw Errors.subjectNotFoundException(subject);
-      }
-    } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException(errorMessage, e);
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException(errorMessage, e);
+      Schema schema = new Schema(
+          subject,
+          0,
+          -1,
+          request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
+          request.getReferences(),
+          request.getSchema()
+      );
+      schemaRegistry.canonicalizeSchema(schema);
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     }
   }
 }

@@ -859,7 +859,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private ParsedSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
+  public ParsedSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
     if (schema == null
         || schema.getSchema() == null
         || schema.getSchema().trim().isEmpty()) {
