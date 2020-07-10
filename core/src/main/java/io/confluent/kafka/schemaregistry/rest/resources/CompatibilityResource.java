@@ -110,7 +110,15 @@ public class CompatibilityResource {
                                   + subject + " and version "
                                   + versionId.getVersionId(), e);
     }
-    validateSchema(subject, request);
+    Schema schema = new Schema(
+        subject,
+        0,
+        -1,
+        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
+        request.getReferences(),
+        request.getSchema()
+    );
+    validateSchema(schema);
     if (schemaForSpecifiedVersion == null) {
       if (versionId.isLatest()) {
         isCompatible = true;
@@ -122,8 +130,7 @@ public class CompatibilityResource {
     } else {
       try {
         isCompatible = schemaRegistry.isCompatible(
-            subject, new Schema(subject, request.getVersion(), request.getId(),
-                request.getSchemaType(), request.getReferences(), request.getSchema()),
+            subject, schema,
             schemaForSpecifiedVersion
         );
       } catch (InvalidSchemaException e) {
@@ -150,16 +157,8 @@ public class CompatibilityResource {
     return versionId;
   }
 
-  private void validateSchema(String subject, RegisterSchemaRequest request) {
+  private void validateSchema(Schema schema) {
     try {
-      Schema schema = new Schema(
-          subject,
-          0,
-          -1,
-          request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
-          request.getReferences(),
-          request.getSchema()
-      );
       schemaRegistry.canonicalizeSchema(schema);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
