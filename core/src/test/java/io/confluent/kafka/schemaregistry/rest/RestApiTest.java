@@ -625,14 +625,8 @@ public class RestApiTest extends ClusterTestHarness {
   @Test
   public void testCompatibilityNonExistentSubject() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
-    try {
-      restApp.restClient.testCompatibility(schema, "non-existent-subject", "latest");
-      fail("Testing compatibility for missing subject should fail with "
-           + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
-           + " (subject not found)");
-    } catch (RestClientException rce) {
-      assertEquals("Subject not found", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
-    }
+    boolean result = restApp.restClient.testCompatibility(schema, "non-existent-subject", "latest");
+    assertTrue("Compatibility succeeds", result);
   }
 
   @Test
