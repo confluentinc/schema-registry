@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.squareup.wire.schema.Location;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ProtoParser;
+import java.util.Collections;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -57,7 +58,9 @@ public class SchemaDiffTest {
       }
       final String description = testCase.get("description").asText();
 
-      List<Difference> differences = SchemaDiff.compare(original, update);
+      // TODO
+      List<Difference> differences = SchemaDiff.compare(
+          original, Collections.emptyList(), update, Collections.emptyList());
       final List<Difference> incompatibleDiffs = differences.stream()
           .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
           .collect(Collectors.toList());
@@ -80,7 +83,9 @@ public class SchemaDiffTest {
     ProtoFileElement original = resourceLoader.readObj("TestProto.proto");
     ProtoFileElement update = resourceLoader.readObj("TestProto2.proto");
 
-    List<Difference> changes = SchemaDiff.compare(original, update);
+    // TODO
+    List<Difference> changes = SchemaDiff.compare(
+        original, Collections.emptyList(), update, Collections.emptyList());
 
     assertTrue(changes.contains(new Difference(
         Difference.Type.FIELD_NAME_CHANGED,

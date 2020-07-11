@@ -17,9 +17,11 @@
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
 import com.squareup.wire.schema.ProtoType;
+import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 
+import com.squareup.wire.schema.internal.parser.TypeElement;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,21 +37,25 @@ import java.util.Set;
 public class Context {
   private final Set<Difference.Type> compatibleChanges;
   private final Set<MessageElement> schemas;
-  private final Set<String> originalEnums;
-  private final Set<String> updateEnums;
+  private final Map<String, TypeElement> originalTypes;
+  private final Map<String, TypeElement> updateTypes;
   private final Map<String, ProtoType> originalMaps;
   private final Map<String, ProtoType> updateMaps;
+  private String originalPackageName;
+  private String updatePackageName;
   private final Deque<String> fullPath;
+  private final Deque<String> fullName;  // subset of path used for fully-qualified names
   private final List<Difference> diffs;
 
   public Context(Set<Difference.Type> compatibleChanges) {
     this.compatibleChanges = compatibleChanges;
     this.schemas = Collections.newSetFromMap(new IdentityHashMap<>());
-    this.originalEnums = new HashSet<>();
-    this.updateEnums = new HashSet<>();
+    this.originalTypes = new HashMap<>();
+    this.updateTypes = new HashMap<>();
     this.originalMaps = new HashMap<>();
     this.updateMaps = new HashMap<>();
     this.fullPath = new ArrayDeque<>();
+    this.fullName = new ArrayDeque<>();
     this.diffs = new ArrayList<>();
   }
 
@@ -57,6 +63,7 @@ public class Context {
     Context ctx = new Context(this.compatibleChanges);
     ctx.schemas.addAll(this.schemas);
     ctx.fullPath.addAll(this.fullPath);
+    ctx.fullName.addAll(this.fullName);
     return ctx;
   }
 
@@ -77,16 +84,17 @@ public class Context {
     }
   }
 
-  public void addEnum(final String name, final boolean isOriginal) {
+  public void addType(final String name, final TypeElement type, final boolean isOriginal) {
     if (isOriginal) {
-      originalEnums.add(name);
+      originalTypes.put(name, type);
     } else {
-      updateEnums.add(name);
+      updateTypes.put(name, type);
     }
   }
 
-  public boolean containsEnum(final String name, final boolean isOriginal) {
-    return isOriginal ? originalEnums.contains(name) : updateEnums.contains(name);
+  public TypeElement getType(final String name, final boolean isOriginal) {
+    String fullName = resolve(name, isOriginal);
+    return getTypeForFullName(fullName, isOriginal);
   }
 
   public void addMap(final String name,
@@ -102,11 +110,83 @@ public class Context {
   }
 
   public Optional<ProtoType> getMap(final String name, final boolean isOriginal) {
-    return Optional.ofNullable(isOriginal ? originalMaps.get(name) : updateMaps.get(name));
+    String fullName = resolve(name, isOriginal);
+    return Optional.ofNullable(isOriginal ? originalMaps.get(fullName) : updateMaps.get(fullName));
+  }
+
+  public void setPackageName(final String packageName, final boolean isOriginal) {
+    if (isOriginal) {
+      originalPackageName = packageName;
+    } else {
+      updatePackageName = packageName;
+    }
   }
 
   public PathScope enterPath(final String path) {
     return new PathScope(path);
+  }
+
+  public NamedScope enterName(final String name) {
+    return new NamedScope(name);
+  }
+
+  public String resolveLocal(String name, boolean isOriginal) {
+    String fullName = resolve(name, isOriginal);
+    if (isOriginal) {
+      if (fullName.startsWith(originalPackageName + ".")) {
+        return fullName.substring(originalPackageName.length() + 1); // also remove dot
+      } else {
+        return fullName;
+      }
+    } else {
+      if (fullName.startsWith(updatePackageName + ".")) {
+        return fullName.substring(updatePackageName.length() + 1); // also remove dot
+      } else {
+        return fullName;
+      }
+    }
+  }
+
+  public String resolve(String name, boolean isOriginal) {
+    if (name.startsWith(".")) {
+      String n = name.substring(1);
+      TypeElement type = getTypeForFullName(n, isOriginal);
+      if (type != null) {
+        return n;
+      }
+    } else {
+      Deque<String> prefix = new ArrayDeque<>(fullName);
+      if (isOriginal) {
+        if (!originalPackageName.isEmpty()) {
+          prefix.addFirst(originalPackageName);
+        }
+      } else {
+        if (!updatePackageName.isEmpty()) {
+          prefix.addFirst(updatePackageName);
+        }
+      }
+      while (!prefix.isEmpty()) {
+        String n = String.join(".", prefix) + "." + name;
+        TypeElement type = getTypeForFullName(n, isOriginal);
+        if (type != null) {
+          return n;
+        }
+        prefix.removeLast();
+      }
+      TypeElement type = getTypeForFullName(name, isOriginal);
+      if (type != null) {
+        return name;
+      }
+    }
+    return null;
+  }
+
+  private TypeElement getTypeForFullName(final String fullName, final boolean isOriginal) {
+    if (isOriginal) {
+      return originalTypes.get(fullName);
+    } else {
+      return updateTypes.get(fullName);
+    }
   }
 
   public class PathScope implements AutoCloseable {
@@ -116,6 +196,18 @@ public class Context {
 
     public void close() {
       fullPath.removeLast();
+    }
+  }
+
+  public class NamedScope extends PathScope {
+    public NamedScope(final String name) {
+      super(name);
+      fullName.addLast(name);
+    }
+
+    public void close() {
+      fullName.removeLast();
+      super.close();
     }
   }
 

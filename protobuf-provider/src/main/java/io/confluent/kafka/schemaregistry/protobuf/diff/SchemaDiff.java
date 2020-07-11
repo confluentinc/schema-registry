@@ -16,12 +16,14 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
+import com.google.common.base.Objects;
 import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,6 +47,7 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ME
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_FIELD_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_REMOVED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.PACKAGE_CHANGED;
 
 public class SchemaDiff {
   public static final Set<Difference.Type> COMPATIBLE_CHANGES;
@@ -52,6 +55,7 @@ public class SchemaDiff {
   static {
     Set<Difference.Type> changes = new HashSet<>();
 
+    changes.add(PACKAGE_CHANGED);
     changes.add(MESSAGE_ADDED);
     changes.add(MESSAGE_REMOVED);
     changes.add(ENUM_ADDED);
@@ -71,7 +75,9 @@ public class SchemaDiff {
 
   public static List<Difference> compare(
       final ProtoFileElement original,
-      final ProtoFileElement update
+      final Collection<ProtoFileElement> originalDependencies,
+      final ProtoFileElement update,
+      final Collection<ProtoFileElement> updateDependencies
   ) {
     final Context ctx = new Context(COMPATIBLE_CHANGES);
     compare(ctx, original, update);
@@ -80,17 +86,28 @@ public class SchemaDiff {
 
   @SuppressWarnings("ConstantConditions")
   static void compare(final Context ctx, ProtoFileElement original, ProtoFileElement update) {
-    collectContextInfo(ctx, original.getTypes(), true);
-    collectContextInfo(ctx, update.getTypes(), false);
+    String originalPackageName = original.getPackageName() != null ? original.getPackageName() : "";
+    String updatePackageName = update.getPackageName() != null ? update.getPackageName() : "";
+    if (!Objects.equal(originalPackageName, updatePackageName)) {
+      ctx.addDifference(PACKAGE_CHANGED);
+    }
+    ctx.setPackageName(originalPackageName, true);
+    ctx.setPackageName(updatePackageName, false);
+    collectContextInfo(ctx, originalPackageName, original.getTypes(), true);
+    collectContextInfo(ctx, updatePackageName, update.getTypes(), false);
     compareTypeElements(ctx, original.getTypes(), update.getTypes());
   }
 
   private static void collectContextInfo(
       final Context ctx,
+      final String scope,
       final List<TypeElement> types,
       boolean isOriginal
   ) {
+    String prefix = scope.isEmpty() ? scope : scope + ".";
     for (TypeElement typeElement : types) {
+      String qualifiedName = prefix + typeElement.getName();
+      ctx.addType(qualifiedName, typeElement, isOriginal);
       if (typeElement instanceof MessageElement) {
         MessageElement messageElement = (MessageElement) typeElement;
         Boolean isMapEntry = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
@@ -100,11 +117,9 @@ public class SchemaDiff {
         Optional<FieldElement> value = findField(ProtobufSchema.VALUE_FIELD,
             messageElement.getFields());
         if (isMapEntry != null && key.isPresent() && value.isPresent()) {
-          ctx.addMap(messageElement.getName(), key.get(), value.get(), isOriginal);
+          ctx.addMap(qualifiedName, key.get(), value.get(), isOriginal);
         }
-        collectContextInfo(ctx, messageElement.getNestedTypes(), isOriginal);
-      } else if (typeElement instanceof EnumElement) {
-        ctx.addEnum(typeElement.getName(), isOriginal);
+        collectContextInfo(ctx, qualifiedName, messageElement.getNestedTypes(), isOriginal);
       }
     }
   }
@@ -129,7 +144,7 @@ public class SchemaDiff {
     allEnumNames.addAll(updateEnums.keySet());
 
     for (String name : allMessageNames) {
-      try (Context.PathScope pathScope = ctx.enterPath(name)) {
+      try (Context.PathScope pathScope = ctx.enterName(name)) {
         MessageElement originalMessage = originalMessages.get(name);
         MessageElement updateMessage = updateMessages.get(name);
         if (updateMessage == null) {
@@ -143,7 +158,7 @@ public class SchemaDiff {
     }
 
     for (String name : allEnumNames) {
-      try (Context.PathScope pathScope = ctx.enterPath(name)) {
+      try (Context.PathScope pathScope = ctx.enterName(name)) {
         EnumElement originalEnum = originalEnums.get(name);
         EnumElement updateEnum = updateEnums.get(name);
         if (updateEnum == null) {
