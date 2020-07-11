@@ -84,11 +84,6 @@ public class Context {
   }
 
   public void addType(final String name, final String packageName, final SchemaReference ref,
-      final TypeElement type, final boolean isOriginal) {
-    addType(name, packageName, ref, type, false, null, null, isOriginal);
-  }
-
-  public void addType(final String name, final String packageName, final SchemaReference ref,
       final TypeElement type, final boolean isMap, final FieldElement key, final FieldElement value,
       final boolean isOriginal) {
     if (isOriginal) {
@@ -112,14 +107,11 @@ public class Context {
   }
 
   public void setFullName(final String name) {
+    List<String> parts = Arrays.asList(name.split("\\."));
     fullPath.clear();
     fullName.clear();
-    fullPath.addAll(Arrays.asList(name.split("\\.")));
-    fullName.addAll(Arrays.asList(name.split("\\.")));
-  }
-
-  public static void main(String[]args) {
-    System.out.println(Arrays.toString("foobar".split("\\.")));
+    fullPath.addAll(parts);
+    fullName.addAll(parts);
   }
 
   public PathScope enterPath(final String path) {
