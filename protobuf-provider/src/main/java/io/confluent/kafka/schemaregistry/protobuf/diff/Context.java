@@ -132,13 +132,12 @@ public class Context {
   public void setFullName(final String name) {
     fullPath.clear();
     fullName.clear();
-    if (name.contains(".")) {
-      fullPath.addAll(Arrays.asList(name.split(".")));
-      fullName.addAll(Arrays.asList(name.split(".")));
-    } else {
-      fullName.add(name);
-      fullPath.add(name);
-    }
+    fullPath.addAll(Arrays.asList(name.split("\\.")));
+    fullName.addAll(Arrays.asList(name.split("\\.")));
+  }
+
+  public static void main(String[]args) {
+    System.out.println(Arrays.toString("foobar".split("\\.")));
   }
 
   public PathScope enterPath(final String path) {

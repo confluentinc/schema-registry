@@ -24,7 +24,6 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -92,24 +91,16 @@ public class SchemaDiff {
     return ctx.getDifferences();
   }
 
-  private static void collectContextInfoForRefs(
-      Context ctx,
-      Map<String, SchemaReference> references,
-      Map<String, ProtoFileElement> dependencies,
-      boolean isOriginal) {
-    for (Map.Entry<String, ProtoFileElement> entry : dependencies.entrySet()) {
-      String refName = entry.getKey();
-      ProtoFileElement protoFile = entry.getValue();
-      SchemaReference ref = references.get(refName);
-      String packageName = protoFile.getPackageName() != null ? protoFile.getPackageName() : "";
-      collectContextInfo(ctx, packageName, packageName, ref, protoFile.getTypes(), isOriginal);
-    }
-  }
-
   @SuppressWarnings("ConstantConditions")
   static void compare(final Context ctx, ProtoFileElement original, ProtoFileElement update) {
-    String originalPackageName = original.getPackageName() != null ? original.getPackageName() : "";
-    String updatePackageName = update.getPackageName() != null ? update.getPackageName() : "";
+    String originalPackageName = original.getPackageName();
+    if (originalPackageName == null) {
+      originalPackageName = "";
+    }
+    String updatePackageName = update.getPackageName();
+    if (updatePackageName == null) {
+      updatePackageName = "";
+    }
     ctx.setPackageName(originalPackageName, true);
     ctx.setPackageName(updatePackageName, false);
     if (!Objects.equal(originalPackageName, updatePackageName)) {
@@ -121,6 +112,23 @@ public class SchemaDiff {
     collectContextInfo(ctx, updatePackageName, updatePackageName,
         dummyRef, update.getTypes(), false);
     compareTypeElements(ctx, original.getTypes(), update.getTypes());
+  }
+
+  private static void collectContextInfoForRefs(
+      Context ctx,
+      Map<String, SchemaReference> references,
+      Map<String, ProtoFileElement> dependencies,
+      boolean isOriginal) {
+    for (Map.Entry<String, ProtoFileElement> entry : dependencies.entrySet()) {
+      String refName = entry.getKey();
+      ProtoFileElement protoFile = entry.getValue();
+      SchemaReference ref = references.get(refName);
+      String packageName = protoFile.getPackageName();
+      if (packageName == null) {
+        packageName = "";
+      }
+      collectContextInfo(ctx, packageName, packageName, ref, protoFile.getTypes(), isOriginal);
+    }
   }
 
   private static void collectContextInfo(

@@ -21,7 +21,6 @@ import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 
 import com.squareup.wire.schema.internal.parser.MessageElement;
-import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import java.util.Objects;
 import java.util.Optional;
