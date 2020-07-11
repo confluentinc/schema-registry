@@ -17,17 +17,17 @@
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
 import com.squareup.wire.schema.ProtoType;
-import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +37,8 @@ import java.util.Set;
 public class Context {
   private final Set<Difference.Type> compatibleChanges;
   private final Set<MessageElement> schemas;
-  private final Map<String, TypeElement> originalTypes;
-  private final Map<String, TypeElement> updateTypes;
+  private final Map<String, TypeElementInfo> originalTypes;
+  private final Map<String, TypeElementInfo> updateTypes;
   private final Map<String, ProtoType> originalMaps;
   private final Map<String, ProtoType> updateMaps;
   private String originalPackageName;
@@ -62,6 +62,12 @@ public class Context {
   public Context getSubcontext() {
     Context ctx = new Context(this.compatibleChanges);
     ctx.schemas.addAll(this.schemas);
+    ctx.originalTypes.putAll(this.originalTypes);
+    ctx.updateTypes.putAll(this.updateTypes);
+    ctx.originalMaps.putAll(this.originalMaps);
+    ctx.updateMaps.putAll(this.updateMaps);
+    ctx.originalPackageName = this.originalPackageName;
+    ctx.updatePackageName = this.updatePackageName;
     ctx.fullPath.addAll(this.fullPath);
     ctx.fullName.addAll(this.fullName);
     return ctx;
@@ -84,15 +90,16 @@ public class Context {
     }
   }
 
-  public void addType(final String name, final TypeElement type, final boolean isOriginal) {
+  public void addType(final String name, final String packageName, final SchemaReference ref,
+      final TypeElement type, final boolean isOriginal) {
     if (isOriginal) {
-      originalTypes.put(name, type);
+      originalTypes.put(name, new TypeElementInfo(packageName, ref, type));
     } else {
-      updateTypes.put(name, type);
+      updateTypes.put(name, new TypeElementInfo(packageName, ref, type));
     }
   }
 
-  public TypeElement getType(final String name, final boolean isOriginal) {
+  public TypeElementInfo getType(final String name, final boolean isOriginal) {
     String fullName = resolve(name, isOriginal);
     return getTypeForFullName(fullName, isOriginal);
   }
@@ -122,6 +129,18 @@ public class Context {
     }
   }
 
+  public void setFullName(final String name) {
+    fullPath.clear();
+    fullName.clear();
+    if (name.contains(".")) {
+      fullPath.addAll(Arrays.asList(name.split(".")));
+      fullName.addAll(Arrays.asList(name.split(".")));
+    } else {
+      fullName.add(name);
+      fullPath.add(name);
+    }
+  }
+
   public PathScope enterPath(final String path) {
     return new PathScope(path);
   }
@@ -130,27 +149,10 @@ public class Context {
     return new NamedScope(name);
   }
 
-  public String resolveLocal(String name, boolean isOriginal) {
-    String fullName = resolve(name, isOriginal);
-    if (isOriginal) {
-      if (fullName.startsWith(originalPackageName + ".")) {
-        return fullName.substring(originalPackageName.length() + 1); // also remove dot
-      } else {
-        return fullName;
-      }
-    } else {
-      if (fullName.startsWith(updatePackageName + ".")) {
-        return fullName.substring(updatePackageName.length() + 1); // also remove dot
-      } else {
-        return fullName;
-      }
-    }
-  }
-
   public String resolve(String name, boolean isOriginal) {
     if (name.startsWith(".")) {
       String n = name.substring(1);
-      TypeElement type = getTypeForFullName(n, isOriginal);
+      TypeElementInfo type = getTypeForFullName(n, isOriginal);
       if (type != null) {
         return n;
       }
@@ -167,13 +169,13 @@ public class Context {
       }
       while (!prefix.isEmpty()) {
         String n = String.join(".", prefix) + "." + name;
-        TypeElement type = getTypeForFullName(n, isOriginal);
+        TypeElementInfo type = getTypeForFullName(n, isOriginal);
         if (type != null) {
           return n;
         }
         prefix.removeLast();
       }
-      TypeElement type = getTypeForFullName(name, isOriginal);
+      TypeElementInfo type = getTypeForFullName(name, isOriginal);
       if (type != null) {
         return name;
       }
@@ -181,7 +183,7 @@ public class Context {
     return null;
   }
 
-  private TypeElement getTypeForFullName(final String fullName, final boolean isOriginal) {
+  private TypeElementInfo getTypeForFullName(final String fullName, final boolean isOriginal) {
     if (isOriginal) {
       return originalTypes.get(fullName);
     } else {
@@ -238,5 +240,34 @@ public class Context {
 
   private static String fullPathString(final Deque<String> fullPath) {
     return "#/" + String.join("/", fullPath);
+  }
+
+  static class TypeElementInfo {
+    private final String packageName;
+    private final SchemaReference ref;
+    private final TypeElement typeElement;
+
+    public TypeElementInfo(String packageName, SchemaReference ref,
+        TypeElement typeElement) {
+      this.packageName = packageName;
+      this.ref = ref;
+      this.typeElement = typeElement;
+    }
+
+    public String packageName() {
+      return packageName;
+    }
+
+    public SchemaReference reference() {
+      return ref;
+    }
+
+    public TypeElement type() {
+      return typeElement;
+    }
+
+    public boolean isLocal() {
+      return ref.getName().isEmpty();
+    }
   }
 }

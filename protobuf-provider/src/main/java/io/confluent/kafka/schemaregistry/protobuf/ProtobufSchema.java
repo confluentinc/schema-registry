@@ -790,10 +790,7 @@ public class ProtobufSchema implements ParsedSchema {
       return false;
     }
     final List<Difference> differences = SchemaDiff.compare(
-        ((ProtobufSchema) previousSchema).schemaObj,
-        ((ProtobufSchema) previousSchema).dependencies.values(),
-        schemaObj,
-        dependencies.values()
+        (ProtobufSchema) previousSchema, this
     );
     final List<Difference> incompatibleDiffs = differences.stream()
         .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))

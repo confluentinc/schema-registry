@@ -23,6 +23,7 @@ import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,6 +34,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import java.util.stream.Collectors;
 
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ENUM_CONST_ADDED;
@@ -74,40 +76,65 @@ public class SchemaDiff {
   }
 
   public static List<Difference> compare(
-      final ProtoFileElement original,
-      final Collection<ProtoFileElement> originalDependencies,
-      final ProtoFileElement update,
-      final Collection<ProtoFileElement> updateDependencies
+      final ProtobufSchema original,
+      final ProtobufSchema update
   ) {
+    Map<String, SchemaReference> originalReferences = original.references().stream()
+        .collect(Collectors.toMap(SchemaReference::getName, r -> r));
+    Map<String, SchemaReference> updateReferences = update.references().stream()
+        .collect(Collectors.toMap(SchemaReference::getName, r -> r));
+    Map<String, ProtoFileElement> originalDependencies = original.dependencies();
+    Map<String, ProtoFileElement> updateDependencies = update.dependencies();
     final Context ctx = new Context(COMPATIBLE_CHANGES);
-    compare(ctx, original, update);
+    collectContextInfoForRefs(ctx, originalReferences, originalDependencies, true);
+    collectContextInfoForRefs(ctx, updateReferences, updateDependencies, false);
+    compare(ctx, original.rawSchema(), update.rawSchema());
     return ctx.getDifferences();
+  }
+
+  private static void collectContextInfoForRefs(
+      Context ctx,
+      Map<String, SchemaReference> references,
+      Map<String, ProtoFileElement> dependencies,
+      boolean isOriginal) {
+    for (Map.Entry<String, ProtoFileElement> entry : dependencies.entrySet()) {
+      String refName = entry.getKey();
+      ProtoFileElement protoFile = entry.getValue();
+      SchemaReference ref = references.get(refName);
+      String packageName = protoFile.getPackageName() != null ? protoFile.getPackageName() : "";
+      collectContextInfo(ctx, packageName, packageName, ref, protoFile.getTypes(), isOriginal);
+    }
   }
 
   @SuppressWarnings("ConstantConditions")
   static void compare(final Context ctx, ProtoFileElement original, ProtoFileElement update) {
     String originalPackageName = original.getPackageName() != null ? original.getPackageName() : "";
     String updatePackageName = update.getPackageName() != null ? update.getPackageName() : "";
+    ctx.setPackageName(originalPackageName, true);
+    ctx.setPackageName(updatePackageName, false);
     if (!Objects.equal(originalPackageName, updatePackageName)) {
       ctx.addDifference(PACKAGE_CHANGED);
     }
-    ctx.setPackageName(originalPackageName, true);
-    ctx.setPackageName(updatePackageName, false);
-    collectContextInfo(ctx, originalPackageName, original.getTypes(), true);
-    collectContextInfo(ctx, updatePackageName, update.getTypes(), false);
+    SchemaReference dummyRef = new SchemaReference("", "", -1);
+    collectContextInfo(ctx, originalPackageName, originalPackageName,
+        dummyRef, original.getTypes(), true);
+    collectContextInfo(ctx, updatePackageName, updatePackageName,
+        dummyRef, update.getTypes(), false);
     compareTypeElements(ctx, original.getTypes(), update.getTypes());
   }
 
   private static void collectContextInfo(
       final Context ctx,
       final String scope,
+      final String packageName,
+      final SchemaReference ref,
       final List<TypeElement> types,
       boolean isOriginal
   ) {
     String prefix = scope.isEmpty() ? scope : scope + ".";
     for (TypeElement typeElement : types) {
       String qualifiedName = prefix + typeElement.getName();
-      ctx.addType(qualifiedName, typeElement, isOriginal);
+      ctx.addType(qualifiedName, packageName, ref, typeElement, isOriginal);
       if (typeElement instanceof MessageElement) {
         MessageElement messageElement = (MessageElement) typeElement;
         Boolean isMapEntry = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
@@ -119,7 +146,8 @@ public class SchemaDiff {
         if (isMapEntry != null && key.isPresent() && value.isPresent()) {
           ctx.addMap(qualifiedName, key.get(), value.get(), isOriginal);
         }
-        collectContextInfo(ctx, qualifiedName, messageElement.getNestedTypes(), isOriginal);
+        collectContextInfo(ctx, qualifiedName,
+            packageName, ref, messageElement.getNestedTypes(), isOriginal);
       }
     }
   }

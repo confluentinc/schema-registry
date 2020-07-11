@@ -20,6 +20,9 @@ import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 
+import com.squareup.wire.schema.internal.parser.MessageElement;
+import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -57,8 +60,8 @@ public class FieldSchemaDiff {
         case SCALAR:
           compareScalarTypes(ctx, original, update);
           break;
-        case NAMED:
-          compareNamedTypes(ctx, original, update);
+        case MESSAGE:
+          compareMessageTypes(ctx, original, update);
           break;
         case MAP:
           compareMapTypes(ctx, original, update);
@@ -79,15 +82,35 @@ public class FieldSchemaDiff {
     }
   }
 
-  static void compareNamedTypes(
+  static void compareMessageTypes(
       final Context ctx,
       final ProtoType original,
       final ProtoType update
   ) {
-    String originalFullNameWithoutPackage = ctx.resolveLocal(original.toString(), true);
-    String updateFullNameWithoutPackage = ctx.resolveLocal(update.toString(), false);
-    if (!Objects.equals(originalFullNameWithoutPackage, updateFullNameWithoutPackage)) {
+    String originalFullName = ctx.resolve(original.toString(), true);
+    String updateFullName = ctx.resolve(update.toString(), false);
+    TypeElementInfo originalType = ctx.getType(originalFullName, true);
+    TypeElementInfo updateType = ctx.getType(updateFullName, false);
+    String originalLocalName = originalFullName.startsWith(originalType.packageName() + ".")
+        ? originalFullName.substring(originalType.packageName().length() + 1)
+        : originalFullName;
+    String updateLocalName = updateFullName.startsWith(updateType.packageName() + ".")
+        ? updateFullName.substring(updateType.packageName().length() + 1)
+        : updateFullName;
+    if (!Objects.equals(originalLocalName, updateLocalName)) {
       ctx.addDifference(FIELD_NAMED_TYPE_CHANGED);
+    } else if (!originalType.isLocal() || !updateType.isLocal()) {
+      // Don't need to compare if both are local since that is done elsewhere
+      final Context subctx = ctx.getSubcontext();
+      subctx.setPackageName(originalType.packageName(), true);
+      subctx.setPackageName(updateType.packageName(), false);
+      subctx.setFullName(originalLocalName);  // same as updateLocalName
+      MessageSchemaDiff.compare(
+          subctx, (MessageElement) originalType.type(), (MessageElement) updateType.type());
+      ctx.addDifferences(subctx.getDifferences());
+      if (!subctx.isCompatible()) {
+        ctx.addDifference(FIELD_NAMED_TYPE_CHANGED);
+      }
     }
   }
 
@@ -102,20 +125,22 @@ public class FieldSchemaDiff {
     } else if (type.isMap()) {
       return Kind.MAP;
     } else {
-      if (ctx.getType(type.toString(), isOriginal) instanceof EnumElement) {
+      TypeElementInfo fileType = ctx.getType(type.toString(), isOriginal);
+      if (fileType != null && fileType.type() instanceof EnumElement) {
         return Kind.SCALAR;
       }
-      return Kind.NAMED;
+      return Kind.MESSAGE;
     }
   }
 
   enum Kind {
-    SCALAR, MAP, NAMED
+    SCALAR, MAP, MESSAGE
   }
 
   // Group the scalars, see https://developers.google.com/protocol-buffers/docs/proto3#updating
   static ScalarKind scalarKind(final Context ctx, ProtoType type, boolean isOriginal) {
-    if (ctx.getType(type.toString(), isOriginal) instanceof EnumElement) {
+    TypeElementInfo fileType = ctx.getType(type.toString(), isOriginal);
+    if (fileType != null && fileType.type() instanceof EnumElement) {
       return ScalarKind.GENERAL_NUMBER;
     }
     switch (type.toString()) {
