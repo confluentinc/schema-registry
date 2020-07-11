@@ -99,8 +99,8 @@ public class CompatibilityResource {
     // a special version
     boolean isCompatible = false;
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
-    Schema schemaForSpecifiedVersion = null;
     VersionId versionId = parseVersionId(version);
+    Schema schemaForSpecifiedVersion = null;
     try {
       //Don't check compatibility against deleted schema
       schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), false);
