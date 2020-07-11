@@ -21,6 +21,7 @@ import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 
 import com.squareup.wire.schema.internal.parser.MessageElement;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import java.util.Objects;
 import java.util.Optional;
@@ -98,17 +99,22 @@ public class FieldSchemaDiff {
         : updateFullName;
     if (!Objects.equals(originalLocalName, updateLocalName)) {
       ctx.addDifference(FIELD_NAMED_TYPE_CHANGED);
-    } else if (!originalType.isLocal() || !updateType.isLocal()) {
-      // Don't need to compare if both are local since that is done elsewhere
-      final Context subctx = ctx.getSubcontext();
-      subctx.setPackageName(originalType.packageName(), true);
-      subctx.setPackageName(updateType.packageName(), false);
-      subctx.setFullName(originalLocalName);  // same as updateLocalName
-      MessageSchemaDiff.compare(
-          subctx, (MessageElement) originalType.type(), (MessageElement) updateType.type());
-      ctx.addDifferences(subctx.getDifferences());
-      if (!subctx.isCompatible()) {
-        ctx.addDifference(FIELD_NAMED_TYPE_CHANGED);
+    } else {
+      SchemaReference originalRef = originalType.reference();
+      SchemaReference updateRef = updateType.reference();
+      // Don't need to compare if both are local or refer to same subject-version
+      if (!originalRef.getSubject().equals(updateRef.getSubject())
+          || originalRef.getVersion().equals(updateRef.getVersion())) {
+        final Context subctx = ctx.getSubcontext();
+        subctx.setPackageName(originalType.packageName(), true);
+        subctx.setPackageName(updateType.packageName(), false);
+        subctx.setFullName(originalLocalName);  // same as updateLocalName
+        MessageSchemaDiff.compare(
+            subctx, (MessageElement) originalType.type(), (MessageElement) updateType.type());
+        ctx.addDifferences(subctx.getDifferences());
+        if (!subctx.isCompatible()) {
+          ctx.addDifference(FIELD_NAMED_TYPE_CHANGED);
+        }
       }
     }
   }

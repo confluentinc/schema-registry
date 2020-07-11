@@ -264,9 +264,5 @@ public class Context {
     public TypeElement type() {
       return typeElement;
     }
-
-    public boolean isLocal() {
-      return ref.getName().isEmpty();
-    }
   }
 }
