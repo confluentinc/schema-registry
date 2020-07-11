@@ -111,6 +111,9 @@ public class CompatibilityResource {
                                   + subject + " and version "
                                   + versionId.getVersionId(), e);
     }
+    if (schemaForSpecifiedVersion == null && !versionId.isLatest()) {
+      throw Errors.versionNotFoundException(versionId.getVersionId());
+    }
     Schema schema = new Schema(
         subject,
         0,
