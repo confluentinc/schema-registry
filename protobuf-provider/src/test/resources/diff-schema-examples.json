@@ -219,18 +219,52 @@
     "original_dependencies": [
       {
         "name": "google.proto",
-        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl2\";\n\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}"
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl\";\n\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}"
       }
     ],
     "update_dependencies": [
       {
         "name": "google2.proto",
-        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl\";\n\nmessage GoogleHome {\n  string deviceID = 1;\n  bool enabled = 2;\n}"
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl2\";\n\nmessage GoogleHome {\n  string deviceID = 1;\n  bool enabled = 2;\n}"
       }
     ],
     "changes": [
       "FIELD_SCALAR_KIND_CHANGED #/GoogleHome/1","FIELD_NAMED_TYPE_CHANGED #/TestMessage/1"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect import change with different remote package name",
+    "original_schema": "syntax = \"proto3\";\nimport \"google.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.GoogleHome test_string = 1;\n    }",
+    "update_schema": "syntax = \"proto3\";\nimport \"google2.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain2.GoogleHome test_string = 1;\n    }",
+    "original_references": [
+      {
+        "name": "google.proto",
+        "subject": "google.proto",
+        "version": 1
+      }
+    ],
+    "update_references": [
+      {
+        "name": "google2.proto",
+        "subject": "google2.proto",
+        "version": 1
+      }
+    ],
+    "original_dependencies": [
+      {
+        "name": "google.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl\";\n\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}"
+      }
+    ],
+    "update_dependencies": [
+      {
+        "name": "google2.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain2;\n\noption java_outer_classname = \"GoogleImpl2\";\n\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}"
+      }
+    ],
+    "changes": [
+    ],
+    "compatible": true
   }
 ]
