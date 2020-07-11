@@ -24,7 +24,6 @@ import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import java.util.Objects;
-import java.util.Optional;
 
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_KIND_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_NAMED_TYPE_CHANGED;
@@ -42,13 +41,13 @@ public class FieldSchemaDiff {
   }
 
   static void compareTypes(final Context ctx, ProtoType original, ProtoType update) {
-    Optional<ProtoType> originalMap = ctx.getMap(original.toString(), true);
-    if (originalMap.isPresent()) {
-      original = originalMap.get();
+    TypeElementInfo originalType = ctx.getType(original.toString(), true);
+    if (originalType != null && originalType.isMap()) {
+      original = originalType.getMapType();
     }
-    Optional<ProtoType> updateMap = ctx.getMap(update.toString(), false);
-    if (updateMap.isPresent()) {
-      update = updateMap.get();
+    TypeElementInfo updateType = ctx.getType(update.toString(), true);
+    if (updateType != null && updateType.isMap()) {
+      update = updateType.getMapType();
     }
 
     Kind originalKind = kind(ctx, original, true);
@@ -130,8 +129,8 @@ public class FieldSchemaDiff {
     } else if (type.isMap()) {
       return Kind.MAP;
     } else {
-      TypeElementInfo fileType = ctx.getType(type.toString(), isOriginal);
-      if (fileType != null && fileType.type() instanceof EnumElement) {
+      TypeElementInfo typeInfo = ctx.getType(type.toString(), isOriginal);
+      if (typeInfo != null && typeInfo.type() instanceof EnumElement) {
         return Kind.SCALAR;
       }
       return Kind.MESSAGE;
@@ -144,8 +143,8 @@ public class FieldSchemaDiff {
 
   // Group the scalars, see https://developers.google.com/protocol-buffers/docs/proto3#updating
   static ScalarKind scalarKind(final Context ctx, ProtoType type, boolean isOriginal) {
-    TypeElementInfo fileType = ctx.getType(type.toString(), isOriginal);
-    if (fileType != null && fileType.type() instanceof EnumElement) {
+    TypeElementInfo typeInfo = ctx.getType(type.toString(), isOriginal);
+    if (typeInfo != null && typeInfo.type() instanceof EnumElement) {
       return ScalarKind.GENERAL_NUMBER;
     }
     switch (type.toString()) {

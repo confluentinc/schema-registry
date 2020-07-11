@@ -31,7 +31,6 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 public class Context {
@@ -39,8 +38,6 @@ public class Context {
   private final Set<MessageElement> schemas;
   private final Map<String, TypeElementInfo> originalTypes;
   private final Map<String, TypeElementInfo> updateTypes;
-  private final Map<String, ProtoType> originalMaps;
-  private final Map<String, ProtoType> updateMaps;
   private String originalPackageName;
   private String updatePackageName;
   private final Deque<String> fullPath;
@@ -52,8 +49,6 @@ public class Context {
     this.schemas = Collections.newSetFromMap(new IdentityHashMap<>());
     this.originalTypes = new HashMap<>();
     this.updateTypes = new HashMap<>();
-    this.originalMaps = new HashMap<>();
-    this.updateMaps = new HashMap<>();
     this.fullPath = new ArrayDeque<>();
     this.fullName = new ArrayDeque<>();
     this.diffs = new ArrayList<>();
@@ -64,8 +59,6 @@ public class Context {
     ctx.schemas.addAll(this.schemas);
     ctx.originalTypes.putAll(this.originalTypes);
     ctx.updateTypes.putAll(this.updateTypes);
-    ctx.originalMaps.putAll(this.originalMaps);
-    ctx.updateMaps.putAll(this.updateMaps);
     ctx.originalPackageName = this.originalPackageName;
     ctx.updatePackageName = this.updatePackageName;
     ctx.fullPath.addAll(this.fullPath);
@@ -92,33 +85,22 @@ public class Context {
 
   public void addType(final String name, final String packageName, final SchemaReference ref,
       final TypeElement type, final boolean isOriginal) {
+    addType(name, packageName, ref, type, false, null, null, isOriginal);
+  }
+
+  public void addType(final String name, final String packageName, final SchemaReference ref,
+      final TypeElement type, final boolean isMap, final FieldElement key, final FieldElement value,
+      final boolean isOriginal) {
     if (isOriginal) {
-      originalTypes.put(name, new TypeElementInfo(packageName, ref, type));
+      originalTypes.put(name, new TypeElementInfo(packageName, ref, type, isMap, key, value));
     } else {
-      updateTypes.put(name, new TypeElementInfo(packageName, ref, type));
+      updateTypes.put(name, new TypeElementInfo(packageName, ref, type, isMap, key, value));
     }
   }
 
   public TypeElementInfo getType(final String name, final boolean isOriginal) {
     String fullName = resolve(name, isOriginal);
     return getTypeForFullName(fullName, isOriginal);
-  }
-
-  public void addMap(final String name,
-                     final FieldElement key,
-                     final FieldElement value,
-                     final boolean isOriginal) {
-    ProtoType type = ProtoType.get("map<" + key.getType() + ", " + value.getType() + ">");
-    if (isOriginal) {
-      originalMaps.put(name, type);
-    } else {
-      updateMaps.put(name, type);
-    }
-  }
-
-  public Optional<ProtoType> getMap(final String name, final boolean isOriginal) {
-    String fullName = resolve(name, isOriginal);
-    return Optional.ofNullable(isOriginal ? originalMaps.get(fullName) : updateMaps.get(fullName));
   }
 
   public void setPackageName(final String packageName, final boolean isOriginal) {
@@ -244,13 +226,19 @@ public class Context {
   static class TypeElementInfo {
     private final String packageName;
     private final SchemaReference ref;
-    private final TypeElement typeElement;
+    private final TypeElement type;
+    private final boolean isMap;
+    private final FieldElement key;
+    private final FieldElement value;
 
-    public TypeElementInfo(String packageName, SchemaReference ref,
-        TypeElement typeElement) {
+    public TypeElementInfo(String packageName, SchemaReference ref, TypeElement type,
+        boolean isMap, FieldElement key, FieldElement value) {
       this.packageName = packageName;
       this.ref = ref;
-      this.typeElement = typeElement;
+      this.type = type;
+      this.isMap = isMap;
+      this.key = key;
+      this.value = value;
     }
 
     public String packageName() {
@@ -262,7 +250,23 @@ public class Context {
     }
 
     public TypeElement type() {
-      return typeElement;
+      return type;
+    }
+
+    public boolean isMap() {
+      return isMap;
+    }
+
+    public FieldElement key() {
+      return key;
+    }
+
+    public FieldElement value() {
+      return value;
+    }
+
+    public ProtoType getMapType() {
+      return isMap ? ProtoType.get("map<" + key.getType() + ", " + value.getType() + ">") : null;
     }
   }
 }

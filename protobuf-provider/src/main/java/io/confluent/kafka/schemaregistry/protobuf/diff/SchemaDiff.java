@@ -142,7 +142,6 @@ public class SchemaDiff {
     String prefix = scope.isEmpty() ? scope : scope + ".";
     for (TypeElement typeElement : types) {
       String qualifiedName = prefix + typeElement.getName();
-      ctx.addType(qualifiedName, packageName, ref, typeElement, isOriginal);
       if (typeElement instanceof MessageElement) {
         MessageElement messageElement = (MessageElement) typeElement;
         Boolean isMapEntry = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
@@ -152,10 +151,15 @@ public class SchemaDiff {
         Optional<FieldElement> value = findField(ProtobufSchema.VALUE_FIELD,
             messageElement.getFields());
         if (isMapEntry != null && key.isPresent() && value.isPresent()) {
-          ctx.addMap(qualifiedName, key.get(), value.get(), isOriginal);
+          ctx.addType(qualifiedName, packageName, ref, typeElement, true,
+              key.get(), value.get(), isOriginal);
+        } else {
+          ctx.addType(qualifiedName, packageName, ref, typeElement, isOriginal);
         }
         collectContextInfo(ctx, qualifiedName,
             packageName, ref, messageElement.getNestedTypes(), isOriginal);
+      } else {
+        ctx.addType(qualifiedName, packageName, ref, typeElement, isOriginal);
       }
     }
   }
