@@ -98,7 +98,6 @@ public class CompatibilityResource {
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
     boolean isCompatible = false;
-    CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     VersionId versionId = parseVersionId(version);
     Schema schemaForSpecifiedVersion = null;
     try {
@@ -138,6 +137,7 @@ public class CompatibilityResource {
       throw Errors.schemaRegistryException(
           "Error while getting compatibility level for subject " + subject, e);
     }
+    CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     compatibilityCheckResponse.setIsCompatible(isCompatible);
     asyncResponse.resume(compatibilityCheckResponse);
   }
