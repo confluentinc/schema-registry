@@ -142,25 +142,22 @@ public class SchemaDiff {
     String prefix = scope.isEmpty() ? scope : scope + ".";
     for (TypeElement typeElement : types) {
       String qualifiedName = prefix + typeElement.getName();
+      boolean isMap = false;
+      Optional<FieldElement> key = Optional.empty();
+      Optional<FieldElement> value = Optional.empty();
       if (typeElement instanceof MessageElement) {
         MessageElement messageElement = (MessageElement) typeElement;
-        Boolean isMapEntry = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
-            .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-        Optional<FieldElement> key = findField(ProtobufSchema.KEY_FIELD,
+        isMap = ProtobufSchema.findOption("map_entry", messageElement.getOptions())
+            .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(false);
+        key = findField(ProtobufSchema.KEY_FIELD,
             messageElement.getFields());
-        Optional<FieldElement> value = findField(ProtobufSchema.VALUE_FIELD,
+        value = findField(ProtobufSchema.VALUE_FIELD,
             messageElement.getFields());
-        if (isMapEntry != null && key.isPresent() && value.isPresent()) {
-          ctx.addType(qualifiedName, packageName, ref, typeElement, true,
-              key.get(), value.get(), isOriginal);
-        } else {
-          ctx.addType(qualifiedName, packageName, ref, typeElement, isOriginal);
-        }
-        collectContextInfo(ctx, qualifiedName,
-            packageName, ref, messageElement.getNestedTypes(), isOriginal);
-      } else {
-        ctx.addType(qualifiedName, packageName, ref, typeElement, isOriginal);
       }
+      ctx.addType(qualifiedName, packageName, ref, typeElement,
+          isMap, key.orElse(null), value.orElse(null), isOriginal);
+      collectContextInfo(ctx, qualifiedName,
+          packageName, ref, typeElement.getNestedTypes(), isOriginal);
     }
   }
 
