@@ -16,12 +16,18 @@
 
 package io.confluent.kafka.schemaregistry.protobuf.diff;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.squareup.wire.schema.Location;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ProtoParser;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -49,6 +55,48 @@ public class SchemaDiffTest {
           Location.get("unknown"), originalSchema);
       ProtoFileElement update = ProtoParser.Companion.parse(
           Location.get("unknown"), updateSchema);
+      List<SchemaReference> originalSchemaRefs = new ArrayList<>();
+      ArrayNode originalRefs = (ArrayNode) testCase.get("original_references");
+      if (originalRefs != null) {
+        for (JsonNode ref : originalRefs) {
+          ObjectNode node = (ObjectNode) ref;
+          SchemaReference schemaRef = new SchemaReference(
+              node.get("name").asText(), node.get("subject").asText(), node.get("version").asInt());
+          originalSchemaRefs.add(schemaRef);
+        }
+      }
+      List<SchemaReference> updateSchemaRefs = new ArrayList<>();
+      ArrayNode updateRefs = (ArrayNode) testCase.get("update_references");
+      if (updateRefs != null) {
+        for (JsonNode ref : updateRefs) {
+          ObjectNode node = (ObjectNode) ref;
+          SchemaReference schemaRef = new SchemaReference(
+              node.get("name").asText(), node.get("subject").asText(), node.get("version").asInt());
+          updateSchemaRefs.add(schemaRef);
+        }
+      }
+      Map<String, ProtoFileElement> originalDependencies = new HashMap<>();
+      ArrayNode originalDeps = (ArrayNode) testCase.get("original_dependencies");
+      if (originalDeps != null) {
+        for (JsonNode dep : originalDeps) {
+          ObjectNode node = (ObjectNode) dep;
+          String schema = node.get("dependency").asText();
+          ProtoFileElement file = ProtoParser.Companion.parse(
+              Location.get("unknown"), schema);
+          originalDependencies.put(node.get("name").asText(), file);
+        }
+      }
+      Map<String, ProtoFileElement> updateDependencies = new HashMap<>();
+      ArrayNode updateDeps = (ArrayNode) testCase.get("update_dependencies");
+      if (updateDeps != null) {
+        for (JsonNode dep : updateDeps) {
+          ObjectNode node = (ObjectNode) dep;
+          String schema = node.get("dependency").asText();
+          ProtoFileElement file = ProtoParser.Companion.parse(
+              Location.get("unknown"), schema);
+          updateDependencies.put(node.get("name").asText(), file);
+        }
+      }
       final ArrayNode changes = (ArrayNode) testCase.get("changes");
       boolean isCompatible = testCase.get("compatible").asBoolean();
       final List<String> errorMessages = new ArrayList<>();
@@ -57,7 +105,10 @@ public class SchemaDiffTest {
       }
       final String description = testCase.get("description").asText();
 
-      List<Difference> differences = SchemaDiff.compare(original, update);
+      List<Difference> differences = SchemaDiff.compare(
+          new ProtobufSchema(original, originalSchemaRefs, originalDependencies),
+          new ProtobufSchema(update, updateSchemaRefs, updateDependencies)
+      );
       final List<Difference> incompatibleDiffs = differences.stream()
           .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
           .collect(Collectors.toList());
@@ -80,8 +131,10 @@ public class SchemaDiffTest {
     ProtoFileElement original = resourceLoader.readObj("TestProto.proto");
     ProtoFileElement update = resourceLoader.readObj("TestProto2.proto");
 
-    List<Difference> changes = SchemaDiff.compare(original, update);
-
+    List<Difference> changes = SchemaDiff.compare(
+        new ProtobufSchema(original, Collections.emptyList(), Collections.emptyMap()),
+        new ProtobufSchema(update, Collections.emptyList(), Collections.emptyMap())
+    );
     assertTrue(changes.contains(new Difference(
         Difference.Type.FIELD_NAME_CHANGED,
         "#/TestMessage/2"
