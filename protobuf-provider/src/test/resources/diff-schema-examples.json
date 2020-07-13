@@ -1,5 +1,30 @@
 [
   {
+    "description": "Detect package change",
+    "original_schema": "syntax = \"proto3\";\npackage foo;\nmessage TestMessage {\n    string test_string = 1;\n    .foo.TestMessage.Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "update_schema": "syntax = \"proto3\";\npackage bar;\nmessage TestMessage {\n    string test_string = 1;\n    .bar.TestMessage.Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "changes": [
+      "PACKAGE_CHANGED #/"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect change to name qualification",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    .TestMessage.Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect change to name qualification with package",
+    "original_schema": "syntax = \"proto3\";\npackage foo;\nmessage TestMessage {\n    string test_string = 1;\n    Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "update_schema": "syntax = \"proto3\";\npackage foo;\nmessage TestMessage {\n    string test_string = 1;\n    .foo.TestMessage.Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect added field",
     "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}",
     "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    string test_string2 = 2;\n}",
@@ -67,6 +92,24 @@
       "ENUM_REMOVED #/Status"
     ],
     "compatible": true
+  },
+  {
+    "description": "Detect field number type to message with same name as enum",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int32 test_int = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    .TestMessage.Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}\nenum Status {\n    ACTIVE = 0;\n    INACTIVE = 1;\n}",
+    "changes": [
+      "FIELD_KIND_CHANGED #/TestMessage/2", "MESSAGE_ADDED #/TestMessage/Status", "ENUM_ADDED #/Status"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect message with same name as enum to field number change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    .TestMessage.Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}\nenum Status {\n    ACTIVE = 0;\n    INACTIVE = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    int32 test_int = 2;\n}",
+    "changes": [
+      "FIELD_KIND_CHANGED #/TestMessage/2", "MESSAGE_REMOVED #/TestMessage/Status", "ENUM_REMOVED #/Status"
+    ],
+    "compatible": false
   },
   {
     "description": "Detect enum const change",
@@ -142,6 +185,154 @@
       "MESSAGE_REMOVED #/TestMessage2",
       "MESSAGE_ADDED #/TestMessage3",
       "FIELD_NAMED_TYPE_CHANGED #/TestMessage/2"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect incompatible field type change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    map<string, int32> test_map_int = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n    map<string, string> test_map_string = 2;\n}",
+    "changes": [
+      "FIELD_NAME_CHANGED #/TestMessage/2",
+      "FIELD_SCALAR_KIND_CHANGED #/TestMessage/2"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect incompatible import change",
+    "original_schema": "syntax = \"proto3\";\nimport \"google.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.GoogleHome test_string = 1;\n    }",
+    "update_schema": "syntax = \"proto3\";\nimport \"google2.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.GoogleHome test_string = 1;\n    }",
+    "original_references": [
+      {
+        "name": "google.proto",
+        "subject": "google.proto",
+        "version": 1
+      }
+    ],
+    "update_references": [
+      {
+        "name": "google2.proto",
+        "subject": "google2.proto",
+        "version": 1
+      }
+    ],
+    "original_dependencies": [
+      {
+        "name": "google.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl\";\n\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}"
+      }
+    ],
+    "update_dependencies": [
+      {
+        "name": "google2.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl2\";\n\nmessage GoogleHome {\n  string deviceID = 1;\n  bool enabled = 2;\n}"
+      }
+    ],
+    "changes": [
+      "FIELD_SCALAR_KIND_CHANGED #/GoogleHome/1","FIELD_NAMED_TYPE_CHANGED #/TestMessage/1"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect import change with different remote package name",
+    "original_schema": "syntax = \"proto3\";\nimport \"google.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.GoogleHome test_string = 1;\n    }",
+    "update_schema": "syntax = \"proto3\";\nimport \"google2.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain2.GoogleHome test_string = 1;\n    }",
+    "original_references": [
+      {
+        "name": "google.proto",
+        "subject": "google.proto",
+        "version": 1
+      }
+    ],
+    "update_references": [
+      {
+        "name": "google2.proto",
+        "subject": "google2.proto",
+        "version": 1
+      }
+    ],
+    "original_dependencies": [
+      {
+        "name": "google.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl\";\n\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}"
+      }
+    ],
+    "update_dependencies": [
+      {
+        "name": "google2.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain2;\n\noption java_outer_classname = \"GoogleImpl2\";\n\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}"
+      }
+    ],
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect import change with different remote package nested name",
+    "original_schema": "syntax = \"proto3\";\nimport \"google.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.outer.GoogleHome test_string = 1;\n    }",
+    "update_schema": "syntax = \"proto3\";\nimport \"google2.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain2.outer.GoogleHome test_string = 1;\n    }",
+    "original_references": [
+      {
+        "name": "google.proto",
+        "subject": "google.proto",
+        "version": 1
+      }
+    ],
+    "update_references": [
+      {
+        "name": "google2.proto",
+        "subject": "google2.proto",
+        "version": 1
+      }
+    ],
+    "original_dependencies": [
+      {
+        "name": "google.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl\";\n\nmessage outer {\n  message GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}\n}"
+      }
+    ],
+    "update_dependencies": [
+      {
+        "name": "google2.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain2;\n\noption java_outer_classname = \"GoogleImpl2\";\n\nmessage outer {\n  message GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}\n}"
+      }
+    ],
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible import change with different remote package nested name",
+    "original_schema": "syntax = \"proto3\";\nimport \"google.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.outer.GoogleHome test_string = 1;\n    }",
+    "update_schema": "syntax = \"proto3\";\nimport \"google2.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain2.outer.GoogleHome test_string = 1;\n    }",
+    "original_references": [
+      {
+        "name": "google.proto",
+        "subject": "google.proto",
+        "version": 1
+      }
+    ],
+    "update_references": [
+      {
+        "name": "google2.proto",
+        "subject": "google2.proto",
+        "version": 1
+      }
+    ],
+    "original_dependencies": [
+      {
+        "name": "google.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl\";\n\nmessage outer {\n  message GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}\n}"
+      }
+    ],
+    "update_dependencies": [
+      {
+        "name": "google2.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain2;\n\noption java_outer_classname = \"GoogleImpl2\";\n\nmessage outer {\n  message GoogleHome {\n  string deviceID = 1;\n  bool enabled = 2;\n}\n}"
+      }
+    ],
+    "changes": [
+      "FIELD_SCALAR_KIND_CHANGED #/outer/GoogleHome/1", "FIELD_NAMED_TYPE_CHANGED #/TestMessage/1"
     ],
     "compatible": false
   }
