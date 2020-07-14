@@ -1262,7 +1262,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       prevParsedSchemas.add(prevParsedSchema);
     }
 
-    return isCompatibleWithPrevious(subject, parseSchema(newSchema), prevParsedSchemas);
+    ParsedSchema parsedSchema = canonicalizeSchema(newSchema);
+    return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas);
   }
 
   private boolean isCompatibleWithPrevious(String subject,

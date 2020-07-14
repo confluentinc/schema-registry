@@ -264,8 +264,7 @@ public class SubjectVersionsResource {
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
     } catch (InvalidSchemaException e) {
-      throw Errors.invalidSchemaException("Either the input schema or"
-                                          + " one its references is invalid", e);
+      throw Errors.invalidSchemaException(e);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {

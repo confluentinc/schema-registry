@@ -15,10 +15,12 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
+import java.util.Collections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,10 +98,8 @@ public class CompatibilityResource {
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
     boolean isCompatible = false;
-    CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
-    String errorMessage = "Error while retrieving list of all subjects";
-    Schema schemaForSpecifiedVersion = null;
     VersionId versionId = parseVersionId(version);
+    Schema schemaForSpecifiedVersion = null;
     try {
       //Don't check compatibility against deleted schema
       schemaForSpecifiedVersion = schemaRegistry.get(subject, versionId.getVersionId(), false);
@@ -110,34 +110,36 @@ public class CompatibilityResource {
                                   + subject + " and version "
                                   + versionId.getVersionId(), e);
     }
-    registerWithError(subject, errorMessage);
-    if (schemaForSpecifiedVersion == null) {
-      if (versionId.isLatest()) {
-        isCompatible = true;
-        compatibilityCheckResponse.setIsCompatible(isCompatible);
-        asyncResponse.resume(compatibilityCheckResponse);
-      } else {
-        throw Errors.versionNotFoundException(versionId.getVersionId());
-      }
-    } else {
-      try {
-        isCompatible = schemaRegistry.isCompatible(
-            subject, new Schema(subject, request.getVersion(), request.getId(),
-                request.getSchemaType(), request.getReferences(), request.getSchema()),
-            schemaForSpecifiedVersion
-        );
-      } catch (InvalidSchemaException e) {
-        throw Errors.invalidSchemaException("Invalid input schema " + request.getSchema(), e);
-      } catch (SchemaRegistryStoreException e) {
-        throw Errors.storeException(
-            "Error while getting compatibility level for subject " + subject, e);
-      } catch (SchemaRegistryException e) {
-        throw Errors.schemaRegistryException(
-            "Error while getting compatibility level for subject " + subject, e);
-      }
-      compatibilityCheckResponse.setIsCompatible(isCompatible);
-      asyncResponse.resume(compatibilityCheckResponse);
+    if (schemaForSpecifiedVersion == null && !versionId.isLatest()) {
+      throw Errors.versionNotFoundException(versionId.getVersionId());
     }
+    Schema schema = new Schema(
+        subject,
+        0,
+        -1,
+        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
+        request.getReferences(),
+        request.getSchema()
+    );
+    try {
+      isCompatible = schemaRegistry.isCompatible(
+          subject, schema,
+          schemaForSpecifiedVersion != null
+              ? Collections.singletonList(schemaForSpecifiedVersion)
+              : Collections.emptyList()
+      );
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(
+          "Error while getting compatibility level for subject " + subject, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(
+          "Error while getting compatibility level for subject " + subject, e);
+    }
+    CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
+    compatibilityCheckResponse.setIsCompatible(isCompatible);
+    asyncResponse.resume(compatibilityCheckResponse);
   }
 
   private static VersionId parseVersionId(String version) {
@@ -148,17 +150,5 @@ public class CompatibilityResource {
       throw Errors.invalidVersionException(e.getMessage());
     }
     return versionId;
-  }
-
-  private void registerWithError(final String subject, final String errorMessage) {
-    try {
-      if (!schemaRegistry.hasSubjects(subject, false)) {
-        throw Errors.subjectNotFoundException(subject);
-      }
-    } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException(errorMessage, e);
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException(errorMessage, e);
-    }
   }
 }
