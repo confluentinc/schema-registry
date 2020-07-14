@@ -860,7 +860,7 @@ public class JsonSchemaData {
       CombinedSchema combinedSchema = (CombinedSchema) jsonSchema;
       CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
       String name = null;
-      if (criterion == CombinedSchema.ONE_CRITERION) {
+      if (criterion == CombinedSchema.ONE_CRITERION || criterion == CombinedSchema.ANY_CRITERION) {
         name = JSON_TYPE_ONE_OF;
       } else if (criterion == CombinedSchema.ALL_CRITERION) {
         return allOfToConnectSchema(combinedSchema, version, forceOptional);

@@ -923,6 +923,25 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectUnionFromAnyOf() {
+    NumberSchema firstSchema = NumberSchema.builder()
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
+        .build();
+    NumberSchema secondSchema = NumberSchema.builder()
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int16"))
+        .build();
+    CombinedSchema schema = CombinedSchema.anyOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_INT8_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.OPTIONAL_INT16_SCHEMA);
+    Schema expectedSchema = builder.build();
+
+    Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.0", (byte) 12);
+    checkNonObjectConversion(expectedSchema, expected, schema, ShortNode.valueOf((short) 12));
+  }
+
+  @Test
   public void testToConnectMapOptionalValue() {
     testToConnectMapOptional("some value");
   }
