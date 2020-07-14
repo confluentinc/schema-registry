@@ -28,6 +28,8 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
 public interface SchemaRegistry extends SchemaVersionFetcher {
 
+  String DEFAULT_TENANT = "default";
+
   void init() throws SchemaRegistryException;
 
   Set<String> schemaTypes();
@@ -57,6 +59,10 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Iterator<Schema> getAllVersions(String subject, boolean filterDeletes)
       throws SchemaRegistryException;
 
+  Iterator<Schema> getVersionsWithSubjectPrefix(
+      String prefix, boolean filterDeletes, boolean latestOnly)
+      throws SchemaRegistryException;
+
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
 
   List<Integer> deleteSubject(String subject, boolean permanentDelete)
@@ -79,7 +85,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
                            boolean permanentDelete) throws SchemaRegistryException;
 
   default String tenant() {
-    return "default";
+    return DEFAULT_TENANT;
   }
 
   SchemaRegistryConfig config();

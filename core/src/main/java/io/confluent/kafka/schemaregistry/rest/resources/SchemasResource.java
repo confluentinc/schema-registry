@@ -19,6 +19,8 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
+import java.util.ArrayList;
+import java.util.Iterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +33,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
@@ -56,6 +59,41 @@ public class SchemasResource {
 
   public SchemasResource(KafkaSchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
+  }
+
+  @GET
+  @ApiOperation("Get the schemas.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  @PerformanceMetric("schemas.get-schemas")
+  public List<Schema> getSchemas(
+      @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
+      @DefaultValue("false") @QueryParam("deleted") boolean lookupDeletedSchema,
+      @DefaultValue("false") @QueryParam("latestOnly") boolean latestOnly,
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
+    Iterator<Schema> schemas = null;
+    List<Schema> filteredSchemas = new ArrayList<Schema>();
+    String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
+    try {
+      schemas = schemaRegistry.getVersionsWithSubjectPrefix(
+          subjectPrefix, lookupDeletedSchema, latestOnly);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    int fromIndex = offset;
+    int toIndex = limit > 0 ? offset + limit : Integer.MAX_VALUE;
+    int index = 0;
+    while (schemas.hasNext() && index < toIndex) {
+      Schema schema = schemas.next();
+      if (index >= offset) {
+        filteredSchemas.add(schema);
+      }
+      index++;
+    }
+    return filteredSchemas;
   }
 
   @GET

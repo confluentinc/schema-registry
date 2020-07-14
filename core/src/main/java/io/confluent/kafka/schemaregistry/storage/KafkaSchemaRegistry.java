@@ -1118,10 +1118,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return sortSchemasByVersion(allVersions(subject, false), returnDeletedSchemas).iterator();
   }
 
-  // Can be used by extensions as a simple subject search
-  public Iterator<Schema> getAllVersionsWithPrefix(String prefix, boolean returnDeletedSchemas)
+  @Override
+  public Iterator<Schema> getVersionsWithSubjectPrefix(String prefix,
+      boolean returnDeletedSchemas,
+      boolean returnLatestOnly)
       throws SchemaRegistryException {
-    return sortSchemasByVersion(allVersions(prefix, true), returnDeletedSchemas).iterator();
+    return sortSchemasByVersion(allVersions(prefix, true), returnDeletedSchemas, returnLatestOnly)
+        .iterator();
   }
 
   private List<SchemaValue> getAllSchemaValues(String subject)
@@ -1341,14 +1344,36 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private List<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas,
                                             boolean returnDeletedSchemas) {
+    return sortSchemasByVersion(schemas, returnDeletedSchemas, false);
+  }
+
+  private List<Schema> sortSchemasByVersion(Iterator<SchemaRegistryValue> schemas,
+                                            boolean returnDeletedSchemas,
+                                            boolean returnLatestOnly) {
     List<Schema> schemaList = new ArrayList<>();
+    Schema previousSchema = null;
     while (schemas.hasNext()) {
       SchemaValue schemaValue = (SchemaValue) schemas.next();
-      if (returnDeletedSchemas || !schemaValue.isDeleted()) {
-        schemaList.add(getSchemaEntityFromSchemaValue(schemaValue));
+      if (!returnDeletedSchemas && schemaValue.isDeleted()) {
+        continue;
+      }
+      Schema schema = getSchemaEntityFromSchemaValue(schemaValue);
+      if (returnLatestOnly) {
+        if (previousSchema != null && !schema.getSubject().equals(previousSchema.getSubject())) {
+          schemaList.add(previousSchema);
+        }
+      } else {
+        schemaList.add(schema);
+      }
+      previousSchema = schema;
+    }
+    if (returnLatestOnly && previousSchema != null) {
+      // handle last subject
+      Schema lastSchema = schemaList.isEmpty() ? null : schemaList.get(schemaList.size() - 1);
+      if (lastSchema == null || !lastSchema.getSubject().equals(previousSchema.getSubject())) {
+        schemaList.add(previousSchema);
       }
     }
-    Collections.sort(schemaList);
     return schemaList;
   }
 
@@ -1358,7 +1383,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       SchemaValue schemaValue = (SchemaValue) schemas.next();
       schemaList.add(schemaValue);
     }
-    Collections.sort(schemaList);
     return schemaList;
   }
 

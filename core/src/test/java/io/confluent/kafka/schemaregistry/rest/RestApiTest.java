@@ -125,6 +125,13 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Getting all subjects should match all registered subjects",
                  allSubjects,
                  restApp.restClient.getAllSubjects());
+
+    List<Schema> latestSchemas = restApp.restClient.getSchemas(null, false, true);
+    assertEquals("Getting latest schemas should return two schemas",
+                 2,
+                 latestSchemas.size());
+    assertEquals(Integer.valueOf(10), latestSchemas.get(0).getVersion());
+    assertEquals(Integer.valueOf(5), latestSchemas.get(1).getVersion());
   }
 
   @Test
