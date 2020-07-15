@@ -124,6 +124,8 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     boolean autoRegisterSchema;
     if (props.containsKey("auto.register")) {
       autoRegisterSchema = Boolean.parseBoolean(props.getProperty("auto.register").trim());
+    } else if (props.containsKey("auto.register.schemas")) {
+      autoRegisterSchema = Boolean.parseBoolean(props.getProperty("auto.register.schemas").trim());
     } else {
       autoRegisterSchema = true;
     }
