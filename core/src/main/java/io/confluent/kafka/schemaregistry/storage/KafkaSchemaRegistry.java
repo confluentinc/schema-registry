@@ -198,6 +198,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
       SchemaRegistryConfig config) throws SchemaRegistryException {
+    return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
+        config,
+        getSchemaUpdateHandler(config),
+        this.serializer, lookupCache, new NoopKey());
+  }
+
+  protected SchemaUpdateHandler getSchemaUpdateHandler(SchemaRegistryConfig config) {
     Map<String, Object> handlerConfigs =
         config.originalsWithPrefix(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG + ".");
     handlerConfigs.put(StoreUpdateHandler.SCHEMA_REGISTRY, this);
@@ -206,12 +213,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             SchemaUpdateHandler.class,
             handlerConfigs);
     KafkaStoreMessageHandler storeHandler =
-        new KafkaStoreMessageHandler(this, lookupCache, idGenerator);
+        new KafkaStoreMessageHandler(this, getLookupCache(), getIdentityGenerator());
+    for (SchemaUpdateHandler customSchemaHandler : customSchemaHandlers) {
+      log.info("Registering custom schema handler: {}",
+          customSchemaHandler.getClass().getName()
+      );
+    }
     customSchemaHandlers.add(storeHandler);
-    return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
-        config,
-        new CompositeSchemaUpdateHandler(customSchemaHandlers),
-        this.serializer, lookupCache, new NoopKey());
+    return new CompositeSchemaUpdateHandler(customSchemaHandlers);
   }
 
   protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache() {
