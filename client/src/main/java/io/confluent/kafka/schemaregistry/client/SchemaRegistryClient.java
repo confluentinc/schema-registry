@@ -146,19 +146,56 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   int getId(String subject, ParsedSchema schema) throws IOException, RestClientException;
 
-  public List<Integer> deleteSubject(String subject) throws IOException, RestClientException;
+  public default List<Integer> deleteSubject(String subject) throws IOException,
+          RestClientException {
+    return deleteSubject(subject, false);
+  }
 
-  public List<Integer> deleteSubject(Map<String, String> requestProperties, String subject)
-      throws IOException, RestClientException;
+  public default List<Integer> deleteSubject(String subject, boolean isPermanent)
+          throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
-  public Integer deleteSchemaVersion(String subject, String version)
-      throws IOException, RestClientException;
+  public default List<Integer> deleteSubject(Map<String, String> requestProperties, String subject)
+      throws IOException, RestClientException {
+    return deleteSubject(requestProperties, subject, false);
+  }
 
-  public Integer deleteSchemaVersion(
+  public default List<Integer> deleteSubject(Map<String,
+          String> requestProperties, String subject, boolean isPermanent)
+          throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default Integer deleteSchemaVersion(String subject, String version)
+      throws IOException, RestClientException {
+    return deleteSchemaVersion(subject, version, false);
+  }
+
+  public default Integer deleteSchemaVersion(
+          String subject,
+          String version,
+          boolean isPermanent)
+          throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default Integer deleteSchemaVersion(
       Map<String, String> requestProperties,
       String subject,
       String version)
-      throws IOException, RestClientException;
+      throws IOException, RestClientException {
+    return deleteSchemaVersion(requestProperties, subject, version, false);
+  }
+
+  public default Integer deleteSchemaVersion(
+      Map<String, String> requestProperties,
+      String subject,
+      String version,
+      boolean isPermanent)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   public void reset();
 }

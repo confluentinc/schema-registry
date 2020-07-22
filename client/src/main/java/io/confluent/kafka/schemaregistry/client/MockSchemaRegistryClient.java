@@ -433,14 +433,16 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public List<Integer> deleteSubject(String subject) throws IOException, RestClientException {
-    return deleteSubject(null, subject);
+  public List<Integer> deleteSubject(String subject, boolean isPermanent)
+          throws IOException, RestClientException {
+    return deleteSubject(null, subject, isPermanent);
   }
 
   @Override
   public List<Integer> deleteSubject(
       Map<String, String> requestProperties,
-      String subject)
+      String subject,
+      boolean isPermanent)
       throws IOException, RestClientException {
     schemaCache.remove(subject);
     idCache.remove(subject);
@@ -450,16 +452,17 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public Integer deleteSchemaVersion(String subject, String version)
+  public Integer deleteSchemaVersion(String subject, String version, boolean isPermanent)
       throws IOException, RestClientException {
-    return deleteSchemaVersion(null, subject, version);
+    return deleteSchemaVersion(null, subject, version, isPermanent);
   }
 
   @Override
   public Integer deleteSchemaVersion(
       Map<String, String> requestProperties,
       String subject,
-      String version)
+      String version,
+      boolean isPermanent)
       throws IOException, RestClientException {
     if (versionCache.containsKey(subject)) {
       versionCache.get(subject).values().remove(Integer.valueOf(version));
