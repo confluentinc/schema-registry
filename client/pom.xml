@@ -69,7 +69,7 @@
         <dependency>
             <groupId>io.swagger</groupId>
             <artifactId>swagger-core</artifactId>
-            <version>1.5.3</version>
+            <version>1.6.2</version>
             <exclusions>
                 <exclusion>
                     <groupId>javax.validation</groupId>
