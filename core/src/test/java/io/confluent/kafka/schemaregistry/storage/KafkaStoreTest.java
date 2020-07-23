@@ -541,7 +541,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     );
 
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
-            new InMemoryCache<>(), new IncrementalIdGenerator());
+            new InMemoryCache<>(), new IncrementalIdGenerator(), "");
 
     storeMessageHandler.handleUpdate(new DeleteSubjectKey("test"), null, null, null, 0L, 0L);
   }
@@ -560,7 +560,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     );
 
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
-            new InMemoryCache<>(), new IncrementalIdGenerator());
+            new InMemoryCache<>(), new IncrementalIdGenerator(), "");
 
     storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null, null, null, 0L, 0L);
   }

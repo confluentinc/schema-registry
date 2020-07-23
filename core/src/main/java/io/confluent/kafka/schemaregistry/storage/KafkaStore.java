@@ -15,7 +15,11 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import java.io.IOException;
+import java.io.*;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -26,18 +30,19 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -46,6 +51,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
@@ -151,7 +158,83 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
     }
+
+    if (config.BACKUPS) {
+      try (Stream<Path> walk = Files.walk(Paths.get("backups"))) {
+        List<String> backups = walk.filter(Files::isRegularFile)
+                .map(x -> x.getFileName().toString())
+                .collect(Collectors.toList());
+        Collections.sort(backups, Collections.reverseOrder());
+        if (backups.size() >= 2) {
+          String currentPath = "backups/" + backups.get(0);
+          String previousPath = "backups/" + backups.get(1);
+          boolean areEqual = Arrays.equals(getChecksum(currentPath), getChecksum(previousPath));
+          if (!areEqual) {
+            restoreFromFilePath(previousPath);
+          }
+        }
+      } catch (IOException e) {
+        log.error("failed to get files");
+      }
+    }
+
     initLatch.countDown();
+  }
+
+  private void restoreFromFilePath(String filePath) {
+    try {
+      Scanner scanner = new Scanner(new File(filePath));
+//      BufferedReader reader = new BufferedReader(new FileReader(filePath));
+//      String line;
+//      while ((line = reader.readLine()) != null) {
+      while (scanner.hasNextLine()) {
+        String line = scanner.nextLine();
+        String[] tokens = line.split("\t");
+        if (tokens.length != 6) {
+          log.error("wrong number of parts for line");
+        }
+        ObjectMapper obj = new ObjectMapper();
+        //TODO: not just hardcode this
+        SchemaRegistryKey key = obj.readValue(tokens[0], SchemaKey.class);
+        SchemaRegistryValue value = obj.readValue(tokens[1], SchemaValue.class);
+        SchemaRegistryValue oldValue = obj.readValue(tokens[2], SchemaValue.class);
+        String[] tpTokens = tokens[3].split("-");
+        TopicPartition tp = new TopicPartition(tpTokens[0], Integer.parseInt(tpTokens[1]));
+        long offset = Long.parseLong(tokens[4]);
+        long timestamp = Long.parseLong(tokens[5]);
+        ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<byte[], byte[]>(
+                topic,
+                tp.partition(),
+                timestamp,
+                this.serializer.serializeKey((K) key),
+                value == null ? null : this.serializer.serializeValue((V) value));
+        producer.send(producerRecord).get();
+//        storeUpdateHandler.handleUpdate((K) key, (V) value, (V) oldValue, tp, offset, timestamp);
+      }
+    } catch (FileNotFoundException e) {
+      log.error("file not found");
+    } catch (JsonProcessingException e) {
+      log.error("json processing exception");
+    } catch (SerializationException e) {
+      log.error("serializaiton error");
+    } catch (Exception e) {
+      log.error("other exception");
+    }
+  }
+
+  private byte[] getChecksum(String filePath) {
+    try {
+      MessageDigest md = MessageDigest.getInstance("MD5");
+      InputStream is = Files.newInputStream(Paths.get(filePath));
+      DigestInputStream dis = new DigestInputStream(is, md);
+      while (dis.read() != -1) {
+
+      }
+      return md.digest();
+    } catch (Exception e) {
+      log.error("Failed to get hash for file: " + filePath);
+    }
+    return null;
   }
 
   public static void addSchemaRegistryConfigsToClientProperties(SchemaRegistryConfig config,
@@ -261,19 +344,19 @@ public class KafkaStore<K, V> implements Store<K, V> {
     Map<ConfigResource, Config> configs =
         admin.describeConfigs(Collections.singleton(topicResource)).all()
             .get(initTimeout, TimeUnit.MILLISECONDS);
-    Config topicConfigs = configs.get(topicResource);
-    String retentionPolicy = topicConfigs.get(TopicConfig.CLEANUP_POLICY_CONFIG).value();
-    if (retentionPolicy == null || !TopicConfig.CLEANUP_POLICY_COMPACT.equals(retentionPolicy)) {
-      log.error("The retention policy of the schema topic " + topic + " is incorrect. "
-                + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
-                + "deleting your schemas after a week. "
-                + "Refer to Kafka documentation for more details on cleanup policies");
-
-      throw new StoreInitializationException("The retention policy of the schema topic " + topic
-                                             + " is incorrect. Expected cleanup.policy to be "
-                                             + "'compact' but it is " + retentionPolicy);
-
-    }
+//    Config topicConfigs = configs.get(topicResource);
+//    String retentionPolicy = topicConfigs.get(TopicConfig.CLEANUP_POLICY_CONFIG).value();
+//    if (retentionPolicy == null || !TopicConfig.CLEANUP_POLICY_COMPACT.equals(retentionPolicy)) {
+//      log.error("The retention policy of the schema topic " + topic + " is incorrect. "
+//                + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
+//                + "deleting your schemas after a week. "
+//                + "Refer to Kafka documentation for more details on cleanup policies");
+//
+//      throw new StoreInitializationException("The retention policy of the schema topic " + topic
+//                                             + " is incorrect. Expected cleanup.policy to be "
+//                                             + "'compact' but it is " + retentionPolicy);
+//
+//    }
   }
 
 

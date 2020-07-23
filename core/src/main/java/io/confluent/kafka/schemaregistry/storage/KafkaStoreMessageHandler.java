@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
@@ -24,19 +26,31 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+
 public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   private IdGenerator idGenerator;
+  private File backupFile;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
                                   LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
-                                  IdGenerator idGenerator) {
+                                  IdGenerator idGenerator,
+                                  String backupFilePrefix) {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
+    this.backupFile = new File("./backups/" + backupFilePrefix + ".txt");
+    try {
+      backupFile.createNewFile();
+    } catch (IOException e) {
+      log.error("failed to create backup file");
+    }
   }
 
   /**
@@ -88,13 +102,58 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       handleSchemaUpdate((SchemaKey) key,
           (SchemaValue) value,
           (SchemaValue) oldValue);
+      recordBackup(key, value, oldValue, tp, offset, timestamp);
     } else if (value == null) {
       // ignore non-schema tombstone
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
+      recordBackup(key, value, oldValue, tp, offset, timestamp);
     } else if (key.getKeyType() == SchemaRegistryKeyType.CLEAR_SUBJECT) {
       handleClearSubject((ClearSubjectValue) value);
+      recordBackup(key, value, oldValue, tp, offset, timestamp);
     }
+  }
+
+  private void recordBackup(SchemaRegistryKey key,
+                            SchemaRegistryValue value,
+                            SchemaRegistryValue oldValue,
+                            TopicPartition tp,
+                            long offset,
+                            long timestamp) {
+    try {
+      FileWriter fr = new FileWriter(backupFile, true);
+      fr.write(formatKey(key) + "\t" +
+              formatMessage(value) + "\t" +
+              formatMessage(oldValue) + "\t" +
+              tp.toString() + "\t" +
+              offset + "\t" +
+              timestamp + "\n");
+      fr.close();
+    } catch (IOException e) {
+      log.error("failed to write debug file");
+    }
+  }
+
+  private String formatKey(SchemaRegistryKey key) {
+    ObjectMapper obj = new ObjectMapper();
+    try {
+      String jsonStr = obj.writeValueAsString(key);
+      return jsonStr;
+    } catch (JsonProcessingException e) {
+      log.error("failed to process key");
+    }
+    return "";
+  }
+
+  private String formatMessage(SchemaRegistryValue value) {
+    ObjectMapper obj = new ObjectMapper();
+    try {
+      String jsonStr = obj.writeValueAsString(value);
+      return jsonStr;
+    } catch (JsonProcessingException e) {
+      log.error("failed to process message");
+    }
+    return "";
   }
 
   private void handleDeleteSubject(DeleteSubjectValue deleteSubjectValue) {

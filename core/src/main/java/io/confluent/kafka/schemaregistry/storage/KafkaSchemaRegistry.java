@@ -205,8 +205,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         config.getConfiguredInstances(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG,
             SchemaUpdateHandler.class,
             handlerConfigs);
+    String backupFilePrefix = System.currentTimeMillis() + "";
     KafkaStoreMessageHandler storeHandler =
-        new KafkaStoreMessageHandler(this, lookupCache, idGenerator);
+        new KafkaStoreMessageHandler(this, lookupCache, idGenerator, backupFilePrefix);
     customSchemaHandlers.add(storeHandler);
     return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
         config,
