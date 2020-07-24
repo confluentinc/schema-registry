@@ -118,8 +118,8 @@ public class SchemaDiff {
       return;
     }
 
-    original = normalizeEmptySchema(original);
-    update = normalizeEmptySchema(update);
+    original = normalizeSchema(original);
+    update = normalizeSchema(update);
 
     if (!(original instanceof CombinedSchema) && update instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) update;
@@ -190,18 +190,22 @@ public class SchemaDiff {
           ObjectSchemaDiff.compare(ctx, (ObjectSchema) original, (ObjectSchema) update);
         } else if (original instanceof ArraySchema) {
           ArraySchemaDiff.compare(ctx, (ArraySchema) original, (ArraySchema) update);
-        } else if (original instanceof ReferenceSchema) {
-          ReferenceSchemaDiff.compare(ctx, (ReferenceSchema) original, (ReferenceSchema) update);
         }
       }
     }
   }
 
-  private static Schema normalizeEmptySchema(final Schema schema) {
-    return schema instanceof EmptySchema ? ObjectSchema.builder()
-        .id(schema.getId())
-        .title(schema.getTitle())
-        .description(schema.getDescription())
-        .build() : schema;
+  private static Schema normalizeSchema(final Schema schema) {
+    if (schema instanceof EmptySchema) {
+      return ObjectSchema.builder()
+          .id(schema.getId())
+          .title(schema.getTitle())
+          .description(schema.getDescription())
+          .build();
+    } else if (schema instanceof ReferenceSchema) {
+      return ((ReferenceSchema) schema).getReferredSchema();
+    } else {
+      return schema;
+    }
   }
 }
