@@ -134,7 +134,15 @@ public class SchemaDiff {
           || combinedSchema.getCriterion() == CombinedSchema.ONE_CRITERION) {
         for (Schema subschema : combinedSchema.getSubschemas()) {
           final Context subctx = ctx.getSubcontext();
-          compare(subctx, original, subschema);
+
+          Schema referredSubschema;
+          if (subschema instanceof ReferenceSchema) {
+            referredSubschema = ((ReferenceSchema)subschema).getReferredSchema();
+          } else {
+            referredSubschema = subschema;
+          }
+
+          compare(subctx, original, referredSubschema);
           if (subctx.isCompatible()) {
             ctx.addDifferences(subctx.getDifferences());
             ctx.addDifference(Type.SUM_TYPE_EXTENDED);
