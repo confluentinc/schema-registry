@@ -1483,9 +1483,43 @@
       }
     },
     "changes": [
-      "TYPE_CHANGED #/items/$ref"
+      "TYPE_CHANGED #/items"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect compatible change of moving to reference schema",
+    "original_schema": {
+      "type": "string"
+    },
+    "update_schema": {
+      "$ref": "#/definitions/someRef",
+      "definitions": {
+        "someRef": {
+          "type": "string"
+        }
+      }
+    },
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change of moving from reference schema",
+    "original_schema": {
+      "$ref": "#/definitions/someRef",
+      "definitions": {
+        "someRef": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "type": "string"
+    },
+    "changes": [
+    ],
+    "compatible": true
   },
   {
     "description": "Detect added boolean additional properties",
