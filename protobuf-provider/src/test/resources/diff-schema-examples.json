@@ -234,6 +234,58 @@
     "compatible": false
   },
   {
+    "description": "Detect moving to import",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    GoogleHome test_string = 1;\n    }\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}",
+    "update_schema": "syntax = \"proto3\";\nimport \"google.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.GoogleHome test_string = 1;\n    }",
+    "original_references": [
+    ],
+    "update_references": [
+      {
+        "name": "google.proto",
+        "subject": "google.proto",
+        "version": 1
+      }
+    ],
+    "original_dependencies": [
+    ],
+    "update_dependencies": [
+      {
+        "name": "google.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl\";\n\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}"
+      }
+    ],
+    "changes": [
+      "MESSAGE_REMOVED #/GoogleHome"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect moving from import",
+    "original_schema": "syntax = \"proto3\";\nimport \"google.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.GoogleHome test_string = 1;\n    }",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    GoogleHome test_string = 1;\n    }\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}",
+    "original_references": [
+      {
+        "name": "google.proto",
+        "subject": "google.proto",
+        "version": 1
+      }
+    ],
+    "update_references": [
+    ],
+    "original_dependencies": [
+      {
+        "name": "google.proto",
+        "dependency": "syntax = \"proto3\";\n\npackage io.confluent.cloud.demo.domain;\n\noption java_outer_classname = \"GoogleImpl\";\n\nmessage GoogleHome {\n  int32 deviceID = 1;\n  bool enabled = 2;\n}"
+      }
+    ],
+    "update_dependencies": [
+    ],
+    "changes": [
+      "MESSAGE_ADDED #/GoogleHome"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect import change with different remote package name",
     "original_schema": "syntax = \"proto3\";\nimport \"google.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.GoogleHome test_string = 1;\n    }",
     "update_schema": "syntax = \"proto3\";\nimport \"google2.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain2.GoogleHome test_string = 1;\n    }",

@@ -87,7 +87,13 @@ public class FieldSchemaDiff {
       final ProtoType update
   ) {
     String originalFullName = ctx.resolve(original.toString(), true);
+    if (originalFullName == null) {
+      throw new IllegalArgumentException("Could not resolve message type: " + original.toString());
+    }
     String updateFullName = ctx.resolve(update.toString(), false);
+    if (updateFullName == null) {
+      throw new IllegalArgumentException("Could not resolve message type: " + update.toString());
+    }
     TypeElementInfo originalType = ctx.getType(originalFullName, true);
     TypeElementInfo updateType = ctx.getType(updateFullName, false);
     String originalLocalName = originalFullName.startsWith(originalType.packageName() + ".")
