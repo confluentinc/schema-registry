@@ -22,7 +22,7 @@
               files="(Errors|AvroMessageReader).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(AbstractKafkaAvroDeserializer|AvroSchemaUtils|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|MockSchemaRegistryClient|SchemaRegistrySerializer|SchemaValue|SubjectVersionsResource|ProtobufSchema|SchemaDiff|FieldSchemaDiff|MessageSchemaDiff|DynamicSchema|SchemaMessageFormatter|ProtobufData|JsonSchema|JSON.*|JsonSchemaData|SchemaMessageReader).java"/>
+              files="(AbstractKafkaJsonSchemaDeserializer|AAbstractKafkaAvroDeserializer|AvroSchemaUtils|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|MockSchemaRegistryClient|SchemaRegistrySerializer|SchemaValue|SubjectVersionsResource|ProtobufSchema|SchemaDiff|FieldSchemaDiff|MessageSchemaDiff|DynamicSchema|SchemaMessageFormatter|ProtobufData|JsonSchema|JSON.*|JsonSchemaData|SchemaMessageReader).java"/>
 
     <suppress checks="NPathComplexity"
               files="(AvroData|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|ProtobufData|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader).java"/>

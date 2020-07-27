@@ -19,15 +19,23 @@ package io.confluent.kafka.serializers.json;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import kafka.utils.VerifiableProperties;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.everit.json.schema.ValidationException;
+import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ReferenceSchema;
+import org.everit.json.schema.ObjectSchema;
+import org.everit.json.schema.Schema;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -90,7 +98,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
       boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload
-  ) throws SerializationException {
+  ) {
 
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
@@ -103,7 +111,10 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
       JsonSchema schema = ((JsonSchema) schemaRegistry.getSchemaById(id));
-      String subject = null;
+      Schema entireSchema = (Schema)getEntireSchema(id);
+
+      String subject = "";
+
       if (includeSchemaAndVersion) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(id, schema, subject, isKey);
@@ -115,10 +126,12 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       String typeName = schema.getString(typeProperty);
 
       Object value;
-      if (type != null) {
-        value = objectMapper.readValue(buffer.array(), start, length, type);
-      } else if (typeName != null) {
+      if (typeName != null) {
         value = deriveType(buffer, length, start, typeName);
+      } else if (entireSchema instanceof CombinedSchema) {
+        value = deriveType(buffer, length, start, (CombinedSchema)entireSchema);
+      } else if (type != null) {
+        value = objectMapper.readValue(buffer.array(), start, length, type);
       } else {
         value = objectMapper.readTree(new ByteArrayInputStream(buffer.array(), start, length));
       }
@@ -155,6 +168,67 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     } catch (RestClientException e) {
       throw new SerializationException("Error retrieving JSON schema for id " + id, e);
     }
+  }
+
+  private Schema getEntireSchema(int id) throws IOException, RestClientException {
+    Collection<String> subjects = schemaRegistry.getAllSubjectsById(id);
+    if (subjects == null) {
+      return null;
+    }
+
+    Optional<String> subjectOpt = subjects.stream().filter(x -> x != null).findAny();
+    if (!subjectOpt.isPresent()) {
+      return null;
+    }
+
+    String subject = subjectOpt.get();
+
+    try {
+      SchemaMetadata schemaMetadata = schemaRegistry.getLatestSchemaMetadata(subject);
+      Optional<ParsedSchema> parsedSchemaOpt = schemaRegistry.parseSchema(
+              schemaMetadata.getSchemaType(),
+              schemaMetadata.getSchema(),
+              schemaMetadata.getReferences()
+      );
+
+      if (!parsedSchemaOpt.isPresent()) {
+        return null;
+      }
+
+      return (Schema) parsedSchemaOpt.get().rawSchema();
+
+    } catch (NullPointerException e) {
+      return null;
+    }
+  }
+
+  private Object deriveType(
+          ByteBuffer buffer,
+          int length,
+          int start,
+          CombinedSchema combinedSchema) {
+
+    for (Schema subschema : combinedSchema.getSubschemas()) {
+      Schema referredSchema = subschema;
+      if (subschema instanceof ReferenceSchema) {
+        referredSchema = ((ReferenceSchema)subschema).getReferredSchema();
+      }
+
+      if (referredSchema instanceof ObjectSchema) {
+        ObjectSchema objSchema = (ObjectSchema)referredSchema;
+        Map<String, Object> unprocessedProperties = objSchema.getUnprocessedProperties();
+        String typeName = (String) unprocessedProperties.getOrDefault(typeProperty, "");
+
+        try {
+          return deriveType(buffer, length, start, typeName);
+        } catch (SerializationException | IOException e) {
+          continue;
+        }
+      }
+    }
+
+    throw new SerializationException(
+            "Can not deserialize object using " + combinedSchema.toString());
   }
 
   private Object deriveType(
