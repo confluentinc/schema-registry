@@ -42,6 +42,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -159,90 +160,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
                                              + "was already initialized");
     }
 
-    if (config.BACKUPS) {
-      try (Stream<Path> walk = Files.walk(Paths.get("backups"))) {
-        List<String> backups = walk.filter(Files::isRegularFile)
-                .map(x -> x.getFileName().toString())
-                .collect(Collectors.toList());
-        Collections.sort(backups, Collections.reverseOrder());
-        if (backups.size() >= 2) {
-          String currentPath = "backups/" + backups.get(0);
-          String previousPath = "backups/" + backups.get(1);
-          boolean areEqual = Arrays.equals(getChecksum(currentPath), getChecksum(previousPath));
-          if (!areEqual) {
-            restoreFromFilePath(previousPath);
-          }
-        }
-      } catch (IOException e) {
-        log.error("failed to get files");
-      }
-    }
-
     initLatch.countDown();
-  }
-
-  private void restoreFromFilePath(String filePath) {
-    try {
-      Scanner scanner = new Scanner(new File(filePath));
-//      BufferedReader reader = new BufferedReader(new FileReader(filePath));
-//      String line;
-//      while ((line = reader.readLine()) != null) {
-      while (scanner.hasNextLine()) {
-        String line = scanner.nextLine();
-        String[] tokens = line.split("\t");
-        if (tokens.length != 6) {
-          log.error("wrong number of parts for line");
-        }
-        ObjectMapper obj = new ObjectMapper();
-        //TODO: not just hardcode this
-        SchemaRegistryKey key = obj.readValue(tokens[0], SchemaKey.class);
-        SchemaRegistryValue value = obj.readValue(tokens[1], SchemaValue.class);
-        SchemaRegistryValue oldValue = obj.readValue(tokens[2], SchemaValue.class);
-        String[] tpTokens = tokens[3].split("-");
-        TopicPartition tp = new TopicPartition(tpTokens[0], Integer.parseInt(tpTokens[1]));
-        long offset = Long.parseLong(tokens[4]);
-        long timestamp = Long.parseLong(tokens[5]);
-        ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<byte[], byte[]>(
-                topic,
-                tp.partition(),
-                timestamp,
-                this.serializer.serializeKey((K) key),
-                value == null ? null : this.serializer.serializeValue((V) value));
-        producer.send(producerRecord).get();
-//        storeUpdateHandler.handleUpdate((K) key, (V) value, (V) oldValue, tp, offset, timestamp);
-      }
-    } catch (FileNotFoundException e) {
-      log.error("file not found");
-    } catch (JsonProcessingException e) {
-      log.error("json processing exception");
-    } catch (SerializationException e) {
-      log.error("serializaiton error");
-    } catch (Exception e) {
-      log.error("other exception");
-    }
-  }
-
-  private byte[] getChecksum(String filePath) {
-    try {
-      MessageDigest md = MessageDigest.getInstance("MD5");
-      InputStream is = Files.newInputStream(Paths.get(filePath));
-      DigestInputStream dis = new DigestInputStream(is, md);
-      while (dis.read() != -1) {
-
-      }
-      return md.digest();
-    } catch (Exception e) {
-      log.error("Failed to get hash for file: " + filePath);
-    }
-    return null;
   }
 
   public static void addSchemaRegistryConfigsToClientProperties(SchemaRegistryConfig config,
                                                                 Properties props) {
     props.putAll(config.originalsWithPrefix("kafkastore."));
   }
-
-
 
   private void createOrVerifySchemaTopic() throws StoreInitializationException {
     Properties props = new Properties();
@@ -341,7 +265,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
 
-    Map<ConfigResource, Config> configs =
+//    Map<ConfigResource, Config> configs =
         admin.describeConfigs(Collections.singleton(topicResource)).all()
             .get(initTimeout, TimeUnit.MILLISECONDS);
 //    Config topicConfigs = configs.get(topicResource);

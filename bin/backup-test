@@ -17,35 +17,28 @@
 
 base_dir=$(dirname $0)/..
 
-# Production jars
-export CLASSPATH=$CLASSPATH:$base_dir/share/java/kafka-serde-tools/*
+if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
+    export KAFKA_HEAP_OPTS="-Xmx512M"
+fi
 
-# Development jars. `mvn package` should collect all the required dependency jars here
-for dir in $base_dir/package-kafka-serde-tools/target/kafka-serde-tools-package-*-development; do
-  export CLASSPATH=$CLASSPATH:$dir/share/java/kafka-serde-tools/*
-done
+DEFAULT_SCHEMA_REGISTRY_URL="--bootstrap-server localhost:9092"
+BACKUP_FILE=""
 
-
-DEFAULT_LINE_READER="--line-reader io.confluent.kafka.formatter.AvroMessageReader"
-
-DEFAULT_SCHEMA_REGISTRY_URL="--property schema.registry.url=http://localhost:8081"
-
-for OPTION in "$@"
+args=("$@")
+for i in "${!args[@]}"
 do
-  case $OPTION in
-    --line-reader)
-      DEFAULT_LINE_READER=""
+  arg=${args[$i]}
+  case $arg in
+    --bootstrap-server)
+      DEFAULT_SCHEMA_REGISTRY_URL="--bootstrap-server "+${args[$i + 1]}
       ;;
-    --*)
+    --backup-file)
+      BACKUP_FILE=${args[$i + 1]}
       ;;
     *)
-      PROPERTY=$OPTION
-      case $PROPERTY in
-        schema.registry.url*)
-          DEFAULT_SCHEMA_REGISTRY_URL=""
-        ;;
-      esac
       ;;
-    esac
+  esac
 done
-exec $(dirname $0)/schema-registry-run-class kafka.tools.ConsoleProducer $DEFAULT_LINE_READER $DEFAULT_SCHEMA_REGISTRY_URL "$@"
+
+#exec $(dirname $0)/schema-registry-run-class kafka.tools.ConsoleProducer $DEFAULT_SCHEMA_REGISTRY_URL --topic _schemas --property parse.key=true < $BACKUP_FILE
+exec $(dirname $0)/schema-registry-run-class io.confluent.kafka.schemaregistry.tools.RestoreFromBackup "$@" 

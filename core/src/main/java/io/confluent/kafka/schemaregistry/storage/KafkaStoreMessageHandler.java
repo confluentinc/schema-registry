@@ -26,9 +26,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
+
+import static io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.WRITE_BACKUPS;
 
 public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
@@ -102,35 +102,34 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       handleSchemaUpdate((SchemaKey) key,
           (SchemaValue) value,
           (SchemaValue) oldValue);
-      recordBackup(key, value, oldValue, tp, offset, timestamp);
+      recordBackup(key, value, tp, timestamp);
     } else if (value == null) {
       // ignore non-schema tombstone
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
-      recordBackup(key, value, oldValue, tp, offset, timestamp);
+      recordBackup(key, value, tp, timestamp);
     } else if (key.getKeyType() == SchemaRegistryKeyType.CLEAR_SUBJECT) {
       handleClearSubject((ClearSubjectValue) value);
-      recordBackup(key, value, oldValue, tp, offset, timestamp);
+      recordBackup(key, value, tp, timestamp);
     }
   }
 
   private void recordBackup(SchemaRegistryKey key,
                             SchemaRegistryValue value,
-                            SchemaRegistryValue oldValue,
                             TopicPartition tp,
-                            long offset,
                             long timestamp) {
-    try {
-      FileWriter fr = new FileWriter(backupFile, true);
-      fr.write(formatKey(key) + "\t" +
-              formatMessage(value) + "\t" +
-              formatMessage(oldValue) + "\t" +
-              tp.toString() + "\t" +
-              offset + "\t" +
-              timestamp + "\n");
-      fr.close();
-    } catch (IOException e) {
-      log.error("failed to write debug file");
+    if (WRITE_BACKUPS) {
+      try {
+        FileOutputStream fileStream = new FileOutputStream(backupFile, true);
+        OutputStreamWriter fr = new OutputStreamWriter(fileStream, "UTF-8");
+        fr.write(formatKey(key) + "\t" +
+                formatMessage(value) + "\t" +
+                tp.toString() + "\t" +
+                timestamp + "\n");
+        fr.close();
+      } catch (IOException e) {
+        log.error("failed to write debug file");
+      }
     }
   }
 
