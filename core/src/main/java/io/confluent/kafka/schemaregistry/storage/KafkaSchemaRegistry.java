@@ -62,6 +62,7 @@ import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -128,7 +129,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throw new SchemaRegistryException("Schema registry configuration is null");
     }
     this.config = config;
-    this.props = new HashMap<>();
+    this.props = new ConcurrentHashMap<>();
     Boolean leaderEligibility = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     if (leaderEligibility == null) {
       leaderEligibility = config.getBoolean(SchemaRegistryConfig.LEADER_ELIGIBILITY);
