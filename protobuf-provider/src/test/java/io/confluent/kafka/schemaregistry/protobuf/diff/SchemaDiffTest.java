@@ -42,6 +42,19 @@ import static org.junit.Assert.assertTrue;
 
 public class SchemaDiffTest {
 
+  private static final String badMessageSchemaString = "syntax = \"proto3\";\n"
+      + "\n"
+      + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+      + "option java_outer_classname = \"TestMapProtos\";\n"
+      + "\n"
+      + "import \"google/protobuf/descriptor.proto\";\n"
+      + "\n"
+      + "message TestBadMessage {\n"
+      + "    bad.Message test_bad_message = 1;\n"
+      + "}\n";
+
+  private static final ProtobufSchema badMessageSchema = new ProtobufSchema(badMessageSchemaString);
+
   @Test
   public void checkProtobufSchemaCompatibility() throws Exception {
     ObjectMapper objectMapper = new ObjectMapper();
@@ -143,6 +156,11 @@ public class SchemaDiffTest {
         Difference.Type.FIELD_SCALAR_KIND_CHANGED,
         "#/TestMessage/2"
     )));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void checkCompatibilityUsingBadMessage() throws Exception {
+    SchemaDiff.compare(badMessageSchema, badMessageSchema);
   }
 
   private static String readFile(String fileName) {
