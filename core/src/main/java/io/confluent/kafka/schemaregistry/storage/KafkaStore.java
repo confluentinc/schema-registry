@@ -16,9 +16,9 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.io.IOException;
-
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -32,6 +32,12 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -40,12 +46,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
@@ -151,7 +151,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
     }
-
     initLatch.countDown();
   }
 
@@ -257,22 +256,22 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
 
-//    Map<ConfigResource, Config> configs =
+    Map<ConfigResource, Config> configs =
         admin.describeConfigs(Collections.singleton(topicResource)).all()
             .get(initTimeout, TimeUnit.MILLISECONDS);
-//    Config topicConfigs = configs.get(topicResource);
-//    String retentionPolicy = topicConfigs.get(TopicConfig.CLEANUP_POLICY_CONFIG).value();
-//    if (retentionPolicy == null || !TopicConfig.CLEANUP_POLICY_COMPACT.equals(retentionPolicy)) {
-//      log.error("The retention policy of the schema topic " + topic + " is incorrect. "
-//                + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
-//                + "deleting your schemas after a week. "
-//                + "Refer to Kafka documentation for more details on cleanup policies");
-//
-//      throw new StoreInitializationException("The retention policy of the schema topic " + topic
-//                                             + " is incorrect. Expected cleanup.policy to be "
-//                                             + "'compact' but it is " + retentionPolicy);
-//
-//    }
+    Config topicConfigs = configs.get(topicResource);
+    String retentionPolicy = topicConfigs.get(TopicConfig.CLEANUP_POLICY_CONFIG).value();
+    if (retentionPolicy == null || !TopicConfig.CLEANUP_POLICY_COMPACT.equals(retentionPolicy)) {
+      log.error("The retention policy of the schema topic " + topic + " is incorrect. "
+                + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
+                + "deleting your schemas after a week. "
+                + "Refer to Kafka documentation for more details on cleanup policies");
+
+      throw new StoreInitializationException("The retention policy of the schema topic " + topic
+                                             + " is incorrect. Expected cleanup.policy to be "
+                                             + "'compact' but it is " + retentionPolicy);
+
+    }
   }
 
 
