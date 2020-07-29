@@ -26,7 +26,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 
 import static io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.WRITE_BACKUPS;
 
@@ -47,6 +50,10 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     this.idGenerator = idGenerator;
     this.backupFile = new File("./backups/" + backupFilePrefix + ".txt");
     try {
+      File directory = new File("./backups");
+      if (!directory.exists()) {
+        directory.mkdir();
+      }
       backupFile.createNewFile();
     } catch (IOException e) {
       log.error("failed to create backup file");
@@ -98,34 +105,43 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
                            TopicPartition tp,
                            long offset,
                            long timestamp) {
+    if (key.getKeyType() != SchemaRegistryKeyType.SCHEMA && value == null) {
+      // ignore non-schema tombstone
+      return;
+    }
+
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
           (SchemaValue) value,
           (SchemaValue) oldValue);
-      recordBackup(key, value, tp, timestamp);
-    } else if (value == null) {
-      // ignore non-schema tombstone
     } else if (key.getKeyType() == SchemaRegistryKeyType.DELETE_SUBJECT) {
       handleDeleteSubject((DeleteSubjectValue) value);
-      recordBackup(key, value, tp, timestamp);
     } else if (key.getKeyType() == SchemaRegistryKeyType.CLEAR_SUBJECT) {
       handleClearSubject((ClearSubjectValue) value);
-      recordBackup(key, value, tp, timestamp);
     }
+    recordBackup(key, value, tp, timestamp);
   }
 
   private void recordBackup(SchemaRegistryKey key,
                             SchemaRegistryValue value,
                             TopicPartition tp,
                             long timestamp) {
-    if (WRITE_BACKUPS) {
+    if (WRITE_BACKUPS && key.getKeyType() != SchemaRegistryKeyType.NOOP) {
       try {
         FileOutputStream fileStream = new FileOutputStream(backupFile, true);
         OutputStreamWriter fr = new OutputStreamWriter(fileStream, "UTF-8");
-        fr.write(formatKey(key) + "\t" +
-                formatMessage(value) + "\t" +
-                tp.toString() + "\t" +
-                timestamp + "\n");
+        fr.write(
+                key.keyType.toString()
+                        + "\t"
+                        + formatKey(key)
+                        + "\t"
+                        + formatMessage(value)
+                        + "\t"
+                        + tp.toString()
+                        + "\t"
+                        + timestamp
+                        + "\n"
+        );
         fr.close();
       } catch (IOException e) {
         log.error("failed to write debug file");

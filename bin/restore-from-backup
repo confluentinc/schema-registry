@@ -40,5 +40,4 @@ do
   esac
 done
 
-#exec $(dirname $0)/schema-registry-run-class kafka.tools.ConsoleProducer $DEFAULT_SCHEMA_REGISTRY_URL --topic _schemas --property parse.key=true < $BACKUP_FILE
 exec $(dirname $0)/schema-registry-run-class io.confluent.kafka.schemaregistry.tools.RestoreFromBackup "$@" 
