@@ -44,6 +44,8 @@ public class MetricsContainer {
   public static final String JMX_PREFIX = "kafka.schema.registry";
 
   public static final String RESOURCE_LABEL_PREFIX = "resource.";
+  public static final String RESOURCE_LABEL_KAFKA_CLUSTER_ID =
+          RESOURCE_LABEL_PREFIX + "kafka.cluster.id";
   public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
   public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
   public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
@@ -220,12 +222,14 @@ public class MetricsContainer {
 
   private static MetricsContext getMetricsContext(SchemaRegistryConfig config,
                                                   String kafkaClusterId) {
+    String srGroupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
+
     Map<String, Object> metadata =
             config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
 
-    metadata.put(RESOURCE_LABEL_CLUSTER_ID, kafkaClusterId);
-    metadata.put(RESOURCE_LABEL_GROUP_ID,
-            config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG));
+    metadata.put(RESOURCE_LABEL_KAFKA_CLUSTER_ID, kafkaClusterId);
+    metadata.put(RESOURCE_LABEL_CLUSTER_ID, srGroupId);
+    metadata.put(RESOURCE_LABEL_GROUP_ID, srGroupId);
     metadata.put(RESOURCE_LABEL_TYPE,  "schema_registry");
     metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
     metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());

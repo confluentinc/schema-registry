@@ -62,6 +62,7 @@ import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -128,7 +129,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throw new SchemaRegistryException("Schema registry configuration is null");
     }
     this.config = config;
-    this.props = new HashMap<>();
+    this.props = new ConcurrentHashMap<>();
     Boolean leaderEligibility = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     if (leaderEligibility == null) {
       leaderEligibility = config.getBoolean(SchemaRegistryConfig.LEADER_ELIGIBILITY);
@@ -198,6 +199,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   protected KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore(
       SchemaRegistryConfig config) throws SchemaRegistryException {
+    return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
+        config,
+        getSchemaUpdateHandler(config),
+        this.serializer, lookupCache, new NoopKey());
+  }
+
+  protected SchemaUpdateHandler getSchemaUpdateHandler(SchemaRegistryConfig config) {
     Map<String, Object> handlerConfigs =
         config.originalsWithPrefix(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG + ".");
     handlerConfigs.put(StoreUpdateHandler.SCHEMA_REGISTRY, this);
@@ -207,12 +215,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             handlerConfigs);
     String backupFilePrefix = System.currentTimeMillis() + "";
     KafkaStoreMessageHandler storeHandler =
-        new KafkaStoreMessageHandler(this, lookupCache, idGenerator, backupFilePrefix);
+        new KafkaStoreMessageHandler(this, getLookupCache(), getIdentityGenerator(), backupFilePrefix);
+    for (SchemaUpdateHandler customSchemaHandler : customSchemaHandlers) {
+      log.info("Registering custom schema handler: {}",
+          customSchemaHandler.getClass().getName()
+      );
+    }
     customSchemaHandlers.add(storeHandler);
-    return new KafkaStore<SchemaRegistryKey, SchemaRegistryValue>(
-        config,
-        new CompositeSchemaUpdateHandler(customSchemaHandlers),
-        this.serializer, lookupCache, new NoopKey());
+    return new CompositeSchemaUpdateHandler(customSchemaHandlers);
   }
 
   protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache() {
