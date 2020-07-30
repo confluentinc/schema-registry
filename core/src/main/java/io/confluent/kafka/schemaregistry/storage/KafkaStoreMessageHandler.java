@@ -54,11 +54,15 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       if (!directory.exists()) {
         if (!directory.mkdir()) {
           log.error("failed to create directory");
+        } else {
+          log.info("created new directory: " + directory.getAbsolutePath());
         }
       }
       if (!backupFile.exists()) {
         if (!backupFile.createNewFile()) {
           log.error("failed to create backup file");
+        } else {
+          log.info("created new file: " + backupFile.getAbsolutePath());
         }
       }
     } catch (IOException e) {
