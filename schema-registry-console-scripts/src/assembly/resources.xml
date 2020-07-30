@@ -10,6 +10,7 @@
       <outputDirectory></outputDirectory>
       <includes>
         <include>schema-registry-*</include>
+        <include>restore-from-backup</include>
       </includes>
     </fileSet>
   </fileSets>
