@@ -215,7 +215,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             handlerConfigs);
     String backupFilePrefix = System.currentTimeMillis() + "";
     KafkaStoreMessageHandler storeHandler =
-        new KafkaStoreMessageHandler(this, getLookupCache(), getIdentityGenerator(), backupFilePrefix);
+        new KafkaStoreMessageHandler(
+                this,
+                getLookupCache(),
+                getIdentityGenerator(),
+                backupFilePrefix
+        );
     for (SchemaUpdateHandler customSchemaHandler : customSchemaHandlers) {
       log.info("Registering custom schema handler: {}",
           customSchemaHandler.getClass().getName()
