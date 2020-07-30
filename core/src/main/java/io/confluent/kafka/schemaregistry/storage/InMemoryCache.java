@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 
 /**
@@ -229,6 +230,28 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     } else {
       return null;
     }
+  }
+
+  @Override
+  public Set<String> subjects(String subject, boolean lookupDeletedSubjects) {
+    return subjects(matchingPredicate(subject), lookupDeletedSubjects);
+  }
+
+  public Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+    return store.entrySet().stream()
+        .flatMap(e -> {
+          K k = e.getKey();
+          V v = e.getValue();
+          if (k instanceof SchemaKey) {
+            SchemaKey key = (SchemaKey) k;
+            SchemaValue value = (SchemaValue) v;
+            if (value != null && (!value.isDeleted() || lookupDeletedSubjects)) {
+              return match.test(key.getSubject()) ? Stream.of(key.getSubject()) : Stream.empty();
+            }
+          }
+          return Stream.empty();
+        })
+        .collect(Collectors.toSet());
   }
 
   @Override

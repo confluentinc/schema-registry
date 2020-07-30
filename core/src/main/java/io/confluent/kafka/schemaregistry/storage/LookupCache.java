@@ -116,6 +116,14 @@ public interface LookupCache<K,V> extends Store<K,V> {
   Mode mode(String subject, boolean returnTopLevelIfNotFound, Mode defaultForTopLevel);
 
   /**
+   * Returns subjects that have schemas (that are not deleted) that match the given subject.
+   *
+   * @param subject the subject, or null for all subjects
+   * @return the subjects with matching schemas
+   */
+  Set<String> subjects(String subject, boolean lookupDeletedSubjects) throws StoreException;
+
+  /**
    * Returns whether there exist schemas (that are not deleted) that match the given subject.
    *
    * @param subject the subject, or null for all subjects

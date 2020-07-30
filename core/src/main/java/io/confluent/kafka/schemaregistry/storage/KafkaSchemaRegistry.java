@@ -1111,6 +1111,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return subjects;
   }
 
+  public Set<String> subjects(String subject,
+                              boolean lookupDeletedSubjects)
+      throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.subjects(subject, lookupDeletedSubjects);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error from the backend Kafka store", e);
+    }
+  }
+
   public boolean hasSubjects(String subject,
                              boolean lookupDeletedSubjects)
           throws SchemaRegistryStoreException {
