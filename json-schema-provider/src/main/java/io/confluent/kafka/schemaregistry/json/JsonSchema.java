@@ -196,7 +196,7 @@ public class JsonSchema implements ParsedSchema {
           }
         }
         SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
-          .useDefaults(true).nullableSupport(true).draftV7Support();
+            .useDefaults(true).nullableSupport(true).draftV7Support();
         for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
           URI child = ReferenceResolver.resolve(idUri, dep.getKey());
           builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
