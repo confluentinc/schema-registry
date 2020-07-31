@@ -188,8 +188,6 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String INTER_INSTANCE_HEADERS_WHITELIST_CONFIG =
       "inter.instance.headers.whitelist";
 
-  public static final String TELEMETRY_REPORTER_ENABLED_CONFIG = "confluent.telemetry.enabled";
-
   protected static final String SCHEMAREGISTRY_GROUP_ID_DOC =
       "Use this setting to override the group.id for the Kafka group used when Kafka is used for "
       + "leader election.\n"
@@ -345,13 +343,10 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
       = "A list of ``http`` headers to forward from follower to leader, "
       + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
-  protected static final String TELEMETRY_REPORTER_ENABLED_DOC =
-          "If true, enables sending telemetry data";
 
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
-  private static final boolean TELEMETRY_REPORTER_ENABLED_DEFAULT = false;
 
   // TODO: move to Apache's ConfigDef
   private static final ConfigDef config;
@@ -540,10 +535,7 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
     .define(INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,
-            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
-    .define(TELEMETRY_REPORTER_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
-            TELEMETRY_REPORTER_ENABLED_DEFAULT, ConfigDef.Importance.LOW,
-            TELEMETRY_REPORTER_ENABLED_DOC);
+            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
   }
 
   private final CompatibilityLevel compatibilityType;
