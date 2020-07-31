@@ -33,7 +33,6 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -82,8 +81,9 @@ public class MetricsContainer {
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
 
-    List<MetricsReporter> reporters = config.getConfiguredInstances(getMetricReporterConfig(config),
-            MetricsReporter.class, Collections.emptyMap());
+    List<MetricsReporter> reporters = config.getConfiguredInstances(
+        config.getList(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG),
+        MetricsReporter.class, Collections.emptyMap());
 
     telemetryReporter = getTelemetryReporter(reporters);
 
@@ -199,16 +199,6 @@ public class MetricsContainer {
       default:
         return null;
     }
-  }
-
-  private static List<String> getMetricReporterConfig(SchemaRegistryConfig config) {
-    List<String> classes = new ArrayList<>(config.getList(
-            ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG));
-    if (config.getBoolean(SchemaRegistryConfig.TELEMETRY_REPORTER_ENABLED_CONFIG)
-            && !classes.contains(TELEMETRY_REPORTER_CLASS)) {
-      classes.add(TELEMETRY_REPORTER_CLASS);
-    }
-    return classes;
   }
 
   private static MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
