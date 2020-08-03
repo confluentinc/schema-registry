@@ -16,6 +16,7 @@
 package io.confluent.connect.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -91,6 +92,7 @@ public class JsonSchemaData {
 
   private static final JsonNodeFactory JSON_NODE_FACTORY =
       JsonNodeFactory.withExactBigDecimals(true);
+  private static final ObjectMapper JSON_OBJECT_MAPPER = new ObjectMapper();
 
   private static final Map<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS =
       new EnumMap<>(
@@ -962,7 +964,13 @@ public class JsonSchemaData {
       builder.parameters(parameters);
     }
     if (jsonSchema.hasDefaultValue()) {
-      builder.defaultValue(jsonSchema.getDefaultValue());
+      Object defaultValue = jsonSchema.getDefaultValue();
+      JsonToConnectTypeConverter logicalConverter =
+          TO_CONNECT_CONVERTERS.get(builder.type());
+      if (logicalConverter != null) {
+        defaultValue = logicalConverter.convert(builder.build(), JSON_OBJECT_MAPPER.convertValue(defaultValue, JsonNode.class));
+      }
+      builder.defaultValue(defaultValue);
     }
 
     if (forceOptional) {
