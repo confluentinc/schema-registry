@@ -16,10 +16,12 @@
 package io.confluent.connect.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -91,6 +93,8 @@ public class JsonSchemaData {
 
   private static final JsonNodeFactory JSON_NODE_FACTORY =
       JsonNodeFactory.withExactBigDecimals(true);
+
+  private static final ObjectMapper OBJECT_MAPPER = Jackson.newObjectMapper();
 
   private static final Map<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS =
       new EnumMap<>(
@@ -498,9 +502,9 @@ public class JsonSchemaData {
       schemaType = schema.type();
       if (jsonValue == null || jsonValue.isNull()) {
         if (schema.defaultValue() != null) {
-          return schema.defaultValue(); // any logical type conversions should already have been
+          // any logical type conversions should already have been applied
+          return schema.defaultValue();
         }
-        // applied
         if (schema.isOptional()) {
           return null;
         }
@@ -962,7 +966,8 @@ public class JsonSchemaData {
       builder.parameters(parameters);
     }
     if (jsonSchema.hasDefaultValue()) {
-      builder.defaultValue(jsonSchema.getDefaultValue());
+      JsonNode jsonNode = OBJECT_MAPPER.convertValue(jsonSchema.getDefaultValue(), JsonNode.class);
+      builder.defaultValue(toConnectData(builder, jsonNode));
     }
 
     if (forceOptional) {
