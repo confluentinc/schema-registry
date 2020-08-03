@@ -398,6 +398,44 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectInt8() {
+    NumberSchema schema = NumberSchema.builder()
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
+        .build();
+    Schema expectedSchema = Schema.INT8_SCHEMA;
+    checkNonObjectConversion(expectedSchema, (byte) 12, schema, ShortNode.valueOf((short) 12));
+  }
+
+  @Test
+  public void testToConnectInt8WithDefault() {
+    NumberSchema schema = NumberSchema.builder()
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
+        .defaultValue((byte) 34)
+        .build();
+    Schema expectedSchema = SchemaBuilder.int8().defaultValue((byte) 34).build();
+    checkNonObjectConversion(expectedSchema, (byte) 12, schema, ShortNode.valueOf((short) 12));
+  }
+
+  @Test
+  public void testToConnectInt8WithDefaultConversion() {
+    NumberSchema schema = NumberSchema.builder()
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
+        .defaultValue(34)
+        .build();
+    Schema expectedSchema = SchemaBuilder.int8().defaultValue((byte) 34).build();
+    checkNonObjectConversion(expectedSchema, (byte) 12, schema, IntNode.valueOf(12));
+  }
+
+  @Test
+  public void testToConnectInt16() {
+    NumberSchema schema = NumberSchema.builder()
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int16"))
+        .build();
+    Schema expectedSchema = Schema.INT16_SCHEMA;
+    checkNonObjectConversion(expectedSchema, (short) 12, schema, ShortNode.valueOf((short) 12));
+  }
+
+  @Test
   public void testToConnectInt32() {
     NumberSchema schema = NumberSchema.builder()
         .unprocessedProperties(Collections.singletonMap("connect.type", "int32"))
