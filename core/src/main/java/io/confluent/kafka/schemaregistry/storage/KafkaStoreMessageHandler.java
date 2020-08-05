@@ -44,13 +44,14 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
                                   LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
                                   IdGenerator idGenerator,
+                                  String backupsDir,
                                   String backupFilePrefix) {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
-    this.backupFile = new File("./backups/" + backupFilePrefix + ".txt");
+    this.backupFile = new File(backupsDir + "/" + backupFilePrefix + ".txt");
     try {
-      File directory = new File("./backups");
+      File directory = new File(backupsDir);
       if (!directory.exists()) {
         if (!directory.mkdir()) {
           log.error("failed to create directory");
@@ -136,12 +137,20 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
                             SchemaRegistryValue value,
                             TopicPartition tp,
                             long timestamp) {
-    if (WRITE_BACKUPS && key.getKeyType() != SchemaRegistryKeyType.NOOP) {
+    String tenantRemovedSubject = "";
+    if (key instanceof SubjectKey) {
+      String subject = ((SubjectKey) key).getSubject();
+      int index = subject.indexOf("_");
+      if (index != -1) {
+        tenantRemovedSubject = subject.substring(index);
+      }
+    }
+    if (WRITE_BACKUPS && key.getKeyType() != SchemaRegistryKeyType.NOOP
+            && tenantRemovedSubject != "__SR_HEALTHCHECK") {
       try {
         FileOutputStream fileStream = new FileOutputStream(backupFile, true);
         OutputStreamWriter fr = new OutputStreamWriter(fileStream, "UTF-8");
-        fr.write(
-                key.keyType.toString()
+        String output = key.keyType.toString()
                         + "\t"
                         + formatKey(key)
                         + "\t"
@@ -150,8 +159,9 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
                         + tp.toString()
                         + "\t"
                         + timestamp
-                        + "\n"
-        );
+                        + "\n";
+        log.info("KZ BACKUP: " + output);
+        fr.write(output);
         fr.close();
       } catch (IOException e) {
         log.error("failed to write debug file");

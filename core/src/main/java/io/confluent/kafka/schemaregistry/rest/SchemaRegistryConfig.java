@@ -50,6 +50,7 @@ public class SchemaRegistryConfig extends RestConfig {
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryConfig.class);
 
   public static final boolean WRITE_BACKUPS = true;
+  public static final String BACKUPS_DIR = "./mnt/backups";
 
   private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
