@@ -68,6 +68,13 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
   }
 
   @Override
+  public void checkpoint(int count) {
+    for (SchemaUpdateHandler handler : handlers) {
+      handler.checkpoint(count);
+    }
+  }
+
+  @Override
   public void close() throws IOException {
     for (SchemaUpdateHandler handler : handlers) {
       handler.close();
