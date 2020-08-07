@@ -142,11 +142,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       String subject = ((SubjectKey) key).getSubject();
       int index = subject.indexOf("_");
       if (index != -1) {
-        tenantRemovedSubject = subject.substring(index);
+        tenantRemovedSubject = subject.substring(index + 1);
       }
     }
     if (WRITE_BACKUPS && key.getKeyType() != SchemaRegistryKeyType.NOOP
-            && tenantRemovedSubject != "__SR_HEALTHCHECK") {
+            && !tenantRemovedSubject.equals("__SR_HEALTHCHECK")) {
       try {
         FileOutputStream fileStream = new FileOutputStream(backupFile, true);
         OutputStreamWriter fr = new OutputStreamWriter(fileStream, "UTF-8");
