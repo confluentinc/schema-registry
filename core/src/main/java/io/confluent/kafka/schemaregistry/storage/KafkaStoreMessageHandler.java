@@ -31,6 +31,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.util.Arrays;
 
 public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
@@ -138,19 +139,23 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
                             SchemaRegistryValue value,
                             TopicPartition tp,
                             long timestamp) {
-    String tenantRemovedSubject = "";
+    boolean ignoreSubject = false;
     if (key instanceof SubjectKey) {
       String subject = ((SubjectKey) key).getSubject();
       if (subject != null) {
         int index = subject.indexOf("_");
         if (index != -1) {
-          tenantRemovedSubject = subject.substring(index + 1);
+          String tenantRemovedSubject = subject.substring(index + 1);
+          String[] subjectsBlacklist = schemaRegistry.config()
+                  .getString(SchemaRegistryConfig.BACKUPS_SUBJECT_BLACKLIST)
+                  .split(" ");
+          ignoreSubject = Arrays.asList(subjectsBlacklist).contains(tenantRemovedSubject);
         }
       }
     }
     if (schemaRegistry.config().getBoolean(SchemaRegistryConfig.WRITE_BACKUPS)
             && key.getKeyType() != SchemaRegistryKeyType.NOOP
-            && !tenantRemovedSubject.equals("__SR_HEALTHCHECK")) {
+            && !ignoreSubject) {
       try {
         FileOutputStream fileStream = new FileOutputStream(backupFile, true);
         OutputStreamWriter fr = new OutputStreamWriter(fileStream, "UTF-8");

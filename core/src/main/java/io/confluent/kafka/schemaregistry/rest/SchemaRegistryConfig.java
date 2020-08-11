@@ -51,6 +51,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String WRITE_BACKUPS = "schema.registry.write.backups";
   public static final String BACKUPS_DIR = "schema.registry.backups.directory";
+  public static final String BACKUPS_SUBJECT_BLACKLIST = "schema.registry.backups.directory";
 
   private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
@@ -351,6 +352,9 @@ public class SchemaRegistryConfig extends RestConfig {
       + "case of disaster.";
   protected static final String BACKUPS_DIR_DOC =
       "The directory to write backup files enabled via \"schema.registry.write.backups\" flag";
+  protected static final String BACKUPS_SUBJECT_BLACKLIST_DOC =
+      "A space separated list of subject to ignore for backup logging "
+      + "(e.g. \"subject_1 subject_2\")";
 
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
@@ -547,7 +551,9 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(WRITE_BACKUPS, ConfigDef.Type.BOOLEAN, false,
             ConfigDef.Importance.LOW, WRITE_BACKUPS_DOC)
     .define(BACKUPS_DIR, ConfigDef.Type.STRING, "./mnt/backups",
-            ConfigDef.Importance.LOW, BACKUPS_DIR_DOC);
+            ConfigDef.Importance.LOW, BACKUPS_DIR_DOC)
+    .define(BACKUPS_SUBJECT_BLACKLIST, ConfigDef.Type.STRING, "__SR_HEALTHCHECK",
+            ConfigDef.Importance.LOW, BACKUPS_SUBJECT_BLACKLIST_DOC);
   }
 
   private final CompatibilityLevel compatibilityType;
