@@ -1048,6 +1048,31 @@ public class JsonSchemaDataTest {
     }
   }
 
+  @Test
+  public void testNumericFormats() {
+    String schema = "{\n"
+        + "  \"title\": \"numerics with format\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"id\": {\n"
+        + "      \"type\": \"integer\",\n"
+        + "      \"format\": \"int32\"\n"
+        + "    },\n"
+        + "    \"num\": {\n"
+        + "      \"type\": \"number\",\n"
+        + "      \"format\": \"double\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"required\": [\n"
+        + "    \"id\"\n"
+        + "  ],\n"
+        + "  \"additionalProperties\": false\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    jsonSchemaData.toConnectSchema(jsonSchema);
+  }
+
   @Ignore
   @Test
   public void testRecursiveSchema() {
