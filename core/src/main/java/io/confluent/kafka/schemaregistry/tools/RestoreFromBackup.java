@@ -16,6 +16,7 @@ package io.confluent.kafka.schemaregistry.tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.ClearSubjectKey;
 import io.confluent.kafka.schemaregistry.storage.ClearSubjectValue;
 import io.confluent.kafka.schemaregistry.storage.ConfigKey;
@@ -34,30 +35,32 @@ import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.Properties;
 import java.util.Scanner;
 
 public class RestoreFromBackup {
-  private static final Logger log = LoggerFactory.getLogger(RestoreFromBackup.class);
-  private static final String topic = "_schemas";
   private static final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer =
           new SchemaRegistrySerializer();
+  private static SchemaRegistryConfig config;
 
   public static void main(String[] args) throws Exception {
     if (args.length < 2) {
+      // Currently, the properties file can be found at
+      // /config/schema-registry.properties for local runs, and at
+      // /opt/confluent/etc/schema-registry/schema-registry.properties in CPD
       System.out.println(
-              "Usage: java " + RestoreFromBackup.class.getName() + " backup file"
-                      + " bootstrap brokers (space separated list)"
+              "Usage: java " + RestoreFromBackup.class.getName() + " backup_file"
+                      + " properties_file"
       );
       System.exit(1);
     }
 
+    config = new SchemaRegistryConfig(args[1]);
     Properties props = new Properties();
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, args[1]);
+    props.putAll(config.originalsWithPrefix("kafkastore."));
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapBrokers());
     props.put(ProducerConfig.ACKS_CONFIG, "-1");
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
             org.apache.kafka.common.serialization.ByteArraySerializer.class);
@@ -65,10 +68,10 @@ public class RestoreFromBackup {
             org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
     props.put(ProducerConfig.CLIENT_ID_CONFIG, "backup-restore-producer");
-
     KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
 
     restoreFromFilePath(args[0], producer);
+    System.out.println("Restore complete.");
   }
 
   private static void restoreFromFilePath(String filePath, KafkaProducer<byte[], byte[]> producer)
@@ -78,7 +81,10 @@ public class RestoreFromBackup {
       String line = scanner.nextLine();
       String[] tokens = line.split("\t");
       if (tokens.length != 5) {
-        log.error("wrong number of parts for line");
+        System.out.println(
+                String.format("wrong number of parts for line: expected 5, got %d",
+                tokens.length));
+        break;
       }
       SchemaRegistryKeyType type = SchemaRegistryKeyType.forName(tokens[0]);
       if (type == SchemaRegistryKeyType.NOOP) {
@@ -88,11 +94,15 @@ public class RestoreFromBackup {
       ObjectMapper obj = new ObjectMapper();
       SchemaRegistryKey key = keyFromType(obj, tokens[1], type);
       SchemaRegistryValue value = valueFromType(obj, tokens[2], type);
-      String[] tpTokens = tokens[3].split("-");
+      String tp = tokens[3];
+      int partitionIndex = tp.lastIndexOf("-");
+      if (partitionIndex == -1) {
+        throw new IllegalArgumentException("topic partition was not well formed: " + tp);
+      }
       long timestamp = Long.parseLong(tokens[4]);
       ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
-              topic,
-              Integer.parseInt(tpTokens[1]),
+              config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG),
+              Integer.parseInt(tp.substring(partitionIndex + 1)),
               timestamp,
               serializer.serializeKey(key),
               value == null ? null : serializer.serializeValue(value));

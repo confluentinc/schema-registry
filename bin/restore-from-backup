@@ -21,23 +21,4 @@ if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
     export KAFKA_HEAP_OPTS="-Xmx512M"
 fi
 
-DEFAULT_SCHEMA_REGISTRY_URL="--bootstrap-server localhost:9092"
-BACKUP_FILE=""
-
-args=("$@")
-for i in "${!args[@]}"
-do
-  arg=${args[$i]}
-  case $arg in
-    --bootstrap-server)
-      DEFAULT_SCHEMA_REGISTRY_URL="--bootstrap-server "+${args[$i + 1]}
-      ;;
-    --backup-file)
-      BACKUP_FILE=${args[$i + 1]}
-      ;;
-    *)
-      ;;
-  esac
-done
-
 exec $(dirname $0)/schema-registry-run-class io.confluent.kafka.schemaregistry.tools.RestoreFromBackup "$@" 
