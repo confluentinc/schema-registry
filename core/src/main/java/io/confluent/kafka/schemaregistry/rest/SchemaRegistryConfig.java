@@ -51,7 +51,8 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String WRITE_BACKUPS = "schema.registry.write.backups";
   public static final String BACKUPS_DIR = "schema.registry.backups.directory";
-  public static final String BACKUPS_SUBJECT_BLACKLIST = "schema.registry.backups.directory";
+  public static final String BACKUPS_SUBJECT_BLACKLIST =
+          "schema.registry.backups.subjects.blacklist";
 
   private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
