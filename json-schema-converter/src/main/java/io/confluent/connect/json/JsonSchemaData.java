@@ -984,12 +984,12 @@ public class JsonSchemaData {
     NumberSchema numberSchema = null;
     StringSchema stringSchema = null;
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
-      if (subSchema instanceof NumberSchema) {
+      if (subSchema instanceof EnumSchema) {
+        enumSchema = (EnumSchema) subSchema;
+      } else if (subSchema instanceof NumberSchema) {
         numberSchema = (NumberSchema) subSchema;
       } else if (subSchema instanceof StringSchema) {
         stringSchema = (StringSchema) subSchema;
-      } else if (subSchema instanceof EnumSchema) {
-        enumSchema = (EnumSchema) subSchema;
       }
     }
     if (enumSchema != null) {
