@@ -980,23 +980,30 @@ public class JsonSchemaData {
 
   private Schema allOfToConnectSchema(
       CombinedSchema combinedSchema, Integer version, boolean forceOptional) {
-    boolean foundStringSchema = false;
     EnumSchema enumSchema = null;
+    NumberSchema numberSchema = null;
+    StringSchema stringSchema = null;
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
-      if (subSchema instanceof StringSchema) {
-        foundStringSchema = true;
+      if (subSchema instanceof NumberSchema) {
+        numberSchema = (NumberSchema) subSchema;
+      } else if (subSchema instanceof StringSchema) {
+        stringSchema = (StringSchema) subSchema;
       } else if (subSchema instanceof EnumSchema) {
         enumSchema = (EnumSchema) subSchema;
       }
     }
     if (enumSchema != null) {
-      if (foundStringSchema) {
-        return toConnectSchema(enumSchema, version, forceOptional);
-      } else {
-        throw new IllegalArgumentException("Only string enum is supported");
-      }
+      // An enum overrides other schemas
+      return toConnectSchema(enumSchema, version, forceOptional);
+    } else if (numberSchema != null
+        && stringSchema != null
+        && stringSchema.getFormatValidator() != null) {
+      // This is a number or integer with a format
+      return toConnectSchema(numberSchema, version, forceOptional);
+    } else {
+      throw new IllegalArgumentException("Unsupported criterion "
+          + combinedSchema.getCriterion() + " for " + combinedSchema);
     }
-    throw new IllegalArgumentException("Unsupported criterion: " + combinedSchema.getCriterion());
   }
 
   private interface JsonToConnectTypeConverter {
