@@ -111,15 +111,17 @@ public class ProtobufData {
    */
   public ProtobufSchemaAndValue fromConnectData(Schema schema, Object value) {
     ProtobufSchema protobufSchema = fromConnectSchema(schema);
-    // Reset the default schema name index.
-    // Note: the assumption is that default names will be generated in an order in both the
-    // schema and data
-    // such that the names correspond to each other in the schema and data.
-    // TODO try to break this assumption
-    defaultSchemaNameIndex = 0;
+    Object ctx = null;
+    if (schema != null) {
+      String name = schema.name();
+      if (name == null) {
+        name = DEFAULT_SCHEMA_NAME + "1";
+      }
+      ctx = protobufSchema.toDescriptor(name);
+    }
     return new ProtobufSchemaAndValue(
         protobufSchema,
-        fromConnectData(schema, "", value, protobufSchema)
+        fromConnectData(ctx, schema, "", value, protobufSchema)
     );
   }
 
@@ -129,6 +131,7 @@ public class ProtobufData {
   }
 
   private Object fromConnectData(
+      Object ctx,
       Schema schema,
       String scope,
       Object value,
@@ -199,13 +202,12 @@ public class ProtobufData {
           }
           List<Object> newListValue = new ArrayList<>();
           for (Object o : listValue) {
-            newListValue.add(fromConnectData(schema.valueSchema(), scope, o, protobufSchema));
+            newListValue.add(fromConnectData(ctx, schema.valueSchema(), scope, o, protobufSchema));
           }
           return newListValue;
         case MAP:
           final Map<?, ?> mapValue = (Map<?, ?>) value;
-          String mapName = getUnqualifiedName(schema.name());
-          String scopedMapName = scope + ProtobufSchema.toMapEntry(mapName);
+          String scopedMapName = ((Descriptor) ctx).getFullName();
           List<Message> newMapValue = new ArrayList<>();
           for (Map.Entry<?, ?> mapEntry : mapValue.entrySet()) {
             DynamicMessage.Builder mapBuilder = protobufSchema.newMessageBuilder(scopedMapName);
@@ -216,12 +218,14 @@ public class ProtobufData {
             final FieldDescriptor keyDescriptor = mapDescriptor.findFieldByName(KEY_FIELD);
             final FieldDescriptor valueDescriptor = mapDescriptor.findFieldByName(VALUE_FIELD);
             Object entryKey = fromConnectData(
+                getFieldType(keyDescriptor),
                 schema.keySchema(),
                 scopedMapName + ".",
                 mapEntry.getKey(),
                 protobufSchema
             );
             Object entryValue = fromConnectData(
+                getFieldType(valueDescriptor),
                 schema.valueSchema(),
                 scopedMapName + ".",
                 mapEntry.getValue(),
@@ -244,21 +248,24 @@ public class ProtobufData {
             for (Field field : schema.fields()) {
               Object object = struct.get(field);
               if (object != null) {
+                Object fieldCtx = getFieldType(ctx, field.name());
                 return new Pair(field.name(),
-                    fromConnectData(field.schema(), scope, object, protobufSchema)
+                    fromConnectData(fieldCtx, field.schema(), scope, object, protobufSchema)
                 );
               }
             }
             throw new DataException("Cannot find non-null field");
           } else {
-            String scopedStructName = scope + getUnqualifiedName(structName);
+            String scopedStructName = ((Descriptor) ctx).getFullName();
             DynamicMessage.Builder messageBuilder =
                 protobufSchema.newMessageBuilder(scopedStructName);
             if (messageBuilder == null) {
               throw new DataException("Invalid message name: " + scopedStructName);
             }
             for (Field field : schema.fields()) {
+              Object fieldCtx = getFieldType(ctx, field.name());
               Object fieldValue = fromConnectData(
+                  fieldCtx,
                   field.schema(),
                   scopedStructName + ".",
                   struct.get(field),
@@ -289,6 +296,28 @@ public class ProtobufData {
       }
     } catch (ClassCastException e) {
       throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
+    }
+  }
+
+  private Object getFieldType(Object ctx, String name) {
+    FieldDescriptor field = ((Descriptor) ctx).findFieldByName(name);
+    if (field == null) {
+      // Could not find a field with this name, which is the case with oneOfs.
+      // In this case we just return the current Descriptor context,
+      // since finding oneOf field names can be achieved with the enclosing Descriptor.
+      return ctx;
+    }
+    return getFieldType(field);
+  }
+
+  private Object getFieldType(FieldDescriptor field) {
+    switch (field.getJavaType()) {
+      case MESSAGE:
+        return field.getMessageType();
+      case ENUM:
+        return field.getEnumType();
+      default:
+        return field.getJavaType();
     }
   }
 
