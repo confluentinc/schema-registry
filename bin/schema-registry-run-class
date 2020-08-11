@@ -39,13 +39,8 @@ done
 for library in "confluent-security/schema-registry" "confluent-common" "rest-utils" "schema-registry"; do
   CLASSPATH=$CLASSPATH:$base_dir/share/java/$library/*
 done
-
+# CPD environment jars
 CLASSPATH=$CLASSPATH:$base_dir/share/java/cc-schema-registry/*
-#CLASSPATH=$CLASSPATH:$base_dir/share/java/cc-schema-registry/kafka-schema-registry-6.1.0-SNAPSHOT.jar
-#CLASSPATH=$CLASSPATH:$base_dir/share/java/cc-schema-registry/kafka-clients-6.1.0-ccs-20200807.174218-68.jar
-#CLASSPATH=$CLASSPATH:$base_dir/share/java/cc-schema-registry/kafka-client-plugins-6.1.0-ce-20200807.194247-1035.jar
-#CLASSPATH=$CLASSPATH:$base_dir/share/java/cc-schema-registry/slf4j-log4j12-1.7.26.jar
-#CLASSPATH=$CLASSPATH:$base_dir/share/java/cc-schema-registry/slf4j-api-1.7.26.jar
 
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
@@ -180,4 +175,3 @@ if [ "x$DAEMON_MODE" = "xtrue" ]; then
 else
   exec "$JAVA" $SCHEMA_REGISTRY_HEAP_OPTS $SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS $SCHEMA_REGISTRY_GC_LOG_OPTS $SCHEMA_REGISTRY_JMX_OPTS $SCHEMA_REGISTRY_LOG4J_OPTS -cp $CLASSPATH $SCHEMA_REGISTRY_OPTS "$MAIN" "$@"
 fi
-$CLASSPATH

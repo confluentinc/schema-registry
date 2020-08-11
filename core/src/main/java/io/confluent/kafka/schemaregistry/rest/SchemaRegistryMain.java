@@ -31,7 +31,7 @@ public class SchemaRegistryMain {
    * Starts an embedded Jetty server running the REST server.
    */
   public static void main(String[] args) throws IOException {
-    
+
     try {
       if (args.length != 1) {
         log.error("Properties file is required to start the schema registry REST instance");
