@@ -14,13 +14,14 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.tools.RestoreFromBackup;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.junit.After;
@@ -34,15 +35,16 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Iterator;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
@@ -52,6 +54,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreTest.class);
 
   private static final int ADMIN_TIMEOUT_SEC = 60;
+  private static final String BACKUPS_DIRECTORY = "./test_backups";
 
   @Before
   public void setup() {
@@ -563,5 +566,84 @@ public class KafkaStoreTest extends ClusterTestHarness {
             new InMemoryCache<>(), new IncrementalIdGenerator(), ".", "");
 
     storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null, null, null, 0L, 0L);
+  }
+
+  // Test backup file + directory creation when logging is enabled
+  @Test
+  public void testKafkaStoreBackupLoggingFileCreation() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+    props.put(SchemaRegistryConfig.WRITE_BACKUPS, true);
+    props.put(SchemaRegistryConfig.BACKUPS_DIR, BACKUPS_DIRECTORY);
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+            config,
+            new SchemaRegistrySerializer()
+    );
+    KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore = schemaRegistry.kafkaStore;
+    kafkaStore.init();
+
+    File directory = new File(BACKUPS_DIRECTORY);
+    assertTrue(directory.exists());
+    assertTrue(directory.isDirectory());
+
+    File[] files = directory.listFiles();
+    assertNotNull(files);
+    assertEquals(files.length, 1);
+
+    File file = files[0];
+    assertNotNull(file);
+    assertTrue(file.exists());
+    assertTrue(file.isFile());
+    assertTrue(file.getName().endsWith(".txt"));
+
+    // cleanup
+    assertTrue(file.delete());
+    assertTrue(directory.delete());
+  }
+
+  // Test backup logging when enabled
+  @Test
+  public void testKafkaStoreBackupLogging() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+    props.put(SchemaRegistryConfig.WRITE_BACKUPS, true);
+    props.put(SchemaRegistryConfig.BACKUPS_DIR, BACKUPS_DIRECTORY);
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+            config,
+            new SchemaRegistrySerializer()
+    );
+    KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore = schemaRegistry.kafkaStore;
+    kafkaStore.init();
+    int id = 100;
+    kafkaStore.put(new SchemaKey("subject", 1),
+            new SchemaValue("subject", 1, id, "schemaString", false)
+    );
+    kafkaStore.put(new SchemaKey("subject", 1),
+            new SchemaValue("subject", 1, id, "schemaString", true)
+    );
+    kafkaStore.put(new SchemaKey("subject2", 1),
+            new SchemaValue("subject2", 1, id, "schemaString", false)
+    );
+
+    File directory = new File(BACKUPS_DIRECTORY);
+    File[] files = directory.listFiles();
+    assertNotNull(files);
+    File backupFile = files[0];
+
+    List<ProducerRecord<byte[], byte[]>> records =
+            RestoreFromBackup.getSchemaRecords(backupFile.getPath(), schemaRegistry.config());
+    assertEquals(records.size(), 3);
+
+    // cleanup
+    for (File file : files) {
+      assertTrue(file.delete());
+    }
+    assertTrue(directory.delete());
   }
 }

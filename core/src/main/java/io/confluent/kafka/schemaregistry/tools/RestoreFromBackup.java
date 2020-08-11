@@ -37,6 +37,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 import java.util.Scanner;
 
@@ -70,12 +72,17 @@ public class RestoreFromBackup {
     props.put(ProducerConfig.CLIENT_ID_CONFIG, "backup-restore-producer");
     KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
 
-    restoreFromFilePath(args[0], producer);
+    List<ProducerRecord<byte[], byte[]>> records = getSchemaRecords(args[0], config);
+    for (ProducerRecord<byte[], byte[]> record : records) {
+      producer.send(record).get();
+    }
     System.out.println("Restore complete.");
   }
 
-  private static void restoreFromFilePath(String filePath, KafkaProducer<byte[], byte[]> producer)
-          throws Exception {
+  // Public for testing
+  public static List<ProducerRecord<byte[], byte[]>> getSchemaRecords(
+          String filePath, SchemaRegistryConfig config) throws Exception {
+    List<ProducerRecord<byte[], byte[]>> records = new ArrayList<>();
     Scanner scanner = new Scanner(new File(filePath), "UTF-8");
     while (scanner.hasNextLine()) {
       String line = scanner.nextLine();
@@ -100,15 +107,15 @@ public class RestoreFromBackup {
         throw new IllegalArgumentException("topic partition was not well formed: " + tp);
       }
       long timestamp = Long.parseLong(tokens[4]);
-      ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+      records.add(new ProducerRecord<>(
               config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG),
               Integer.parseInt(tp.substring(partitionIndex + 1)),
               timestamp,
               serializer.serializeKey(key),
-              value == null ? null : serializer.serializeValue(value));
-      producer.send(producerRecord).get();
+              value == null ? null : serializer.serializeValue(value)));
     }
     scanner.close();
+    return records;
   }
 
   private static SchemaRegistryKey keyFromType(ObjectMapper obj,
