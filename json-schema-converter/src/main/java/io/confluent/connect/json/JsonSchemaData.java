@@ -992,8 +992,8 @@ public class JsonSchemaData {
         stringSchema = (StringSchema) subSchema;
       }
     }
-    if (enumSchema != null) {
-      // An enum overrides other schemas
+    if (enumSchema != null && stringSchema != null) {
+      // This is a string enum
       return toConnectSchema(enumSchema, version, forceOptional);
     } else if (numberSchema != null
         && stringSchema != null
