@@ -141,9 +141,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     String tenantRemovedSubject = "";
     if (key instanceof SubjectKey) {
       String subject = ((SubjectKey) key).getSubject();
-      int index = subject.indexOf("_");
-      if (index != -1) {
-        tenantRemovedSubject = subject.substring(index + 1);
+      if (subject != null) {
+        int index = subject.indexOf("_");
+        if (index != -1) {
+          tenantRemovedSubject = subject.substring(index + 1);
+        }
       }
     }
     if (schemaRegistry.config().getBoolean(SchemaRegistryConfig.WRITE_BACKUPS)
