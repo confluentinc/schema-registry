@@ -219,7 +219,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                 this,
                 getLookupCache(),
                 getIdentityGenerator(),
-                config.BACKUPS_DIR,
+                config.getString(SchemaRegistryConfig.BACKUPS_DIR),
                 backupFilePrefix
         );
     for (SchemaUpdateHandler customSchemaHandler : customSchemaHandlers) {

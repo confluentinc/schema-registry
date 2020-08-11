@@ -49,8 +49,8 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryConfig.class);
 
-  public static final boolean WRITE_BACKUPS = true;
-  public static final String BACKUPS_DIR = "./mnt/backups";
+  public static final String WRITE_BACKUPS = "schema.registry.write.backups";
+  public static final String BACKUPS_DIR = "schema.registry.backups.directory";
 
   private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
   // TODO: change this to "http://0.0.0.0:8081" when PORT_CONFIG is deleted.
@@ -346,6 +346,11 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
       = "A list of ``http`` headers to forward from follower to leader, "
       + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
+  protected static final String WRITE_BACKUPS_DOC =
+      "Whether or not to write backup commit logs that can be used to restore state in"
+      + "case of disaster.";
+  protected static final String BACKUPS_DIR_DOC =
+      "The directory to write backup files enabled via \"schema.registry.write.backups\" flag";
 
   private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
@@ -538,7 +543,11 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
     .define(INTER_INSTANCE_PROTOCOL_CONFIG, ConfigDef.Type.STRING, HTTP,
-            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
+            ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC)
+    .define(WRITE_BACKUPS, ConfigDef.Type.BOOLEAN, false,
+            ConfigDef.Importance.LOW, WRITE_BACKUPS_DOC)
+    .define(BACKUPS_DIR, ConfigDef.Type.STRING, "./mnt/backups",
+            ConfigDef.Importance.LOW, BACKUPS_DIR_DOC);
   }
 
   private final CompatibilityLevel compatibilityType;

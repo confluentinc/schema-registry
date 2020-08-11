@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
@@ -30,8 +31,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
-
-import static io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.WRITE_BACKUPS;
 
 public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
@@ -50,24 +49,26 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
     this.backupFile = new File(backupsDir + "/" + backupFilePrefix + ".txt");
-    try {
-      File directory = new File(backupsDir);
-      if (!directory.exists()) {
-        if (!directory.mkdir()) {
-          log.error("failed to create directory");
-        } else {
-          log.info("created new directory: " + directory.getAbsolutePath());
+    if (schemaRegistry.config().getBoolean(SchemaRegistryConfig.WRITE_BACKUPS)) {
+      try {
+        File directory = new File(backupsDir);
+        if (!directory.exists()) {
+          if (!directory.mkdir()) {
+            log.error("failed to create directory");
+          } else {
+            log.info("created new directory: " + directory.getAbsolutePath());
+          }
         }
-      }
-      if (!backupFile.exists()) {
-        if (!backupFile.createNewFile()) {
-          log.error("failed to create backup file");
-        } else {
-          log.info("created new file: " + backupFile.getAbsolutePath());
+        if (!backupFile.exists()) {
+          if (!backupFile.createNewFile()) {
+            log.error("failed to create backup file");
+          } else {
+            log.info("created new file: " + backupFile.getAbsolutePath());
+          }
         }
+      } catch (IOException e) {
+        log.error("exception when trying to create backup file");
       }
-    } catch (IOException e) {
-      log.error("exception when trying to create backup file");
     }
   }
 
@@ -145,7 +146,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         tenantRemovedSubject = subject.substring(index + 1);
       }
     }
-    if (WRITE_BACKUPS && key.getKeyType() != SchemaRegistryKeyType.NOOP
+    if (schemaRegistry.config().getBoolean(SchemaRegistryConfig.WRITE_BACKUPS)
+            && key.getKeyType() != SchemaRegistryKeyType.NOOP
             && !tenantRemovedSubject.equals("__SR_HEALTHCHECK")) {
       try {
         FileOutputStream fileStream = new FileOutputStream(backupFile, true);
@@ -160,7 +162,6 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
                         + "\t"
                         + timestamp
                         + "\n";
-        log.info("KZ BACKUP: " + output);
         fr.write(output);
         fr.close();
       } catch (IOException e) {
