@@ -36,11 +36,9 @@ for dir in $base_dir/package-schema-registry/target/kafka-schema-registry-packag
 done
 
 # Production jars, including kafka, rest-utils, and schema-registry
-for library in "confluent-security/schema-registry" "confluent-common" "rest-utils" "schema-registry"; do
+for library in "confluent-security/schema-registry" "confluent-common" "confluent-telemetry" "rest-utils" "schema-registry" "cc-schema-registry"; do
   CLASSPATH=$CLASSPATH:$base_dir/share/java/$library/*
 done
-# CPD environment jars
-CLASSPATH=$CLASSPATH:$base_dir/share/java/cc-schema-registry/*
 
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
