@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.client;
 
 import io.confluent.common.config.ConfigDef;
+import java.util.Collections;
 
 public class SchemaRegistryClientConfig {
 
@@ -41,9 +42,10 @@ public class SchemaRegistryClientConfig {
 
     for (org.apache.kafka.common.config.ConfigDef.ConfigKey configKey
         : sslConfigDef.configKeys().values()) {
+      ConfigDef.Type type = typeFor(configKey.type);
       configDef.define(namespace + configKey.name,
-          typeFor(configKey.type),
-          configKey.defaultValue != null ? configKey.defaultValue : "",
+          type,
+          configKey.defaultValue != null ? configKey.defaultValue : defaultFor(type),
           importanceFor(configKey.importance),
           configKey.documentation);
     }
@@ -51,6 +53,31 @@ public class SchemaRegistryClientConfig {
 
   private static ConfigDef.Type typeFor(org.apache.kafka.common.config.ConfigDef.Type type) {
     return ConfigDef.Type.valueOf(type.name());
+  }
+
+  private static Object defaultFor(ConfigDef.Type type) {
+    switch (type) {
+      case BOOLEAN:
+        return false;
+      case STRING:
+        return "";
+      case INT:
+        return 0;
+      case LONG:
+        return 0L;
+      case DOUBLE:
+        return 0.0;
+      case LIST:
+        return Collections.emptyList();
+      case CLASS:
+        return Object.class;
+      case PASSWORD:
+        return "";
+      case MAP:
+        return Collections.emptyMap();
+      default:
+        return "";
+    }
   }
 
   private static ConfigDef.Importance importanceFor(
