@@ -131,7 +131,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
           + "instances.";
 
   public static ConfigDef baseConfigDef() {
-    return new ConfigDef()
+    ConfigDef configDef = new ConfigDef()
         .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
                 Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
@@ -160,6 +160,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, PROXY_HOST_DOC)
         .define(PROXY_PORT, Type.INT, PROXY_PORT_DEFAULT,
                 Importance.LOW, PROXY_PORT_DOC);
+    SchemaRegistryClientConfig.withClientSslSupport(
+        configDef, SchemaRegistryClientConfig.CLIENT_NAMESPACE);
+    return configDef;
   }
 
   public AbstractKafkaSchemaSerDeConfig(ConfigDef config, Map<?, ?> props) {
