@@ -43,7 +43,7 @@ public class SchemaRegistryClientConfig {
         : sslConfigDef.configKeys().values()) {
       configDef.define(namespace + configKey.name,
           typeFor(configKey.type),
-          configKey.defaultValue != null ? configKey.defaultValue : "",
+          configKey.defaultValue,
           importanceFor(configKey.importance),
           configKey.documentation);
     }
