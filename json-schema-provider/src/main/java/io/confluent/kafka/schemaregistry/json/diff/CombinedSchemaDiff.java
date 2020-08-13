@@ -22,10 +22,12 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.CombinedSchema.ValidationCriterion;
 import org.everit.json.schema.Schema;
 
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.COMBINED_TYPE_CHANGED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.COMBINED_TYPE_EXTENDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.COMBINED_TYPE_SUBSCHEMAS_CHANGED;
-import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.COMPOSITION_METHOD_CHANGED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PRODUCT_TYPE_EXTENDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PRODUCT_TYPE_NARROWED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.SUM_TYPE_EXTENDED;
@@ -37,22 +39,21 @@ class CombinedSchemaDiff {
       final CombinedSchema original,
       final CombinedSchema update
   ) {
-    if (!original.getCriterion().equals(update.getCriterion())) {
-      ctx.addDifference(COMPOSITION_METHOD_CHANGED);
-    } else {
+    Difference.Type type = compareCriteria(ctx, original.getCriterion(), update.getCriterion());
+    if (type != COMBINED_TYPE_CHANGED) {
       // Use sets to collapse duplicate entries
       final Set<Schema> originalSubschemas = new LinkedHashSet<>(original.getSubschemas());
       final Set<Schema> updateSubschemas = new LinkedHashSet<>(update.getSubschemas());
       int originalSize = originalSubschemas.size();
       int updateSize = updateSubschemas.size();
       if (originalSize < updateSize) {
-        if (original.getCriterion() == CombinedSchema.ALL_CRITERION) {
+        if (update.getCriterion() == CombinedSchema.ALL_CRITERION) {
           ctx.addDifference(PRODUCT_TYPE_EXTENDED);
         } else {
           ctx.addDifference(SUM_TYPE_EXTENDED);
         }
       } else if (originalSize > updateSize) {
-        if (original.getCriterion() == CombinedSchema.ALL_CRITERION) {
+        if (update.getCriterion() == CombinedSchema.ALL_CRITERION) {
           ctx.addDifference(PRODUCT_TYPE_NARROWED);
         } else {
           ctx.addDifference(SUM_TYPE_NARROWED);
@@ -88,5 +89,24 @@ class CombinedSchemaDiff {
         ctx.addDifference(COMBINED_TYPE_SUBSCHEMAS_CHANGED);
       }
     }
+  }
+
+  private static Difference.Type compareCriteria(
+      final Context ctx,
+      final ValidationCriterion original,
+      final ValidationCriterion update
+  ) {
+    Difference.Type type;
+    if (original.equals(update)) {
+      type = null;
+    } else if (update == CombinedSchema.ANY_CRITERION) {
+      type = COMBINED_TYPE_EXTENDED;
+    } else {
+      type = COMBINED_TYPE_CHANGED;
+    }
+    if (type != null) {
+      ctx.addDifference(type);
+    }
+    return type;
   }
 }
