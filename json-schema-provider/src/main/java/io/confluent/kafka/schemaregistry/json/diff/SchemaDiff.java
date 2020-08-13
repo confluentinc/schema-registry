@@ -94,6 +94,7 @@ public class SchemaDiff {
 
     changes.add(Type.ENUM_ARRAY_EXTENDED);
 
+    changes.add(Type.COMBINED_TYPE_EXTENDED);
     changes.add(Type.PRODUCT_TYPE_NARROWED);
     changes.add(Type.SUM_TYPE_EXTENDED);
     changes.add(Type.NOT_TYPE_NARROWED);
