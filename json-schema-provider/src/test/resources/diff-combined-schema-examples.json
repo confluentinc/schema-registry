@@ -388,5 +388,137 @@
       "PRODUCT_TYPE_EXTENDED #/properties/prop1"
     ],
     "compatible": false
-  }
+  },
+  {
+    "description": "Detect compatible change from oneOf to anyOf schema",
+    "original_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "COMBINED_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from oneOf to anyOf schema with more properties",
+    "original_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "COMBINED_TYPE_EXTENDED #/properties/prop1",
+      "SUM_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from allOf to anyOf schema",
+    "original_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "COMBINED_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from oneOf to allOf schema with more properties",
+    "original_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "COMBINED_TYPE_EXTENDED #/properties/prop1",
+      "SUM_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
 ]
