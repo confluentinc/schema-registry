@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -41,9 +42,9 @@ import java.util.stream.Stream;
  */
 public class InMemoryCache<K, V> implements LookupCache<K, V> {
   // visible for subclasses
-  protected final ConcurrentNavigableMap<K, V> store;
-  private final Map<Integer, Map<String, Integer>> guidToSubjectVersions;
-  private final Map<MD5, Integer> hashToGuid;
+  private final ConcurrentNavigableMap<K, V> store;
+  private final Map<String, Map<Integer, Map<String, Integer>>> guidToSubjectVersions;
+  private final Map<String, Map<MD5, Integer>> hashToGuid;
   private final Map<SchemaKey, Set<Integer>> referencedBy;
 
   public InMemoryCache(Serializer<K, V> serializer) {
@@ -107,11 +108,14 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     MD5 md5 = MD5.ofString(schema.getSchema(), refs == null ? null : refs.stream()
         .map(ref -> new SchemaReference(ref.getName(), ref.getSubject(), ref.getVersion()))
         .collect(Collectors.toList()));
-    Integer id = hashToGuid.get(md5);
+    Map<MD5, Integer> hashes = hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
+    Integer id = hashes.get(md5);
     if (id == null) {
       return null;
     }
-    Map<String, Integer> subjectVersions = guidToSubjectVersions.get(id);
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<String, Integer> subjectVersions = guids.get(id);
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return null;
     }
@@ -130,7 +134,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public SchemaKey schemaKeyById(Integer id) {
-    Map<String, Integer> subjectVersions = guidToSubjectVersions.get(id);
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<String, Integer> subjectVersions = guids.get(id);
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return null;
     }
@@ -140,8 +146,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue) {
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
-        guidToSubjectVersions.computeIfAbsent(schemaValue.getId(), k -> new HashMap<>());
+        guids.computeIfAbsent(schemaValue.getId(), k -> new HashMap<>());
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
@@ -163,21 +171,25 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (schemaValue == null) {
       return;
     }
-    Map<String, Integer> subjectVersions = guidToSubjectVersions.get(schemaValue.getId());
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<String, Integer> subjectVersions = guids.get(schemaValue.getId());
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return;
     }
     subjectVersions.computeIfPresent(schemaKey.getSubject(),
         (k, v) -> schemaKey.getVersion() == v ? null : v);
     if (subjectVersions.isEmpty()) {
-      guidToSubjectVersions.remove(schemaValue.getId());
+      guids.remove(schemaValue.getId());
     }
   }
 
   @Override
   public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
-        guidToSubjectVersions.computeIfAbsent(schemaValue.getId(), k -> new HashMap<>());
+        guids.computeIfAbsent(schemaValue.getId(), k -> new HashMap<>());
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
@@ -189,7 +201,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
     MD5 md5 = MD5.ofString(schemaValue.getSchema(), schemaValue.getReferences());
-    hashToGuid.put(md5, schemaValue.getId());
+    Map<MD5, Integer> hashes = hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+    hashes.put(md5, schemaValue.getId());
   }
 
   @Override
@@ -239,7 +252,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return subjects(matchingPredicate(subject), lookupDeletedSubjects);
   }
 
-  public Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+  protected Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .flatMap(e -> {
           K k = e.getKey();
@@ -261,7 +274,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return hasSubjects(matchingPredicate(subject), lookupDeletedSubjects);
   }
 
-  public boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+  protected boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .anyMatch(e -> {
           K k = e.getKey();
@@ -282,11 +295,12 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     clearSubjects(matchingPredicate(subject));
   }
 
-  public void clearSubjects(Predicate<String> match) {
+  protected void clearSubjects(Predicate<String> match) {
     BiPredicate<String, Integer> matchDeleted = matchDeleted(match);
 
-    Iterator<Map.Entry<Integer, Map<String, Integer>>> it =
-        guidToSubjectVersions.entrySet().iterator();
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Iterator<Map.Entry<Integer, Map<String, Integer>>> it = guids.entrySet().iterator();
     while (it.hasNext()) {
       Map<String, Integer> subjectVersions = it.next().getValue();
       subjectVersions.entrySet().removeIf(e -> matchDeleted.test(e.getKey(), e.getValue()));

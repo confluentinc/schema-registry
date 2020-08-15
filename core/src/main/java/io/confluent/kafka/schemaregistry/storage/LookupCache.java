@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.DEFAULT_TENANT;
+
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
@@ -139,4 +141,16 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param subject the subject, or null for all subjects
    */
   void clearSubjects(String subject) throws StoreException;
+
+  default String tenant() {
+    return DEFAULT_TENANT;
+  }
+
+  /**
+   * Can be used by subclasses to implement multi-tenancy
+   *
+   * @param tenant the tenant
+   */
+  default void setTenant(String tenant) {
+  }
 }
