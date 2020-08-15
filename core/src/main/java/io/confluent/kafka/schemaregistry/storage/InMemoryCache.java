@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
+import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -45,17 +46,18 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final Map<MD5, Integer> hashToGuid;
   private final Map<SchemaKey, Set<Integer>> referencedBy;
 
-  public InMemoryCache() {
-    this(new ConcurrentSkipListMap<>());
+  public InMemoryCache(Serializer<K, V> serializer) {
+    this(serializer, new ConcurrentSkipListMap<>());
   }
 
-  public InMemoryCache(ConcurrentNavigableMap<K, V> store) {
+  public InMemoryCache(Serializer<K, V> serializer, ConcurrentNavigableMap<K, V> store) {
     this.store = store;
     this.guidToSubjectVersions = new ConcurrentHashMap<>();
     this.hashToGuid = new ConcurrentHashMap<>();
     this.referencedBy = new ConcurrentHashMap<>();
   }
 
+  @Override
   public void init() throws StoreInitializationException {
     // do nothing
   }
@@ -71,11 +73,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public Iterator<V> getAll(K key1, K key2) {
+  public CloseableIterator<V> getAll(K key1, K key2) {
     ConcurrentNavigableMap<K, V> subMap = (key1 == null && key2 == null)
                                           ? store
                                           : store.subMap(key1, key2);
-    return subMap.values().iterator();
+    return new DelegatingIterator<>(subMap.values().iterator());
   }
 
   @Override
@@ -89,8 +91,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public Iterator<K> getAllKeys() throws StoreException {
-    return store.keySet().iterator();
+  public CloseableIterator<K> getAllKeys() throws StoreException {
+    return new DelegatingIterator<>(store.keySet().iterator());
   }
 
   @Override
@@ -237,7 +239,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return subjects(matchingPredicate(subject), lookupDeletedSubjects);
   }
 
-  public Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+  protected Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .flatMap(e -> {
           K k = e.getKey();
@@ -259,7 +261,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return hasSubjects(matchingPredicate(subject), lookupDeletedSubjects);
   }
 
-  public boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+  protected boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .anyMatch(e -> {
           K k = e.getKey();
@@ -318,5 +320,33 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       }
       return false;
     };
+  }
+
+  static class DelegatingIterator<T> implements CloseableIterator<T> {
+
+    private Iterator<T> iterator;
+
+    public DelegatingIterator(Iterator<T> iterator) {
+      this.iterator = iterator;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iterator.hasNext();
+    }
+
+    @Override
+    public T next() {
+      return iterator.next();
+    }
+
+    @Override
+    public void remove() {
+      iterator.remove();
+    }
+
+    @Override
+    public void close() {
+    }
   }
 }
