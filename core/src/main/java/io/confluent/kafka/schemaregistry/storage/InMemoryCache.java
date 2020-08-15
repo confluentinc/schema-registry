@@ -239,7 +239,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return subjects(matchingPredicate(subject), lookupDeletedSubjects);
   }
 
-  protected Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+  public Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .flatMap(e -> {
           K k = e.getKey();
@@ -261,7 +261,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return hasSubjects(matchingPredicate(subject), lookupDeletedSubjects);
   }
 
-  protected boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+  public boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .anyMatch(e -> {
           K k = e.getKey();
