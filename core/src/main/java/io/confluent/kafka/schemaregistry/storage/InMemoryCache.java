@@ -244,10 +244,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public Set<String> subjects(String subject, boolean lookupDeletedSubjects) {
-    return subjects(matchingPredicate(subject), lookupDeletedSubjects);
+    return subjects(matchingSubjectPredicate(subject), lookupDeletedSubjects);
   }
 
-  protected Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+  private Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .flatMap(e -> {
           K k = e.getKey();
@@ -266,10 +266,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public boolean hasSubjects(String subject, boolean lookupDeletedSubjects) {
-    return hasSubjects(matchingPredicate(subject), lookupDeletedSubjects);
+    return hasSubjects(matchingSubjectPredicate(subject), lookupDeletedSubjects);
   }
 
-  protected boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+  private boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .anyMatch(e -> {
           K k = e.getKey();
@@ -287,10 +287,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public void clearSubjects(String subject) {
-    clearSubjects(matchingPredicate(subject));
+    clearSubjects(matchingSubjectPredicate(subject));
   }
 
-  protected void clearSubjects(Predicate<String> match) {
+  private void clearSubjects(Predicate<String> match) {
     BiPredicate<String, Integer> matchDeleted = matchDeleted(match);
 
     Map<Integer, Map<String, Integer>> guids =
@@ -315,7 +315,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     });
   }
 
-  private Predicate<String> matchingPredicate(String subject) {
+  protected Predicate<String> matchingSubjectPredicate(String subject) {
     return s -> subject == null || subject.equals(s);
   }
 
