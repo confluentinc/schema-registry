@@ -28,11 +28,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
   private final KafkaSchemaRegistry schemaRegistry;
-  private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
+  private final LookupCache lookupCache;
   private IdGenerator idGenerator;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
-                                  LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
+                                  LookupCache lookupCache,
                                   IdGenerator idGenerator) {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
@@ -50,21 +50,21 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
       if (schemaObj != null) {
-        SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
-        if (oldKey != null) {
-          SchemaValue oldSchema;
-          try {
+        try {
+          SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
+          if (oldKey != null) {
+            SchemaValue oldSchema;
             oldSchema = (SchemaValue) lookupCache.get(oldKey);
-          } catch (StoreException e) {
-            log.error("Error while retrieving schema", e);
-            return false;
+            if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
+              log.error("Found a schema with duplicate ID {}.  This schema will not be "
+                      + "registered since a schema already exists with this ID.",
+                  schemaObj.getId());
+              return false;
+            }
           }
-          if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
-            log.error("Found a schema with duplicate ID {}.  This schema will not be "
-                    + "registered since a schema already exists with this ID.",
-                schemaObj.getId());
-            return false;
-          }
+        } catch (StoreException e) {
+          log.error("Error while retrieving schema", e);
+          return false;
         }
       }
     }

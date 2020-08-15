@@ -42,6 +42,10 @@ public class MD5 {
     this.md5 = md5;
   }
 
+  public byte[] bytes() {
+    return md5;
+  }
+
   /**
    * Factory method converts String into MD5 object.
    */
