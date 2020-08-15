@@ -548,7 +548,8 @@ public class KafkaStoreTest extends ClusterTestHarness {
             new SchemaRegistrySerializer()
     );
 
-    InMemoryCache<String, String> store = new InMemoryCache<>(StringSerializer.INSTANCE);
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> store =
+            new InMemoryCache<>(new SchemaRegistrySerializer());
     store.init();
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
             store, new IncrementalIdGenerator());
@@ -569,7 +570,8 @@ public class KafkaStoreTest extends ClusterTestHarness {
             new SchemaRegistrySerializer()
     );
 
-    InMemoryCache<String, String> store = new InMemoryCache<>(StringSerializer.INSTANCE);
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> store =
+            new InMemoryCache<>(new SchemaRegistrySerializer());
     store.init();
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
           store, new IncrementalIdGenerator());
