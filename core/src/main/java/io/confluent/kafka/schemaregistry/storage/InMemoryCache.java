@@ -22,8 +22,6 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
 
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -129,7 +127,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public Set<Integer> referencesSchema(SchemaKey schema) {
-    return referencedBy.getOrDefault(schema, new HashSet<>());
+    return referencedBy.getOrDefault(schema, Collections.newSetFromMap(new ConcurrentHashMap<>()));
   }
 
   @Override
@@ -149,7 +147,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     Map<Integer, Map<String, Integer>> guids =
             guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
-        guids.computeIfAbsent(schemaValue.getId(), k -> new HashMap<>());
+        guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
@@ -189,12 +187,13 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     Map<Integer, Map<String, Integer>> guids =
             guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
-        guids.computeIfAbsent(schemaValue.getId(), k -> new HashMap<>());
+        guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
       SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
-      Set<Integer> refBy = referencedBy.computeIfAbsent(refKey, k -> new HashSet<>());
+      Set<Integer> refBy = referencedBy.computeIfAbsent(
+              refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
       refBy.add(schemaValue.getId());
     }
   }
