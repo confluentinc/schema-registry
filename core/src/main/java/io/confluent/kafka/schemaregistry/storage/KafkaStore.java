@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import java.io.IOException;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -410,7 +409,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
         storeUpdateHandler.close();
       }
       log.debug("Kafka store shut down complete");
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new RuntimeException(e);
     }
   }

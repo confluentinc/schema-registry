@@ -44,5 +44,5 @@ public interface Store<K, V> {
 
   public CloseableIterator<K> getAllKeys() throws StoreException;
 
-  public void close();
+  public void close() throws StoreException;
 }
