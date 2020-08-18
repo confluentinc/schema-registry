@@ -84,7 +84,7 @@ public class ProtobufData {
   private int defaultSchemaNameIndex = 0;
 
   private final Cache<Schema, ProtobufSchema> fromConnectSchemaCache;
-  private final Cache<ProtobufSchema, Schema> toConnectSchemaCache;
+  private final Cache<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean enhancedSchemaSupport;
 
   public ProtobufData() {
@@ -857,7 +857,8 @@ public class ProtobufData {
     if (schema == null) {
       return null;
     }
-    Schema cachedSchema = toConnectSchemaCache.get(schema);
+    Pair<String, ProtobufSchema> cacheKey = new Pair<>(schema.name(), schema);
+    Schema cachedSchema = toConnectSchemaCache.get(cacheKey);
     if (cachedSchema != null) {
       return cachedSchema;
     }
@@ -866,7 +867,7 @@ public class ProtobufData {
     ToConnectContext ctx = new ToConnectContext();
     ctx.put(descriptor.getFullName(), builder);
     Schema resultSchema = toConnectSchema(ctx, builder, descriptor, schema.version()).build();
-    toConnectSchemaCache.put(schema, resultSchema);
+    toConnectSchemaCache.put(cacheKey, resultSchema);
     return resultSchema;
   }
 
