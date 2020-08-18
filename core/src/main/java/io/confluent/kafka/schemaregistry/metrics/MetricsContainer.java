@@ -223,6 +223,8 @@ public class MetricsContainer {
     metadata.put(RESOURCE_LABEL_TYPE,  "schema_registry");
     metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
     metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+    metadata.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG,
+            config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG));
 
     return new KafkaMetricsContext(JMX_PREFIX, metadata);
   }
