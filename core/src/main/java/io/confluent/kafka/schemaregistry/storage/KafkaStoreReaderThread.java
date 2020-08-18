@@ -245,20 +245,24 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   @Override
   public void shutdown() {
-    log.debug("Starting shutdown of KafkaStoreReaderThread.");
+    try {
+      log.debug("Starting shutdown of KafkaStoreReaderThread.");
 
-    super.initiateShutdown();
-    if (consumer != null) {
-      consumer.wakeup();
+      super.initiateShutdown();
+      if (consumer != null) {
+        consumer.wakeup();
+      }
+      if (localStore != null) {
+        localStore.close();
+      }
+      super.awaitShutdown();
+      if (consumer != null) {
+        consumer.close();
+      }
+      log.info("KafkaStoreReaderThread shutdown complete.");
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
-    if (localStore != null) {
-      localStore.close();
-    }
-    super.awaitShutdown();
-    if (consumer != null) {
-      consumer.close();
-    }
-    log.info("KafkaStoreReaderThread shutdown complete.");
   }
 
   public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) throws StoreException {

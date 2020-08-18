@@ -20,8 +20,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
-import java.util.HashMap;
-import java.util.HashSet;
+import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -39,23 +39,19 @@ import java.util.stream.Stream;
  * In-memory store based on maps
  */
 public class InMemoryCache<K, V> implements LookupCache<K, V> {
-  // visible for subclasses
-  protected final ConcurrentNavigableMap<K, V> store;
-  private final Map<Integer, Map<String, Integer>> guidToSubjectVersions;
-  private final Map<MD5, Integer> hashToGuid;
+  private final ConcurrentNavigableMap<K, V> store;
+  private final Map<String, Map<Integer, Map<String, Integer>>> guidToSubjectVersions;
+  private final Map<String, Map<MD5, Integer>> hashToGuid;
   private final Map<SchemaKey, Set<Integer>> referencedBy;
 
-  public InMemoryCache() {
-    this(new ConcurrentSkipListMap<>());
-  }
-
-  public InMemoryCache(ConcurrentNavigableMap<K, V> store) {
-    this.store = store;
+  public InMemoryCache(Serializer<K, V> serializer) {
+    this.store = new ConcurrentSkipListMap<>();
     this.guidToSubjectVersions = new ConcurrentHashMap<>();
     this.hashToGuid = new ConcurrentHashMap<>();
     this.referencedBy = new ConcurrentHashMap<>();
   }
 
+  @Override
   public void init() throws StoreInitializationException {
     // do nothing
   }
@@ -71,11 +67,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public Iterator<V> getAll(K key1, K key2) {
+  public CloseableIterator<V> getAll(K key1, K key2) {
     ConcurrentNavigableMap<K, V> subMap = (key1 == null && key2 == null)
                                           ? store
                                           : store.subMap(key1, key2);
-    return subMap.values().iterator();
+    return new DelegatingIterator<>(subMap.values().iterator());
   }
 
   @Override
@@ -89,8 +85,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public Iterator<K> getAllKeys() throws StoreException {
-    return store.keySet().iterator();
+  public CloseableIterator<K> getAllKeys() throws StoreException {
+    return new DelegatingIterator<>(store.keySet().iterator());
   }
 
   @Override
@@ -105,11 +101,14 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     MD5 md5 = MD5.ofString(schema.getSchema(), refs == null ? null : refs.stream()
         .map(ref -> new SchemaReference(ref.getName(), ref.getSubject(), ref.getVersion()))
         .collect(Collectors.toList()));
-    Integer id = hashToGuid.get(md5);
+    Map<MD5, Integer> hashes = hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
+    Integer id = hashes.get(md5);
     if (id == null) {
       return null;
     }
-    Map<String, Integer> subjectVersions = guidToSubjectVersions.get(id);
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<String, Integer> subjectVersions = guids.get(id);
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return null;
     }
@@ -123,12 +122,14 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public Set<Integer> referencesSchema(SchemaKey schema) {
-    return referencedBy.getOrDefault(schema, new HashSet<>());
+    return referencedBy.getOrDefault(schema, Collections.newSetFromMap(new ConcurrentHashMap<>()));
   }
 
   @Override
   public SchemaKey schemaKeyById(Integer id) {
-    Map<String, Integer> subjectVersions = guidToSubjectVersions.get(id);
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<String, Integer> subjectVersions = guids.get(id);
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return null;
     }
@@ -138,8 +139,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue) {
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
-        guidToSubjectVersions.computeIfAbsent(schemaValue.getId(), k -> new HashMap<>());
+        guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
@@ -161,33 +164,39 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (schemaValue == null) {
       return;
     }
-    Map<String, Integer> subjectVersions = guidToSubjectVersions.get(schemaValue.getId());
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<String, Integer> subjectVersions = guids.get(schemaValue.getId());
     if (subjectVersions == null || subjectVersions.isEmpty()) {
       return;
     }
     subjectVersions.computeIfPresent(schemaKey.getSubject(),
         (k, v) -> schemaKey.getVersion() == v ? null : v);
     if (subjectVersions.isEmpty()) {
-      guidToSubjectVersions.remove(schemaValue.getId());
+      guids.remove(schemaValue.getId());
     }
   }
 
   @Override
   public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
-        guidToSubjectVersions.computeIfAbsent(schemaValue.getId(), k -> new HashMap<>());
+        guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
     subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
       SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
-      Set<Integer> refBy = referencedBy.computeIfAbsent(refKey, k -> new HashSet<>());
+      Set<Integer> refBy = referencedBy.computeIfAbsent(
+              refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
       refBy.add(schemaValue.getId());
     }
   }
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
     MD5 md5 = MD5.ofString(schemaValue.getSchema(), schemaValue.getReferences());
-    hashToGuid.put(md5, schemaValue.getId());
+    Map<MD5, Integer> hashes = hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+    hashes.put(md5, schemaValue.getId());
   }
 
   @Override
@@ -234,10 +243,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public Set<String> subjects(String subject, boolean lookupDeletedSubjects) {
-    return subjects(matchingPredicate(subject), lookupDeletedSubjects);
+    return subjects(matchingSubjectPredicate(subject), lookupDeletedSubjects);
   }
 
-  public Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+  private Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .flatMap(e -> {
           K k = e.getKey();
@@ -256,10 +265,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public boolean hasSubjects(String subject, boolean lookupDeletedSubjects) {
-    return hasSubjects(matchingPredicate(subject), lookupDeletedSubjects);
+    return hasSubjects(matchingSubjectPredicate(subject), lookupDeletedSubjects);
   }
 
-  public boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+  private boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .anyMatch(e -> {
           K k = e.getKey();
@@ -277,14 +286,15 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public void clearSubjects(String subject) {
-    clearSubjects(matchingPredicate(subject));
+    clearSubjects(matchingSubjectPredicate(subject));
   }
 
-  public void clearSubjects(Predicate<String> match) {
+  private void clearSubjects(Predicate<String> match) {
     BiPredicate<String, Integer> matchDeleted = matchDeleted(match);
 
-    Iterator<Map.Entry<Integer, Map<String, Integer>>> it =
-        guidToSubjectVersions.entrySet().iterator();
+    Map<Integer, Map<String, Integer>> guids =
+            guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Iterator<Map.Entry<Integer, Map<String, Integer>>> it = guids.entrySet().iterator();
     while (it.hasNext()) {
       Map<String, Integer> subjectVersions = it.next().getValue();
       subjectVersions.entrySet().removeIf(e -> matchDeleted.test(e.getKey(), e.getValue()));
@@ -304,7 +314,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     });
   }
 
-  private Predicate<String> matchingPredicate(String subject) {
+  protected Predicate<String> matchingSubjectPredicate(String subject) {
     return s -> subject == null || subject.equals(s);
   }
 
@@ -318,5 +328,33 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       }
       return false;
     };
+  }
+
+  static class DelegatingIterator<T> implements CloseableIterator<T> {
+
+    private Iterator<T> iterator;
+
+    public DelegatingIterator(Iterator<T> iterator) {
+      this.iterator = iterator;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iterator.hasNext();
+    }
+
+    @Override
+    public T next() {
+      return iterator.next();
+    }
+
+    @Override
+    public void remove() {
+      iterator.remove();
+    }
+
+    @Override
+    public void close() {
+    }
   }
 }

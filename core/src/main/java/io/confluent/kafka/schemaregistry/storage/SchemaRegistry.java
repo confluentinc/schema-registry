@@ -88,7 +88,11 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return DEFAULT_TENANT;
   }
 
-  // Can be used by subclasses to implement multi-tenancy
+  /**
+   * Can be used by subclasses to implement multi-tenancy
+   *
+   * @param tenant the tenant
+   */
   default void setTenant(String tenant) {
   }
 

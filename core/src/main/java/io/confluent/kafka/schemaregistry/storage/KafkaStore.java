@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import java.io.IOException;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -34,7 +33,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -368,7 +366,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   @Override
-  public Iterator<V> getAll(K key1, K key2) throws StoreException {
+  public CloseableIterator<V> getAll(K key1, K key2) throws StoreException {
     assertInitialized();
     return localStore.getAll(key1, key2);
   }
@@ -390,7 +388,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   @Override
-  public Iterator<K> getAllKeys() throws StoreException {
+  public CloseableIterator<K> getAllKeys() throws StoreException {
     assertInitialized();
     return localStore.getAllKeys();
   }
@@ -411,7 +409,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
         storeUpdateHandler.close();
       }
       log.debug("Kafka store shut down complete");
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new RuntimeException(e);
     }
   }
