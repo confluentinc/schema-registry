@@ -39,7 +39,6 @@ import java.util.stream.Stream;
  * In-memory store based on maps
  */
 public class InMemoryCache<K, V> implements LookupCache<K, V> {
-  // visible for subclasses
   private final ConcurrentNavigableMap<K, V> store;
   private final Map<String, Map<Integer, Map<String, Integer>>> guidToSubjectVersions;
   private final Map<String, Map<MD5, Integer>> hashToGuid;
