@@ -350,7 +350,7 @@ public class ProtobufConverterTest {
   }
 
   @Test
-  public void testToConnectDataForValueBothMessages() throws Exception {
+  public void testToConnectDataForValueWithBothMessages() throws Exception {
     converter.configure(SR_CONFIG, false);
     // extra byte for message index
     byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0}, HELLO_WORLD_MESSAGE.toByteArray());
