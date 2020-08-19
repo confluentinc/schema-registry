@@ -17,8 +17,11 @@
 package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -42,7 +45,7 @@ import java.util.regex.Pattern;
 @Mojo(name = "download")
 public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
 
-  @Parameter(required = false, defaultValue = ".avsc")
+  @Parameter(required = false)
   String schemaExtension;
 
   @Parameter(required = true)
@@ -148,7 +151,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
     Map<String, ParsedSchema> subjectToSchema = downloadSchemas(subjectsToDownload);
 
     for (Map.Entry<String, ParsedSchema> kvp : subjectToSchema.entrySet()) {
-      String fileName = String.format("%s%s", kvp.getKey(), this.schemaExtension);
+      String fileName = String.format("%s%s", kvp.getKey(), getExtension(kvp.getValue()));
       File outputFile = new File(this.outputDirectory, fileName);
 
       getLog().info(
@@ -166,6 +169,22 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
             ex
         );
       }
+    }
+  }
+
+  private String getExtension(ParsedSchema parsedSchema) {
+    if (this.schemaExtension != null) {
+      return schemaExtension;
+    }
+    switch (parsedSchema.schemaType()) {
+      case AvroSchema.TYPE:
+        return ".avsc";
+      case JsonSchema.TYPE:
+        return ".schema.json";
+      case ProtobufSchema.TYPE:
+        return ".proto";
+      default:
+        return ".txt";
     }
   }
 }
