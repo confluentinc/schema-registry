@@ -130,7 +130,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testSimpleGetAfterFailure() throws Exception {
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(
         bootstrapServers,
         inMemoryStore
@@ -205,7 +205,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testDeleteAfterRestart() throws Exception {
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(
         bootstrapServers,
         inMemoryStore
@@ -258,7 +258,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testCustomGroupIdConfig() throws Exception {
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
     String groupId = "test-group-id";
     Properties props = new Properties();
     props.put(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG, groupId);
@@ -270,7 +270,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testDefaultGroupIdConfig() throws Exception {
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
     Properties props = new Properties();
     KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, props);
 
@@ -292,7 +292,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
       admin.createTopics(Collections.singletonList(topic)).all().get(ADMIN_TIMEOUT_SEC, TimeUnit.SECONDS);
     }
 
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
 
     KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, kafkaProps);
   }
@@ -312,7 +312,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
       admin.createTopics(Collections.singletonList(topic)).all().get(ADMIN_TIMEOUT_SEC, TimeUnit.SECONDS);
     }
 
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
 
     StoreUtils.createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, kafkaProps);
   }
@@ -322,7 +322,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     Properties kafkaProps = new Properties();
     kafkaProps.put("kafkastore.topic.config.delete.retention.ms", "10000");
     kafkaProps.put("kafkastore.topic.config.segment.ms", "10000");
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
     StoreUtils.createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, kafkaProps);
 
     Properties props = new Properties();
@@ -430,9 +430,11 @@ public class KafkaStoreTest extends ClusterTestHarness {
         new SchemaValue("subject2", 1, id, "schemaString2", false)
     );
     int size = 0;
-    for (Iterator<SchemaRegistryKey> iter = kafkaStore.getAllKeys(); iter.hasNext(); ) {
-      size++;
-      iter.next();
+    try (CloseableIterator<SchemaRegistryKey> keys = kafkaStore.getAllKeys()) {
+      for (Iterator<SchemaRegistryKey> iter = keys; iter.hasNext(); ) {
+        size++;
+        iter.next();
+      }
     }
     assertEquals(1, size);
   }
@@ -459,9 +461,11 @@ public class KafkaStoreTest extends ClusterTestHarness {
         new SchemaValue("subject2", 1, id, "schemaString", false)
     );
     int size = 0;
-    for (Iterator<SchemaRegistryKey> iter = kafkaStore.getAllKeys(); iter.hasNext(); ) {
-      size++;
-      iter.next();
+    try (CloseableIterator<SchemaRegistryKey> keys = kafkaStore.getAllKeys()) {
+      for (Iterator<SchemaRegistryKey> iter = keys; iter.hasNext(); ) {
+        size++;
+        iter.next();
+      }
     }
     assertEquals(2, size);
   }
@@ -491,9 +495,11 @@ public class KafkaStoreTest extends ClusterTestHarness {
         new SchemaValue("subject2", 1, id, "schemaString2", false)
     );
     int size = 0;
-    for (Iterator<SchemaRegistryKey> iter = kafkaStore.getAllKeys(); iter.hasNext(); ) {
-      size++;
-      iter.next();
+    try (CloseableIterator<SchemaRegistryKey> keys = kafkaStore.getAllKeys()) {
+      for (Iterator<SchemaRegistryKey> iter = keys; iter.hasNext(); ) {
+        size++;
+        iter.next();
+      }
     }
     assertEquals(1, size);
   }
@@ -523,9 +529,11 @@ public class KafkaStoreTest extends ClusterTestHarness {
         new SchemaValue("subject2", 1, id, "schemaString", false)
     );
     int size = 0;
-    for (Iterator<SchemaRegistryKey> iter = kafkaStore.getAllKeys(); iter.hasNext(); ) {
-      size++;
-      iter.next();
+    try (CloseableIterator<SchemaRegistryKey> keys = kafkaStore.getAllKeys()) {
+      for (Iterator<SchemaRegistryKey> iter = keys; iter.hasNext(); ) {
+        size++;
+        iter.next();
+      }
     }
     assertEquals(2, size);
   }
@@ -543,8 +551,11 @@ public class KafkaStoreTest extends ClusterTestHarness {
             new SchemaRegistrySerializer()
     );
 
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> store =
+            new InMemoryCache<>(new SchemaRegistrySerializer());
+    store.init();
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
-            new InMemoryCache<>(), new IncrementalIdGenerator(), ".", "");
+            store, new IncrementalIdGenerator(), ".", "");
 
     storeMessageHandler.handleUpdate(new DeleteSubjectKey("test"), null, null, null, 0L, 0L);
   }
@@ -562,8 +573,11 @@ public class KafkaStoreTest extends ClusterTestHarness {
             new SchemaRegistrySerializer()
     );
 
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> store =
+            new InMemoryCache<>(new SchemaRegistrySerializer());
+    store.init();
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
-            new InMemoryCache<>(), new IncrementalIdGenerator(), ".", "");
+          store, new IncrementalIdGenerator(), ".", "");
 
     storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null, null, null, 0L, 0L);
   }

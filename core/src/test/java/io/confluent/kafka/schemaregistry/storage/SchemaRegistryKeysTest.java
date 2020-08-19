@@ -17,8 +17,10 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import java.util.Map;
 import org.junit.Test;
 
 import java.util.Iterator;
@@ -99,7 +101,7 @@ public class SchemaRegistryKeysTest {
   }
 
   @Test
-  public void testSchemaKeyComparator() {
+  public void testSchemaKeyComparator() throws Exception {
     String subject = "foo";
     SchemaRegistryKey key1 = new SchemaKey(subject, KafkaSchemaRegistry.MIN_VERSION);
     SchemaRegistryKey key2 = new SchemaKey(subject, KafkaSchemaRegistry.MAX_VERSION);
@@ -142,7 +144,7 @@ public class SchemaRegistryKeysTest {
   }
 
   @Test
-  public void testConfigKeyComparator() {
+  public void testConfigKeyComparator() throws Exception {
     ConfigKey key1 = new ConfigKey(null);
     ConfigKey key2 = new ConfigKey(null);
     assertEquals("Top level config keys should be equal", key1, key2);
@@ -158,7 +160,7 @@ public class SchemaRegistryKeysTest {
   }
 
   @Test
-  public void testKeyComparator() {
+  public void testKeyComparator() throws Exception {
     String subject = "foo";
     ConfigKey topLevelConfigKey = new ConfigKey(null);
     ConfigKey subjectLevelConfigKey = new ConfigKey(subject);
@@ -170,19 +172,21 @@ public class SchemaRegistryKeysTest {
     testStoreKeyOrder(expectedOrder);
   }
 
-  private void testStoreKeyOrder(SchemaRegistryKey[] orderedKeys) {
+  private void testStoreKeyOrder(SchemaRegistryKey[] orderedKeys)
+          throws StoreInitializationException {
     int numKeys = orderedKeys.length;
-    InMemoryCache<SchemaRegistryKey, String> store = new InMemoryCache<SchemaRegistryKey, String>();
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> store =
+        new InMemoryCache<>(new SchemaRegistrySerializer());
+    store.init();
     while (--numKeys >= 0) {
       try {
-        store.put(orderedKeys[numKeys], orderedKeys[numKeys].toString());
+        store.put(orderedKeys[numKeys], toValue(orderedKeys[numKeys]));
       } catch (StoreException e) {
         fail("Error writing key " + orderedKeys[numKeys].toString() + " to the in memory store");
       }
     }
     // test key order
-    try {
-      Iterator<SchemaRegistryKey> keys = store.getAllKeys();
+    try (CloseableIterator<SchemaRegistryKey> keys = store.getAllKeys()) {
       SchemaRegistryKey[] retrievedKeyOrder = new SchemaRegistryKey[orderedKeys.length];
       int keyIndex = 0;
       while (keys.hasNext()) {
@@ -191,6 +195,15 @@ public class SchemaRegistryKeysTest {
       assertArrayEquals(orderedKeys, retrievedKeyOrder);
     } catch (StoreException e) {
       fail();
+    }
+  }
+
+  private static SchemaValue toValue(SchemaRegistryKey key) {
+    if (key instanceof SubjectKey) {
+      SubjectKey subjectKey = (SubjectKey) key;
+      return new SchemaValue(subjectKey.getSubject(), 1, 0, "dummy", false);
+    } else {
+      return new SchemaValue("dummy", 1, 0, "dummy", false);
     }
   }
 }

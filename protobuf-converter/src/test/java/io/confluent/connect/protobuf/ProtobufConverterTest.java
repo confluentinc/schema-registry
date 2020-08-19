@@ -350,6 +350,41 @@ public class ProtobufConverterTest {
   }
 
   @Test
+  public void testToConnectDataForValueWithBothMessages() throws Exception {
+    converter.configure(SR_CONFIG, false);
+    // extra byte for message index
+    byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0}, HELLO_WORLD_MESSAGE.toByteArray());
+    schemaRegistry.register("my-topic-value", getSchema(TestMessage.getDescriptor()));
+    SchemaAndValue result = converter.toConnectData("my-topic", input);
+
+    SchemaAndValue expected = new SchemaAndValue(getTestMessageSchema(),
+            getTestMessageStruct(TEST_MSG_STRING, 123)
+    );
+
+    assertEquals(expected, result);
+
+    // extra bytes for message index
+    input = concat(new byte[]{0, 0, 0, 0, 1, 2, 2}, HELLO_WORLD_MESSAGE2.toByteArray());
+    schemaRegistry.register("my-topic-value", getSchema(TestMessage2.getDescriptor()));
+    result = converter.toConnectData("my-topic", input);
+
+    SchemaBuilder builder = getTestMessageSchemaBuilder("TestMessage2");
+    builder.field(
+            "test_message",
+            getTestMessageSchemaBuilder("TestMessage")
+                    .optional()
+                    .parameter(PROTOBUF_TYPE_TAG, String.valueOf(16))
+                    .build()
+    );
+    Schema schema = builder.version(1).build();
+    Struct struct = getTestMessageStruct(schema, TEST_MSG_STRING, 123);
+    struct.put("test_message", null);
+    expected = new SchemaAndValue(schema, struct);
+
+    assertEquals(expected, result);
+  }
+
+  @Test
   public void testToConnectDataForValueWithNamespace() throws Exception {
     Map<String, Object> configs = new HashMap<>();
     configs.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
