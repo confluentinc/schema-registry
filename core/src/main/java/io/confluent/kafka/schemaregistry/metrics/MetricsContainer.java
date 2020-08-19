@@ -92,7 +92,7 @@ public class MetricsContainer {
     reporters.add(new JmxReporter());
 
     for (MetricsReporter reporter : reporters) {
-      reporter.configure(config.originals());
+      reporter.configure(config.values());
     }
 
     metricsContext = getMetricsContext(config, kafkaClusterId);
