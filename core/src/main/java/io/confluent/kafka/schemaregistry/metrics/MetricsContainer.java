@@ -83,8 +83,9 @@ public class MetricsContainer {
 
     List<MetricsReporter> reporters = config.getConfiguredInstances(
         config.getList(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG),
-        MetricsReporter.class, Collections.singletonMap(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG,
-                    config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG)));
+        MetricsReporter.class,
+        Collections.singletonMap(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG,
+                                 config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG)));
 
     telemetryReporter = getTelemetryReporter(reporters);
 
