@@ -49,8 +49,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.useLatestVersion = config.useLatestVersion();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);
     this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
-    this.specVersion =
-        SpecificationVersion.get(config.getString(KafkaJsonSchemaSerializerConfig.SCHEMA_SPEC_VERSION));
+    this.specVersion = SpecificationVersion.get(
+        config.getString(KafkaJsonSchemaSerializerConfig.SCHEMA_SPEC_VERSION));
     this.oneofForNullables = config.getBoolean(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES);
     this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
   }
