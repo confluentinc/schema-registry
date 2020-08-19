@@ -60,6 +60,8 @@ if [ "x$SCHEMA_REGISTRY_LOG4J_OPTS" = "x" ]; then
     LOG4J_DIR="$base_dir/etc/schema-registry/log4j.properties"
   elif [ -e "/etc/schema-registry/log4j.properties" ]; then # Normal install layout
     LOG4J_DIR="/etc/schema-registry/log4j.properties"
+  elif [ -e "/opt/confluent/etc/schema-registry/log4j.properties" ]; then # CPD
+    LOG4J_DIR="/opt/confluent/etc/schema-registry/log4j.properties"
   fi
 
     # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
