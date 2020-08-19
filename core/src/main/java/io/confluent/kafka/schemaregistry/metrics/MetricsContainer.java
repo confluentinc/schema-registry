@@ -74,6 +74,10 @@ public class MetricsContainer {
   private final SchemaRegistryMetric jsonSchemasDeleted;
   private final SchemaRegistryMetric protobufSchemasDeleted;
 
+  private final SchemaRegistryMetric backupDirectryCreationFailure;
+  private final SchemaRegistryMetric backupFileCreationFailure;
+  private final SchemaRegistryMetric backupFileWriteFailure;
+
   private final MetricsReporter telemetryReporter;
   private final MetricsContext metricsContext;
 
@@ -133,6 +137,13 @@ public class MetricsContainer {
 
     this.protobufSchemasDeleted = createMetric("protobuf-schemas-deleted",
             "Number of deleted Protobuf schemas");
+
+    this.backupDirectryCreationFailure = createMetric("backup-directory-creation-failure",
+            "Number of failed backup directory creations");
+    this.backupFileCreationFailure = createMetric("backup-file-creation-failure",
+            "Number of failed backup file creations");
+    this.backupFileWriteFailure = createMetric("backup-file-write-failure",
+            "Number of failed backup file writes");
   }
 
   private SchemaRegistryMetric createMetric(String name, String metricDescription) {
@@ -225,5 +236,17 @@ public class MetricsContainer {
     metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
 
     return new KafkaMetricsContext(JMX_PREFIX, metadata);
+  }
+
+  public SchemaRegistryMetric getBackupDirectoryCreationFailure() {
+    return backupDirectryCreationFailure;
+  }
+
+  public SchemaRegistryMetric getBackupFileCreationFailure() {
+    return backupFileCreationFailure;
+  }
+
+  public SchemaRegistryMetric getBackupFileWriteFailure() {
+    return backupFileWriteFailure;
   }
 }

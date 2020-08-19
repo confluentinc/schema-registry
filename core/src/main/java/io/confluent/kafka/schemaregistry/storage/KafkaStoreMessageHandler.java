@@ -32,6 +32,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.util.Arrays;
+import java.util.List;
 
 public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
@@ -40,6 +41,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   private IdGenerator idGenerator;
   private File backupFile;
+  private List<String> backupSubjectsBlacklist;
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
                                   LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
@@ -55,20 +57,27 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         File directory = new File(backupsDir);
         if (!directory.exists()) {
           if (!directory.mkdir()) {
-            log.error("failed to create directory");
+            log.error("failed to create backup directory: " + directory.getAbsolutePath());
+            schemaRegistry.getMetricsContainer().getBackupDirectoryCreationFailure().increment();
           } else {
             log.info("created new directory: " + directory.getAbsolutePath());
           }
         }
         if (!backupFile.exists()) {
           if (!backupFile.createNewFile()) {
-            log.error("failed to create backup file");
+            log.error("failed to create backup file: " + backupFile.getAbsolutePath());
+            schemaRegistry.getMetricsContainer().getBackupFileCreationFailure().increment();
           } else {
             log.info("created new file: " + backupFile.getAbsolutePath());
           }
         }
+        backupSubjectsBlacklist = Arrays.asList(schemaRegistry.config()
+                .getString(SchemaRegistryConfig.BACKUPS_SUBJECT_BLACKLIST)
+                .split(" "));
       } catch (IOException e) {
-        log.error("exception when trying to create backup file");
+        log.error("io exception when trying to create backup file: "
+                + backupFile.getAbsolutePath());
+        schemaRegistry.getMetricsContainer().getBackupFileWriteFailure().increment();
       }
     }
   }
@@ -132,7 +141,9 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     } else if (key.getKeyType() == SchemaRegistryKeyType.CLEAR_SUBJECT) {
       handleClearSubject((ClearSubjectValue) value);
     }
-    recordBackup(key, value, tp, timestamp);
+    if (schemaRegistry.config().getBoolean(SchemaRegistryConfig.WRITE_BACKUPS)) {
+      recordBackup(key, value, tp, timestamp);
+    }
   }
 
   private void recordBackup(SchemaRegistryKey key,
@@ -146,16 +157,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         int index = subject.indexOf("_");
         if (index != -1) {
           String tenantRemovedSubject = subject.substring(index + 1);
-          String[] subjectsBlacklist = schemaRegistry.config()
-                  .getString(SchemaRegistryConfig.BACKUPS_SUBJECT_BLACKLIST)
-                  .split(" ");
-          ignoreSubject = Arrays.asList(subjectsBlacklist).contains(tenantRemovedSubject);
+          ignoreSubject = backupSubjectsBlacklist.contains(tenantRemovedSubject);
         }
       }
     }
-    if (schemaRegistry.config().getBoolean(SchemaRegistryConfig.WRITE_BACKUPS)
-            && key.getKeyType() != SchemaRegistryKeyType.NOOP
-            && !ignoreSubject) {
+    if (key.getKeyType() != SchemaRegistryKeyType.NOOP && !ignoreSubject) {
       try {
         FileOutputStream fileStream = new FileOutputStream(backupFile, true);
         OutputStreamWriter fr = new OutputStreamWriter(fileStream, "UTF-8");
@@ -172,7 +178,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         fr.write(output);
         fr.close();
       } catch (IOException e) {
-        log.error("failed to write debug file");
+        log.error("failed to write backup file for schema registry key: " + key);
       }
     }
   }
