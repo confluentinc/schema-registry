@@ -25,7 +25,7 @@ import org.junit.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-s
+
 public class MetricsContainerTest extends ClusterTestHarness {
 
     public MetricsContainerTest() { super(1, true); }
