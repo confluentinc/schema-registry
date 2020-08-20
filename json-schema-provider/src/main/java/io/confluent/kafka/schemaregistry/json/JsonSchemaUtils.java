@@ -73,7 +73,7 @@ public class JsonSchemaUtils {
 
   public static JsonSchema getSchema(Object object, SchemaRegistryClient client)
       throws IOException {
-    return getSchema(object, SpecificationVersion.DRAFT_7, true, client);
+    return getSchema(object, null, true, client);
   }
 
   public static JsonSchema getSchema(
@@ -83,6 +83,9 @@ public class JsonSchemaUtils {
       SchemaRegistryClient client) throws IOException {
     if (object == null) {
       return null;
+    }
+    if (specVersion == null) {
+      specVersion = SpecificationVersion.DRAFT_7;
     }
     if (isEnvelope(object)) {
       JsonNode jsonValue = (JsonNode) object;
