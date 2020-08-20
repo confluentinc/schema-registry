@@ -73,12 +73,14 @@ public class JsonSchemaUtils {
 
   public static JsonSchema getSchema(Object object, SchemaRegistryClient client)
       throws IOException {
-    return getSchema(object, true, client);
+    return getSchema(object, SpecificationVersion.DRAFT_7, true, client);
   }
 
   public static JsonSchema getSchema(
-      Object object, boolean useOneofForNullables, SchemaRegistryClient client)
-      throws IOException {
+      Object object,
+      SpecificationVersion specVersion,
+      boolean useOneofForNullables,
+      SchemaRegistryClient client) throws IOException {
     if (object == null) {
       return null;
     }
@@ -105,7 +107,25 @@ public class JsonSchemaUtils {
       }
     }
     JsonSchemaConfig config = getConfig(useOneofForNullables);
-    config = config.withJsonSchemaDraft(JsonSchemaDraft.DRAFT_07);
+    JsonSchemaDraft draft;
+    switch (specVersion) {
+      case DRAFT_4:
+        draft = JsonSchemaDraft.DRAFT_04;
+        break;
+      case DRAFT_6:
+        draft = JsonSchemaDraft.DRAFT_06;
+        break;
+      case DRAFT_7:
+        draft = JsonSchemaDraft.DRAFT_07;
+        break;
+      case DRAFT_2019_09:
+        draft = JsonSchemaDraft.DRAFT_2019_09;
+        break;
+      default:
+        draft = JsonSchemaDraft.DRAFT_07;
+        break;
+    }
+    config = config.withJsonSchemaDraft(draft);
     JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(jsonMapper, config);
     JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(cls);
     return new JsonSchema(jsonSchema);
