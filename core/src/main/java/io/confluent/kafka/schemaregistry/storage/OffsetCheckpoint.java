@@ -112,6 +112,10 @@ public class OffsetCheckpoint implements Closeable {
    * @throws IOException if any file operation fails with an IO exception
    */
   public void write(final Map<TopicPartition, Long> offsets) throws IOException {
+    // if the version is negative, skip
+    if (version < 0) {
+      return;
+    }
     // if there is no offsets, skip writing the file to save disk IOs
     if (offsets.isEmpty()) {
       return;
