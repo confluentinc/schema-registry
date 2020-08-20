@@ -21,10 +21,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import io.confluent.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 
-public class EnumRecommender implements ConfigDef.Validator {
+public class EnumRecommender implements ConfigDef.Validator, ConfigDef.Recommender {
   private final List<String> canonicalValues;
   private final Set<String> validValues;
 
@@ -58,10 +58,12 @@ public class EnumRecommender implements ConfigDef.Validator {
     return canonicalValues.toString();
   }
 
+  @Override
   public List<Object> validValues(String name, Map<String, Object> configs) {
     return new ArrayList<>(canonicalValues);
   }
 
+  @Override
   public boolean visible(String name, Map<String, Object> configs) {
     return true;
   }
