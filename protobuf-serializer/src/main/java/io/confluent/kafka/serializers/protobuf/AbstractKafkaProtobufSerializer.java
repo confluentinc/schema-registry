@@ -18,6 +18,8 @@ package io.confluent.kafka.serializers.protobuf;
 
 import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -74,7 +76,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     String restClientErrorMsg = "";
     try {
       schema = resolveDependencies(schemaRegistry, autoRegisterSchema,
-          referenceSubjectNameStrategy, topic, isKey, schema);
+          useLatestVersion, latestVersions, referenceSubjectNameStrategy, topic, isKey, schema);
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
@@ -103,9 +105,12 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     }
   }
 
+  // Visible for testing
   public static ProtobufSchema resolveDependencies(
       SchemaRegistryClient schemaRegistry,
       boolean autoRegisterSchema,
+      boolean useLatestVersion,
+      Cache<SubjectSchema, ParsedSchema> latestVersions,
       ReferenceSubjectNameStrategy strategy,
       String topic,
       boolean isKey,
@@ -117,6 +122,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     }
     Schema s = resolveDependencies(schemaRegistry,
         autoRegisterSchema,
+        useLatestVersion,
+        latestVersions,
         strategy,
         topic,
         isKey,
@@ -130,6 +137,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   private static Schema resolveDependencies(
       SchemaRegistryClient schemaRegistry,
       boolean autoRegisterSchema,
+      boolean useLatestVersion,
+      Cache<SubjectSchema, ParsedSchema> latestVersions,
       ReferenceSubjectNameStrategy strategy,
       String topic,
       boolean isKey,
@@ -141,6 +150,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     for (String dep : protoFileElement.getImports()) {
       Schema subschema = resolveDependencies(schemaRegistry,
           autoRegisterSchema,
+          useLatestVersion,
+          latestVersions,
           strategy,
           topic,
           isKey,
@@ -153,6 +164,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     for (String dep : protoFileElement.getPublicImports()) {
       Schema subschema = resolveDependencies(schemaRegistry,
           autoRegisterSchema,
+          useLatestVersion,
+          latestVersions,
           strategy,
           topic,
           isKey,
@@ -169,6 +182,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     if (subject != null) {
       if (autoRegisterSchema) {
         id = schemaRegistry.register(subject, schema);
+      } else if (useLatestVersion) {
+        schema = (ProtobufSchema) lookupLatestVersion(
+            schemaRegistry, subject, schema, latestVersions);
+        id = schemaRegistry.getId(subject, schema);
       } else {
         id = schemaRegistry.getId(subject, schema);
       }
