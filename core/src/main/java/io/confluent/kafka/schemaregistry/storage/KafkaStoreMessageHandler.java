@@ -51,8 +51,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
-    this.backupFile = new File(backupsDir + "/" + backupFilePrefix + ".txt");
     if (schemaRegistry.config().getBoolean(SchemaRegistryConfig.WRITE_BACKUPS)) {
+      this.backupFile = new File(backupsDir + "/" + backupFilePrefix + ".txt");
       try {
         File directory = new File(backupsDir);
         if (!directory.exists()) {
