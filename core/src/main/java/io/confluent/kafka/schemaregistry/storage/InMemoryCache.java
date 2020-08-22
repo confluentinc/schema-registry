@@ -90,6 +90,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public void flush() {
+  }
+
+  @Override
   public void close() {
     store.clear();
   }

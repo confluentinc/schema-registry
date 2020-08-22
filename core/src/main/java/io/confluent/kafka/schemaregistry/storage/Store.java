@@ -53,5 +53,7 @@ public interface Store<K, V> {
 
   public CloseableIterator<K> getAllKeys() throws StoreException;
 
+  public void flush() throws StoreException;
+
   public void close() throws StoreException;
 }

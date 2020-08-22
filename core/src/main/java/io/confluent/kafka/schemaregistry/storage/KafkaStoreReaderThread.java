@@ -268,6 +268,11 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       }
       storeUpdateHandler.checkpoint(records.count());
       if (localStore.isPersistent()) {
+        try {
+          localStore.flush();
+        } catch (StoreException se) {
+          log.error("Failed to flush", se);
+        }
         checkpointOffsets();
       }
     } catch (WakeupException we) {
