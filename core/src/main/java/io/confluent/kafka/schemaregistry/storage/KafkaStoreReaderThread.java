@@ -270,10 +270,10 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       if (localStore.isPersistent()) {
         try {
           localStore.flush();
+          checkpointOffsets();
         } catch (StoreException se) {
-          log.error("Failed to flush", se);
+          log.warn("Failed to flush", se);
         }
-        checkpointOffsets();
       }
     } catch (WakeupException we) {
       // do nothing because the thread is closing -- see shutdown()
