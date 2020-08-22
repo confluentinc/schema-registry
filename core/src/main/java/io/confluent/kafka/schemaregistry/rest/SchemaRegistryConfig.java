@@ -93,11 +93,11 @@ public class SchemaRegistryConfig extends RestConfig {
   /**
    * <code>kafkastore.checkpoint.dir</code>
    */
-  public static final String KAFKASTORE_CHECKPOINT_DIR_CONFIG = "kafkacache.checkpoint.dir";
+  public static final String KAFKASTORE_CHECKPOINT_DIR_CONFIG = "kafkastore.checkpoint.dir";
   /**
    * <code>kafkastore.checkpoint.version</code>
    */
-  public static final String KAFKASTORE_CHECKPOINT_VERSION_CONFIG = "kafkacache.checkpoint.version";
+  public static final String KAFKASTORE_CHECKPOINT_VERSION_CONFIG = "kafkastore.checkpoint.version";
   /**
    * <code>kafkastore.init.timeout.ms</code>
    */
