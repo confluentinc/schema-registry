@@ -45,7 +45,6 @@ import java.util.Scanner;
 public class RestoreFromBackup {
   private static final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer =
           new SchemaRegistrySerializer();
-  private static SchemaRegistryConfig config;
 
   public static void main(String[] args) throws Exception {
     if (args.length < 2) {
@@ -59,7 +58,7 @@ public class RestoreFromBackup {
       System.exit(1);
     }
 
-    config = new SchemaRegistryConfig(args[1]);
+    SchemaRegistryConfig config = new SchemaRegistryConfig(args[1]);
     Properties props = new Properties();
     props.putAll(config.originalsWithPrefix("kafkastore."));
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapBrokers());
@@ -89,8 +88,8 @@ public class RestoreFromBackup {
       String[] tokens = line.split("\t");
       if (tokens.length != 5) {
         System.out.println(
-                String.format("wrong number of parts for line: expected 5, got %d",
-                tokens.length));
+                String.format("wrong number of parts for line: expected 5, got %d: \"%s\"",
+                tokens.length, line));
         break;
       }
       SchemaRegistryKeyType type = SchemaRegistryKeyType.forName(tokens[0]);
