@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.json;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.everit.json.schema.ValidationException;
@@ -38,6 +39,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected boolean autoRegisterSchema;
   protected boolean useLatestVersion;
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
+  protected SpecificationVersion specVersion;
   protected boolean oneofForNullables;
   protected boolean validate;
 
@@ -47,6 +49,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.useLatestVersion = config.useLatestVersion();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);
     this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
+    this.specVersion = SpecificationVersion.get(
+        config.getString(KafkaJsonSchemaSerializerConfig.SCHEMA_SPEC_VERSION));
     this.oneofForNullables = config.getBoolean(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES);
     this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
   }

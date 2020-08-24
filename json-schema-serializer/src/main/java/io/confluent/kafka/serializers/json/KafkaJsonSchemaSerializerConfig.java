@@ -15,6 +15,9 @@
 
 package io.confluent.kafka.serializers.json;
 
+import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
+import io.confluent.kafka.schemaregistry.utils.EnumRecommender;
+import java.util.Locale;
 import java.util.Map;
 
 import org.apache.kafka.common.config.ConfigDef;
@@ -26,6 +29,12 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   public static final boolean FAIL_INVALID_SCHEMA_DEFAULT = false;
   public static final String FAIL_INVALID_SCHEMA_DOC = "Whether to fail deserialization if the "
       + "payload does not match the schema";
+
+  public static final String SCHEMA_SPEC_VERSION = "json.schema.spec.version";
+  public static final String SCHEMA_SPEC_VERSION_DEFAULT =
+      SpecificationVersion.DRAFT_7.name().toLowerCase(Locale.ROOT);
+  public static final String SCHEMA_SPEC_VERSION_DOC = "The specification version to use for JSON "
+      + "schemas derived from objects, one of 'draft_4', 'draft_6', 'draft_7', or 'draft_2019_09'";
 
   public static final String ONEOF_FOR_NULLABLES = "json.oneof.for.nullables";
   public static final boolean ONEOF_FOR_NULLABLES_DEFAULT = true;
@@ -45,6 +54,12 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
         FAIL_INVALID_SCHEMA_DEFAULT,
         ConfigDef.Importance.MEDIUM,
         FAIL_INVALID_SCHEMA_DOC
+    ).define(SCHEMA_SPEC_VERSION,
+        ConfigDef.Type.STRING,
+        SCHEMA_SPEC_VERSION_DEFAULT,
+        EnumRecommender.in(SpecificationVersion.values()),
+        ConfigDef.Importance.MEDIUM,
+        SCHEMA_SPEC_VERSION_DOC
     ).define(ONEOF_FOR_NULLABLES,
         ConfigDef.Type.BOOLEAN,
         ONEOF_FOR_NULLABLES_DEFAULT,
