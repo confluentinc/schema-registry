@@ -83,15 +83,13 @@ public class MetricsContainer {
 
     List<MetricsReporter> reporters = config.getConfiguredInstances(
         config.getList(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG),
-        MetricsReporter.class, Collections.emptyMap());
+        MetricsReporter.class,
+        Collections.singletonMap(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG,
+                                 config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG)));
 
     telemetryReporter = getTelemetryReporter(reporters);
 
-    reporters.add(new JmxReporter());
-
-    for (MetricsReporter reporter : reporters) {
-      reporter.configure(config.originals());
-    }
+    reporters.add(getJmxReporter(config));
 
     metricsContext = getMetricsContext(config, kafkaClusterId);
 
@@ -133,6 +131,12 @@ public class MetricsContainer {
 
     this.protobufSchemasDeleted = createMetric("protobuf-schemas-deleted",
             "Number of deleted Protobuf schemas");
+  }
+
+  private static MetricsReporter getJmxReporter(SchemaRegistryConfig config) {
+    MetricsReporter reporter = new JmxReporter();
+    reporter.configure(config.originals());
+    return reporter;
   }
 
   private SchemaRegistryMetric createMetric(String name, String metricDescription) {
