@@ -32,6 +32,11 @@
             <artifactId>kafka_${kafka.scala.version}</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-client-plugins</artifactId>
+            <version>${ce.kafka.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
         </dependency>
