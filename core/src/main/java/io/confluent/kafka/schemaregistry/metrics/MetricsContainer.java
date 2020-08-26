@@ -51,9 +51,6 @@ public class MetricsContainer {
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
 
-  private static final String TELEMETRY_REPORTER_CLASS =
-          "io.confluent.telemetry.reporter.TelemetryReporter";
-
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
 
@@ -74,7 +71,6 @@ public class MetricsContainer {
   private final SchemaRegistryMetric jsonSchemasDeleted;
   private final SchemaRegistryMetric protobufSchemasDeleted;
 
-  private final MetricsReporter telemetryReporter;
   private final MetricsContext metricsContext;
 
   public MetricsContainer(SchemaRegistryConfig config, String kafkaClusterId) {
@@ -86,8 +82,6 @@ public class MetricsContainer {
         MetricsReporter.class,
         Collections.singletonMap(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG,
                                  config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG)));
-
-    telemetryReporter = getTelemetryReporter(reporters);
 
     reporters.add(getJmxReporter(config));
 
@@ -153,15 +147,8 @@ public class MetricsContainer {
     return nodeCount;
   }
 
-  public void setLeader(boolean leader) {
-    isLeaderNode.set(leader ? 1 : 0);
-    if (telemetryReporter != null) {
-      if (leader) {
-        telemetryReporter.contextChange(metricsContext);
-      } else {
-        telemetryReporter.close();
-      }
-    }
+  public SchemaRegistryMetric getLeaderNode() {
+    return isLeaderNode;
   }
 
   public SchemaRegistryMetric getApiCallsSuccess() {
@@ -203,15 +190,6 @@ public class MetricsContainer {
       default:
         return null;
     }
-  }
-
-  private static MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
-    for (MetricsReporter reporter : reporters) {
-      if (reporter.getClass().getName().equals(TELEMETRY_REPORTER_CLASS)) {
-        return reporter;
-      }
-    }
-    return null;
   }
 
   private static MetricsContext getMetricsContext(SchemaRegistryConfig config,
