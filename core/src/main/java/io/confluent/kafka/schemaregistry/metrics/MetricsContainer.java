@@ -74,20 +74,23 @@ public class MetricsContainer {
   private final SchemaRegistryMetric jsonSchemasDeleted;
   private final SchemaRegistryMetric protobufSchemasDeleted;
 
-  private final MetricsReporter telemetryReporter;
+  private final Map<String, Object> configOverrides;
   private final MetricsContext metricsContext;
+  private final SchemaRegistryConfig config;
+
+  private MetricsReporter telemetryReporter;
 
   public MetricsContainer(SchemaRegistryConfig config, String kafkaClusterId) {
+    this.config = config;
     this.configuredTags =
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
 
+    configOverrides = Collections.singletonMap(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG,
+                                               config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG));
     List<MetricsReporter> reporters = config.getConfiguredInstances(
-        config.getList(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG),
-        MetricsReporter.class,
-        Collections.singletonMap(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG,
-                                 config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG)));
+        config.getList(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG), MetricsReporter.class, configOverrides);
 
-    telemetryReporter = getTelemetryReporter(reporters);
+    telemetryReporter = createTelemetryReporter(reporters);
 
     reporters.add(getJmxReporter(config));
 
@@ -139,6 +142,12 @@ public class MetricsContainer {
     return reporter;
   }
 
+  private MetricsReporter createTelemetryReporter() {
+    List<MetricsReporter> reporters = config.getConfiguredInstances(Collections.singletonList(TELEMETRY_REPORTER_CLASS),
+            MetricsReporter.class, configOverrides);
+    return reporters.get(0);
+  }
+
   private SchemaRegistryMetric createMetric(String name, String metricDescription) {
     return createMetric(name, name, name, metricDescription);
   }
@@ -153,13 +162,14 @@ public class MetricsContainer {
     return nodeCount;
   }
 
-  public void setLeader(boolean leader) {
+  public synchronized void setLeader(boolean leader) {
     isLeaderNode.set(leader ? 1 : 0);
     if (telemetryReporter != null) {
+      metrics.removeReporter(telemetryReporter);
       if (leader) {
+        telemetryReporter = createTelemetryReporter();
+        metrics.addReporter(telemetryReporter);
         telemetryReporter.contextChange(metricsContext);
-      } else {
-        telemetryReporter.close();
       }
     }
   }
@@ -205,7 +215,7 @@ public class MetricsContainer {
     }
   }
 
-  private static MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
+  private static MetricsReporter createTelemetryReporter(List<MetricsReporter> reporters) {
     for (MetricsReporter reporter : reporters) {
       if (reporter.getClass().getName().equals(TELEMETRY_REPORTER_CLASS)) {
         return reporter;
