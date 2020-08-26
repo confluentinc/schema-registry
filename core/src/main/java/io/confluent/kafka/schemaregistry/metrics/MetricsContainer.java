@@ -147,7 +147,9 @@ public class MetricsContainer {
     return nodeCount;
   }
 
-  public SchemaRegistryMetric getLeaderNode() { return isLeaderNode; }
+  public SchemaRegistryMetric getLeaderNode() {
+    return isLeaderNode;
+  }
 
   public SchemaRegistryMetric getApiCallsSuccess() {
     return apiCallsSuccess;
