@@ -1048,9 +1048,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public Set<String> listSubjectsForId(int id, boolean returnDeleted)
       throws SchemaRegistryException {
-    return listVersionsForId(id, returnDeleted).stream()
-        .map(SubjectVersion::getSubject)
-        .collect(Collectors.toSet());
+    List<SubjectVersion> versions = listVersionsForId(id, returnDeleted);
+    return versions != null
+        ? versions.stream()
+            .map(SubjectVersion::getSubject)
+            .collect(Collectors.toSet())
+        : null;
   }
 
   public List<SubjectVersion> listVersionsForId(int id) throws SchemaRegistryException {
