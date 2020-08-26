@@ -372,7 +372,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
         idGenerator.init();
       }
-      metricsContainer.setLeader(isLeader());
+      metricsContainer.getLeaderNode().set(isLeader() ? 1 : 0);
     } finally {
       kafkaStore.leaderLock().unlock();
     }
