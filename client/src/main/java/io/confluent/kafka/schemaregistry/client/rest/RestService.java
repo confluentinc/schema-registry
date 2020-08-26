@@ -854,7 +854,15 @@ public class RestService implements Configurable {
   public List<String> getAllSubjectsById(Map<String, String> requestProperties,
                                          int id)
       throws IOException, RestClientException {
+    return getAllSubjectsById(requestProperties, id, false);
+  }
+
+  public List<String> getAllSubjectsById(Map<String, String> requestProperties,
+                                         int id,
+                                         boolean lookupDeleted)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/subjects");
+    builder.queryParam("deleted", lookupDeleted);
     String path = builder.build(id).toString();
 
     List<String> response = httpRequest(path, "GET", null, requestProperties,
@@ -871,7 +879,15 @@ public class RestService implements Configurable {
   public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
                                                  int id)
       throws IOException, RestClientException {
+    return getAllVersionsById(requestProperties, id, false);
+  }
+
+  public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
+                                                 int id,
+                                                 boolean lookupDeleted)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/versions");
+    builder.queryParam("deleted", lookupDeleted);
     String path = builder.build(id).toString();
 
     List<SubjectVersion> response = httpRequest(path, "GET", null, requestProperties,

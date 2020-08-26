@@ -63,6 +63,7 @@ import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -1042,36 +1043,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   public Set<String> listSubjectsForId(int id) throws SchemaRegistryException {
-    SchemaValue schema = null;
-    try {
-      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
-      if (subjectVersionKey == null) {
-        return null;
-      }
-      schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
-      if (schema == null) {
-        return null;
-      }
+    return listSubjectsForId(id, false);
+  }
 
-      return lookupCache.schemaIdAndSubjects(new Schema(
-          schema.getSubject(),
-          schema.getVersion(),
-          schema.getId(),
-          schema.getSchemaType(),
-          schema.getReferences().stream()
-              .map(ref ->
-                  new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
-                    ref.getName(), ref.getSubject(), ref.getVersion()))
-              .collect(Collectors.toList()),
-          schema.getSchema()
-      )).allSubjects();
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
-          + id + " from the backend Kafka store", e);
-    }
+  public Set<String> listSubjectsForId(int id, boolean returnDeleted)
+      throws SchemaRegistryException {
+    return listVersionsForId(id, returnDeleted).stream()
+        .map(SubjectVersion::getSubject)
+        .collect(Collectors.toSet());
   }
 
   public List<SubjectVersion> listVersionsForId(int id) throws SchemaRegistryException {
+    return listVersionsForId(id, false);
+  }
+
+  public List<SubjectVersion> listVersionsForId(int id, boolean lookupDeleted)
+      throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
       SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
@@ -1096,7 +1083,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           schema.getSchema()
       )).allSubjectVersions().entrySet()
           .stream()
-          .map(e -> new SubjectVersion(e.getKey(), e.getValue()))
+          .flatMap(e -> {
+            try {
+              SchemaValue schemaValue =
+                  (SchemaValue) kafkaStore.get(new SchemaKey(e.getKey(), e.getValue()));
+              if ((schemaValue != null && !schemaValue.isDeleted()) || lookupDeleted) {
+                return Stream.of(new SubjectVersion(e.getKey(), e.getValue()));
+              } else {
+                return Stream.empty();
+              }
+            } catch (StoreException ex) {
+              return Stream.empty();
+            }
+          })
           .collect(Collectors.toList());
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while retrieving schema with id "
