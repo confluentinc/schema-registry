@@ -90,10 +90,10 @@ public class OffsetCheckpoint implements Closeable {
 
   private File baseDir(final String checkpointDir, String topic) throws IOException {
     final File dir = new File(checkpointDir, topic);
-    if (!dir.exists() && !dir.mkdirs()) {
+    if ((!dir.exists() && !dir.mkdirs()) || !dir.isDirectory() || !dir.canWrite()) {
       throw new IOException(
           String.format(
-              "checkpoint directory [%s] doesn't exist and couldn't be created", dir.getPath()));
+              "Cannot access or write to directory [%s]", dir.getPath()));
     }
     return dir;
   }
