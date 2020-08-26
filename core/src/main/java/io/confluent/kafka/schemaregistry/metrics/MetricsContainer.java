@@ -86,11 +86,12 @@ public class MetricsContainer {
             Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
 
     configOverrides = Collections.singletonMap(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG,
-                                               config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG));
+            config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG));
     List<MetricsReporter> reporters = config.getConfiguredInstances(
-        config.getList(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG), MetricsReporter.class, configOverrides);
+            config.getList(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG),
+            MetricsReporter.class, configOverrides);
 
-    telemetryReporter = createTelemetryReporter(reporters);
+    telemetryReporter = getTelemetryReporter(reporters);
 
     reporters.add(getJmxReporter(config));
 
@@ -143,7 +144,8 @@ public class MetricsContainer {
   }
 
   private MetricsReporter createTelemetryReporter() {
-    List<MetricsReporter> reporters = config.getConfiguredInstances(Collections.singletonList(TELEMETRY_REPORTER_CLASS),
+    List<MetricsReporter> reporters = config.getConfiguredInstances(
+            Collections.singletonList(TELEMETRY_REPORTER_CLASS),
             MetricsReporter.class, configOverrides);
     return reporters.get(0);
   }
@@ -215,7 +217,7 @@ public class MetricsContainer {
     }
   }
 
-  private static MetricsReporter createTelemetryReporter(List<MetricsReporter> reporters) {
+  private static MetricsReporter getTelemetryReporter(List<MetricsReporter> reporters) {
     for (MetricsReporter reporter : reporters) {
       if (reporter.getClass().getName().equals(TELEMETRY_REPORTER_CLASS)) {
         return reporter;
