@@ -212,7 +212,6 @@
                 </exclusion>
             </exclusions>
         </dependency>
-<<<<<<< HEAD
         <dependency>
             <groupId>io.swagger</groupId>
             <artifactId>swagger-annotations</artifactId>
