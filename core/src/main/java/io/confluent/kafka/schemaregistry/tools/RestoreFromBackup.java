@@ -52,13 +52,13 @@ public class RestoreFromBackup {
       // /config/schema-registry.properties for local runs, and at
       // /opt/confluent/etc/schema-registry/schema-registry.properties in CPD
       System.out.println(
-              "Usage: java " + RestoreFromBackup.class.getName() + " backup_file"
-                      + " properties_file"
+              "Usage: java " + RestoreFromBackup.class.getName() + " properties_file"
+                      + " backup_file"
       );
       System.exit(1);
     }
 
-    SchemaRegistryConfig config = new SchemaRegistryConfig(args[1]);
+    SchemaRegistryConfig config = new SchemaRegistryConfig(args[0]);
     Properties props = new Properties();
     props.putAll(config.originalsWithPrefix("kafkastore."));
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapBrokers());
@@ -71,7 +71,7 @@ public class RestoreFromBackup {
     props.put(ProducerConfig.CLIENT_ID_CONFIG, "backup-restore-producer");
     KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
 
-    List<ProducerRecord<byte[], byte[]>> records = getSchemaRecords(args[0], config);
+    List<ProducerRecord<byte[], byte[]>> records = getSchemaRecords(args[1], config);
     for (ProducerRecord<byte[], byte[]> record : records) {
       producer.send(record).get();
     }

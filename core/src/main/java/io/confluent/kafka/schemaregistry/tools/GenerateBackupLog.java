@@ -14,6 +14,7 @@
 
 package io.confluent.kafka.schemaregistry.tools;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryKeyType;
 
 import java.io.File;
@@ -21,30 +22,37 @@ import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
 
 public class GenerateBackupLog {
-  private static int counter = 1;
+  private static int subjectCounter = 1;
+  private static int idCounter = 100001;
 
   public static void main(String[] args) throws Exception {
-    if (args.length < 2 || args.length > 3) {
+    if (args.length < 3 || args.length > 4) {
+      // Currently, the properties file can be found at
+      // /config/schema-registry.properties for local runs, and at
+      // /opt/confluent/etc/schema-registry/schema-registry.properties in CPD
       System.out.println(
-              "Usage: java " + GenerateBackupLog.class.getName() + " output_file"
-                      + " num_schemas" + " num_schema_fields_(optional, default 3)"
+              "Usage: java " + GenerateBackupLog.class.getName() + " properties_file"
+                      + " output_file" + " num_schemas" + " num_schema_fields_(optional, default 3)"
       );
       System.exit(1);
     }
-    File file = new File(args[0]);
+    SchemaRegistryConfig config = new SchemaRegistryConfig(args[0]);
+    String partition = config.getString(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG) + "-0";
+
+    File file = new File(args[1]);
     if (!file.exists() && !file.createNewFile()) {
       System.out.println("failed to create file");
     }
-    int numFields = args.length == 3 ? Integer.parseInt(args[2]) : 3;
+    int numFields = args.length == 4 ? Integer.parseInt(args[3]) : 3;
 
     FileOutputStream fileStream = new FileOutputStream(file, true);
     OutputStreamWriter fr = new OutputStreamWriter(fileStream, "UTF-8");
-    for (int i = 0; i < Integer.parseInt(args[1]); i++) {
+    for (int i = 0; i < Integer.parseInt(args[2]); i++) {
       String output = SchemaRegistryKeyType.SCHEMA.toString()
               + "\t"
               + generateSchemaKeyValue(numFields)
               + "\t"
-              + "_schemas-0"
+              + partition
               + "\t"
               + System.currentTimeMillis()
               + "\n";
@@ -54,7 +62,7 @@ public class GenerateBackupLog {
   }
 
   private static String generateSchemaKeyValue(int numFields) {
-    String name = "test" + counter;
+    String name = "test" + subjectCounter++;
     String subject = String.format("%s-value", name);
     StringBuffer sb = new StringBuffer();
     String key = "{\"keytype\":\"SCHEMA\",\"subject\":\""
@@ -62,7 +70,7 @@ public class GenerateBackupLog {
             + "\",\"version\":1,\"magic\":1}\t";
     sb.append(key);
 
-    sb.append("{\"subject\":\"" + subject + "\",\"version\":1,\"id\":" + counter++ + ",");
+    sb.append("{\"subject\":\"" + subject + "\",\"version\":1,\"id\":" + idCounter++ + ",");
     // schema
     sb.append("\"schema\":\"{\\\"type\\\":\\\"record\\\",\\\"name\\\":\\\""
             + name + "\\\", \\\"fields\\\":[");
