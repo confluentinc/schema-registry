@@ -36,10 +36,6 @@
             <artifactId>common-utils</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-client-plugins</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.glassfish.jersey.ext</groupId>
             <artifactId>jersey-bean-validation</artifactId>
         </dependency>
@@ -216,6 +212,7 @@
                 </exclusion>
             </exclusions>
         </dependency>
+<<<<<<< HEAD
         <dependency>
             <groupId>io.swagger</groupId>
             <artifactId>swagger-annotations</artifactId>
@@ -225,6 +222,11 @@
             <groupId>io.swagger</groupId>
             <artifactId>swagger-core</artifactId>
             <version>1.6.2</version>
+        </dependency>
+        <!-- Must be at end so tests don't pick up Bouncy Castle FIPS -->
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-client-plugins</artifactId>
         </dependency>
     </dependencies>
 
