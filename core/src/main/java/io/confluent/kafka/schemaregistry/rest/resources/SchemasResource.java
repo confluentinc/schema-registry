@@ -133,13 +133,14 @@ public class SchemasResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
   public Set<String> getSubjects(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
-      @PathParam("id") Integer id) {
+      @PathParam("id") Integer id,
+      @QueryParam("deleted") boolean lookupDeletedSchema) {
     Set<String> subjects;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
         + id + " from the schema registry";
 
     try {
-      subjects = schemaRegistry.listSubjectsForId(id);
+      subjects = schemaRegistry.listSubjectsForId(id, lookupDeletedSchema);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -162,13 +163,14 @@ public class SchemasResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
   public List<SubjectVersion> getVersions(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
-      @PathParam("id") Integer id) {
+      @PathParam("id") Integer id,
+      @QueryParam("deleted") boolean lookupDeletedSchema) {
     List<SubjectVersion> versions;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
                           + id + " from the schema registry";
 
     try {
-      versions = schemaRegistry.listVersionsForId(id);
+      versions = schemaRegistry.listVersionsForId(id, lookupDeletedSchema);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
