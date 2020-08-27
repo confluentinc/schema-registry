@@ -213,18 +213,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         config.getConfiguredInstances(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG,
             SchemaUpdateHandler.class,
             handlerConfigs);
+    KafkaStoreMessageHandler storeHandler =
+        new KafkaStoreMessageHandler(this, getLookupCache(), getIdentityGenerator());
     for (SchemaUpdateHandler customSchemaHandler : customSchemaHandlers) {
       log.info("Registering custom schema handler: {}",
           customSchemaHandler.getClass().getName()
       );
     }
-    KafkaStoreMessageHandler storeHandler =
-        new KafkaStoreMessageHandler(this, getLookupCache(), getIdentityGenerator());
-    List<SchemaUpdateHandler> storeHandlers = new ArrayList<>();
-    // Ensure KafkaStoreMessageHandler is first so it can update internal indexes
-    storeHandlers.add(storeHandler);
-    storeHandlers.addAll(customSchemaHandlers);
-    return new CompositeSchemaUpdateHandler(storeHandlers);
+    customSchemaHandlers.add(storeHandler);
+    return new CompositeSchemaUpdateHandler(customSchemaHandlers);
   }
 
   protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache() {
