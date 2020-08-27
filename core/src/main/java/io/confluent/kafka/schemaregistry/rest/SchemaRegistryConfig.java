@@ -96,6 +96,14 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String KAFKASTORE_TIMEOUT_CONFIG = "kafkastore.timeout.ms";
   /**
+   * <code>kafkastore.checkpoint.dir</code>
+   */
+  public static final String KAFKASTORE_CHECKPOINT_DIR_CONFIG = "kafkastore.checkpoint.dir";
+  /**
+   * <code>kafkastore.checkpoint.version</code>
+   */
+  public static final String KAFKASTORE_CHECKPOINT_VERSION_CONFIG = "kafkastore.checkpoint.version";
+  /**
    * <code>kafkastore.init.timeout.ms</code>
    */
   public static final String KAFKASTORE_INIT_TIMEOUT_CONFIG = "kafkastore.init.timeout.ms";
@@ -246,6 +254,10 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_INIT_TIMEOUT_DOC =
       "The timeout for initialization of the Kafka store, including creation of the Kafka topic "
       + "that stores schema data.";
+  protected static final String KAFKASTORE_CHECKPOINT_DIR_DOC =
+      "For persistent stores, the directory in which to store offset checkpoints.";
+  protected static final String KAFKASTORE_CHECKPOINT_VERSION_DOC =
+      "For persistent stores, the version of the checkpoint offset file.";
   protected static final String KAFKASTORE_TIMEOUT_DOC =
       "The timeout for an operation on the Kafka store";
   protected static final String KAFKASTORE_UPDATE_HANDLERS_DOC =
@@ -421,6 +433,12 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC
+    )
+    .define(KAFKASTORE_CHECKPOINT_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
+        ConfigDef.Importance.MEDIUM, KAFKASTORE_CHECKPOINT_DIR_DOC
+    )
+    .define(KAFKASTORE_CHECKPOINT_VERSION_CONFIG, ConfigDef.Type.INT, 0,
+        ConfigDef.Importance.MEDIUM, KAFKASTORE_CHECKPOINT_VERSION_DOC
     )
     .define(KAFKASTORE_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, KAFKASTORE_UPDATE_HANDLERS_DOC

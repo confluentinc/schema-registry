@@ -392,6 +392,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   @Override
+  public void flush() throws StoreException {
+    localStore.flush();
+  }
+
+  @Override
   public void close() {
     try {
       if (kafkaTopicReader != null) {

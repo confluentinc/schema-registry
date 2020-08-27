@@ -599,6 +599,19 @@ public class RestApiTest extends ClusterTestHarness {
     List<String> associatedSubjects = restApp.restClient.getAllSubjectsById(1);
     assertEquals(associatedSubjects.size(), 2);
     assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
+
+    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
+
+    associatedSubjects = restApp.restClient.getAllSubjectsById(1);
+    assertEquals(associatedSubjects.size(), 1);
+    assertEquals(Collections.singletonList(subject1), associatedSubjects);
+
+    associatedSubjects = restApp.restClient.getAllSubjectsById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, true);
+    assertEquals(associatedSubjects.size(), 2);
+    assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
   }
 
   @Test
@@ -624,6 +637,20 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject2);
 
     List<SubjectVersion> associatedSubjects = restApp.restClient.getAllVersionsById(1);
+    assertEquals(associatedSubjects.size(), 2);
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
+
+    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
+
+    associatedSubjects = restApp.restClient.getAllVersionsById(1);
+    assertEquals(associatedSubjects.size(), 1);
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
+
+    associatedSubjects = restApp.restClient.getAllVersionsById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, true);
     assertEquals(associatedSubjects.size(), 2);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));

@@ -57,7 +57,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public V get(K key) {
+  public V get(K key) throws StoreException {
     return store.get(key);
   }
 
@@ -67,7 +67,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public CloseableIterator<V> getAll(K key1, K key2) {
+  public CloseableIterator<V> getAll(K key1, K key2) throws StoreException {
     ConcurrentNavigableMap<K, V> subMap = (key1 == null && key2 == null)
                                           ? store
                                           : store.subMap(key1, key2);
@@ -75,7 +75,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void putAll(Map<K, V> entries) {
+  public void putAll(Map<K, V> entries) throws StoreException {
     store.putAll(entries);
   }
 
@@ -90,12 +90,16 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void close() {
+  public void flush() throws StoreException {
+  }
+
+  @Override
+  public void close() throws StoreException {
     store.clear();
   }
 
   @Override
-  public SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) {
+  public SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) throws StoreException {
     List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
         = schema.getReferences();
     MD5 md5 = MD5.ofString(schema.getSchema(), refs == null ? null : refs.stream()
@@ -116,17 +120,17 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public boolean containsSchema(Schema schema) {
+  public boolean containsSchema(Schema schema) throws StoreException {
     return schemaIdAndSubjects(schema) != null;
   }
 
   @Override
-  public Set<Integer> referencesSchema(SchemaKey schema) {
+  public Set<Integer> referencesSchema(SchemaKey schema) throws StoreException {
     return referencedBy.getOrDefault(schema, Collections.newSetFromMap(new ConcurrentHashMap<>()));
   }
 
   @Override
-  public SchemaKey schemaKeyById(Integer id) {
+  public SchemaKey schemaKeyById(Integer id) throws StoreException {
     Map<Integer, Map<String, Integer>> guids =
             guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
     Map<String, Integer> subjectVersions = guids.get(id);
@@ -204,7 +208,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public CompatibilityLevel compatibilityLevel(String subject,
                                                boolean returnTopLevelIfNotFound,
                                                CompatibilityLevel defaultForTopLevel
-  ) {
+  ) throws StoreException {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
     ConfigValue config = (ConfigValue) get((K) subjectConfigKey);
     if (config == null && subject == null) {
@@ -225,7 +229,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public Mode mode(String subject,
                    boolean returnTopLevelIfNotFound,
                    Mode defaultForTopLevel
-  ) {
+  ) throws StoreException {
     ModeKey modeKey = new ModeKey(subject);
     ModeValue modeValue = (ModeValue) get((K) modeKey);
     if (modeValue == null && subject == null) {
@@ -242,7 +246,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public Set<String> subjects(String subject, boolean lookupDeletedSubjects) {
+  public Set<String> subjects(String subject, boolean lookupDeletedSubjects) throws StoreException {
     return subjects(matchingSubjectPredicate(subject), lookupDeletedSubjects);
   }
 
@@ -264,7 +268,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public boolean hasSubjects(String subject, boolean lookupDeletedSubjects) {
+  public boolean hasSubjects(String subject, boolean lookupDeletedSubjects) throws StoreException {
     return hasSubjects(matchingSubjectPredicate(subject), lookupDeletedSubjects);
   }
 
@@ -285,7 +289,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void clearSubjects(String subject) {
+  public void clearSubjects(String subject) throws StoreException {
     clearSubjects(matchingSubjectPredicate(subject));
   }
 

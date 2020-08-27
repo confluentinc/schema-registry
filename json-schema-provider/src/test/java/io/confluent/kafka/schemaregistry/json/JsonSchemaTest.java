@@ -239,6 +239,18 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testSchemaWithDraft4() throws Exception {
+    TestObj testObj = new TestObj();
+    String actual =
+        JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_4, true, null).toString();
+    String expected = "{\"$schema\":\"http://json-schema.org/draft-04/schema#\","
+        + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
+        + "\"properties\":{\"prop\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},"
+        + "{\"type\":\"string\"}]}}}";
+    assertEquals(expected, actual);
+  }
+
+  @Test
   public void testSchemaWithOneofs() throws Exception {
     TestObj testObj = new TestObj();
     String actual = JsonSchemaUtils.getSchema(testObj).toString();
@@ -252,7 +264,8 @@ public class JsonSchemaTest {
   @Test
   public void testSchemaWithoutOneofs() throws Exception {
     TestObj testObj = new TestObj();
-    String actual = JsonSchemaUtils.getSchema(testObj, false, null).toString();
+    String actual =
+        JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_7, false, null).toString();
     String expected = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\","
         + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
         + "\"properties\":{\"prop\":{\"type\":\"string\"}}}";
