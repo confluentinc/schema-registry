@@ -36,10 +36,6 @@
             <artifactId>common-utils</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-client-plugins</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.glassfish.jersey.ext</groupId>
             <artifactId>jersey-bean-validation</artifactId>
         </dependency>
@@ -202,6 +198,11 @@
                     <artifactId>api-ldap-schema-data</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <!-- Must be at end so tests don't pick up Bouncy Castle FIPS -->
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-client-plugins</artifactId>
         </dependency>
     </dependencies>
 
