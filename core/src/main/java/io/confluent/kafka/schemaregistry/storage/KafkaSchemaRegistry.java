@@ -744,12 +744,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Collections.reverse(allVersions);
 
       for (SchemaValue schemaValue : allVersions) {
-        if (!schemaValue.isDeleted()) {
+        if (!schemaValue.isDeleted()
+            && parsedSchema.references().isEmpty()
+            && !schemaValue.getReferences().isEmpty()) {
           Schema undeleted = getSchemaEntityFromSchemaValue(schemaValue);
           ParsedSchema undeletedSchema = parseSchema(undeleted);
-          if (parsedSchema.references().isEmpty()
-              && !undeletedSchema.references().isEmpty()
-              && parsedSchema.deepEquals(undeletedSchema)) {
+          if (parsedSchema.deepEquals(undeletedSchema)) {
             // This handles the case where a schema is sent with all references resolved
             return undeleted;
           }
