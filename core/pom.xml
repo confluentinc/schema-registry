@@ -220,11 +220,6 @@
             <groupId>io.swagger</groupId>
             <artifactId>swagger-core</artifactId>
         </dependency>
-        <!-- Must be at end so tests don't pick up Bouncy Castle FIPS -->
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-client-plugins</artifactId>
-        </dependency>
     </dependencies>
 
     <build>
