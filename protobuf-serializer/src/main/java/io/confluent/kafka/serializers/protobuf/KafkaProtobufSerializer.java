@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.protobuf;
 
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
+import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -33,7 +34,7 @@ public class KafkaProtobufSerializer<T extends Message>
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
   private boolean isKey;
-  private LRUCache<Descriptor, ProtobufSchema> schemaCache;
+  private Cache<Descriptor, ProtobufSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
