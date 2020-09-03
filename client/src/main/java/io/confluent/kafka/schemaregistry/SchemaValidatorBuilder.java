@@ -20,6 +20,7 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -58,15 +59,15 @@ public final class SchemaValidatorBuilder {
     this.strategy = (toValidate, existing) -> {
       List<String> backward = existing.isBackwardCompatible(toValidate);
       List<String> forward = toValidate.isBackwardCompatible(existing);
-      if (backward != null && forward != null) {
+      if (!backward.isEmpty() && !forward.isEmpty()) {
         backward.addAll(forward);
         return backward;
-      } else if (backward != null) {
+      } else if (!backward.isEmpty()) {
         return backward;
-      } else if (forward != null)  {
+      } else if (!forward.isEmpty())  {
         return forward;
       } else {
-        return null;
+        return Collections.emptyList();
       }
     };
     return this;
@@ -80,7 +81,7 @@ public final class SchemaValidatorBuilder {
         ParsedSchema existing = schemas.next();
         return strategy.validate(toValidate, existing);
       }
-      return null;
+      return Collections.emptyList();
     };
   }
 
@@ -89,11 +90,11 @@ public final class SchemaValidatorBuilder {
     return (toValidate, schemasInOrder) -> {
       for (ParsedSchema existing : schemasInOrder) {
         List<String> errorMessages = strategy.validate(toValidate, existing);
-        if (errorMessages != null) {
+        if (!errorMessages.isEmpty()) {
           return errorMessages;
         }
       }
-      return null;
+      return Collections.emptyList();
     };
   }
 
