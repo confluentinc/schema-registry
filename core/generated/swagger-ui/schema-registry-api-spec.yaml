@@ -95,6 +95,10 @@ paths:
         required: true
         schema:
           $ref: "#/definitions/RegisterSchemaRequest"
+      - name: "verbose"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"

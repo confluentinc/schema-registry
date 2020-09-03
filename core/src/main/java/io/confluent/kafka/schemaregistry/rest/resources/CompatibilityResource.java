@@ -35,6 +35,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
+import javax.ws.rs.QueryParam;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -93,7 +94,8 @@ public class CompatibilityResource {
           + "\"latest\" checks compatibility of the input schema with the last registered schema "
           + "under the specified subject", required = true)@PathParam("version") String version,
       @ApiParam(value = "Schema", required = true)
-      @NotNull RegisterSchemaRequest request) {
+      @NotNull RegisterSchemaRequest request,
+      @QueryParam("verbose") boolean verbose) {
     log.info("Testing schema subject {} compatibility between existing version {} and "
              + "specified version {}, id {}, type {}",
              subject, version, request.getVersion(), request.getId(), request.getSchemaType());
@@ -139,10 +141,20 @@ public class CompatibilityResource {
       throw Errors.schemaRegistryException(
           "Error while getting compatibility level for subject " + subject, e);
     }
+    CompatibilityCheckResponse compatibilityCheckResponse =
+            createCompatiblityCheckResponse(errorMessages, verbose);
+    asyncResponse.resume(compatibilityCheckResponse);
+  }
+
+  private static CompatibilityCheckResponse createCompatiblityCheckResponse(
+          List<String> errorMessages,
+          boolean verbose) {
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     compatibilityCheckResponse.setIsCompatible(errorMessages.isEmpty());
-    compatibilityCheckResponse.setErrorMessages(errorMessages);
-    asyncResponse.resume(compatibilityCheckResponse);
+    if (verbose) {
+      compatibilityCheckResponse.setErrorMessages(errorMessages);
+    }
+    return compatibilityCheckResponse;
   }
 
   private static VersionId parseVersionId(String version) {
