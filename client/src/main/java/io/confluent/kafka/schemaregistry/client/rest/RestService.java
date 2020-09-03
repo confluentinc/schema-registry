@@ -576,7 +576,8 @@ public class RestService implements Configurable {
                                                String version)
       throws IOException, RestClientException {
     UriBuilder builder =
-        UriBuilder.fromPath("/compatibility/subjects/{subject}/versions/{version}?verbose=true");
+        UriBuilder.fromPath("/compatibility/subjects/{subject}/versions/{version}");
+    builder.queryParam("verbose", true);
     String path = builder.build(subject, version).toString();
 
     CompatibilityCheckResponse response =
