@@ -141,6 +141,7 @@ public class CompatibilityResource {
       throw Errors.schemaRegistryException(
           "Error while getting compatibility level for subject " + subject, e);
     }
+
     CompatibilityCheckResponse compatibilityCheckResponse =
             createCompatiblityCheckResponse(errorMessages, verbose);
     asyncResponse.resume(compatibilityCheckResponse);

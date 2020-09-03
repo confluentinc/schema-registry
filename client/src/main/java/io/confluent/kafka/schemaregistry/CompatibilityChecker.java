@@ -64,7 +64,8 @@ public class CompatibilityChecker {
       FULL_TRANSITIVE_VALIDATOR);
 
   private static final SchemaValidator NO_OP_VALIDATOR =
-      (schema, schemas) -> Collections.emptyList();
+          (schema, schemas) -> Collections.emptyList();
+
   public static final CompatibilityChecker NO_OP_CHECKER =
       new CompatibilityChecker(NO_OP_VALIDATOR);
 

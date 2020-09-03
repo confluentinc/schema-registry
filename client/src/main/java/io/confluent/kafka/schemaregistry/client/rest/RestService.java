@@ -578,6 +578,7 @@ public class RestService implements Configurable {
     UriBuilder builder =
         UriBuilder.fromPath("/compatibility/subjects/{subject}/versions/{version}");
     builder.queryParam("verbose", true);
+
     String path = builder.build(subject, version).toString();
 
     CompatibilityCheckResponse response =
