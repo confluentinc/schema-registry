@@ -467,7 +467,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
       Collections.reverse(undeletedVersions);
 
-      boolean isCompatible = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions);
+      boolean isCompatible =
+              isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions).isEmpty();
       // Allow schema providers to modify the schema during compatibility checks
       schema.setSchema(parsedSchema.canonicalString());
       schema.setReferences(parsedSchema.references());
@@ -1281,7 +1282,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   @Override
-  public boolean isCompatible(String subject,
+  public List<String> isCompatible(String subject,
                               Schema newSchema,
                               Schema latestSchema)
       throws SchemaRegistryException {
@@ -1296,7 +1297,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    * @param previousSchemas Full schema history in chronological order
    */
   @Override
-  public boolean isCompatible(String subject,
+  public List<String> isCompatible(String subject,
                               Schema newSchema,
                               List<Schema> previousSchemas)
       throws SchemaRegistryException {
@@ -1316,7 +1317,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas);
   }
 
-  private boolean isCompatibleWithPrevious(String subject,
+  private List<String> isCompatibleWithPrevious(String subject,
                                            ParsedSchema parsedSchema,
                                            List<ParsedSchema> previousSchemas)
       throws SchemaRegistryException {

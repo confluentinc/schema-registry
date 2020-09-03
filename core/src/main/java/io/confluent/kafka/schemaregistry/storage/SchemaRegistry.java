@@ -71,11 +71,11 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException;
 
-  boolean isCompatible(String subject,
+  List<String> isCompatible(String subject,
                        Schema newSchema,
                        Schema targetSchema) throws SchemaRegistryException;
 
-  boolean isCompatible(String subject,
+  List<String> isCompatible(String subject,
                        Schema newSchema,
                        List<Schema> previousSchemas) throws SchemaRegistryException;
 

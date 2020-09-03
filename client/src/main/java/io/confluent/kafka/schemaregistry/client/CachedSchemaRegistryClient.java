@@ -430,6 +430,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public List<String> testCompatibilityVerbose(String subject, ParsedSchema schema)
+          throws IOException, RestClientException {
+    return restService.testCompatibilityVerbose(schema.canonicalString(), schema.schemaType(),
+            schema.references(), subject, "latest");
+  }
+
+  @Override
   public String updateCompatibility(String subject, String compatibility)
       throws IOException, RestClientException {
     ConfigUpdateRequest response = restService.updateCompatibility(compatibility, subject);

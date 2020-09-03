@@ -377,11 +377,11 @@ public class ProtobufSchemaTest {
     String fileProto = schema.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
     ProtobufSchema schema2 = new ProtobufSchema(fileProto);
     assertTrue(schema.isCompatible(
-        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)));
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
     fileProto = schema2.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
     ProtobufSchema schema3 = new ProtobufSchema(fileProto);
     assertTrue(schema2.isCompatible(
-        CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)));
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)).isEmpty());
     assertEquals(schema2, schema3);
 
     original = resourceLoader.readObj("NestedTestProto.proto");
@@ -389,11 +389,11 @@ public class ProtobufSchemaTest {
     fileProto = schema.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
     schema2 = new ProtobufSchema(fileProto);
     assertTrue(schema.isCompatible(
-        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)));
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
     fileProto = schema2.formattedString(ProtobufSchema.SERIALIZED_FORMAT);
     schema3 = new ProtobufSchema(fileProto);
     assertTrue(schema2.isCompatible(
-        CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)));
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema3)).isEmpty());
     assertEquals(schema2, schema3);
   }
 

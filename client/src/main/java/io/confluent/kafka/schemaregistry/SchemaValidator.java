@@ -20,6 +20,8 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import java.util.List;
+
 /**
  * <p>
  * A SchemaValidator has one method, which validates that a {@link ParsedSchema} is
@@ -42,6 +44,8 @@ public interface SchemaValidator {
    * @param toValidate The schema to validate
    * @param existing The schemas to validate against, in order from most recent to latest if
    *     applicable
+   * @return empty list if the schema is compatible with the provided schema, other wise the list
+   *        of error messages
    */
-  boolean validate(ParsedSchema toValidate, Iterable<? extends ParsedSchema> existing);
+  List<String> validate(ParsedSchema toValidate, Iterable<? extends ParsedSchema> existing);
 }

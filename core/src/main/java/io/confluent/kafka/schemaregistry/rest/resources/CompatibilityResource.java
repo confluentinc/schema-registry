@@ -21,6 +21,8 @@ import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import java.util.Collections;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,7 +99,7 @@ public class CompatibilityResource {
              subject, version, request.getVersion(), request.getId(), request.getSchemaType());
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
-    boolean isCompatible = false;
+    List<String> errorMessages;
     VersionId versionId = parseVersionId(version);
     Schema schemaForSpecifiedVersion = null;
     try {
@@ -122,7 +124,7 @@ public class CompatibilityResource {
         request.getSchema()
     );
     try {
-      isCompatible = schemaRegistry.isCompatible(
+      errorMessages = schemaRegistry.isCompatible(
           subject, schema,
           schemaForSpecifiedVersion != null
               ? Collections.singletonList(schemaForSpecifiedVersion)
@@ -138,7 +140,8 @@ public class CompatibilityResource {
           "Error while getting compatibility level for subject " + subject, e);
     }
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
-    compatibilityCheckResponse.setIsCompatible(isCompatible);
+    compatibilityCheckResponse.setIsCompatible(errorMessages.isEmpty());
+    compatibilityCheckResponse.setErrorMessages(errorMessages);
     asyncResponse.resume(compatibilityCheckResponse);
   }
 

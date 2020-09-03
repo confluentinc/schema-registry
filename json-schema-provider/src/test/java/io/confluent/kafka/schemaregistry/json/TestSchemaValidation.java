@@ -226,11 +226,11 @@ public class TestSchemaValidation {
       Schema reader = tc.getReader();
       Schema writer = tc.getWriter();
       SchemaValidator validator = builder.canReadStrategy().validateAll();
-      boolean valid = validator.validate(
+      List<String> valid = validator.validate(
           new JsonSchema(reader),
           Collections.singleton(new JsonSchema(writer))
       );
-      Assert.assertFalse(valid);
+      Assert.assertFalse(valid.isEmpty());
     }
   }
 
@@ -247,7 +247,7 @@ public class TestSchemaValidation {
     for (int i = prev.length - 1; i >= 0; i--) {
       prior.add(new JsonSchema(prev[i]));
     }
-    boolean valid = validator.validate(new JsonSchema(schemaFails), prior);
-    Assert.assertFalse(valid);
+    List<String> valid = validator.validate(new JsonSchema(schemaFails), prior);
+    Assert.assertFalse(valid.isEmpty());
   }
 }

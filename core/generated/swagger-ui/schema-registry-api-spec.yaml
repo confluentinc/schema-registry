@@ -912,6 +912,10 @@ definitions:
     properties:
       is_compatible:
         type: "boolean"
+      error_messages:
+        type: "array"
+        items:
+          type: "string"
   Config:
     type: "object"
     properties:

@@ -549,6 +549,46 @@ public class RestService implements Configurable {
     return response.getIsCompatible();
   }
 
+  public List<String> testCompatibilityVerbose(String schemaString,
+                                               String schemaType,
+                                               List<SchemaReference> references,
+                                               String subject,
+                                               String version)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    request.setSchemaType(schemaType);
+    request.setReferences(references);
+    return testCompatibilityVerbose(request, subject, version);
+  }
+
+  public List<String> testCompatibilityVerbose(RegisterSchemaRequest registerSchemaRequest,
+                                               String subject,
+                                               String version)
+      throws IOException, RestClientException {
+    return testCompatibilityVerbose(
+        DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest, subject, version);
+  }
+
+  public List<String> testCompatibilityVerbose(Map<String, String> requestProperties,
+                                               RegisterSchemaRequest registerSchemaRequest,
+                                               String subject,
+                                               String version)
+      throws IOException, RestClientException {
+    UriBuilder builder =
+        UriBuilder.fromPath("/compatibility/subjects/{subject}/versions/{version}");
+    String path = builder.build(subject, version).toString();
+
+    CompatibilityCheckResponse response =
+        httpRequest(
+            path,
+            "POST",
+            registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
+            requestProperties,
+            COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
+    return response.getErrorMessages();
+  }
+
   public ConfigUpdateRequest updateCompatibility(String compatibility, String subject)
       throws IOException, RestClientException {
     ConfigUpdateRequest request = new ConfigUpdateRequest();
