@@ -113,6 +113,10 @@ public class KafkaJsonSchemaSerializerTest {
     // Test for javaType property
     deserialized = getDeserializer(null).deserialize(topic, bytes);
     assertEquals(user, deserialized);
+
+    // Test javaType overrides the default Object.class
+    deserialized = getDeserializer(Object.class).deserialize(topic, bytes);
+    assertEquals(user, deserialized);
   }
 
   @Test(expected = SerializationException.class)
