@@ -115,11 +115,14 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       String typeName = schema.getString(typeProperty);
 
       Object value;
-      if (type != null) {
+      if (type != null && !Object.class.equals(type)) {
         value = objectMapper.readValue(buffer.array(), start, length, type);
       } else if (typeName != null) {
         value = deriveType(buffer, length, start, typeName);
+      } else if (Object.class.equals(type)) {
+        value = objectMapper.readValue(buffer.array(), start, length, type);
       } else {
+        // Return JsonNode if type is null
         value = objectMapper.readTree(new ByteArrayInputStream(buffer.array(), start, length));
       }
 
