@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.json;
 
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -40,12 +41,12 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
    * Constructor used by Kafka producer.
    */
   public KafkaJsonSchemaSerializer() {
-    schemaCache = new LRUCache<>(DEFAULT_CACHE_CAPACITY);
+    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client) {
     schemaRegistry = client;
-    schemaCache = new LRUCache<>(DEFAULT_CACHE_CAPACITY);
+    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -56,7 +57,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
                                    int cacheCapacity) {
     schemaRegistry = client;
     configure(serializerConfig(props));
-    schemaCache = new LRUCache<>(cacheCapacity);
+    schemaCache = new SynchronizedCache<>(new LRUCache<>(cacheCapacity));
   }
 
   @Override

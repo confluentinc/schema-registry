@@ -22,6 +22,7 @@ import java.util.Objects;
 import kafka.utils.VerifiableProperties;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -50,7 +51,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   private Cache<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
-    schemaCache = new LRUCache<>(DEFAULT_CACHE_CAPACITY);
+    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
   }
 
   /**
