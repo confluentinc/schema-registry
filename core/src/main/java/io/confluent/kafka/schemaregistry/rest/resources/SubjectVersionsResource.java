@@ -220,6 +220,8 @@ public class SubjectVersionsResource {
     int id;
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
+    } catch (IdDoesNotMatchException e) {
+      throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidAvroException("Input schema is an invalid Avro schema", e);
     } catch (OperationNotPermittedException e) {
