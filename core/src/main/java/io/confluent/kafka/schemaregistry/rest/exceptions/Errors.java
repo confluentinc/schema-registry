@@ -39,6 +39,7 @@ public class Errors {
   public static final int INVALID_COMPATIBILITY_LEVEL_ERROR_CODE = 42203;
   public static final int INVALID_MODE_ERROR_CODE = 42204;
   public static final int OPERATION_NOT_PERMITTED_ERROR_CODE = 42205;
+  public static final int ID_DOES_NOT_MATCH_ERROR_CODE = 42207;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -64,6 +65,10 @@ public class Errors {
     return new RestIncompatibleAvroSchemaException(message,
                                                    RestIncompatibleAvroSchemaException.DEFAULT_ERROR_CODE,
                                                    cause);
+  }
+
+  public static RestIdDoesNotMatchException idDoesNotMatchException(Throwable cause) {
+    return new RestIdDoesNotMatchException(cause.getMessage());
   }
 
   public static RestInvalidSchemaException invalidAvroException(String message, Throwable cause) {
