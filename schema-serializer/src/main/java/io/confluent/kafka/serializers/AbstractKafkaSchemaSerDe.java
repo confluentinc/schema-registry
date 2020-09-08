@@ -23,6 +23,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -56,7 +57,7 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
   protected Cache<SubjectSchema, ParsedSchema> latestVersions =
-      new LRUCache<>(DEFAULT_CACHE_CAPACITY);
+      new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
   protected boolean useSchemaReflection;
 
 
