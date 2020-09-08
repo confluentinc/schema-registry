@@ -61,8 +61,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.LinkedList;
-import java.util.Arrays;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -789,7 +787,7 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return new LinkedList<>(Arrays.asList("Incompatible because of different schema type"));
+      return Collections.singletonList("Incompatible because of different schema type");
     }
     final List<Difference> differences = SchemaDiff.compare(
         (ProtobufSchema) previousSchema, this
@@ -800,7 +798,7 @@ public class ProtobufSchema implements ParsedSchema {
     boolean isCompatible = incompatibleDiffs.isEmpty();
     if (!isCompatible) {
       boolean first = true;
-      List<String> errorMessages = new LinkedList<>();
+      List<String> errorMessages = new ArrayList<>();
       for (Difference incompatibleDiff : incompatibleDiffs) {
         if (first) {
           // Log first incompatible change as warning

@@ -121,8 +121,10 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   public boolean testCompatibility(String subject, ParsedSchema schema)
       throws IOException, RestClientException;
 
-  public List<String> testCompatibilityVerbose(String subject, ParsedSchema schema)
-          throws IOException, RestClientException;
+  default List<String> testCompatibilityVerbose(String subject, ParsedSchema schema)
+          throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   public String updateCompatibility(String subject, String compatibility)
       throws IOException, RestClientException;

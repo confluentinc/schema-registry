@@ -133,7 +133,11 @@ public class CompatibilityResource {
               : Collections.emptyList()
       );
     } catch (InvalidSchemaException e) {
-      throw Errors.invalidSchemaException(e);
+      if (verbose) {
+        errorMessages = Collections.singletonList(e.getMessage());
+      } else {
+        throw Errors.invalidSchemaException(e);
+      }
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(
           "Error while getting compatibility level for subject " + subject, e);
@@ -153,7 +157,7 @@ public class CompatibilityResource {
     CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
     compatibilityCheckResponse.setIsCompatible(errorMessages.isEmpty());
     if (verbose) {
-      compatibilityCheckResponse.setErrorMessages(errorMessages);
+      compatibilityCheckResponse.setMessages(errorMessages);
     }
     return compatibilityCheckResponse;
   }

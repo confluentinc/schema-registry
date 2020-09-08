@@ -36,7 +36,7 @@ public interface SchemaValidationStrategy {
    *
    * @param toValidate The schema to validate
    * @param existing The schema to validate against
-   * @return List of error message, other wise empty list
+   * @return List of error message, otherwise empty list
    */
   List<String> validate(ParsedSchema toValidate, ParsedSchema existing);
 }

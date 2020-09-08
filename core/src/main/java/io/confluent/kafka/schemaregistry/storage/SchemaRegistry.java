@@ -72,12 +72,12 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       throws SchemaRegistryException;
 
   List<String> isCompatible(String subject,
-                       Schema newSchema,
-                       Schema targetSchema) throws SchemaRegistryException;
+                            Schema newSchema,
+                            Schema targetSchema) throws SchemaRegistryException;
 
   List<String> isCompatible(String subject,
-                       Schema newSchema,
-                       List<Schema> previousSchemas) throws SchemaRegistryException;
+                            Schema newSchema,
+                            List<Schema> previousSchemas) throws SchemaRegistryException;
 
   void close();
 

@@ -30,7 +30,7 @@ import java.util.Objects;
 public class CompatibilityCheckResponse {
 
   private boolean isCompatible;
-  private List<String> errorMessages = null;
+  private List<String> messages = null;
 
   public static CompatibilityCheckResponse fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, CompatibilityCheckResponse.class);
@@ -50,14 +50,14 @@ public class CompatibilityCheckResponse {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
-  @JsonProperty("error_messages")
-  public List<String> getErrorMessages() {
-    return errorMessages;
+  @JsonProperty("messages")
+  public List<String> getMessages() {
+    return messages;
   }
 
-  @JsonProperty("error_messages")
-  public void setErrorMessages(List<String> errorMessages) {
-    this.errorMessages = errorMessages;
+  @JsonProperty("messages")
+  public void setMessages(List<String> messages) {
+    this.messages = messages;
   }
 
   @Override

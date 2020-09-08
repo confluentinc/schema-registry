@@ -916,7 +916,7 @@ definitions:
     properties:
       is_compatible:
         type: "boolean"
-      error_messages:
+      messages:
         type: "array"
         items:
           type: "string"

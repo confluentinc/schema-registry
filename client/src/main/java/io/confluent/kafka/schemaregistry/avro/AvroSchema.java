@@ -30,8 +30,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.LinkedList;
-import java.util.Arrays;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -161,18 +159,18 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return new LinkedList<>(Arrays.asList("Incompatible because of different schema type"));
+      return Collections.singletonList("Incompatible because of different schema type");
     }
     try {
       BACKWARD_VALIDATOR.validate(this.schemaObj,
           Collections.singleton(((AvroSchema) previousSchema).schemaObj));
       return Collections.emptyList();
     } catch (SchemaValidationException e) {
-      return new LinkedList<>(Arrays.asList(e.toString()));
+      return Collections.singletonList(e.toString());
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
-      return new LinkedList<>(Arrays.asList(
-              String.format("Unexpected exception during compatibility check", e)));
+      return Collections.singletonList(
+              "Unexpected exception during compatibility check: " + e.getMessage());
     }
   }
 

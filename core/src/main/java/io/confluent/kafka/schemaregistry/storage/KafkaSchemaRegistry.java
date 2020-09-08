@@ -1283,8 +1283,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   @Override
   public List<String> isCompatible(String subject,
-                              Schema newSchema,
-                              Schema latestSchema)
+                                   Schema newSchema,
+                                   Schema latestSchema)
       throws SchemaRegistryException {
     if (latestSchema == null) {
       log.error("Lastest schema not provided");
@@ -1298,8 +1298,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    */
   @Override
   public List<String> isCompatible(String subject,
-                              Schema newSchema,
-                              List<Schema> previousSchemas)
+                                   Schema newSchema,
+                                   List<Schema> previousSchemas)
       throws SchemaRegistryException {
 
     if (previousSchemas == null) {
@@ -1318,8 +1318,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private List<String> isCompatibleWithPrevious(String subject,
-                                           ParsedSchema parsedSchema,
-                                           List<ParsedSchema> previousSchemas)
+                                                ParsedSchema parsedSchema,
+                                                List<ParsedSchema> previousSchemas)
       throws SchemaRegistryException {
 
     CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);

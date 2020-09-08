@@ -378,7 +378,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
     CompatibilityLevel compatibilityLevel = CompatibilityLevel.forName(compatibility);
     if (compatibilityLevel == null) {
-      return new LinkedList<>(Arrays.asList("Compatibility level not specify."));
+      return new LinkedList<>(Arrays.asList("Compatibility level not specified."));
     }
 
     List<ParsedSchema> schemaHistory = new ArrayList<>();
