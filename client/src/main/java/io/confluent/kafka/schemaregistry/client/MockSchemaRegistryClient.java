@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.LinkedList;
 
 /**
  * Mock implementation of SchemaRegistryClient that can be used for tests. This version is NOT
@@ -355,6 +356,29 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     CompatibilityLevel compatibilityLevel = CompatibilityLevel.forName(compatibility);
     if (compatibilityLevel == null) {
       return false;
+    }
+
+    List<ParsedSchema> schemaHistory = new ArrayList<>();
+    for (int version : allVersions(subject)) {
+      SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
+      schemaHistory.add(getSchemaBySubjectAndIdFromRegistry(subject,
+          schemaMetadata.getId()));
+    }
+
+    return newSchema.isCompatible(compatibilityLevel, schemaHistory).isEmpty();
+  }
+
+  @Override
+  public List<String> testCompatibilityVerbose(String subject, ParsedSchema newSchema)
+          throws IOException, RestClientException {
+    String compatibility = compatibilityCache.get(subject);
+    if (compatibility == null) {
+      compatibility = defaultCompatibility;
+    }
+
+    CompatibilityLevel compatibilityLevel = CompatibilityLevel.forName(compatibility);
+    if (compatibilityLevel == null) {
+      return new LinkedList<>(Arrays.asList("Compatibility level not specified."));
     }
 
     List<ParsedSchema> schemaHistory = new ArrayList<>();

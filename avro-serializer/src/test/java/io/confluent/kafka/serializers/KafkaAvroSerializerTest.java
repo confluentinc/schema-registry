@@ -361,7 +361,7 @@ public class KafkaAvroSerializerTest {
 
     AvroSchema avroSchemaV1 = new AvroSchema(schemaV1);
     AvroSchema avroSchemaV2 = new AvroSchema(schemaV2);
-    assertTrue("Schema V2 should be backwards compatible", avroSchemaV2.isBackwardCompatible(avroSchemaV1));
+    assertTrue("Schema V2 should be backwards compatible", avroSchemaV2.isBackwardCompatible(avroSchemaV1).isEmpty());
 
     GenericRecord recordV1 = new GenericData.Record(avroSchemaV1.rawSchema());
     recordV1.put(fieldToDelete, "present");

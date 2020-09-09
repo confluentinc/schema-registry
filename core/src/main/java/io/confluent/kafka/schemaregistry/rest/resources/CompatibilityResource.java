@@ -21,6 +21,8 @@ import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import java.util.Collections;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +35,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
+import javax.ws.rs.QueryParam;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -91,13 +94,14 @@ public class CompatibilityResource {
           + "\"latest\" checks compatibility of the input schema with the last registered schema "
           + "under the specified subject", required = true)@PathParam("version") String version,
       @ApiParam(value = "Schema", required = true)
-      @NotNull RegisterSchemaRequest request) {
+      @NotNull RegisterSchemaRequest request,
+      @QueryParam("verbose") boolean verbose) {
     log.info("Testing schema subject {} compatibility between existing version {} and "
              + "specified version {}, id {}, type {}",
              subject, version, request.getVersion(), request.getId(), request.getSchemaType());
     // returns true if posted schema is compatible with the specified version. "latest" is 
     // a special version
-    boolean isCompatible = false;
+    List<String> errorMessages;
     VersionId versionId = parseVersionId(version);
     Schema schemaForSpecifiedVersion = null;
     try {
@@ -122,14 +126,18 @@ public class CompatibilityResource {
         request.getSchema()
     );
     try {
-      isCompatible = schemaRegistry.isCompatible(
+      errorMessages = schemaRegistry.isCompatible(
           subject, schema,
           schemaForSpecifiedVersion != null
               ? Collections.singletonList(schemaForSpecifiedVersion)
               : Collections.emptyList()
       );
     } catch (InvalidSchemaException e) {
-      throw Errors.invalidSchemaException(e);
+      if (verbose) {
+        errorMessages = Collections.singletonList(e.getMessage());
+      } else {
+        throw Errors.invalidSchemaException(e);
+      }
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(
           "Error while getting compatibility level for subject " + subject, e);
@@ -137,9 +145,21 @@ public class CompatibilityResource {
       throw Errors.schemaRegistryException(
           "Error while getting compatibility level for subject " + subject, e);
     }
-    CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
-    compatibilityCheckResponse.setIsCompatible(isCompatible);
+
+    CompatibilityCheckResponse compatibilityCheckResponse =
+            createCompatiblityCheckResponse(errorMessages, verbose);
     asyncResponse.resume(compatibilityCheckResponse);
+  }
+
+  private static CompatibilityCheckResponse createCompatiblityCheckResponse(
+          List<String> errorMessages,
+          boolean verbose) {
+    CompatibilityCheckResponse compatibilityCheckResponse = new CompatibilityCheckResponse();
+    compatibilityCheckResponse.setIsCompatible(errorMessages.isEmpty());
+    if (verbose) {
+      compatibilityCheckResponse.setMessages(errorMessages);
+    }
+    return compatibilityCheckResponse;
   }
 
   private static VersionId parseVersionId(String version) {

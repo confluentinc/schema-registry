@@ -204,7 +204,7 @@ public abstract class AbstractKafkaSchemaSerDe {
               + " of type " + schemaMetadata.getSchemaType()));
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
-      if (!latestVersion.isBackwardCompatible(schema)) {
+      if (!latestVersion.isBackwardCompatible(schema).isEmpty()) {
         throw new IOException("Incompatible schema " + schemaMetadata.getSchema()
             + " with refs " + schemaMetadata.getReferences()
             + " of type " + schemaMetadata.getSchemaType()
