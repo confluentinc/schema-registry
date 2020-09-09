@@ -118,7 +118,7 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
-  public static final boolean DEFAULT_MODE_MUTABILITY = false;
+  public static final boolean DEFAULT_MODE_MUTABILITY = true;
   /**
    * <code>schema.registry.zk.name</code>*
    */
