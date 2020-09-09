@@ -16,8 +16,7 @@
 
 package io.confluent.kafka.schemaregistry;
 
-import java.util.Arrays;
-import java.util.LinkedList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -104,7 +103,7 @@ public interface ParsedSchema {
       CompatibilityLevel level, List<? extends ParsedSchema> previousSchemas) {
     for (ParsedSchema previousSchema : previousSchemas) {
       if (!schemaType().equals(previousSchema.schemaType())) {
-        return new LinkedList<>(Arrays.asList("Incompatible because of different schema type"));
+        return Collections.singletonList("Incompatible because of different schema type");
       }
     }
     return CompatibilityChecker.checker(level).isCompatible(this, previousSchemas);

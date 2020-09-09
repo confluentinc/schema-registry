@@ -166,7 +166,7 @@ public class AvroSchema implements ParsedSchema {
           Collections.singleton(((AvroSchema) previousSchema).schemaObj));
       return Collections.emptyList();
     } catch (SchemaValidationException e) {
-      return Collections.singletonList(e.toString());
+      return Collections.singletonList(e.getMessage());
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
       return Collections.singletonList(
