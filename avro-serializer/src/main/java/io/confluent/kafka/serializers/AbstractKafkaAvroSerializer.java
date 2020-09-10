@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
+import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
@@ -76,15 +77,21 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaAvroSerDe
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
       out.write(ByteBuffer.allocate(idSize).putInt(id).array());
-      if (object instanceof byte[]) {
-        out.write((byte[]) object);
+      Object value = object instanceof NonRecordContainer
+          ? ((NonRecordContainer) object).getValue()
+          : object;
+      if (schema.getType().equals(Type.BYTES)) {
+        if (value instanceof byte[]) {
+          out.write((byte[]) value);
+        } else if (value instanceof ByteBuffer) {
+          out.write(((ByteBuffer) value).array());
+        } else {
+          throw new SerializationException(
+              "Unrecognized bytes object of type: " + value.getClass().getName());
+        }
       } else {
         BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
         DatumWriter<Object> writer;
-        Object
-            value =
-            object instanceof NonRecordContainer ? ((NonRecordContainer) object).getValue()
-                                                 : object;
         if (value instanceof SpecificRecord) {
           writer = new SpecificDatumWriter<>(schema);
         } else if (useSchemaReflection) {
