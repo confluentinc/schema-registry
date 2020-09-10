@@ -22,6 +22,7 @@ import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 
 import com.google.common.collect.ImmutableMap;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -42,6 +43,7 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -151,6 +153,14 @@ public class AvroConverterTest {
     assertEquals(expected, schemaAndValue.value());
   }
 
+  @Test
+  public void testTypeBytes() {
+    Schema schema = SchemaBuilder.bytes().build();
+    byte[] b = converter.fromConnectData("topic", schema, "jellomellow".getBytes());
+    SchemaAndValue sv = converter.toConnectData("topic", b);
+    assertEquals(Type.BYTES, sv.schema().type());
+    assertArrayEquals("jellomellow".getBytes(), ((ByteBuffer) sv.value()).array());
+  }
 
   @Test
   public void testNull() {
