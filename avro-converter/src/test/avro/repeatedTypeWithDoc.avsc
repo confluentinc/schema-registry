@@ -1,0 +1,87 @@
+{
+  "name": "RepeatedTypeWithDoc",
+  "namespace": "com.rr.avro.test",
+  "type": "record",
+  "doc": "record's doc",
+  "fields": [
+    {
+      "name": "stringField",
+      "type": "string",
+      "doc": "field's doc"
+    },
+    {
+      "name": "anotherStringField",
+      "type": "string"
+    },
+    {
+      "name": "recordField",
+      "doc": "record field's doc",
+      "type": {
+        "name": "NestedRecord",
+        "type": "record",
+        "doc": "nested record's doc",
+        "fields": [
+          {
+            "name": "nestedRecordField",
+            "doc": "nested record field's doc",
+            "type": {
+              "name": "FixedType",
+              "type": "fixed",
+              "size": 4
+            }
+          },
+          {
+            "name": "anotherNestedRecordField",
+            "type": "FixedType"
+          }
+        ]
+      }
+    },
+    {
+      "name": "anotherRecordField",
+      "type": "NestedRecord",
+      "doc": "another record field's doc"
+    },
+    {
+      "name": "recordFieldWithoutDoc",
+      "type": "NestedRecord"
+    },
+    {
+      "name": "doclessRecordField",
+      "type": {
+        "name": "DoclessNestedRecord",
+        "type": "record",
+        "fields": [
+          {
+            "name": "aField",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "doclessRecordFieldWithDoc",
+      "type": "DoclessNestedRecord",
+      "doc": "docless record field's doc"
+    },
+    {
+      "name": "enumField",
+      "doc": "enum field's doc",
+      "type": {
+        "name": "Kind",
+        "type": "enum",
+        "doc": "enum's doc",
+        "symbols" : ["ONE", "TWO", "THREE"]
+      }
+    },
+    {
+      "name": "anotherEnumField",
+      "type": "Kind",
+      "doc": "another enum field's doc"
+    },
+    {
+      "name": "doclessEnumField",
+      "type": "Kind"
+    }
+  ]
+}

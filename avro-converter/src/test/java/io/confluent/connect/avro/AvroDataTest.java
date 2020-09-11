@@ -303,7 +303,6 @@ public class AvroDataTest {
     // One field has some extra data set on it to ensure it gets passed through via the fields
     // config
     org.apache.avro.Schema int8Schema = org.apache.avro.SchemaBuilder.builder().intType();
-    int8Schema.addProp("connect.doc", "int8 field");
     int8Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(2));
     int8Schema.addProp("connect.type", "int8");
     org.apache.avro.Schema int16Schema = org.apache.avro.SchemaBuilder.builder().intType();
@@ -324,6 +323,7 @@ public class AvroDataTest {
         .name("map").type().map().values().intType().noDefault()
         .name("mapNonStringKeys").type().array().items(complexMapElementSchema).noDefault()
         .endRecord();
+    avroSchema.addProp("connect.field.doc.int8", "int8 field");
     org.apache.avro.generic.GenericRecord avroRecord
         = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int8", 12)
@@ -698,7 +698,7 @@ public class AvroDataTest {
   @Test
   public void testFromConnectOptionalPrimitiveWithMetadata() {
     Schema schema = SchemaBuilder.string().
-        doc("doc").defaultValue("foo").name("io.confluent.stringtype").version(2).optional()
+        defaultValue("foo").name("io.confluent.stringtype").version(2).optional()
         .parameter("foo", "bar").parameter("baz", "baz")
         .build();
 
@@ -714,7 +714,6 @@ public class AvroDataTest {
     avroStringSchema.addProp("connect.name", "io.confluent.stringtype");
     avroStringSchema.addProp("connect.version",
                              JsonNodeFactory.instance.numberNode(2));
-    avroStringSchema.addProp("connect.doc", "doc");
     avroStringSchema.addProp("connect.default", "foo");
     ObjectNode params = JsonNodeFactory.instance.objectNode();
     params.put("foo", "bar");
@@ -736,8 +735,8 @@ public class AvroDataTest {
   @Test
   public void testFromConnectRecordWithMetadata() {
     Schema schema = SchemaBuilder.struct()
-        .name("io.confluent.test.TestSchema").version(12).doc("doc")
-        .field("int32", Schema.INT32_SCHEMA)
+        .name("io.confluent.test.TestSchema").version(12)
+        .field("int32", SchemaBuilder.int32().doc("doc").build())
         .build();
     Struct struct = new Struct(schema)
         .put("int32", 12);
@@ -751,7 +750,7 @@ public class AvroDataTest {
         .endRecord();
     avroSchema.addProp("connect.name", "io.confluent.test.TestSchema");
     avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(12));
-    avroSchema.addProp("connect.doc", "doc");
+    avroSchema.addProp("connect.field.doc.int32", "doc");
     org.apache.avro.generic.GenericRecord avroRecord
         = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int32", 12)
@@ -1730,7 +1729,7 @@ public class AvroDataTest {
     // per-field metadata (doc, default value) that Connect holds in the schema itself. We set
     // these properties on one of these fields to ensure they are properly converted
     Schema schema = SchemaBuilder.struct()
-        .name("io.confluent.test.TestSchema").version(12).doc("doc")
+        .name("io.confluent.test.TestSchema").version(12)
         .field("int32", SchemaBuilder.int32().defaultValue(7).doc("field doc").build())
         .build();
     Struct struct = new Struct(schema)
@@ -1743,7 +1742,7 @@ public class AvroDataTest {
         .endRecord();
     avroSchema.addProp("connect.name", "io.confluent.test.TestSchema");
     avroSchema.addProp("connect.version", JsonNodeFactory.instance.numberNode(12));
-    avroSchema.addProp("connect.doc", "doc");
+    avroSchema.addProp("connect.field.doc.int32", "field doc");
     org.apache.avro.generic.GenericRecord avroRecord
         = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int32", 12)
