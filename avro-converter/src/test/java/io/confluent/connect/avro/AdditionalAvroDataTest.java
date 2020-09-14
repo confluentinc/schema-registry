@@ -220,7 +220,7 @@ public class AdditionalAvroDataTest
         avroData = new AvroData(avroDataConfig);
 
         Schema avroSchema =
-                new Parser().parse(new File("src/test/avro/RepeatedTypeWithDoc.avsc"));
+                new Parser().parse(new File("src/test/avro/repeatedTypeWithDoc.avsc"));
 
         Assert.assertEquals(avroSchema.getField("enumField").schema(),
                 avroSchema.getField("anotherEnumField").schema());
