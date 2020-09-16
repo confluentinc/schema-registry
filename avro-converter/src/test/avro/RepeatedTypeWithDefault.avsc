@@ -1,0 +1,16 @@
+{
+  "name": "RepeatedTypeWithDefault",
+  "namespace": "com.rr.avro.test",
+  "type": "record",
+  "fields": [
+    {
+      "name": "stringField",
+      "type": "string",
+      "default": "field's default"
+    },
+    {
+      "name": "anotherStringField",
+      "type": "string"
+    }
+  ]
+}
