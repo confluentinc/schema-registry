@@ -65,10 +65,12 @@ import foo.bar.Kind;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
-import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.AVRO_ENUM_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.CONNECT_DOC_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_INTERNAL_TYPE_NAME;
 import static io.confluent.connect.avro.AvroData.CONNECT_NAME_PROP;
-import static io.confluent.connect.avro.AvroData.CONNECT_RECORD_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.AVRO_RECORD_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.AVRO_FIELD_DOC_PREFIX_PROP;
 import static io.confluent.connect.avro.AvroData.KEY_FIELD;
 import static io.confluent.connect.avro.AvroData.MAP_ENTRY_TYPE_NAME;
 import static io.confluent.connect.avro.AvroData.NAMESPACE;
@@ -366,7 +368,7 @@ public class AvroDataTest {
                                  .field("int64", SchemaBuilder.int64().defaultValue(12L).doc("int64 field").build())
                                  .field("float32", SchemaBuilder.float32().defaultValue(12.2f).doc("float32 field").build())
                                  .field("float64", SchemaBuilder.float64().defaultValue(12.2).doc("float64 field").build())
-                                 .field("boolean", SchemaBuilder.bool().defaultValue(true).doc("boolean field").build())
+                                 .field("boolean", SchemaBuilder.bool().defaultValue(true).doc("bool field").build())
                                  .field("string", SchemaBuilder.string().defaultValue("foo").doc("string field").build())
                                  .field("bytes", SchemaBuilder.bytes().defaultValue(ByteBuffer.wrap("foo".getBytes())).doc("bytes field").build())
                                  .field("array", SchemaBuilder.array(Schema.STRING_SCHEMA).defaultValue(Arrays.asList("a", "b", "c")).build())
@@ -403,27 +405,37 @@ public class AvroDataTest {
             .endRecord();
 
     org.apache.avro.Schema int8Schema = org.apache.avro.SchemaBuilder.builder().intType();
+    int8Schema.addProp("connect.doc", "int8 field");
     int8Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(2));
     int8Schema.addProp("connect.type", "int8");
     org.apache.avro.Schema int16Schema = org.apache.avro.SchemaBuilder.builder().intType();
+    int16Schema.addProp("connect.doc", "int16 field");
     int16Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode((short) 12));
     int16Schema.addProp("connect.type", "int16");
     org.apache.avro.Schema int32Schema = org.apache.avro.SchemaBuilder.builder().intType();
+    int32Schema.addProp("connect.doc", "int32 field");
     int32Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12));
     org.apache.avro.Schema int64Schema = org.apache.avro.SchemaBuilder.builder().longType();
+    int64Schema.addProp("connect.doc", "int64 field");
     int64Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12L));
     org.apache.avro.Schema float32Schema = org.apache.avro.SchemaBuilder.builder().floatType();
+    float32Schema.addProp("connect.doc", "float32 field");
     float32Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12.2f));
     org.apache.avro.Schema float64Schema = org.apache.avro.SchemaBuilder.builder().doubleType();
+    float64Schema.addProp("connect.doc", "float64 field");
     float64Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12.2));
     org.apache.avro.Schema boolSchema = org.apache.avro.SchemaBuilder.builder().booleanType();
+    boolSchema.addProp("connect.doc", "bool field");
     boolSchema.addProp("connect.default", JsonNodeFactory.instance.booleanNode(true));
     org.apache.avro.Schema stringSchema = org.apache.avro.SchemaBuilder.builder().stringType();
+    stringSchema.addProp("connect.doc", "string field");
     stringSchema.addProp("connect.default", JsonNodeFactory.instance.textNode("foo"));
     org.apache.avro.Schema bytesSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
+    bytesSchema.addProp("connect.doc", "bytes field");
     bytesSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode("foo".getBytes()));
 
     org.apache.avro.Schema dateSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    dateSchema.addProp("connect.doc", "date field");
     dateSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(dateDefVal));
     dateSchema.addProp(AvroData.CONNECT_NAME_PROP, Date.LOGICAL_NAME);
     dateSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
@@ -434,6 +446,7 @@ public class AvroDataTest {
     dateSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DATE);
 
     org.apache.avro.Schema timeSchema = org.apache.avro.SchemaBuilder.builder().intType();
+    timeSchema.addProp("connect.doc", "time field");
     timeSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(timeDefVal));
     timeSchema.addProp(AvroData.CONNECT_NAME_PROP, Time.LOGICAL_NAME);
     timeSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
@@ -444,6 +457,7 @@ public class AvroDataTest {
     timeSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MILLIS);
 
     org.apache.avro.Schema tsSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    tsSchema.addProp("connect.doc", "ts field");
     tsSchema.addProp("connect.default", JsonNodeFactory.instance.numberNode(tsDefVal));
     tsSchema.addProp(AvroData.CONNECT_NAME_PROP, Timestamp.LOGICAL_NAME);
     tsSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
@@ -456,6 +470,7 @@ public class AvroDataTest {
     org.apache.avro.Schema decimalSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
     decimalSchema.addProp("scale", 5);
     decimalSchema.addProp("precision", 64);
+    decimalSchema.addProp("connect.doc", "decimal field");
     decimalSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
     decimalSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode(decimalDefVal));
     decimalSchema.addProp("connect.parameters", parameters("scale", "5"));
@@ -506,19 +521,6 @@ public class AvroDataTest {
         .name("ts").type(tsSchema).withDefault(tsDefVal)
         .name("decimal").type(decimalSchema).withDefault(ByteBuffer.wrap(decimalDefVal))
         .endRecord();
-    avroSchema.addProp("connect.field.doc.int8", "int8 field");
-    avroSchema.addProp("connect.field.doc.int16", "int16 field");
-    avroSchema.addProp("connect.field.doc.int32", "int32 field");
-    avroSchema.addProp("connect.field.doc.int64", "int64 field");
-    avroSchema.addProp("connect.field.doc.float32", "float32 field");
-    avroSchema.addProp("connect.field.doc.float64", "float64 field");
-    avroSchema.addProp("connect.field.doc.boolean", "boolean field");
-    avroSchema.addProp("connect.field.doc.string", "string field");
-    avroSchema.addProp("connect.field.doc.bytes", "bytes field");
-    avroSchema.addProp("connect.field.doc.date", "date field");
-    avroSchema.addProp("connect.field.doc.time", "time field");
-    avroSchema.addProp("connect.field.doc.ts", "ts field");
-    avroSchema.addProp("connect.field.doc.decimal", "decimal field");
     org.apache.avro.generic.GenericRecord avroRecord
         = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
         .set("int8", 2)
@@ -1665,8 +1667,7 @@ public class AvroDataTest {
         .doc("some documentation")
         .symbols("foo", "bar", "baz");
     SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
-    builder.parameter(CONNECT_ENUM_DOC_PROP, "some documentation");
-    builder.parameter(CONNECT_RECORD_DOC_PROP, "some documentation");
+    builder.parameter(AVRO_ENUM_DOC_PROP, "some documentation");
     builder.parameter(AVRO_TYPE_ENUM, "TestEnum");
     for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
       builder.parameter(AVRO_TYPE_ENUM+"."+enumSymbol, enumSymbol);
@@ -1699,7 +1700,7 @@ public class AvroDataTest {
   @Test
   public void testToConnectOptionalPrimitiveWithConnectMetadata() {
     Schema schema = SchemaBuilder.string().
-        defaultValue("foo").name("io.confluent.stringtype").version(2).optional()
+        doc("doc").defaultValue("foo").name("io.confluent.stringtype").version(2).optional()
         .parameter("foo", "bar").parameter("baz", "baz")
         .build();
 
@@ -1707,7 +1708,7 @@ public class AvroDataTest {
     avroStringSchema.addProp("connect.name", "io.confluent.stringtype");
     avroStringSchema.addProp("connect.version",
                              JsonNodeFactory.instance.numberNode(2));
-    //avroStringSchema.addProp("connect.doc", "doc");
+    avroStringSchema.addProp("connect.doc", "doc");
     avroStringSchema.addProp("connect.default", "foo");
     ObjectNode params = JsonNodeFactory.instance.objectNode();
     params.put("foo", "bar");
@@ -1719,8 +1720,6 @@ public class AvroDataTest {
             .nullType().endUnion();
 
 
-    SchemaAndValue expect = new SchemaAndValue(schema, "string");
-    SchemaAndValue actual = avroData.toConnectData(avroSchema, "string");
     assertEquals(new SchemaAndValue(schema, "string"),
                  avroData.toConnectData(avroSchema, "string"));
   }
@@ -1728,11 +1727,12 @@ public class AvroDataTest {
   @Test
   public void testToConnectRecordWithMetadata() {
     // One important difference between record schemas in Avro and Connect is that Avro has some
-    // per-field metadata (doc, default value) that Connect holds in the schema itself. We set
+    // per-field metadata (doc, default value) that Connect holds in parameters(). We set
     // these properties on one of these fields to ensure they are properly converted
     Schema schema = SchemaBuilder.struct()
         .name("io.confluent.test.TestSchema").version(12).doc("doc")
-        .field("int32", SchemaBuilder.int32().defaultValue(7).doc("field doc").build())
+        .field("int32", SchemaBuilder.int32().defaultValue(7).build())
+        .parameter(AVRO_FIELD_DOC_PREFIX_PROP + "int32", "field doc")
         .build();
     Struct struct = new Struct(schema)
         .put("int32", 12);
@@ -1925,7 +1925,10 @@ public class AvroDataTest {
     AvroData avroData = new AvroData(avroDataConfig);
     Schema schema1 = avroData.toConnectSchema(avroSchema1);
     Schema schema2 = avroData.toConnectSchema(avroSchema2);
-    assertEquals(schema1.parameters(), schema2.parameters());
+    assertEquals("Listing State Changed Event Key",
+        schema1.parameters().get(AVRO_RECORD_DOC_PROP));
+    assertEquals("Another listing State Changed Event Key",
+        schema2.parameters().get(AVRO_RECORD_DOC_PROP));
   }
 
   @Test
@@ -2288,7 +2291,7 @@ public class AvroDataTest {
   ) {
     assertEquals(expected.name(), actual.name());
     assertEquals(expected.aliases(), actual.aliases());
-    //assertEquals(expected.doc(), actual.doc());
+    assertEquals(expected.doc(), actual.doc());
     assertSchemaEquals(expected.schema(), actual.schema());
     Object expectedDef = expected.defaultVal();
     Object actualDef = actual.defaultVal();
