@@ -85,12 +85,14 @@ public class AvroData {
 
   public static final String CONNECT_NAME_PROP = "connect.name";
   public static final String CONNECT_DOC_PROP = "connect.doc";
-  public static final String CONNECT_RECORD_DOC_PROP = "connect.record.doc";
-  public static final String CONNECT_ENUM_DOC_PROP = "connect.enum.doc";
   public static final String CONNECT_VERSION_PROP = "connect.version";
   public static final String CONNECT_DEFAULT_VALUE_PROP = "connect.default";
   public static final String CONNECT_PARAMETERS_PROP = "connect.parameters";
   public static final String CONNECT_INTERNAL_TYPE_NAME = "connect.internal.type";
+  public static final String AVRO_RECORD_DOC_PROP = NAMESPACE + ".record.doc";
+  public static final String AVRO_ENUM_DOC_PROP = NAMESPACE + ".enum.doc";
+  public static final String AVRO_FIELD_DOC_PREFIX_PROP = NAMESPACE + ".field.doc.";
+  public static final String AVRO_FIELD_DEFAULT_PREFIX_PROP = NAMESPACE + ".field.default.";
 
   public static final String CONNECT_TYPE_PROP = "connect.type";
 
@@ -99,6 +101,7 @@ public class AvroData {
 
   public static final String AVRO_TYPE_UNION = NAMESPACE + ".Union";
   public static final String AVRO_TYPE_ENUM = NAMESPACE + ".Enum";
+
 
   public static final String AVRO_TYPE_ANYTHING = NAMESPACE + ".Anything";
 
@@ -813,7 +816,7 @@ public class AvroData {
           baseSchema =
               org.apache.avro.SchemaBuilder.builder().enumeration(
                   schema.parameters().get(AVRO_TYPE_ENUM))
-                  .doc(schema.parameters().get(CONNECT_ENUM_DOC_PROP))
+                  .doc(schema.parameters().get(AVRO_ENUM_DOC_PROP))
                   .symbols(symbols.toArray(new String[symbols.size()]));
         } else {
           baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
@@ -864,12 +867,14 @@ public class AvroData {
               fields,
               KEY_FIELD,
               schema.keySchema(),
-              fromConnectContext);
+              fromConnectContext,
+              null);
           addAvroRecordField(
               fields,
               VALUE_FIELD,
               schema.valueSchema(),
-              fromConnectContext);
+              fromConnectContext,
+              null);
           mapSchema.setFields(fields);
           baseSchema = org.apache.avro.Schema.createArray(mapSchema);
         }
@@ -893,7 +898,7 @@ public class AvroData {
           baseSchema = org.apache.avro.Schema.createUnion(unionSchemas);
         } else {
           String doc = schema.parameters() != null
-                       ? schema.parameters().get(CONNECT_RECORD_DOC_PROP)
+                       ? schema.parameters().get(AVRO_RECORD_DOC_PROP)
                        : null;
           baseSchema = org.apache.avro.Schema.createRecord(
               name != null ? name : DEFAULT_SCHEMA_NAME, doc, namespace, false);
@@ -902,7 +907,10 @@ public class AvroData {
           }
           List<org.apache.avro.Schema.Field> fields = new ArrayList<>();
           for (Field field : schema.fields()) {
-            addAvroRecordField(fields, field.name(), field.schema(), fromConnectContext);
+            String fieldDoc = schema.parameters() == null ? null :
+                (schema.parameters().containsKey(AVRO_FIELD_DOC_PREFIX_PROP + field.name()) ?
+                    schema.parameters().get(AVRO_FIELD_DOC_PREFIX_PROP + field.name()) : null);
+            addAvroRecordField(fields, field.name(), field.schema(), fromConnectContext, fieldDoc);
           }
           baseSchema.setFields(fields);
         }
@@ -1051,7 +1059,8 @@ public class AvroData {
   private void addAvroRecordField(
       List<org.apache.avro.Schema.Field> fields,
       String fieldName, Schema fieldSchema,
-      FromConnectContext fromConnectContext) {
+      FromConnectContext fromConnectContext,
+      String fieldDoc) {
 
     Object defaultVal = null;
     if (fieldSchema.defaultValue() != null) {
@@ -1062,7 +1071,7 @@ public class AvroData {
     org.apache.avro.Schema.Field field = new org.apache.avro.Schema.Field(
         fieldName,
         fromConnectSchema(fieldSchema, fromConnectContext, false),
-        fieldSchema.doc(),
+        fieldDoc,
         defaultVal);
     fields.add(field);
   }
@@ -1712,8 +1721,14 @@ public class AvroData {
       case RECORD: {
         builder = SchemaBuilder.struct();
         toConnectContext.cycleReferences.put(schema, new CyclicSchemaWrapper(builder));
+        if (schema.getDoc() != null) {
+          builder.parameter(AVRO_RECORD_DOC_PROP, schema.getDoc());
+        }
         for (org.apache.avro.Schema.Field field : schema.getFields()) {
-
+          if (field.doc() != null) {
+            builder.parameter(AVRO_FIELD_DOC_PREFIX_PROP + field.name(), field.doc());
+          }
+          //todo: handle default value
           Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
                   field.defaultVal(), field.doc(), toConnectContext);
           builder.field(field.name(), fieldSchema);
@@ -1724,8 +1739,8 @@ public class AvroData {
       case ENUM:
         // enums are unwrapped to strings and the original enum is not preserved
         builder = SchemaBuilder.string();
-        if (connectMetaData && schema.getDoc() != null) {
-          builder.parameter(CONNECT_ENUM_DOC_PROP, schema.getDoc());
+        if (schema.getDoc() != null) {
+          builder.parameter(AVRO_ENUM_DOC_PROP, schema.getDoc());
         }
         builder.parameter(AVRO_TYPE_ENUM, schema.getFullName());
         for (String enumSymbol : schema.getEnumSymbols()) {
@@ -1775,14 +1790,11 @@ public class AvroData {
                                 + schema.getType().getName() + ".");
     }
 
-    String docVal = docDefaultVal != null ? docDefaultVal :
-        (schema.getDoc() != null ? schema.getDoc() : schema.getProp(CONNECT_DOC_PROP));
-    if (docVal != null) {
+    String docVal = schema.getProp(CONNECT_DOC_PROP);
+    if (connectMetaData && docVal != null) {
       builder.doc(docVal);
     }
-    if (connectMetaData && schema.getDoc() != null) {
-      builder.parameter(CONNECT_RECORD_DOC_PROP, schema.getDoc());
-    }
+    //todo: handle connect default
 
     // Included Kafka Connect version takes priority, fall back to schema registry version
     int versionInt = -1;  // A valid version must be a positive integer (assumed throughout SR)
