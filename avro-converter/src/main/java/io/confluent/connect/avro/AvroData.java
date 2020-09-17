@@ -908,8 +908,8 @@ public class AvroData {
           List<org.apache.avro.Schema.Field> fields = new ArrayList<>();
           for (Field field : schema.fields()) {
             String fieldDoc = schema.parameters() == null ? null :
-                (schema.parameters().containsKey(AVRO_FIELD_DOC_PREFIX_PROP + field.name()) ?
-                    schema.parameters().get(AVRO_FIELD_DOC_PREFIX_PROP + field.name()) : null);
+                (schema.parameters().containsKey(AVRO_FIELD_DOC_PREFIX_PROP + field.name())
+                    ? schema.parameters().get(AVRO_FIELD_DOC_PREFIX_PROP + field.name()) : null);
             addAvroRecordField(fields, field.name(), field.schema(), fromConnectContext, fieldDoc);
           }
           baseSchema.setFields(fields);
