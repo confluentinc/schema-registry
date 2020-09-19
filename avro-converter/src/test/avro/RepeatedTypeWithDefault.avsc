@@ -11,6 +11,35 @@
     {
       "name": "anotherStringField",
       "type": "string"
+    },
+    {
+      "name": "enumField",
+      "default": "ONE",
+      "type": {
+        "name": "Kind",
+        "type": "enum",
+        "symbols" : ["ONE", "TWO", "THREE"]
+      }
+    },
+    {
+      "name": "anotherEnumField",
+      "type": "Kind",
+      "default": "TWO"
+    },
+    {
+      "name": "enumFieldWithDiffDefault",
+      "default": "B",
+      "type": {
+        "name": "someKind",
+        "type": "enum",
+        "symbols": ["A", "B", "C"],
+        "default": "A"
+      }
+    },
+    {
+      "name": "floatField",
+      "type": "float",
+      "default": 9.18
     }
   ]
 }
