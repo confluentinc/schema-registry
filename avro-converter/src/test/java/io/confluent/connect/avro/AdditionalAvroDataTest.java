@@ -278,6 +278,8 @@ public class AdditionalAvroDataTest
             outputAvroSchema.getField("anotherEnumField").schema().getDoc());
 
         Assert.assertNull(outputAvroSchema.getField("doclessEnumField").doc());
+        Assert.assertNull(outputAvroSchema.getField("diffEnumField").doc());
+        Assert.assertEquals("diffEnum's doc", outputAvroSchema.getField("diffEnumField").schema().getDoc());
 
         // Schema equality is mandatory (see issue #1042)
         Assert.assertEquals(outputAvroSchema.getField("stringField").schema(),

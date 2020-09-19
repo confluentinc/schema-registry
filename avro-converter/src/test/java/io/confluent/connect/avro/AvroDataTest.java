@@ -65,7 +65,7 @@ import foo.bar.Kind;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
-import static io.confluent.connect.avro.AvroData.AVRO_ENUM_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.AVRO_ENUM_DOC_PREFIX_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_DOC_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_INTERNAL_TYPE_NAME;
 import static io.confluent.connect.avro.AvroData.CONNECT_NAME_PROP;
@@ -1667,7 +1667,7 @@ public class AvroDataTest {
         .doc("some documentation")
         .symbols("foo", "bar", "baz");
     SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
-    builder.parameter(AVRO_ENUM_DOC_PROP, "some documentation");
+    builder.parameter(AVRO_ENUM_DOC_PREFIX_PROP + "TestEnum", "some documentation");
     builder.parameter(AVRO_TYPE_ENUM, "TestEnum");
     for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
       builder.parameter(AVRO_TYPE_ENUM+"."+enumSymbol, enumSymbol);

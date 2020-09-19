@@ -90,7 +90,7 @@ public class AvroData {
   public static final String CONNECT_PARAMETERS_PROP = "connect.parameters";
   public static final String CONNECT_INTERNAL_TYPE_NAME = "connect.internal.type";
   public static final String AVRO_RECORD_DOC_PROP = NAMESPACE + ".record.doc";
-  public static final String AVRO_ENUM_DOC_PROP = NAMESPACE + ".enum.doc";
+  public static final String AVRO_ENUM_DOC_PREFIX_PROP = NAMESPACE + ".enum.doc.";
   public static final String AVRO_FIELD_DOC_PREFIX_PROP = NAMESPACE + ".field.doc.";
   public static final String AVRO_FIELD_DEFAULT_PREFIX_PROP = NAMESPACE + ".field.default.";
 
@@ -816,7 +816,7 @@ public class AvroData {
           baseSchema =
               org.apache.avro.SchemaBuilder.builder().enumeration(
                   schema.parameters().get(AVRO_TYPE_ENUM))
-                  .doc(schema.parameters().get(AVRO_ENUM_DOC_PROP))
+                  .doc(schema.parameters().get(AVRO_ENUM_DOC_PREFIX_PROP + name))
                   .symbols(symbols.toArray(new String[symbols.size()]));
         } else {
           baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
@@ -1721,11 +1721,11 @@ public class AvroData {
       case RECORD: {
         builder = SchemaBuilder.struct();
         toConnectContext.cycleReferences.put(schema, new CyclicSchemaWrapper(builder));
-        if (schema.getDoc() != null) {
+        if (connectMetaData && schema.getDoc() != null) {
           builder.parameter(AVRO_RECORD_DOC_PROP, schema.getDoc());
         }
         for (org.apache.avro.Schema.Field field : schema.getFields()) {
-          if (field.doc() != null) {
+          if (connectMetaData && field.doc() != null) {
             builder.parameter(AVRO_FIELD_DOC_PREFIX_PROP + field.name(), field.doc());
           }
           //todo: handle default value
@@ -1739,8 +1739,8 @@ public class AvroData {
       case ENUM:
         // enums are unwrapped to strings and the original enum is not preserved
         builder = SchemaBuilder.string();
-        if (schema.getDoc() != null) {
-          builder.parameter(AVRO_ENUM_DOC_PROP, schema.getDoc());
+        if (connectMetaData && schema.getDoc() != null) {
+          builder.parameter(AVRO_ENUM_DOC_PREFIX_PROP + schema.getName(), schema.getDoc());
         }
         builder.parameter(AVRO_TYPE_ENUM, schema.getFullName());
         for (String enumSymbol : schema.getEnumSymbols()) {

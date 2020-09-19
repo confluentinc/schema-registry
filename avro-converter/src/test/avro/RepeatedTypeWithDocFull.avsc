@@ -82,6 +82,15 @@
     {
       "name": "doclessEnumField",
       "type": "Kind"
+    },
+    {
+      "name": "diffEnumField",
+      "type": {
+        "name": "anotherKind",
+        "type": "enum",
+        "doc": "diffEnum's doc",
+        "symbols": ["A", "B", "C"]
+      }
     }
   ]
 }
