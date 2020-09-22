@@ -505,48 +505,57 @@ public class RestService implements Configurable {
   }
 
   // Visible for testing
-  public boolean testCompatibility(String schemaString, String subject, String version)
+  public List<String> testCompatibility(String schemaString, String subject, String version)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
-    return testCompatibility(request, subject, version);
+    return testCompatibility(request, subject, version, false);
   }
 
-  public boolean testCompatibility(String schemaString,
-                                   String schemaType,
-                                   List<SchemaReference> references,
-                                   String subject,
-                                   String version)
+  public List<String> testCompatibility(String schemaString,
+                                        String schemaType,
+                                        List<SchemaReference> references,
+                                        String subject,
+                                        String version,
+                                        boolean verbose)
       throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
     request.setReferences(references);
-    return testCompatibility(request, subject, version);
+    return testCompatibility(request, subject, version, verbose);
   }
 
-  public boolean testCompatibility(RegisterSchemaRequest registerSchemaRequest,
-                                   String subject,
-                                   String version)
+  public List<String> testCompatibility(RegisterSchemaRequest registerSchemaRequest,
+                                        String subject,
+                                        String version,
+                                        boolean verbose)
       throws IOException, RestClientException {
     return testCompatibility(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest,
-                             subject, version);
+                             subject, version, verbose);
   }
 
-  public boolean testCompatibility(Map<String, String> requestProperties,
-                                   RegisterSchemaRequest registerSchemaRequest,
-                                   String subject,
-                                   String version)
+  public List<String> testCompatibility(Map<String, String> requestProperties,
+                                        RegisterSchemaRequest registerSchemaRequest,
+                                        String subject,
+                                        String version,
+                                        boolean verbose)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath(
         "/compatibility/subjects/{subject}/versions/{version}");
+    builder.queryParam("verbose", verbose);
     String path = builder.build(subject, version).toString();
 
     CompatibilityCheckResponse response =
         httpRequest(path, "POST",
                     registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
                     requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
-    return response.getIsCompatible();
+    if (verbose) {
+      return response.getMessages();
+    } else {
+      return response.getIsCompatible()
+              ? Collections.emptyList() : Collections.singletonList("Schemas are incompatible");
+    }
   }
 
   public ConfigUpdateRequest updateCompatibility(String compatibility, String subject)
@@ -854,7 +863,15 @@ public class RestService implements Configurable {
   public List<String> getAllSubjectsById(Map<String, String> requestProperties,
                                          int id)
       throws IOException, RestClientException {
+    return getAllSubjectsById(requestProperties, id, false);
+  }
+
+  public List<String> getAllSubjectsById(Map<String, String> requestProperties,
+                                         int id,
+                                         boolean lookupDeleted)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/subjects");
+    builder.queryParam("deleted", lookupDeleted);
     String path = builder.build(id).toString();
 
     List<String> response = httpRequest(path, "GET", null, requestProperties,
@@ -871,7 +888,15 @@ public class RestService implements Configurable {
   public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
                                                  int id)
       throws IOException, RestClientException {
+    return getAllVersionsById(requestProperties, id, false);
+  }
+
+  public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
+                                                 int id,
+                                                 boolean lookupDeleted)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/versions");
+    builder.queryParam("deleted", lookupDeleted);
     String path = builder.build(id).toString();
 
     List<SubjectVersion> response = httpRequest(path, "GET", null, requestProperties,

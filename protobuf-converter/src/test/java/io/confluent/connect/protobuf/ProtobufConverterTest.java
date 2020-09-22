@@ -680,15 +680,15 @@ public class ProtobufConverterTest {
     ProtobufSchema schema = getSchema(keyValueMessage.getDescriptorForType());
     ReferenceSubjectNameStrategy strategy = new DefaultReferenceSubjectNameStrategy();
     schema = KafkaProtobufSerializer.resolveDependencies(
-        schemaRegistry, true, strategy, "topic1", isKey, schema);
+        schemaRegistry, true, false, null, strategy, "topic1", isKey, schema);
     schemaRegistry.register("topic1-" + subjectSuffix, schema);
     schema = getSchema(keyMessage.getDescriptorForType());
     schema = KafkaProtobufSerializer.resolveDependencies(
-        schemaRegistry, true, strategy, "topic2", isKey, schema);
+        schemaRegistry, true, false, null, strategy, "topic2", isKey, schema);
     schemaRegistry.register("topic2-" + subjectSuffix, schema);
     schema = getSchema(keyValueMessage2.getDescriptorForType());
     schema = KafkaProtobufSerializer.resolveDependencies(
-        schemaRegistry, true, strategy, "topic2", isKey, schema);
+        schemaRegistry, true, false, null, strategy, "topic2", isKey, schema);
     schemaRegistry.register("topic2-" + subjectSuffix, schema);
 
     KafkaProtobufSerializer serializer = new KafkaProtobufSerializer(schemaRegistry);

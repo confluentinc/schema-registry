@@ -47,6 +47,7 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
@@ -263,6 +264,8 @@ public class SubjectVersionsResource {
     int id;
     try {
       id = schemaRegistry.registerOrForward(subjectName, schema, headerProperties);
+    } catch (IdDoesNotMatchException e) {
+      throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (OperationNotPermittedException e) {

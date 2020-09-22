@@ -18,7 +18,11 @@ package io.confluent.kafka.serializers.protobuf;
 
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
+import java.util.Objects;
 import kafka.utils.VerifiableProperties;
+import org.apache.kafka.common.cache.Cache;
+import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -38,9 +42,17 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
 public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
+
+  private static int DEFAULT_CACHE_CAPACITY = 1000;
+
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected boolean deriveType;
+  private Cache<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
+
+  public AbstractKafkaProtobufDeserializer() {
+    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
+  }
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
@@ -105,12 +117,12 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       ProtobufSchema schema = ((ProtobufSchema) schemaRegistry.getSchemaById(id));
       MessageIndexes indexes = MessageIndexes.readFrom(buffer);
       String name = schema.toMessageName(indexes);
-      schema = schema.copy(name);
+      schema = schemaWithName(schema, name);
       String subject = null;
       if (includeSchemaAndVersion) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(id, schema, subject, isKey);
-        schema = schema.copy(name);
+        schema = schemaWithName(schema, name);
       }
 
       int length = buffer.limit() - 1 - idSize;
@@ -152,6 +164,16 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     } catch (RestClientException e) {
       throw new SerializationException("Error retrieving Protobuf schema for id " + id, e);
     }
+  }
+
+  private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {
+    Pair<String, ProtobufSchema> cacheKey = new Pair<>(name, schema);
+    ProtobufSchema schemaWithName = schemaCache.get(cacheKey);
+    if (schemaWithName == null) {
+      schemaWithName = schema.copy(name);
+      schemaCache.put(cacheKey, schemaWithName);
+    }
+    return schemaWithName;
   }
 
   private Object deriveType(ByteBuffer buffer, ProtobufSchema schema) {
@@ -211,5 +233,49 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       String topic, boolean isKey, byte[] payload
   ) throws SerializationException {
     return (ProtobufSchemaAndValue) deserialize(true, topic, isKey, payload);
+  }
+
+  static class Pair<K, V> {
+    private K key;
+    private V value;
+
+    public Pair(K key, V value) {
+      this.key = key;
+      this.value = value;
+    }
+
+    public K getKey() {
+      return key;
+    }
+
+    public V getValue() {
+      return value;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      Pair<?, ?> pair = (Pair<?, ?>) o;
+      return Objects.equals(key, pair.key)
+          && Objects.equals(value, pair.value);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(key, value);
+    }
+
+    @Override
+    public String toString() {
+      return "Pair{"
+          + "key=" + key
+          + ", value=" + value
+          + '}';
+    }
   }
 }

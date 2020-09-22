@@ -22,6 +22,15 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationE
 
 public interface Store<K, V> {
 
+  /**
+   * Whether the store is persistent.
+   *
+   * @return whether the store is persistent
+   */
+  default boolean isPersistent() {
+    return false;
+  }
+
   public void init() throws StoreInitializationException;
 
   public V get(K key) throws StoreException;
@@ -43,6 +52,8 @@ public interface Store<K, V> {
   public V delete(K key) throws StoreException;
 
   public CloseableIterator<K> getAllKeys() throws StoreException;
+
+  public void flush() throws StoreException;
 
   public void close() throws StoreException;
 }

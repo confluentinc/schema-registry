@@ -785,9 +785,9 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   @Override
-  public boolean isBackwardCompatible(ParsedSchema previousSchema) {
+  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return false;
+      return Collections.singletonList("Incompatible because of different schema type");
     }
     final List<Difference> differences = SchemaDiff.compare(
         (ProtobufSchema) previousSchema, this
@@ -798,17 +798,22 @@ public class ProtobufSchema implements ParsedSchema {
     boolean isCompatible = incompatibleDiffs.isEmpty();
     if (!isCompatible) {
       boolean first = true;
+      List<String> errorMessages = new ArrayList<>();
       for (Difference incompatibleDiff : incompatibleDiffs) {
         if (first) {
           // Log first incompatible change as warning
           log.warn("Found incompatible change: {}", incompatibleDiff);
+          errorMessages.add(String.format("Found incompatible change: {}", incompatibleDiff));
           first = false;
         } else {
           log.debug("Found incompatible change: {}", incompatibleDiff);
+          errorMessages.add(String.format("Found incompatible change: {}", incompatibleDiff));
         }
       }
+      return errorMessages;
+    } else {
+      return Collections.emptyList();
     }
-    return isCompatible;
   }
 
   @Override

@@ -1,8 +1,8 @@
 #!/usr/bin/env groovy
 common {
-  slackChannel = '#schema-registry-eng'
-  downStreamRepos = ["secret-registry", "kafka-rest", "ksql",
+  slackChannel = '#data-governance-eng'
+  downStreamRepos = ["kafka-rest", "ksql",
     "confluent-security-plugins", "kafka-connect-replicator",
-    "ce-kafka-rest", "confluent-cloud-plugins"]
+    "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
   nanoVersion = true
 }

@@ -95,6 +95,10 @@ paths:
         required: true
         schema:
           $ref: "#/definitions/RegisterSchemaRequest"
+      - name: "verbose"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -428,6 +432,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -461,6 +469,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "deleted"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -904,6 +916,10 @@ definitions:
     properties:
       is_compatible:
         type: "boolean"
+      messages:
+        type: "array"
+        items:
+          type: "string"
   Config:
     type: "object"
     properties:

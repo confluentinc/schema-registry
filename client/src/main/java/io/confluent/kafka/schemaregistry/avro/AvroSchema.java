@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,19 +157,20 @@ public class AvroSchema implements ParsedSchema {
   }
 
   @Override
-  public boolean isBackwardCompatible(ParsedSchema previousSchema) {
+  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
-      return false;
+      return Collections.singletonList("Incompatible because of different schema type");
     }
     try {
       BACKWARD_VALIDATOR.validate(this.schemaObj,
           Collections.singleton(((AvroSchema) previousSchema).schemaObj));
-      return true;
+      return Collections.emptyList();
     } catch (SchemaValidationException e) {
-      return false;
+      return Collections.singletonList(e.getMessage());
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
-      return false;
+      return Collections.singletonList(
+              "Unexpected exception during compatibility check: " + e.getMessage());
     }
   }
 

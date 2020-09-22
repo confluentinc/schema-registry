@@ -16,9 +16,9 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 /**
@@ -83,9 +83,10 @@ public interface ParsedSchema {
    * to ensure that it is compatible with the specified schema.
    *
    * @param previousSchema previous schema
-   * @return whether this schema is backward compatible with the previous schema
+   * @return an empty list if this schema is backward compatible with the previous schema,
+   *         otherwise the list of error messages
    */
-  boolean isBackwardCompatible(ParsedSchema previousSchema);
+  List<String> isBackwardCompatible(ParsedSchema previousSchema);
 
   /**
    * Checks the compatibility between this schema and the specified schemas.
@@ -95,13 +96,14 @@ public interface ParsedSchema {
    *
    * @param level the compatibility level
    * @param previousSchemas full schema history in chronological order
-   * @return whether this schema is compatible with the previous schemas
+   * @return an empty list if this schema is backward compatible with the previous schema, otherwise
+   *         the list of error messages
    */
-  default boolean isCompatible(CompatibilityLevel level,
-                               List<? extends ParsedSchema> previousSchemas) {
+  default List<String> isCompatible(
+      CompatibilityLevel level, List<? extends ParsedSchema> previousSchemas) {
     for (ParsedSchema previousSchema : previousSchemas) {
       if (!schemaType().equals(previousSchema.schemaType())) {
-        return false;
+        return Collections.singletonList("Incompatible because of different schema type");
       }
     }
     return CompatibilityChecker.checker(level).isCompatible(this, previousSchemas);

@@ -67,11 +67,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <Class name="io.confluent.kafka.schemaregistry.storage.InMemoryCache"/>
-        <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
-    </Match>
-
-    <Match>
         <Class name="io.confluent.kafka.schemaregistry.storage.MD5"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>

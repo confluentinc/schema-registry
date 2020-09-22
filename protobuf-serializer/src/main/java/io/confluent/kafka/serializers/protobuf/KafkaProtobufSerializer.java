@@ -18,7 +18,9 @@ package io.confluent.kafka.serializers.protobuf;
 
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
+import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -33,18 +35,18 @@ public class KafkaProtobufSerializer<T extends Message>
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
   private boolean isKey;
-  private LRUCache<Descriptor, ProtobufSchema> schemaCache;
+  private Cache<Descriptor, ProtobufSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaProtobufSerializer() {
-    schemaCache = new LRUCache<>(DEFAULT_CACHE_CAPACITY);
+    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client) {
     schemaRegistry = client;
-    schemaCache = new LRUCache<>(DEFAULT_CACHE_CAPACITY);
+    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -55,7 +57,7 @@ public class KafkaProtobufSerializer<T extends Message>
                                  int cacheCapacity) {
     schemaRegistry = client;
     configure(serializerConfig(props));
-    schemaCache = new LRUCache<>(cacheCapacity);
+    schemaCache = new SynchronizedCache<>(new LRUCache<>(cacheCapacity));
   }
 
   @Override

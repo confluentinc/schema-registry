@@ -63,6 +63,7 @@ import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -382,7 +383,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
         idGenerator.init();
       }
-      metricsContainer.setLeader(isLeader());
+      metricsContainer.getLeaderNode().set(isLeader() ? 1 : 0);
     } finally {
       kafkaStore.leaderLock().unlock();
     }
@@ -466,7 +467,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
       Collections.reverse(undeletedVersions);
 
-      boolean isCompatible = isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions);
+      boolean isCompatible =
+              isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions).isEmpty();
       // Allow schema providers to modify the schema during compatibility checks
       schema.setSchema(parsedSchema.canonicalString());
       schema.setReferences(parsedSchema.references());
@@ -743,12 +745,12 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       Collections.reverse(allVersions);
 
       for (SchemaValue schemaValue : allVersions) {
-        if (!schemaValue.isDeleted()) {
+        if (!schemaValue.isDeleted()
+            && parsedSchema.references().isEmpty()
+            && !schemaValue.getReferences().isEmpty()) {
           Schema undeleted = getSchemaEntityFromSchemaValue(schemaValue);
           ParsedSchema undeletedSchema = parseSchema(undeleted);
-          if (parsedSchema.references().isEmpty()
-              && !undeletedSchema.references().isEmpty()
-              && parsedSchema.deepEquals(undeletedSchema)) {
+          if (parsedSchema.deepEquals(undeletedSchema)) {
             // This handles the case where a schema is sent with all references resolved
             return undeleted;
           }
@@ -1042,36 +1044,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   public Set<String> listSubjectsForId(int id) throws SchemaRegistryException {
-    SchemaValue schema = null;
-    try {
-      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
-      if (subjectVersionKey == null) {
-        return null;
-      }
-      schema = (SchemaValue) kafkaStore.get(subjectVersionKey);
-      if (schema == null) {
-        return null;
-      }
+    return listSubjectsForId(id, false);
+  }
 
-      return lookupCache.schemaIdAndSubjects(new Schema(
-          schema.getSubject(),
-          schema.getVersion(),
-          schema.getId(),
-          schema.getSchemaType(),
-          schema.getReferences().stream()
-              .map(ref ->
-                  new io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference(
-                    ref.getName(), ref.getSubject(), ref.getVersion()))
-              .collect(Collectors.toList()),
-          schema.getSchema()
-      )).allSubjects();
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
-          + id + " from the backend Kafka store", e);
-    }
+  public Set<String> listSubjectsForId(int id, boolean returnDeleted)
+      throws SchemaRegistryException {
+    List<SubjectVersion> versions = listVersionsForId(id, returnDeleted);
+    return versions != null
+        ? versions.stream()
+            .map(SubjectVersion::getSubject)
+            .collect(Collectors.toSet())
+        : null;
   }
 
   public List<SubjectVersion> listVersionsForId(int id) throws SchemaRegistryException {
+    return listVersionsForId(id, false);
+  }
+
+  public List<SubjectVersion> listVersionsForId(int id, boolean lookupDeleted)
+      throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
       SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
@@ -1096,7 +1087,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           schema.getSchema()
       )).allSubjectVersions().entrySet()
           .stream()
-          .map(e -> new SubjectVersion(e.getKey(), e.getValue()))
+          .flatMap(e -> {
+            try {
+              SchemaValue schemaValue =
+                  (SchemaValue) kafkaStore.get(new SchemaKey(e.getKey(), e.getValue()));
+              if ((schemaValue != null && !schemaValue.isDeleted()) || lookupDeleted) {
+                return Stream.of(new SubjectVersion(e.getKey(), e.getValue()));
+              } else {
+                return Stream.empty();
+              }
+            } catch (StoreException ex) {
+              return Stream.empty();
+            }
+          })
           .collect(Collectors.toList());
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while retrieving schema with id "
@@ -1279,9 +1282,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   @Override
-  public boolean isCompatible(String subject,
-                              Schema newSchema,
-                              Schema latestSchema)
+  public List<String> isCompatible(String subject,
+                                   Schema newSchema,
+                                   Schema latestSchema)
       throws SchemaRegistryException {
     if (latestSchema == null) {
       log.error("Lastest schema not provided");
@@ -1294,9 +1297,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    * @param previousSchemas Full schema history in chronological order
    */
   @Override
-  public boolean isCompatible(String subject,
-                              Schema newSchema,
-                              List<Schema> previousSchemas)
+  public List<String> isCompatible(String subject,
+                                   Schema newSchema,
+                                   List<Schema> previousSchemas)
       throws SchemaRegistryException {
 
     if (previousSchemas == null) {
@@ -1314,9 +1317,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas);
   }
 
-  private boolean isCompatibleWithPrevious(String subject,
-                                           ParsedSchema parsedSchema,
-                                           List<ParsedSchema> previousSchemas)
+  private List<String> isCompatibleWithPrevious(String subject,
+                                                ParsedSchema parsedSchema,
+                                                List<ParsedSchema> previousSchemas)
       throws SchemaRegistryException {
 
     CompatibilityLevel compatibility = getCompatibilityLevelInScope(subject);

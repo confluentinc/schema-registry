@@ -21,7 +21,9 @@ import java.util.Objects;
 import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -54,8 +56,8 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected SchemaRegistryClient schemaRegistry;
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
-  private LRUCache<SubjectSchema, ParsedSchema> latestVersions =
-      new LRUCache<>(DEFAULT_CACHE_CAPACITY);
+  protected Cache<SubjectSchema, ParsedSchema> latestVersions =
+      new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
   protected boolean useSchemaReflection;
 
 
@@ -175,8 +177,20 @@ public abstract class AbstractKafkaSchemaSerDe {
 
   protected ParsedSchema lookupLatestVersion(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
+    return lookupLatestVersion(schemaRegistry, subject, schema, latestVersions);
+  }
+
+  protected static ParsedSchema lookupLatestVersion(
+      SchemaRegistryClient schemaRegistry,
+      String subject,
+      ParsedSchema schema,
+      Cache<SubjectSchema, ParsedSchema> cache)
+      throws IOException, RestClientException {
     SubjectSchema ss = new SubjectSchema(subject, schema);
-    ParsedSchema latestVersion = latestVersions.get(ss);
+    ParsedSchema latestVersion = null;
+    if (cache != null) {
+      latestVersion = cache.get(ss);
+    }
     if (latestVersion == null) {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestSchemaMetadata(subject);
       Optional<ParsedSchema> optSchema =
@@ -190,13 +204,15 @@ public abstract class AbstractKafkaSchemaSerDe {
               + " of type " + schemaMetadata.getSchemaType()));
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
-      if (!latestVersion.isBackwardCompatible(schema)) {
+      if (!latestVersion.isBackwardCompatible(schema).isEmpty()) {
         throw new IOException("Incompatible schema " + schemaMetadata.getSchema()
             + " with refs " + schemaMetadata.getReferences()
             + " of type " + schemaMetadata.getSchemaType()
             + " for schema " + schema.canonicalString());
       }
-      latestVersions.put(ss, latestVersion);
+      if (cache != null) {
+        cache.put(ss, latestVersion);
+      }
     }
     return latestVersion;
   }
@@ -209,7 +225,7 @@ public abstract class AbstractKafkaSchemaSerDe {
     return buffer;
   }
 
-  static class SubjectSchema {
+  protected static class SubjectSchema {
     private String subject;
     private ParsedSchema schema;
 

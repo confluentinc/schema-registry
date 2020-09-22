@@ -158,13 +158,13 @@ public class RestApiTest extends ClusterTestHarness {
     // test compatibility of this schema against the latest version under the subject
     String schema1 = allSchemas.get(0);
     boolean isCompatible =
-        restApp.restClient.testCompatibility(schema1, subject, "latest");
+        restApp.restClient.testCompatibility(schema1, subject, "latest").isEmpty();
     assertTrue("First schema registered should be compatible", isCompatible);
 
     for (int i = 0; i < numSchemas; i++) {
       // Test that compatibility check doesn't change the number of versions
       String schema = allSchemas.get(i);
-      isCompatible = restApp.restClient.testCompatibility(schema, subject, "latest");
+      isCompatible = restApp.restClient.testCompatibility(schema, subject, "latest").isEmpty();
       TestUtils.checkNumberOfVersions(restApp.restClient, numRegisteredSchemas, subject);
     }
   }
@@ -199,7 +199,8 @@ public class RestApiTest extends ClusterTestHarness {
         restApp.restClient.lookUpSubjectVersion(schema1, subject).getVersion();
     boolean isCompatible = restApp.restClient.testCompatibility(schema2, subject,
                                                                 String.valueOf(
-                                                                    versionOfRegisteredSchema));
+                                                                    versionOfRegisteredSchema))
+                                              .isEmpty();
     assertFalse("Schema should be incompatible with specified version", isCompatible);
   }
 
@@ -599,6 +600,19 @@ public class RestApiTest extends ClusterTestHarness {
     List<String> associatedSubjects = restApp.restClient.getAllSubjectsById(1);
     assertEquals(associatedSubjects.size(), 2);
     assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
+
+    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
+
+    associatedSubjects = restApp.restClient.getAllSubjectsById(1);
+    assertEquals(associatedSubjects.size(), 1);
+    assertEquals(Collections.singletonList(subject1), associatedSubjects);
+
+    associatedSubjects = restApp.restClient.getAllSubjectsById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, true);
+    assertEquals(associatedSubjects.size(), 2);
+    assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
   }
 
   @Test
@@ -627,12 +641,27 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(associatedSubjects.size(), 2);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
+
+    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
+
+    associatedSubjects = restApp.restClient.getAllVersionsById(1);
+    assertEquals(associatedSubjects.size(), 1);
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
+
+    associatedSubjects = restApp.restClient.getAllVersionsById(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, true);
+    assertEquals(associatedSubjects.size(), 2);
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
   }
 
   @Test
   public void testCompatibilityNonExistentSubject() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
-    boolean result = restApp.restClient.testCompatibility(schema, "non-existent-subject", "latest");
+    boolean result = restApp.restClient.testCompatibility(schema, "non-existent-subject", "latest")
+                                       .isEmpty();
     assertTrue("Compatibility succeeds", result);
   }
 
@@ -1011,13 +1040,13 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.registerSchema(schema1, subject);
 
     boolean isCompatible = restApp.restClient.testCompatibility(wrongSchema2, subject,
-                                                                "latest");
+                                                                "latest").isEmpty();
     assertTrue("Schema should be compatible with specified version", isCompatible);
 
     restApp.restClient.registerSchema(wrongSchema2, subject);
 
     isCompatible = restApp.restClient.testCompatibility(correctSchema2, subject,
-                                                        "latest");
+                                                        "latest").isEmpty();
     assertFalse("Schema should be incompatible with specified version", isCompatible);
     try {
       restApp.restClient.registerSchema(correctSchema2, subject);
@@ -1030,7 +1059,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest");
     isCompatible = restApp.restClient.testCompatibility(correctSchema2, subject,
-                                                        "latest");
+                                                        "latest").isEmpty();
     assertTrue("Schema should be compatible with specified version", isCompatible);
 
     restApp.restClient.registerSchema(correctSchema2, subject);

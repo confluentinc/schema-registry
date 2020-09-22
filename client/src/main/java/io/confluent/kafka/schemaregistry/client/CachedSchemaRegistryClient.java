@@ -426,7 +426,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public boolean testCompatibility(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     return restService.testCompatibility(schema.canonicalString(), schema.schemaType(),
-        schema.references(), subject, "latest");
+        schema.references(), subject, "latest", false).isEmpty();
+  }
+
+  @Override
+  public List<String> testCompatibilityVerbose(String subject, ParsedSchema schema)
+          throws IOException, RestClientException {
+    return restService.testCompatibility(schema.canonicalString(), schema.schemaType(),
+            schema.references(), subject, "latest", true);
   }
 
   @Override
