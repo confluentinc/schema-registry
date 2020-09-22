@@ -1925,10 +1925,7 @@ public class AvroDataTest {
     AvroData avroData = new AvroData(avroDataConfig);
     Schema schema1 = avroData.toConnectSchema(avroSchema1);
     Schema schema2 = avroData.toConnectSchema(avroSchema2);
-    assertEquals("Listing State Changed Event Key",
-        schema1.parameters().get(AVRO_RECORD_DOC_PROP));
-    assertEquals("Another listing State Changed Event Key",
-        schema2.parameters().get(AVRO_RECORD_DOC_PROP));
+    assertEquals(schema1.parameters(), schema2.parameters());
   }
 
   @Test

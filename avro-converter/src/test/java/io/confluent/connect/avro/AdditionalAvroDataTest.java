@@ -324,7 +324,7 @@ public class AdditionalAvroDataTest
         Assert.assertEquals("B", outputAvroSchema.getField("enumFieldWithDiffDefault").defaultVal());
         Assert.assertEquals("A", outputAvroSchema.getField("enumFieldWithDiffDefault").schema().getEnumDefault());
 
-        Assert.assertEquals(9.18, outputAvroSchema.getField("floatField").defaultVal());
+        Assert.assertEquals(9.18f, outputAvroSchema.getField("floatField").defaultVal());
 
         Assert.assertEquals(outputAvroSchema.getField("enumField").schema(),
             outputAvroSchema.getField("anotherEnumField").schema());
