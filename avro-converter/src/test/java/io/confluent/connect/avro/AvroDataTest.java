@@ -66,10 +66,9 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
 import static io.confluent.connect.avro.AvroData.AVRO_ENUM_DOC_PREFIX_PROP;
-import static io.confluent.connect.avro.AvroData.CONNECT_DOC_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_INTERNAL_TYPE_NAME;
+import static io.confluent.connect.avro.AvroData.AVRO_FIELD_DEFAULT_FLAG_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_NAME_PROP;
-import static io.confluent.connect.avro.AvroData.AVRO_RECORD_DOC_PROP;
 import static io.confluent.connect.avro.AvroData.AVRO_FIELD_DOC_PREFIX_PROP;
 import static io.confluent.connect.avro.AvroData.KEY_FIELD;
 import static io.confluent.connect.avro.AvroData.MAP_ENTRY_TYPE_NAME;
@@ -410,7 +409,7 @@ public class AvroDataTest {
     int8Schema.addProp("connect.type", "int8");
     org.apache.avro.Schema int16Schema = org.apache.avro.SchemaBuilder.builder().intType();
     int16Schema.addProp("connect.doc", "int16 field");
-    int16Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode((short) 12));
+    int16Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12));
     int16Schema.addProp("connect.type", "int16");
     org.apache.avro.Schema int32Schema = org.apache.avro.SchemaBuilder.builder().intType();
     int32Schema.addProp("connect.doc", "int32 field");
@@ -432,7 +431,7 @@ public class AvroDataTest {
     stringSchema.addProp("connect.default", JsonNodeFactory.instance.textNode("foo"));
     org.apache.avro.Schema bytesSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
     bytesSchema.addProp("connect.doc", "bytes field");
-    bytesSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode("foo".getBytes()));
+    bytesSchema.addProp("connect.default", "foo".getBytes());
 
     org.apache.avro.Schema dateSchema = org.apache.avro.SchemaBuilder.builder().intType();
     dateSchema.addProp("connect.doc", "date field");
@@ -472,7 +471,7 @@ public class AvroDataTest {
     decimalSchema.addProp("precision", 64);
     decimalSchema.addProp("connect.doc", "decimal field");
     decimalSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
-    decimalSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode(decimalDefVal));
+    decimalSchema.addProp("connect.default", decimalDefVal);
     decimalSchema.addProp("connect.parameters", parameters("scale", "5"));
     decimalSchema.addProp(AvroData.CONNECT_NAME_PROP, Decimal.LOGICAL_NAME);
     // this is the new and correct way to set logical type
@@ -1731,7 +1730,11 @@ public class AvroDataTest {
     // these properties on one of these fields to ensure they are properly converted
     Schema schema = SchemaBuilder.struct()
         .name("io.confluent.test.TestSchema").version(12).doc("doc")
-        .field("int32", SchemaBuilder.int32().defaultValue(7).build())
+        .field("int32", SchemaBuilder
+            .int32()
+            .defaultValue(7)
+            .parameter(AVRO_FIELD_DEFAULT_FLAG_PROP, "true")
+            .build())
         .parameter(AVRO_FIELD_DOC_PREFIX_PROP + "int32", "field doc")
         .build();
     Struct struct = new Struct(schema)
