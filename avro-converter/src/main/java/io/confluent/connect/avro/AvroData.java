@@ -813,10 +813,8 @@ public class AvroData {
               symbols.add(entry.getValue());
             }
           }
-          String enumDoc = schema.parameters()
-              .getOrDefault(AVRO_ENUM_DOC_PREFIX_PROP + name, null);
-          String enumDefault = schema.parameters()
-              .getOrDefault(AVRO_ENUM_DEFAULT_PREFIX_PROP + name, null);
+          String enumDoc = schema.parameters().get(AVRO_ENUM_DOC_PREFIX_PROP + name);
+          String enumDefault = schema.parameters().get(AVRO_ENUM_DEFAULT_PREFIX_PROP + name);
           baseSchema =
               org.apache.avro.SchemaBuilder.builder().enumeration(
                   schema.parameters().get(AVRO_TYPE_ENUM))
@@ -914,7 +912,7 @@ public class AvroData {
           for (Field field : schema.fields()) {
             String fieldDoc = schema.parameters() != null
                 ? schema.parameters()
-                  .getOrDefault(AVRO_FIELD_DOC_PREFIX_PROP + field.name(), null)
+                  .get(AVRO_FIELD_DOC_PREFIX_PROP + field.name())
                 : null;
             addAvroRecordField(fields, field.name(), field.schema(), fieldDoc, fromConnectContext);
           }
@@ -1786,7 +1784,6 @@ public class AvroData {
     if (connectMetaData && docVal != null) {
       builder.doc(docVal);
     }
-    //todo: handle connect default
 
     // Included Kafka Connect version takes priority, fall back to schema registry version
     int versionInt = -1;  // A valid version must be a positive integer (assumed throughout SR)
