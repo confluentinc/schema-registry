@@ -814,13 +814,10 @@ public class AvroData {
               symbols.add(entry.getValue());
             }
           }
-          String enumDoc = null;
-          String enumDefault = null;
-          if (schema.parameters() != null) {
-            enumDoc = schema.parameters().getOrDefault(AVRO_ENUM_DOC_PREFIX_PROP + name, null);
-            enumDefault = schema.parameters()
-                .getOrDefault(AVRO_ENUM_DEFAULT_PREFIX_PROP + name, null);
-          }
+          String enumDoc = schema.parameters()
+              .getOrDefault(AVRO_ENUM_DOC_PREFIX_PROP + name, null);
+          String enumDefault = schema.parameters()
+              .getOrDefault(AVRO_ENUM_DEFAULT_PREFIX_PROP + name, null);
           baseSchema =
               org.apache.avro.SchemaBuilder.builder().enumeration(
                   schema.parameters().get(AVRO_TYPE_ENUM))
@@ -876,14 +873,14 @@ public class AvroData {
               fields,
               KEY_FIELD,
               schema.keySchema(),
-              fromConnectContext,
-              null);
+              null,
+              fromConnectContext);
           addAvroRecordField(
               fields,
               VALUE_FIELD,
               schema.valueSchema(),
-              fromConnectContext,
-              null);
+              null,
+              fromConnectContext);
           mapSchema.setFields(fields);
           baseSchema = org.apache.avro.Schema.createArray(mapSchema);
         }
@@ -916,10 +913,11 @@ public class AvroData {
           }
           List<org.apache.avro.Schema.Field> fields = new ArrayList<>();
           for (Field field : schema.fields()) {
-            String fieldDoc = schema.parameters() == null ? null :
-                (schema.parameters().containsKey(AVRO_FIELD_DOC_PREFIX_PROP + field.name())
-                    ? schema.parameters().get(AVRO_FIELD_DOC_PREFIX_PROP + field.name()) : null);
-            addAvroRecordField(fields, field.name(), field.schema(), fromConnectContext, fieldDoc);
+            String fieldDoc = schema.parameters() != null
+                ? schema.parameters()
+                  .getOrDefault(AVRO_FIELD_DOC_PREFIX_PROP + field.name(), null)
+                : null;
+            addAvroRecordField(fields, field.name(), field.schema(), fieldDoc, fromConnectContext);
           }
           baseSchema.setFields(fields);
         }
@@ -939,7 +937,7 @@ public class AvroData {
                              JsonNodeFactory.instance.numberNode(schema.version()));
         }
         if (schema.parameters() != null) {
-          JsonNode params = parametersFromConncetWithoutAvroDefaultFlag(schema.parameters());
+          JsonNode params = parametersFromConnect(schema.parameters());
           if (!params.isEmpty()) {
             baseSchema.addProp(CONNECT_PARAMETERS_PROP, params);
           }
@@ -1074,8 +1072,8 @@ public class AvroData {
   private void addAvroRecordField(
       List<org.apache.avro.Schema.Field> fields,
       String fieldName, Schema fieldSchema,
-      FromConnectContext fromConnectContext,
-      String fieldDoc) {
+      String fieldDoc,
+      FromConnectContext fromConnectContext) {
 
     Object defaultVal = null;
     if (fieldSchema.defaultValue() != null) {
@@ -1224,20 +1222,13 @@ public class AvroData {
     }
   }
 
-  private static JsonNode parametersFromConncetWithoutAvroDefaultFlag(Map<String, String> params) {
+
+  private static JsonNode parametersFromConnect(Map<String, String> params) {
     ObjectNode result = JsonNodeFactory.instance.objectNode();
     for (Map.Entry<String, String> entry : params.entrySet()) {
       if (!entry.getKey().equals(AVRO_FIELD_DEFAULT_FLAG_PROP)) {
         result.put(entry.getKey(), entry.getValue());
       }
-    }
-    return result;
-  }
-
-  private static JsonNode parametersFromConnect(Map<String, String> params) {
-    ObjectNode result = JsonNodeFactory.instance.objectNode();
-    for (Map.Entry<String, String> entry : params.entrySet()) {
-      result.put(entry.getKey(), entry.getValue());
     }
     return result;
   }
@@ -1753,7 +1744,6 @@ public class AvroData {
           if (connectMetaData && field.doc() != null) {
             builder.parameter(AVRO_FIELD_DOC_PREFIX_PROP + field.name(), field.doc());
           }
-          //todo: handle default value
           Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
                   field.defaultVal(), field.doc(), toConnectContext);
           builder.field(field.name(), fieldSchema);
@@ -1878,11 +1868,11 @@ public class AvroData {
       }
     }
 
-    if (fieldDefaultVal != null && schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP) == null) {
-      builder.parameter(AVRO_FIELD_DEFAULT_FLAG_PROP, "true");
-    }
+    Object connectDefault = schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP);
     if (fieldDefaultVal == null) {
-      fieldDefaultVal = JacksonUtils.toJsonNode(schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP));
+      fieldDefaultVal = JacksonUtils.toJsonNode(connectDefault);
+    } else if (connectDefault == null) {
+      builder.parameter(AVRO_FIELD_DEFAULT_FLAG_PROP, "true");
     }
     if (fieldDefaultVal != null) {
       builder.defaultValue(
