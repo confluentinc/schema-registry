@@ -946,7 +946,7 @@ public class AvroData {
           if (schema.parameters() == null
               || !schema.parameters().containsKey(AVRO_FIELD_DEFAULT_FLAG_PROP)) {
             baseSchema.addProp(CONNECT_DEFAULT_VALUE_PROP,
-                defaultValueToConnect(schema, schema.defaultValue()));
+                defaultValueFromConnect(schema, schema.defaultValue()));
           }
         }
         if (schema.name() != null) {
@@ -1077,7 +1077,8 @@ public class AvroData {
 
     Object defaultVal = null;
     if (fieldSchema.defaultValue() != null) {
-      defaultVal = defaultValueToConnect(fieldSchema, fieldSchema.defaultValue());
+      defaultVal = JacksonUtils.toObject(
+          defaultValueFromConnect(fieldSchema, fieldSchema.defaultValue()));
     } else if (fieldSchema.isOptional()) {
       defaultVal = JsonProperties.NULL_VALUE;
     }
@@ -1089,37 +1090,6 @@ public class AvroData {
     fields.add(field);
   }
 
-  private Object defaultValueToConnect(Schema fieldSchema, Object defaultVal) {
-    // If this is a logical, convert to the primitive form for the Avro default value
-    defaultVal = toAvroLogical(fieldSchema, defaultVal);
-
-    // Avro doesn't handle a few types that Connect uses, so convert those explicitly here
-    if (defaultVal instanceof Byte) {
-      // byte are mapped to integers in Avro
-      defaultVal = ((Byte) defaultVal).intValue();
-    } else if (defaultVal instanceof Short) {
-      // Shorts are mapped to integers in Avro
-      defaultVal = ((Short) defaultVal).intValue();
-    } else if (defaultVal instanceof ByteBuffer) {
-      // Avro doesn't handle ByteBuffer directly, but does handle 'byte[]'
-      // Copy the contents of the byte buffer without side effects on the buffer
-      ByteBuffer buffer = (ByteBuffer)defaultVal;
-      byte[] bytes = new byte[buffer.remaining()];
-      buffer.duplicate().get(bytes);
-      defaultVal = bytes;
-    } else if (defaultVal instanceof Struct) {
-      Struct struct = (Struct)defaultVal;
-      Map<String, Object> map = new LinkedHashMap<>();
-      for (Field field : struct.schema().fields()) {
-        Object object = struct.get(field);
-        if (object != null) {
-          map.put(field.name(), defaultValueToConnect(field.schema(), object));
-        }
-      }
-      defaultVal = map;
-    }
-    return defaultVal;
-  }
 
   private static Object toAvroLogical(Schema schema, Object value) {
     if (schema != null && schema.name() != null) {
@@ -1154,9 +1124,9 @@ public class AvroData {
 
       switch (schema.type()) {
         case INT8:
-          return JsonNodeFactory.instance.numberNode((Byte) defaultVal);
+          return JsonNodeFactory.instance.numberNode(((Byte) defaultVal).intValue());
         case INT16:
-          return JsonNodeFactory.instance.numberNode((Short) defaultVal);
+          return JsonNodeFactory.instance.numberNode(((Short) defaultVal).intValue());
         case INT32:
           return JsonNodeFactory.instance.numberNode((Integer) defaultVal);
         case INT64:
@@ -1171,9 +1141,11 @@ public class AvroData {
           return JsonNodeFactory.instance.textNode((String) defaultVal);
         case BYTES:
           if (defaultVal instanceof byte[]) {
-            return JsonNodeFactory.instance.binaryNode((byte[]) defaultVal);
+            return JsonNodeFactory.instance.textNode(new String((byte[]) defaultVal,
+                StandardCharsets.ISO_8859_1));
           } else {
-            return JsonNodeFactory.instance.binaryNode(((ByteBuffer) defaultVal).array());
+            return JsonNodeFactory.instance.textNode(new String(((ByteBuffer) defaultVal).array(),
+                StandardCharsets.ISO_8859_1));
           }
         case ARRAY: {
           ArrayNode array = JsonNodeFactory.instance.arrayNode();

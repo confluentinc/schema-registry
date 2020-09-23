@@ -48,6 +48,7 @@ import org.powermock.reflect.Whitebox;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -409,7 +410,7 @@ public class AvroDataTest {
     int8Schema.addProp("connect.type", "int8");
     org.apache.avro.Schema int16Schema = org.apache.avro.SchemaBuilder.builder().intType();
     int16Schema.addProp("connect.doc", "int16 field");
-    int16Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(12));
+    int16Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(((short)12)).intValue());
     int16Schema.addProp("connect.type", "int16");
     org.apache.avro.Schema int32Schema = org.apache.avro.SchemaBuilder.builder().intType();
     int32Schema.addProp("connect.doc", "int32 field");
@@ -431,7 +432,9 @@ public class AvroDataTest {
     stringSchema.addProp("connect.default", JsonNodeFactory.instance.textNode("foo"));
     org.apache.avro.Schema bytesSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
     bytesSchema.addProp("connect.doc", "bytes field");
-    bytesSchema.addProp("connect.default", "foo".getBytes());
+    bytesSchema.addProp("connect.default", JsonNodeFactory.instance.textNode(
+        new String("foo".getBytes(), StandardCharsets.ISO_8859_1)
+    ));
 
     org.apache.avro.Schema dateSchema = org.apache.avro.SchemaBuilder.builder().intType();
     dateSchema.addProp("connect.doc", "date field");
@@ -471,7 +474,8 @@ public class AvroDataTest {
     decimalSchema.addProp("precision", 64);
     decimalSchema.addProp("connect.doc", "decimal field");
     decimalSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
-    decimalSchema.addProp("connect.default", decimalDefVal);
+    decimalSchema.addProp("connect.default", JsonNodeFactory.instance.textNode(
+        new String(decimalDefVal, StandardCharsets.ISO_8859_1)));
     decimalSchema.addProp("connect.parameters", parameters("scale", "5"));
     decimalSchema.addProp(AvroData.CONNECT_NAME_PROP, Decimal.LOGICAL_NAME);
     // this is the new and correct way to set logical type
