@@ -48,6 +48,7 @@ import org.powermock.reflect.Whitebox;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -65,10 +66,11 @@ import foo.bar.Kind;
 import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static io.confluent.connect.avro.AvroData.AVRO_TYPE_ENUM;
-import static io.confluent.connect.avro.AvroData.CONNECT_ENUM_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.AVRO_ENUM_DOC_PREFIX_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_INTERNAL_TYPE_NAME;
+import static io.confluent.connect.avro.AvroData.AVRO_FIELD_DEFAULT_FLAG_PROP;
 import static io.confluent.connect.avro.AvroData.CONNECT_NAME_PROP;
-import static io.confluent.connect.avro.AvroData.CONNECT_RECORD_DOC_PROP;
+import static io.confluent.connect.avro.AvroData.AVRO_FIELD_DOC_PREFIX_PROP;
 import static io.confluent.connect.avro.AvroData.KEY_FIELD;
 import static io.confluent.connect.avro.AvroData.MAP_ENTRY_TYPE_NAME;
 import static io.confluent.connect.avro.AvroData.NAMESPACE;
@@ -408,7 +410,7 @@ public class AvroDataTest {
     int8Schema.addProp("connect.type", "int8");
     org.apache.avro.Schema int16Schema = org.apache.avro.SchemaBuilder.builder().intType();
     int16Schema.addProp("connect.doc", "int16 field");
-    int16Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode((short) 12));
+    int16Schema.addProp("connect.default", JsonNodeFactory.instance.numberNode(((short)12)).intValue());
     int16Schema.addProp("connect.type", "int16");
     org.apache.avro.Schema int32Schema = org.apache.avro.SchemaBuilder.builder().intType();
     int32Schema.addProp("connect.doc", "int32 field");
@@ -430,7 +432,9 @@ public class AvroDataTest {
     stringSchema.addProp("connect.default", JsonNodeFactory.instance.textNode("foo"));
     org.apache.avro.Schema bytesSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
     bytesSchema.addProp("connect.doc", "bytes field");
-    bytesSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode("foo".getBytes()));
+    bytesSchema.addProp("connect.default", JsonNodeFactory.instance.textNode(
+        new String("foo".getBytes(), StandardCharsets.ISO_8859_1)
+    ));
 
     org.apache.avro.Schema dateSchema = org.apache.avro.SchemaBuilder.builder().intType();
     dateSchema.addProp("connect.doc", "date field");
@@ -470,7 +474,8 @@ public class AvroDataTest {
     decimalSchema.addProp("precision", 64);
     decimalSchema.addProp("connect.doc", "decimal field");
     decimalSchema.addProp(AvroData.CONNECT_VERSION_PROP, 1);
-    decimalSchema.addProp("connect.default", JsonNodeFactory.instance.binaryNode(decimalDefVal));
+    decimalSchema.addProp("connect.default", JsonNodeFactory.instance.textNode(
+        new String(decimalDefVal, StandardCharsets.ISO_8859_1)));
     decimalSchema.addProp("connect.parameters", parameters("scale", "5"));
     decimalSchema.addProp(AvroData.CONNECT_NAME_PROP, Decimal.LOGICAL_NAME);
     // this is the new and correct way to set logical type
@@ -503,21 +508,21 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
         .record(AvroData.DEFAULT_SCHEMA_NAME).namespace(AvroData.NAMESPACE) // default values
         .fields()
-        .name("int8").doc("int8 field").type(int8Schema).withDefault(2)
-        .name("int16").doc("int16 field").type(int16Schema).withDefault(12)
-        .name("int32").doc("int32 field").type(int32Schema).withDefault(12)
-        .name("int64").doc("int64 field").type(int64Schema).withDefault(12L)
-        .name("float32").doc("float32 field").type(float32Schema).withDefault(12.2f)
-        .name("float64").doc("float64 field").type(float64Schema).withDefault(12.2)
-        .name("boolean").doc("bool field").type(boolSchema).withDefault(true)
-        .name("string").doc("string field").type(stringSchema).withDefault("foo")
-        .name("bytes").doc("bytes field").type(bytesSchema).withDefault(ByteBuffer.wrap("foo".getBytes()))
+        .name("int8").type(int8Schema).withDefault(2)
+        .name("int16").type(int16Schema).withDefault(12)
+        .name("int32").type(int32Schema).withDefault(12)
+        .name("int64").type(int64Schema).withDefault(12L)
+        .name("float32").type(float32Schema).withDefault(12.2f)
+        .name("float64").type(float64Schema).withDefault(12.2)
+        .name("boolean").type(boolSchema).withDefault(true)
+        .name("string").type(stringSchema).withDefault("foo")
+        .name("bytes").type(bytesSchema).withDefault(ByteBuffer.wrap("foo".getBytes()))
         .name("array").type(arraySchema).withDefault(Arrays.asList("a", "b", "c"))
         .name("map").type(mapSchema).withDefault(Collections.singletonMap("field", 1))
-        .name("date").doc("date field").type(dateSchema).withDefault(dateDefVal)
-        .name("time").doc("time field").type(timeSchema).withDefault(timeDefVal)
-        .name("ts").doc("ts field").type(tsSchema).withDefault(tsDefVal)
-        .name("decimal").doc("decimal field").type(decimalSchema).withDefault(ByteBuffer.wrap(decimalDefVal))
+        .name("date").type(dateSchema).withDefault(dateDefVal)
+        .name("time").type(timeSchema).withDefault(timeDefVal)
+        .name("ts").type(tsSchema).withDefault(tsDefVal)
+        .name("decimal").type(decimalSchema).withDefault(ByteBuffer.wrap(decimalDefVal))
         .endRecord();
     org.apache.avro.generic.GenericRecord avroRecord
         = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
@@ -1670,10 +1675,8 @@ public class AvroDataTest {
         .doc("some documentation")
         .symbols("foo", "bar", "baz");
     SchemaBuilder builder = SchemaBuilder.string().name("TestEnum");
-    builder.parameter(CONNECT_ENUM_DOC_PROP, "some documentation");
-    builder.parameter(CONNECT_RECORD_DOC_PROP, "some documentation");
+    builder.parameter(AVRO_ENUM_DOC_PREFIX_PROP + "TestEnum", "some documentation");
     builder.parameter(AVRO_TYPE_ENUM, "TestEnum");
-    builder.doc("some documentation");
     for(String enumSymbol : new String[]{"foo", "bar", "baz"}) {
       builder.parameter(AVRO_TYPE_ENUM+"."+enumSymbol, enumSymbol);
     }
@@ -1732,11 +1735,16 @@ public class AvroDataTest {
   @Test
   public void testToConnectRecordWithMetadata() {
     // One important difference between record schemas in Avro and Connect is that Avro has some
-    // per-field metadata (doc, default value) that Connect holds in the schema itself. We set
+    // per-field metadata (doc, default value) that Connect holds in parameters(). We set
     // these properties on one of these fields to ensure they are properly converted
     Schema schema = SchemaBuilder.struct()
         .name("io.confluent.test.TestSchema").version(12).doc("doc")
-        .field("int32", SchemaBuilder.int32().defaultValue(7).doc("field doc").build())
+        .field("int32", SchemaBuilder
+            .int32()
+            .defaultValue(7)
+            .parameter(AVRO_FIELD_DEFAULT_FLAG_PROP, "true")
+            .build())
+        .parameter(AVRO_FIELD_DOC_PREFIX_PROP + "int32", "field doc")
         .build();
     Struct struct = new Struct(schema)
         .put("int32", 12);
