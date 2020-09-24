@@ -55,7 +55,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -86,12 +85,17 @@ public class AvroData {
 
   public static final String CONNECT_NAME_PROP = "connect.name";
   public static final String CONNECT_DOC_PROP = "connect.doc";
-  public static final String CONNECT_RECORD_DOC_PROP = "connect.record.doc";
-  public static final String CONNECT_ENUM_DOC_PROP = "connect.enum.doc";
   public static final String CONNECT_VERSION_PROP = "connect.version";
   public static final String CONNECT_DEFAULT_VALUE_PROP = "connect.default";
   public static final String CONNECT_PARAMETERS_PROP = "connect.parameters";
   public static final String CONNECT_INTERNAL_TYPE_NAME = "connect.internal.type";
+  public static final String AVRO_RECORD_DOC_PROP = NAMESPACE + ".record.doc";
+  public static final String AVRO_ENUM_DOC_PREFIX_PROP = NAMESPACE + ".enum.doc.";
+  public static final String AVRO_FIELD_DOC_PREFIX_PROP = NAMESPACE + ".field.doc.";
+  //This property is used to determine whether a default value in the Connect schema originated
+  //from an Avro field default
+  public static final String AVRO_FIELD_DEFAULT_FLAG_PROP = NAMESPACE + ".field.default";
+  public static final String AVRO_ENUM_DEFAULT_PREFIX_PROP = NAMESPACE + ".enum.default.";
 
   public static final String CONNECT_TYPE_PROP = "connect.type";
 
@@ -779,10 +783,13 @@ public class AvroData {
               symbols.add(entry.getValue());
             }
           }
+          String enumDoc = schema.parameters().get(AVRO_ENUM_DOC_PREFIX_PROP + name);
+          String enumDefault = schema.parameters().get(AVRO_ENUM_DEFAULT_PREFIX_PROP + name);
           baseSchema =
               org.apache.avro.SchemaBuilder.builder().enumeration(
                   schema.parameters().get(AVRO_TYPE_ENUM))
-                  .doc(schema.parameters().get(CONNECT_ENUM_DOC_PROP))
+                  .doc(enumDoc)
+                  .defaultSymbol(enumDefault)
                   .symbols(symbols.toArray(new String[symbols.size()]));
         } else {
           baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
@@ -833,11 +840,13 @@ public class AvroData {
               fields,
               KEY_FIELD,
               schema.keySchema(),
+              null,
               fromConnectContext);
           addAvroRecordField(
               fields,
               VALUE_FIELD,
               schema.valueSchema(),
+              null,
               fromConnectContext);
           mapSchema.setFields(fields);
           baseSchema = org.apache.avro.Schema.createArray(mapSchema);
@@ -862,7 +871,7 @@ public class AvroData {
           baseSchema = org.apache.avro.Schema.createUnion(unionSchemas);
         } else {
           String doc = schema.parameters() != null
-                       ? schema.parameters().get(CONNECT_RECORD_DOC_PROP)
+                       ? schema.parameters().get(AVRO_RECORD_DOC_PROP)
                        : null;
           baseSchema = org.apache.avro.Schema.createRecord(
               name != null ? name : DEFAULT_SCHEMA_NAME, doc, namespace, false);
@@ -871,7 +880,11 @@ public class AvroData {
           }
           List<org.apache.avro.Schema.Field> fields = new ArrayList<>();
           for (Field field : schema.fields()) {
-            addAvroRecordField(fields, field.name(), field.schema(), fromConnectContext);
+            String fieldDoc = schema.parameters() != null
+                ? schema.parameters()
+                  .get(AVRO_FIELD_DOC_PREFIX_PROP + field.name())
+                : null;
+            addAvroRecordField(fields, field.name(), field.schema(), fieldDoc, fromConnectContext);
           }
           baseSchema.setFields(fields);
         }
@@ -891,11 +904,17 @@ public class AvroData {
                              JsonNodeFactory.instance.numberNode(schema.version()));
         }
         if (schema.parameters() != null) {
-          baseSchema.addProp(CONNECT_PARAMETERS_PROP, parametersFromConnect(schema.parameters()));
+          JsonNode params = parametersFromConnect(schema.parameters());
+          if (!params.isEmpty()) {
+            baseSchema.addProp(CONNECT_PARAMETERS_PROP, params);
+          }
         }
         if (schema.defaultValue() != null) {
-          baseSchema.addProp(CONNECT_DEFAULT_VALUE_PROP,
-                             defaultValueFromConnect(schema, schema.defaultValue()));
+          if (schema.parameters() == null
+              || !schema.parameters().containsKey(AVRO_FIELD_DEFAULT_FLAG_PROP)) {
+            baseSchema.addProp(CONNECT_DEFAULT_VALUE_PROP,
+                defaultValueFromConnect(schema, schema.defaultValue()));
+          }
         }
         if (schema.name() != null) {
           baseSchema.addProp(CONNECT_NAME_PROP, schema.name());
@@ -1020,53 +1039,24 @@ public class AvroData {
   private void addAvroRecordField(
       List<org.apache.avro.Schema.Field> fields,
       String fieldName, Schema fieldSchema,
+      String fieldDoc,
       FromConnectContext fromConnectContext) {
 
     Object defaultVal = null;
     if (fieldSchema.defaultValue() != null) {
-      defaultVal = defaultValueToConnect(fieldSchema, fieldSchema.defaultValue());
+      defaultVal = JacksonUtils.toObject(
+          defaultValueFromConnect(fieldSchema, fieldSchema.defaultValue()));
     } else if (fieldSchema.isOptional()) {
       defaultVal = JsonProperties.NULL_VALUE;
     }
     org.apache.avro.Schema.Field field = new org.apache.avro.Schema.Field(
         fieldName,
         fromConnectSchema(fieldSchema, fromConnectContext, false),
-        fieldSchema.doc(),
+        fieldDoc,
         defaultVal);
     fields.add(field);
   }
 
-  private Object defaultValueToConnect(Schema fieldSchema, Object defaultVal) {
-    // If this is a logical, convert to the primitive form for the Avro default value
-    defaultVal = toAvroLogical(fieldSchema, defaultVal);
-
-    // Avro doesn't handle a few types that Connect uses, so convert those explicitly here
-    if (defaultVal instanceof Byte) {
-      // byte are mapped to integers in Avro
-      defaultVal = ((Byte) defaultVal).intValue();
-    } else if (defaultVal instanceof Short) {
-      // Shorts are mapped to integers in Avro
-      defaultVal = ((Short) defaultVal).intValue();
-    } else if (defaultVal instanceof ByteBuffer) {
-      // Avro doesn't handle ByteBuffer directly, but does handle 'byte[]'
-      // Copy the contents of the byte buffer without side effects on the buffer
-      ByteBuffer buffer = (ByteBuffer)defaultVal;
-      byte[] bytes = new byte[buffer.remaining()];
-      buffer.duplicate().get(bytes);
-      defaultVal = bytes;
-    } else if (defaultVal instanceof Struct) {
-      Struct struct = (Struct)defaultVal;
-      Map<String, Object> map = new LinkedHashMap<>();
-      for (Field field : struct.schema().fields()) {
-        Object object = struct.get(field);
-        if (object != null) {
-          map.put(field.name(), defaultValueToConnect(field.schema(), object));
-        }
-      }
-      defaultVal = map;
-    }
-    return defaultVal;
-  }
 
   private static Object toAvroLogical(Schema schema, Object value) {
     if (schema != null && schema.name() != null) {
@@ -1101,9 +1091,9 @@ public class AvroData {
 
       switch (schema.type()) {
         case INT8:
-          return JsonNodeFactory.instance.numberNode((Byte) defaultVal);
+          return JsonNodeFactory.instance.numberNode(((Byte) defaultVal).intValue());
         case INT16:
-          return JsonNodeFactory.instance.numberNode((Short) defaultVal);
+          return JsonNodeFactory.instance.numberNode(((Short) defaultVal).intValue());
         case INT32:
           return JsonNodeFactory.instance.numberNode((Integer) defaultVal);
         case INT64:
@@ -1118,9 +1108,11 @@ public class AvroData {
           return JsonNodeFactory.instance.textNode((String) defaultVal);
         case BYTES:
           if (defaultVal instanceof byte[]) {
-            return JsonNodeFactory.instance.binaryNode((byte[]) defaultVal);
+            return JsonNodeFactory.instance.textNode(new String((byte[]) defaultVal,
+                StandardCharsets.ISO_8859_1));
           } else {
-            return JsonNodeFactory.instance.binaryNode(((ByteBuffer) defaultVal).array());
+            return JsonNodeFactory.instance.textNode(new String(((ByteBuffer) defaultVal).array(),
+                StandardCharsets.ISO_8859_1));
           }
         case ARRAY: {
           ArrayNode array = JsonNodeFactory.instance.arrayNode();
@@ -1169,10 +1161,13 @@ public class AvroData {
     }
   }
 
+
   private static JsonNode parametersFromConnect(Map<String, String> params) {
     ObjectNode result = JsonNodeFactory.instance.objectNode();
     for (Map.Entry<String, String> entry : params.entrySet()) {
-      result.put(entry.getKey(), entry.getValue());
+      if (!entry.getKey().equals(AVRO_FIELD_DEFAULT_FLAG_PROP)) {
+        result.put(entry.getKey(), entry.getValue());
+      }
     }
     return result;
   }
@@ -1682,8 +1677,13 @@ public class AvroData {
       case RECORD: {
         builder = SchemaBuilder.struct();
         toConnectContext.cycleReferences.put(schema, new CyclicSchemaWrapper(builder));
+        if (connectMetaData && schema.getDoc() != null) {
+          builder.parameter(AVRO_RECORD_DOC_PROP, schema.getDoc());
+        }
         for (org.apache.avro.Schema.Field field : schema.getFields()) {
-
+          if (connectMetaData && field.doc() != null) {
+            builder.parameter(AVRO_FIELD_DOC_PREFIX_PROP + field.name(), field.doc());
+          }
           Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
                   field.defaultVal(), field.doc(), toConnectContext);
           builder.field(field.name(), fieldSchema);
@@ -1694,8 +1694,14 @@ public class AvroData {
       case ENUM:
         // enums are unwrapped to strings and the original enum is not preserved
         builder = SchemaBuilder.string();
-        if (connectMetaData && schema.getDoc() != null) {
-          builder.parameter(CONNECT_ENUM_DOC_PROP, schema.getDoc());
+        if (connectMetaData) {
+          if (schema.getDoc() != null) {
+            builder.parameter(AVRO_ENUM_DOC_PREFIX_PROP + schema.getName(), schema.getDoc());
+          }
+          if (schema.getEnumDefault() != null) {
+            builder.parameter(AVRO_ENUM_DEFAULT_PREFIX_PROP + schema.getName(),
+                schema.getEnumDefault());
+          }
         }
         builder.parameter(AVRO_TYPE_ENUM, schema.getFullName());
         for (String enumSymbol : schema.getEnumSymbols()) {
@@ -1745,13 +1751,9 @@ public class AvroData {
                                 + schema.getType().getName() + ".");
     }
 
-    String docVal = docDefaultVal != null ? docDefaultVal :
-        (schema.getDoc() != null ? schema.getDoc() : schema.getProp(CONNECT_DOC_PROP));
-    if (docVal != null) {
+    String docVal = schema.getProp(CONNECT_DOC_PROP);
+    if (connectMetaData && docVal != null) {
       builder.doc(docVal);
-    }
-    if (connectMetaData && schema.getDoc() != null) {
-      builder.parameter(CONNECT_RECORD_DOC_PROP, schema.getDoc());
     }
 
     // Included Kafka Connect version takes priority, fall back to schema registry version
@@ -1805,8 +1807,11 @@ public class AvroData {
       }
     }
 
+    Object connectDefault = schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP);
     if (fieldDefaultVal == null) {
-      fieldDefaultVal = JacksonUtils.toJsonNode(schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP));
+      fieldDefaultVal = JacksonUtils.toJsonNode(connectDefault);
+    } else if (connectDefault == null) {
+      builder.parameter(AVRO_FIELD_DEFAULT_FLAG_PROP, "true");
     }
     if (fieldDefaultVal != null) {
       builder.defaultValue(
