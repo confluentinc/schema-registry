@@ -91,6 +91,8 @@ public class AvroData {
   public static final String AVRO_RECORD_DOC_PROP = NAMESPACE + ".record.doc";
   public static final String AVRO_ENUM_DOC_PREFIX_PROP = NAMESPACE + ".enum.doc.";
   public static final String AVRO_FIELD_DOC_PREFIX_PROP = NAMESPACE + ".field.doc.";
+  //This property is used to determine whether a default value in the Connect schema originated
+  //from an Avro field default
   public static final String AVRO_FIELD_DEFAULT_FLAG_PROP = NAMESPACE + ".field.default";
   public static final String AVRO_ENUM_DEFAULT_PREFIX_PROP = NAMESPACE + ".enum.default.";
 
@@ -101,7 +103,6 @@ public class AvroData {
 
   public static final String AVRO_TYPE_UNION = NAMESPACE + ".Union";
   public static final String AVRO_TYPE_ENUM = NAMESPACE + ".Enum";
-
 
   public static final String AVRO_TYPE_ANYTHING = NAMESPACE + ".Anything";
 
