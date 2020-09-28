@@ -18,5 +18,6 @@ package io.confluent.kafka.schemaregistry.storage;
 public enum Mode {
   READWRITE,
   READONLY,
+  READONLY_OVERRIDE,
   IMPORT
 }

@@ -525,7 +525,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private void checkRegisterMode(
       String subject, Schema schema
   ) throws OperationNotPermittedException, SchemaRegistryStoreException {
-    if (getModeInScope(subject) == Mode.READONLY) {
+    if (getModeInScope(subject) == Mode.READONLY
+        || getModeInScope(subject) == Mode.READONLY_OVERRIDE) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
 
@@ -581,7 +582,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                   boolean permanentDelete)
       throws SchemaRegistryException {
     try {
-      if (getModeInScope(subject) == Mode.READONLY) {
+      if (getModeInScope(subject) == Mode.READONLY
+          || getModeInScope(subject) == Mode.READONLY_OVERRIDE) {
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
@@ -646,7 +648,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                                      boolean permanentDelete) throws SchemaRegistryException {
     // Ensure cache is up-to-date before any potential writes
     try {
-      if (getModeInScope(subject) == Mode.READONLY) {
+      if (getModeInScope(subject) == Mode.READONLY
+          || getModeInScope(subject) == Mode.READONLY_OVERRIDE) {
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
@@ -1206,7 +1209,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public void updateCompatibilityLevel(String subject, CompatibilityLevel newCompatibilityLevel)
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
-    if (getModeInScope(subject) == Mode.READONLY) {
+    if (getModeInScope(subject) == Mode.READONLY
+        || getModeInScope(subject) == Mode.READONLY_OVERRIDE) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
     }
     ConfigKey configKey = new ConfigKey(subject);
@@ -1338,7 +1342,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public Mode getMode(String subject) throws SchemaRegistryStoreException {
     try {
-      return lookupCache.mode(subject, false, defaultMode);
+      SchemaRegistryValue globalModeValue = this.kafkaStore.get(new ModeKey(null));
+      Mode globalMode = globalModeValue != null ? ((ModeValue) globalModeValue).getMode() : null;
+      Mode subjectMode = lookupCache.mode(subject, false, defaultMode);
+
+      if (globalMode == Mode.READONLY_OVERRIDE) {
+        return globalMode;
+      } else if (subjectMode != null) {
+        return subjectMode;
+      } else {
+        return globalMode != null ? globalMode : defaultMode;
+      }
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
@@ -1346,7 +1360,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private Mode getModeInScope(String subject) throws SchemaRegistryStoreException {
     try {
-      return lookupCache.mode(subject, true, defaultMode);
+      SchemaRegistryValue globalModeValue = this.kafkaStore.get(new ModeKey(null));
+      Mode globalMode = globalModeValue != null ? ((ModeValue) globalModeValue).getMode() : null;
+      Mode subjectMode = lookupCache.mode(subject, false, defaultMode);
+
+      if (globalMode == Mode.READONLY_OVERRIDE) {
+        return globalMode;
+      } else if (subjectMode != null) {
+        return subjectMode;
+      } else {
+        return globalMode != null ? globalMode : defaultMode;
+      }
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
