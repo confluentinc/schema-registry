@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>6.1.0-beta200928192657</version>
+        <version>6.1.0-beta200928192657-cp1</version>
     </parent>
 
     <licenses>
