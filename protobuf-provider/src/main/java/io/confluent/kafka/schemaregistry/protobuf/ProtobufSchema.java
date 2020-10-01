@@ -31,9 +31,9 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.squareup.wire.Syntax;
 import com.squareup.wire.schema.Field;
 import com.squareup.wire.schema.Location;
-import com.squareup.wire.schema.ProtoFile;
 import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.EnumConstantElement;
 import com.squareup.wire.schema.internal.parser.EnumElement;
@@ -273,13 +273,13 @@ public class ProtobufSchema implements ParsedSchema {
       packageName = null;
     }
 
-    ProtoFile.Syntax syntax = null;
+    Syntax syntax = null;
     switch (file.getSyntax()) {
       case PROTO2:
-        syntax = ProtoFile.Syntax.PROTO_2;
+        syntax = Syntax.PROTO_2;
         break;
       case PROTO3:
-        syntax = ProtoFile.Syntax.PROTO_3;
+        syntax = Syntax.PROTO_3;
         break;
       default:
         break;
@@ -469,17 +469,8 @@ public class ProtobufSchema implements ParsedSchema {
       OptionElement option = new OptionElement("packed", kind, fd.getOptions().getPacked(), false);
       options.add(option);
     }
-    if (fd.hasJsonName()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          "json_name",
-          kind,
-          fd.getJsonName(),
-          false
-      );
-      options.add(option);
-    }
-    String defaultValue = fd.hasDefaultValue() && fd.getDefaultValue() != null
+    String jsonName = fd.hasJsonName() ? fd.getJsonName() : null;
+    String defaultValue = !PROTO3.equals(file.getSyntax()) && fd.hasDefaultValue()
                           ? fd.getDefaultValue()
                           : null;
     // NOTE: skip some options
@@ -488,6 +479,7 @@ public class ProtobufSchema implements ParsedSchema {
         dataType(fd),
         name,
         defaultValue,
+        jsonName,
         fd.getNumber(),
         "",
         options.build()
@@ -573,7 +565,7 @@ public class ProtobufSchema implements ParsedSchema {
     log.trace("*** toDynamicSchema: {}", rootElem.toSchema());
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     try {
-      ProtoFile.Syntax syntax = rootElem.getSyntax();
+      Syntax syntax = rootElem.getSyntax();
       if (syntax != null) {
         schema.setSyntax(syntax.toString());
       }
@@ -663,8 +655,7 @@ public class ProtobufSchema implements ParsedSchema {
       String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
       String fieldType = field.getType();
       String defaultVal = field.getDefaultValue();
-      String jsonName = findOption("json_name", field.getOptions())
-          .map(o -> o.getValue().toString()).orElse(null);
+      String jsonName = field.getJsonName();
       Boolean isPacked = findOption("packed", field.getOptions())
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
       ProtoType protoType = ProtoType.get(fieldType);
