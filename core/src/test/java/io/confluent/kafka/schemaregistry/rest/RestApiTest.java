@@ -144,6 +144,36 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRegisterBadDefault() throws Exception {
+    String subject = "testSubject";
+
+    String schemaString = "{\"type\":\"record\","
+            + "\"name\":\"myrecord\","
+            + "\"fields\":"
+            + "[{\"type\":\"string\",\"default\":null,\"name\":"
+            + "\"f" + "\"}]}";
+    String schema = AvroUtils.parseSchema(schemaString).canonicalString();
+
+    try {
+      restApp.restClient.testCompatibility(schema, subject, "latest");
+      fail("Testing compatibility for schema with invalid default should fail with "
+              + Errors.INVALID_SCHEMA_ERROR_CODE
+              + " (invalid schema)");
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+
+    try {
+      restApp.restClient.registerSchema(schema, subject);
+      fail("Registering schema with invalid default should fail with "
+              + Errors.INVALID_SCHEMA_ERROR_CODE
+              + " (invalid schema)");
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+  @Test
   public void testCompatibleSchemaLookupBySubject() throws Exception {
     String subject = "testSubject";
     int numRegisteredSchemas = 0;

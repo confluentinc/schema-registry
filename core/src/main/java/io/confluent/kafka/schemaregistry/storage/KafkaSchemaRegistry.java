@@ -424,10 +424,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       // Ensure cache is up-to-date before any potential writes
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
 
-      ParsedSchema parsedSchema = canonicalizeSchema(schema);
+      int schemaId = schema.getId();
+      ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0);
 
       // see if the schema to be registered already exists
-      int schemaId = schema.getId();
       SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
       if (schemaIdAndSubjects != null) {
         if (schemaId >= 0 && schemaId != schemaIdAndSubjects.getSchemaId()) {
@@ -725,7 +725,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     try {
-      ParsedSchema parsedSchema = canonicalizeSchema(schema);
+      ParsedSchema parsedSchema = canonicalizeSchema(schema, false);
       SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
       if (schemaIdAndSubjects != null) {
         if (schemaIdAndSubjects.hasSubject(subject)
@@ -876,14 +876,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private ParsedSchema canonicalizeSchema(Schema schema) throws InvalidSchemaException {
+  private ParsedSchema canonicalizeSchema(Schema schema, boolean isNew) throws InvalidSchemaException {
     if (schema == null
         || schema.getSchema() == null
         || schema.getSchema().trim().isEmpty()) {
       log.error("Empty schema");
       throw new InvalidSchemaException("Empty schema");
     }
-    ParsedSchema parsedSchema = parseSchema(schema);
+    ParsedSchema parsedSchema = parseSchema(schema, isNew);
     try {
       parsedSchema.validate();
     } catch (Exception e) {
@@ -897,13 +897,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
-    return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences());
+    return parseSchema(schema, false);
+  }
+
+  private ParsedSchema parseSchema(Schema schema, boolean isNew) throws InvalidSchemaException {
+    return parseSchema(schema.getSchemaType(), schema.getSchema(), schema.getReferences(), isNew);
   }
 
   public ParsedSchema parseSchema(
       String schemaType,
       String schema,
-      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
+      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
+      boolean isNew)
       throws InvalidSchemaException {
     if (schemaType == null) {
       schemaType = AvroSchema.TYPE;
@@ -915,7 +920,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throw new InvalidSchemaException(errMsg);
     }
     final String type = schemaType;
-    ParsedSchema parsedSchema = provider.parseSchema(schema, references)
+    ParsedSchema parsedSchema = provider.parseSchema(schema, references, isNew)
             .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
                     + " with refs " + references + " of type " + type));
     return parsedSchema;
@@ -1003,7 +1008,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         : null;
     schemaString.setReferences(refs);
     if (format != null && !format.trim().isEmpty()) {
-      ParsedSchema parsedSchema = parseSchema(schema.getSchemaType(), schema.getSchema(), refs);
+      ParsedSchema parsedSchema =
+              parseSchema(schema.getSchemaType(), schema.getSchema(), refs, false);
       schemaString.setSchemaString(parsedSchema.formattedString(format));
     } else {
       schemaString.setSchemaString(schema.getSchema());
@@ -1313,7 +1319,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       prevParsedSchemas.add(prevParsedSchema);
     }
 
-    ParsedSchema parsedSchema = canonicalizeSchema(newSchema);
+    ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true);
     return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas);
   }
 

@@ -35,10 +35,11 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
 
   @Override
   public Optional<ParsedSchema> parseSchema(String schemaString,
-                                            List<SchemaReference> references) {
+                                            List<SchemaReference> references,
+                                            boolean isNew) {
     try {
       return Optional.of(
-          new AvroSchema(schemaString, references, resolveReferences(references), null));
+          new AvroSchema(schemaString, references, resolveReferences(references), null, isNew));
     } catch (Exception e) {
       log.error("Could not parse Avro schema", e);
       return Optional.empty();
