@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
+import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
@@ -226,6 +227,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   @SuppressWarnings("unchecked")
   private Schema getSpecificReaderSchema(Schema writerSchema) {
+    if (writerSchema.getType() == Type.UNION) {
+      // Otherwise the readerClass will be Object
+      return writerSchema;
+    }
     Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
     if (readerClass == null) {
       throw new SerializationException("Could not find class "

@@ -305,6 +305,46 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerWithMultiTypeUnionSpecific() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+            false,
+            KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+            true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+            true
+    );
+    IndexedRecord record = createSpecificAvroRecord();
+    AvroSchema schema = new AvroSchema(record.getSchema());
+    schemaRegistry.register("user", schema);
+    schemaRegistry.register("account", new AvroSchema(createAccountSchema()));
+    schemaRegistry.register(topic + "-value",
+            new AvroSchema("[ \"io.confluent.kafka.example.User\", \"example.avro.Account\" ]",
+                    ImmutableList.of(
+                            new SchemaReference("io.confluent.kafka.example.User", "user", 1),
+                            new SchemaReference("example.avro.Account", "account", 1)
+                    ),
+                    ImmutableMap.of(
+                            "io.confluent.kafka.example.User",
+                            schema.toString(),
+                            "example.avro.Account",
+                            createAccountSchema().toString()
+                    ),
+                    null
+            ));
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+    byte[] bytes1 = avroSerializer.serialize(topic, record);
+    assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+  }
+
+  @Test
   public void testKafkaAvroSerializerWithProjection() {
     byte[] bytes;
     Object obj;
