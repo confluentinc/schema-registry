@@ -740,8 +740,7 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      // Remove comments, such as the location
-      canonicalString = ProtobufSchemaUtils.toString(schemaObj).replaceAll("//.*?\\n", "");
+      canonicalString = ProtobufSchemaUtils.toString(schemaObj);
     }
     return canonicalString;
   }
