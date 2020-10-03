@@ -562,7 +562,7 @@ public class ProtobufSchema implements ParsedSchema {
   private static DynamicSchema toDynamicSchema(
       String name, ProtoFileElement rootElem, Map<String, ProtoFileElement> dependencies
   ) {
-    log.trace("*** toDynamicSchema: {}", rootElem.toSchema());
+    log.trace("*** toDynamicSchema: {}", ProtobufSchemaUtils.toString(rootElem));
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     try {
       Syntax syntax = rootElem.getSyntax();
@@ -741,7 +741,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
     if (canonicalString == null) {
       // Remove comments, such as the location
-      canonicalString = schemaObj.toSchema().replaceAll("//.*?\\n", "");
+      canonicalString = ProtobufSchemaUtils.toString(schemaObj).replaceAll("//.*?\\n", "");
     }
     return canonicalString;
   }
@@ -767,7 +767,8 @@ public class ProtobufSchema implements ParsedSchema {
   public Map<String, String> resolvedReferences() {
     return dependencies.entrySet()
         .stream()
-        .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toSchema()));
+        .collect(Collectors.toMap(
+                Map.Entry::getKey, e -> ProtobufSchemaUtils.toString(e.getValue())));
   }
 
   public Map<String, ProtoFileElement> dependencies() {
