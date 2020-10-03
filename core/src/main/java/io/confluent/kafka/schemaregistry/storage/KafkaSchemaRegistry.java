@@ -906,11 +906,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   public ParsedSchema parseSchema(
-      String schemaType,
-      String schema,
-      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
-      boolean isNew)
-      throws InvalidSchemaException {
+          String schemaType,
+          String schema,
+          List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
+       throws InvalidSchemaException {
+    return parseSchema(schemaType, schema, references, false);
+  }
+
+  public ParsedSchema parseSchema(
+          String schemaType,
+          String schema,
+          List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
+          boolean isNew) throws InvalidSchemaException {
     if (schemaType == null) {
       schemaType = AvroSchema.TYPE;
     }
