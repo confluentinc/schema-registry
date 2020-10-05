@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -78,6 +79,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   // Noop key is only used to help reliably determine last offset; reader thread ignores
   // messages with this key
   private final K noopKey;
+  private final AtomicBoolean initialized;
 
   private Properties consumerProps = new Properties();
 
@@ -89,6 +91,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 Store<K, V> localStore,
                                 Producer<byte[], byte[]> producer,
                                 K noopKey,
+                                AtomicBoolean initialized,
                                 SchemaRegistryConfig config) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     offsetUpdateLock = new ReentrantLock();
@@ -100,6 +103,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.localStore = localStore;
     this.producer = producer;
     this.noopKey = noopKey;
+    this.initialized = initialized;
 
     if (localStore.isPersistent()) {
       try {
@@ -267,7 +271,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         }
       }
       storeUpdateHandler.checkpoint(records.count());
-      if (localStore.isPersistent()) {
+      if (localStore.isPersistent() && initialized.get()) {
         try {
           localStore.flush();
           checkpointOffsets();
