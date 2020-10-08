@@ -66,7 +66,8 @@ public class AvroSchema implements ParsedSchema {
                     Map<String, String> resolvedReferences,
                     Integer version,
                     boolean isNew) {
-    Schema.Parser parser = getParser(isNew);
+    this.isNew = isNew;
+    Schema.Parser parser = getParser();
     for (String schema : resolvedReferences.values()) {
       parser.parse(schema);
     }
@@ -74,7 +75,6 @@ public class AvroSchema implements ParsedSchema {
     this.references = Collections.unmodifiableList(references);
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.version = version;
-    this.isNew = isNew;
   }
 
   public AvroSchema(Schema schemaObj) {
@@ -82,11 +82,11 @@ public class AvroSchema implements ParsedSchema {
   }
 
   public AvroSchema(Schema schemaObj, Integer version) {
+    this.isNew = false;
     this.schemaObj = schemaObj;
     this.references = Collections.emptyList();
     this.resolvedReferences = Collections.emptyMap();
     this.version = version;
-    this.isNew = false;
   }
 
   private AvroSchema(
@@ -97,12 +97,12 @@ public class AvroSchema implements ParsedSchema {
       Integer version,
       boolean isNew
   ) {
+    this.isNew = isNew;
     this.schemaObj = schemaObj;
     this.canonicalString = canonicalString;
     this.references = references;
     this.resolvedReferences = resolvedReferences;
     this.version = version;
-    this.isNew = isNew;
   }
 
   public AvroSchema copy() {
@@ -116,9 +116,9 @@ public class AvroSchema implements ParsedSchema {
     );
   }
 
-  protected Schema.Parser getParser(boolean isNew) {
+  protected Schema.Parser getParser() {
     Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(isNew);
+    parser.setValidateDefaults(isNew());
     return parser;
   }
 
@@ -146,7 +146,7 @@ public class AvroSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      Schema.Parser parser = getParser(isNew);
+      Schema.Parser parser = getParser();
       List<Schema> schemaRefs = new ArrayList<>();
       for (String schema : resolvedReferences.values()) {
         Schema schemaRef = parser.parse(schema);
@@ -168,6 +168,10 @@ public class AvroSchema implements ParsedSchema {
 
   public Map<String, String> resolvedReferences() {
     return resolvedReferences;
+  }
+
+  public boolean isNew() {
+    return isNew;
   }
 
   @Override
