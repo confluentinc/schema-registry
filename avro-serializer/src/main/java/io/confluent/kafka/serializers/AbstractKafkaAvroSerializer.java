@@ -73,14 +73,14 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     try {
       int id;
       if (autoRegisterSchema) {
-        restClientErrorMsg = "Error registering Avro schema: ";
+        restClientErrorMsg = "Error registering Avro schema";
         id = schemaRegistry.register(subject, schema);
       } else if (useLatestVersion) {
-        restClientErrorMsg = "Error retrieving latest version: ";
+        restClientErrorMsg = "Error retrieving latest version of Avro schema";
         schema = (AvroSchema) lookupLatestVersion(subject, schema);
         id = schemaRegistry.getId(subject, schema);
       } else {
-        restClientErrorMsg = "Error retrieving Avro schema: ";
+        restClientErrorMsg = "Error retrieving Avro schema";
         id = schemaRegistry.getId(subject, schema);
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -122,7 +122,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       // ClassCastException, etc
       throw new SerializationException("Error serializing Avro message", e);
     } catch (RestClientException e) {
-      throw new SerializationException(restClientErrorMsg + schema, e);
+      throw new SerializationException(restClientErrorMsg + " for subject " + subject
+              + " and schema: " + schema, e);
     }
   }
 }

@@ -169,6 +169,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     super(config, props);
   }
 
+  public AbstractKafkaSchemaSerDeConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
+    super(definition, originals, doLog);
+  }
+
   public int getMaxSchemasPerSubject() {
     return this.getInt(MAX_SCHEMAS_PER_SUBJECT_CONFIG);
   }
