@@ -194,19 +194,17 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
               }
               this.storeUpdateHandler.handleUpdate(messageKey, message, oldMessage);
             } else {
-              if (localStore.get(messageKey) == null) {
-                try {
-                  ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
-                      topic,
-                      0,
-                      record.key(),
-                      null
-                  );
-                  producer.send(producerRecord);
-                  log.debug("Tombstoned invalid key {}", messageKey);
-                } catch (KafkaException ke) {
-                  log.warn("Failed to tombstone invalid key {}", messageKey, ke);
-                }
+              V oldMessage = localStore.get(messageKey);
+              try {
+                ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                    topic,
+                    record.key(),
+                    oldMessage == null ? null : serializer.serializeValue(oldMessage)
+                );
+                producer.send(producerRecord);
+                log.warn("Ignore invalid update to key {}", messageKey);
+              } catch (KafkaException | SerializationException ke) {
+                log.error("Failed to recover from invalid update to key {}", messageKey, ke);
               }
             }
             try {
