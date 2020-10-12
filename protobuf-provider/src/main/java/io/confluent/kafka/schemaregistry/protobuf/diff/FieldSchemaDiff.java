@@ -45,7 +45,7 @@ public class FieldSchemaDiff {
     if (originalType != null && originalType.isMap()) {
       original = originalType.getMapType();
     }
-    TypeElementInfo updateType = ctx.getType(update.toString(), true);
+    TypeElementInfo updateType = ctx.getType(update.toString(), false);
     if (updateType != null && updateType.isMap()) {
       update = updateType.getMapType();
     }
