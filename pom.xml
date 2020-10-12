@@ -339,7 +339,7 @@
                 <plugin>
                     <groupId>com.github.os72</groupId>
                     <artifactId>protoc-jar-maven-plugin</artifactId>
-                    <version>3.11.1</version>
+                    <version>3.11.4</version>
                     <executions>
                         <execution>
                             <phase>generate-test-sources</phase>
