@@ -257,7 +257,7 @@
     "changes": [
       "MESSAGE_REMOVED #/GoogleHome"
     ],
-    "compatible": true
+    "compatible": false
   },
   {
     "description": "Detect moving from import",

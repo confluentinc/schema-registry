@@ -24,6 +24,7 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,7 +59,6 @@ public class SchemaDiff {
 
     changes.add(PACKAGE_CHANGED);
     changes.add(MESSAGE_ADDED);
-    changes.add(MESSAGE_REMOVED);
     changes.add(ENUM_ADDED);
     changes.add(ENUM_REMOVED);
     changes.add(ENUM_CONST_ADDED);
@@ -185,9 +185,15 @@ public class SchemaDiff {
         MessageElement originalMessage = originalMessages.get(name);
         MessageElement updateMessage = updateMessages.get(name);
         if (updateMessage == null) {
-          ctx.addDifference(MESSAGE_REMOVED);
+          TypeElementInfo originalType = ctx.getType(name, true);
+          if (originalType != null && !originalType.isMap()) {
+            ctx.addDifference(MESSAGE_REMOVED);
+          }
         } else if (originalMessage == null) {
-          ctx.addDifference(MESSAGE_ADDED);
+          TypeElementInfo updateType = ctx.getType(name, false);
+          if (updateType != null && !updateType.isMap()) {
+            ctx.addDifference(MESSAGE_ADDED);
+          }
         } else {
           MessageSchemaDiff.compare(ctx, originalMessage, updateMessage);
         }
