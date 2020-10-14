@@ -687,7 +687,7 @@ public class ProtobufData {
       label = "repeated";
     }
     Map<String, String> params = new HashMap<>();
-    String type = dataTypeFromConnectSchema(fieldSchema, params);
+    String type = dataTypeFromConnectSchema(fieldSchema, name, params);
     if (fieldSchema.type() == Schema.Type.STRUCT) {
       String fieldSchemaName = fieldSchema.name();
       if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
@@ -867,10 +867,8 @@ public class ProtobufData {
     return enumer.build();
   }
 
-<<<<<<< HEAD
-  private String dataTypeFromConnectSchema(Schema schema, String fieldName) {
-=======
-  private String dataTypeFromConnectSchema(Schema schema, Map<String, String> params) {
+  private String dataTypeFromConnectSchema(
+      Schema schema, String fieldName, Map<String, String> params) {
     if (isDecimalSchema(schema)) {
       if (schema.parameters() != null) {
         String scale = schema.parameters().get(Decimal.SCALE_FIELD);
@@ -884,7 +882,6 @@ public class ProtobufData {
     } else if (isTimestampSchema(schema)) {
       return PROTOBUF_TIMESTAMP_TYPE;
     }
->>>>>>> cd2f82ee... DG-615 Add logical types to Protobuf converter
     switch (schema.type()) {
       case INT8:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT8);

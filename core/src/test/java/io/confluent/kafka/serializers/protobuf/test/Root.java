@@ -31,17 +31,17 @@ public final class Root {
         getRootIdBytes();
 
     /**
-     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
      * @return Whether the ref field is set.
      */
     boolean hasRef();
     /**
-     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
      * @return The ref.
      */
     io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage getRef();
     /**
-     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
      */
     io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessageOrBuilder getRefOrBuilder();
   }
@@ -181,21 +181,21 @@ public final class Root {
     public static final int REF_FIELD_NUMBER = 2;
     private io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage ref_;
     /**
-     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
      * @return Whether the ref field is set.
      */
     public boolean hasRef() {
       return ref_ != null;
     }
     /**
-     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
      * @return The ref.
      */
     public io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage getRef() {
       return ref_ == null ? io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage.getDefaultInstance() : ref_;
     }
     /**
-     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+     * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
      */
     public io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessageOrBuilder getRefOrBuilder() {
       return getRef();
@@ -613,14 +613,14 @@ public final class Root {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage, io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage.Builder, io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessageOrBuilder> refBuilder_;
       /**
-       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
        * @return Whether the ref field is set.
        */
       public boolean hasRef() {
         return refBuilder_ != null || ref_ != null;
       }
       /**
-       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
        * @return The ref.
        */
       public io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage getRef() {
@@ -631,7 +631,7 @@ public final class Root {
         }
       }
       /**
-       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
        */
       public Builder setRef(io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage value) {
         if (refBuilder_ == null) {
@@ -647,7 +647,7 @@ public final class Root {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
        */
       public Builder setRef(
           io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage.Builder builderForValue) {
@@ -661,7 +661,7 @@ public final class Root {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
        */
       public Builder mergeRef(io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage value) {
         if (refBuilder_ == null) {
@@ -679,7 +679,7 @@ public final class Root {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
        */
       public Builder clearRef() {
         if (refBuilder_ == null) {
@@ -693,7 +693,7 @@ public final class Root {
         return this;
       }
       /**
-       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
        */
       public io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage.Builder getRefBuilder() {
         
@@ -701,7 +701,7 @@ public final class Root {
         return getRefFieldBuilder().getBuilder();
       }
       /**
-       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
        */
       public io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessageOrBuilder getRefOrBuilder() {
         if (refBuilder_ != null) {
@@ -712,7 +712,7 @@ public final class Root {
         }
       }
       /**
-       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2;</code>
+       * <code>.io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(.confluent.field_meta) = { ... }</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage, io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessage.Builder, io.confluent.kafka.serializers.protobuf.test.Ref.ReferencedMessageOrBuilder> 
@@ -795,15 +795,18 @@ public final class Root {
   static {
     java.lang.String[] descriptorData = {
       "\n\nroot.proto\022,io.confluent.kafka.seriali" +
-      "zers.protobuf.test\032\tref.proto\"p\n\017Referre" +
-      "rMessage\022\017\n\007root_id\030\001 \001(\t\022L\n\003ref\030\002 \001(\0132?" +
-      ".io.confluent.kafka.serializers.protobuf" +
-      ".test.ReferencedMessageb\006proto3"
+      "zers.protobuf.test\032\tref.proto\032\024confluent" +
+      "/meta.proto\"\236\001\n\017ReferrerMessage\022\017\n\007root_" +
+      "id\030\001 \001(\t\022d\n\003ref\030\002 \001(\0132?.io.confluent.kaf" +
+      "ka.serializers.protobuf.test.ReferencedM" +
+      "essageB\026\202D\023\n\021ReferencedMessage:\024\202D\021\n\017Ref" +
+      "errerMessageb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
           io.confluent.kafka.serializers.protobuf.test.Ref.getDescriptor(),
+          io.confluent.protobuf.MetaProto.getDescriptor(),
         });
     internal_static_io_confluent_kafka_serializers_protobuf_test_ReferrerMessage_descriptor =
       getDescriptor().getMessageTypes().get(0);
@@ -811,7 +814,14 @@ public final class Root {
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_io_confluent_kafka_serializers_protobuf_test_ReferrerMessage_descriptor,
         new java.lang.String[] { "RootId", "Ref", });
+    com.google.protobuf.ExtensionRegistry registry =
+        com.google.protobuf.ExtensionRegistry.newInstance();
+    registry.add(io.confluent.protobuf.MetaProto.fieldMeta);
+    registry.add(io.confluent.protobuf.MetaProto.messageMeta);
+    com.google.protobuf.Descriptors.FileDescriptor
+        .internalUpdateFileDescriptor(descriptor, registry);
     io.confluent.kafka.serializers.protobuf.test.Ref.getDescriptor();
+    io.confluent.protobuf.MetaProto.getDescriptor();
   }
 
   // @@protoc_insertion_point(outer_class_scope)

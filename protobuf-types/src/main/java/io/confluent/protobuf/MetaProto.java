@@ -24,19 +24,11 @@ public final class MetaProto {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <pre>
-     * Documentation string
-     * </pre>
-     *
      * <code>string doc = 1;</code>
      * @return The doc.
      */
     java.lang.String getDoc();
     /**
-     * <pre>
-     * Documentation string
-     * </pre>
-     *
      * <code>string doc = 1;</code>
      * @return The bytes for doc.
      */
@@ -44,18 +36,10 @@ public final class MetaProto {
         getDocBytes();
 
     /**
-     * <pre>
-     * Parameters
-     * </pre>
-     *
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
     int getParamsCount();
     /**
-     * <pre>
-     * Parameters
-     * </pre>
-     *
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
     boolean containsParams(
@@ -67,19 +51,11 @@ public final class MetaProto {
     java.util.Map<java.lang.String, java.lang.String>
     getParams();
     /**
-     * <pre>
-     * Parameters
-     * </pre>
-     *
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
     java.util.Map<java.lang.String, java.lang.String>
     getParamsMap();
     /**
-     * <pre>
-     * Parameters
-     * </pre>
-     *
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
 
@@ -87,10 +63,6 @@ public final class MetaProto {
         java.lang.String key,
         java.lang.String defaultValue);
     /**
-     * <pre>
-     * Parameters
-     * </pre>
-     *
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
 
@@ -210,10 +182,6 @@ public final class MetaProto {
     public static final int DOC_FIELD_NUMBER = 1;
     private volatile java.lang.Object doc_;
     /**
-     * <pre>
-     * Documentation string
-     * </pre>
-     *
      * <code>string doc = 1;</code>
      * @return The doc.
      */
@@ -230,10 +198,6 @@ public final class MetaProto {
       }
     }
     /**
-     * <pre>
-     * Documentation string
-     * </pre>
-     *
      * <code>string doc = 1;</code>
      * @return The bytes for doc.
      */
@@ -278,10 +242,6 @@ public final class MetaProto {
       return internalGetParams().getMap().size();
     }
     /**
-     * <pre>
-     * Parameters
-     * </pre>
-     *
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
 
@@ -298,10 +258,6 @@ public final class MetaProto {
       return getParamsMap();
     }
     /**
-     * <pre>
-     * Parameters
-     * </pre>
-     *
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
 
@@ -309,10 +265,6 @@ public final class MetaProto {
       return internalGetParams().getMap();
     }
     /**
-     * <pre>
-     * Parameters
-     * </pre>
-     *
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
 
@@ -325,10 +277,6 @@ public final class MetaProto {
       return map.containsKey(key) ? map.get(key) : defaultValue;
     }
     /**
-     * <pre>
-     * Parameters
-     * </pre>
-     *
      * <code>map&lt;string, string&gt; params = 2;</code>
      */
 
@@ -698,10 +646,6 @@ public final class MetaProto {
 
       private java.lang.Object doc_ = "";
       /**
-       * <pre>
-       * Documentation string
-       * </pre>
-       *
        * <code>string doc = 1;</code>
        * @return The doc.
        */
@@ -718,10 +662,6 @@ public final class MetaProto {
         }
       }
       /**
-       * <pre>
-       * Documentation string
-       * </pre>
-       *
        * <code>string doc = 1;</code>
        * @return The bytes for doc.
        */
@@ -739,10 +679,6 @@ public final class MetaProto {
         }
       }
       /**
-       * <pre>
-       * Documentation string
-       * </pre>
-       *
        * <code>string doc = 1;</code>
        * @param value The doc to set.
        * @return This builder for chaining.
@@ -758,10 +694,6 @@ public final class MetaProto {
         return this;
       }
       /**
-       * <pre>
-       * Documentation string
-       * </pre>
-       *
        * <code>string doc = 1;</code>
        * @return This builder for chaining.
        */
@@ -772,10 +704,6 @@ public final class MetaProto {
         return this;
       }
       /**
-       * <pre>
-       * Documentation string
-       * </pre>
-       *
        * <code>string doc = 1;</code>
        * @param value The bytes for doc to set.
        * @return This builder for chaining.
@@ -819,10 +747,6 @@ public final class MetaProto {
         return internalGetParams().getMap().size();
       }
       /**
-       * <pre>
-       * Parameters
-       * </pre>
-       *
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
 
@@ -839,10 +763,6 @@ public final class MetaProto {
         return getParamsMap();
       }
       /**
-       * <pre>
-       * Parameters
-       * </pre>
-       *
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
 
@@ -850,10 +770,6 @@ public final class MetaProto {
         return internalGetParams().getMap();
       }
       /**
-       * <pre>
-       * Parameters
-       * </pre>
-       *
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
 
@@ -866,10 +782,6 @@ public final class MetaProto {
         return map.containsKey(key) ? map.get(key) : defaultValue;
       }
       /**
-       * <pre>
-       * Parameters
-       * </pre>
-       *
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
 
@@ -890,10 +802,6 @@ public final class MetaProto {
         return this;
       }
       /**
-       * <pre>
-       * Parameters
-       * </pre>
-       *
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
 
@@ -913,10 +821,6 @@ public final class MetaProto {
         return internalGetMutableParams().getMutableMap();
       }
       /**
-       * <pre>
-       * Parameters
-       * </pre>
-       *
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
       public Builder putParams(
@@ -929,10 +833,6 @@ public final class MetaProto {
         return this;
       }
       /**
-       * <pre>
-       * Parameters
-       * </pre>
-       *
        * <code>map&lt;string, string&gt; params = 2;</code>
        */
 
