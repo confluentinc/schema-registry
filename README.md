@@ -147,10 +147,10 @@ To run the unit and integration tests:
 mvn test
 ```
 
-To run an instance of Schema Registry against a local Kafka cluster (using the default configuration included with Kafka):
+To run an instance of Schema Registry against a local Kafka cluster (using the default configuration file):
 
 ```bash
-mvn exec:java
+mvn exec:java -pl :kafka-schema-registry -Dexec.args="config/schema-registry.properties"
 ```
 
 To create a packaged version, optionally skipping the tests:
