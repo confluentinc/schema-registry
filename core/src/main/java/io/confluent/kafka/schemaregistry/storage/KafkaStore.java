@@ -300,9 +300,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * Wait until the KafkaStore catches up to the given offset in the Kafka topic.
    */
   private void waitUntilKafkaReaderReachesOffset(long offset, int timeoutMs) throws StoreException {
-    log.info("Wait to catch up until the offset at " + offset);
+    log.info("Wait to catch up until the offset at {}", offset);
     kafkaTopicReader.waitUntilOffset(offset, timeoutMs, TimeUnit.MILLISECONDS);
-    log.info("Reached offset at " + offset);
+    log.info("Reached offset at {}", offset);
   }
 
   public void markLastWrittenOffsetInvalid() {
