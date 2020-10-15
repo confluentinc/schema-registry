@@ -403,7 +403,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
     try {
       if (kafkaTopicReader != null) {
         kafkaTopicReader.shutdown();
-        log.info("Kafka store reader thread shut down");
       }
       if (producer != null) {
         producer.close();
