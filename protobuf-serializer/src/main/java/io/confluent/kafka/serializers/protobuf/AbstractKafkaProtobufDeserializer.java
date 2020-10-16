@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
+import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import java.util.Objects;
@@ -129,8 +130,6 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         schema = schemaWithName(schema, name);
       }
 
-      log.info("62f7197218b16a40 deserialize topic: {} isKey: {} name: {} subject: {} schema: {}", topic, isKey, name, subject, schema);
-
       int length = buffer.limit() - 1 - idSize;
       int start = buffer.position() + buffer.arrayOffset();
 
@@ -144,6 +143,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else if (deriveType) {
         value = deriveType(buffer, schema);
       } else {
+        Descriptor descriptor = schema.toDescriptor();
+        if (descriptor == null) {
+          log.info("62f7197218b16a40 deserialize topic: {} isKey: {} name: {} subject: {} schema: {}", topic, isKey, name, subject, schema);
+        }
         value = DynamicMessage.parseFrom(schema.toDescriptor(),
             new ByteArrayInputStream(buffer.array(), start, length)
         );

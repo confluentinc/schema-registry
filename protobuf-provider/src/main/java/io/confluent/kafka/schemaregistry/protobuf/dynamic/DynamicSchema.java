@@ -39,11 +39,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * DynamicSchema
  */
 public class DynamicSchema {
+  private static final Logger log = LoggerFactory.getLogger(DynamicSchema.class);
+
   // --- public static ---
 
   /**
@@ -122,6 +126,11 @@ public class DynamicSchema {
     Descriptor msgType = mMsgDescriptorMapShort.get(msgTypeName);
     if (msgType == null) {
       msgType = mMsgDescriptorMapFull.get(msgTypeName);
+    }
+    if (msgType == null) {
+      log.info("62f7197218b16a40 -> getMessageDescriptor() : msgTypeName = {}", msgTypeName);
+      log.info("62f7197218b16a40 -> getMessageDescriptor() : short names = {}", mMsgDescriptorMapShort.keySet());
+      log.info("62f7197218b16a40 -> getMessageDescriptor() : full names = {}", mMsgDescriptorMapFull.keySet());
     }
     return msgType;
   }
