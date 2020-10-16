@@ -129,8 +129,10 @@ public class DynamicSchema {
     }
     if (msgType == null) {
       log.info("62f7197218b16a40 -> getMessageDescriptor() : msgTypeName = {}", msgTypeName);
-      log.info("62f7197218b16a40 -> getMessageDescriptor() : short names = {}", mMsgDescriptorMapShort.keySet());
-      log.info("62f7197218b16a40 -> getMessageDescriptor() : full names = {}", mMsgDescriptorMapFull.keySet());
+      log.info("62f7197218b16a40 -> getMessageDescriptor() : short names = {}",
+          mMsgDescriptorMapShort.keySet());
+      log.info("62f7197218b16a40 -> getMessageDescriptor() : full names = {}",
+          mMsgDescriptorMapFull.keySet());
     }
     return msgType;
   }

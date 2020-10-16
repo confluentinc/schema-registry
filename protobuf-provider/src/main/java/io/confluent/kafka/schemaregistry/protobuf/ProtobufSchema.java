@@ -521,7 +521,8 @@ public class ProtobufSchema implements ParsedSchema {
       descriptor = toDescriptor(name());
     }
     if (descriptor == null) {
-      log.info("62f7197218b16a40 -> toDescriptor() : schemaObj = {}, descriptor =  {}", schemaObj, descriptor);
+      log.info("62f7197218b16a40 -> toDescriptor() : schemaObj = {}, descriptor =  {}",
+          schemaObj, descriptor);
     }
     return descriptor;
   }
