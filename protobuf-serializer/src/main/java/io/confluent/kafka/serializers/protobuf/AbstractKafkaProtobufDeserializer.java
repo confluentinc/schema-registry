@@ -39,9 +39,13 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
+
+  private static final Logger log = LoggerFactory.getLogger(AbstractKafkaProtobufDeserializer.class);
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
@@ -124,6 +128,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         schema = schemaForDeserialize(id, schema, subject, isKey);
         schema = schemaWithName(schema, name);
       }
+
+      log.debug("62f7197218b16a40 deserialize topic: {} isKey: {} name: {} subject: {} schema: {}", topic, isKey, name, subject, schema);
 
       int length = buffer.limit() - 1 - idSize;
       int start = buffer.position() + buffer.arrayOffset();
