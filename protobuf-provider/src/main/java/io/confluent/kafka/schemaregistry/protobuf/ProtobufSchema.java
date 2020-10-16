@@ -513,7 +513,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
-  private Descriptor toDescriptor() {
+  public Descriptor toDescriptor() {
     if (schemaObj == null) {
       return null;
     }
