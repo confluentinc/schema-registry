@@ -129,7 +129,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         schema = schemaWithName(schema, name);
       }
 
-      log.debug("62f7197218b16a40 deserialize topic: {} isKey: {} name: {} subject: {} schema: {}", topic, isKey, name, subject, schema);
+      log.info("62f7197218b16a40 deserialize topic: {} isKey: {} name: {} subject: {} schema: {}", topic, isKey, name, subject, schema);
 
       int length = buffer.limit() - 1 - idSize;
       int start = buffer.position() + buffer.arrayOffset();
