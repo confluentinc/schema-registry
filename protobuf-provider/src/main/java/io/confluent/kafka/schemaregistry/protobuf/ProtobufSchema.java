@@ -513,22 +513,17 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
-  private Descriptor toDescriptorInt() {
+  public Descriptor toDescriptor() {
     if (schemaObj == null) {
       return null;
     }
     if (descriptor == null) {
       descriptor = toDescriptor(name());
     }
+    if (descriptor == null) {
+      log.info("62f7197218b16a40 -> toDescriptor() : schemaObj = {}, descriptor =  {}", schemaObj, descriptor);
+    }
     return descriptor;
-  }
-
-  public Descriptor toDescriptor() {
-    log.info("62f7197218b16a40 -> toDescriptor() : schemaObj = {}, descriptor =  {}",
-        schemaObj, descriptor);
-    Descriptor ret = toDescriptorInt();
-    log.info("62f7197218b16a40 <- toDescriptor() returning {}", ret);
-    return ret;
   }
 
   public Descriptor toDescriptor(String name) {
