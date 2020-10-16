@@ -146,8 +146,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else {
         Descriptor descriptor = schema.toDescriptor();
         if (descriptor == null) {
-          log.info("62f7197218b16a40 deserialize id: {} includeSchema: {} " +
-                  " topic: {} isKey: {} name: {} subject: {} schema: {}",
+          log.info("62f7197218b16a40 deserialize id: {} includeSchema: {} "
+                   + " topic: {} isKey: {} name: {} subject: {} schema: {}",
               id, includeSchemaAndVersion, topic, isKey, name, subject, schema);
         }
         value = DynamicMessage.parseFrom(descriptor,
