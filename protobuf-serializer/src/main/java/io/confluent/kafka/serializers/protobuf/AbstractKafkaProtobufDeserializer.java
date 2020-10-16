@@ -46,7 +46,8 @@ import org.slf4j.LoggerFactory;
 public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
 
-  private static final Logger log = LoggerFactory.getLogger(AbstractKafkaProtobufDeserializer.class);
+  private static final Logger log =
+      LoggerFactory.getLogger(AbstractKafkaProtobufDeserializer.class);
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
