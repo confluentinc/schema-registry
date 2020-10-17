@@ -661,7 +661,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
         if (permanentDelete) {
           SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
-          if (!schemaValue.isDeleted()) {
+          if (schemaValue != null && !schemaValue.isDeleted()) {
             throw new SubjectNotSoftDeletedException(subject);
           }
         }
