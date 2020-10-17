@@ -589,7 +589,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         throw new ReferenceExistsException(key.toString());
       }
       SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
-      if (permanentDelete && !schemaValue.isDeleted()) {
+      if (permanentDelete && schemaValue != null && !schemaValue.isDeleted()) {
         throw new SchemaVersionNotSoftDeletedException(subject, schema.getVersion().toString());
       }
       // Ensure cache is up-to-date before any potential writes
