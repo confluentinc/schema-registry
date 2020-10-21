@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
+import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import java.util.Objects;
@@ -138,7 +139,11 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       } else if (deriveType) {
         value = deriveType(buffer, schema);
       } else {
-        value = DynamicMessage.parseFrom(schema.toDescriptor(),
+        Descriptor descriptor = schema.toDescriptor();
+        if (descriptor == null) {
+          throw new SerializationException("Could not find descriptor with name " + schema.name());
+        }
+        value = DynamicMessage.parseFrom(descriptor,
             new ByteArrayInputStream(buffer.array(), start, length)
         );
       }
