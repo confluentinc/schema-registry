@@ -910,7 +910,11 @@ public class ProtobufSchema implements ParsedSchema {
       sb.append(message.getName());
       types = message.getNestedTypes();
     }
-    return sb.toString();
+    String messageName = sb.toString();
+    String packageName = schemaObj.getPackageName();
+    return packageName != null && !packageName.isEmpty()
+        ? packageName + '.' + messageName
+        : messageName;
   }
 
   private MessageElement getMessageAtIndex(List<TypeElement> types, int index) {
