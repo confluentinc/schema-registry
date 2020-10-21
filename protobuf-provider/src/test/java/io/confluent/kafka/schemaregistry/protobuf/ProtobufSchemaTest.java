@@ -24,8 +24,12 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -413,11 +417,35 @@ public class ProtobufSchemaTest {
         + "}\n", protobufSchema.toString());
   }
 
+  @Test
+  public void testSameMessageName() throws Exception {
+    List<SchemaReference> refs = new ArrayList<>();
+    refs.add(new SchemaReference("TestProto.proto", "test1", 1));
+    refs.add(new SchemaReference("TestProto2.proto", "test1", 1));
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("TestProto.proto", readFile("TestProto.proto"));
+    resolved.put("TestProto2.proto", readFile("TestProto2.proto"));
+    ProtobufSchema schema = new ProtobufSchema(
+        readFile("SameMessageName.proto"), refs, resolved, null, null);
+
+    // DG-951 Ensure we can get the message in the schema,
+    // even though it has the same unqualified name as messages
+    // in one or more referenced schemas
+    assertNotNull(schema.toDescriptor(
+        schema.toMessageName(new MessageIndexes(Collections.singletonList(0)))));
+  }
+
   private static JsonNode jsonTree(String jsonData) {
     try {
       return objectMapper.readTree(jsonData);
     } catch (Exception e) {
       throw new RuntimeException("Failed to parse JSON", e);
     }
+  }
+
+  private static String readFile(String fileName) {
+    ResourceLoader resourceLoader = new ResourceLoader(
+        "/io/confluent/kafka/schemaregistry/protobuf/diff/");
+    return resourceLoader.toString(fileName);
   }
 }
