@@ -150,6 +150,10 @@ public class KafkaAvroSerializerTest {
         .build();
   }
 
+  private IndexedRecord createAnnotatedUserRecord() {
+    return io.confluent.kafka.example.annotated.User.newBuilder().setName("testUser").build();
+  }
+
   private IndexedRecord createInvalidAvroRecord() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
                         "\"name\": \"User\"," +
@@ -234,6 +238,26 @@ public class KafkaAvroSerializerTest {
     IndexedRecord avroRecord = createUserRecord();
     schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithPreRegisteredUseLatest()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
     assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
   }
