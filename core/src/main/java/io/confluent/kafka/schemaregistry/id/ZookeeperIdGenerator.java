@@ -34,7 +34,7 @@ public class ZookeeperIdGenerator implements IdGenerator {
 
   public static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_SIZE = 20;
   public static final String ZOOKEEPER_SCHEMA_ID_COUNTER = "/schema_id_counter";
-  private static final Logger log = LoggerFactory.getLogger(ZookeeperMasterElector.class);
+  private static final Logger log = LoggerFactory.getLogger(ZookeeperIdGenerator.class);
   private static final int ZOOKEEPER_SCHEMA_ID_COUNTER_BATCH_WRITE_RETRY_BACKOFF_MS = 50;
 
   private ZkUtils zkUtils;
