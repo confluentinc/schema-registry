@@ -51,7 +51,7 @@ import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 
 public class JsonSchema implements ParsedSchema {
 
-  private static final Logger log = LoggerFactory.getLogger(JsonSchemaProvider.class);
+  private static final Logger log = LoggerFactory.getLogger(JsonSchema.class);
 
   public static final String TYPE = "JSON";
 
