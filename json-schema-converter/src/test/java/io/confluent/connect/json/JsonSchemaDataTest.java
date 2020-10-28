@@ -904,6 +904,14 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectNumberConstInAllOf() {
+    JsonSchema jsonSchema = new JsonSchema("{\"const\":123.45,\"type\":\"number\"}");
+    CombinedSchema schema = (CombinedSchema) jsonSchema.rawSchema();
+    Schema expectedSchema = new SchemaBuilder(Type.FLOAT64).build();
+    checkNonObjectConversion(expectedSchema, 123.45, schema, DoubleNode.valueOf(123.45));
+  }
+
+  @Test
   public void testToConnectUnion() {
     NumberSchema firstSchema = NumberSchema.builder()
         .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
