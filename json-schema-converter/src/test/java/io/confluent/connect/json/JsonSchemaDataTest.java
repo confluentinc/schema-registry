@@ -866,22 +866,6 @@ public class JsonSchemaDataTest {
     checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
   }
 
-  @Test
-  public void testToConnectStringConstInAllOf() {
-    JsonSchema jsonSchema = new JsonSchema("{\"const\":\"money\",\"type\":\"string\"}");
-    CombinedSchema schema = (CombinedSchema) jsonSchema.rawSchema();
-    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).build();
-    checkNonObjectConversion(expectedSchema, "money", schema, TextNode.valueOf("money"));
-  }
-
-  @Test
-  public void testToConnectIntegerConstInAllOf() {
-    JsonSchema jsonSchema = new JsonSchema("{\"const\":123,\"type\":\"integer\"}");
-    CombinedSchema schema = (CombinedSchema) jsonSchema.rawSchema();
-    Schema expectedSchema = new SchemaBuilder(Type.INT64).build();
-    checkNonObjectConversion(expectedSchema, 123L, schema, LongNode.valueOf(123));
-  }
-
   @Test(expected = IllegalArgumentException.class)
   public void testToConnectIntEnumInAllOfIsInvalid() {
     NumberSchema numberSchema = NumberSchema.builder().build();
@@ -901,6 +885,22 @@ public class JsonSchemaDataTest {
         .build();
 
     checkNonObjectConversion(expectedSchema, 1, schema, IntNode.valueOf(1));
+  }
+
+  @Test
+  public void testToConnectStringConstInAllOf() {
+    JsonSchema jsonSchema = new JsonSchema("{\"const\":\"money\",\"type\":\"string\"}");
+    CombinedSchema schema = (CombinedSchema) jsonSchema.rawSchema();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).build();
+    checkNonObjectConversion(expectedSchema, "money", schema, TextNode.valueOf("money"));
+  }
+
+  @Test
+  public void testToConnectIntegerConstInAllOf() {
+    JsonSchema jsonSchema = new JsonSchema("{\"const\":123,\"type\":\"integer\"}");
+    CombinedSchema schema = (CombinedSchema) jsonSchema.rawSchema();
+    Schema expectedSchema = new SchemaBuilder(Type.INT64).build();
+    checkNonObjectConversion(expectedSchema, 123L, schema, LongNode.valueOf(123));
   }
 
   @Test
