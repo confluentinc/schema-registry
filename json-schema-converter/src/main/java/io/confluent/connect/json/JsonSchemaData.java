@@ -39,6 +39,7 @@ import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
@@ -980,11 +981,14 @@ public class JsonSchemaData {
 
   private Schema allOfToConnectSchema(
       CombinedSchema combinedSchema, Integer version, boolean forceOptional) {
+    ConstSchema constSchema = null;
     EnumSchema enumSchema = null;
     NumberSchema numberSchema = null;
     StringSchema stringSchema = null;
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
-      if (subSchema instanceof EnumSchema) {
+      if (subSchema instanceof ConstSchema) {
+        constSchema = (ConstSchema) subSchema;
+      } else if (subSchema instanceof EnumSchema) {
         enumSchema = (EnumSchema) subSchema;
       } else if (subSchema instanceof NumberSchema) {
         numberSchema = (NumberSchema) subSchema;
@@ -992,7 +996,11 @@ public class JsonSchemaData {
         stringSchema = (StringSchema) subSchema;
       }
     }
-    if (enumSchema != null && stringSchema != null) {
+    if (constSchema != null && stringSchema != null) {
+      return toConnectSchema(stringSchema, version, forceOptional);
+    } else if (constSchema != null && numberSchema != null) {
+      return toConnectSchema(numberSchema, version, forceOptional);
+    } else if (enumSchema != null && stringSchema != null) {
       // This is a string enum
       return toConnectSchema(enumSchema, version, forceOptional);
     } else if (numberSchema != null
