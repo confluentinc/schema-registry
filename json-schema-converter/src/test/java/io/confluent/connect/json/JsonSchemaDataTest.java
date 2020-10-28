@@ -36,12 +36,14 @@ import java.util.List;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.json.DecimalFormat;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
@@ -862,6 +864,22 @@ public class JsonSchemaDataTest {
         .build();
 
     checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
+  }
+
+  @Test
+  public void testToConnectStringConstInAllOf() {
+    JsonSchema jsonSchema = new JsonSchema("{\"const\":\"money\",\"type\":\"string\"}");
+    CombinedSchema schema = (CombinedSchema) jsonSchema.rawSchema();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).build();
+    checkNonObjectConversion(expectedSchema, "money", schema, TextNode.valueOf("money"));
+  }
+
+  @Test
+  public void testToConnectIntegerConstInAllOf() {
+    JsonSchema jsonSchema = new JsonSchema("{\"const\":123,\"type\":\"integer\"}");
+    CombinedSchema schema = (CombinedSchema) jsonSchema.rawSchema();
+    Schema expectedSchema = new SchemaBuilder(Type.INT64).build();
+    checkNonObjectConversion(expectedSchema, 123L, schema, LongNode.valueOf(123));
   }
 
   @Test(expected = IllegalArgumentException.class)
