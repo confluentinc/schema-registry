@@ -23,7 +23,6 @@ import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
-import com.google.protobuf.Descriptors.FieldDescriptor.Type;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.FloatValue;
@@ -76,7 +75,6 @@ import static org.apache.kafka.connect.data.Schema.OPTIONAL_INT16_SCHEMA;
 import static org.apache.kafka.connect.data.Schema.OPTIONAL_INT8_SCHEMA;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 public class ProtobufDataTest {
