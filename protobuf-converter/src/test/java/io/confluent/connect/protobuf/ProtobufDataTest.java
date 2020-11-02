@@ -76,6 +76,7 @@ import static org.apache.kafka.connect.data.Schema.OPTIONAL_INT16_SCHEMA;
 import static org.apache.kafka.connect.data.Schema.OPTIONAL_INT8_SCHEMA;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 public class ProtobufDataTest {
@@ -830,6 +831,23 @@ public class ProtobufDataTest {
     converted = protobufData.fromConnectData(null, null);
     assertNull(converted.getSchema());
     assertNull(converted.getValue());
+  }
+
+  @Test
+  public void testFromConnectNameCollision() {
+    Schema nested = SchemaBuilder.struct()
+        .name("nested")
+        .field("string", Schema.STRING_SCHEMA)
+        .build();
+    Schema schema = SchemaBuilder.struct()
+        .field("nested", nested)
+        .build();
+
+    ProtobufSchema protobufSchema = new ProtobufData().fromConnectSchema(schema);
+    Descriptors.FieldDescriptor fieldDescriptor = protobufSchema.toDescriptor()
+        .findFieldByName("nested");
+    Descriptor nestedDescriptor = fieldDescriptor.getMessageType();
+    assertEquals("nestedMessage", nestedDescriptor.getName());
   }
 
   @Test
