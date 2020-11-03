@@ -488,7 +488,7 @@ public class ProtobufData {
       } else if (fieldSchema.type() == Schema.Type.MAP) {
         label = "repeated";
       }
-      String type = dataTypeFromConnectSchema(fieldSchema);
+      String type = dataTypeFromConnectSchema(fieldSchema, name);
       if (fieldSchema.type() == Schema.Type.STRUCT) {
         String fieldSchemaName = fieldSchema.name();
         if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
@@ -497,8 +497,8 @@ public class ProtobufData {
           oneofDefinitionFromConnectSchema(ctx, schema, message, fieldSchema, unionName);
           return null;
         } else {
-          if (!ctx.contains(fieldSchemaName)) {
-            ctx.add(fieldSchemaName);
+          if (!ctx.contains(type)) {
+            ctx.add(type);
             message.addMessageDefinition(messageDefinitionFromConnectSchema(
                 ctx,
                 schema,
@@ -632,7 +632,7 @@ public class ProtobufData {
     return enumer.build();
   }
 
-  private String dataTypeFromConnectSchema(Schema schema) {
+  private String dataTypeFromConnectSchema(Schema schema, String fieldName) {
     switch (schema.type()) {
       case INT8:
       case INT16:
@@ -662,7 +662,12 @@ public class ProtobufData {
       case MAP:
         return ProtobufSchema.toMapEntry(getUnqualifiedName(schema.name()));
       case STRUCT:
-        return getUnqualifiedName(schema.name());
+        String name = getUnqualifiedName(schema.name());
+        if (name.equals(fieldName)) {
+          // Can't have message types and fields with same name, add suffix to message type
+          name += "Message";
+        }
+        return name;
       default:
         throw new DataException("Unknown schema type: " + schema.type());
     }

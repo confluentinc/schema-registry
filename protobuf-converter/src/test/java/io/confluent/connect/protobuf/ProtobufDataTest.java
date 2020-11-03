@@ -23,7 +23,6 @@ import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
-import com.google.protobuf.Descriptors.FieldDescriptor.Type;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.FloatValue;
@@ -830,6 +829,23 @@ public class ProtobufDataTest {
     converted = protobufData.fromConnectData(null, null);
     assertNull(converted.getSchema());
     assertNull(converted.getValue());
+  }
+
+  @Test
+  public void testFromConnectNameCollision() {
+    Schema nested = SchemaBuilder.struct()
+        .name("nested")
+        .field("string", Schema.STRING_SCHEMA)
+        .build();
+    Schema schema = SchemaBuilder.struct()
+        .field("nested", nested)
+        .build();
+
+    ProtobufSchema protobufSchema = new ProtobufData().fromConnectSchema(schema);
+    Descriptors.FieldDescriptor fieldDescriptor = protobufSchema.toDescriptor()
+        .findFieldByName("nested");
+    Descriptor nestedDescriptor = fieldDescriptor.getMessageType();
+    assertEquals("nestedMessage", nestedDescriptor.getName());
   }
 
   @Test
