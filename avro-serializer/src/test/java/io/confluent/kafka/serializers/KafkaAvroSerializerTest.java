@@ -21,6 +21,7 @@ import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import java.util.Arrays;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
@@ -123,6 +124,13 @@ public class KafkaAvroSerializerTest {
     return avroRecord;
   }
 
+  private IndexedRecord createUserRecordUtf8() {
+    Schema schema = createUserSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", new Utf8("testUser"));
+    return avroRecord;
+  }
+
   private Schema createAccountSchema() {
     String accountSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
         "\"name\": \"Account\"," +
@@ -167,6 +175,26 @@ public class KafkaAvroSerializerTest {
     // intentionally miss setting a required field f2
     return avroRecord;
   }
+
+  private static final Schema arraySchema = new Schema.Parser().parse(
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"array\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"items\": {\n"
+          + "\"type\": \"record\",\n"
+          + "\"namespace\": \"example.avro\",\n"
+          + "\"name\": \"User\",\n"
+          + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}}");
+
+  private static final Schema mapSchema = new Schema.Parser().parse(
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"map\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"values\": {\n"
+          + "\"type\": \"record\",\n"
+          + "\"namespace\": \"example.avro\",\n"
+          + "\"name\": \"User\",\n"
+          + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}}");
 
   @Test
   public void testKafkaAvroSerializer() {
@@ -366,6 +394,60 @@ public class KafkaAvroSerializerTest {
     avroDeserializer.configure(deserializerConfigs, false);
     byte[] bytes1 = avroSerializer.serialize(topic, record);
     assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithArraySpecific() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+        true
+    );
+    IndexedRecord record1 = createUserRecordUtf8();
+    GenericData.Array<IndexedRecord> data = new GenericData.Array(arraySchema,
+        Arrays.asList(record1)
+    );
+    schemaRegistry.register(topic + "-value", new AvroSchema(arraySchema));
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+    byte[] bytes1 = avroSerializer.serialize(topic, data);
+    Object result = avroDeserializer.deserialize(topic, bytes1);
+    assertEquals(data, result);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithMapSpecific() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+        true
+    );
+    Map<Utf8, IndexedRecord> data = new HashMap<>();
+    data.put(new Utf8("one"), createUserRecordUtf8());
+    schemaRegistry.register(topic + "-value", new AvroSchema(mapSchema));
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+    byte[] bytes1 = avroSerializer.serialize(topic, data);
+    Object result = avroDeserializer.deserialize(topic, bytes1);
+    assertEquals(data, result);
   }
 
   @Test
