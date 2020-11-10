@@ -227,8 +227,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   @SuppressWarnings("unchecked")
   private Schema getSpecificReaderSchema(Schema writerSchema) {
-    if (writerSchema.getType() == Type.UNION) {
-      // Otherwise the readerClass will be Object
+    if (writerSchema.getType() == Type.ARRAY
+        || writerSchema.getType() == Type.MAP
+        || writerSchema.getType() == Type.UNION) {
       return writerSchema;
     }
     Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
