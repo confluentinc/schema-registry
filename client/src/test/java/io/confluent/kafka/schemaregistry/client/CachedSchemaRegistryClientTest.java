@@ -89,6 +89,27 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testDuplicateClientNamespaceConfiguration() {
+    Map<String, String> configs = Collections.singletonMap("key", "value");
+    restService.configure(configs);
+    expectLastCall();
+
+    replay(restService);
+
+    Map<String, String> duplicateConfigs = new HashMap<>();
+    duplicateConfigs.put("key", "value");
+    duplicateConfigs.put("schema.registry.key", "value");
+    new CachedSchemaRegistryClient(
+        restService,
+        IDENTITY_MAP_CAPACITY,
+        duplicateConfigs,
+        null
+    );
+
+    verify(restService);
+  }
+
+  @Test
   public void testRegisterSchemaCache() throws Exception {
     // Expect one call to register schema
     expect(restService.registerSchema(anyString(), anyString(), anyObject(List.class),
