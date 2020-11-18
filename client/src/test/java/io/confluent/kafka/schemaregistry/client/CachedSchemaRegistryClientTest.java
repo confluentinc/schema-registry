@@ -15,7 +15,6 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
-import java.util.LinkedHashMap;
 import org.apache.avro.Schema;
 import org.easymock.EasyMock;
 import org.junit.Test;
@@ -96,7 +95,7 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    Map<String, String> duplicateConfigs = new LinkedHashMap<>();
+    Map<String, String> duplicateConfigs = new HashMap<>();
     duplicateConfigs.put("key", "value");
     duplicateConfigs.put("schema.registry.key", "value");
     new CachedSchemaRegistryClient(
