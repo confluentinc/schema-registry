@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import java.util.LinkedHashMap;
 import org.apache.avro.Schema;
 import org.easymock.EasyMock;
 import org.junit.Test;
@@ -82,6 +83,27 @@ public class CachedSchemaRegistryClientTest {
         IDENTITY_MAP_CAPACITY,
         null,
         headers
+    );
+
+    verify(restService);
+  }
+
+  @Test
+  public void testDuplicateClientNamespaceConfiguration() {
+    Map<String, String> configs = Collections.singletonMap("key", "value");
+    restService.configure(configs);
+    expectLastCall();
+
+    replay(restService);
+
+    Map<String, String> duplicateConfigs = new LinkedHashMap<>();
+    duplicateConfigs.put("key", "value");
+    duplicateConfigs.put("schema.registry.key", "value");
+    new CachedSchemaRegistryClient(
+        restService,
+        IDENTITY_MAP_CAPACITY,
+        duplicateConfigs,
+        null
     );
 
     verify(restService);
