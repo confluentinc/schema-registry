@@ -173,7 +173,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
               e -> e.getKey().startsWith(SchemaRegistryClientConfig.CLIENT_NAMESPACE)
                   ? e.getKey().substring(SchemaRegistryClientConfig.CLIENT_NAMESPACE.length())
                   : e.getKey(),
-              Map.Entry::getValue));
+              Map.Entry::getValue,
+              (existing, replacement) -> replacement));
       restService.configure(restConfigs);
 
       Map<String, Object> sslConfigs = configs.entrySet().stream()
