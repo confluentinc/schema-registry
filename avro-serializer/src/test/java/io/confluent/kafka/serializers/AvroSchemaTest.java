@@ -19,6 +19,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import java.util.Collections;
+import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
@@ -39,6 +43,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -73,6 +78,15 @@ public class AvroSchemaTest {
           + "\"default string\"}\n"
           + "]\n"
           + "}");
+
+  private static final String recordInvalidDefaultSchema =
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"record\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"fields\": [\n"
+          + "     {\"name\": \"string_default\", \"type\": \"string\", \"default\": null}\n"
+          + "]\n"
+          + "}";
 
   private static final Schema arraySchema = new Schema.Parser().parse(
       "{\"namespace\": \"namespace\",\n"
@@ -370,6 +384,20 @@ public class AvroSchemaTest {
     )));
     assertTrue(result.isTextual());
     assertEquals("SPADES", result.textValue());
+  }
+
+  @Test
+  public void testInvalidDefault() throws Exception {
+    AvroSchemaProvider provider = new AvroSchemaProvider();
+    Map<String, String> configs = Collections.singletonMap(AvroSchemaProvider.AVRO_VALIDATE_DEFAULTS, "false");
+    provider.configure(configs);
+    Optional<ParsedSchema> schema = provider.parseSchema(recordInvalidDefaultSchema, Collections.emptyList(), true);
+    assertTrue(schema.isPresent());
+
+    configs = Collections.singletonMap(AvroSchemaProvider.AVRO_VALIDATE_DEFAULTS, "true");
+    provider.configure(configs);
+    schema = provider.parseSchema(recordInvalidDefaultSchema, Collections.emptyList(), true);
+    assertFalse(schema.isPresent());
   }
 
 
