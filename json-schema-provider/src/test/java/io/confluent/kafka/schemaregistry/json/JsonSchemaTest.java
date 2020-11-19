@@ -22,7 +22,12 @@ import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import org.everit.json.schema.ValidationException;
 import org.junit.Test;
 
@@ -270,6 +275,32 @@ public class JsonSchemaTest {
         + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
         + "\"properties\":{\"prop\":{\"type\":\"string\"}}}";
     assertEquals(expected, actual);
+  }
+
+  @Test
+  public void testEnvelopeWithReferences() throws Exception {
+    Map<String, String> schemas = getJsonSchemaWithReferences();
+    SchemaReference ref = new SchemaReference("ref.json", "reference", 1);
+    JsonSchema schema = new JsonSchema(schemas.get("main.json"), Collections.singletonList(ref),
+        Collections.singletonMap("ref.json", schemas.get("ref.json")), null);
+    Object envelope = JsonSchemaUtils.envelope(schema, null);
+    JsonSchema schema2 = JsonSchemaUtils.getSchema(envelope);
+    assertEquals(schema, schema2);
+  }
+
+  private static Map<String, String> getJsonSchemaWithReferences() {
+    Map<String, String> schemas = new HashMap<>();
+    String reference = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
+        + "{\"ExternalType\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"additionalProperties\":false}}}";
+    schemas.put("ref.json", new JsonSchema(reference).canonicalString());
+    String schemaString = "{"
+        + "\"$id\": \"https://acme.com/referrer.json\","
+        + "\"$schema\": \"http://json-schema.org/draft-07/schema#\","
+        + "\"type\":\"object\",\"properties\":{\"Ref\":"
+        + "{\"$ref\":\"ref.json#/definitions/ExternalType\"}},\"additionalProperties\":false}";
+    schemas.put("main.json", schemaString);
+    return schemas;
   }
 
   private static JsonSchema createPrimitiveSchema(String type) {
