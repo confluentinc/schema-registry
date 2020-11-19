@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -29,6 +30,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -42,16 +45,43 @@ public class JsonSchemaUtils {
   private static final ObjectMapper jsonMapper = Jackson.newObjectMapper();
 
   static final String ENVELOPE_SCHEMA_FIELD_NAME = "schema";
+  static final String ENVELOPE_REFERENCES_FIELD_NAME = "references";
+  static final String ENVELOPE_RESOLVED_REFS_FIELD_NAME = "resolvedReferences";
   static final String ENVELOPE_PAYLOAD_FIELD_NAME = "payload";
 
   public static ObjectNode envelope(JsonSchema schema, JsonNode payload) {
-    return envelope(schema.toJsonNode(), payload);
+    Map<String, String> resolvedReferences = schema.resolvedReferences();
+    Map<String, JsonNode> resolved = Collections.emptyMap();
+    if (resolvedReferences != null && !resolvedReferences.isEmpty()) {
+      resolved = resolvedReferences.entrySet().stream()
+          .collect(Collectors.toMap(Entry::getKey, e -> {
+            try {
+              return jsonMapper.readTree(e.getValue());
+            } catch (IOException ioe) {
+              throw new IllegalArgumentException(ioe);
+            }
+          }));
+    }
+    return envelope(schema.toJsonNode(), schema.references(), resolved, payload);
   }
 
   public static ObjectNode envelope(JsonNode schema, JsonNode payload) {
+    return envelope(schema, Collections.emptyList(), Collections.emptyMap(), payload);
+  }
+
+  public static ObjectNode envelope(JsonNode schema,
+                                    List<SchemaReference> references,
+                                    Map<String, JsonNode> resolvedReferences,
+                                    JsonNode payload) {
     ObjectNode result = JsonNodeFactory.instance.objectNode();
     result.set(ENVELOPE_SCHEMA_FIELD_NAME, schema);
     result.set(ENVELOPE_PAYLOAD_FIELD_NAME, payload);
+    if (references != null && !references.isEmpty()) {
+      result.set(ENVELOPE_REFERENCES_FIELD_NAME, jsonMapper.valueToTree(references));
+    }
+    if (resolvedReferences != null && !resolvedReferences.isEmpty()) {
+      result.set(ENVELOPE_RESOLVED_REFS_FIELD_NAME, jsonMapper.valueToTree(resolvedReferences));
+    }
     return result;
   }
 
@@ -88,8 +118,7 @@ public class JsonSchemaUtils {
       specVersion = SpecificationVersion.DRAFT_7;
     }
     if (isEnvelope(object)) {
-      JsonNode jsonValue = (JsonNode) object;
-      return new JsonSchema(jsonValue.get(ENVELOPE_SCHEMA_FIELD_NAME));
+      return getSchemaFromEnvelope((JsonNode) object);
     }
     Class<?> cls = object.getClass();
     if (cls.isAnnotationPresent(Schema.class)) {
@@ -132,6 +161,27 @@ public class JsonSchemaUtils {
     JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(jsonMapper, config);
     JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(cls);
     return new JsonSchema(jsonSchema);
+  }
+
+  private static JsonSchema getSchemaFromEnvelope(JsonNode jsonValue) {
+    JsonNode referencesNode = jsonValue.get(ENVELOPE_REFERENCES_FIELD_NAME);
+    List<SchemaReference> references = Collections.emptyList();
+    if (referencesNode != null && !referencesNode.isEmpty()) {
+      JavaType type = jsonMapper.getTypeFactory().constructParametricType(
+          List.class, SchemaReference.class);
+      references = jsonMapper.convertValue(referencesNode, type);
+    }
+    JsonNode resolvedReferencesNode = jsonValue.get(ENVELOPE_RESOLVED_REFS_FIELD_NAME);
+    Map<String, String> resolvedReferences = Collections.emptyMap();
+    if (resolvedReferencesNode != null && !resolvedReferencesNode.isEmpty()) {
+      JavaType type = jsonMapper.getTypeFactory().constructParametricType(
+          Map.class, String.class, JsonNode.class);
+      Map<String, JsonNode> resolved = jsonMapper.convertValue(resolvedReferencesNode, type);
+      resolvedReferences = resolved.entrySet().stream()
+          .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().toString()));
+    }
+    JsonNode schemaNode = jsonValue.get(ENVELOPE_SCHEMA_FIELD_NAME);
+    return new JsonSchema(schemaNode, references, resolvedReferences, null);
   }
 
   private static JsonSchemaConfig getConfig(boolean useOneofForNullables) {
