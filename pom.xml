@@ -13,7 +13,7 @@
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>6.2.0-beta201122193350</version>
+    <version>6.2.0-beta201122193350-cp1</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
