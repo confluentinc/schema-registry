@@ -126,7 +126,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public Set<Integer> referencesSchema(SchemaKey schema) throws StoreException {
-    return referencedBy.getOrDefault(schema, Collections.newSetFromMap(new ConcurrentHashMap<>()));
+    return referencedBy.getOrDefault(schema, Collections.emptySet());
   }
 
   @Override
