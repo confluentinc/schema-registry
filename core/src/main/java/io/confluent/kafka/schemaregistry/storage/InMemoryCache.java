@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -122,7 +123,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public Set<Integer> referencesSchema(SchemaKey schema) {
-    return referencedBy.getOrDefault(schema, new HashSet<>());
+    return referencedBy.getOrDefault(schema, Collections.emptySet());
   }
 
   @Override

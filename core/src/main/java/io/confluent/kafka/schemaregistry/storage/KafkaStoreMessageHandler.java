@@ -128,6 +128,9 @@ public class KafkaStoreMessageHandler
                                   SchemaValue schemaValue,
                                   SchemaValue oldSchemaValue) {
     if (schemaValue != null) {
+      // Update the maximum id seen so far
+      idGenerator.schemaRegistered(schemaKey, schemaValue);
+
       // If the schema is marked to be deleted, we store it in an internal datastructure
       // that holds all deleted schema keys for an id.
       // Whenever we encounter a new schema for a subject, we check to see if the same schema
@@ -138,8 +141,6 @@ public class KafkaStoreMessageHandler
       if (schemaValue.isDeleted()) {
         this.lookupCache.schemaDeleted(schemaKey, schemaValue);
       } else {
-        // Update the maximum id seen so far
-        idGenerator.schemaRegistered(schemaKey, schemaValue);
         lookupCache.schemaRegistered(schemaKey, schemaValue);
       }
     } else {
