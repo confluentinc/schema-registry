@@ -47,7 +47,6 @@ public class ProtobufConverter implements Converter {
   private Deserializer deserializer;
 
   private boolean isKey;
-  private String keyOrValueSuffix;
   private ProtobufData protobufData;
 
   public ProtobufConverter() {
@@ -61,7 +60,6 @@ public class ProtobufConverter implements Converter {
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
-    this.keyOrValueSuffix = isKey ? "key" : "value";
     ProtobufConverterConfig protobufConverterConfig = new ProtobufConverterConfig(configs);
 
     if (schemaRegistry == null) {
@@ -97,9 +95,8 @@ public class ProtobufConverter implements Converter {
       }
     } catch (SerializationException e) {
       throw new DataException(String.format(
-          "Failed to serialize Protobuf data from topic %s-%s :",
-          topic,
-          this.keyOrValueSuffix
+          "Failed to serialize Protobuf data from topic %s :",
+          topic
       ), e);
     }
   }
@@ -118,17 +115,15 @@ public class ProtobufConverter implements Converter {
           return protobufData.toConnectData(deserialized.getSchema(), message);
         }
         throw new DataException(String.format(
-            "Unsupported type %s returned during deserialization of topic %s-%s ",
-            object.getClass(),
-            topic,
-            this.keyOrValueSuffix
+            "Unsupported type %s returned during deserialization of topic %s ",
+            object.getClass().getName(),
+            topic
         ));
       }
     } catch (SerializationException e) {
       throw new DataException(String.format(
-          "Failed to deserialize data for topic %s-%s to Protobuf: ",
-          topic,
-          this.keyOrValueSuffix
+          "Failed to deserialize data for topic %s to Protobuf: ",
+          topic
       ), e);
     }
   }
