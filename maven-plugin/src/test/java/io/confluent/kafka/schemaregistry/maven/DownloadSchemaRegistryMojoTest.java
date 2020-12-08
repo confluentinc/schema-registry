@@ -19,6 +19,9 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -27,6 +30,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static org.hamcrest.CoreMatchers.is;
 
 public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
   DownloadSchemaRegistryMojo mojo;
@@ -38,10 +43,11 @@ public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
   }
 
   @Test
-  public void specificSubjects() throws IOException, RestClientException {
-    int version = 1;
+  public void specificSubjects() throws IOException, RestClientException, MojoFailureException, MojoExecutionException {
+    this.mojo.outputDirectory = this.tempDirectory;
 
-    List<File> files = new ArrayList<>();
+    List<File> filesToDownload = new ArrayList<>();
+    List<File> filesNotToDownload = new ArrayList<>();
     this.mojo.subjectPatterns.clear();
 
     for (int i = 0; i < 100; i++) {
@@ -55,11 +61,21 @@ public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
       File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
 
       if (i % 10 == 0) {
-        String subjectPattern = String.format("^TestSubject%03d-(Key|Value)$", i);
-        files.add(keySchemaFile);
-        files.add(valueSchemaFile);
+        String subjectPattern = String.format("^TestSubject%03d-(key|value)$", i);
+        filesToDownload.add(keySchemaFile);
+        filesToDownload.add(valueSchemaFile);
         this.mojo.subjectPatterns.add(subjectPattern);
+      } else {
+        filesNotToDownload.add(keySchemaFile);
+        filesNotToDownload.add(valueSchemaFile);
       }
+    }
+    this.mojo.execute();
+    for (File file: filesToDownload) {
+      Assert.assertThat(file.exists(), is(true));
+    }
+    for (File file: filesNotToDownload) {
+      Assert.assertThat(file.exists(), is(false));
     }
   }
 
