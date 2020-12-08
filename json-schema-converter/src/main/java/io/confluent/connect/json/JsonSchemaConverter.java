@@ -47,6 +47,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
   private Deserializer deserializer;
 
   private boolean isKey;
+  private String keyOrValueSuffix;
   private JsonSchemaData jsonSchemaData;
 
   public JsonSchemaConverter() {
@@ -60,6 +61,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
+    this.keyOrValueSuffix = isKey ? "key" : "value";
     JsonSchemaConverterConfig jsonSchemaConverterConfig = new JsonSchemaConverterConfig(configs);
 
     if (schemaRegistry == null) {
@@ -87,8 +89,10 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     try {
       return serializer.serialize(topic, isKey, jsonValue, jsonSchema);
     } catch (SerializationException e) {
-      throw new DataException("Converting Kafka Connect data to byte[] failed due to "
-          + "serialization error: ",
+      throw new DataException(String.format("Converting Kafka Connect data to byte[] failed due to "
+          + "serialization error of topic %s-%s: ",
+          topic,
+          this.keyOrValueSuffix),
           e
       );
     }
@@ -108,11 +112,10 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       return new SchemaAndValue(schema, jsonSchemaData.toConnectData(schema,
           (JsonNode) deserialized.getValue()));
     } catch (SerializationException e) {
-      String keyOrValue = isKey ? "key" : "value";
       throw new DataException(String.format("Converting byte[] to Kafka Connect data failed due to "
           + "serialization error of topic %s-%s: ",
           topic,
-          keyOrValue),
+          this.keyOrValueSuffix),
           e
       );
     }
