@@ -114,11 +114,14 @@ public class ProtobufConverter implements Converter {
           Message message = (Message) object;
           return protobufData.toConnectData(deserialized.getSchema(), message);
         }
+        String keyOrValue = isKey ? "key" : "value";
+        throw new DataException(String.format(
+            "Unsupported type %s returned during deserialization of topic %s-%s ",
+            object.getClass(),
+            topic,
+            keyOrValue
+        ));
       }
-      throw new DataException(String.format(
-          "Unsupported type returned during deserialization of topic %s ",
-          topic
-      ));
     } catch (SerializationException e) {
       throw new DataException(String.format(
           "Failed to deserialize data for topic %s to Protobuf: ",

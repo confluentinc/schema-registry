@@ -108,8 +108,11 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       return new SchemaAndValue(schema, jsonSchemaData.toConnectData(schema,
           (JsonNode) deserialized.getValue()));
     } catch (SerializationException e) {
-      throw new DataException("Converting byte[] to Kafka Connect data failed due to "
-          + "serialization error: ",
+      String keyOrValue = isKey ? "key" : "value";
+      throw new DataException(String.format("Converting byte[] to Kafka Connect data failed due to "
+          + "serialization error of topic %s-%s: ",
+          topic,
+          keyOrValue),
           e
       );
     }
