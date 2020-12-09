@@ -17,12 +17,14 @@ package io.confluent.kafka.schemaregistry.storage;
 import io.confluent.kafka.schemaregistry.SASLClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 // tests SASL with ZooKeeper and Kafka.
+@Ignore
 public class KafkaStoreSASLTest extends SASLClusterTestHarness {
   @Test
   public void testInitialization() throws Exception {
