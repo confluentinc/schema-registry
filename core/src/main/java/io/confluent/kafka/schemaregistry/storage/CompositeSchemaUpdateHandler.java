@@ -33,6 +33,15 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
   }
 
   /**
+   * Invoked after the cache is initialized.
+   */
+  public void cacheInitialized() {
+    for (SchemaUpdateHandler handler : handlers) {
+      handler.cacheInitialized();
+    }
+  }
+
+  /**
    * Invoked before every new K,V pair written to the store
    *
    * @param key   Key associated with the data
