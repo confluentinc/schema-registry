@@ -45,10 +45,10 @@ public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
   @Test
   public void specificSubjects() throws IOException, RestClientException, MojoFailureException, MojoExecutionException {
     this.mojo.outputDirectory = this.tempDirectory;
+    this.mojo.subjectPatterns.clear();
 
     List<File> filesToDownload = new ArrayList<>();
     List<File> filesNotToDownload = new ArrayList<>();
-    this.mojo.subjectPatterns.clear();
 
     for (int i = 0; i < 100; i++) {
       String keySubject = String.format("TestSubject%03d-key", i);
@@ -70,13 +70,53 @@ public class DownloadSchemaRegistryMojoTest extends SchemaRegistryTest {
         filesNotToDownload.add(valueSchemaFile);
       }
     }
+
     this.mojo.execute();
-    for (File file: filesToDownload) {
+
+    for (File file : filesToDownload) {
       Assert.assertThat(file.exists(), is(true));
     }
-    for (File file: filesNotToDownload) {
+    for (File file : filesNotToDownload) {
       Assert.assertThat(file.exists(), is(false));
     }
+  }
+
+  @Test
+  public void specificSubjectAndVersion() throws IOException, RestClientException, MojoFailureException, MojoExecutionException {
+    this.mojo.outputDirectory = this.tempDirectory;
+    this.mojo.subjectPatterns.clear();
+
+    String valueSubject = "TestSubject-value";
+    Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+    this.mojo.client().register(valueSubject, new AvroSchema(valueSchema), 1, 101);
+
+    Schema valueSchemaUpdated = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.NULL)));
+    this.mojo.client().register(valueSubject, new AvroSchema(valueSchemaUpdated), 2, 102);
+
+    File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
+
+    String subjectPattern = "^TestSubject-(key|value)$:2";
+    this.mojo.subjectPatterns.add(subjectPattern);
+
+    this.mojo.execute();
+
+    Assert.assertThat(valueSchemaFile.exists(), is(true));
+    Assert.assertThat(new Schema.Parser().parse(valueSchemaFile), is(valueSchemaUpdated));
+  }
+
+  @Test(expected = MojoExecutionException.class)
+  public void specificSubjectAndVersionNotFound() throws IOException, RestClientException, MojoFailureException, MojoExecutionException {
+    this.mojo.outputDirectory = this.tempDirectory;
+    this.mojo.subjectPatterns.clear();
+
+    String valueSubject = "TestSubject-value";
+    Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+    this.mojo.client().register(valueSubject, new AvroSchema(valueSchema), 1, 101);
+
+    String subjectPattern = "^TestSubject-(key|value)$:9999";
+    this.mojo.subjectPatterns.add(subjectPattern);
+
+    this.mojo.execute();
   }
 
 }

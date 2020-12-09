@@ -39,8 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Mojo(name = "download")
 public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
@@ -54,30 +52,39 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
   @Parameter(required = true)
   File outputDirectory;
 
-  Map<String, ParsedSchema> downloadSchemas(Collection<String> subjects)
+  Map<String, ParsedSchema> downloadSchemas(Collection<SubjectVersion> subjectVersions)
       throws MojoExecutionException {
     Map<String, ParsedSchema> results = new LinkedHashMap<>();
 
-    for (String subject : subjects) {
+    for (SubjectVersion subjectVersion : subjectVersions) {
       SchemaMetadata schemaMetadata;
       try {
-        getLog().info(String.format("Downloading latest metadata for %s.", subject));
-        schemaMetadata = this.client().getLatestSchemaMetadata(subject);
+        if(subjectVersion.version == -1) {
+            getLog().info(String.format("Downloading latest metadata for %s.", subjectVersion));
+            schemaMetadata = this.client().getLatestSchemaMetadata(subjectVersion.subject);
+        } else {
+            getLog().info(String.format("Downloading latest metadata for %s.", subjectVersion));
+            schemaMetadata = this.client().getSchemaMetadata(subjectVersion.subject, subjectVersion.version);
+        }
         Optional<ParsedSchema> schema =
             this.client().parseSchema(
                 schemaMetadata.getSchemaType(),
                 schemaMetadata.getSchema(),
                 schemaMetadata.getReferences());
         if (schema.isPresent()) {
-          results.put(subject, schema.get());
+          results.put(subjectVersion.subject, schema.get());
         } else {
           throw new MojoExecutionException(
-              String.format("Error while parsing schema for %s", subject)
+              String.format("Error while parsing schema for %s", subjectVersion.subject)
           );
         }
       } catch (Exception ex) {
         throw new MojoExecutionException(
-            String.format("Exception thrown while downloading metadata for %s.", subject),
+            String.format(
+                    "Exception thrown while downloading metadata for %s with version %s.",
+                    subjectVersion.subject,
+                    (subjectVersion.version == -1) ? "latest" : subjectVersion.version
+            ),
             ex
         );
       }
@@ -112,21 +119,6 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       throw new MojoExecutionException("Exception thrown while creating outputDirectory", ex);
     }
 
-    List<Pattern> patterns = new ArrayList<>();
-
-    for (String subject : subjectPatterns) {
-      try {
-        getLog().debug(String.format("Creating pattern for '%s'", subject));
-        Pattern pattern = Pattern.compile(subject);
-        patterns.add(pattern);
-      } catch (Exception ex) {
-        throw new IllegalStateException(
-            String.format("Exception thrown while creating pattern '%s'", subject),
-            ex
-        );
-      }
-    }
-
     Collection<String> allSubjects;
     try {
       getLog().info("Getting all subjects on schema registry...");
@@ -135,20 +127,20 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       throw new MojoExecutionException("Exception thrown", ex);
     }
 
-    getLog().info(String.format("Schema Registry has %s subject(s).", allSubjects.size()));
-    Set<String> subjectsToDownload = new LinkedHashSet<>();
-
+    Set<SubjectVersion> subjectsToDownload = new LinkedHashSet<>();
     for (String subject : allSubjects) {
-      for (Pattern pattern : patterns) {
-        getLog()
-            .debug(String.format("Checking '%s' against pattern '%s'", subject, pattern.pattern()));
-        Matcher matcher = pattern.matcher(subject);
-
-        if (matcher.matches()) {
+      for (String subjectPattern : subjectPatterns) {
+        int version = -1;
+        if(subjectPattern.indexOf(":") != -1) {
+          String[] patternAndVersion = subjectPattern.split(":");
+          subjectPattern = patternAndVersion[0];
+          version = Integer.valueOf(patternAndVersion[1]);
+        }
+        getLog().debug(String.format("Checking '%s' against pattern '%s'", subject, subjectPattern));
+        if(subject.matches(subjectPattern)) {
           getLog().debug(String.format("'%s' matches pattern '%s' so downloading.", subject,
-                                       pattern.pattern()));
-          subjectsToDownload.add(subject);
-          break;
+            subjectPattern));
+          subjectsToDownload.add(new SubjectVersion(subject, version));
         }
       }
     }
@@ -192,4 +184,5 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
         return ".txt";
     }
   }
+
 }
