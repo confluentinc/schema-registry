@@ -28,6 +28,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka_${kafka.scala.version}</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>com.squareup.wire</groupId>
             <artifactId>wire-schema</artifactId>
         </dependency>
