@@ -31,6 +31,12 @@ public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
   }
 
   /**
+   * Invoked after the cache is initialized.
+   */
+  default void cacheInitialized() {
+  }
+
+  /**
    * Invoked before every new K,V pair written to the store
    *
    * @param key   Key associated with the data
