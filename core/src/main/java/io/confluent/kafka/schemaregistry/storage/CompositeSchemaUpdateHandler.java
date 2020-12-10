@@ -35,6 +35,7 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
   /**
    * Invoked after the cache is initialized.
    */
+  @Override
   public void cacheInitialized() {
     for (SchemaUpdateHandler handler : handlers) {
       handler.cacheInitialized();
@@ -47,6 +48,7 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
    * @param key   Key associated with the data
    * @param value Data written to the store
    */
+  @Override
   public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
                                 TopicPartition tp, long offset, long timestamp) {
     for (SchemaUpdateHandler handler : handlers) {
