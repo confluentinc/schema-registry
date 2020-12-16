@@ -152,7 +152,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
 
     valueSchema = getSchema(schemaRegistry, props, false);
     final Object valueSubjectNameStrategy = config.valueSubjectNameStrategy();
-    valueSubject = getSubjectName(valueSubjectNameStrategy, topic, true, valueSchema);
+    valueSubject = getSubjectName(valueSubjectNameStrategy, topic, false, valueSchema);
 
     if (needsKeySchema()) {
       keySchema = getSchema(schemaRegistry, props, true);
