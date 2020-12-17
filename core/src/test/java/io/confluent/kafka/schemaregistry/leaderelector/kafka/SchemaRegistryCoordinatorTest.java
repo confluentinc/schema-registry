@@ -171,8 +171,8 @@ public class SchemaRegistryCoordinatorTest {
       @Override
       public boolean matches(AbstractRequest body) {
         SyncGroupRequest sync = (SyncGroupRequest) body;
-        return sync.data.memberId().equals(consumerId) &&
-               sync.data.generationId() == 1 &&
+        return sync.data().memberId().equals(consumerId) &&
+               sync.data().generationId() == 1 &&
                sync.groupAssignments().containsKey(consumerId);
       }
     }, syncGroupResponse);
@@ -208,8 +208,8 @@ public class SchemaRegistryCoordinatorTest {
       @Override
       public boolean matches(AbstractRequest body) {
         SyncGroupRequest sync = (SyncGroupRequest) body;
-        return sync.data.memberId().equals(consumerId) &&
-               sync.data.generationId() == 1 &&
+        return sync.data().memberId().equals(consumerId) &&
+               sync.data().generationId() == 1 &&
                sync.groupAssignments().containsKey(consumerId);
       }
     }, syncGroupResponse);
@@ -247,8 +247,8 @@ public class SchemaRegistryCoordinatorTest {
       @Override
       public boolean matches(AbstractRequest body) {
         SyncGroupRequest sync = (SyncGroupRequest) body;
-        return sync.data.memberId().equals(consumerId) &&
-               sync.data.generationId() == 1 &&
+        return sync.data().memberId().equals(consumerId) &&
+               sync.data().generationId() == 1 &&
                sync.groupAssignments().containsKey(consumerId);
       }
     }, syncGroupResponse);
@@ -282,8 +282,8 @@ public class SchemaRegistryCoordinatorTest {
       @Override
       public boolean matches(AbstractRequest body) {
         SyncGroupRequest sync = (SyncGroupRequest) body;
-        return sync.data.memberId().equals(consumerId) &&
-               sync.data.generationId() == 1 &&
+        return sync.data().memberId().equals(consumerId) &&
+               sync.data().generationId() == 1 &&
                sync.groupAssignments().isEmpty();
       }
     }, syncGroupResponse);
