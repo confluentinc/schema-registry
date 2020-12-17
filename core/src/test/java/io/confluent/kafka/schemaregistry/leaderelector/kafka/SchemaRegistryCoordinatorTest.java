@@ -151,151 +151,151 @@ public class SchemaRegistryCoordinatorTest {
     assertEquals(LEADER_INFO, state);
   }
 
-//  @Test
-//  public void testNormalJoinGroupLeader() {
-//    final String consumerId = LEADER_ID;
-//
-//    client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-//    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-//
-//    // normal join group
-//    Map<String, SchemaRegistryIdentity> memberInfo = Collections.singletonMap(consumerId, LEADER_INFO);
-//    client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberInfo, Errors.NONE));
-//    SyncGroupResponse syncGroupResponse = syncGroupResponse(
-//        SchemaRegistryProtocol.Assignment.NO_ERROR,
-//        consumerId,
-//        LEADER_INFO,
-//        Errors.NONE
-//    );
-//    client.prepareResponse(new MockClient.RequestMatcher() {
-//      @Override
-//      public boolean matches(AbstractRequest body) {
-//        SyncGroupRequest sync = (SyncGroupRequest) body;
-//        return sync.data.memberId().equals(consumerId) &&
-//               sync.data.generationId() == 1 &&
-//               sync.groupAssignments().containsKey(consumerId);
-//      }
-//    }, syncGroupResponse);
-//    coordinator.ensureActiveGroup();
-//
-//    assertFalse(coordinator.rejoinNeededOrPending());
-//    assertEquals(0, rebalanceListener.revokedCount);
-//    assertEquals(1, rebalanceListener.assignedCount);
-//    assertFalse(rebalanceListener.assignments.get(0).failed());
-//    assertEquals(consumerId, rebalanceListener.assignments.get(0).leader());
-//    assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).leaderIdentity());
-//  }
-//
-//  @Test
-//  public void testJoinGroupLeaderNoneEligible() {
-//    final String consumerId = LEADER_ID;
-//
-//    client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-//    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-//
-//    Map<String, SchemaRegistryIdentity> memberInfo = Collections.singletonMap(
-//        consumerId,
-//        INELIGIBLE_LEADER_INFO
-//    );
-//    client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberInfo, Errors.NONE));
-//    SyncGroupResponse syncGroupResponse = syncGroupResponse(
-//        SchemaRegistryProtocol.Assignment.NO_ERROR,
-//        null,
-//        null,
-//        Errors.NONE
-//    );
-//    client.prepareResponse(new MockClient.RequestMatcher() {
-//      @Override
-//      public boolean matches(AbstractRequest body) {
-//        SyncGroupRequest sync = (SyncGroupRequest) body;
-//        return sync.data.memberId().equals(consumerId) &&
-//               sync.data.generationId() == 1 &&
-//               sync.groupAssignments().containsKey(consumerId);
-//      }
-//    }, syncGroupResponse);
-//
-//    coordinator.ensureActiveGroup();
-//
-//    assertFalse(coordinator.rejoinNeededOrPending());
-//    assertEquals(0, rebalanceListener.revokedCount);
-//    assertEquals(1, rebalanceListener.assignedCount);
-//    // No leader isn't considered a failure
-//    assertFalse(rebalanceListener.assignments.get(0).failed());
-//    assertNull(rebalanceListener.assignments.get(0).leader());
-//    assertNull(rebalanceListener.assignments.get(0).leaderIdentity());
-//  }
-//
-//  @Test
-//  public void testJoinGroupLeaderDuplicateUrls() {
-//    final String consumerId = LEADER_ID;
-//
-//    client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-//    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-//
-//    Map<String, SchemaRegistryIdentity> memberInfo = new HashMap<>();
-//    // intentionally duplicate info to get duplicate URLs
-//    memberInfo.put(LEADER_ID, LEADER_INFO);
-//    memberInfo.put(MEMBER_ID, LEADER_INFO);
-//    client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberInfo, Errors.NONE));
-//    SyncGroupResponse syncGroupResponse = syncGroupResponse(
-//        SchemaRegistryProtocol.Assignment.DUPLICATE_URLS,
-//        null,
-//        null,
-//        Errors.NONE
-//    );
-//    client.prepareResponse(new MockClient.RequestMatcher() {
-//      @Override
-//      public boolean matches(AbstractRequest body) {
-//        SyncGroupRequest sync = (SyncGroupRequest) body;
-//        return sync.data.memberId().equals(consumerId) &&
-//               sync.data.generationId() == 1 &&
-//               sync.groupAssignments().containsKey(consumerId);
-//      }
-//    }, syncGroupResponse);
-//
-//    coordinator.ensureActiveGroup();
-//
-//    assertFalse(coordinator.rejoinNeededOrPending());
-//    assertEquals(0, rebalanceListener.revokedCount);
-//    assertEquals(1, rebalanceListener.assignedCount);
-//    assertTrue(rebalanceListener.assignments.get(0).failed());
-//    assertNull(rebalanceListener.assignments.get(0).leader());
-//    assertNull(rebalanceListener.assignments.get(0).leaderIdentity());
-//  }
-//
-//  @Test
-//  public void testNormalJoinGroupFollower() {
-//    final String consumerId = MEMBER_ID;
-//
-//    client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-//    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-//
-//    // normal join group
-//    client.prepareResponse(joinGroupFollowerResponse(1, consumerId, LEADER_ID, Errors.NONE));
-//    SyncGroupResponse syncGroupResponse = syncGroupResponse(
-//        SchemaRegistryProtocol.Assignment.NO_ERROR,
-//        LEADER_ID,
-//        LEADER_INFO,
-//        Errors.NONE
-//    );
-//    client.prepareResponse(new MockClient.RequestMatcher() {
-//      @Override
-//      public boolean matches(AbstractRequest body) {
-//        SyncGroupRequest sync = (SyncGroupRequest) body;
-//        return sync.data.memberId().equals(consumerId) &&
-//               sync.data.generationId() == 1 &&
-//               sync.groupAssignments().isEmpty();
-//      }
-//    }, syncGroupResponse);
-//    coordinator.ensureActiveGroup();
-//
-//    assertFalse(coordinator.rejoinNeededOrPending());
-//    assertEquals(0, rebalanceListener.revokedCount);
-//    assertEquals(1, rebalanceListener.assignedCount);
-//    assertFalse(rebalanceListener.assignments.get(0).failed());
-//    assertEquals(LEADER_ID, rebalanceListener.assignments.get(0).leader());
-//    assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).leaderIdentity());
-//  }
+  @Test
+  public void testNormalJoinGroupLeader() {
+    final String consumerId = LEADER_ID;
+
+    client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+    // normal join group
+    Map<String, SchemaRegistryIdentity> memberInfo = Collections.singletonMap(consumerId, LEADER_INFO);
+    client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberInfo, Errors.NONE));
+    SyncGroupResponse syncGroupResponse = syncGroupResponse(
+        SchemaRegistryProtocol.Assignment.NO_ERROR,
+        consumerId,
+        LEADER_INFO,
+        Errors.NONE
+    );
+    client.prepareResponse(new MockClient.RequestMatcher() {
+      @Override
+      public boolean matches(AbstractRequest body) {
+        SyncGroupRequest sync = (SyncGroupRequest) body;
+        return sync.data.memberId().equals(consumerId) &&
+               sync.data.generationId() == 1 &&
+               sync.groupAssignments().containsKey(consumerId);
+      }
+    }, syncGroupResponse);
+    coordinator.ensureActiveGroup();
+
+    assertFalse(coordinator.rejoinNeededOrPending());
+    assertEquals(0, rebalanceListener.revokedCount);
+    assertEquals(1, rebalanceListener.assignedCount);
+    assertFalse(rebalanceListener.assignments.get(0).failed());
+    assertEquals(consumerId, rebalanceListener.assignments.get(0).leader());
+    assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).leaderIdentity());
+  }
+
+  @Test
+  public void testJoinGroupLeaderNoneEligible() {
+    final String consumerId = LEADER_ID;
+
+    client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+    Map<String, SchemaRegistryIdentity> memberInfo = Collections.singletonMap(
+        consumerId,
+        INELIGIBLE_LEADER_INFO
+    );
+    client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberInfo, Errors.NONE));
+    SyncGroupResponse syncGroupResponse = syncGroupResponse(
+        SchemaRegistryProtocol.Assignment.NO_ERROR,
+        null,
+        null,
+        Errors.NONE
+    );
+    client.prepareResponse(new MockClient.RequestMatcher() {
+      @Override
+      public boolean matches(AbstractRequest body) {
+        SyncGroupRequest sync = (SyncGroupRequest) body;
+        return sync.data.memberId().equals(consumerId) &&
+               sync.data.generationId() == 1 &&
+               sync.groupAssignments().containsKey(consumerId);
+      }
+    }, syncGroupResponse);
+
+    coordinator.ensureActiveGroup();
+
+    assertFalse(coordinator.rejoinNeededOrPending());
+    assertEquals(0, rebalanceListener.revokedCount);
+    assertEquals(1, rebalanceListener.assignedCount);
+    // No leader isn't considered a failure
+    assertFalse(rebalanceListener.assignments.get(0).failed());
+    assertNull(rebalanceListener.assignments.get(0).leader());
+    assertNull(rebalanceListener.assignments.get(0).leaderIdentity());
+  }
+
+  @Test
+  public void testJoinGroupLeaderDuplicateUrls() {
+    final String consumerId = LEADER_ID;
+
+    client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+    Map<String, SchemaRegistryIdentity> memberInfo = new HashMap<>();
+    // intentionally duplicate info to get duplicate URLs
+    memberInfo.put(LEADER_ID, LEADER_INFO);
+    memberInfo.put(MEMBER_ID, LEADER_INFO);
+    client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberInfo, Errors.NONE));
+    SyncGroupResponse syncGroupResponse = syncGroupResponse(
+        SchemaRegistryProtocol.Assignment.DUPLICATE_URLS,
+        null,
+        null,
+        Errors.NONE
+    );
+    client.prepareResponse(new MockClient.RequestMatcher() {
+      @Override
+      public boolean matches(AbstractRequest body) {
+        SyncGroupRequest sync = (SyncGroupRequest) body;
+        return sync.data.memberId().equals(consumerId) &&
+               sync.data.generationId() == 1 &&
+               sync.groupAssignments().containsKey(consumerId);
+      }
+    }, syncGroupResponse);
+
+    coordinator.ensureActiveGroup();
+
+    assertFalse(coordinator.rejoinNeededOrPending());
+    assertEquals(0, rebalanceListener.revokedCount);
+    assertEquals(1, rebalanceListener.assignedCount);
+    assertTrue(rebalanceListener.assignments.get(0).failed());
+    assertNull(rebalanceListener.assignments.get(0).leader());
+    assertNull(rebalanceListener.assignments.get(0).leaderIdentity());
+  }
+
+  @Test
+  public void testNormalJoinGroupFollower() {
+    final String consumerId = MEMBER_ID;
+
+    client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+    coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+    // normal join group
+    client.prepareResponse(joinGroupFollowerResponse(1, consumerId, LEADER_ID, Errors.NONE));
+    SyncGroupResponse syncGroupResponse = syncGroupResponse(
+        SchemaRegistryProtocol.Assignment.NO_ERROR,
+        LEADER_ID,
+        LEADER_INFO,
+        Errors.NONE
+    );
+    client.prepareResponse(new MockClient.RequestMatcher() {
+      @Override
+      public boolean matches(AbstractRequest body) {
+        SyncGroupRequest sync = (SyncGroupRequest) body;
+        return sync.data.memberId().equals(consumerId) &&
+               sync.data.generationId() == 1 &&
+               sync.groupAssignments().isEmpty();
+      }
+    }, syncGroupResponse);
+    coordinator.ensureActiveGroup();
+
+    assertFalse(coordinator.rejoinNeededOrPending());
+    assertEquals(0, rebalanceListener.revokedCount);
+    assertEquals(1, rebalanceListener.assignedCount);
+    assertFalse(rebalanceListener.assignments.get(0).failed());
+    assertEquals(LEADER_ID, rebalanceListener.assignments.get(0).leader());
+    assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).leaderIdentity());
+  }
 
   private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
     return FindCoordinatorResponse.prepareResponse(error, node);
