@@ -202,9 +202,10 @@ public class SchemaDiff {
           Integer updateMessageIndex = updateMessageIndexes.get(name);
           if (originalMessageIndex != null && originalMessageIndex.equals(updateMessageIndex)) {
             MessageSchemaDiff.compare(ctx, originalMessage, updateMessage);
-          } else
+          } else {
             // Moving or reordering a message is incompatible since we serialize message indexes
             ctx.addDifference(MESSAGE_MOVED);
+          }
         }
       }
     }
