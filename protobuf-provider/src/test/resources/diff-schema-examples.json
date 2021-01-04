@@ -199,6 +199,35 @@
     "compatible": false
   },
   {
+    "description": "Detect compatible message addition",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}\nmessage TestMessage2 {\n    string test_string = 1;\n}",
+    "changes": [
+      "MESSAGE_ADDED #/TestMessage2"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible message index change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage2 {\n    string test_string = 1;\n}\nmessage TestMessage {\n    string test_string = 1;\n}",
+    "changes": [
+      "MESSAGE_ADDED #/TestMessage2",
+      "MESSAGE_MOVED #/TestMessage"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect incompatible message index change",
+    "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}\nmessage TestMessage2 {\n    string test_string = 1;\n}",
+    "update_schema": "syntax = \"proto3\";\nmessage TestMessage2 {\n    string test_string = 1;\n}\nmessage TestMessage {\n    string test_string = 1;\n}",
+    "changes": [
+      "MESSAGE_MOVED #/TestMessage2",
+      "MESSAGE_MOVED #/TestMessage"
+    ],
+    "compatible": false
+  },
+  {
     "description": "Detect incompatible import change",
     "original_schema": "syntax = \"proto3\";\nimport \"google.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.GoogleHome test_string = 1;\n    }",
     "update_schema": "syntax = \"proto3\";\nimport \"google2.proto\";\nmessage TestMessage {\n    .io.confluent.cloud.demo.domain.GoogleHome test_string = 1;\n    }",

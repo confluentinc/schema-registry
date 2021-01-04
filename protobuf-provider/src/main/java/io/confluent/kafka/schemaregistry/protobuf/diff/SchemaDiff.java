@@ -45,6 +45,7 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FI
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_NAME_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.MESSAGE_ADDED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.MESSAGE_MOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.MESSAGE_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_FIELD_ADDED;
@@ -170,10 +171,12 @@ public class SchemaDiff {
   ) {
     Map<String, MessageElement> originalMessages = new HashMap<>();
     Map<String, MessageElement> updateMessages = new HashMap<>();
+    Map<String, Integer> originalMessageIndexes = new HashMap<>();
+    Map<String, Integer> updateMessageIndexes = new HashMap<>();
     Map<String, EnumElement> originalEnums = new HashMap<>();
     Map<String, EnumElement> updateEnums = new HashMap<>();
-    compareMessageElements(original, originalMessages, originalEnums);
-    compareMessageElements(update, updateMessages, updateEnums);
+    compareMessageElements(original, originalMessages, originalMessageIndexes, originalEnums);
+    compareMessageElements(update, updateMessages, updateMessageIndexes, updateEnums);
 
     Set<String> allMessageNames = new HashSet<>(originalMessages.keySet());
     allMessageNames.addAll(updateMessages.keySet());
@@ -195,7 +198,13 @@ public class SchemaDiff {
             ctx.addDifference(MESSAGE_ADDED);
           }
         } else {
-          MessageSchemaDiff.compare(ctx, originalMessage, updateMessage);
+          Integer originalMessageIndex = originalMessageIndexes.get(name);
+          Integer updateMessageIndex = updateMessageIndexes.get(name);
+          if (originalMessageIndex != null && originalMessageIndex.equals(updateMessageIndex)) {
+            MessageSchemaDiff.compare(ctx, originalMessage, updateMessage);
+          } else
+            // Moving or reordering a message is incompatible since we serialize message indexes
+            ctx.addDifference(MESSAGE_MOVED);
         }
       }
     }
@@ -218,12 +227,15 @@ public class SchemaDiff {
   private static void compareMessageElements(
       List<TypeElement> types,
       Map<String, MessageElement> messages,
+      Map<String, Integer> messageIndexes,
       Map<String, EnumElement> enums
   ) {
+    int index = 0;
     for (TypeElement typeElement : types) {
       if (typeElement instanceof MessageElement) {
         MessageElement messageElement = (MessageElement) typeElement;
         messages.put(messageElement.getName(), messageElement);
+        messageIndexes.put(messageElement.getName(), index++);
       } else if (typeElement instanceof EnumElement) {
         EnumElement enumElement = (EnumElement) typeElement;
         enums.put(enumElement.getName(), enumElement);
