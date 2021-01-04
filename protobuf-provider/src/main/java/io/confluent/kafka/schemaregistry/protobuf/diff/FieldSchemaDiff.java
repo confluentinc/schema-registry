@@ -108,7 +108,8 @@ public class FieldSchemaDiff {
       SchemaReference originalRef = originalType.reference();
       SchemaReference updateRef = updateType.reference();
       // Don't need to compare if both are local or refer to same subject-version
-      if (!Objects.equals(originalRef.getSubject(), updateRef.getSubject())
+      if (originalRef == null || updateRef == null
+          || !Objects.equals(originalRef.getSubject(), updateRef.getSubject())
           || !Objects.equals(originalRef.getVersion(), updateRef.getVersion())) {
         final Context subctx = ctx.getSubcontext();
         subctx.setPackageName(originalType.packageName(), true);
