@@ -148,6 +148,22 @@ public class KafkaProtobufFormatterTest {
   }
 
   @Test
+  public void testKafkaProtobufKeyValueFormatterNullMessage() throws Exception {
+    formatter.init(props);
+
+    byte[] serializedValue = null;
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+        "topic1", 0, 200,  null, serializedValue);
+    formatter.writeTo(crecord, ps);
+    String outputJson = baos.toString();
+    assertEquals("Null message should print \"null\"",
+        "null\n",
+        outputJson);
+  }
+
+  @Test
   public void testInvalidFormat() {
     String inputJson = "{\"invalid-field-name\":\"myname\"}\n";
     BufferedReader reader =
