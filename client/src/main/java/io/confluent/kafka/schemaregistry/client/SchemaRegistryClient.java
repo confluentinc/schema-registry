@@ -83,6 +83,12 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException;
 
+  public List<ParsedSchema> getSchemas(
+      String subjectPrefix,
+      boolean lookupDeletedSchema,
+      boolean latestOnly)
+      throws IOException, RestClientException;
+
   public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException;
 
   default Collection<SubjectVersion> getAllVersionsById(int id) throws IOException,
