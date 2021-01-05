@@ -87,7 +87,7 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
   protected void writeTo(byte[] data, PrintStream output) throws IOException {
     Message object = deserializer.deserialize(data);
     try {
-      output.print(object == null ? object : JsonFormat.printer()
+      output.print(object == null ? null : JsonFormat.printer()
           .includingDefaultValueFields()
           .omittingInsignificantWhitespace()
           .print(object));
