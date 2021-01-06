@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+import "confluent/meta.proto";
+import "confluent/type/decimal.proto";
+
+option java_package = "io.confluent.kafka.serializers.protobuf.test";
+option (confluent.file_meta) = {
+  doc: "file",
+  params: [
+  ]
+};
+
+message DecimalValue {
+  option (confluent.message_meta) = {
+    doc: "message",
+    params: [
+    ]
+  };
+
+  confluent.type.Decimal value = 1 [(confluent.field_meta) = {
+    doc: "field",
+    params: [
+      {
+        value: "3",
+        key: "connect.scale"
+      }
+    ]
+  }];
+}
+enum Status {
+  option (confluent.enum_meta) = {
+    doc: "enum",
+    params: [
+    ]
+  };
+  ACTIVE = 0 [(confluent.enum_value_meta) = {
+    doc: "enum_value",
+    params: [
+      {
+        value: "enum",
+        key: "type"
+      }
+    ]
+  }];
+  INACTIVE = 1;
+}
+
