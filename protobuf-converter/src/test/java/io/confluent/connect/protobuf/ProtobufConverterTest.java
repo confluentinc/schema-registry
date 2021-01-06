@@ -18,7 +18,6 @@ package io.confluent.connect.protobuf;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.Descriptors.Descriptor;
-import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;

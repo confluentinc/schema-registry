@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+import "google/protobuf/descriptor.proto";
+
+package confluent;
+
+option java_package = "io.confluent.protobuf";
+option java_outer_classname = "MetaProto";
+
+message Meta {
+  // Documentation string
+  string doc = 1;
+  // Parameters
+  map<string,string> params = 2;
+}
+
+extend google.protobuf.FileOptions {
+  Meta file_meta = 1088;
+}
+
+extend google.protobuf.MessageOptions {
+  Meta message_meta = 1088;
+}
+
+extend google.protobuf.FieldOptions {
+  Meta field_meta = 1088;
+}
+
+extend google.protobuf.EnumOptions {
+  Meta enum_meta = 1088;
+}
+
+extend google.protobuf.EnumValueOptions {
+  Meta enum_value_meta = 1088;
+}
