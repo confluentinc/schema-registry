@@ -428,7 +428,8 @@ public class ProtobufSchema implements ParsedSchema {
   private OneOfElement toOneof(String name, ImmutableList.Builder<FieldElement> fields) {
     log.trace("*** oneof name: {}", name);
     // NOTE: skip groups
-    return new OneOfElement(name, "", fields.build(), Collections.emptyList());
+    return new OneOfElement(name, "", fields.build(),
+        Collections.emptyList(), Collections.emptyList());
   }
 
   private EnumElement toEnum(EnumDescriptorProto ed) {
