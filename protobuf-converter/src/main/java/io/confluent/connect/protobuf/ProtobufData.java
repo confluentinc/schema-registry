@@ -26,17 +26,27 @@ import com.google.protobuf.Descriptors.OneofDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.Timestamps;
+import io.confluent.protobuf.MetaProto;
+import io.confluent.protobuf.MetaProto.Meta;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalTime;
+import java.util.Calendar;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Set;
+import java.util.TimeZone;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
+import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 
@@ -74,12 +84,195 @@ public class ProtobufData {
   public static final String PROTOBUF_TYPE_UNION_PREFIX = PROTOBUF_TYPE_UNION + ".";
   public static final String PROTOBUF_TYPE_TAG = NAMESPACE + ".Tag";
 
-  public static final String GOOGLE_PROTOBUF_PACKAGE = "google.protobuf";
-  public static final String GOOGLE_PROTOBUF_TIMESTAMP_NAME = "Timestamp";
-  public static final String GOOGLE_PROTOBUF_TIMESTAMP_FULL_NAME = GOOGLE_PROTOBUF_PACKAGE
-      + "."
-      + GOOGLE_PROTOBUF_TIMESTAMP_NAME;
-  public static final String GOOGLE_PROTOBUF_TIMESTAMP_LOCATION = "google/protobuf/timestamp.proto";
+  public static final String PROTOBUF_DECIMAL_LOCATION = "confluent/type/decimal.proto";
+  public static final String PROTOBUF_DECIMAL_TYPE = "confluent.type.Decimal";
+  public static final String PROTOBUF_DATE_LOCATION = "google/type/date.proto";
+  public static final String PROTOBUF_DATE_TYPE = "google.type.Date";
+  public static final String PROTOBUF_TIME_LOCATION = "google/type/timeofday.proto";
+  public static final String PROTOBUF_TIME_TYPE = "google.type.TimeOfDay";
+  public static final String PROTOBUF_TIMESTAMP_LOCATION = "google/protobuf/timestamp.proto";
+  public static final String PROTOBUF_TIMESTAMP_TYPE = "google.protobuf.Timestamp";
+
+  public static final String CONNECT_SCALE_PROP = "connect.scale";
+  public static final String CONNECT_TYPE_PROP = "connect.type";
+  public static final String CONNECT_TYPE_INT8 = "int8";
+  public static final String CONNECT_TYPE_INT16 = "int16";
+
+  private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+  private static final int MILLIS_PER_NANO = 1_000_000;
+  private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+
+  // Convert values in Kafka Connect form into their logical types. These logical converters are
+  // discovered by logical type
+  // names specified in the field
+  private static final HashMap<String, LogicalTypeConverter>
+          TO_CONNECT_LOGICAL_CONVERTERS = new HashMap<>();
+
+  static {
+    TO_CONNECT_LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, (schema, value) -> {
+      if (!(value instanceof Message)) {
+        throw new DataException("Invalid type for Date, "
+                + "expected Message but was "
+                + value.getClass());
+      }
+      Message message = (Message) value;
+      byte[] decimalValue = new byte[0];
+      int scale = 0;
+      for (Map.Entry<FieldDescriptor, Object> entry : message.getAllFields().entrySet()) {
+        if (entry.getKey().getName().equals("value")) {
+          decimalValue = ((ByteString) entry.getValue()).toByteArray();
+        } else if (entry.getKey().getName().equals("scale")) {
+          scale = ((Number) entry.getValue()).intValue();
+        }
+      }
+      return new BigDecimal(new BigInteger(decimalValue), scale);
+    });
+
+    TO_CONNECT_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, (schema, value) -> {
+      if (!(value instanceof Message)) {
+        throw new DataException("Invalid type for Date, "
+                + "expected Message but was "
+                + value.getClass());
+      }
+      Message message = (Message) value;
+      int year = 0;
+      int month = 0;
+      int day = 0;
+      for (Map.Entry<FieldDescriptor, Object> entry : message.getAllFields().entrySet()) {
+        if (entry.getKey().getName().equals("year")) {
+          year = ((Number) entry.getValue()).intValue();
+        } else if (entry.getKey().getName().equals("month")) {
+          month = ((Number) entry.getValue()).intValue();
+        } else if (entry.getKey().getName().equals("day")) {
+          day = ((Number) entry.getValue()).intValue();
+        }
+      }
+      Calendar cal = Calendar.getInstance(UTC);
+      cal.setLenient(false);
+      cal.set(Calendar.YEAR, year);
+      cal.set(Calendar.MONTH, month - 1);
+      cal.set(Calendar.DAY_OF_MONTH, day);
+      cal.set(Calendar.HOUR_OF_DAY, 0);
+      cal.set(Calendar.MINUTE, 0);
+      cal.set(Calendar.SECOND, 0);
+      cal.set(Calendar.MILLISECOND, 0);
+      return cal.getTime();
+    });
+
+    TO_CONNECT_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, (schema, value) -> {
+      if (!(value instanceof Message)) {
+        throw new DataException("Invalid type for Time, "
+                + "expected Message but was "
+                + value.getClass());
+      }
+      Message message = (Message) value;
+      int hours = 0;
+      int minutes = 0;
+      int seconds = 0;
+      int nanos = 0;
+      for (Map.Entry<FieldDescriptor, Object> entry : message.getAllFields().entrySet()) {
+        if (entry.getKey().getName().equals("hours")) {
+          hours = ((Number) entry.getValue()).intValue();
+        } else if (entry.getKey().getName().equals("minutes")) {
+          minutes = ((Number) entry.getValue()).intValue();
+        } else if (entry.getKey().getName().equals("seconds")) {
+          seconds = ((Number) entry.getValue()).intValue();
+        } else if (entry.getKey().getName().equals("nanos")) {
+          nanos = ((Number) entry.getValue()).intValue();
+        }
+      }
+      LocalTime localTime = LocalTime.of(hours, minutes, seconds, nanos);
+      return new java.util.Date(localTime.toNanoOfDay() / MILLIS_PER_NANO);
+    });
+
+    TO_CONNECT_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, (schema, value) -> {
+      if (!(value instanceof Message)) {
+        throw new DataException("Invalid type for Timestamp, "
+                + "expected Message but was "
+                + value.getClass());
+      }
+      Message message = (Message) value;
+      long seconds = 0L;
+      int nanos = 0;
+      for (Map.Entry<FieldDescriptor, Object> entry : message.getAllFields().entrySet()) {
+        if (entry.getKey().getName().equals("seconds")) {
+          seconds = ((Number) entry.getValue()).longValue();
+        } else if (entry.getKey().getName().equals("nanos")) {
+          nanos = ((Number) entry.getValue()).intValue();
+        }
+      }
+      com.google.protobuf.Timestamp timestamp = com.google.protobuf.Timestamp.newBuilder()
+              .setSeconds(seconds)
+              .setNanos(nanos)
+              .build();
+      return Timestamp.toLogical(schema, Timestamps.toMillis(timestamp));
+    });
+  }
+
+  private static final HashMap<String, LogicalTypeConverter>
+          TO_PROTOBUF_LOGICAL_CONVERTERS = new HashMap<>();
+
+  static {
+    TO_PROTOBUF_LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, (schema, value) -> {
+      if (!(value instanceof BigDecimal)) {
+        throw new DataException("Invalid type for Decimal, "
+                + "expected BigDecimal but was " + value.getClass());
+      }
+      BigDecimal decimal = (BigDecimal) value;
+      return io.confluent.protobuf.type.Decimal.newBuilder()
+              .setValue(ByteString.copyFrom(decimal.unscaledValue().toByteArray()))
+              .setScale(decimal.scale())
+              .build();
+    });
+
+    TO_PROTOBUF_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, (schema, value) -> {
+      if (!(value instanceof java.util.Date)) {
+        throw new DataException("Invalid type for Date, expected Date but was " + value.getClass());
+      }
+      java.util.Date date = (java.util.Date) value;
+      Calendar calendar = Calendar.getInstance(UTC);
+      calendar.setTime(date);
+      if (calendar.get(Calendar.HOUR_OF_DAY) != 0 || calendar.get(Calendar.MINUTE) != 0
+              || calendar.get(Calendar.SECOND) != 0 || calendar.get(Calendar.MILLISECOND) != 0) {
+        throw new DataException(
+                "Kafka Connect Date type should not have any time fields set to non-zero values.");
+      }
+      return com.google.type.Date.newBuilder()
+              .setYear(calendar.get(Calendar.YEAR))
+              .setMonth(calendar.get(Calendar.MONTH) + 1)
+              .setDay(calendar.get(Calendar.DAY_OF_MONTH))
+              .build();
+    });
+
+    TO_PROTOBUF_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, (schema, value) -> {
+      if (!(value instanceof java.util.Date)) {
+        throw new DataException("Invalid type for Time, expected Date but was " + value.getClass());
+      }
+      java.util.Date date = (java.util.Date) value;
+      Calendar calendar = Calendar.getInstance(UTC);
+      calendar.setTime(date);
+      long unixMillis = calendar.getTimeInMillis();
+      if (unixMillis < 0 || unixMillis > MILLIS_PER_DAY) {
+        throw new DataException(
+                "Time values must use number of millis greater than 0 and less than 86400000");
+      }
+      return com.google.type.TimeOfDay.newBuilder()
+              .setHours(calendar.get(Calendar.HOUR_OF_DAY))
+              .setMinutes(calendar.get(Calendar.MINUTE))
+              .setSeconds(calendar.get(Calendar.SECOND))
+              .setNanos(calendar.get(Calendar.MILLISECOND) * MILLIS_PER_NANO)
+              .build();
+    });
+
+    TO_PROTOBUF_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, (schema, value) -> {
+      if (!(value instanceof java.util.Date)) {
+        throw new DataException("Invalid type for Timestamp, "
+                + "expected Date but was " + value.getClass());
+      }
+      java.util.Date date = (java.util.Date) value;
+      return Timestamps.fromMillis(Timestamp.fromLogical(schema, date));
+    });
+  }
 
   private int defaultSchemaNameIndex = 0;
 
@@ -142,6 +335,13 @@ public class ProtobufData {
       return null;
     }
 
+    if (schema.name() != null) {
+      LogicalTypeConverter logicalConverter = TO_PROTOBUF_LOGICAL_CONVERTERS.get(schema.name());
+      if (logicalConverter != null) {
+        return logicalConverter.convert(schema, value);
+      }
+    }
+
     final Schema.Type schemaType = schema.type();
     try {
       switch (schemaType) {
@@ -153,11 +353,6 @@ public class ProtobufData {
         }
 
         case INT64: {
-          if (isProtobufTimestamp(schema)) {
-            final java.util.Date timestamp = (java.util.Date) value;
-            return Timestamps.fromMillis(Timestamp.fromLogical(schema, timestamp));
-          }
-
           final long longValue = ((Number) value).longValue(); // Check for correct type
           return longValue;
         }
@@ -249,7 +444,7 @@ public class ProtobufData {
               Object object = struct.get(field);
               if (object != null) {
                 Object fieldCtx = getFieldType(ctx, field.name());
-                return new Pair(field.name(),
+                return new Pair<>(field.name(),
                     fromConnectData(fieldCtx, field.schema(), scope, object, protobufSchema)
                 );
               }
@@ -433,7 +628,9 @@ public class ProtobufData {
             fieldDef.getType(),
             fieldDef.getName(),
             fieldDef.getNum(),
-            fieldDef.getDefaultVal()
+            fieldDef.getDefaultVal(),
+            fieldDef.getDoc(),
+            fieldDef.getParams()
         );
       }
     }
@@ -466,7 +663,9 @@ public class ProtobufData {
             fieldDef.getType(),
             fieldDef.getName(),
             fieldDef.getNum(),
-            fieldDef.getDefaultVal()
+            fieldDef.getDefaultVal(),
+            fieldDef.getDoc(),
+            fieldDef.getParams()
         );
       }
     }
@@ -480,58 +679,76 @@ public class ProtobufData {
       String name,
       int tag
   ) {
-    try {
-      String label = fieldSchema.isOptional() ? "optional" : "required";
-      if (fieldSchema.type() == Schema.Type.ARRAY) {
-        label = "repeated";
-        fieldSchema = fieldSchema.valueSchema();
-      } else if (fieldSchema.type() == Schema.Type.MAP) {
-        label = "repeated";
-      }
-      String type = dataTypeFromConnectSchema(fieldSchema, name);
-      if (fieldSchema.type() == Schema.Type.STRUCT) {
-        String fieldSchemaName = fieldSchema.name();
-        if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
-          String unionName =
-              getUnqualifiedName(fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length()));
-          oneofDefinitionFromConnectSchema(ctx, schema, message, fieldSchema, unionName);
-          return null;
-        } else {
-          if (!ctx.contains(type)) {
-            ctx.add(type);
-            message.addMessageDefinition(messageDefinitionFromConnectSchema(
-                ctx,
-                schema,
-                type,
-                fieldSchema
-            ));
-          }
+    String label = fieldSchema.isOptional() ? "optional" : "required";
+    if (fieldSchema.type() == Schema.Type.ARRAY) {
+      label = "repeated";
+      fieldSchema = fieldSchema.valueSchema();
+    } else if (fieldSchema.type() == Schema.Type.MAP) {
+      label = "repeated";
+    }
+    Map<String, String> params = new HashMap<>();
+    String type = dataTypeFromConnectSchema(fieldSchema, name, params);
+    if (fieldSchema.type() == Schema.Type.STRUCT) {
+      String fieldSchemaName = fieldSchema.name();
+      if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
+        String unionName =
+            getUnqualifiedName(fieldSchemaName.substring(PROTOBUF_TYPE_UNION_PREFIX.length()));
+        oneofDefinitionFromConnectSchema(ctx, schema, message, fieldSchema, unionName);
+        return null;
+      } else {
+        if (!ctx.contains(fieldSchemaName)) {
+          ctx.add(fieldSchemaName);
+          message.addMessageDefinition(messageDefinitionFromConnectSchema(
+              ctx,
+              schema,
+              type,
+              fieldSchema
+          ));
         }
-      } else if (fieldSchema.type() == Schema.Type.MAP) {
-        message.addMessageDefinition(
-            mapDefinitionFromConnectSchema(ctx, schema, type, fieldSchema));
-      } else if (fieldSchema.parameters() != null && fieldSchema.parameters()
-          .containsKey(PROTOBUF_TYPE_ENUM)) {
-        message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
-      } else if (type.equals(GOOGLE_PROTOBUF_TIMESTAMP_FULL_NAME)) {
-        DynamicSchema.Builder timestampSchema = DynamicSchema.newBuilder();
-        timestampSchema.setSyntax(ProtobufSchema.PROTO3);
-        timestampSchema.setName(GOOGLE_PROTOBUF_TIMESTAMP_LOCATION);
-        timestampSchema.setPackage(GOOGLE_PROTOBUF_PACKAGE);
-        timestampSchema.addMessageDefinition(timestampDefinition());
-        schema.addSchema(timestampSchema.build());
-        schema.addDependency(GOOGLE_PROTOBUF_TIMESTAMP_LOCATION);
       }
-      Object defaultVal = fieldSchema.defaultValue();
-      return new FieldDefinition(
-          label,
-          type,
-          name,
-          tag,
-          defaultVal != null ? defaultVal.toString() : null
-      );
-    } catch (Descriptors.DescriptorValidationException e) {
-      throw new IllegalStateException(e);
+    } else if (fieldSchema.type() == Schema.Type.MAP) {
+      message.addMessageDefinition(
+          mapDefinitionFromConnectSchema(ctx, schema, type, fieldSchema));
+    } else if (fieldSchema.parameters() != null && fieldSchema.parameters()
+        .containsKey(PROTOBUF_TYPE_ENUM)) {
+      message.addEnumDefinition(enumDefinitionFromConnectSchema(schema, fieldSchema));
+    } else {
+      DynamicSchema dynamicSchema = typeToDynamicSchema(type);
+      if (dynamicSchema != null) {
+        schema.addSchema(dynamicSchema);
+        schema.addDependency(dynamicSchema.getFileDescriptorProto().getName());
+      }
+    }
+    Object defaultVal = fieldSchema.defaultValue();
+    return new FieldDefinition(
+        label,
+        type,
+        name,
+        tag,
+        defaultVal != null ? defaultVal.toString() : null,
+        null,
+        params
+    );
+  }
+
+  private DynamicSchema typeToDynamicSchema(String type) {
+    ProtobufSchema dep;
+    switch (type) {
+      case PROTOBUF_DECIMAL_TYPE:
+        dep = new ProtobufSchema(
+                io.confluent.protobuf.type.Decimal.getDescriptor());
+        return dep.toDynamicSchema(PROTOBUF_DECIMAL_LOCATION);
+      case PROTOBUF_DATE_TYPE:
+        dep = new ProtobufSchema(com.google.type.Date.getDescriptor());
+        return dep.toDynamicSchema(PROTOBUF_DATE_LOCATION);
+      case PROTOBUF_TIME_TYPE:
+        dep = new ProtobufSchema(com.google.type.TimeOfDay.getDescriptor());
+        return dep.toDynamicSchema(PROTOBUF_TIME_LOCATION);
+      case PROTOBUF_TIMESTAMP_TYPE:
+        dep = new ProtobufSchema(com.google.protobuf.Timestamp.getDescriptor());
+        return dep.toDynamicSchema(PROTOBUF_TIMESTAMP_LOCATION);
+      default:
+        return null;
     }
   }
 
@@ -541,13 +758,18 @@ public class ProtobufData {
     private final String name;
     private final int num;
     private final String defaultVal;
+    private final String doc;
+    private final Map<String, String> params;
 
-    public FieldDefinition(String label, String type, String name, int num, String defaultVal) {
+    public FieldDefinition(String label, String type, String name, int num, String defaultVal,
+                           String doc, Map<String, String> params) {
       this.label = label;
       this.type = type;
       this.name = name;
       this.num = num;
       this.defaultVal = defaultVal;
+      this.doc = doc;
+      this.params = params;
     }
 
     public String getType() {
@@ -570,6 +792,14 @@ public class ProtobufData {
       return label;
     }
 
+    public String getDoc() {
+      return doc;
+    }
+
+    public Map<String, String> getParams() {
+      return params;
+    }
+
     @Override
     public boolean equals(Object o) {
       if (this == o) {
@@ -578,16 +808,19 @@ public class ProtobufData {
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      FieldDefinition field = (FieldDefinition) o;
-      return num == field.num && Objects.equals(label, field.label) && Objects.equals(
-          type,
-          field.type
-      ) && Objects.equals(name, field.name) && Objects.equals(defaultVal, field.defaultVal);
+      FieldDefinition that = (FieldDefinition) o;
+      return num == that.num
+              && Objects.equals(label, that.label)
+              && Objects.equals(type, that.type)
+              && Objects.equals(name, that.name)
+              && Objects.equals(defaultVal, that.defaultVal)
+              && Objects.equals(doc, that.doc)
+              && Objects.equals(params, that.params);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(label, type, name, num, defaultVal);
+      return Objects.hash(label, type, name, num, defaultVal, doc, params);
     }
   }
 
@@ -603,7 +836,8 @@ public class ProtobufData {
         KEY_FIELD,
         1
     );
-    map.addField(key.getLabel(), key.getType(), key.getName(), key.getNum(), key.getDefaultVal());
+    map.addField(key.getLabel(), key.getType(), key.getName(), key.getNum(),
+            key.getDefaultVal(), null, null);
     FieldDefinition val = fieldDefinitionFromConnectSchema(
         ctx,
         schema,
@@ -612,7 +846,8 @@ public class ProtobufData {
         VALUE_FIELD,
         2
     );
-    map.addField(val.getLabel(), val.getType(), val.getName(), val.getNum(), val.getDefaultVal());
+    map.addField(val.getLabel(), val.getType(), val.getName(), val.getNum(),
+            val.getDefaultVal(), null, null);
     return map.build();
   }
 
@@ -632,16 +867,31 @@ public class ProtobufData {
     return enumer.build();
   }
 
-  private String dataTypeFromConnectSchema(Schema schema, String fieldName) {
+  private String dataTypeFromConnectSchema(
+      Schema schema, String fieldName, Map<String, String> params) {
+    if (isDecimalSchema(schema)) {
+      if (schema.parameters() != null) {
+        String scale = schema.parameters().get(Decimal.SCALE_FIELD);
+        params.put(CONNECT_SCALE_PROP, scale);
+      }
+      return PROTOBUF_DECIMAL_TYPE;
+    } else if (isDateSchema(schema)) {
+      return PROTOBUF_DATE_TYPE;
+    } else if (isTimeSchema(schema)) {
+      return PROTOBUF_TIME_TYPE;
+    } else if (isTimestampSchema(schema)) {
+      return PROTOBUF_TIMESTAMP_TYPE;
+    }
     switch (schema.type()) {
       case INT8:
+        params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT8);
+        return FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT16:
+        params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT16);
+        return FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT32:
         return FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT64:
-        if (isProtobufTimestamp(schema)) {
-          return GOOGLE_PROTOBUF_TIMESTAMP_FULL_NAME;
-        }
         return FieldDescriptor.Type.INT64.toString().toLowerCase();
       case FLOAT32:
         return FieldDescriptor.Type.FLOAT.toString().toLowerCase();
@@ -673,8 +923,20 @@ public class ProtobufData {
     }
   }
 
-  private boolean isProtobufTimestamp(Schema schema) {
-    return Timestamp.SCHEMA.name().equals(schema.name());
+  private boolean isDecimalSchema(Schema schema) {
+    return Decimal.LOGICAL_NAME.equals(schema.name());
+  }
+
+  private boolean isDateSchema(Schema schema) {
+    return Date.LOGICAL_NAME.equals(schema.name());
+  }
+
+  private boolean isTimeSchema(Schema schema) {
+    return Time.LOGICAL_NAME.equals(schema.name());
+  }
+
+  private boolean isTimestampSchema(Schema schema) {
+    return Timestamp.LOGICAL_NAME.equals(schema.name());
   }
 
   public SchemaAndValue toConnectData(ProtobufSchema protobufSchema, Message message) {
@@ -693,29 +955,22 @@ public class ProtobufData {
       if (value == null) {
         return null;
       }
-      if (isProtobufTimestamp(schema)) {
-        Message message = (Message) value;
 
-        long seconds = 0L;
-        int nanos = 0;
-        for (Map.Entry<FieldDescriptor, Object> entry : message.getAllFields().entrySet()) {
-          if (entry.getKey().getName().equals("seconds")) {
-            seconds = ((Number) entry.getValue()).longValue();
-          } else if (entry.getKey().getName().equals("nanos")) {
-            nanos = ((Number) entry.getValue()).intValue();
-          }
+      if (schema.name() != null) {
+        LogicalTypeConverter logicalConverter = TO_CONNECT_LOGICAL_CONVERTERS.get(schema.name());
+        if (logicalConverter != null) {
+          return logicalConverter.convert(schema, value);
         }
-        com.google.protobuf.Timestamp timestamp = com.google.protobuf.Timestamp.newBuilder()
-            .setSeconds(seconds)
-            .setNanos(nanos)
-            .build();
-        return Timestamp.toLogical(schema, Timestamps.toMillis(timestamp));
       }
 
       Object converted = null;
       switch (schema.type()) {
         case INT8:
+          converted = ((Number) value).byteValue();
+          break;
         case INT16:
+          converted = ((Number) value).shortValue();
+          break;
         case INT32:
           converted = ((Number) value).intValue();
           break;
@@ -927,6 +1182,20 @@ public class ProtobufData {
       case INT32:
       case SINT32:
       case SFIXED32: {
+        if (descriptor.getOptions().hasExtension(MetaProto.fieldMeta)) {
+          Meta fieldMeta = descriptor.getOptions().getExtension(MetaProto.fieldMeta);
+          Map<String, String> params = fieldMeta.getParamsMap();
+          if (params != null) {
+            String connectType = params.get(CONNECT_TYPE_PROP);
+            if (CONNECT_TYPE_INT8.equals(connectType)) {
+              builder = SchemaBuilder.int8();
+              break;
+            } else if (CONNECT_TYPE_INT16.equals(connectType)) {
+              builder = SchemaBuilder.int16();
+              break;
+            }
+          }
+        }
         builder = SchemaBuilder.int32();
         break;
       }
@@ -978,7 +1247,28 @@ public class ProtobufData {
         break;
 
       case MESSAGE: {
-        if (isTimestampDescriptor(descriptor)) {
+        if (isDecimalDescriptor(descriptor)) {
+          int scale = 0;
+          if (descriptor.getOptions().hasExtension(MetaProto.fieldMeta)) {
+            Meta fieldMeta = descriptor.getOptions().getExtension(MetaProto.fieldMeta);
+            Map<String, String> params = fieldMeta.getParamsMap();
+            if (params != null) {
+              try {
+                scale = Integer.parseInt(params.get(CONNECT_SCALE_PROP));
+              } catch (NumberFormatException e) {
+                // ignore
+              }
+            }
+          }
+          builder = Decimal.builder(scale);
+          break;
+        } else if (isDateDescriptor(descriptor)) {
+          builder = Date.builder();
+          break;
+        } else if (isTimeDescriptor(descriptor)) {
+          builder = Time.builder();
+          break;
+        } else if (isTimestampDescriptor(descriptor)) {
           builder = Timestamp.builder();
           break;
         }
@@ -1009,17 +1299,24 @@ public class ProtobufData {
     return builder.build();
   }
 
-  private static MessageDefinition timestampDefinition() {
-    MessageDefinition.Builder timestampType = MessageDefinition.newBuilder(
-        GOOGLE_PROTOBUF_TIMESTAMP_NAME);
-    timestampType.addField("optional", "int64", "seconds", 1, null);
-    timestampType.addField("optional", "int32", "nanos", 2, null);
-    return timestampType.build();
+  private static boolean isDecimalDescriptor(FieldDescriptor descriptor) {
+    String name = descriptor.getMessageType().getFullName();
+    return PROTOBUF_DECIMAL_TYPE.equals(name);
+  }
+
+  private static boolean isDateDescriptor(FieldDescriptor descriptor) {
+    String name = descriptor.getMessageType().getFullName();
+    return PROTOBUF_DATE_TYPE.equals(name);
+  }
+
+  private static boolean isTimeDescriptor(FieldDescriptor descriptor) {
+    String name = descriptor.getMessageType().getFullName();
+    return PROTOBUF_TIME_TYPE.equals(name);
   }
 
   private static boolean isTimestampDescriptor(FieldDescriptor descriptor) {
     String name = descriptor.getMessageType().getFullName();
-    return GOOGLE_PROTOBUF_TIMESTAMP_FULL_NAME.equals(name);
+    return PROTOBUF_TIMESTAMP_TYPE.equals(name);
   }
 
   private static boolean isMapDescriptor(
@@ -1195,6 +1492,10 @@ public class ProtobufData {
       // Don't create a ConnectSchema
       return this;
     }
+  }
+
+  private interface LogicalTypeConverter {
+    Object convert(Schema schema, Object value);
   }
 
   /**

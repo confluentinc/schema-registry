@@ -36,6 +36,19 @@ import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
 import io.confluent.connect.protobuf.test.RecursiveKeyValue;
+import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass;
+import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass.DateValue;
+import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass;
+import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
+import io.confluent.kafka.serializers.protobuf.test.Int16ValueOuterClass.Int16Value;
+import io.confluent.kafka.serializers.protobuf.test.Int8ValueOuterClass.Int8Value;
+import io.confluent.kafka.serializers.protobuf.test.TimeOfDayValueOuterClass;
+import io.confluent.kafka.serializers.protobuf.test.TimeOfDayValueOuterClass.TimeOfDayValue;
+import io.confluent.protobuf.type.Decimal;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalTime;
+import java.util.TimeZone;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -71,8 +84,6 @@ import io.confluent.kafka.serializers.protobuf.test.UInt32ValueOuterClass;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION_PREFIX;
 import static io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.newBuilder;
-import static org.apache.kafka.connect.data.Schema.OPTIONAL_INT16_SCHEMA;
-import static org.apache.kafka.connect.data.Schema.OPTIONAL_INT8_SCHEMA;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -81,6 +92,14 @@ public class ProtobufDataTest {
 
   private static final Logger log = LoggerFactory.getLogger(ProtobufDataTest.class);
 
+  private static Schema OPTIONAL_INT8_SCHEMA = SchemaBuilder.int8()
+      .optional()
+      .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+      .build();
+  private static Schema OPTIONAL_INT16_SCHEMA = SchemaBuilder.int16()
+      .optional()
+      .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+      .build();
   private static Schema OPTIONAL_INT32_SCHEMA = SchemaBuilder.int32()
       .optional()
       .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
@@ -509,6 +528,26 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testToConnectInt8() throws Exception {
+    Byte expectedValue = 12;
+    Int8Value.Builder builder = Int8Value.newBuilder();
+    builder.setValue(expectedValue);
+    Int8Value message = builder.build();
+    SchemaAndValue result = getSchemaAndValue(message);
+    assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT8_SCHEMA, message, expectedValue), result);
+  }
+
+  @Test
+  public void testToConnectInt16() throws Exception {
+    Short expectedValue = 12;
+    Int16Value.Builder builder = Int16Value.newBuilder();
+    builder.setValue(expectedValue);
+    Int16Value message = builder.build();
+    SchemaAndValue result = getSchemaAndValue(message);
+    assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT16_SCHEMA, message, expectedValue), result);
+  }
+
+  @Test
   public void testToConnectInt32() throws Exception {
     Integer expectedValue = 12;
     Int32Value.Builder builder = Int32Value.newBuilder();
@@ -618,8 +657,81 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testToConnectDecimal() throws Exception {
+    BigDecimal expectedValue = new BigDecimal(BigInteger.valueOf(12345678L), 3);
+
+    Decimal.Builder decimalBuilder =
+            Decimal.newBuilder();
+    decimalBuilder.setValue(ByteString.copyFrom(expectedValue.unscaledValue().toByteArray()));
+    decimalBuilder.setScale(expectedValue.scale());
+
+    DecimalValueOuterClass.DecimalValue.Builder builder =
+            DecimalValueOuterClass.DecimalValue.newBuilder();
+    builder.setValue(decimalBuilder.build());
+    DecimalValueOuterClass.DecimalValue message = builder.build();
+
+    SchemaAndValue result = getSchemaAndValue(message);
+
+    Schema decimalSchema = org.apache.kafka.connect.data.Decimal.builder(3)
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+            .build();
+    assertEquals(getExpectedSchemaAndValue(decimalSchema, message, expectedValue), result);
+  }
+
+  @Test
+  public void testToConnectDate() throws Exception {
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
+    sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+    java.util.Date expectedValue = sdf.parse("2017/12/31");
+
+    com.google.type.Date.Builder dateBuilder = com.google.type.Date.newBuilder();
+    dateBuilder.setYear(2017);
+    dateBuilder.setMonth(12);
+    dateBuilder.setDay(31);
+
+    DateValueOuterClass.DateValue.Builder builder = DateValueOuterClass.DateValue.newBuilder();
+    builder.setValue(dateBuilder.build());
+    DateValueOuterClass.DateValue message = builder.build();
+
+    SchemaAndValue result = getSchemaAndValue(message);
+
+    Schema dateSchema = org.apache.kafka.connect.data.Date.builder()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .build();
+    assertEquals(getExpectedSchemaAndValue(dateSchema, message, expectedValue), result);
+  }
+
+  @Test
+  public void testToConnectTime() throws Exception {
+    LocalTime localTime = LocalTime.of(11, 12, 13, 14_000_000);
+    java.util.Date expectedValue = new java.util.Date(localTime.toNanoOfDay() / 1_000_000);
+
+    com.google.type.TimeOfDay.Builder timeBuilder = com.google.type.TimeOfDay.newBuilder();
+    timeBuilder.setHours(11);
+    timeBuilder.setMinutes(12);
+    timeBuilder.setSeconds(13);
+    timeBuilder.setNanos(14_000_000);
+
+    TimeOfDayValueOuterClass.TimeOfDayValue.Builder builder =
+            TimeOfDayValueOuterClass.TimeOfDayValue.newBuilder();
+    builder.setValue(timeBuilder.build());
+    TimeOfDayValueOuterClass.TimeOfDayValue message = builder.build();
+
+    SchemaAndValue result = getSchemaAndValue(message);
+
+    Schema dateSchema = org.apache.kafka.connect.data.Time.builder()
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+            .build();
+    assertEquals(getExpectedSchemaAndValue(dateSchema, message, expectedValue), result);
+  }
+
+  @Test
   public void testToConnectTimestamp() throws Exception {
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
+    sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
     java.util.Date expectedValue = sdf.parse("2017/12/31");
 
     Timestamp timestamp = Timestamps.fromMillis(expectedValue.getTime());
@@ -852,7 +964,7 @@ public class ProtobufDataTest {
   public void testFromConnectInt8() throws Exception {
     Byte value = 15;
     byte[] messageBytes = getMessageBytes(OPTIONAL_INT8_SCHEMA, value);
-    Message message = Int32Value.parseFrom(messageBytes);
+    Message message = Int8Value.parseFrom(messageBytes);
 
     assertEquals(1, message.getAllFields().size());
 
@@ -866,7 +978,7 @@ public class ProtobufDataTest {
   public void testFromConnectInt16() throws Exception {
     Short value = 15;
     byte[] messageBytes = getMessageBytes(OPTIONAL_INT16_SCHEMA, value);
-    Message message = Int32Value.parseFrom(messageBytes);
+    Message message = Int16Value.parseFrom(messageBytes);
 
     assertEquals(1, message.getAllFields().size());
 
@@ -903,11 +1015,80 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testFromConnectDecimal() throws Exception {
+    BigDecimal bigDecimal = new BigDecimal(BigInteger.valueOf(12345678L), 3);
+    DecimalValue.Builder builder = DecimalValue.newBuilder();
+    Decimal decimal =
+            Decimal.newBuilder()
+            .setValue(ByteString.copyFrom(bigDecimal.unscaledValue().toByteArray()))
+            .setScale(3)
+            .build();
+    builder.setValue(decimal);
+    DecimalValue decimalMessage = builder.build();
+
+    SchemaAndValue schemaAndValue = getSchemaAndValue(decimalMessage);
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+    Message message = DecimalValue.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+            .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(decimal, message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectDate() throws Exception {
+    DateValue.Builder builder = DateValue.newBuilder();
+    com.google.type.Date date = com.google.type.Date.newBuilder()
+            .setYear(2017)
+            .setMonth(9)
+            .setDay(18)
+            .build();
+    builder.setValue(date);
+    DateValue dateMessage = builder.build();
+
+    SchemaAndValue schemaAndValue = getSchemaAndValue(dateMessage);
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+    Message message = DateValue.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+            .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(date, message.getField(fieldDescriptor));
+  }
+
+  @Test
+  public void testFromConnectTime() throws Exception {
+    TimeOfDayValue.Builder builder = TimeOfDayValue.newBuilder();
+    com.google.type.TimeOfDay time = com.google.type.TimeOfDay.newBuilder()
+            .setHours(11)
+            .setMinutes(12)
+            .setSeconds(13)
+            .setNanos(14_000_0000)
+            .build();
+    builder.setValue(time);
+    TimeOfDayValue timeMessage = builder.build();
+
+    SchemaAndValue schemaAndValue = getSchemaAndValue(timeMessage);
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+    Message message = TimeOfDayValue.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+            .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(time, message.getField(fieldDescriptor));
+  }
+
+  @Test
   public void testFromConnectTimestamp() throws Exception {
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
+    sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
     java.util.Date date = sdf.parse("2017/09/18");
     Timestamp timestamp = Timestamps.fromMillis(date.getTime());
-    TimestampValue.Builder builder = newBuilder();
+    TimestampValue.Builder builder = TimestampValue.newBuilder();
     builder.setValue(timestamp);
     TimestampValue timestampMessage = builder.build();
 
@@ -919,7 +1100,7 @@ public class ProtobufDataTest {
 
     Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
         .findFieldByName(VALUE_FIELD_NAME);
-    assertEquals(Timestamps.fromMillis(date.getTime()), message.getField(fieldDescriptor));
+    assertEquals(timestamp, message.getField(fieldDescriptor));
   }
 
   @Test
