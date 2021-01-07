@@ -45,10 +45,6 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-protobuf-types</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.squareup.wire</groupId>
             <artifactId>wire-schema</artifactId>
         </dependency>

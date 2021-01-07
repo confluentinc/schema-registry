@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
@@ -44,9 +45,6 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ProtoParser;
 import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
-import io.confluent.protobuf.MetaProto;
-import io.confluent.protobuf.MetaProto.Meta;
-import java.util.LinkedHashMap;
 import kotlin.ranges.IntRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +54,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -84,9 +83,6 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final String PROTO2 = "proto2";
   public static final String PROTO3 = "proto3";
-
-  public static final String DOC_FIELD = "doc";
-  public static final String PARAMS_FIELD = "params";
 
   public static final String DEFAULT_NAME = "default";
   public static final String MAP_ENTRY_SUFFIX = "Entry";  // Suffix used by protoc
@@ -166,7 +162,7 @@ public class ProtobufSchema implements ParsedSchema {
     this.version = null;
     this.name = descriptor.getFullName();
     this.references = Collections.emptyList();
-    this.dependencies = Collections.unmodifiableMap(dependencies);
+    this.dependencies = dependencies;
     this.descriptor = descriptor;
   }
 
@@ -336,11 +332,6 @@ public class ProtobufSchema implements ParsedSchema {
       );
       options.add(option);
     }
-    if (file.getOptions().hasExtension(MetaProto.fileMeta)) {
-      Meta meta = file.getOptions().getExtension(MetaProto.fileMeta);
-      OptionElement option = toOption("confluent.file_meta", meta);
-      options.add(option);
-    }
     // NOTE: skip services, extensions, some options
     return new ProtoFileElement(DEFAULT_LOCATION,
         packageName,
@@ -406,11 +397,6 @@ public class ProtobufSchema implements ParsedSchema {
       );
       options.add(option);
     }
-    if (descriptor.getOptions().hasExtension(MetaProto.messageMeta)) {
-      Meta meta = descriptor.getOptions().getExtension(MetaProto.messageMeta);
-      OptionElement option = toOption("confluent.message_meta", meta);
-      options.add(option);
-    }
     // NOTE: skip some options, extensions, groups
     return new MessageElement(DEFAULT_LOCATION,
         name,
@@ -425,27 +411,6 @@ public class ProtobufSchema implements ParsedSchema {
         Collections.emptyList(),
         Collections.emptyList()
     );
-  }
-
-  private OptionElement toOption(String name, Meta meta) {
-    Map<String, Object> map = new HashMap<>();
-    String doc = meta.getDoc();
-    if (doc != null) {
-      map.put(DOC_FIELD, doc);
-    }
-    Map<String, String> params = meta.getParamsMap();
-    if (params != null) {
-      List<Map<String, String>> keyValues = new ArrayList<>();
-      for (Map.Entry<String, String> entry : params.entrySet()) {
-        Map<String, String> keyValue = new HashMap<>();
-        keyValue.put(KEY_FIELD, entry.getKey());
-        keyValue.put(VALUE_FIELD, entry.getValue());
-        keyValues.add(keyValue);
-      }
-      map.put(PARAMS_FIELD, keyValues);
-    }
-    OptionElement.Kind kind = OptionElement.Kind.MAP;
-    return new OptionElement(name, kind, map, true);
   }
 
   private ReservedElement toReserved(ReservedRange range) {
@@ -467,19 +432,13 @@ public class ProtobufSchema implements ParsedSchema {
     log.trace("*** enum name: {}", name);
     ImmutableList.Builder<EnumConstantElement> constants = ImmutableList.builder();
     for (EnumValueDescriptorProto ev : ed.getValueList()) {
-      ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
-      if (ev.getOptions().hasExtension(MetaProto.enumValueMeta)) {
-        Meta meta = ev.getOptions().getExtension(MetaProto.enumValueMeta);
-        OptionElement option = toOption("confluent.enum_value_meta", meta);
-        options.add(option);
-      }
-      // NOTE: skip some options
+      // NOTE: skip options
       constants.add(new EnumConstantElement(
           DEFAULT_LOCATION,
           ev.getName(),
           ev.getNumber(),
           "",
-          options.build()
+          Collections.emptyList()
       ));
     }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
@@ -491,11 +450,6 @@ public class ProtobufSchema implements ParsedSchema {
           ed.getOptions().getAllowAlias(),
           false
       );
-      options.add(option);
-    }
-    if (ed.getOptions().hasExtension(MetaProto.enumMeta)) {
-      Meta meta = ed.getOptions().getExtension(MetaProto.enumMeta);
-      OptionElement option = toOption("confluent.enum_meta", meta);
       options.add(option);
     }
     // NOTE: skip some options
@@ -519,11 +473,6 @@ public class ProtobufSchema implements ParsedSchema {
           fd.getJsonName(),
           false
       );
-      options.add(option);
-    }
-    if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
-      Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
-      OptionElement option = toOption("confluent.field_meta", meta);
       options.add(option);
     }
     String defaultValue = fd.hasDefaultValue() && fd.getDefaultValue() != null
@@ -600,20 +549,20 @@ public class ProtobufSchema implements ParsedSchema {
         + " contains no message type definitions");
   }
 
-  public DynamicSchema toDynamicSchema() {
-    return toDynamicSchema(DEFAULT_NAME);
-  }
-
-  public DynamicSchema toDynamicSchema(String name) {
+  @VisibleForTesting
+  protected DynamicSchema toDynamicSchema() {
     if (schemaObj == null) {
       return null;
     }
     if (dynamicSchema == null) {
-      dynamicSchema = toDynamicSchema(name, schemaObj, dependencies);
+      dynamicSchema = toDynamicSchema(DEFAULT_NAME, schemaObj, dependencies);
     }
     return dynamicSchema;
   }
 
+  /*
+   * DynamicSchema is used as a temporary helper class and should not be exposed in the API.
+   */
   private static DynamicSchema toDynamicSchema(
       String name, ProtoFileElement rootElem, Map<String, ProtoFileElement> dependencies
   ) {
@@ -665,10 +614,6 @@ public class ProtobufSchema implements ParsedSchema {
       if (javaMultipleFiles != null) {
         schema.setJavaMultipleFiles(javaMultipleFiles);
       }
-      Optional<OptionElement> meta = findOption("confluent.file_meta", rootElem.getOptions());
-      String doc = findDoc(meta);
-      Map<String, String> params = findParams(meta);
-      schema.setMeta(doc, params);
       schema.setName(name);
       return schema.build();
     } catch (Descriptors.DescriptorValidationException e) {
@@ -695,17 +640,12 @@ public class ProtobufSchema implements ParsedSchema {
         String defaultVal = field.getDefaultValue();
         String jsonName = findOption("json_name", field.getOptions())
             .map(o -> o.getValue().toString()).orElse(null);
-        Optional<OptionElement> meta = findOption("confluent.field_meta", field.getOptions());
-        String doc = findDoc(meta);
-        Map<String, String> params = findParams(meta);
         oneofBuilder.addField(
             field.getType(),
             field.getName(),
             field.getTag(),
             defaultVal,
-            jsonName,
-            doc,
-            params
+            jsonName
         );
         added.add(field.getName());
       }
@@ -723,9 +663,6 @@ public class ProtobufSchema implements ParsedSchema {
           .map(o -> o.getValue().toString()).orElse(null);
       Boolean isPacked = findOption("packed", field.getOptions())
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-      Optional<OptionElement> meta = findOption("confluent.field_meta", field.getOptions());
-      String doc = findDoc(meta);
-      Map<String, String> params = findParams(meta);
       ProtoType protoType = ProtoType.get(fieldType);
       ProtoType keyType = protoType.getKeyType();
       ProtoType valueType = protoType.getValueType();
@@ -735,8 +672,8 @@ public class ProtobufSchema implements ParsedSchema {
         fieldType = toMapEntry(field.getName());
         MessageDefinition.Builder mapMessage = MessageDefinition.newBuilder(fieldType);
         mapMessage.setMapEntry(true);
-        mapMessage.addField(null, keyType.getSimpleName(), KEY_FIELD, 1, null, null, null);
-        mapMessage.addField(null, valueType.getSimpleName(), VALUE_FIELD, 2, null, null, null);
+        mapMessage.addField(null, keyType.getSimpleName(), KEY_FIELD, 1, null);
+        mapMessage.addField(null, valueType.getSimpleName(), VALUE_FIELD, 2, null);
         message.addMessageDefinition(mapMessage.build());
       }
       message.addField(
@@ -746,8 +683,6 @@ public class ProtobufSchema implements ParsedSchema {
           field.getTag(),
           defaultVal,
           jsonName,
-          doc,
-          params,
           isPacked
       );
     }
@@ -772,10 +707,6 @@ public class ProtobufSchema implements ParsedSchema {
     if (isMapEntry != null) {
       message.setMapEntry(isMapEntry);
     }
-    Optional<OptionElement> meta = findOption("confluent.message_meta", messageElem.getOptions());
-    String doc = findDoc(meta);
-    Map<String, String> params = findParams(meta);
-    message.setMeta(doc, params);
     return message.build();
   }
 
@@ -783,59 +714,13 @@ public class ProtobufSchema implements ParsedSchema {
     return options.stream().filter(o -> o.getName().equals(name)).findFirst();
   }
 
-  public static String findDoc(Optional<OptionElement> meta) {
-    return (String) findMeta(meta, DOC_FIELD);
-  }
-
-  public static Map<String, String> findParams(Optional<OptionElement> meta) {
-    List<Map<String, String>> keyValues = (List<Map<String, String>>) findMeta(meta, PARAMS_FIELD);
-    if (keyValues == null) {
-      return null;
-    }
-    Map<String, String> params = new HashMap<>();
-    for (Map<String, String> keyValue : keyValues) {
-      String key = keyValue.get(KEY_FIELD);
-      String value = keyValue.get(VALUE_FIELD);
-      params.put(key, value);
-    }
-    return params;
-  }
-
-  public static Object findMeta(Optional<OptionElement> meta, String name) {
-    if (!meta.isPresent()) {
-      return null;
-    }
-    OptionElement options = meta.get();
-    switch (options.getKind()) {
-      case OPTION:
-        OptionElement option = (OptionElement) options.getValue();
-        if (option.getName().equals(name)) {
-          return option.getValue();
-        } else {
-          return null;
-        }
-      case MAP:
-        Map<String, ?> map = (Map<String, ?>) options.getValue();
-        return map.get(name);
-      default:
-        throw new IllegalStateException("Unexpected custom option kind " + options.getKind());
-    }
-  }
-
   private static EnumDefinition toDynamicEnum(EnumElement enumElem) {
     Boolean allowAlias = findOption("allow_alias", enumElem.getOptions())
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
     EnumDefinition.Builder enumer = EnumDefinition.newBuilder(enumElem.getName(), allowAlias);
     for (EnumConstantElement constant : enumElem.getConstants()) {
-      Optional<OptionElement> meta = findOption("confluent.enum_value_meta", constant.getOptions());
-      String doc = findDoc(meta);
-      Map<String, String> params = findParams(meta);
-      enumer.addValue(constant.getName(), constant.getTag(), doc, params);
+      enumer.addValue(constant.getName(), constant.getTag());
     }
-    Optional<OptionElement> meta = findOption("confluent.enum_meta", enumElem.getOptions());
-    String doc = findDoc(meta);
-    Map<String, String> params = findParams(meta);
-    enumer.setMeta(doc, params);
     return enumer.build();
   }
 

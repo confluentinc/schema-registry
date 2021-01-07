@@ -38,15 +38,6 @@
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-protobuf-types</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.google.api.grpc</groupId>
-            <artifactId>proto-google-common-protos</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java-util</artifactId>
         </dependency>
