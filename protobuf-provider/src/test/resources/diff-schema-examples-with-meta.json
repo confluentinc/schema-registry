@@ -1,0 +1,67 @@
+[
+  {
+    "description": "Ignore changes to custom imports",
+    "original_schema": "io/confluent/kafka/schemaregistry/protobuf/diff/DecimalValue.proto",
+    "update_schema": "io/confluent/kafka/schemaregistry/protobuf/diff/DecimalValue2.proto",
+    "original_references": [
+      {
+        "name": "google/protobuf/descriptor.proto",
+        "subject": "google/protobuf/descriptor.proto",
+        "version": 1
+      },
+      {
+        "name": "confluent/meta.proto",
+        "subject": "confluent/meta.proto",
+        "version": 1
+      },
+      {
+        "name": "confluent/type/decimal.proto",
+        "subject": "confluent/type/decimal.proto",
+        "version": 1
+      }
+    ],
+    "update_references": [
+      {
+        "name": "google/protobuf/descriptor.proto",
+        "subject": "google/protobuf/descriptor.proto",
+        "version": 1
+      },
+      {
+        "name": "confluent/meta.proto",
+        "subject": "confluent/meta.proto",
+        "version": 1
+      },
+      {
+        "name": "confluent/type/decimal.proto",
+        "subject": "confluent/type/decimal.proto",
+        "version": 1
+      }
+    ],
+    "original_dependencies": [
+      {
+        "name": "google/protobuf/descriptor.proto"
+      },
+      {
+        "name": "confluent/meta.proto"
+      },
+      {
+        "name": "confluent/type/decimal.proto"
+      }
+    ],
+    "update_dependencies": [
+      {
+        "name": "google/protobuf/descriptor.proto"
+      },
+      {
+        "name": "confluent/meta.proto"
+      },
+      {
+        "name": "confluent/type/decimal.proto"
+      }
+    ],
+    "changes": [
+      "ENUM_ADDED #/Status"
+    ],
+    "compatible": true
+  }
+]
