@@ -339,7 +339,9 @@ public class ProtobufSchema implements ParsedSchema {
     if (file.getOptions().hasExtension(MetaProto.fileMeta)) {
       Meta meta = file.getOptions().getExtension(MetaProto.fileMeta);
       OptionElement option = toOption("confluent.file_meta", meta);
-      options.add(option);
+      if (option != null) {
+        options.add(option);
+      }
     }
     // NOTE: skip services, extensions, some options
     return new ProtoFileElement(DEFAULT_LOCATION,
@@ -409,7 +411,9 @@ public class ProtobufSchema implements ParsedSchema {
     if (descriptor.getOptions().hasExtension(MetaProto.messageMeta)) {
       Meta meta = descriptor.getOptions().getExtension(MetaProto.messageMeta);
       OptionElement option = toOption("confluent.message_meta", meta);
-      options.add(option);
+      if (option != null) {
+        options.add(option);
+      }
     }
     // NOTE: skip some options, extensions, groups
     return new MessageElement(DEFAULT_LOCATION,
@@ -430,11 +434,11 @@ public class ProtobufSchema implements ParsedSchema {
   private OptionElement toOption(String name, Meta meta) {
     Map<String, Object> map = new HashMap<>();
     String doc = meta.getDoc();
-    if (doc != null) {
+    if (doc != null && !doc.isEmpty()) {
       map.put(DOC_FIELD, doc);
     }
     Map<String, String> params = meta.getParamsMap();
-    if (params != null) {
+    if (params != null && !params.isEmpty()) {
       List<Map<String, String>> keyValues = new ArrayList<>();
       for (Map.Entry<String, String> entry : params.entrySet()) {
         Map<String, String> keyValue = new HashMap<>();
@@ -445,7 +449,7 @@ public class ProtobufSchema implements ParsedSchema {
       map.put(PARAMS_FIELD, keyValues);
     }
     OptionElement.Kind kind = OptionElement.Kind.MAP;
-    return new OptionElement(name, kind, map, true);
+    return map.isEmpty() ? null : new OptionElement(name, kind, map, true);
   }
 
   private ReservedElement toReserved(ReservedRange range) {
@@ -471,7 +475,9 @@ public class ProtobufSchema implements ParsedSchema {
       if (ev.getOptions().hasExtension(MetaProto.enumValueMeta)) {
         Meta meta = ev.getOptions().getExtension(MetaProto.enumValueMeta);
         OptionElement option = toOption("confluent.enum_value_meta", meta);
-        options.add(option);
+        if (option != null) {
+          options.add(option);
+        }
       }
       // NOTE: skip some options
       constants.add(new EnumConstantElement(
@@ -496,7 +502,9 @@ public class ProtobufSchema implements ParsedSchema {
     if (ed.getOptions().hasExtension(MetaProto.enumMeta)) {
       Meta meta = ed.getOptions().getExtension(MetaProto.enumMeta);
       OptionElement option = toOption("confluent.enum_meta", meta);
-      options.add(option);
+      if (option != null) {
+        options.add(option);
+      }
     }
     // NOTE: skip some options
     return new EnumElement(DEFAULT_LOCATION, name, "", options.build(), constants.build());
@@ -524,7 +532,9 @@ public class ProtobufSchema implements ParsedSchema {
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
       OptionElement option = toOption("confluent.field_meta", meta);
-      options.add(option);
+      if (option != null) {
+        options.add(option);
+      }
     }
     String defaultValue = fd.hasDefaultValue() && fd.getDefaultValue() != null
                           ? fd.getDefaultValue()
