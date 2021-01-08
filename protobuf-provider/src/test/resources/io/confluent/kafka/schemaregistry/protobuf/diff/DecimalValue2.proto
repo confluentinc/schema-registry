@@ -5,16 +5,12 @@ import "confluent/type/decimal.proto";
 
 option java_package = "io.confluent.kafka.serializers.protobuf.test";
 option (confluent.file_meta) = {
-  doc: "file",
-  params: [
-  ]
+  doc: "file"
 };
 
 message DecimalValue {
   option (confluent.message_meta) = {
-    doc: "message",
-    params: [
-    ]
+    doc: "message"
   };
 
   confluent.type.Decimal value = 1 [(confluent.field_meta) = {
@@ -29,9 +25,7 @@ message DecimalValue {
 }
 enum Status {
   option (confluent.enum_meta) = {
-    doc: "enum",
-    params: [
-    ]
+    doc: "enum"
   };
   ACTIVE = 0 [(confluent.enum_value_meta) = {
     doc: "enum_value",

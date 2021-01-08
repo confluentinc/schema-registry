@@ -288,16 +288,12 @@ public class RestApiTest extends ClusterTestHarness {
         + "\n"
         + "message ReferrerMessage {\n"
         + "  option (confluent.message_meta) = {\n"
-        + "    doc: \"ReferrerMessage\",\n"
-        + "    params: [\n"
-        + "    ]\n"
+        + "    doc: \"ReferrerMessage\"\n"
         + "  };\n"
         + "\n"
         + "  string root_id = 1;\n"
         + "  .io.confluent.kafka.serializers.protobuf.test.ReferencedMessage ref = 2 [(confluent.field_meta) = {\n"
-        + "    doc: \"ReferencedMessage\",\n"
-        + "    params: [\n"
-        + "    ]\n"
+        + "    doc: \"ReferencedMessage\"\n"
         + "  }];\n"
         + "}\n";
     schemas.put("root.proto", schemaString);
