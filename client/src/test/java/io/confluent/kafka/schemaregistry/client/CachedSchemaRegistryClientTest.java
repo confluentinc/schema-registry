@@ -15,6 +15,7 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
+import org.easymock.TestSubject;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -24,16 +25,19 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.kafka.common.config.ConfigException;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 
 import static org.easymock.EasyMock.anyBoolean;
 import static org.easymock.EasyMock.anyObject;
@@ -432,6 +436,55 @@ public class CachedSchemaRegistryClientTest {
             null
     );
   }
+
+  @Test
+  public void testGetSchemas() throws Exception {
+    expect(restService.registerSchema(anyString(), anyString(), anyObject(List.class), anyString()))
+            .andReturn(ID_25)
+            .andReturn(26)
+            .andReturn(27)
+            .andReturn(28)
+            .andReturn(29);
+
+    List<Schema> schemas = IntStream.range(0, 5)
+        .mapToObj( idx -> new Schema(
+                SUBJECT_0,
+                7,
+                idx + 25,
+                AvroSchema.TYPE,
+                Collections.emptyList(),
+                avroSchemaString(idx)
+          )
+        ).collect(Collectors.toList());
+
+
+    expect(restService.getSchemas(anyString(), anyBoolean(), anyBoolean())).andReturn(schemas);
+
+    replay(restService);
+
+    for (int i = 0; i != IDENTITY_MAP_CAPACITY; ++i) {
+      client.register(SUBJECT_0, avroSchema(i));  // Each one results in new id.
+    }
+
+    List<ParsedSchema> parsedSchemas = client.getSchemas(SUBJECT_0, false, true);
+    assertEquals(5, parsedSchemas.size());
+    IntStream.range(0, 5).forEach(idx -> {
+            assertEquals(new AvroSchema(avroSchemaString(idx)), parsedSchemas.get(idx));
+            assertEquals(AvroSchema.TYPE, parsedSchemas.get(idx).schemaType());
+    });
+  }
+
+  @Test
+  public void testGetSchemasEmptyReturn() throws Exception {
+    List<Schema> emptyList = Collections.emptyList();
+    expect(restService.getSchemas(anyString(), anyBoolean(), anyBoolean())).andReturn(emptyList);
+
+    replay(restService);
+
+    List<ParsedSchema> parsedSchemas = client.getSchemas(SUBJECT_0, false, true);
+    assertEquals(0, parsedSchemas.size());
+  }
+
 
   private static AvroSchema avroSchema(final int i) {
     return new AvroSchema(avroSchemaString(i));
