@@ -75,6 +75,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String KAFKASTORE_TOPIC_CONFIG = "kafkastore.topic";
   public static final String DEFAULT_KAFKASTORE_TOPIC = "_schemas";
   /**
+   * <code>kafkastore.topic.verify</code>
+   */
+  public static final String KAFKASTORE_TOPIC_VERIFY_CONFIG = "kafkastore.topic.verify";
+  public static final boolean DEFAULT_KAFKASTORE_TOPIC_VERIFY = true;
+  /**
    * <code>kafkastore.topic.replication.factor</code>
    */
   public static final String KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG =
@@ -232,6 +237,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_TOPIC_DOC =
       "The durable single partition topic that acts"
       + "as the durable log for the data";
+  protected static final String KAFKASTORE_TOPIC_VERIFY_DOC =
+      "Whether schema registry should verify & attempt to create topics on boot.";
   protected static final String KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC =
       "The desired replication factor of the schema topic. The actual replication factor "
       + "will be the smaller of this value and the number of live Kafka brokers.";
@@ -394,6 +401,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKASTORE_TOPIC,
         ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_DOC
+    )
+    .define(KAFKASTORE_TOPIC_VERIFY_CONFIG, ConfigDef.Type.BOOLEAN, DEFAULT_KAFKASTORE_TOPIC_VERIFY,
+        ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_VERIFY_CONFIG
     )
     .define(KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,
         DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR,

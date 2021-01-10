@@ -69,6 +69,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final int initTimeout;
   private final int timeout;
   private final String bootstrapBrokers;
+  private final boolean verifySchemaTopic;
   private KafkaProducer<byte[], byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
   // Noop key is only used to help reliably determine last offset; reader thread ignores
@@ -103,6 +104,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.noopKey = noopKey;
     this.config = config;
     this.bootstrapBrokers = config.bootstrapBrokers();
+    this.verifySchemaTopic = config.getBoolean(SchemaRegistryConfig.KAFKASTORE_TOPIC_VERIFY_CONFIG);
 
     log.info("Initializing KafkaStore with broker endpoints: " + this.bootstrapBrokers);
   }
@@ -160,6 +162,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
 
   private void createOrVerifySchemaTopic() throws StoreInitializationException {
+    if (!this.verifySchemaTopic) {
+      log.info("Skipping auto topic creation and verification");
+      return;
+    }
+
     Properties props = new Properties();
     addSchemaRegistryConfigsToClientProperties(this.config, props);
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
