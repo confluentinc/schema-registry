@@ -17,6 +17,7 @@ package io.confluent.kafka.serializers;
 
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.example.ExtendedWidget;
+import io.confluent.kafka.example.NullableWidget;
 import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
@@ -653,23 +654,22 @@ public class KafkaAvroSerializerTest {
     byte[] bytes;
     Object obj;
 
-    ExtendedWidget widget = new ExtendedWidget();
-    widget.setName("alice");
-    Schema schema = ReflectData.get().getSchema(widget.getClass());
+    NullableWidget widget = new NullableWidget("alice");
+    Schema schema = ReflectData.AllowNull.get().getSchema(widget.getClass());
 
     bytes = reflectionAvroSerializer.serialize(topic, widget);
 
     obj = reflectionAvroDecoder.fromBytes(bytes, schema);
     assertTrue(
         "Returned object should be a io.confluent.kafka.example.User",
-        Widget.class.isInstance(obj)
+        NullableWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
         "Returned object should be a io.confluent.kafka.example.User",
-        Widget.class.isInstance(obj)
+        NullableWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
   }
