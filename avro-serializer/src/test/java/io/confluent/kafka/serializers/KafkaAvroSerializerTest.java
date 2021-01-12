@@ -17,7 +17,6 @@ package io.confluent.kafka.serializers;
 
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.example.ExtendedWidget;
-import io.confluent.kafka.example.NullableWidget;
 import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
