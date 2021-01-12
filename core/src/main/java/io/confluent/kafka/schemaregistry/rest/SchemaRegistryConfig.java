@@ -77,7 +77,8 @@ public class SchemaRegistryConfig extends RestConfig {
   /**
    * <code>kafkastore.topic.skip.validation</code>
    */
-  public static final String KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG = "kafkastore.topic.skip.validation";
+  public static final String KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG =
+      "kafkastore.topic.skip.validation";
   public static final boolean DEFAULT_KAFKASTORE_TOPIC_SKIP_VALIDATION = false;
   /**
    * <code>kafkastore.topic.replication.factor</code>
@@ -402,7 +403,8 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKASTORE_TOPIC,
         ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_DOC
     )
-    .define(KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG, ConfigDef.Type.BOOLEAN, DEFAULT_KAFKASTORE_TOPIC_SKIP_VALIDATION,
+    .define(KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG, ConfigDef.Type.BOOLEAN,
+        DEFAULT_KAFKASTORE_TOPIC_SKIP_VALIDATION,
         ConfigDef.Importance.MEDIUM, KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG
     )
     .define(KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,

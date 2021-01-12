@@ -104,7 +104,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.noopKey = noopKey;
     this.config = config;
     this.bootstrapBrokers = config.bootstrapBrokers();
-    this.skipSchemaTopicValidation = config.getBoolean(SchemaRegistryConfig.KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG);
+    this.skipSchemaTopicValidation =
+        config.getBoolean(SchemaRegistryConfig.KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG);
 
     log.info("Initializing KafkaStore with broker endpoints: " + this.bootstrapBrokers);
   }
