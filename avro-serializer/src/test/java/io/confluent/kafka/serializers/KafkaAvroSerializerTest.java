@@ -681,8 +681,7 @@ public class KafkaAvroSerializerTest {
     );
     assertEquals(widget, obj);
 
-    obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
-    //obj = reflectionAvroDeserializer.deserialize(topic, bytes);
+    obj = reflectionAvroDeserializer.deserialize(topic, bytes);
     assertTrue(
         "Returned object should be a io.confluent.kafka.example.ExtendedWidget",
         ExtendedWidget.class.isInstance(obj)

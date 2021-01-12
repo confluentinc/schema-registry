@@ -33,7 +33,7 @@ public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
     config = baseConfigDef();
     config = baseConfigDef()
         .define(AVRO_REFLECTION_ALLOW_NULL_CONFIG, ConfigDef.Type.BOOLEAN,
-            AVRO_REFLECTION_ALLOW_NULL_DEFAULT, ConfigDef.Importance.LOW,
+            AVRO_REFLECTION_ALLOW_NULL_DEFAULT, ConfigDef.Importance.MEDIUM,
             AVRO_REFLECTION_ALLOW_NULL_DOC);
   }
 

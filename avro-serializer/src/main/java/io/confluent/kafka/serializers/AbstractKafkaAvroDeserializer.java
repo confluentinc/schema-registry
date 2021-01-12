@@ -258,18 +258,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private Schema getReflectionReaderSchema(Schema writerSchema) {
-    Class<?> readerClass = avroReflectionAllowNull
-        ? ReflectData.AllowNull.get().getClass(writerSchema)
-        : ReflectData.get().getClass(writerSchema);
+    ReflectData reflectData = avroReflectionAllowNull ? ReflectData.AllowNull.get()
+        : ReflectData.get();
+    Class<?> readerClass = reflectData.getClass(writerSchema);
     if (readerClass == null) {
       throw new SerializationException("Could not find class "
           + writerSchema.getFullName()
           + " specified in writer's schema whilst finding reader's "
           + "schema for a reflected class.");
     }
-    return avroReflectionAllowNull
-        ? ReflectData.AllowNull.get().getSchema(readerClass)
-        : ReflectData.get().getSchema(readerClass);
+    return reflectData.getSchema(readerClass);
   }
 
   class DeserializationContext {

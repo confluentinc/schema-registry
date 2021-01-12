@@ -42,7 +42,7 @@ public class KafkaAvroDeserializerConfig extends AbstractKafkaSchemaSerDeConfig 
         .define(SPECIFIC_AVRO_READER_CONFIG, Type.BOOLEAN, SPECIFIC_AVRO_READER_DEFAULT,
                 Importance.LOW, SPECIFIC_AVRO_READER_DOC)
         .define(AVRO_REFLECTION_ALLOW_NULL_CONFIG, Type.BOOLEAN, AVRO_REFLECTION_ALLOW_NULL_DEFAULT,
-            Importance.LOW, AVRO_REFLECTION_ALLOW_NULL_DOC);
+            Importance.MEDIUM, AVRO_REFLECTION_ALLOW_NULL_DOC);
   }
 
   public KafkaAvroDeserializerConfig(Map<?, ?> props) {
