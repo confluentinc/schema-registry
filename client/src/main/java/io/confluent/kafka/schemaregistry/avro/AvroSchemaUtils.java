@@ -78,7 +78,8 @@ public class AvroSchemaUtils {
     return getSchema(object, false, false);
   }
 
-  public static Schema getSchema(Object object, boolean useReflection, boolean reflectionAllowNull) {
+  public static Schema getSchema(Object object, boolean useReflection,
+                                 boolean reflectionAllowNull) {
     if (object == null) {
       return primitiveSchemas.get("Null");
     } else if (object instanceof Boolean) {
