@@ -43,12 +43,15 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
   protected boolean useLatestVersion;
+  protected boolean avroReflectionAllowNull = false;
   private final Map<Schema, DatumWriter<Object>> datumWriterCache = new ConcurrentHashMap<>();
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
     autoRegisterSchema = config.autoRegisterSchema();
     useLatestVersion = config.useLatestVersion();
+    avroReflectionAllowNull = config
+        .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {

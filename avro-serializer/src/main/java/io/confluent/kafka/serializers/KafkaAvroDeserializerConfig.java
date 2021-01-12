@@ -30,12 +30,19 @@ public class KafkaAvroDeserializerConfig extends AbstractKafkaSchemaSerDeConfig 
   public static final String SPECIFIC_AVRO_READER_DOC =
       "If true, tries to look up the SpecificRecord class ";
 
+  public static final String AVRO_REFLECTION_ALLOW_NULL_CONFIG = "avro.reflection.allow.null";
+  public static final boolean AVRO_REFLECTION_ALLOW_NULL_DEFAULT = false;
+  public static final String AVRO_REFLECTION_ALLOW_NULL_DOC =
+      "If true, allows null field values used in ReflectionAvroDeserializer";
+
   private static ConfigDef config;
 
   static {
     config = baseConfigDef()
         .define(SPECIFIC_AVRO_READER_CONFIG, Type.BOOLEAN, SPECIFIC_AVRO_READER_DEFAULT,
-                Importance.LOW, SPECIFIC_AVRO_READER_DOC);
+                Importance.LOW, SPECIFIC_AVRO_READER_DOC)
+        .define(AVRO_REFLECTION_ALLOW_NULL_CONFIG, Type.BOOLEAN, AVRO_REFLECTION_ALLOW_NULL_DEFAULT,
+            Importance.LOW, AVRO_REFLECTION_ALLOW_NULL_DOC);
   }
 
   public KafkaAvroDeserializerConfig(Map<?, ?> props) {

@@ -1,12 +1,12 @@
 package io.confluent.kafka.example;
 
 import javax.annotation.Nullable;
+import javax.management.ObjectName;
 import java.util.Objects;
 
 public class NullableWidget {
   private String name;
 
-  @Nullable
   private Integer age;
 
   public NullableWidget() {}
@@ -41,7 +41,7 @@ public class NullableWidget {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     NullableWidget that = (NullableWidget) o;
-    return name.equals(that.name) &&
+    return Objects.equals(name, that.name) &&
         Objects.equals(age, that.age);
   }
 

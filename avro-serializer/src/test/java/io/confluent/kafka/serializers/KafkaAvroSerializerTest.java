@@ -654,22 +654,39 @@ public class KafkaAvroSerializerTest {
     byte[] bytes;
     Object obj;
 
-    NullableWidget widget = new NullableWidget("alice");
+    ExtendedWidget widget = new ExtendedWidget();
+    // intentionally miss setting Age field
+    widget.setName("alice");
     Schema schema = ReflectData.AllowNull.get().getSchema(widget.getClass());
 
-    bytes = reflectionAvroSerializer.serialize(topic, widget);
+    try {
+      reflectionAvroSerializer.serialize(topic, widget);
+      fail("Sending instance with null field should fail reflection serializer");
+    } catch (SerializationException e){
+      //this is expected
+    }
 
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, true,
+        KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG, true
+    );
+    reflectionAvroDeserializer.configure(configs, false);
+    reflectionAvroSerializer.configure(configs, false);
+
+    bytes = reflectionAvroSerializer.serialize(topic, widget);
     obj = reflectionAvroDecoder.fromBytes(bytes, schema);
     assertTrue(
         "Returned object should be a io.confluent.kafka.example.User",
-        NullableWidget.class.isInstance(obj)
+        ExtendedWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
+    //obj = reflectionAvroDeserializer.deserialize(topic, bytes);
     assertTrue(
         "Returned object should be a io.confluent.kafka.example.User",
-        NullableWidget.class.isInstance(obj)
+        ExtendedWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
   }

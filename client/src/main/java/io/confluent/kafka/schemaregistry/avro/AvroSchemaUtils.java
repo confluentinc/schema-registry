@@ -75,10 +75,10 @@ public class AvroSchemaUtils {
   }
 
   public static Schema getSchema(Object object) {
-    return getSchema(object, false);
+    return getSchema(object, false, false);
   }
 
-  public static Schema getSchema(Object object, boolean useReflection) {
+  public static Schema getSchema(Object object, boolean useReflection, boolean reflectionAllowNull) {
     if (object == null) {
       return primitiveSchemas.get("Null");
     } else if (object instanceof Boolean) {
@@ -96,7 +96,8 @@ public class AvroSchemaUtils {
     } else if (object instanceof byte[] || object instanceof ByteBuffer) {
       return primitiveSchemas.get("Bytes");
     } else if (useReflection) {
-      Schema schema = ReflectData.get().getSchema(object.getClass());
+      Schema schema = reflectionAllowNull ? ReflectData.AllowNull.get().getSchema(object.getClass())
+          : ReflectData.get().getSchema(object.getClass());
       if (schema == null) {
         throw new SerializationException("Schema is null for object of class " + object.getClass()
             .getCanonicalName());
