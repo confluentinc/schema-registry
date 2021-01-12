@@ -636,14 +636,14 @@ public class KafkaAvroSerializerTest {
 
     obj = reflectionAvroDecoder.fromBytes(bytes, schema);
     assertTrue(
-            "Returned object should be a io.confluent.kafka.example.User",
+            "Returned object should be a io.confluent.kafka.example.Widget",
             Widget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
-            "Returned object should be a io.confluent.kafka.example.User",
+            "Returned object should be a io.confluent.kafka.example.Widget",
             Widget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
@@ -677,7 +677,7 @@ public class KafkaAvroSerializerTest {
     bytes = reflectionAvroSerializer.serialize(topic, widget);
     obj = reflectionAvroDecoder.fromBytes(bytes, schema);
     assertTrue(
-        "Returned object should be a io.confluent.kafka.example.User",
+        "Returned object should be a io.confluent.kafka.example.ExtendedWidget",
         ExtendedWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
@@ -685,7 +685,7 @@ public class KafkaAvroSerializerTest {
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     //obj = reflectionAvroDeserializer.deserialize(topic, bytes);
     assertTrue(
-        "Returned object should be a io.confluent.kafka.example.User",
+        "Returned object should be a io.confluent.kafka.example.ExtendedWidget",
         ExtendedWidget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
