@@ -30,6 +30,11 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   public static final String FAIL_INVALID_SCHEMA_DOC = "Whether to fail deserialization if the "
       + "payload does not match the schema";
 
+  public static final String WRITE_DATES_AS_ISO8601 = "json.write.dates.iso8601";
+  public static final boolean WRITE_DATES_AS_ISO8601_DEFAULT = false;
+  public static final String WRITE_DATES_AS_ISO8601_DOC = "Whether to write dates as "
+      + "ISO 8601 strings";
+
   public static final String SCHEMA_SPEC_VERSION = "json.schema.spec.version";
   public static final String SCHEMA_SPEC_VERSION_DEFAULT =
       SpecificationVersion.DRAFT_7.name().toLowerCase(Locale.ROOT);
@@ -54,6 +59,11 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
         FAIL_INVALID_SCHEMA_DEFAULT,
         ConfigDef.Importance.MEDIUM,
         FAIL_INVALID_SCHEMA_DOC
+    ).define(WRITE_DATES_AS_ISO8601,
+        ConfigDef.Type.BOOLEAN,
+        WRITE_DATES_AS_ISO8601_DEFAULT,
+        ConfigDef.Importance.MEDIUM,
+        WRITE_DATES_AS_ISO8601_DOC
     ).define(SCHEMA_SPEC_VERSION,
         ConfigDef.Type.STRING,
         SCHEMA_SPEC_VERSION_DEFAULT,

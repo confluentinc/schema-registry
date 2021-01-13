@@ -49,6 +49,10 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.useLatestVersion = config.useLatestVersion();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);
     this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
+    boolean writeDatesAsIso8601 = config.getBoolean(
+        KafkaJsonSchemaSerializerConfig.WRITE_DATES_AS_ISO8601);
+    this.objectMapper.configure(
+        SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, !writeDatesAsIso8601);
     this.specVersion = SpecificationVersion.get(
         config.getString(KafkaJsonSchemaSerializerConfig.SCHEMA_SPEC_VERSION));
     this.oneofForNullables = config.getBoolean(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES);

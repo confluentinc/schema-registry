@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.json;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
+import java.time.LocalDate;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -48,6 +49,7 @@ public class KafkaJsonSchemaSerializerTest {
     config.put(KafkaJsonSchemaSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
     config.put(KafkaJsonSchemaSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     config.put(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA, true);
+    config.put(KafkaJsonSchemaSerializerConfig.WRITE_DATES_AS_ISO8601, true);
     schemaRegistry = new MockSchemaRegistryClient();
     serializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(config));
     deserializer = getDeserializer(Object.class);
@@ -104,7 +106,7 @@ public class KafkaJsonSchemaSerializerTest {
 
   @Test
   public void serializeUser() throws Exception {
-    User user = new User("john", "doe", (short) 50);
+    User user = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
 
     byte[] bytes = serializer.serialize("foo", user);
     Object deserialized = getDeserializer(User.class).deserialize(topic, bytes);
@@ -121,7 +123,7 @@ public class KafkaJsonSchemaSerializerTest {
 
   @Test(expected = SerializationException.class)
   public void serializeInvalidUser() throws Exception {
-    User user = new User("john", "doe", (short) -1, "jack");
+    User user = new User("john", "doe", (short) -1, "jack", LocalDate.parse("2018-12-27"));
 
     byte[] bytes = serializer.serialize("foo", user);
     Object deserialized = getDeserializer(User.class).deserialize(topic, bytes);
@@ -141,18 +143,17 @@ public class KafkaJsonSchemaSerializerTest {
     public short age;
     @JsonProperty
     public Optional<String> nickName;
+    @JsonProperty
+    public LocalDate birthdate;
 
     public User() {}
 
-    public User(String firstName, String lastName, short age) {
-      this(firstName, lastName, age, null);
-    }
-
-    public User(String firstName, String lastName, short age, String nickName) {
+    public User(String firstName, String lastName, short age, String nickName, LocalDate birthdate) {
       this.firstName = firstName;
       this.lastName = lastName;
       this.age = age;
       this.nickName = Optional.ofNullable(nickName);
+      this.birthdate = birthdate;
     }
 
     @Override
@@ -167,12 +168,13 @@ public class KafkaJsonSchemaSerializerTest {
       return age == user.age
           && Objects.equals(firstName, user.firstName)
           && Objects.equals(lastName, user.lastName)
-          && Objects.equals(nickName, user.nickName);
+          && Objects.equals(nickName, user.nickName)
+          && Objects.equals(birthdate, user.birthdate);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(firstName, lastName, age, nickName);
+      return Objects.hash(firstName, lastName, age, nickName, birthdate);
     }
   }
 }
