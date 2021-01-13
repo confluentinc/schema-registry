@@ -124,6 +124,31 @@ public class KafkaAvroSerializerTest {
     return avroRecord;
   }
 
+  private Schema createExtendUserSchema() {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
+        "\"name\": \"User\"," +
+        "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}, " +
+        "{\"name\": \"age\", \"type\": [\"null\", \"int\"]}]}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(userSchema);
+    return schema;
+  }
+
+  private IndexedRecord createExtendUserRecordWithNullField() {
+    Schema schema = createExtendUserSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", "testUser");
+    return avroRecord;
+  }
+
+  private IndexedRecord createExtendUserRecord() {
+    Schema schema = createExtendUserSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", "testUser");
+    avroRecord.put("age", 30);
+    return avroRecord;
+  }
+
   private IndexedRecord createUserRecordUtf8() {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
@@ -203,6 +228,16 @@ public class KafkaAvroSerializerTest {
     bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
     assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+
+    IndexedRecord avroRecordWithAllField = createExtendUserRecord();
+    bytes = avroSerializer.serialize(topic, avroRecordWithAllField);
+    assertEquals(avroRecordWithAllField, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecordWithAllField, avroDecoder.fromBytes(bytes));
+
+    IndexedRecord avroRecordWithoutOptional = createExtendUserRecordWithNullField();
+    bytes = avroSerializer.serialize(topic, avroRecordWithoutOptional);
+    assertEquals(avroRecordWithoutOptional, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecordWithoutOptional, avroDecoder.fromBytes(bytes));
 
     bytes = avroSerializer.serialize(topic, null);
     assertEquals(null, avroDeserializer.deserialize(topic, bytes));
@@ -600,18 +635,60 @@ public class KafkaAvroSerializerTest {
 
     obj = reflectionAvroDecoder.fromBytes(bytes, schema);
     assertTrue(
-            "Returned object should be a io.confluent.kafka.example.User",
+            "Returned object should be a io.confluent.kafka.example.Widget",
             Widget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
 
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue(
-            "Returned object should be a io.confluent.kafka.example.User",
+            "Returned object should be a io.confluent.kafka.example.Widget",
             Widget.class.isInstance(obj)
     );
     assertEquals(widget, obj);
   }
+
+  @Test
+  public void testKafkaAvroSerializerReflectionRecordWithNullField() {
+    byte[] bytes;
+    Object obj;
+
+    ExtendedWidget widget = new ExtendedWidget();
+    // intentionally miss setting Age field
+    widget.setName("alice");
+    Schema schema = ReflectData.AllowNull.get().getSchema(widget.getClass());
+
+    try {
+      reflectionAvroSerializer.serialize(topic, widget);
+      fail("Sending instance with null field should fail reflection serializer");
+    } catch (SerializationException e){
+      //this is expected
+    }
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, true,
+        KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG, true
+    );
+    reflectionAvroDeserializer.configure(configs, false);
+    reflectionAvroSerializer.configure(configs, false);
+
+    bytes = reflectionAvroSerializer.serialize(topic, widget);
+    obj = reflectionAvroDecoder.fromBytes(bytes, schema);
+    assertTrue(
+        "Returned object should be a io.confluent.kafka.example.ExtendedWidget",
+        ExtendedWidget.class.isInstance(obj)
+    );
+    assertEquals(widget, obj);
+
+    obj = reflectionAvroDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object should be a io.confluent.kafka.example.ExtendedWidget",
+        ExtendedWidget.class.isInstance(obj)
+    );
+    assertEquals(widget, obj);
+  }
+
 
   @Test
   public void testKafkaAvroSerializerReflectionRecordWithProjection() {

@@ -22,10 +22,19 @@ import java.util.Map;
 
 public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
+  public static final String AVRO_REFLECTION_ALLOW_NULL_CONFIG = "avro.reflection.allow.null";
+  public static final boolean AVRO_REFLECTION_ALLOW_NULL_DEFAULT = false;
+  public static final String AVRO_REFLECTION_ALLOW_NULL_DOC =
+      "If true, allows null field values used in ReflectionAvroSerializer";
+
   private static ConfigDef config;
 
   static {
     config = baseConfigDef();
+    config = baseConfigDef()
+        .define(AVRO_REFLECTION_ALLOW_NULL_CONFIG, ConfigDef.Type.BOOLEAN,
+            AVRO_REFLECTION_ALLOW_NULL_DEFAULT, ConfigDef.Importance.MEDIUM,
+            AVRO_REFLECTION_ALLOW_NULL_DOC);
   }
 
   public KafkaAvroSerializerConfig(Map<?, ?> props) {
