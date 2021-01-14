@@ -22,6 +22,7 @@ import io.confluent.kafka.example.Widget;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import java.util.Arrays;
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
@@ -509,7 +510,12 @@ public class KafkaAvroSerializerTest {
     GenericData.Record decoderProjection = (GenericData.Record) obj;
     assertEquals("testUser", decoderProjection.get("name").toString());
     //Age field was hidden by projection
-    assertNull(decoderProjection.get("age"));
+    try {
+      decoderProjection.get("age");
+      fail("Getting invalid schema field should fail");
+    } catch (AvroRuntimeException e){
+      //this is expected
+    }
 
     obj = avroDeserializer.deserialize(topic, bytes, User.getClassSchema());
     assertTrue(
@@ -519,7 +525,12 @@ public class KafkaAvroSerializerTest {
     GenericData.Record deserializeProjection = (GenericData.Record) obj;
     assertEquals("testUser", deserializeProjection.get("name").toString());
     //Age field was hidden by projection
-    assertNull(deserializeProjection.get("age"));
+    try {
+      deserializeProjection.get("age");
+      fail("Getting invalid schema field should fail");
+    } catch (AvroRuntimeException e){
+      //this is expected
+    }
   }
 
   @Test
@@ -554,7 +565,12 @@ public class KafkaAvroSerializerTest {
     assertNotNull("Optional field should have a non-null default value", genericRecordV2.get(newOptionalField));
 
     // In version 2 of the schema, the fieldToDelete field is gone
-    assertNull("Field was removed in schema V2 but is still present", genericRecordV2.get(fieldToDelete));
+    try {
+      genericRecordV2.get(fieldToDelete);
+      fail("Getting invalid schema field should fail");
+    } catch (AvroRuntimeException e){
+      //this is expected
+    }
   }
 
   @Test
