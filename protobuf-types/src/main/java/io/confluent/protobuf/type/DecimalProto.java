@@ -28,10 +28,10 @@ public final class DecimalProto {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\rdecimal.proto\022\016confluent.type\"\'\n\007Decim" +
-      "al\022\r\n\005value\030\001 \001(\014\022\r\n\005scale\030\002 \001(\005B,\n\032io.c" +
-      "onfluent.protobuf.typeB\014DecimalProtoP\001b\006" +
-      "proto3"
+      "\n\rdecimal.proto\022\016confluent.type\":\n\007Decim" +
+      "al\022\r\n\005value\030\001 \001(\014\022\021\n\tprecision\030\002 \001(\r\022\r\n\005" +
+      "scale\030\003 \001(\005B,\n\032io.confluent.protobuf.typ" +
+      "eB\014DecimalProtoP\001b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -42,7 +42,7 @@ public final class DecimalProto {
     internal_static_confluent_type_Decimal_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_confluent_type_Decimal_descriptor,
-        new java.lang.String[] { "Value", "Scale", });
+        new java.lang.String[] { "Value", "Precision", "Scale", });
   }
 
   // @@protoc_insertion_point(outer_class_scope)

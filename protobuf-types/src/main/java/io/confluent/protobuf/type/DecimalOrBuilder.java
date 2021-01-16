@@ -19,10 +19,20 @@ public interface DecimalOrBuilder extends
 
   /**
    * <pre>
+   * The precision
+   * </pre>
+   *
+   * <code>uint32 precision = 2;</code>
+   * @return The precision.
+   */
+  int getPrecision();
+
+  /**
+   * <pre>
    * The scale
    * </pre>
    *
-   * <code>int32 scale = 2;</code>
+   * <code>int32 scale = 3;</code>
    * @return The scale.
    */
   int getScale();

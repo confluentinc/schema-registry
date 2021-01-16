@@ -56,6 +56,11 @@ private static final long serialVersionUID = 0L;
           }
           case 16: {
 
+            precision_ = input.readUInt32();
+            break;
+          }
+          case 24: {
+
             scale_ = input.readInt32();
             break;
           }
@@ -105,14 +110,28 @@ private static final long serialVersionUID = 0L;
     return value_;
   }
 
-  public static final int SCALE_FIELD_NUMBER = 2;
+  public static final int PRECISION_FIELD_NUMBER = 2;
+  private int precision_;
+  /**
+   * <pre>
+   * The precision
+   * </pre>
+   *
+   * <code>uint32 precision = 2;</code>
+   * @return The precision.
+   */
+  public int getPrecision() {
+    return precision_;
+  }
+
+  public static final int SCALE_FIELD_NUMBER = 3;
   private int scale_;
   /**
    * <pre>
    * The scale
    * </pre>
    *
-   * <code>int32 scale = 2;</code>
+   * <code>int32 scale = 3;</code>
    * @return The scale.
    */
   public int getScale() {
@@ -136,8 +155,11 @@ private static final long serialVersionUID = 0L;
     if (!value_.isEmpty()) {
       output.writeBytes(1, value_);
     }
+    if (precision_ != 0) {
+      output.writeUInt32(2, precision_);
+    }
     if (scale_ != 0) {
-      output.writeInt32(2, scale_);
+      output.writeInt32(3, scale_);
     }
     unknownFields.writeTo(output);
   }
@@ -152,9 +174,13 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeBytesSize(1, value_);
     }
+    if (precision_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(2, precision_);
+    }
     if (scale_ != 0) {
       size += com.google.protobuf.CodedOutputStream
-        .computeInt32Size(2, scale_);
+        .computeInt32Size(3, scale_);
     }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
@@ -173,6 +199,8 @@ private static final long serialVersionUID = 0L;
 
     if (!getValue()
         .equals(other.getValue())) return false;
+    if (getPrecision()
+        != other.getPrecision()) return false;
     if (getScale()
         != other.getScale()) return false;
     if (!unknownFields.equals(other.unknownFields)) return false;
@@ -188,6 +216,8 @@ private static final long serialVersionUID = 0L;
     hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + VALUE_FIELD_NUMBER;
     hash = (53 * hash) + getValue().hashCode();
+    hash = (37 * hash) + PRECISION_FIELD_NUMBER;
+    hash = (53 * hash) + getPrecision();
     hash = (37 * hash) + SCALE_FIELD_NUMBER;
     hash = (53 * hash) + getScale();
     hash = (29 * hash) + unknownFields.hashCode();
@@ -325,6 +355,8 @@ private static final long serialVersionUID = 0L;
       super.clear();
       value_ = com.google.protobuf.ByteString.EMPTY;
 
+      precision_ = 0;
+
       scale_ = 0;
 
       return this;
@@ -354,6 +386,7 @@ private static final long serialVersionUID = 0L;
     public io.confluent.protobuf.type.Decimal buildPartial() {
       io.confluent.protobuf.type.Decimal result = new io.confluent.protobuf.type.Decimal(this);
       result.value_ = value_;
+      result.precision_ = precision_;
       result.scale_ = scale_;
       onBuilt();
       return result;
@@ -405,6 +438,9 @@ private static final long serialVersionUID = 0L;
       if (other == io.confluent.protobuf.type.Decimal.getDefaultInstance()) return this;
       if (other.getValue() != com.google.protobuf.ByteString.EMPTY) {
         setValue(other.getValue());
+      }
+      if (other.getPrecision() != 0) {
+        setPrecision(other.getPrecision());
       }
       if (other.getScale() != 0) {
         setScale(other.getScale());
@@ -483,13 +519,55 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    private int precision_ ;
+    /**
+     * <pre>
+     * The precision
+     * </pre>
+     *
+     * <code>uint32 precision = 2;</code>
+     * @return The precision.
+     */
+    public int getPrecision() {
+      return precision_;
+    }
+    /**
+     * <pre>
+     * The precision
+     * </pre>
+     *
+     * <code>uint32 precision = 2;</code>
+     * @param value The precision to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPrecision(int value) {
+      
+      precision_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The precision
+     * </pre>
+     *
+     * <code>uint32 precision = 2;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPrecision() {
+      
+      precision_ = 0;
+      onChanged();
+      return this;
+    }
+
     private int scale_ ;
     /**
      * <pre>
      * The scale
      * </pre>
      *
-     * <code>int32 scale = 2;</code>
+     * <code>int32 scale = 3;</code>
      * @return The scale.
      */
     public int getScale() {
@@ -500,7 +578,7 @@ private static final long serialVersionUID = 0L;
      * The scale
      * </pre>
      *
-     * <code>int32 scale = 2;</code>
+     * <code>int32 scale = 3;</code>
      * @param value The scale to set.
      * @return This builder for chaining.
      */
@@ -515,7 +593,7 @@ private static final long serialVersionUID = 0L;
      * The scale
      * </pre>
      *
-     * <code>int32 scale = 2;</code>
+     * <code>int32 scale = 3;</code>
      * @return This builder for chaining.
      */
     public Builder clearScale() {

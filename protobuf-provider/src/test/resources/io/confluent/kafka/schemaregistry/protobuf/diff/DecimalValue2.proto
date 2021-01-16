@@ -17,8 +17,12 @@ message DecimalValue {
     doc: "field",
     params: [
       {
+        value: "8",
+        key: "precision"
+      },
+      {
         value: "3",
-        key: "connect.scale"
+        key: "scale"
       }
     ]
   }];
