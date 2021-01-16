@@ -28,9 +28,8 @@ import com.google.protobuf.Message;
 import com.google.protobuf.util.Timestamps;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
+import io.confluent.protobuf.type.utils.DecimalUtils;
 import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.MathContext;
 import java.time.LocalTime;
 import java.util.Calendar;
 import java.util.HashSet;
@@ -119,25 +118,7 @@ public class ProtobufData {
                 + "expected Message but was "
                 + value.getClass());
       }
-      Message message = (Message) value;
-      byte[] decimalValue = new byte[0];
-      Integer precision = null;
-      int scale = 0;
-      for (Map.Entry<FieldDescriptor, Object> entry : message.getAllFields().entrySet()) {
-        if (entry.getKey().getName().equals("value")) {
-          decimalValue = ((ByteString) entry.getValue()).toByteArray();
-        } else if (entry.getKey().getName().equals("precision")) {
-          precision = ((Number) entry.getValue()).intValue();
-        } else if (entry.getKey().getName().equals("scale")) {
-          scale = ((Number) entry.getValue()).intValue();
-        }
-      }
-      if (precision != null) {
-        MathContext mc = new MathContext(precision);
-        return new BigDecimal(new BigInteger(decimalValue), scale, mc);
-      } else {
-        return new BigDecimal(new BigInteger(decimalValue), scale);
-      }
+      return DecimalUtils.toBigDecimal((Message) value);
     });
 
     TO_CONNECT_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, (schema, value) -> {
@@ -230,12 +211,7 @@ public class ProtobufData {
         throw new DataException("Invalid type for Decimal, "
                 + "expected BigDecimal but was " + value.getClass());
       }
-      BigDecimal decimal = (BigDecimal) value;
-      return io.confluent.protobuf.type.Decimal.newBuilder()
-              .setValue(ByteString.copyFrom(decimal.unscaledValue().toByteArray()))
-              .setPrecision(decimal.precision())
-              .setScale(decimal.scale())
-              .build();
+      return DecimalUtils.fromBigDecimal((BigDecimal) value);
     });
 
     TO_PROTOBUF_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, (schema, value) -> {
