@@ -935,7 +935,9 @@ public class JsonSchemaData {
         for (Map.Entry<String, org.everit.json.schema.Schema> property : sortedMap.values()) {
           String subFieldName = property.getKey();
           org.everit.json.schema.Schema subSchema = property.getValue();
-          builder.field(subFieldName, toConnectSchema(subSchema));
+          builder.field(subFieldName,
+                  toConnectSchema(subSchema, null, !objectSchema.getRequiredProperties().contains(subFieldName))
+          );
         }
       }
     } else if (jsonSchema instanceof ReferenceSchema) {

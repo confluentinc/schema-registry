@@ -56,6 +56,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
@@ -588,6 +589,8 @@ public class JsonSchemaDataTest {
         .unprocessedProperties(ImmutableMap.of("connect.index", 1))
         .build();
     ObjectSchema schema = ObjectSchema.builder()
+        .addRequiredProperty("int8")
+        .addRequiredProperty("string")
         .addPropertySchema("int8", numberSchema)
         .addPropertySchema("string", stringSchema)
         .title("Record")
@@ -607,15 +610,18 @@ public class JsonSchemaDataTest {
 
   @Test
   public void testToConnectRecordWithOptionalValue() {
-    testToConnectRecordWithOptional("sample string");
+    testToConnectRecordWithNonRequiredAndNullable(Optional.ofNullable("sample string"));
   }
 
   @Test
   public void testToConnectRecordWithOptionalNullValue() {
-    testToConnectRecordWithOptional(null);
+    testToConnectRecordWithNonRequiredAndNullable(Optional.ofNullable(null));
   }
 
-  private void testToConnectRecordWithOptional(String value) {
+  /**
+   * @param value use null for non-required field, Optional.ofNullable() for required field
+   */
+  private void testToConnectRecordWithNonRequiredAndNullable(Optional<String> value) {
     NumberSchema numberSchema = NumberSchema.builder()
         .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
         .build();
@@ -626,23 +632,33 @@ public class JsonSchemaDataTest {
         .unprocessedProperties(ImmutableMap.of("connect.index", 1))
         .build();
     ObjectSchema schema = ObjectSchema.builder()
+        .addRequiredProperty("int8")
         .addPropertySchema("int8", numberSchema)
         .addPropertySchema("string", combinedSchema)
         .title("Record")
         .build();
     ObjectNode obj = JsonNodeFactory.instance.objectNode();
     obj.set("int8", ShortNode.valueOf((short) 12));
-    if (value == null) {
-      obj.set("string", NullNode.getInstance());
-    } else {
-      obj.set("string", TextNode.valueOf(value));
+    if (value != null) {
+      if (!value.isPresent()) {
+        obj.set("string", NullNode.getInstance());
+      } else {
+        obj.set("string", TextNode.valueOf(value.get()));
+      }
     }
     Schema expectedSchema = SchemaBuilder.struct()
         .name("Record")
         .field("int8", Schema.INT8_SCHEMA)
         .field("string", Schema.OPTIONAL_STRING_SCHEMA)
         .build();
-    Struct struct = new Struct(expectedSchema).put("int8", (byte) 12).put("string", value);
+    Struct struct = new Struct(expectedSchema).put("int8", (byte) 12);
+    if(value != null) {
+      if (value.isPresent()) {
+        struct = struct.put("string", value.get());
+      } else {
+        struct = struct.put("string", null);
+      }
+    }
     checkNonObjectConversion(expectedSchema, struct, schema, obj);
   }
 
@@ -696,9 +712,14 @@ public class JsonSchemaDataTest {
 
   @Test
   public void testToConnectNestedRecordWithOptionalRecordValue() {
-    ObjectSchema nested = ObjectSchema.builder().addPropertySchema("string",
-        StringSchema.builder().unprocessedProperties(ImmutableMap.of("connect.index", 0)).build()
-    ).title("nestedRecord").build();
+    ObjectSchema nested = ObjectSchema
+        .builder()
+        .addPropertySchema("string",
+            StringSchema.builder().unprocessedProperties(ImmutableMap.of("connect.index", 0)).build()
+        )
+        .addRequiredProperty("string")
+        .title("nestedRecord")
+        .build();
     CombinedSchema combinedSchema = CombinedSchema.oneOf(ImmutableList.of(NullSchema.INSTANCE,
         nested
     ))
@@ -721,15 +742,21 @@ public class JsonSchemaDataTest {
 
   @Test
   public void testToConnectNestedRecordWithOptionalRecordNullValue() {
-    ObjectSchema nested = ObjectSchema.builder().addPropertySchema("string",
-        StringSchema.builder().unprocessedProperties(ImmutableMap.of("connect.index", 0)).build()
-    ).title("nestedRecord").build();
+    ObjectSchema nested = ObjectSchema
+        .builder()
+        .addPropertySchema("string",
+            StringSchema.builder().unprocessedProperties(ImmutableMap.of("connect.index", 0)).build()
+        )
+        .addRequiredProperty("string")
+        .title("nestedRecord")
+        .build();
     CombinedSchema combinedSchema = CombinedSchema.oneOf(ImmutableList.of(NullSchema.INSTANCE,
         nested
     ))
         .unprocessedProperties(ImmutableMap.of("connect.index", 0))
         .build();
     ObjectSchema schema = ObjectSchema.builder()
+        .addRequiredProperty("nestedRecord")
         .addPropertySchema("nestedRecord", combinedSchema)
         .title("Record")
         .build();
