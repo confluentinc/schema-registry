@@ -25,6 +25,7 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.reflect.ReflectDatumWriter;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayOutputStream;
@@ -36,6 +37,8 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import kafka.utils.VerifiableProperties;
+
+import javax.ws.rs.core.Response.Status.Family;
 
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSerDe {
 
@@ -118,7 +121,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       // ClassCastException, etc
       throw new SerializationException("Error serializing Avro message", e);
     } catch (RestClientException e) {
-      throw new SerializationException(restClientErrorMsg + schema, e);
+      if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
+        throw new InvalidConfigurationException(e.getMessage());
+      } else {
+        throw new SerializationException(restClientErrorMsg + " for subject " + subject
+            + " and schema: " + schema, e);
+      }
     }
   }
 }

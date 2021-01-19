@@ -21,6 +21,7 @@ import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayOutputStream;
@@ -39,6 +40,8 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
+
+import javax.ws.rs.core.Response.Status.Family;
 
 public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
@@ -101,7 +104,11 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error serializing Protobuf message", e);
     } catch (RestClientException e) {
-      throw new SerializationException(restClientErrorMsg + schema, e);
+      if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
+        throw new InvalidConfigurationException(e.getMessage());
+      } else {
+        throw new SerializationException(restClientErrorMsg + schema, e);
+      }
     }
   }
 

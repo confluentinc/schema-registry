@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.everit.json.schema.ValidationException;
 
@@ -33,6 +34,8 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
+
+import javax.ws.rs.core.Response.Status.Family;
 
 public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafkaSchemaSerDe {
 
@@ -110,7 +113,11 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error serializing JSON message", e);
     } catch (RestClientException e) {
-      throw new SerializationException(restClientErrorMsg + schema, e);
+      if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
+        throw new InvalidConfigurationException(e.getMessage());
+      } else {
+        throw new SerializationException(restClientErrorMsg + schema, e);
+      }
     }
   }
 }

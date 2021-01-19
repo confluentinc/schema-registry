@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kafka.utils.VerifiableProperties;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.everit.json.schema.ValidationException;
 
@@ -35,6 +36,8 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
+
+import javax.ws.rs.core.Response.Status.Family;
 
 public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKafkaSchemaSerDe {
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
@@ -156,7 +159,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error deserializing JSON message for id " + id, e);
     } catch (RestClientException e) {
-      throw new SerializationException("Error retrieving JSON schema for id " + id, e);
+      if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
+        throw new InvalidConfigurationException(e.getMessage());
+      } else {
+        throw new SerializationException("Error retrieving JSON schema for id " + id, e);
+      }
     }
   }
 
