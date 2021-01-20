@@ -28,6 +28,8 @@ import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -91,6 +93,11 @@ public class AvroConverter implements Converter {
           String.format("Failed to serialize Avro data from topic %s :", topic),
           e
       );
+    } catch (InvalidConfigurationException e) {
+      throw new ConfigException(
+          String.format("Failed to access Avro data from topic %s :", topic),
+          e
+      );
     }
   }
 
@@ -116,6 +123,11 @@ public class AvroConverter implements Converter {
     } catch (SerializationException e) {
       throw new DataException(
           String.format("Failed to deserialize data for topic %s to Avro: ", topic),
+          e
+      );
+    } catch (InvalidConfigurationException e) {
+      throw new ConfigException(
+          String.format("Failed to access Avro data from topic %s :", topic),
           e
       );
     }

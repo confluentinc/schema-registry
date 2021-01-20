@@ -25,6 +25,7 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.reflect.ReflectDatumWriter;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayOutputStream;
@@ -63,7 +64,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   }
 
   protected byte[] serializeImpl(
-      String subject, Object object, AvroSchema schema) throws SerializationException {
+      String subject, Object object, AvroSchema schema)
+      throws SerializationException, InvalidConfigurationException {
     // null needs to treated specially since the client most likely just wants to send
     // an individual null value instead of making the subject a null type. Also, null in
     // Kafka has a special meaning for deletion in a topic with the compact retention policy.
@@ -125,8 +127,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       // ClassCastException, etc
       throw new SerializationException("Error serializing Avro message", e);
     } catch (RestClientException e) {
-      throw new SerializationException(restClientErrorMsg + " for subject " + subject
-              + " and schema: " + schema, e);
+      throw toKafkaException(e, restClientErrorMsg + schema);
     }
   }
 }

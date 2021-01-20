@@ -21,9 +21,11 @@ import java.util.Objects;
 import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.IOException;
@@ -40,6 +42,8 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
+
+import javax.ws.rs.core.Response.Status.Family;
 
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
@@ -197,6 +201,14 @@ public abstract class AbstractKafkaSchemaSerDe {
       throw new SerializationException("Unknown magic byte!");
     }
     return buffer;
+  }
+
+  protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {
+    if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
+      return new InvalidConfigurationException(e.getMessage());
+    } else {
+      return new SerializationException(errorMessage, e);
+    }
   }
 
   protected static class SubjectSchema {
