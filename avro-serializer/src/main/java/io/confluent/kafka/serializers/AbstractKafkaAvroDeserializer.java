@@ -168,11 +168,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                                       + " schema version for id "
                                       + context.getSchemaId(), e);
     } catch (RestClientException e) {
-       String errorMessage = "Error retrieving Avro "
+      String errorMessage = "Error retrieving Avro "
            + getSchemaType(isKey)
            + " schema version for id "
            + context.getSchemaId();
-       throw toKafkaException(e, errorMessage);
+      throw toKafkaException(e, errorMessage);
     }
   }
 
