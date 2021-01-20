@@ -120,9 +120,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       // ClassCastException, etc
       throw new SerializationException("Error serializing Avro message", e);
     } catch (RestClientException e) {
-      String errorMessage = restClientErrorMsg + " for subject " + subject
-          + " and schema: " + schema;
-      throw toKafkaException(e, errorMessage);
+      throw toKafkaException(e, restClientErrorMsg + schema);
     }
   }
 }
