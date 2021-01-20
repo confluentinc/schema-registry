@@ -11,6 +11,7 @@ message DecimalValue {
 
   // The bytes value.
   confluent.type.Decimal value = 1 [(confluent.field_meta) = { params: [
-    { key: "connect.scale", value: "3" }
+    { key: "precision", value: "8" },
+    { key: "scale", value: "3" }
   ]}];
 }

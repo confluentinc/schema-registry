@@ -715,11 +715,11 @@ public final class DecimalValueOuterClass {
   static {
     java.lang.String[] descriptorData = {
       "\n\022DecimalValue.proto\032\024confluent/meta.pro" +
-      "to\032\034confluent/type/decimal.proto\"]\n\014Deci" +
-      "malValue\022?\n\005value\030\001 \001(\0132\027.confluent.type" +
-      ".DecimalB\027\202D\024\022\022\n\rconnect.scale\022\0013:\014\202D\t\n\007" +
-      "messageB.\n,io.confluent.kafka.serializer" +
-      "s.protobuf.testb\006proto3"
+      "to\032\034confluent/type/decimal.proto\"e\n\014Deci" +
+      "malValue\022G\n\005value\030\001 \001(\0132\027.confluent.type" +
+      ".DecimalB\037\202D\034\022\016\n\tprecision\022\0018\022\n\n\005scale\022\001" +
+      "3:\014\202D\t\n\007messageB.\n,io.confluent.kafka.se" +
+      "rializers.protobuf.testb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

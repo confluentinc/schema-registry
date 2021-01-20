@@ -663,6 +663,7 @@ public class ProtobufDataTest {
     Decimal.Builder decimalBuilder =
             Decimal.newBuilder();
     decimalBuilder.setValue(ByteString.copyFrom(expectedValue.unscaledValue().toByteArray()));
+    decimalBuilder.setPrecision(8);
     decimalBuilder.setScale(expectedValue.scale());
 
     DecimalValueOuterClass.DecimalValue.Builder builder =
@@ -674,6 +675,7 @@ public class ProtobufDataTest {
 
     Schema decimalSchema = org.apache.kafka.connect.data.Decimal.builder(3)
             .optional()
+            .parameter(ProtobufData.CONNECT_PRECISION_PROP, String.valueOf(8))
             .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
             .build();
     assertEquals(getExpectedSchemaAndValue(decimalSchema, message, expectedValue), result);
@@ -1021,6 +1023,7 @@ public class ProtobufDataTest {
     Decimal decimal =
             Decimal.newBuilder()
             .setValue(ByteString.copyFrom(bigDecimal.unscaledValue().toByteArray()))
+            .setPrecision(8)
             .setScale(3)
             .build();
     builder.setValue(decimal);

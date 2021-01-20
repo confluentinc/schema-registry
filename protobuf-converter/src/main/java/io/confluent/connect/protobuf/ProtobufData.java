@@ -28,8 +28,8 @@ import com.google.protobuf.Message;
 import com.google.protobuf.util.Timestamps;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
+import io.confluent.protobuf.type.utils.DecimalUtils;
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.time.LocalTime;
 import java.util.Calendar;
 import java.util.HashSet;
@@ -84,6 +84,8 @@ public class ProtobufData {
   public static final String PROTOBUF_TYPE_UNION_PREFIX = PROTOBUF_TYPE_UNION + ".";
   public static final String PROTOBUF_TYPE_TAG = NAMESPACE + ".Tag";
 
+  public static final String PROTOBUF_PRECISION_PROP = "precision";
+  public static final String PROTOBUF_SCALE_PROP = "scale";
   public static final String PROTOBUF_DECIMAL_LOCATION = "confluent/type/decimal.proto";
   public static final String PROTOBUF_DECIMAL_TYPE = "confluent.type.Decimal";
   public static final String PROTOBUF_DATE_LOCATION = "google/type/date.proto";
@@ -93,7 +95,8 @@ public class ProtobufData {
   public static final String PROTOBUF_TIMESTAMP_LOCATION = "google/protobuf/timestamp.proto";
   public static final String PROTOBUF_TIMESTAMP_TYPE = "google.protobuf.Timestamp";
 
-  public static final String CONNECT_SCALE_PROP = "connect.scale";
+  public static final String CONNECT_PRECISION_PROP = "connect.decimal.precision";
+  public static final String CONNECT_SCALE_PROP = Decimal.SCALE_FIELD;
   public static final String CONNECT_TYPE_PROP = "connect.type";
   public static final String CONNECT_TYPE_INT8 = "int8";
   public static final String CONNECT_TYPE_INT16 = "int16";
@@ -115,17 +118,7 @@ public class ProtobufData {
                 + "expected Message but was "
                 + value.getClass());
       }
-      Message message = (Message) value;
-      byte[] decimalValue = new byte[0];
-      int scale = 0;
-      for (Map.Entry<FieldDescriptor, Object> entry : message.getAllFields().entrySet()) {
-        if (entry.getKey().getName().equals("value")) {
-          decimalValue = ((ByteString) entry.getValue()).toByteArray();
-        } else if (entry.getKey().getName().equals("scale")) {
-          scale = ((Number) entry.getValue()).intValue();
-        }
-      }
-      return new BigDecimal(new BigInteger(decimalValue), scale);
+      return DecimalUtils.toBigDecimal((Message) value);
     });
 
     TO_CONNECT_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, (schema, value) -> {
@@ -218,11 +211,7 @@ public class ProtobufData {
         throw new DataException("Invalid type for Decimal, "
                 + "expected BigDecimal but was " + value.getClass());
       }
-      BigDecimal decimal = (BigDecimal) value;
-      return io.confluent.protobuf.type.Decimal.newBuilder()
-              .setValue(ByteString.copyFrom(decimal.unscaledValue().toByteArray()))
-              .setScale(decimal.scale())
-              .build();
+      return DecimalUtils.fromBigDecimal((BigDecimal) value);
     });
 
     TO_PROTOBUF_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, (schema, value) -> {
@@ -871,8 +860,14 @@ public class ProtobufData {
       Schema schema, String fieldName, Map<String, String> params) {
     if (isDecimalSchema(schema)) {
       if (schema.parameters() != null) {
-        String scale = schema.parameters().get(Decimal.SCALE_FIELD);
-        params.put(CONNECT_SCALE_PROP, scale);
+        String precision = schema.parameters().get(CONNECT_PRECISION_PROP);
+        if (precision != null) {
+          params.put(PROTOBUF_PRECISION_PROP, precision);
+        }
+        String scale = schema.parameters().get(CONNECT_SCALE_PROP);
+        if (scale != null) {
+          params.put(PROTOBUF_SCALE_PROP, scale);
+        }
       }
       return PROTOBUF_DECIMAL_TYPE;
     } else if (isDateSchema(schema)) {
@@ -1248,19 +1243,32 @@ public class ProtobufData {
 
       case MESSAGE: {
         if (isDecimalDescriptor(descriptor)) {
+          Integer precision = null;
           int scale = 0;
           if (descriptor.getOptions().hasExtension(MetaProto.fieldMeta)) {
             Meta fieldMeta = descriptor.getOptions().getExtension(MetaProto.fieldMeta);
             Map<String, String> params = fieldMeta.getParamsMap();
-            if (params != null) {
+            String precisionStr = params.get(PROTOBUF_PRECISION_PROP);
+            if (precisionStr != null) {
               try {
-                scale = Integer.parseInt(params.get(CONNECT_SCALE_PROP));
+                precision = Integer.parseInt(precisionStr);
+              } catch (NumberFormatException e) {
+                // ignore
+              }
+            }
+            String scaleStr = params.get(PROTOBUF_SCALE_PROP);
+            if (scaleStr != null) {
+              try {
+                scale = Integer.parseInt(scaleStr);
               } catch (NumberFormatException e) {
                 // ignore
               }
             }
           }
           builder = Decimal.builder(scale);
+          if (precision != null) {
+            builder.parameter(CONNECT_PRECISION_PROP, precision.toString());
+          }
           break;
         } else if (isDateDescriptor(descriptor)) {
           builder = Date.builder();
