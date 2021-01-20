@@ -35,8 +35,6 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
-import javax.ws.rs.core.Response.Status.Family;
-
 public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafkaSchemaSerDe {
 
   protected boolean autoRegisterSchema;
@@ -70,7 +68,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       String subject,
       T object,
       JsonSchema schema
-  ) throws SerializationException {
+  ) throws SerializationException, InvalidConfigurationException {
     // null needs to treated specially since the client most likely just wants to send
     // an individual null value instead of making the subject a null type. Also, null in
     // Kafka has a special meaning for deletion in a topic with the compact retention policy.
@@ -113,11 +111,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error serializing JSON message", e);
     } catch (RestClientException e) {
-      if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
-        throw new InvalidConfigurationException(e.getMessage());
-      } else {
-        throw new SerializationException(restClientErrorMsg + schema, e);
-      }
+      throw toKafkaException(e, restClientErrorMsg + schema);
     }
   }
 }

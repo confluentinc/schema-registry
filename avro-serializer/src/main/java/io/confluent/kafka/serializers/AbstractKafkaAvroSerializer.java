@@ -38,8 +38,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import kafka.utils.VerifiableProperties;
 
-import javax.ws.rs.core.Response.Status.Family;
-
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSerDe {
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
@@ -61,7 +59,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   }
 
   protected byte[] serializeImpl(
-      String subject, Object object, AvroSchema schema) throws SerializationException {
+      String subject, Object object, AvroSchema schema)
+      throws SerializationException, InvalidConfigurationException {
     // null needs to treated specially since the client most likely just wants to send
     // an individual null value instead of making the subject a null type. Also, null in
     // Kafka has a special meaning for deletion in a topic with the compact retention policy.
@@ -121,12 +120,9 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       // ClassCastException, etc
       throw new SerializationException("Error serializing Avro message", e);
     } catch (RestClientException e) {
-      if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
-        throw new InvalidConfigurationException(e.getMessage());
-      } else {
-        throw new SerializationException(restClientErrorMsg + " for subject " + subject
-            + " and schema: " + schema, e);
-      }
+      String errorMessage = restClientErrorMsg + " for subject " + subject
+          + " and schema: " + schema;
+      throw toKafkaException(e, errorMessage);
     }
   }
 }

@@ -42,8 +42,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import kafka.utils.VerifiableProperties;
 
-import javax.ws.rs.core.Response.Status.Family;
-
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
@@ -135,7 +133,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    */
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
       String topic, boolean isKey, byte[] payload)
-      throws SerializationException {
+      throws SerializationException, InvalidConfigurationException {
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
     if (payload == null) {
@@ -170,14 +168,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                                       + " schema version for id "
                                       + context.getSchemaId(), e);
     } catch (RestClientException e) {
-      if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
-        throw new InvalidConfigurationException(e.getMessage());
-      } else {
-        throw new SerializationException("Error retrieving Avro "
-            + getSchemaType(isKey)
-            + " schema version for id "
-            + context.getSchemaId(), e);
-      }
+       String errorMessage = "Error retrieving Avro "
+           + getSchemaType(isKey)
+           + " schema version for id "
+           + context.getSchemaId();
+       throw toKafkaException(e, errorMessage);
     }
   }
 
@@ -295,14 +290,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                                          + " schema for id "
                                          + schemaId, e);
       } catch (RestClientException e) {
-        if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
-          throw new InvalidConfigurationException(e.getMessage());
-        } else {
-          throw new SerializationException("Error retrieving Avro "
-              + getSchemaType(isKey)
-              + " schema for id "
-              + schemaId, e);
-        }
+        String errorMessage = "Error retrieving Avro "
+            + getSchemaType(isKey)
+            + " schema for id "
+            + schemaId;
+        throw toKafkaException(e, errorMessage);
       }
     }
 
@@ -317,12 +309,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                                          + " schema for id "
                                          + schemaId, e);
       } catch (RestClientException e) {
-        if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
-          throw new InvalidConfigurationException(e.getMessage());
-        } else {
-          throw new SerializationException(
-              "Error retrieving Avro " + getSchemaType(isKey) + " schema for id " + schemaId, e);
-        }
+        String errorMessage =  "Error retrieving Avro "
+            + getSchemaType(isKey)
+            + " schema for id "
+            + schemaId;
+        throw toKafkaException(e, errorMessage);
       }
     }
 

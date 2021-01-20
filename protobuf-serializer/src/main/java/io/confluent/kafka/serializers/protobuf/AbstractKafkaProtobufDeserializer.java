@@ -42,8 +42,6 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
-import javax.ws.rs.core.Response.Status.Family;
-
 public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
 
@@ -98,7 +96,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
    * @param payload serialized data
    * @return the deserialized object
    */
-  protected T deserialize(byte[] payload) throws SerializationException {
+  protected T deserialize(byte[] payload)
+      throws SerializationException, InvalidConfigurationException {
     return (T) deserialize(false, null, null, payload);
   }
 
@@ -106,7 +105,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
       boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload
-  ) throws SerializationException {
+  ) throws SerializationException, InvalidConfigurationException {
 
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
@@ -170,11 +169,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error deserializing Protobuf message for id " + id, e);
     } catch (RestClientException e) {
-      if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
-        throw new InvalidConfigurationException(e.getMessage());
-      } else {
-        throw new SerializationException("Error retrieving Protobuf schema for id " + id, e);
-      }
+      throw toKafkaException(e, "Error retrieving Protobuf schema for id " + id);
     }
   }
 
