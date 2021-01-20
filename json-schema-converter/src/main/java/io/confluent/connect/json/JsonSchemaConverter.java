@@ -17,6 +17,8 @@ package io.confluent.connect.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -92,6 +94,11 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
           topic),
           e
       );
+    } catch (InvalidConfigurationException e) {
+      throw new ConfigException(
+          String.format("Failed to access data from topic %s :", topic),
+          e
+      );
     }
   }
 
@@ -112,6 +119,11 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       throw new DataException(String.format("Converting byte[] to Kafka Connect data failed due to "
           + "serialization error of topic %s: ",
           topic),
+          e
+      );
+    } catch (InvalidConfigurationException e) {
+      throw new ConfigException(
+          String.format("Failed to access data from topic %s :", topic),
           e
       );
     }

@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kafka.utils.VerifiableProperties;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.everit.json.schema.ValidationException;
 
@@ -82,7 +83,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    * @param payload serialized data
    * @return the deserialized object
    */
-  protected T deserialize(byte[] payload) throws SerializationException {
+  protected T deserialize(byte[] payload)
+      throws SerializationException, InvalidConfigurationException {
     return (T) deserialize(false, null, null, payload);
   }
 
@@ -90,7 +92,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
       boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload
-  ) throws SerializationException {
+  ) throws SerializationException, InvalidConfigurationException {
 
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
@@ -156,7 +158,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     } catch (IOException | RuntimeException e) {
       throw new SerializationException("Error deserializing JSON message for id " + id, e);
     } catch (RestClientException e) {
-      throw new SerializationException("Error retrieving JSON schema for id " + id, e);
+      throw toKafkaException(e, "Error retrieving JSON schema for id " + id);
     }
   }
 
