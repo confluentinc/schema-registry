@@ -17,6 +17,8 @@
 package io.confluent.connect.protobuf;
 
 import com.google.protobuf.Message;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -98,6 +100,11 @@ public class ProtobufConverter implements Converter {
           "Failed to serialize Protobuf data from topic %s :",
           topic
       ), e);
+    } catch (InvalidConfigurationException e) {
+      throw new ConfigException(
+          String.format("Failed to access data from topic %s :", topic),
+          e
+      );
     }
   }
 
@@ -125,6 +132,11 @@ public class ProtobufConverter implements Converter {
           "Failed to deserialize data for topic %s to Protobuf: ",
           topic
       ), e);
+    } catch (InvalidConfigurationException e) {
+      throw new ConfigException(
+          String.format("Failed to access data from topic %s :", topic),
+          e
+      );
     }
   }
 
