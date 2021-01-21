@@ -69,6 +69,12 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String USE_LATEST_VERSION_DOC =
       "Specify if the Serializer should use the latest subject version for serialization";
 
+  public static final String LATEST_COMPATIBILITY_STRICT = "latest.compatibility.strict";
+  public static final boolean LATEST_COMPATIBILITY_STRICT_DEFAULT = true;
+  public static final String LATEST_COMPATIBILITY_STRICT_DOC =
+      "Whether to check for backward compatibility between the latest subject version and "
+      + " the Schema of the object to be serialized";
+
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
@@ -140,6 +146,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
         .define(USE_LATEST_VERSION, Type.BOOLEAN, USE_LATEST_VERSION_DEFAULT,
                 Importance.LOW, USE_LATEST_VERSION_DOC)
+        .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
+                Importance.LOW, LATEST_COMPATIBILITY_STRICT_DOC)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
@@ -187,6 +195,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean useLatestVersion() {
     return this.getBoolean(USE_LATEST_VERSION);
+  }
+
+  public boolean getLatestCompatibilityStrict() {
+    return this.getBoolean(LATEST_COMPATIBILITY_STRICT);
   }
 
   public Object keySubjectNameStrategy() {
