@@ -144,28 +144,16 @@ public class ProtobufSchema implements ParsedSchema {
       this.version = version;
       this.name = name;
       this.references = Collections.unmodifiableList(references);
-      Map<String, ProtoFileElement> dependencies = resolvedReferences.entrySet()
+      this.dependencies = Collections.unmodifiableMap(resolvedReferences.entrySet()
           .stream()
           .collect(Collectors.toMap(
               Map.Entry::getKey,
               e -> toProtoFile(e.getValue())
-          ));
-      addBuiltInDependencies(dependencies);
-      this.dependencies = Collections.unmodifiableMap(dependencies);
+          )));
     } catch (IllegalStateException e) {
       log.error("Could not parse Protobuf schema " + schemaString
           + " with references " + references, e);
       throw e;
-    }
-  }
-
-  private void addBuiltInDependencies(Map<String, ProtoFileElement> dependencies) {
-    // For convenience, allow built-in dependencies to be used even if references are not provided
-    if (!dependencies.containsKey(DECIMAL_LOCATION)) {
-      dependencies.put(DECIMAL_LOCATION, DECIMAL_SCHEMA);
-    }
-    if (!dependencies.containsKey(META_LOCATION)) {
-      dependencies.put(META_LOCATION, META_SCHEMA);
     }
   }
 
@@ -645,7 +633,7 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (dynamicSchema == null) {
-      dynamicSchema = toDynamicSchema(name, schemaObj, dependencies);
+      dynamicSchema = toDynamicSchema(name, schemaObj, dependenciesWithNativeSchemas());
     }
     return dynamicSchema;
   }
@@ -928,6 +916,17 @@ public class ProtobufSchema implements ParsedSchema {
 
   public Map<String, ProtoFileElement> dependencies() {
     return dependencies;
+  }
+
+  public Map<String, ProtoFileElement> dependenciesWithNativeSchemas() {
+    Map<String, ProtoFileElement> deps = new HashMap<>(dependencies);
+    if (!deps.containsKey(DECIMAL_LOCATION)) {
+      deps.put(DECIMAL_LOCATION, DECIMAL_SCHEMA);
+    }
+    if (!deps.containsKey(META_LOCATION)) {
+      deps.put(META_LOCATION, META_SCHEMA);
+    }
+    return deps;
   }
 
   @Override

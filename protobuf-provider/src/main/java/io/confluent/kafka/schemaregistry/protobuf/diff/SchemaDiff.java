@@ -83,8 +83,8 @@ public class SchemaDiff {
         .collect(Collectors.toMap(SchemaReference::getName, r -> r));
     Map<String, SchemaReference> updateReferences = update.references().stream()
         .collect(Collectors.toMap(SchemaReference::getName, r -> r));
-    Map<String, ProtoFileElement> originalDependencies = original.dependencies();
-    Map<String, ProtoFileElement> updateDependencies = update.dependencies();
+    Map<String, ProtoFileElement> originalDependencies = original.dependenciesWithNativeSchemas();
+    Map<String, ProtoFileElement> updateDependencies = update.dependenciesWithNativeSchemas();
     final Context ctx = new Context(COMPATIBLE_CHANGES);
     collectContextInfoForRefs(ctx, originalReferences, originalDependencies, true);
     collectContextInfoForRefs(ctx, updateReferences, updateDependencies, false);
