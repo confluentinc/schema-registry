@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
@@ -131,6 +132,42 @@ public class RestApiTest extends ClusterTestHarness {
     int id2 = restApp.restClient.registerSchema(schema, "subject2");
     assertEquals("Registering the same schema under different subjects should return the same id",
                  id1, id2);
+  }
+
+  @Test
+  public void testImportDifferentSchemaOnSameID() throws Exception {
+    String schema1 = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\"}]}";
+
+    String schema2 = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\"},"
+        + "{\"type\":\"int\",\"name\":\"field2\",\"default\":0}]}";
+
+    restApp.restClient.setMode("IMPORT");
+
+    try {
+      int id1 = restApp.restClient.registerSchema(schema1, "subject1", 1, 1);
+      assertEquals(1, id1);
+      int id2 = restApp.restClient.registerSchema(schema2, "subject1", 2, 1);
+      fail(String.format("Schema2 is registered with id %s, should receive error here", id2));
+    } catch (RestClientException e) {
+      assertEquals("Overwrite schema for the same ID is not permitted.",
+          Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+    }
+
+    try {
+      int id1 = restApp.restClient.registerSchema(schema1, "subject1", 1, 1);
+      assertEquals(1, id1);
+      int id2 = restApp.restClient.registerSchema(schema2, "subject2", 1, 1);
+      fail(String.format("Schema2 is registered with id %s, should receive error here", id2));
+    } catch (RestClientException e) {
+      assertEquals("Overwrite schema for the same ID is not permitted.",
+          Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+    }
   }
 
   @Test
