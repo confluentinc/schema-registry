@@ -16,9 +16,14 @@
 
 package io.confluent.connect.protobuf;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Timestamp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
+import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -70,6 +75,9 @@ public class ProtobufConverterTest {
       .setTestInt32(123)
       .setTestMessage(HELLO_WORLD_MESSAGE)
       .build();
+  private static final TimestampValue TIMESTAMP_VALUE = TimestampValue.newBuilder()
+      .setValue(Timestamp.newBuilder().setSeconds(1000).build())
+      .build();
 
   private static final Map<String, ?> SR_CONFIG = Collections.singletonMap(
       AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
@@ -80,7 +88,7 @@ public class ProtobufConverterTest {
   private final ProtobufConverter converter;
 
   public ProtobufConverterTest() {
-    schemaRegistry = new MockSchemaRegistryClient();
+    schemaRegistry = new MockSchemaRegistryClient(ImmutableList.of(new ProtobufSchemaProvider()));
     converter = new ProtobufConverter(schemaRegistry);
   }
 
@@ -163,6 +171,20 @@ public class ProtobufConverterTest {
     return builder;
   }
 
+  private SchemaBuilder getTimestampBuilder() {
+    final SchemaBuilder builder = SchemaBuilder.struct();
+    builder.name("google.protobuf.Timestamp");
+    builder.field(
+        "seconds",
+        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    builder.field(
+        "nanos",
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    return builder;
+  }
+
   private Struct getTestMessageStruct(String messageText, int messageInt) {
     return getTestMessageStruct("TestMessage", messageText, messageInt);
   }
@@ -189,6 +211,13 @@ public class ProtobufConverterTest {
     result.put("test_sint64", 0L);
     result.put("test_uint32", 0L);
     result.put("test_uint64", 0L);
+    return result;
+  }
+
+  private Struct getTimestampStruct(Schema schema, long seconds, int nanos) {
+    Struct result = new Struct(schema.schema());
+    result.put("seconds", seconds);
+    result.put("nanos", nanos);
     return result;
   }
 
@@ -262,6 +291,65 @@ public class ProtobufConverterTest {
     Schema schema = builder.version(1).build();
     Struct struct = getTestMessageStruct(schema, TEST_MSG_STRING, 123);
     struct.put("test_message", getTestMessageStruct(nested, TEST_MSG_STRING, 123));
+    byte[] result = converter.fromConnectData("my-topic",
+        schema,
+        struct
+    );
+
+    assertArrayEquals(expected, Arrays.copyOfRange(result, PROTOBUF_BYTES_START, result.length));
+  }
+
+  @Test
+  public void testFromConnectDataWithReference() {
+    final byte[] expected = TIMESTAMP_VALUE.toByteArray();
+
+    converter.configure(SR_CONFIG, false);
+    String fullName = "io.confluent.kafka.serializers.protobuf.test.TimestampValue";
+    Schema timestampSchema =
+        getTimestampBuilder().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build();
+    SchemaBuilder builder = SchemaBuilder.struct();
+    builder.name(fullName);
+    builder.field(
+        "value",
+        timestampSchema
+    );
+    Schema schema = builder.version(1).build();
+    Struct struct = new Struct(schema);
+    struct.put("value", getTimestampStruct(timestampSchema, 1000L, 0));
+    byte[] result = converter.fromConnectData("my-topic",
+        schema,
+        struct
+    );
+
+    assertArrayEquals(expected, Arrays.copyOfRange(result, PROTOBUF_BYTES_START, result.length));
+  }
+
+  @Test
+  public void testFromConnectDataWithReferenceUsingLatest() throws Exception {
+    final byte[] expected = TIMESTAMP_VALUE.toByteArray();
+
+    Map<String, Object> config = new HashMap<>();
+    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost");
+    config.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "true");
+    config.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
+    config.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, "false");
+    converter.configure(config, false);
+    schemaRegistry.register("google/protobuf/timestamp.proto", new ProtobufSchema(Timestamp.getDescriptor()));
+    SchemaReference ref = new SchemaReference("google/protobuf/timestamp.proto", "google/protobuf/timestamp.proto", 1);
+    schemaRegistry.register("my-topic-value", new ProtobufSchema(TimestampValue.getDescriptor(), ImmutableList.of(ref)));
+
+    String fullName = "io.confluent.kafka.serializers.protobuf.test.TimestampValue";
+    Schema timestampSchema =
+        getTimestampBuilder().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build();
+    SchemaBuilder builder = SchemaBuilder.struct();
+    builder.name(fullName);
+    builder.field(
+        "value",
+        timestampSchema
+    );
+    Schema schema = builder.version(1).build();
+    Struct struct = new Struct(schema);
+    struct.put("value", getTimestampStruct(timestampSchema, 1000L, 0));
     byte[] result = converter.fromConnectData("my-topic",
         schema,
         struct
@@ -679,15 +767,15 @@ public class ProtobufConverterTest {
     ProtobufSchema schema = getSchema(keyValueMessage.getDescriptorForType());
     ReferenceSubjectNameStrategy strategy = new DefaultReferenceSubjectNameStrategy();
     schema = KafkaProtobufSerializer.resolveDependencies(
-        schemaRegistry, true, false, null, strategy, "topic1", isKey, schema);
+        schemaRegistry, true, false, true, null, strategy, "topic1", isKey, schema);
     schemaRegistry.register("topic1-" + subjectSuffix, schema);
     schema = getSchema(keyMessage.getDescriptorForType());
     schema = KafkaProtobufSerializer.resolveDependencies(
-        schemaRegistry, true, false, null, strategy, "topic2", isKey, schema);
+        schemaRegistry, true, false, true, null, strategy, "topic2", isKey, schema);
     schemaRegistry.register("topic2-" + subjectSuffix, schema);
     schema = getSchema(keyValueMessage2.getDescriptorForType());
     schema = KafkaProtobufSerializer.resolveDependencies(
-        schemaRegistry, true, false, null, strategy, "topic2", isKey, schema);
+        schemaRegistry, true, false, true, null, strategy, "topic2", isKey, schema);
     schemaRegistry.register("topic2-" + subjectSuffix, schema);
 
     KafkaProtobufSerializer serializer = new KafkaProtobufSerializer(schemaRegistry);

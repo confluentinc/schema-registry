@@ -161,11 +161,15 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public ProtobufSchema(Descriptor descriptor) {
+    this(descriptor, Collections.emptyList());
+  }
+
+  public ProtobufSchema(Descriptor descriptor, List<SchemaReference> references) {
     Map<String, ProtoFileElement> dependencies = new HashMap<>();
     this.schemaObj = toProtoFile(descriptor.getFile(), dependencies);
     this.version = null;
     this.name = descriptor.getFullName();
-    this.references = Collections.emptyList();
+    this.references = Collections.unmodifiableList(references);
     this.dependencies = Collections.unmodifiableMap(dependencies);
     this.descriptor = descriptor;
   }

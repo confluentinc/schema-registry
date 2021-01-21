@@ -153,16 +153,18 @@ public abstract class AbstractKafkaSchemaSerDe {
     return schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 
-  protected ParsedSchema lookupLatestVersion(String subject, ParsedSchema schema)
+  protected ParsedSchema lookupLatestVersion(
+      String subject, ParsedSchema schema, boolean latestCompatStrict)
       throws IOException, RestClientException {
-    return lookupLatestVersion(schemaRegistry, subject, schema, latestVersions);
+    return lookupLatestVersion(schemaRegistry, subject, schema, latestVersions, latestCompatStrict);
   }
 
   protected static ParsedSchema lookupLatestVersion(
       SchemaRegistryClient schemaRegistry,
       String subject,
       ParsedSchema schema,
-      Cache<SubjectSchema, ParsedSchema> cache)
+      Cache<SubjectSchema, ParsedSchema> cache,
+      boolean latestCompatStrict)
       throws IOException, RestClientException {
     SubjectSchema ss = new SubjectSchema(subject, schema);
     ParsedSchema latestVersion = null;
@@ -182,7 +184,7 @@ public abstract class AbstractKafkaSchemaSerDe {
               + " of type " + schemaMetadata.getSchemaType()));
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
-      if (!latestVersion.isBackwardCompatible(schema).isEmpty()) {
+      if (latestCompatStrict && !latestVersion.isBackwardCompatible(schema).isEmpty()) {
         throw new IOException("Incompatible schema " + schemaMetadata.getSchema()
             + " with refs " + schemaMetadata.getReferences()
             + " of type " + schemaMetadata.getSchemaType()

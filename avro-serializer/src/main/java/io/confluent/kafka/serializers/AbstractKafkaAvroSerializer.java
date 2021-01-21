@@ -44,6 +44,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
   protected boolean useLatestVersion;
+  protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   private final Map<Schema, DatumWriter<Object>> datumWriterCache = new ConcurrentHashMap<>();
 
@@ -51,6 +52,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     configureClientProperties(config, new AvroSchemaProvider());
     autoRegisterSchema = config.autoRegisterSchema();
     useLatestVersion = config.useLatestVersion();
+    latestCompatStrict = config.getLatestCompatibilityStrict();
     avroReflectionAllowNull = config
         .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
   }
@@ -82,7 +84,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         id = schemaRegistry.register(subject, schema);
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version of Avro schema";
-        schema = (AvroSchema) lookupLatestVersion(subject, schema);
+        schema = (AvroSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
         id = schemaRegistry.getId(subject, schema);
       } else {
         restClientErrorMsg = "Error retrieving Avro schema";
