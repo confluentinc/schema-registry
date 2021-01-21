@@ -388,7 +388,7 @@ public class ProtobufSchemaTest {
     SchemaReference descriptorRef = new SchemaReference(descriptorName, descriptorName, 1);
 
     ProtoFileElement original = resourceLoader.readObj(
-            "io/confluent/kafka/schemaregistry/protobuf/diff/DecimalValue2.proto");
+        "io/confluent/kafka/schemaregistry/protobuf/diff/DecimalValue2.proto");
     List<SchemaReference> refs = new ArrayList<>();
     refs.add(metaRef);
     refs.add(decimalRef);
@@ -398,6 +398,29 @@ public class ProtobufSchemaTest {
     deps.put(decimalName, decimal);
     deps.put(descriptorName, descriptor);
     ProtobufSchema schema = new ProtobufSchema(original, refs, deps);
+    Descriptor desc = schema.toDescriptor();
+    ProtobufSchema schema2 = new ProtobufSchema(desc);
+
+    assertTrue(schema.isCompatible(
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
+    assertEquals(schema.canonicalString(), schema2.canonicalString());
+  }
+
+  @Test
+  public void testNativeDependencies() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "\n"
+        + "message DecimalValue {\n"
+        + "  confluent.type.Decimal value = 1 [(confluent.field_meta) = { params: [\n"
+        + "    { value: \"8\", key: \"precision\" },\n"
+        + "    { value: \"3\", key: \"scale\" }\n"
+        + "  ]}];\n"
+        + "}";
+
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
     Descriptor desc = schema.toDescriptor();
     ProtobufSchema schema2 = new ProtobufSchema(desc);
 

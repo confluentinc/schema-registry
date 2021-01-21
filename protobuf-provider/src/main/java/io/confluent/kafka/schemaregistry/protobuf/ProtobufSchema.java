@@ -46,6 +46,7 @@ import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
+import io.confluent.protobuf.type.DecimalProto;
 import java.util.LinkedHashMap;
 import kotlin.ranges.IntRange;
 import org.slf4j.Logger;
@@ -94,6 +95,14 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String VALUE_FIELD = "value";
 
   public static final Location DEFAULT_LOCATION = Location.get("");
+
+  public static final String DECIMAL_LOCATION = "confluent/type/decimal.proto";
+  public static final String META_LOCATION = "confluent/meta.proto";
+
+  private static final ProtoFileElement DECIMAL_SCHEMA =
+      toProtoFile(DecimalProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement META_SCHEMA =
+      toProtoFile(MetaProto.getDescriptor().toProto()) ;
 
   private final ProtoFileElement schemaObj;
 
@@ -260,7 +269,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
-  private ProtoFileElement toProtoFile(
+  private static ProtoFileElement toProtoFile(
       FileDescriptor file, Map<String, ProtoFileElement> dependencies
   ) {
     for (FileDescriptor dependency : file.getDependencies()) {
@@ -270,7 +279,7 @@ public class ProtobufSchema implements ParsedSchema {
     return toProtoFile(file.toProto());
   }
 
-  private ProtoFileElement toProtoFile(FileDescriptorProto file) {
+  private static ProtoFileElement toProtoFile(FileDescriptorProto file) {
     String packageName = file.getPackage();
     // Don't set empty package name
     if ("".equals(packageName)) {
@@ -360,7 +369,7 @@ public class ProtobufSchema implements ParsedSchema {
     );
   }
 
-  private MessageElement toMessage(FileDescriptorProto file, DescriptorProto descriptor) {
+  private static MessageElement toMessage(FileDescriptorProto file, DescriptorProto descriptor) {
     String name = descriptor.getName();
     log.trace("*** msg name: {}", name);
     ImmutableList.Builder<FieldElement> fields = ImmutableList.builder();
@@ -435,7 +444,7 @@ public class ProtobufSchema implements ParsedSchema {
     );
   }
 
-  private OptionElement toOption(String name, Meta meta) {
+  private static OptionElement toOption(String name, Meta meta) {
     Map<String, Object> map = new HashMap<>();
     String doc = meta.getDoc();
     if (doc != null && !doc.isEmpty()) {
@@ -456,7 +465,7 @@ public class ProtobufSchema implements ParsedSchema {
     return map.isEmpty() ? null : new OptionElement(name, kind, map, true);
   }
 
-  private ReservedElement toReserved(ReservedRange range) {
+  private static ReservedElement toReserved(ReservedRange range) {
     List<Object> values = new ArrayList<>();
     int start = range.getStart();
     int end = range.getEnd();
@@ -464,13 +473,13 @@ public class ProtobufSchema implements ParsedSchema {
     return new ReservedElement(DEFAULT_LOCATION, "", values);
   }
 
-  private OneOfElement toOneof(String name, ImmutableList.Builder<FieldElement> fields) {
+  private static OneOfElement toOneof(String name, ImmutableList.Builder<FieldElement> fields) {
     log.trace("*** oneof name: {}", name);
     // NOTE: skip groups
     return new OneOfElement(name, "", fields.build(), Collections.emptyList());
   }
 
-  private EnumElement toEnum(EnumDescriptorProto ed) {
+  private static EnumElement toEnum(EnumDescriptorProto ed) {
     String name = ed.getName();
     log.trace("*** enum name: {}", name);
     ImmutableList.Builder<EnumConstantElement> constants = ImmutableList.builder();
@@ -514,7 +523,8 @@ public class ProtobufSchema implements ParsedSchema {
     return new EnumElement(DEFAULT_LOCATION, name, "", options.build(), constants.build());
   }
 
-  private FieldElement toField(FileDescriptorProto file, FieldDescriptorProto fd, boolean inOneof) {
+  private static FieldElement toField(
+      FileDescriptorProto file, FieldDescriptorProto fd, boolean inOneof) {
     String name = fd.getName();
     log.trace("*** field name: {}", name);
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
@@ -555,7 +565,7 @@ public class ProtobufSchema implements ParsedSchema {
     );
   }
 
-  private Field.Label label(FileDescriptorProto file, FieldDescriptorProto fd) {
+  private static Field.Label label(FileDescriptorProto file, FieldDescriptorProto fd) {
     boolean isProto3 = file.getSyntax().equals(PROTO3);
     switch (fd.getLabel()) {
       case LABEL_REQUIRED:
@@ -569,7 +579,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
-  private String dataType(FieldDescriptorProto field) {
+  private static String dataType(FieldDescriptorProto field) {
     if (field.hasTypeName()) {
       return field.getTypeName();
     } else {
@@ -623,7 +633,7 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (dynamicSchema == null) {
-      dynamicSchema = toDynamicSchema(name, schemaObj, dependencies);
+      dynamicSchema = toDynamicSchema(name, schemaObj, dependenciesWithNativeSchemas());
     }
     return dynamicSchema;
   }
@@ -906,6 +916,17 @@ public class ProtobufSchema implements ParsedSchema {
 
   public Map<String, ProtoFileElement> dependencies() {
     return dependencies;
+  }
+
+  public Map<String, ProtoFileElement> dependenciesWithNativeSchemas() {
+    Map<String, ProtoFileElement> deps = new HashMap<>(dependencies);
+    if (!deps.containsKey(DECIMAL_LOCATION)) {
+      deps.put(DECIMAL_LOCATION, DECIMAL_SCHEMA);
+    }
+    if (!deps.containsKey(META_LOCATION)) {
+      deps.put(META_LOCATION, META_SCHEMA);
+    }
+    return deps;
   }
 
   @Override
