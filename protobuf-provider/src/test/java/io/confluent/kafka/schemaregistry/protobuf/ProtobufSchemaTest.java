@@ -407,7 +407,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testBuiltInDependencies() throws Exception {
+  public void testNativeDependencies() throws Exception {
     String schemaString = "syntax = \"proto3\";\n"
         + "\n"
         + "import \"confluent/meta.proto\";\n"
