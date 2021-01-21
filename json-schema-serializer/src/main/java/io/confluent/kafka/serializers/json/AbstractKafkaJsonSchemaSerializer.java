@@ -38,6 +38,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
 
   protected boolean autoRegisterSchema;
   protected boolean useLatestVersion;
+  protected boolean latestCompatStrict;
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected SpecificationVersion specVersion;
   protected boolean oneofForNullables;
@@ -47,6 +48,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     configureClientProperties(config, new JsonSchemaProvider());
     this.autoRegisterSchema = config.autoRegisterSchema();
     this.useLatestVersion = config.useLatestVersion();
+    this.latestCompatStrict = config.getLatestCompatibilityStrict();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);
     this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
     this.specVersion = SpecificationVersion.get(
@@ -84,7 +86,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         id = schemaRegistry.register(subject, schema);
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
-        schema = (JsonSchema) lookupLatestVersion(subject, schema);
+        schema = (JsonSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
         id = schemaRegistry.getId(subject, schema);
       } else {
         restClientErrorMsg = "Error retrieving JSON schema: ";

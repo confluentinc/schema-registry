@@ -45,12 +45,14 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
 
   protected boolean autoRegisterSchema;
   protected boolean useLatestVersion;
+  protected boolean latestCompatStrict;
   protected ReferenceSubjectNameStrategy referenceSubjectNameStrategy;
 
   protected void configure(KafkaProtobufSerializerConfig config) {
     configureClientProperties(config, new ProtobufSchemaProvider());
     this.autoRegisterSchema = config.autoRegisterSchema();
     this.useLatestVersion = config.useLatestVersion();
+    this.latestCompatStrict = config.getLatestCompatibilityStrict();
     this.referenceSubjectNameStrategy = config.referenceSubjectNameStrategyInstance();
   }
 
@@ -76,14 +78,15 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     String restClientErrorMsg = "";
     try {
       schema = resolveDependencies(schemaRegistry, autoRegisterSchema,
-          useLatestVersion, latestVersions, referenceSubjectNameStrategy, topic, isKey, schema);
+          useLatestVersion, latestCompatStrict, latestVersions,
+          referenceSubjectNameStrategy, topic, isKey, schema);
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
         id = schemaRegistry.register(subject, schema);
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
-        schema = (ProtobufSchema) lookupLatestVersion(subject, schema);
+        schema = (ProtobufSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
         id = schemaRegistry.getId(subject, schema);
       } else {
         restClientErrorMsg = "Error retrieving Protobuf schema: ";
@@ -110,6 +113,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       SchemaRegistryClient schemaRegistry,
       boolean autoRegisterSchema,
       boolean useLatestVersion,
+      boolean latestCompatStrict,
       Cache<SubjectSchema, ParsedSchema> latestVersions,
       ReferenceSubjectNameStrategy strategy,
       String topic,
@@ -123,6 +127,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     Schema s = resolveDependencies(schemaRegistry,
         autoRegisterSchema,
         useLatestVersion,
+        latestCompatStrict,
         latestVersions,
         strategy,
         topic,
@@ -138,6 +143,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       SchemaRegistryClient schemaRegistry,
       boolean autoRegisterSchema,
       boolean useLatestVersion,
+      boolean latestCompatStrict,
       Cache<SubjectSchema, ParsedSchema> latestVersions,
       ReferenceSubjectNameStrategy strategy,
       String topic,
@@ -151,6 +157,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       Schema subschema = resolveDependencies(schemaRegistry,
           autoRegisterSchema,
           useLatestVersion,
+          latestCompatStrict,
           latestVersions,
           strategy,
           topic,
@@ -165,6 +172,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       Schema subschema = resolveDependencies(schemaRegistry,
           autoRegisterSchema,
           useLatestVersion,
+          latestCompatStrict,
           latestVersions,
           strategy,
           topic,
@@ -184,7 +192,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         id = schemaRegistry.register(subject, schema);
       } else if (useLatestVersion) {
         schema = (ProtobufSchema) lookupLatestVersion(
-            schemaRegistry, subject, schema, latestVersions);
+            schemaRegistry, subject, schema, latestVersions, latestCompatStrict);
         id = schemaRegistry.getId(subject, schema);
       } else {
         id = schemaRegistry.getId(subject, schema);
