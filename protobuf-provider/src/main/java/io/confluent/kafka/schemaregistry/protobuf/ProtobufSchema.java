@@ -535,7 +535,8 @@ public class ProtobufSchema implements ParsedSchema {
     return new EnumElement(DEFAULT_LOCATION, name, "", options.build(), constants.build());
   }
 
-  private static FieldElement toField(FileDescriptorProto file, FieldDescriptorProto fd, boolean inOneof) {
+  private static FieldElement toField(
+      FileDescriptorProto file, FieldDescriptorProto fd, boolean inOneof) {
     String name = fd.getName();
     log.trace("*** field name: {}", name);
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
