@@ -101,7 +101,6 @@ public class ProtobufSchema implements ParsedSchema {
 
   private static final ProtoFileElement DECIMAL_SCHEMA =
       toProtoFile(DecimalProto.getDescriptor().toProto()) ;
-
   private static final ProtoFileElement META_SCHEMA =
       toProtoFile(MetaProto.getDescriptor().toProto()) ;
 
