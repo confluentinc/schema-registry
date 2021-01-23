@@ -410,6 +410,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
 
         SchemaKey schemaKey = new SchemaKey(subject, schema.getVersion());
         if (schemaId >= 0) {
+          checkIfSchemaWithIdExist(schemaId, schema);
           schema.setId(schemaId);
           kafkaStore.put(schemaKey, new SchemaValue(schema));
         } else {
@@ -628,6 +629,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     } else {
       // this schema was never registered in the registry under any subject
       return null;
+    }
+  }
+
+  public void checkIfSchemaWithIdExist(int id, Schema schema)
+      throws SchemaRegistryException, StoreException {
+    SchemaKey existingKey = this.lookupCache.schemaKeyById(id);
+    if (existingKey != null) {
+      SchemaRegistryValue existingValue = this.lookupCache.get(existingKey);
+      if (existingValue != null
+          && existingValue instanceof SchemaValue
+          && !((SchemaValue) existingValue).getSchema().equals(schema.getSchema())) {
+        throw new OperationNotPermittedException(
+            String.format("Overwrite new schema with id %s is not permitted.", id)
+        );
+      }
     }
   }
 
