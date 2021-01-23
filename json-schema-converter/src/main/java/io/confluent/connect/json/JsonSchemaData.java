@@ -22,6 +22,9 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import java.util.HashSet;
+import java.util.Map.Entry;
+import java.util.Set;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -219,7 +222,19 @@ public class JsonSchemaData {
       case MAP:
         return value.isObject() || value.isArray();
       case STRUCT:
-        return value.isObject();
+        if (value.isObject()) {
+          Set<String> schemaFields = fieldSchema.fields()
+              .stream()
+              .map(Field::name)
+              .collect(Collectors.toSet());
+          Set<String> objectFields = new HashSet<>();
+          for (Iterator<Entry<String, JsonNode>> iter = value.fields(); iter.hasNext(); ) {
+            objectFields.add(iter.next().getKey());
+          }
+          return schemaFields.containsAll(objectFields);
+        } else {
+          return false;
+        }
       default:
         throw new IllegalArgumentException("Unsupported type " + fieldSchema.type());
     }
