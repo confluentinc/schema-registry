@@ -361,8 +361,7 @@ public class JsonSchemaData {
       if (schema.isOptional()) {
         return JSON_NODE_FACTORY.nullNode();
       }
-      throw new DataException(
-          "Conversion error: null value for field that is required and has no default value");
+      return null;
     }
 
     Object value = logicalValue;
@@ -484,7 +483,10 @@ public class JsonSchemaData {
           } else {
             ObjectNode obj = JSON_NODE_FACTORY.objectNode();
             for (Field field : schema.fields()) {
-              obj.set(field.name(), fromConnectData(field.schema(), struct.get(field)));
+              JsonNode jsonNode = fromConnectData(field.schema(), struct.get(field));
+              if (jsonNode != null) {
+                obj.set(field.name(), jsonNode);
+              }
             }
             return obj;
           }

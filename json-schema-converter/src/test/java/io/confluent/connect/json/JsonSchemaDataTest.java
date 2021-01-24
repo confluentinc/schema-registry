@@ -371,6 +371,32 @@ public class JsonSchemaDataTest {
         jsonSchemaData.fromConnectSchema(NAMED_MAP_SCHEMA).rawSchema(), NAMED_JSON_MAP_SCHEMA);
   }
 
+  @Test
+  public void testFromConnectRecordWithMissingNonoptional() {
+    NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
+        .build();
+    StringSchema stringSchema = StringSchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    ObjectSchema schema = ObjectSchema.builder()
+        .addPropertySchema("int8", numberSchema)
+        .addPropertySchema("string", stringSchema)
+        .title("Record")
+        .build();
+    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+    obj.set("int8", ShortNode.valueOf((short) 12));
+    // The string field is not set
+    Schema actualSchema = SchemaBuilder.struct()
+        .name("Record")
+        .field("int8", Schema.INT8_SCHEMA)
+        .field("string", Schema.STRING_SCHEMA)
+        .build();
+    Struct struct = new Struct(actualSchema).put("int8", (byte) 12);
+    checkNonObjectConversion(schema, obj, actualSchema, struct);
+  }
+
   private void checkNonObjectConversion(
       org.everit.json.schema.Schema expectedSchema, Object expected, Schema schema, Object value
   ) {
@@ -650,6 +676,7 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectRecordWithMissingNonoptional() {
     NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
         .build();
     StringSchema stringSchema = StringSchema.builder()
