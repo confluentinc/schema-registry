@@ -190,7 +190,10 @@ public class JsonSchemaData {
 
         Struct result = new Struct(schema.schema());
         for (Field field : schema.fields()) {
-          result.put(field, toConnectData(field.schema(), value.get(field.name())));
+          Object fieldValue = toConnectData(field.schema(), value.get(field.name()));
+          if (fieldValue != null) {
+            result.put(field, fieldValue);
+          }
         }
 
         return result;
@@ -506,7 +509,7 @@ public class JsonSchemaData {
           // any logical type conversions should already have been applied
           return schema.defaultValue();
         }
-        if (schema.isOptional()) {
+        if (jsonValue == null || schema.isOptional()) {
           return null;
         }
         throw new DataException("Invalid null value for required " + schemaType + " field");

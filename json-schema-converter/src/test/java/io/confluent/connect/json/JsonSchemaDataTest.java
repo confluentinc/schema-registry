@@ -39,11 +39,11 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.json.DecimalFormat;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
-import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
@@ -69,6 +69,7 @@ import static org.apache.kafka.connect.data.Decimal.LOGICAL_NAME;
 import static org.apache.kafka.connect.data.Decimal.SCALE_FIELD;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class JsonSchemaDataTest {
 
@@ -647,6 +648,31 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectRecordWithMissingNonoptional() {
+    NumberSchema numberSchema = NumberSchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
+        .build();
+    StringSchema stringSchema = StringSchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    ObjectSchema schema = ObjectSchema.builder()
+        .addPropertySchema("int8", numberSchema)
+        .addPropertySchema("string", stringSchema)
+        .title("Record")
+        .build();
+    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+    obj.set("int8", ShortNode.valueOf((short) 12));
+    // The string field is not set
+    Schema expectedSchema = SchemaBuilder.struct()
+        .name("Record")
+        .field("int8", Schema.INT8_SCHEMA)
+        .field("string", Schema.STRING_SCHEMA)
+        .build();
+    Struct struct = new Struct(expectedSchema).put("int8", (byte) 12);
+    checkNonObjectConversion(expectedSchema, struct, schema, obj);
+  }
+
+  @Test
   public void testToConnectRecordWithOptionalArrayValue() {
     testToConnectRecordWithOptionalArray(Arrays.asList("test"));
   }
@@ -1064,7 +1090,11 @@ public class JsonSchemaDataTest {
     Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
     Object jsonValue = jsonSchemaData.toConnectData(connectSchema, value);
     if (connectSchema != null) {
-      ConnectSchema.validateValue(connectSchema, jsonValue);
+      try {
+        ConnectSchema.validateValue(connectSchema, jsonValue);
+      } catch (DataException e) {
+        assertTrue(e.getMessage().contains("Invalid value: null used for required field"));
+      }
     }
     assertEquals(expectedSchema, connectSchema);
     if (expected instanceof byte[]) {
