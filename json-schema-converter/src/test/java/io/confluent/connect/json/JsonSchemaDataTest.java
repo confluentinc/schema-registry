@@ -220,6 +220,63 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testFromConnectUnionDifferentStruct() {
+    NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
+        .build();
+    StringSchema stringSchema = StringSchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    ObjectSchema firstSchema = ObjectSchema.builder()
+        .addPropertySchema("a", numberSchema)
+        .addPropertySchema("b", stringSchema)
+        .title("field0")
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0))
+        .build();
+    ObjectSchema secondSchema = ObjectSchema.builder()
+        .addPropertySchema("c", numberSchema)
+        .addPropertySchema("d", stringSchema)
+        .title("field1")
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    Schema field0 = SchemaBuilder.struct()
+        .name("field0")
+        .field("a", Schema.INT8_SCHEMA)
+        .field("b", Schema.STRING_SCHEMA)
+        .optional()
+        .build();
+    Schema field1 = SchemaBuilder.struct()
+        .name("field1")
+        .field("c", Schema.INT8_SCHEMA)
+        .field("d", Schema.STRING_SCHEMA)
+        .optional()
+        .build();
+    SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", field0);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", field1);
+    Schema connectSchema = builder.build();
+
+    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+    obj.set("a", ShortNode.valueOf((short) 12));
+    obj.set("b", TextNode.valueOf("sample string"));
+    Struct struct = new Struct(field0).put("a", (byte) 12)
+        .put("b", "sample string");
+    Struct actual = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.0", struct);
+    checkNonObjectConversion(schema, obj, connectSchema, actual);
+
+    obj = JsonNodeFactory.instance.objectNode();
+    obj.set("c", ShortNode.valueOf((short) 12));
+    obj.set("d", TextNode.valueOf("sample string"));
+    struct = new Struct(field1).put("c", (byte) 12)
+        .put("d", "sample string");
+    actual = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.1", struct);
+    checkNonObjectConversion(schema, obj, connectSchema, actual);
+  }
+
+  @Test
   public void testFromConnectBase64Decimal() {
     jsonSchemaData =
         new JsonSchemaData(new JsonSchemaDataConfig(
@@ -402,6 +459,7 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectInt8() {
     NumberSchema schema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
         .build();
     Schema expectedSchema = Schema.INT8_SCHEMA;
@@ -411,6 +469,7 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectInt8WithDefault() {
     NumberSchema schema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
         .defaultValue((byte) 34)
         .build();
@@ -421,6 +480,7 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectInt8WithDefaultConversion() {
     NumberSchema schema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
         .defaultValue(34)
         .build();
@@ -431,6 +491,7 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectInt16() {
     NumberSchema schema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int16"))
         .build();
     Schema expectedSchema = Schema.INT16_SCHEMA;
@@ -440,6 +501,7 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectInt32() {
     NumberSchema schema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int32"))
         .build();
     Schema expectedSchema = Schema.INT32_SCHEMA;
@@ -449,6 +511,7 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectInt64() {
     NumberSchema schema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int64"))
         .build();
     Schema expectedSchema = Schema.INT64_SCHEMA;
@@ -518,6 +581,7 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectArray() {
     NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
         .build();
     ArraySchema schema = ArraySchema.builder().allItemSchema(numberSchema).build();
@@ -532,6 +596,7 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectMapStringKeys() {
     NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
         .build();
     ObjectSchema schema = ObjectSchema.builder()
@@ -553,9 +618,11 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectMapNonStringKeys() {
     NumberSchema keySchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
         .build();
     NumberSchema valueSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int16"))
         .build();
     ObjectSchema mapSchema = ObjectSchema.builder()
@@ -582,6 +649,7 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectRecord() {
     NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
         .build();
     StringSchema stringSchema = StringSchema.builder()
@@ -617,6 +685,7 @@ public class JsonSchemaDataTest {
 
   private void testToConnectRecordWithOptional(String value) {
     NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
         .build();
     StringSchema stringSchema = StringSchema.builder().build();
@@ -914,9 +983,11 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectUnion() {
     NumberSchema firstSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
         .build();
     NumberSchema secondSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int16"))
         .build();
     CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
@@ -935,6 +1006,7 @@ public class JsonSchemaDataTest {
     StringSchema firstSchema = StringSchema.builder()
         .build();
     NumberSchema secondSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int32"))
         .build();
     CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
@@ -989,9 +1061,11 @@ public class JsonSchemaDataTest {
   @Test
   public void testToConnectUnionFromAnyOf() {
     NumberSchema firstSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
         .build();
     NumberSchema secondSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(Collections.singletonMap("connect.type", "int16"))
         .build();
     CombinedSchema schema = CombinedSchema.anyOf(ImmutableList.of(firstSchema, secondSchema))
@@ -1003,6 +1077,63 @@ public class JsonSchemaDataTest {
 
     Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.0", (byte) 12);
     checkNonObjectConversion(expectedSchema, expected, schema, ShortNode.valueOf((short) 12));
+  }
+
+  @Test
+  public void testToConnectUnionDifferentStruct() {
+    NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
+        .build();
+    StringSchema stringSchema = StringSchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    ObjectSchema firstSchema = ObjectSchema.builder()
+        .addPropertySchema("a", numberSchema)
+        .addPropertySchema("b", stringSchema)
+        .title("field0")
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0))
+        .build();
+    ObjectSchema secondSchema = ObjectSchema.builder()
+        .addPropertySchema("c", numberSchema)
+        .addPropertySchema("d", stringSchema)
+        .title("field1")
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    Schema field0 = SchemaBuilder.struct()
+        .name("field0")
+        .field("a", Schema.INT8_SCHEMA)
+        .field("b", Schema.STRING_SCHEMA)
+        .optional()
+        .build();
+    Schema field1 = SchemaBuilder.struct()
+        .name("field1")
+        .field("c", Schema.INT8_SCHEMA)
+        .field("d", Schema.STRING_SCHEMA)
+        .optional()
+        .build();
+    SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", field0);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", field1);
+    Schema connectSchema = builder.build();
+
+    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+    obj.set("a", ShortNode.valueOf((short) 12));
+    obj.set("b", TextNode.valueOf("sample string"));
+    Struct struct = new Struct(field0).put("a", (byte) 12)
+        .put("b", "sample string");
+    Struct expected = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.0", struct);
+    checkNonObjectConversion(connectSchema, expected, schema, obj);
+
+    obj = JsonNodeFactory.instance.objectNode();
+    obj.set("c", ShortNode.valueOf((short) 12));
+    obj.set("d", TextNode.valueOf("sample string"));
+    struct = new Struct(field1).put("c", (byte) 12)
+        .put("d", "sample string");
+    expected = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.1", struct);
+    checkNonObjectConversion(connectSchema, expected, schema, obj);
   }
 
   @Test
@@ -1019,6 +1150,7 @@ public class JsonSchemaDataTest {
     // Encoded as array of 2-tuple records. Use key and value types that require conversion to
     // make sure conversion of each element actually occurs.
     NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
         .unprocessedProperties(ImmutableMap.of("connect.type", "int8"))
         .build();
     StringSchema stringSchema = StringSchema.builder().build();
