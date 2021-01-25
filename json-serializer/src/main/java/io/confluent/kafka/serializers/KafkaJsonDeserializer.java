@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.confluent.kafka.serializers.jackson.Jackson;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -45,7 +46,7 @@ public class KafkaJsonDeserializer<T> implements Deserializer<T> {
   }
 
   protected void configure(KafkaJsonDecoderConfig config, Class<T> type) {
-    this.objectMapper = new ObjectMapper();
+    this.objectMapper = Jackson.newObjectMapper();
     this.type = type;
 
     boolean
