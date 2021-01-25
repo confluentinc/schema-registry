@@ -22,6 +22,9 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import java.util.HashSet;
+import java.util.Map.Entry;
+import java.util.Set;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -170,16 +173,28 @@ public class JsonSchemaData {
     });
     TO_CONNECT_CONVERTERS.put(Schema.Type.STRUCT, (schema, value) -> {
       if (schema.name() != null && schema.name().equals(JSON_TYPE_ONE_OF)) {
-        int index = 0;
+        int numMatchingProperties = -1;
+        Field matchingField = null;
         for (Field field : schema.fields()) {
           Schema fieldSchema = field.schema();
 
           if (isInstanceOfSchemaTypeForSimpleSchema(fieldSchema, value)) {
-            return new Struct(schema.schema()).put(JSON_TYPE_ONE_OF + ".field." + index,
+            return new Struct(schema.schema()).put(JSON_TYPE_ONE_OF + ".field." + field.index(),
                 toConnectData(fieldSchema, value)
             );
+          } else {
+            int matching = matchStructSchema(fieldSchema, value);
+            if (matching > numMatchingProperties) {
+              numMatchingProperties = matching;
+              matchingField = field;
+            }
           }
-          index++;
+        }
+        if (matchingField != null) {
+          return new Struct(schema.schema()).put(
+              JSON_TYPE_ONE_OF + ".field." + matchingField.index(),
+              toConnectData(matchingField.schema(), value)
+          );
         }
         throw new DataException("Did not find matching oneof field for data: " + value.toString());
       } else {
@@ -219,10 +234,27 @@ public class JsonSchemaData {
       case MAP:
         return value.isObject() || value.isArray();
       case STRUCT:
-        return value.isObject();
+        return false;
       default:
         throw new IllegalArgumentException("Unsupported type " + fieldSchema.type());
     }
+  }
+
+  private static int matchStructSchema(Schema fieldSchema, JsonNode value) {
+    if (fieldSchema.type() != Schema.Type.STRUCT || !value.isObject()) {
+      return -1;
+    }
+    Set<String> schemaFields = fieldSchema.fields()
+        .stream()
+        .map(Field::name)
+        .collect(Collectors.toSet());
+    Set<String> objectFields = new HashSet<>();
+    for (Iterator<Entry<String, JsonNode>> iter = value.fields(); iter.hasNext(); ) {
+      objectFields.add(iter.next().getKey());
+    }
+    Set<String> intersectSet = new HashSet<>(schemaFields);
+    intersectSet.retainAll(objectFields);
+    return intersectSet.size();
   }
 
   // Convert values in Kafka Connect form into their logical types. These logical converters are
