@@ -31,6 +31,11 @@ public class ProtobufDataConfig extends AbstractConfig {
       "Toggle for enabling/disabling enhanced protobuf schema support: "
           + "package name preservation";
 
+  public static final String WRAPPER_FOR_NULLABLES_CONFIG = "wrapper.for.nullables";
+  public static final boolean WRAPPER_FOR_NULLABLES_DEFAULT = false;
+  public static final String WRAPPER_FOR_NULLABLES_DOC = "Whether nullable fields should use "
+      + "primitive wrapper messages";
+
   public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.config";
   public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
   public static final String SCHEMAS_CACHE_SIZE_DOC = "Size of the converted schemas cache";
@@ -42,6 +47,11 @@ public class ProtobufDataConfig extends AbstractConfig {
             ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DEFAULT,
             ConfigDef.Importance.MEDIUM,
             ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DOC)
+        .define(WRAPPER_FOR_NULLABLES_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            WRAPPER_FOR_NULLABLES_DEFAULT,
+            ConfigDef.Importance.MEDIUM,
+            WRAPPER_FOR_NULLABLES_DOC)
         .define(SCHEMAS_CACHE_SIZE_CONFIG,
             ConfigDef.Type.INT,
             SCHEMAS_CACHE_SIZE_DEFAULT,
@@ -56,6 +66,10 @@ public class ProtobufDataConfig extends AbstractConfig {
 
   public boolean isEnhancedProtobufSchemaSupport() {
     return this.getBoolean(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG);
+  }
+
+  public boolean useWrapperForNullables() {
+    return this.getBoolean(WRAPPER_FOR_NULLABLES_CONFIG);
   }
 
   public int schemaCacheSize() {
