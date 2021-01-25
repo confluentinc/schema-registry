@@ -205,7 +205,10 @@ public class JsonSchemaData {
 
         Struct result = new Struct(schema.schema());
         for (Field field : schema.fields()) {
-          result.put(field, toConnectData(field.schema(), value.get(field.name())));
+          Object fieldValue = toConnectData(field.schema(), value.get(field.name()));
+          if (fieldValue != null) {
+            result.put(field, fieldValue);
+          }
         }
 
         return result;
@@ -390,8 +393,7 @@ public class JsonSchemaData {
       if (schema.isOptional()) {
         return JSON_NODE_FACTORY.nullNode();
       }
-      throw new DataException(
-          "Conversion error: null value for field that is required and has no default value");
+      return null;
     }
 
     Object value = logicalValue;
@@ -513,7 +515,10 @@ public class JsonSchemaData {
           } else {
             ObjectNode obj = JSON_NODE_FACTORY.objectNode();
             for (Field field : schema.fields()) {
-              obj.set(field.name(), fromConnectData(field.schema(), struct.get(field)));
+              JsonNode jsonNode = fromConnectData(field.schema(), struct.get(field));
+              if (jsonNode != null) {
+                obj.set(field.name(), jsonNode);
+              }
             }
             return obj;
           }
@@ -538,7 +543,7 @@ public class JsonSchemaData {
           // any logical type conversions should already have been applied
           return schema.defaultValue();
         }
-        if (schema.isOptional()) {
+        if (jsonValue == null || schema.isOptional()) {
           return null;
         }
         throw new DataException("Invalid null value for required " + schemaType + " field");
