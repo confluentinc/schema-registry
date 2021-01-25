@@ -241,7 +241,7 @@ public class JsonSchemaData {
   }
 
   private static int matchStructSchema(Schema fieldSchema, JsonNode value) {
-    if (fieldSchema.type() != Schema.Type.STRUCT) {
+    if (fieldSchema.type() != Schema.Type.STRUCT || !value.isObject()) {
       return -1;
     }
     Set<String> schemaFields = fieldSchema.fields()
