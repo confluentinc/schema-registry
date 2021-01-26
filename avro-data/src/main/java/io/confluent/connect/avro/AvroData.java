@@ -2044,6 +2044,10 @@ public class AvroData {
 
   private static boolean isInstanceOfAvroSchemaTypeForSimpleSchema(Schema fieldSchema,
                                                                    Object value) {
+    if (isEnumSchema(fieldSchema)) {
+      String enumSchemaName = fieldSchema.parameters().get(AVRO_TYPE_ENUM);
+      return value.getClass().getName().equals(enumSchemaName);
+    }
     List<Class> classes = SIMPLE_AVRO_SCHEMA_TYPES.get(fieldSchema.type());
     if (classes == null) {
       return false;
