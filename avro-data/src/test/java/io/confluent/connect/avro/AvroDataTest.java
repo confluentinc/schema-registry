@@ -16,6 +16,7 @@
 
 package io.confluent.connect.avro;
 
+import com.connect.avro.EnumStringUnion;
 import com.connect.avro.EnumUnion;
 import com.connect.avro.UserType;
 
@@ -1104,6 +1105,33 @@ public class AvroDataTest {
     GenericData.Record value = (GenericData.Record) avroData.fromConnectData(schema, schemaValue);
     Object userTypeValue = value.get("userType");
     Assert.assertNull(userTypeValue);
+  }
+
+  @Test
+  public void testEnumStringUnion() throws Exception {
+    GenericData genericData = GenericData.get();
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+        .build();
+
+    AvroData avroData = new AvroData(avroDataConfig);
+
+    EnumStringUnion testModel = EnumStringUnion.newBuilder()
+        .setUserType(UserType.ANONYMOUS)
+        .build();
+
+    SchemaAndValue schemaAndValue = avroData.toConnectData(EnumStringUnion.SCHEMA$, testModel);
+    org.apache.kafka.connect.data.Schema schema = schemaAndValue.schema();
+    Object schemaValue = schemaAndValue.value();
+
+    GenericData.Record value = (GenericData.Record) avroData.fromConnectData(schema, schemaValue);
+
+    org.apache.avro.Schema userTypeSchema = EnumStringUnion.SCHEMA$.getField("userType").schema();
+
+    Object userTypeValue = value.get("userType");
+
+    int unionIndex = genericData.resolveUnion(userTypeSchema, userTypeValue);
+    Assert.assertEquals(2, unionIndex);
   }
 
   // Avro -> Connect. Validate a) all Avro types that convert directly to Avro, b) specialized
