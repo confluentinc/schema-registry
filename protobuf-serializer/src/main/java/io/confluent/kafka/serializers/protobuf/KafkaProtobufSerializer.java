@@ -18,9 +18,12 @@ package io.confluent.kafka.serializers.protobuf;
 
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import java.io.IOException;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
@@ -74,6 +77,14 @@ public class KafkaProtobufSerializer<T extends Message>
     ProtobufSchema schema = schemaCache.get(record.getDescriptorForType());
     if (schema == null) {
       schema = ProtobufSchemaUtils.getSchema(record);
+      try {
+        // Ensure dependencies are resolved before caching
+        schema = resolveDependencies(schemaRegistry, autoRegisterSchema,
+            useLatestVersion, latestCompatStrict, latestVersions,
+            referenceSubjectNameStrategy, topic, isKey, schema);
+      } catch (IOException | RestClientException e) {
+        throw new SerializationException("Error serializing Protobuf message", e);
+      }
       schemaCache.put(record.getDescriptorForType(), schema);
     }
     return serializeImpl(getSubjectName(topic, isKey, record, schema),
