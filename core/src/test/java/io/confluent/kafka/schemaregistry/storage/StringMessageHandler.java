@@ -26,9 +26,9 @@ public class StringMessageHandler implements StoreUpdateHandler<String, String> 
    * @param value Data written to the store
    * @param timestamp Timestamp of record
    */
-  public boolean validateUpdate(String key, String value,
-                                TopicPartition tp, long offset, long timestamp) {
-    return true;
+  public ValidationStatus validateUpdate(String key, String value,
+                                         TopicPartition tp, long offset, long timestamp) {
+    return ValidationStatus.SUCCESS;
   }
 
   /**

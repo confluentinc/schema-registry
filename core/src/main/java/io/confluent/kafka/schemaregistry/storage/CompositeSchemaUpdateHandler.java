@@ -49,15 +49,15 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
    * @param value Data written to the store
    */
   @Override
-  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
-                                TopicPartition tp, long offset, long timestamp) {
+  public ValidationStatus validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
+                                         TopicPartition tp, long offset, long timestamp) {
     for (SchemaUpdateHandler handler : handlers) {
-      boolean valid = handler.validateUpdate(key, value, tp, offset, timestamp);
-      if (!valid) {
-        return false;
+      ValidationStatus status = handler.validateUpdate(key, value, tp, offset, timestamp);
+      if (status != ValidationStatus.SUCCESS) {
+        return status;
       }
     }
-    return true;
+    return ValidationStatus.SUCCESS;
   }
 
   /**
