@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
+import io.confluent.kafka.schemaregistry.storage.StoreUpdateHandler.ValidationStatus;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -229,30 +230,37 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             TopicPartition tp = new TopicPartition(record.topic(), record.partition());
             long offset = record.offset();
             long timestamp = record.timestamp();
-            boolean valid = this.storeUpdateHandler.validateUpdate(
+            ValidationStatus status = this.storeUpdateHandler.validateUpdate(
                     messageKey, message, tp, offset, timestamp);
-            if (valid) {
-              V oldMessage;
-              if (message == null) {
-                oldMessage = localStore.delete(messageKey);
-              } else {
-                oldMessage = localStore.put(messageKey, message);
-              }
-              this.storeUpdateHandler.handleUpdate(
-                      messageKey, message, oldMessage, tp, offset, timestamp);
-            } else {
-              V oldMessage = localStore.get(messageKey);
-              try {
-                ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
-                    topic,
-                    record.key(),
-                    oldMessage == null ? null : serializer.serializeValue(oldMessage)
-                );
-                producer.send(producerRecord);
+            V oldMessage;
+            switch (status) {
+              case SUCCESS:
+                if (message == null) {
+                  oldMessage = localStore.delete(messageKey);
+                } else {
+                  oldMessage = localStore.put(messageKey, message);
+                }
+                this.storeUpdateHandler.handleUpdate(
+                        messageKey, message, oldMessage, tp, offset, timestamp);
+                break;
+              case ROLLBACK_FAILURE:
+                oldMessage = localStore.get(messageKey);
+                try {
+                  ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                      topic,
+                      record.key(),
+                      oldMessage == null ? null : serializer.serializeValue(oldMessage)
+                  );
+                  producer.send(producerRecord);
+                  log.warn("Rollback invalid update to key {}", messageKey);
+                } catch (KafkaException | SerializationException ke) {
+                  log.error("Failed to recover from invalid update to key {}", messageKey, ke);
+                }
+                break;
+              case IGNORE_FAILURE:
+              default:
                 log.warn("Ignore invalid update to key {}", messageKey);
-              } catch (KafkaException | SerializationException ke) {
-                log.error("Failed to recover from invalid update to key {}", messageKey, ke);
-              }
+                break;
             }
             try {
               offsetUpdateLock.lock();
