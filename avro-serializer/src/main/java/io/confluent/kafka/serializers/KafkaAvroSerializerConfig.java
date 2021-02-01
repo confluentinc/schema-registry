@@ -26,6 +26,11 @@ public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
   public static final boolean AVRO_REFLECTION_ALLOW_NULL_DEFAULT = false;
   public static final String AVRO_REFLECTION_ALLOW_NULL_DOC =
       "If true, allows null field values used in ReflectionAvroSerializer";
+  public static final String AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG =
+          "avro.use.logical.type.converters";
+  public static final boolean AVRO_USE_LOGICAL_TYPE_CONVERTERS_DEFAULT = false;
+  public static final String AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC =
+          "If true, use logical type converter in generic record";
 
   private static ConfigDef config;
 
@@ -35,6 +40,10 @@ public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
         .define(AVRO_REFLECTION_ALLOW_NULL_CONFIG, ConfigDef.Type.BOOLEAN,
             AVRO_REFLECTION_ALLOW_NULL_DEFAULT, ConfigDef.Importance.MEDIUM,
             AVRO_REFLECTION_ALLOW_NULL_DOC);
+    config = config
+            .define(AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, ConfigDef.Type.BOOLEAN,
+            AVRO_USE_LOGICAL_TYPE_CONVERTERS_DEFAULT, ConfigDef.Importance.MEDIUM,
+            AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC);
   }
 
   public KafkaAvroSerializerConfig(Map<?, ?> props) {

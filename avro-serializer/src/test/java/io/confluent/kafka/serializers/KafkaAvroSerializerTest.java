@@ -21,10 +21,11 @@ import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+
+import java.math.BigDecimal;
 import java.util.Arrays;
-import org.apache.avro.AvroRuntimeException;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
+
+import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -170,6 +171,28 @@ public class KafkaAvroSerializerTest {
     Schema schema = createAccountSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("accountNumber", "0123456789");
+    return avroRecord;
+  }
+
+  private Schema createBalanceSchema() {
+    String balanceSchema = "{\n" +
+            "\t\"namespace\": \"example.avro\", \"type\": \"record\",\n" +
+            "    \"name\": \"Account\",\n" +
+            "    \"fields\": [\n" +
+            "    \t{\"name\": \"accountNumber\", \"type\": \"string\"},\n" +
+            "        {\"name\": \"balance\", \"type\": {\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":4,\"scale\":2}}\n" +
+            "    ]\n" +
+            "}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(balanceSchema);
+    return schema;
+  }
+
+  private IndexedRecord createBalanceRecord() {
+    Schema schema = createBalanceSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("accountNumber", "0123456789");
+    avroRecord.put("balance", new BigDecimal(10));
     return avroRecord;
   }
 
@@ -847,6 +870,25 @@ public class KafkaAvroSerializerTest {
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue("Returned object should be a String", String.class.isInstance(obj));
     assertEquals(message, obj);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerGenericRecordWithConverters() {
+    Map configs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+            TopicRecordNameStrategy.class.getName(),
+            KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG,
+            true
+    );
+
+    avroSerializer.configure(configs, false);
+    avroDeserializer.configure(configs, false);
+
+    IndexedRecord record1 = createBalanceRecord();
+    byte[] bytes1 = avroSerializer.serialize(topic, record1);
+    assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
   }
 
 }

@@ -16,9 +16,11 @@
 
 package io.confluent.kafka.serializers;
 
+import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
@@ -46,6 +48,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
   protected boolean avroReflectionAllowNull = false;
+  protected boolean avroUseLogicalTypeConverters = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
   private final Map<SchemaPair, DatumReader<?>> datumReaderCache = new ConcurrentHashMap<>();
 
@@ -59,6 +62,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
     avroReflectionAllowNull = config
         .getBoolean(KafkaAvroDeserializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
+    avroUseLogicalTypeConverters = config
+            .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -189,13 +194,29 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       boolean writerSchemaIsPrimitive =
               AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
       if (writerSchemaIsPrimitive) {
-        return new GenericDatumReader<>(writerSchema, finalReaderSchema);
+        GenericData genericData = new GenericData();
+        if (avroUseLogicalTypeConverters) {
+          genericData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+        }
+        return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       } else if (useSchemaReflection) {
-        return new ReflectDatumReader<>(writerSchema, finalReaderSchema);
+        ReflectData reflectData = new ReflectData();
+        if (avroUseLogicalTypeConverters) {
+          reflectData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+        }
+        return new ReflectDatumReader<>(writerSchema, finalReaderSchema, reflectData);
       } else if (useSpecificAvroReader) {
-        return new SpecificDatumReader<>(writerSchema, finalReaderSchema);
+        SpecificData specificData = new SpecificData();
+        if (avroUseLogicalTypeConverters) {
+          specificData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+        }
+        return new SpecificDatumReader<>(writerSchema, finalReaderSchema, specificData);
       } else {
-        return new GenericDatumReader<>(writerSchema, finalReaderSchema);
+        GenericData genericData = new GenericData();
+        if (avroUseLogicalTypeConverters) {
+          genericData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+        }
+        return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       }
     });
   }
