@@ -123,7 +123,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
    * @param topic              the topic
    * @param isKey              whether the object is the record key
    * @param schema             the schema
-   * @return
+   * @return the schema with resolved dependencies
    * @throws IOException
    * @throws RestClientException
    */
