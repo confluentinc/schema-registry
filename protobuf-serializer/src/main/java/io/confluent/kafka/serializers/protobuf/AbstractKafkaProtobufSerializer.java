@@ -124,8 +124,6 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
    * @param isKey              whether the object is the record key
    * @param schema             the schema
    * @return the schema with resolved dependencies
-   * @throws IOException
-   * @throws RestClientException
    */
   public static ProtobufSchema resolveDependencies(
       SchemaRegistryClient schemaRegistry,
