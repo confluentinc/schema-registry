@@ -46,6 +46,11 @@
             </exclusions>
         </dependency>
         <dependency>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <version>6.1.7.Final</version>
+        </dependency>
+        <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>rest-utils</artifactId>
         </dependency>
