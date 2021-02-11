@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
@@ -91,7 +92,7 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
             result.merge(entry.getKey(), entry.getValue(), Long::min);
           }
         } else {
-          result = offsets;
+          result = new HashMap<>(offsets);
         }
       }
     }
