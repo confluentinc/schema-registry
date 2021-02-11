@@ -82,9 +82,19 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
 
   @Override
   public Map<TopicPartition, Long> checkpoint(int count) {
-    Map<TopicPartition, Long> result = new HashMap<>();
+    Map<TopicPartition, Long> result = null;
     for (SchemaUpdateHandler handler : handlers) {
-      handler.checkpoint(count).forEach((k, v) -> result.merge(k, v, Long::min));
+      Map<TopicPartition, Long> offsets = handler.checkpoint(count);
+      if (offsets != null) {
+        if (result != null) {
+          for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
+            // When merging, choose the smaller offset
+            result.merge(entry.getKey(), entry.getValue(), Long::min);
+          }
+        } else {
+          result = offsets;
+        }
+      }
     }
     return result;
   }
