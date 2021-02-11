@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
