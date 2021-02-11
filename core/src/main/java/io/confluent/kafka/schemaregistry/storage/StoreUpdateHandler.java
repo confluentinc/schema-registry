@@ -72,8 +72,10 @@ public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
    * Invoked after a batch of updates.
    *
    * @param count batch count
+   * @return the offsets to checkpoint, or null
    */
-  default void checkpoint(int count) {
+  default Map<TopicPartition, Long> checkpoint(int count) {
+    return null;
   }
 
   @Override

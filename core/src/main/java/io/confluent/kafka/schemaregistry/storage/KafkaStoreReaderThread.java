@@ -276,11 +276,11 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           }
         }
       }
-      storeUpdateHandler.checkpoint(records.count());
       if (localStore.isPersistent() && initialized.get()) {
         try {
           localStore.flush();
-          checkpointOffsets();
+          Map<TopicPartition, Long> offsets = storeUpdateHandler.checkpoint(records.count());
+          checkpointOffsets(offsets);
         } catch (StoreException se) {
           log.warn("Failed to flush", se);
         }
@@ -297,8 +297,11 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     }
   }
 
-  private void checkpointOffsets() {
-    checkpointFileCache.put(new TopicPartition(topic, 0), offsetInSchemasTopic + 1);
+  private void checkpointOffsets(Map<TopicPartition, Long> offsets) {
+    Map<TopicPartition, Long> newOffsets = offsets != null
+        ? offsets
+        : Collections.singletonMap(new TopicPartition(topic, 0), offsetInSchemasTopic + 1);
+    checkpointFileCache.putAll(newOffsets);
     try {
       checkpointFile.write(checkpointFileCache);
     } catch (final IOException e) {
