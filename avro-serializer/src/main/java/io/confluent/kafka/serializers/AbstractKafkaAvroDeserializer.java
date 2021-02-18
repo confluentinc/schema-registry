@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.serializers;
 
-import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
@@ -196,25 +195,29 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       if (writerSchemaIsPrimitive) {
         GenericData genericData = new GenericData();
         if (avroUseLogicalTypeConverters) {
-          genericData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+          AvroData<GenericData> avroData = new AvroData<>();
+          genericData = avroData.getAvroDataWithConverters();
         }
         return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       } else if (useSchemaReflection) {
         ReflectData reflectData = new ReflectData();
         if (avroUseLogicalTypeConverters) {
-          reflectData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+          AvroData<ReflectData> avroData = new AvroData<>();
+          reflectData = avroData.getAvroDataWithConverters();
         }
         return new ReflectDatumReader<>(writerSchema, finalReaderSchema, reflectData);
       } else if (useSpecificAvroReader) {
         SpecificData specificData = new SpecificData();
         if (avroUseLogicalTypeConverters) {
-          specificData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+          AvroData<SpecificData> avroData = new AvroData<>();
+          specificData = avroData.getAvroDataWithConverters();
         }
         return new SpecificDatumReader<>(writerSchema, finalReaderSchema, specificData);
       } else {
         GenericData genericData = new GenericData();
         if (avroUseLogicalTypeConverters) {
-          genericData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+          AvroData<GenericData> avroData = new AvroData<>();
+          genericData = avroData.getAvroDataWithConverters();
         }
         return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       }

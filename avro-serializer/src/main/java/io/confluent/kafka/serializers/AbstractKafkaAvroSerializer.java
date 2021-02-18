@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.serializers;
 
-import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
@@ -76,19 +75,22 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     if (value instanceof SpecificRecord) {
       SpecificData specificData = new SpecificData();
       if (avroUseLogicalTypeConverters) {
-        specificData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+        AvroData<SpecificData> avroData = new AvroData<>();
+        specificData = avroData.getAvroDataWithConverters();
       }
       return new SpecificDatumWriter<>(schema, specificData);
     } else if (useSchemaReflection) {
       ReflectData reflectData = new ReflectData();
       if (avroUseLogicalTypeConverters) {
-        reflectData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+        AvroData<ReflectData> avroData = new AvroData<>();
+        reflectData = avroData.getAvroDataWithConverters();
       }
       return new ReflectDatumWriter<>(schema, reflectData);
     } else {
       GenericData genericData = new GenericData();
       if (avroUseLogicalTypeConverters) {
-        genericData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+        AvroData<GenericData> avroData = new AvroData<>();
+        genericData = avroData.getAvroDataWithConverters();
       }
       return new GenericDatumWriter<>(schema, genericData);
     }

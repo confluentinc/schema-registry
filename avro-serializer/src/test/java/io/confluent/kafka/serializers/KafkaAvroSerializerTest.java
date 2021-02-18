@@ -23,6 +23,10 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Arrays;
 
 import org.apache.avro.*;
@@ -180,7 +184,14 @@ public class KafkaAvroSerializerTest {
             "    \"name\": \"Account\",\n" +
             "    \"fields\": [\n" +
             "    \t{\"name\": \"accountNumber\", \"type\": \"string\"},\n" +
-            "        {\"name\": \"balance\", \"type\": {\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":4,\"scale\":2}}\n" +
+            "        {\"name\": \"balance\", \"type\": {\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":4,\"scale\":2}},\n" +
+            "        {\"name\": \"date\", \"type\": {\"type\":\"int\",\"logicalType\":\"date\"}},\n" +
+            "        {\"name\": \"timeMs\", \"type\": {\"type\":\"int\",\"logicalType\":\"time-millis\"}},\n" +
+            "        {\"name\": \"timeMicros\", \"type\": {\"type\":\"long\",\"logicalType\":\"time-micros\"}},\n" +
+            "        {\"name\": \"tsMs\", \"type\": {\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},\n" +
+            "        {\"name\": \"tsMicros\", \"type\": {\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},\n" +
+            "        {\"name\": \"localTsMs\", \"type\": {\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},\n" +
+            "        {\"name\": \"localTsMicros\", \"type\": {\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}}\n" +
             "    ]\n" +
             "}";
     Schema.Parser parser = new Schema.Parser();
@@ -192,7 +203,14 @@ public class KafkaAvroSerializerTest {
     Schema schema = createBalanceSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("accountNumber", "0123456789");
-    avroRecord.put("balance", new BigDecimal(10));
+    avroRecord.put("balance", new BigDecimal("10.00"));
+    avroRecord.put("date", LocalDate.of(2021,1, 1));
+    avroRecord.put("timeMs", LocalTime.of(1, 1, 1, 1000000));
+    avroRecord.put("timeMicros", LocalTime.of(1, 1, 1, 1001000));
+    avroRecord.put("tsMs", Instant.ofEpochMilli(1613646696368L));
+    avroRecord.put("tsMicros", Instant.ofEpochMilli(1613646696368009L));
+    avroRecord.put("localTsMs", LocalDateTime.of(2021,1, 1, 1, 1, 1, 1000000));
+    avroRecord.put("localTsMicros", LocalDateTime.of(2021,1, 1, 1, 1, 1, 1001000));
     return avroRecord;
   }
 
