@@ -143,14 +143,14 @@ public class AvroSchemaUtils {
   }
 
   private static void removeProperty(JsonNode node, String propertyName) {
-    if (node instanceof ObjectNode) {
+    if (node.isObject()) {
       ObjectNode objectNode = (ObjectNode) node;
       objectNode.remove(propertyName);
       Iterator<JsonNode> elements = objectNode.elements();
       while (elements.hasNext()) {
         removeProperty(elements.next(), propertyName);
       }
-    } else if (node instanceof ArrayNode) {
+    } else if (node.isArray()) {
       ArrayNode arrayNode = (ArrayNode) node;
       Iterator<JsonNode> elements = arrayNode.elements();
       while (elements.hasNext()) {
