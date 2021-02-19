@@ -327,6 +327,36 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerWithPreRegisteredRemoveJavaProperties()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG,
+        true
+    );
+    avroSerializer.configure(configs, false);
+    String schema = "{\n"
+        + "  \"namespace\": \"io.confluent.kafka.example.annotated\",\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"User\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"name\",\n"
+        + "      \"type\": \"string\"\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+    schemaRegistry.register(topic + "-value", new AvroSchema(schema));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    assertEquals(annotatedUserRecord, specificAvroDeserializer.deserialize(topic, bytes));
+    assertEquals(annotatedUserRecord, specificAvroDecoder.fromBytes(bytes));
+  }
+
+  @Test
   public void testKafkaAvroSerializerWithMultiType() throws IOException, RestClientException {
     Map configs = ImmutableMap.of(
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,

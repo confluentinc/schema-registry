@@ -43,6 +43,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
+  protected boolean removeJavaProperties;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
@@ -51,6 +52,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
     autoRegisterSchema = config.autoRegisterSchema();
+    removeJavaProperties =
+        config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
     useLatestVersion = config.useLatestVersion();
     latestCompatStrict = config.getLatestCompatibilityStrict();
     avroReflectionAllowNull = config
