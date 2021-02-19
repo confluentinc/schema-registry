@@ -136,7 +136,8 @@ public class AvroSchemaUtils {
     try {
       JsonNode node = jsonMapper.readTree(schema.toString());
       removeProperty(node, "avro.java.string");
-      return new Schema.Parser().parse(node.toString());
+      AvroSchema avroSchema = new AvroSchema(node.toString());
+      return avroSchema.rawSchema();
     } catch (IOException e) {
       throw new SerializationException("Could not parse schema: " + schema.toString());
     }
