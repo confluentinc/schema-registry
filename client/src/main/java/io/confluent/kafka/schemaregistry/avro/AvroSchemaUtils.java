@@ -18,6 +18,9 @@ package io.confluent.kafka.schemaregistry.avro;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.Iterator;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
@@ -75,10 +78,11 @@ public class AvroSchemaUtils {
   }
 
   public static Schema getSchema(Object object) {
-    return getSchema(object, false);
+    return getSchema(object, false, false);
   }
 
-  public static Schema getSchema(Object object, boolean useReflection) {
+  public static Schema getSchema(Object object, boolean useReflection,
+      boolean removeJavaProperties) {
     if (object == null) {
       return primitiveSchemas.get("Null");
     } else if (object instanceof Boolean) {
@@ -104,7 +108,11 @@ public class AvroSchemaUtils {
         return schema;
       }
     } else if (object instanceof GenericContainer) {
-      return ((GenericContainer) object).getSchema();
+      Schema schema = ((GenericContainer) object).getSchema();
+      if (removeJavaProperties) {
+        schema = removeJavaProperties(schema);
+      }
+      return schema;
     } else if (object instanceof Map) {
       // This case is unusual -- the schema isn't available directly anywhere, instead we have to
       // take get the value schema out of one of the entries and then construct the full schema.
@@ -121,6 +129,33 @@ public class AvroSchemaUtils {
       throw new IllegalArgumentException(
           "Unsupported Avro type. Supported types are null, Boolean, Integer, Long, "
               + "Float, Double, String, byte[] and IndexedRecord");
+    }
+  }
+
+  private static Schema removeJavaProperties(Schema schema) {
+    try {
+      JsonNode node = jsonMapper.readTree(schema.toString());
+      removeJavaProperty(node, "avro.java.string");
+      return new Schema.Parser().parse(node.toString());
+    } catch (IOException e) {
+      throw new SerializationException("Could not parse schema: " + schema.toString());
+    }
+  }
+
+  private static void removeJavaProperty(JsonNode node, String propertyName) {
+    if (node instanceof ObjectNode) {
+      ObjectNode objectNode = (ObjectNode) node;
+      objectNode.remove(propertyName);
+      Iterator<JsonNode> elements = objectNode.elements();
+      while (elements.hasNext()) {
+        removeJavaProperty(elements.next(), propertyName);
+      }
+    } else if (node instanceof ArrayNode) {
+      ArrayNode arrayNode = (ArrayNode) node;
+      Iterator<JsonNode> elements = arrayNode.elements();
+      while (elements.hasNext()) {
+        removeJavaProperty(elements.next(), propertyName);
+      }
     }
   }
 

@@ -16,6 +16,11 @@
 
 package io.confluent.kafka.serializers;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.Iterator;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -42,12 +47,15 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
+  protected boolean removeJavaProperties;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
     autoRegisterSchema = config.autoRegisterSchema();
+    removeJavaProperties =
+        config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
     useLatestVersion = config.useLatestVersion();
     latestCompatStrict = config.getLatestCompatibilityStrict();
   }
