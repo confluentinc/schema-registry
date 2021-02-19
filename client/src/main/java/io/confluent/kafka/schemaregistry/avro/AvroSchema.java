@@ -20,9 +20,8 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaValidationException;
-import org.apache.avro.SchemaValidator;
-import org.apache.avro.SchemaValidatorBuilder;
+import org.apache.avro.SchemaCompatibility;
+import org.apache.avro.SchemaCompatibility.SchemaCompatibilityType;
 import org.apache.avro.Schemas;
 
 import java.util.ArrayList;
@@ -38,9 +37,6 @@ public class AvroSchema implements ParsedSchema {
   private static final Logger log = LoggerFactory.getLogger(AvroSchema.class);
 
   public static final String TYPE = "AVRO";
-
-  private static final SchemaValidator BACKWARD_VALIDATOR =
-      new SchemaValidatorBuilder().canReadStrategy().validateLatest();
 
   private final Schema schemaObj;
   private String canonicalString;
@@ -161,11 +157,11 @@ public class AvroSchema implements ParsedSchema {
       return false;
     }
     try {
-      BACKWARD_VALIDATOR.validate(this.schemaObj,
-          Collections.singleton(((AvroSchema) previousSchema).schemaObj));
-      return true;
-    } catch (SchemaValidationException e) {
-      return false;
+      SchemaCompatibility.SchemaPairCompatibility result =
+          SchemaCompatibility.checkReaderWriterCompatibility(
+              this.schemaObj,
+              ((AvroSchema) previousSchema).schemaObj);
+      return result.getResult().getCompatibility() == SchemaCompatibilityType.COMPATIBLE;
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
       return false;
