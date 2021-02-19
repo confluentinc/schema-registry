@@ -135,26 +135,26 @@ public class AvroSchemaUtils {
   private static Schema removeJavaProperties(Schema schema) {
     try {
       JsonNode node = jsonMapper.readTree(schema.toString());
-      removeJavaProperty(node, "avro.java.string");
+      removeProperty(node, "avro.java.string");
       return new Schema.Parser().parse(node.toString());
     } catch (IOException e) {
       throw new SerializationException("Could not parse schema: " + schema.toString());
     }
   }
 
-  private static void removeJavaProperty(JsonNode node, String propertyName) {
+  private static void removeProperty(JsonNode node, String propertyName) {
     if (node instanceof ObjectNode) {
       ObjectNode objectNode = (ObjectNode) node;
       objectNode.remove(propertyName);
       Iterator<JsonNode> elements = objectNode.elements();
       while (elements.hasNext()) {
-        removeJavaProperty(elements.next(), propertyName);
+        removeProperty(elements.next(), propertyName);
       }
     } else if (node instanceof ArrayNode) {
       ArrayNode arrayNode = (ArrayNode) node;
       Iterator<JsonNode> elements = arrayNode.elements();
       while (elements.hasNext()) {
-        removeJavaProperty(elements.next(), propertyName);
+        removeProperty(elements.next(), propertyName);
       }
     }
   }
