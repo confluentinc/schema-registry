@@ -19,6 +19,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import java.util.Collections;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
@@ -39,6 +41,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -98,6 +101,11 @@ public class AvroSchemaTest {
   private static final Schema enumSchema = new Schema.Parser().parse("{ \"type\": \"enum\",\n"
       + "  \"name\": \"Suit\",\n"
       + "  \"symbols\" : [\"SPADES\", \"HEARTS\", \"DIAMONDS\", \"CLUBS\"]\n"
+      + "}");
+
+  private static final Schema enumSchema2 = new Schema.Parser().parse("{ \"type\": \"enum\",\n"
+      + "  \"name\": \"Suit\",\n"
+      + "  \"symbols\" : [\"SPADES\", \"HEARTS\", \"DIAMONDS\"]\n"
       + "}");
 
   @Test
@@ -261,6 +269,12 @@ public class AvroSchemaTest {
     // serialization.
   }
 
+  @Test
+  public void testEnumCompatibility() {
+    AvroSchema schema1 = new AvroSchema(enumSchema);
+    AvroSchema schema2 = new AvroSchema(enumSchema2);
+    assertFalse(schema2.isBackwardCompatible(schema1));
+  }
 
   @Test
   public void testPrimitiveTypesToJson() throws Exception {
