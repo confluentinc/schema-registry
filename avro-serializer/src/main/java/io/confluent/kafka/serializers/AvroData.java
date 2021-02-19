@@ -20,10 +20,9 @@ import org.apache.avro.Conversions;
 import org.apache.avro.data.TimeConversions;
 import org.apache.avro.generic.GenericData;
 
-public class AvroData<T> {
+public class AvroData {
 
-  public T getAvroDataWithConverters() {
-    GenericData avroData = new GenericData();
+  public static void addLogicalTypeConversion(GenericData avroData) {
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.DateConversion());
@@ -37,7 +36,6 @@ public class AvroData<T> {
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMicrosConversion());
 
-    return (T) avroData;
   }
 
 }

@@ -75,22 +75,19 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     if (value instanceof SpecificRecord) {
       SpecificData specificData = new SpecificData();
       if (avroUseLogicalTypeConverters) {
-        AvroData<SpecificData> avroData = new AvroData<>();
-        specificData = avroData.getAvroDataWithConverters();
+        AvroData.addLogicalTypeConversion(specificData);
       }
       return new SpecificDatumWriter<>(schema, specificData);
     } else if (useSchemaReflection) {
       ReflectData reflectData = new ReflectData();
       if (avroUseLogicalTypeConverters) {
-        AvroData<ReflectData> avroData = new AvroData<>();
-        reflectData = avroData.getAvroDataWithConverters();
+        AvroData.addLogicalTypeConversion(reflectData);
       }
       return new ReflectDatumWriter<>(schema, reflectData);
     } else {
       GenericData genericData = new GenericData();
       if (avroUseLogicalTypeConverters) {
-        AvroData<GenericData> avroData = new AvroData<>();
-        genericData = avroData.getAvroDataWithConverters();
+        AvroData.addLogicalTypeConversion(genericData);
       }
       return new GenericDatumWriter<>(schema, genericData);
     }
