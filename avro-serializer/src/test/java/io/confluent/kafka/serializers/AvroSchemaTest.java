@@ -114,6 +114,11 @@ public class AvroSchemaTest {
       + "  \"symbols\" : [\"SPADES\", \"HEARTS\", \"DIAMONDS\", \"CLUBS\"]\n"
       + "}");
 
+  private static final Schema enumSchema2 = new Schema.Parser().parse("{ \"type\": \"enum\",\n"
+      + "  \"name\": \"Suit\",\n"
+      + "  \"symbols\" : [\"SPADES\", \"HEARTS\", \"DIAMONDS\"]\n"
+      + "}");
+
   @Test
   public void testPrimitiveTypesToAvro() throws Exception {
     Object result = AvroSchemaUtils.toObject((JsonNode) null, createPrimitiveSchema("null"));
@@ -275,6 +280,12 @@ public class AvroSchemaTest {
     // serialization.
   }
 
+  @Test
+  public void testEnumCompatibility() {
+    AvroSchema schema1 = new AvroSchema(enumSchema);
+    AvroSchema schema2 = new AvroSchema(enumSchema2);
+    assertFalse(schema2.isBackwardCompatible(schema1).isEmpty());
+  }
 
   @Test
   public void testPrimitiveTypesToJson() throws Exception {
