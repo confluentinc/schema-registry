@@ -72,11 +72,12 @@ public class ModeResource {
       @ApiResponse(code = 422, message = "Error code 42204 -- Invalid mode\n"
           + "Error code 42205 -- Operation not permitted"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
-          + "Error code 50003 -- Error while forwarding the request to the primary"
+          + "Error code 50003 -- Error while forwarding the request to the primary\n"
           + "Error code 50004 -- Unknown leader")
   })
   public ModeUpdateRequest updateMode(
-      @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
+      @ApiParam(value = "Name of the Subject", required = true)
+      @PathParam("subject") String subject,
       @Context HttpHeaders headers,
       @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request
   ) {
@@ -130,7 +131,7 @@ public class ModeResource {
       @ApiResponse(code = 422, message = "Error code 42204 -- Invalid mode\n"
           + "Error code 42205 -- Operation not permitted"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
-          + "Error code 50003 -- Error while forwarding the request to the primary"
+          + "Error code 50003 -- Error while forwarding the request to the primary\n"
           + "Error code 50004 -- Unknown leader")
   })
   public ModeUpdateRequest updateTopLevelMode(
