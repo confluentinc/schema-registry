@@ -15,7 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,7 +67,16 @@ public class ModeResource {
 
   @Path("/{subject}")
   @PUT
+  @ApiOperation(value = "Update mode for the specified subject.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 422, message = "Error code 42204 -- Invalid mode\n"
+          + "Error code 42205 -- Operation not permitted"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
+          + "Error code 50003 -- Error while forwarding the request to the primary\n"
+          + "Error code 50004 -- Unknown leader")
+  })
   public ModeUpdateRequest updateMode(
+      @ApiParam(value = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
       @Context HttpHeaders headers,
       @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request
@@ -95,7 +107,13 @@ public class ModeResource {
 
   @Path("/{subject}")
   @GET
-  public ModeGetResponse getMode(@PathParam("subject") String subject) {
+  @ApiOperation(value = "Get mode for a subject.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Subject not found"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
+  public ModeGetResponse getMode(
+      @ApiParam(value = "Name of the Subject", required = true)
+      @PathParam("subject") String subject) {
     try {
       Mode mode = schemaRegistry.getMode(subject);
       if (mode == null) {
@@ -108,6 +126,14 @@ public class ModeResource {
   }
 
   @PUT
+  @ApiOperation(value = "Update global mode.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 422, message = "Error code 42204 -- Invalid mode\n"
+          + "Error code 42205 -- Operation not permitted"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
+          + "Error code 50003 -- Error while forwarding the request to the primary\n"
+          + "Error code 50004 -- Unknown leader")
+  })
   public ModeUpdateRequest updateTopLevelMode(
       @Context HttpHeaders headers,
       @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request) {
@@ -115,6 +141,9 @@ public class ModeResource {
   }
 
   @GET
+  @ApiOperation(value = "Get global mode.")
+  @ApiResponses(value = {
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
   public ModeGetResponse getTopLevelMode() {
     return getMode(null);
   }
