@@ -1386,7 +1386,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private Mode getModeInScope(String subject) throws SchemaRegistryStoreException {
+  public Mode getModeInScope(String subject) throws SchemaRegistryStoreException {
     try {
       Mode globalMode = lookupCache.mode(null, true, defaultMode);
       Mode subjectMode = lookupCache.mode(subject, true, defaultMode);

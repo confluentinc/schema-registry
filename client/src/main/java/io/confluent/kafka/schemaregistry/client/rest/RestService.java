@@ -646,14 +646,20 @@ public class RestService implements Configurable {
 
   public ModeGetResponse getMode()
       throws IOException, RestClientException {
-    return getMode(null);
+    return getMode(null, false);
   }
 
   public ModeGetResponse getMode(String subject)
       throws IOException, RestClientException {
+    return getMode(subject, false);
+  }
+
+  public ModeGetResponse getMode(String subject, boolean defaultToGlobal)
+      throws IOException, RestClientException {
     String path = subject != null
-                  ? UriBuilder.fromPath("/mode/{subject}").build(subject).toString()
-                  : "/mode";
+        ? UriBuilder.fromPath("/mode/{subject}")
+        .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
+        : "/mode";
 
     ModeGetResponse mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
