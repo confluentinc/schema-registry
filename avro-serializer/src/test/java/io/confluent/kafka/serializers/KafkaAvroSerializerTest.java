@@ -16,6 +16,7 @@
 package io.confluent.kafka.serializers;
 
 import com.google.common.collect.ImmutableList;
+import io.confluent.kafka.example.AccountBalance;
 import io.confluent.kafka.example.ExtendedWidget;
 import io.confluent.kafka.example.Widget;
 
@@ -43,6 +44,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import io.confluent.kafka.example.Account;
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.User;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -212,6 +214,34 @@ public class KafkaAvroSerializerTest {
     avroRecord.put("localTsMs", LocalDateTime.of(2021,1, 1, 1, 1, 1, 1000000));
     avroRecord.put("localTsMicros", LocalDateTime.of(2021,1, 1, 1, 1, 1, 1001000));
     return avroRecord;
+  }
+
+  private Account creataAccountRecord() {
+    return Account.newBuilder()
+        .setAccountNumber("0123456789")
+        .setBalance(new BigDecimal("10.00"))
+        .setDate(LocalDate.of(2021,1, 1))
+        .setTimeMs(LocalTime.of(1, 1, 1, 1000000))
+        .setTimeMicros(LocalTime.of(1, 1, 1, 1001000))
+        .setTsMs(Instant.ofEpochMilli(1613646696368L))
+        .setTsMicros(Instant.ofEpochMilli(1613646696368009L))
+        .setLocalTsMs(LocalDateTime.of(2021,1, 1, 1, 1, 1, 1000000))
+        .setLocalTsMicros(LocalDateTime.of(2021,1, 1, 1, 1, 1, 1001000))
+        .build();
+  }
+
+  private AccountBalance createAccountBalanceRecord() {
+    AccountBalance accountBalance = new AccountBalance();
+    accountBalance.setAccountNumber("0123456789");
+    accountBalance.setBalance(new BigDecimal("10.00"));
+    accountBalance.setDate(LocalDate.of(2021,1, 1));
+    accountBalance.setTimeMs(LocalTime.of(1, 1, 1, 1000000));
+    accountBalance.setTimeMicros(LocalTime.of(1, 1, 1, 1001000));
+    accountBalance.setTsMs(Instant.ofEpochMilli(1613646696368L));
+    accountBalance.setTsMicros(Instant.ofEpochMilli(1613646696368009L));
+    accountBalance.setLocalTsMs(LocalDateTime.of(2021,1, 1, 1, 1, 1, 1000000));
+    accountBalance.setLocalTsMicros(LocalDateTime.of(2021,1, 1, 1, 1, 1, 1001000));
+    return accountBalance;
   }
 
   private IndexedRecord createSpecificAvroRecord() {

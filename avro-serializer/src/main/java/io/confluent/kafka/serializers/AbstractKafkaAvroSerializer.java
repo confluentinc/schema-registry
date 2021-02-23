@@ -16,6 +16,15 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
@@ -23,24 +32,11 @@ import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectDatumWriter;
-import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import kafka.utils.VerifiableProperties;
 
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSerDe {
 
@@ -73,17 +69,9 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   protected DatumWriter<?> getDatumWriter(Object value, Schema schema) {
     if (value instanceof SpecificRecord) {
-      SpecificData specificData = new SpecificData();
-      if (avroUseLogicalTypeConverters) {
-        AvroData.addLogicalTypeConversion(specificData);
-      }
-      return new SpecificDatumWriter<>(schema, specificData);
+      return new SpecificDatumWriter<>(schema);
     } else if (useSchemaReflection) {
-      ReflectData reflectData = new ReflectData();
-      if (avroUseLogicalTypeConverters) {
-        AvroData.addLogicalTypeConversion(reflectData);
-      }
-      return new ReflectDatumWriter<>(schema, reflectData);
+      return new ReflectDatumWriter<>(schema);
     } else {
       GenericData genericData = new GenericData();
       if (avroUseLogicalTypeConverters) {

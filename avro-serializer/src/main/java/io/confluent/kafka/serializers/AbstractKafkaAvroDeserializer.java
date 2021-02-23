@@ -199,17 +199,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         }
         return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       } else if (useSchemaReflection) {
-        ReflectData reflectData = new ReflectData();
-        if (avroUseLogicalTypeConverters) {
-          AvroData.addLogicalTypeConversion(reflectData);
-        }
-        return new ReflectDatumReader<>(writerSchema, finalReaderSchema, reflectData);
+        return new ReflectDatumReader<>(writerSchema, finalReaderSchema);
       } else if (useSpecificAvroReader) {
-        SpecificData specificData = new SpecificData();
-        if (avroUseLogicalTypeConverters) {
-          AvroData.addLogicalTypeConversion(specificData);
-        }
-        return new SpecificDatumReader<>(writerSchema, finalReaderSchema, specificData);
+        return new SpecificDatumReader<>(writerSchema, finalReaderSchema);
       } else {
         GenericData genericData = new GenericData();
         if (avroUseLogicalTypeConverters) {
