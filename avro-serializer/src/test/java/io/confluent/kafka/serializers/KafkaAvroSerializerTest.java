@@ -21,10 +21,15 @@ import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Arrays;
-import org.apache.avro.AvroRuntimeException;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
+
+import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -170,6 +175,42 @@ public class KafkaAvroSerializerTest {
     Schema schema = createAccountSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("accountNumber", "0123456789");
+    return avroRecord;
+  }
+
+  private Schema createBalanceSchema() {
+    String balanceSchema = "{\n" +
+            "\t\"namespace\": \"example.avro\", \"type\": \"record\",\n" +
+            "    \"name\": \"Account\",\n" +
+            "    \"fields\": [\n" +
+            "    \t{\"name\": \"accountNumber\", \"type\": \"string\"},\n" +
+            "        {\"name\": \"balance\", \"type\": {\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":4,\"scale\":2}},\n" +
+            "        {\"name\": \"date\", \"type\": {\"type\":\"int\",\"logicalType\":\"date\"}},\n" +
+            "        {\"name\": \"timeMs\", \"type\": {\"type\":\"int\",\"logicalType\":\"time-millis\"}},\n" +
+            "        {\"name\": \"timeMicros\", \"type\": {\"type\":\"long\",\"logicalType\":\"time-micros\"}},\n" +
+            "        {\"name\": \"tsMs\", \"type\": {\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},\n" +
+            "        {\"name\": \"tsMicros\", \"type\": {\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},\n" +
+            "        {\"name\": \"localTsMs\", \"type\": {\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},\n" +
+            "        {\"name\": \"localTsMicros\", \"type\": {\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}}\n" +
+            "    ]\n" +
+            "}";
+    Schema.Parser parser = new Schema.Parser();
+    Schema schema = parser.parse(balanceSchema);
+    return schema;
+  }
+
+  private IndexedRecord createBalanceRecord() {
+    Schema schema = createBalanceSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("accountNumber", "0123456789");
+    avroRecord.put("balance", new BigDecimal("10.00"));
+    avroRecord.put("date", LocalDate.of(2021,1, 1));
+    avroRecord.put("timeMs", LocalTime.of(1, 1, 1, 1000000));
+    avroRecord.put("timeMicros", LocalTime.of(1, 1, 1, 1001000));
+    avroRecord.put("tsMs", Instant.ofEpochMilli(1613646696368L));
+    avroRecord.put("tsMicros", Instant.ofEpochMilli(1613646696368009L));
+    avroRecord.put("localTsMs", LocalDateTime.of(2021,1, 1, 1, 1, 1, 1000000));
+    avroRecord.put("localTsMicros", LocalDateTime.of(2021,1, 1, 1, 1, 1, 1001000));
     return avroRecord;
   }
 
@@ -877,6 +918,25 @@ public class KafkaAvroSerializerTest {
     obj = reflectionAvroDeserializer.deserialize(topic, bytes, schema);
     assertTrue("Returned object should be a String", String.class.isInstance(obj));
     assertEquals(message, obj);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerGenericRecordWithConverters() {
+    Map configs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+            TopicRecordNameStrategy.class.getName(),
+            KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG,
+            true
+    );
+
+    avroSerializer.configure(configs, false);
+    avroDeserializer.configure(configs, false);
+
+    IndexedRecord record1 = createBalanceRecord();
+    byte[] bytes1 = avroSerializer.serialize(topic, record1);
+    assertEquals(record1, avroDeserializer.deserialize(topic, bytes1));
   }
 
 }
