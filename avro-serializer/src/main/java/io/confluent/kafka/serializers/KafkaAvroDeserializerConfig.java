@@ -46,11 +46,10 @@ public class KafkaAvroDeserializerConfig extends AbstractKafkaSchemaSerDeConfig 
   static {
     config = baseConfigDef()
         .define(SPECIFIC_AVRO_READER_CONFIG, Type.BOOLEAN, SPECIFIC_AVRO_READER_DEFAULT,
-                Importance.LOW, SPECIFIC_AVRO_READER_DOC)
+            Importance.LOW, SPECIFIC_AVRO_READER_DOC)
         .define(AVRO_REFLECTION_ALLOW_NULL_CONFIG, Type.BOOLEAN, AVRO_REFLECTION_ALLOW_NULL_DEFAULT,
-            Importance.MEDIUM, AVRO_REFLECTION_ALLOW_NULL_DOC);
-    config = config
-            .define(AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, ConfigDef.Type.BOOLEAN,
+            Importance.MEDIUM, AVRO_REFLECTION_ALLOW_NULL_DOC)
+        .define(AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, ConfigDef.Type.BOOLEAN,
             AVRO_USE_LOGICAL_TYPE_CONVERTERS_DEFAULT, ConfigDef.Importance.MEDIUM,
             AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC);
   }
