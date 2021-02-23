@@ -1446,6 +1446,10 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.setMode("READWRITE", subject);
     assertEquals("READWRITE", restApp.restClient.getMode(subject).getMode());
 
+    //test delete subject mode
+    restApp.restClient.deleteSubjectMode(subject);
+    assertEquals("READONLY", restApp.restClient.getMode(subject, true).getMode());
+
     //test READONLY_OVERRIDE globalMode override subjectMode
     restApp.restClient.setMode("READONLY_OVERRIDE", null);
     assertEquals("READONLY_OVERRIDE", restApp.restClient.getMode(subject).getMode());
