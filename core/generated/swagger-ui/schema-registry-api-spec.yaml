@@ -232,6 +232,43 @@ paths:
         500:
           description: "Error code 50001 -- Error in the backend data store\nError\
             \ code 50003 -- Error while forwarding the request to the primary"
+    delete:
+      summary: "Deletes the specified subject-level compatibility level config and\
+        \ revert to the global default."
+      description: ""
+      operationId: "deleteSubjectConfig"
+      consumes:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json"
+      - "application/json"
+      - "application/octet-stream"
+      produces:
+      - "application/vnd.schemaregistry.v1+json"
+      - "application/vnd.schemaregistry+json; qs=0.9"
+      - "application/json; qs=0.5"
+      parameters:
+      - name: "subject"
+        in: "path"
+        description: "the name of the subject"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "string"
+            enum:
+            - "NONE"
+            - "BACKWARD"
+            - "BACKWARD_TRANSITIVE"
+            - "FORWARD"
+            - "FORWARD_TRANSITIVE"
+            - "FULL"
+            - "FULL_TRANSITIVE"
+        404:
+          description: "Error code 40401 -- Subject not found"
+        500:
+          description: "Error code 50001 -- Error in the backend datastore"
   /mode:
     get:
       summary: "Get global mode."

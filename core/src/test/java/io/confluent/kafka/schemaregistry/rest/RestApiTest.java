@@ -371,6 +371,14 @@ public class RestApiTest extends ClusterTestHarness {
                  FORWARD.name,
                  restApp.restClient.getConfig(subject).getCompatibilityLevel());
 
+    // delete subject compatibility
+    restApp.restClient.deleteSubjectConfig(subject);
+
+    assertEquals("Compatibility level for this subject should be reverted to none",
+        NONE.name,
+        restApp.restClient
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true)
+            .getCompatibilityLevel());
   }
 
   @Test
