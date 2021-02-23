@@ -1424,6 +1424,16 @@ public class RestApiTest extends ClusterTestHarness {
     String subject = "testSubject";
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
+
+    try {
+      restApp.restClient.getMode(subject).getMode();
+      fail(String.format("Subject %s should not be found when there's no mode override", subject));
+    } catch (RestClientException e) {
+      assertEquals(String.format("No mode override for subject %s, get mode should return Subject Not Found", subject),
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
+    assertEquals("READWRITE", restApp.restClient.getMode(subject, true).getMode());
+
     restApp.restClient.setMode("READONLY", null);
     restApp.restClient.setMode("READWRITE", subject);
     assertEquals("READWRITE", restApp.restClient.getMode(subject).getMode());

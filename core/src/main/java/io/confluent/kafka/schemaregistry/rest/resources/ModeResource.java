@@ -29,6 +29,7 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import java.util.Locale;
@@ -113,9 +114,12 @@ public class ModeResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
   public ModeGetResponse getMode(
       @ApiParam(value = "Name of the Subject", required = true)
-      @PathParam("subject") String subject) {
+      @PathParam("subject") String subject,
+      @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
     try {
-      Mode mode = schemaRegistry.getMode(subject);
+      Mode mode = defaultToGlobal
+          ? schemaRegistry.getModeInScope(subject)
+          : schemaRegistry.getMode(subject);
       if (mode == null) {
         throw Errors.subjectNotFoundException(subject);
       }
@@ -145,6 +149,6 @@ public class ModeResource {
   @ApiResponses(value = {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
   public ModeGetResponse getTopLevelMode() {
-    return getMode(null);
+    return getMode(null, false);
   }
 }
