@@ -410,6 +410,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  public RestService leaderRestService() {
+    return leaderRestService;
+  }
+
   public Set<String> schemaTypes() {
     return providers.keySet();
   }

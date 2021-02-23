@@ -30,9 +30,13 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.TimestampProto;
+import com.google.protobuf.WrappersProto;
+import com.google.type.DateProto;
+import com.google.type.TimeOfDayProto;
+import com.squareup.wire.Syntax;
 import com.squareup.wire.schema.Field;
 import com.squareup.wire.schema.Location;
-import com.squareup.wire.schema.ProtoFile;
 import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.EnumConstantElement;
 import com.squareup.wire.schema.internal.parser.EnumElement;
@@ -96,13 +100,25 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final Location DEFAULT_LOCATION = Location.get("");
 
-  public static final String DECIMAL_LOCATION = "confluent/type/decimal.proto";
   public static final String META_LOCATION = "confluent/meta.proto";
+  public static final String DECIMAL_LOCATION = "confluent/type/decimal.proto";
+  public static final String DATE_LOCATION = "google/type/date.proto";
+  public static final String TIME_LOCATION = "google/type/timeofday.proto";
+  public static final String TIMESTAMP_LOCATION = "google/protobuf/timestamp.proto";
+  public static final String WRAPPER_LOCATION = "google/protobuf/wrappers.proto";
 
-  private static final ProtoFileElement DECIMAL_SCHEMA =
-      toProtoFile(DecimalProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement META_SCHEMA =
       toProtoFile(MetaProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement DECIMAL_SCHEMA =
+      toProtoFile(DecimalProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement DATE_SCHEMA =
+      toProtoFile(DateProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement TIME_SCHEMA =
+      toProtoFile(TimeOfDayProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement TIMESTAMP_SCHEMA =
+      toProtoFile(TimestampProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement WRAPPER_SCHEMA =
+      toProtoFile(WrappersProto.getDescriptor().toProto()) ;
 
   private final ProtoFileElement schemaObj;
 
@@ -286,13 +302,13 @@ public class ProtobufSchema implements ParsedSchema {
       packageName = null;
     }
 
-    ProtoFile.Syntax syntax = null;
+    Syntax syntax = null;
     switch (file.getSyntax()) {
       case PROTO2:
-        syntax = ProtoFile.Syntax.PROTO_2;
+        syntax = Syntax.PROTO_2;
         break;
       case PROTO3:
-        syntax = ProtoFile.Syntax.PROTO_3;
+        syntax = Syntax.PROTO_3;
         break;
       default:
         break;
@@ -476,7 +492,8 @@ public class ProtobufSchema implements ParsedSchema {
   private static OneOfElement toOneof(String name, ImmutableList.Builder<FieldElement> fields) {
     log.trace("*** oneof name: {}", name);
     // NOTE: skip groups
-    return new OneOfElement(name, "", fields.build(), Collections.emptyList());
+    return new OneOfElement(name, "", fields.build(),
+        Collections.emptyList(), Collections.emptyList());
   }
 
   private static EnumElement toEnum(EnumDescriptorProto ed) {
@@ -533,16 +550,6 @@ public class ProtobufSchema implements ParsedSchema {
       OptionElement option = new OptionElement("packed", kind, fd.getOptions().getPacked(), false);
       options.add(option);
     }
-    if (fd.hasJsonName()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          "json_name",
-          kind,
-          fd.getJsonName(),
-          false
-      );
-      options.add(option);
-    }
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
       OptionElement option = toOption("confluent.field_meta", meta);
@@ -550,7 +557,8 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    String defaultValue = fd.hasDefaultValue() && fd.getDefaultValue() != null
+    String jsonName = fd.hasJsonName() ? fd.getJsonName() : null;
+    String defaultValue = !PROTO3.equals(file.getSyntax()) && fd.hasDefaultValue()
                           ? fd.getDefaultValue()
                           : null;
     // NOTE: skip some options
@@ -559,6 +567,7 @@ public class ProtobufSchema implements ParsedSchema {
         dataType(fd),
         name,
         defaultValue,
+        jsonName,
         fd.getNumber(),
         "",
         options.build()
@@ -633,7 +642,7 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (dynamicSchema == null) {
-      dynamicSchema = toDynamicSchema(name, schemaObj, dependenciesWithNativeSchemas());
+      dynamicSchema = toDynamicSchema(name, schemaObj, dependenciesWithLogicalTypes());
     }
     return dynamicSchema;
   }
@@ -641,10 +650,12 @@ public class ProtobufSchema implements ParsedSchema {
   private static DynamicSchema toDynamicSchema(
       String name, ProtoFileElement rootElem, Map<String, ProtoFileElement> dependencies
   ) {
-    log.trace("*** toDynamicSchema: {}", rootElem.toSchema());
+    if (log.isTraceEnabled()) {
+      log.trace("*** toDynamicSchema: {}", ProtobufSchemaUtils.toString(rootElem));
+    }
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     try {
-      ProtoFile.Syntax syntax = rootElem.getSyntax();
+      Syntax syntax = rootElem.getSyntax();
       if (syntax != null) {
         schema.setSyntax(syntax.toString());
       }
@@ -743,8 +754,7 @@ public class ProtobufSchema implements ParsedSchema {
       String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
       String fieldType = field.getType();
       String defaultVal = field.getDefaultValue();
-      String jsonName = findOption("json_name", field.getOptions())
-          .map(o -> o.getValue().toString()).orElse(null);
+      String jsonName = field.getJsonName();
       Boolean isPacked = findOption("packed", field.getOptions())
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
       Optional<OptionElement> meta = findOption("confluent.field_meta", field.getOptions());
@@ -884,8 +894,7 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      // Remove comments, such as the location
-      canonicalString = schemaObj.toSchema().replaceAll("//.*?\\n", "");
+      canonicalString = ProtobufSchemaUtils.toString(schemaObj);
     }
     return canonicalString;
   }
@@ -911,20 +920,33 @@ public class ProtobufSchema implements ParsedSchema {
   public Map<String, String> resolvedReferences() {
     return dependencies.entrySet()
         .stream()
-        .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toSchema()));
+        .collect(Collectors.toMap(
+                Map.Entry::getKey, e -> ProtobufSchemaUtils.toString(e.getValue())));
   }
 
   public Map<String, ProtoFileElement> dependencies() {
     return dependencies;
   }
 
-  public Map<String, ProtoFileElement> dependenciesWithNativeSchemas() {
+  public Map<String, ProtoFileElement> dependenciesWithLogicalTypes() {
     Map<String, ProtoFileElement> deps = new HashMap<>(dependencies);
+    if (!deps.containsKey(META_LOCATION)) {
+      deps.put(META_LOCATION, META_SCHEMA);
+    }
     if (!deps.containsKey(DECIMAL_LOCATION)) {
       deps.put(DECIMAL_LOCATION, DECIMAL_SCHEMA);
     }
-    if (!deps.containsKey(META_LOCATION)) {
-      deps.put(META_LOCATION, META_SCHEMA);
+    if (!deps.containsKey(DATE_LOCATION)) {
+      deps.put(DATE_LOCATION, DATE_SCHEMA);
+    }
+    if (!deps.containsKey(TIME_LOCATION)) {
+      deps.put(TIME_LOCATION, TIME_SCHEMA);
+    }
+    if (!deps.containsKey(TIMESTAMP_LOCATION)) {
+      deps.put(TIMESTAMP_LOCATION, TIMESTAMP_SCHEMA);
+    }
+    if (!deps.containsKey(WRAPPER_LOCATION)) {
+      deps.put(WRAPPER_LOCATION, WRAPPER_SCHEMA);
     }
     return deps;
   }

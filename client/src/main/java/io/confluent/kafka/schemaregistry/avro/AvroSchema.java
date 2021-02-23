@@ -19,10 +19,10 @@ package io.confluent.kafka.schemaregistry.avro;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaValidationException;
-import org.apache.avro.SchemaValidator;
-import org.apache.avro.SchemaValidatorBuilder;
+import org.apache.avro.SchemaCompatibility;
+import org.apache.avro.SchemaCompatibility.Incompatibility;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,9 +38,6 @@ public class AvroSchema implements ParsedSchema {
   private static final Logger log = LoggerFactory.getLogger(AvroSchema.class);
 
   public static final String TYPE = "AVRO";
-
-  private static final SchemaValidator BACKWARD_VALIDATOR =
-      new SchemaValidatorBuilder().canReadStrategy().validateLatest();
 
   private final Schema schemaObj;
   private String canonicalString;
@@ -179,11 +176,13 @@ public class AvroSchema implements ParsedSchema {
       return Collections.singletonList("Incompatible because of different schema type");
     }
     try {
-      BACKWARD_VALIDATOR.validate(this.schemaObj,
-          Collections.singleton(((AvroSchema) previousSchema).schemaObj));
-      return Collections.emptyList();
-    } catch (SchemaValidationException e) {
-      return Collections.singletonList(e.getMessage());
+      SchemaCompatibility.SchemaPairCompatibility result =
+          SchemaCompatibility.checkReaderWriterCompatibility(
+              this.schemaObj,
+              ((AvroSchema) previousSchema).schemaObj);
+      return result.getResult().getIncompatibilities().stream()
+          .map(Incompatibility::toString)
+          .collect(Collectors.toList());
     } catch (Exception e) {
       log.error("Unexpected exception during compatibility check", e);
       return Collections.singletonList(
