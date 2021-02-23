@@ -210,11 +210,11 @@ public class ConfigResource {
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Failed to update compatibility level", e);
+      throw Errors.storeException("Failed to delete compatibility level", e);
     } catch (UnknownLeaderException e) {
-      throw Errors.unknownLeaderException("Failed to update compatibility level", e);
+      throw Errors.unknownLeaderException("Failed to delete compatibility level", e);
     } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding update config request"
+      throw Errors.requestForwardingFailedException("Error while forwarding delete config request"
           + " to the leader", e);
     }
     asyncResponse.resume(deletedConfig);

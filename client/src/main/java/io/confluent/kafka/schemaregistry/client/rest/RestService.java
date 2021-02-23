@@ -135,7 +135,7 @@ public class RestService implements Configurable {
   private static final TypeReference<? extends List<Integer>> DELETE_SUBJECT_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
       };
-  private static final TypeReference<String> DELETE_MODE_RESPONSE_TYPE =
+  private static final TypeReference<String> DELETE_SUBJECT_MODE_RESPONSE_TYPE =
       new TypeReference<String>() {
       };
   private static final TypeReference<Config> DELETE_SUBJECT_CONFIG_RESPONSE_TYPE =
@@ -690,6 +690,21 @@ public class RestService implements Configurable {
     ModeGetResponse mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
     return mode;
+  }
+
+  public String deleteSubjectMode(String subject)
+      throws IOException, RestClientException {
+    return deleteSubjectMode(DEFAULT_REQUEST_PROPERTIES, subject);
+  }
+
+  public String deleteSubjectMode(Map<String, String> requestProperties, String subject)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/mode/{subject}");
+    String path = builder.build(subject).toString();
+
+    String response = httpRequest(path, "DELETE", null, requestProperties,
+        DELETE_SUBJECT_MODE_RESPONSE_TYPE);
+    return response;
   }
 
   public List<Schema> getSchemas(
