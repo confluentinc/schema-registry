@@ -177,7 +177,8 @@ public class AvroSchema implements ParsedSchema {
       return false;
     }
     AvroSchema that = (AvroSchema) o;
-    return Objects.equals(schemaObj, that.schemaObj)
+    // Can't use schemaObj as it doesn't compare field doc, aliases, etc.
+    return Objects.equals(canonicalString(), that.canonicalString())
         && Objects.equals(references, that.references)
         && Objects.equals(version, that.version);
   }
