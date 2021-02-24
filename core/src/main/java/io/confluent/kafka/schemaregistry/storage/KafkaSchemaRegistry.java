@@ -879,6 +879,26 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  private void forwardDeleteSubjectCompatibilityConfigToLeader(
+      Map<String, String> requestProperties,
+      String subject
+  ) throws SchemaRegistryRequestForwardingException {
+    UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding delete subject compatibility config request %s to %s",
+        subject, baseUrl));
+    try {
+      leaderRestService.deleteSubjectConfig(requestProperties, subject);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format(
+              "Unexpected error while forwarding delete subject compatibility config"
+                  + "request %s to %s", subject, baseUrl), e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
   private void forwardSetModeRequestToLeader(
       String subject, Mode mode,
       Map<String, String> headerProperties)
@@ -896,6 +916,26 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           String.format("Unexpected error while forwarding the update mode request %s to %s",
               modeUpdateRequest, baseUrl),
           e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private void forwardDeleteSubjectModeRequestToLeader(
+      String subject,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding delete subject mode request %s to %s",
+        subject, baseUrl));
+    try {
+      leaderRestService.deleteSubjectMode(headerProperties, subject);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format(
+              "Unexpected error while forwarding delete subject mode"
+                  + "request %s to %s", subject, baseUrl), e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
     }
@@ -1283,6 +1323,42 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  public void deleteSubjectCompatibilityConfig(String subject)
+      throws SchemaRegistryStoreException, OperationNotPermittedException {
+    if (isReadOnlyMode(subject)) {
+      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+    }
+    try {
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
+      deleteSubjectCompatibility(subject);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to delete subject config value from store",
+          e);
+    }
+  }
+
+  public void deleteSubjectCompatibilityConfigOrForward(String subject,
+                                                        Map<String, String> headerProperties)
+      throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
+      OperationNotPermittedException, UnknownLeaderException {
+    kafkaStore.lockFor(subject).lock();
+    try {
+      if (isLeader()) {
+        deleteSubjectCompatibilityConfig(subject);
+      } else {
+        // forward delete subject config request to the leader
+        if (leaderIdentity != null) {
+          forwardDeleteSubjectCompatibilityConfigToLeader(headerProperties, subject);
+        } else {
+          throw new UnknownLeaderException("Delete config request failed since leader is "
+              + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
   private String kafkaClusterId(SchemaRegistryConfig config) throws SchemaRegistryException {
     Properties adminClientProps = new Properties();
     KafkaStore.addSchemaRegistryConfigsToClientProperties(config, adminClientProps);
@@ -1435,6 +1511,41 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           forwardSetModeRequestToLeader(subject, mode, headerProperties);
         } else {
           throw new UnknownLeaderException("Update mode request failed since leader is "
+              + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  public void deleteSubjectMode(String subject)
+      throws SchemaRegistryStoreException, OperationNotPermittedException {
+    if (!allowModeChanges) {
+      throw new OperationNotPermittedException("Mode changes are not allowed");
+    }
+    try {
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
+      deleteMode(subject);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to delete subject config value from store",
+          e);
+    }
+  }
+
+  public void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties)
+      throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
+      OperationNotPermittedException, UnknownLeaderException {
+    kafkaStore.lockFor(subject).lock();
+    try {
+      if (isLeader()) {
+        deleteSubjectMode(subject);
+      } else {
+        // forward delete subject config request to the leader
+        if (leaderIdentity != null) {
+          forwardDeleteSubjectModeRequestToLeader(subject, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Delete config request failed since leader is "
               + "unknown");
         }
       }

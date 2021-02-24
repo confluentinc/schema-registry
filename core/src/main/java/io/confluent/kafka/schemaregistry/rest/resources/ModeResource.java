@@ -24,12 +24,15 @@ import org.slf4j.LoggerFactory;
 
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import java.util.Locale;
@@ -150,5 +153,42 @@ public class ModeResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
   public ModeGetResponse getTopLevelMode() {
     return getMode(null, false);
+  }
+
+  @DELETE
+  @Path("/{subject}")
+  @ApiOperation(value = "Deletes the specified subject-level mode and revert to "
+      + "the global default.", response = Mode.class)
+  @ApiResponses(value = {
+      @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")
+  })
+  public void deleteSubjectMode(
+      final @Suspended AsyncResponse asyncResponse,
+      @Context HttpHeaders headers,
+      @ApiParam(value = "the name of the subject", required = true)
+      @PathParam("subject") String subject) {
+    log.info("Deleting mode for subject {}", subject);
+    Mode deletedMode;
+    try {
+      deletedMode = schemaRegistry.getMode(subject);
+      if (deletedMode == null) {
+        throw Errors.subjectNotFoundException(subject);
+      }
+
+      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+          headers, schemaRegistry.config().whitelistHeaders());
+      schemaRegistry.deleteSubjectModeOrForward(subject, headerProperties);
+    } catch (OperationNotPermittedException e) {
+      throw Errors.operationNotPermittedException(e.getMessage());
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException("Failed to delete mode", e);
+    } catch (UnknownLeaderException e) {
+      throw Errors.unknownLeaderException("Failed to delete mode", e);
+    } catch (SchemaRegistryRequestForwardingException e) {
+      throw Errors.requestForwardingFailedException("Error while forwarding delete mode request"
+          + " to the leader", e);
+    }
+    asyncResponse.resume(deletedMode);
   }
 }

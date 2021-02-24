@@ -135,8 +135,11 @@ public class RestService implements Configurable {
   private static final TypeReference<? extends List<Integer>> DELETE_SUBJECT_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
       };
-  private static final TypeReference<String> DELETE_MODE_RESPONSE_TYPE =
+  private static final TypeReference<String> DELETE_SUBJECT_MODE_RESPONSE_TYPE =
       new TypeReference<String>() {
+      };
+  private static final TypeReference<Config> DELETE_SUBJECT_CONFIG_RESPONSE_TYPE =
+      new TypeReference<Config>() {
       };
   private static final TypeReference<ServerClusterId> GET_CLUSTER_ID_RESPONSE_TYPE =
       new TypeReference<ServerClusterId>() {
@@ -600,19 +603,42 @@ public class RestService implements Configurable {
 
   public Config getConfig(String subject)
       throws IOException, RestClientException {
-    return getConfig(DEFAULT_REQUEST_PROPERTIES, subject);
+    return getConfig(DEFAULT_REQUEST_PROPERTIES, subject, false);
   }
 
   public Config getConfig(Map<String, String> requestProperties,
                           String subject)
       throws IOException, RestClientException {
+    return getConfig(requestProperties, subject, false);
+  }
+
+  public Config getConfig(Map<String, String> requestProperties,
+                          String subject,
+                          boolean defaultToGlobal)
+      throws IOException, RestClientException {
     String path = subject != null
-                  ? UriBuilder.fromPath("/config/{subject}").build(subject).toString()
-                  : "/config";
+        ? UriBuilder.fromPath("/config/{subject}")
+        .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
+        : "/config";
 
     Config config =
         httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
     return config;
+  }
+
+  public Config deleteSubjectConfig(String subject)
+      throws IOException, RestClientException {
+    return deleteSubjectConfig(DEFAULT_REQUEST_PROPERTIES, subject);
+  }
+
+  public Config deleteSubjectConfig(Map<String, String> requestProperties, String subject)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/config/{subject}");
+    String path = builder.build(subject).toString();
+
+    Config response = httpRequest(path, "DELETE", null, requestProperties,
+        DELETE_SUBJECT_CONFIG_RESPONSE_TYPE);
+    return response;
   }
 
   public ModeUpdateRequest setMode(String mode)
@@ -664,6 +690,21 @@ public class RestService implements Configurable {
     ModeGetResponse mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
     return mode;
+  }
+
+  public String deleteSubjectMode(String subject)
+      throws IOException, RestClientException {
+    return deleteSubjectMode(DEFAULT_REQUEST_PROPERTIES, subject);
+  }
+
+  public String deleteSubjectMode(Map<String, String> requestProperties, String subject)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/mode/{subject}");
+    String path = builder.build(subject).toString();
+
+    String response = httpRequest(path, "DELETE", null, requestProperties,
+        DELETE_SUBJECT_MODE_RESPONSE_TYPE);
+    return response;
   }
 
   public List<Schema> getSchemas(

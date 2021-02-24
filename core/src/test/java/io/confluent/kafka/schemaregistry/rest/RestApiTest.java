@@ -371,6 +371,14 @@ public class RestApiTest extends ClusterTestHarness {
                  FORWARD.name,
                  restApp.restClient.getConfig(subject).getCompatibilityLevel());
 
+    // delete subject compatibility
+    restApp.restClient.deleteSubjectConfig(subject);
+
+    assertEquals("Compatibility level for this subject should be reverted to none",
+        NONE.name,
+        restApp.restClient
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true)
+            .getCompatibilityLevel());
   }
 
   @Test
@@ -1437,6 +1445,10 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.setMode("READONLY", null);
     restApp.restClient.setMode("READWRITE", subject);
     assertEquals("READWRITE", restApp.restClient.getMode(subject).getMode());
+
+    //test delete subject mode
+    restApp.restClient.deleteSubjectMode(subject);
+    assertEquals("READONLY", restApp.restClient.getMode(subject, true).getMode());
 
     //test READONLY_OVERRIDE globalMode override subjectMode
     restApp.restClient.setMode("READONLY_OVERRIDE", null);
