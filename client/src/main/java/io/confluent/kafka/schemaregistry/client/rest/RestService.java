@@ -183,6 +183,8 @@ public class RestService implements Configurable {
         (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
     String bearerCredentialsSource =
         (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
+    String sslEndpointIdentificationAlgo =
+            (String) configs.get(SchemaRegistryClientConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
     if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
       throw new ConfigException(String.format(
@@ -217,6 +219,8 @@ public class RestService implements Configurable {
     if (isValidProxyConfig(proxyHost, proxyPort)) {
       setProxy(proxyHost, proxyPort);
     }
+
+    setHostnameVerifier(getHostnameVerifier(sslEndpointIdentificationAlgo));
   }
 
   private static boolean isNonEmpty(String s) {
@@ -1035,5 +1039,24 @@ public class RestService implements Configurable {
 
   public void setProxy(String proxyHost, int proxyPort) {
     this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+  }
+
+  private HostnameVerifier getHostnameVerifier(String sslEndpointIdentificationAlgo) {
+
+    if (sslEndpointIdentificationAlgo != null) {
+      if (sslEndpointIdentificationAlgo.equals("none")
+              || sslEndpointIdentificationAlgo.isEmpty()) {
+        return (hostname, session) -> true;
+      } else if (sslEndpointIdentificationAlgo.equalsIgnoreCase("https")) {
+        return null;
+      } else {
+        log.warn("Endpoint Identification Algorithm: " + sslEndpointIdentificationAlgo + " not supported.");
+        log.warn("Falling back to https");
+        return null;
+      }
+    }
+
+    // Default
+    return null;
   }
 }
