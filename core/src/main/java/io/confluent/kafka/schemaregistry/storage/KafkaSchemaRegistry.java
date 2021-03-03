@@ -320,6 +320,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  public void waitForInit() throws InterruptedException {
+    kafkaStore.waitForInit();
+  }
+
   public boolean initialized() {
     return kafkaStore.initialized();
   }
