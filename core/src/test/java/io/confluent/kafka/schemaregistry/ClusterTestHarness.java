@@ -181,7 +181,7 @@ public abstract class ClusterTestHarness {
   }
 
   protected void setupRestApp(Properties schemaRegistryProps) throws Exception {
-    restApp = new RestApp(schemaRegistryPort, zkConnect, null, KAFKASTORE_TOPIC,
+    restApp = new RestApp(schemaRegistryPort, zkConnect, bootstrapServers, KAFKASTORE_TOPIC,
                           compatibilityType, true, schemaRegistryProps);
     restApp.start();
   }
