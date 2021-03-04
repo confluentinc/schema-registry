@@ -80,9 +80,6 @@ public class RestService implements Configurable {
   private static final TypeReference<Config> GET_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
       };
-  private static final TypeReference<List<ModeGetResponse>> GET_MODES_RESPONSE_TYPE =
-      new TypeReference<List<ModeGetResponse>>() {
-      };
   private static final TypeReference<ModeGetResponse> GET_MODE_RESPONSE_TYPE =
       new TypeReference<ModeGetResponse>() {
       };
@@ -135,8 +132,8 @@ public class RestService implements Configurable {
   private static final TypeReference<? extends List<Integer>> DELETE_SUBJECT_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
       };
-  private static final TypeReference<String> DELETE_SUBJECT_MODE_RESPONSE_TYPE =
-      new TypeReference<String>() {
+  private static final TypeReference<ModeGetResponse> DELETE_SUBJECT_MODE_RESPONSE_TYPE =
+      new TypeReference<ModeGetResponse>() {
       };
   private static final TypeReference<Config> DELETE_SUBJECT_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
@@ -692,17 +689,17 @@ public class RestService implements Configurable {
     return mode;
   }
 
-  public String deleteSubjectMode(String subject)
+  public ModeGetResponse deleteSubjectMode(String subject)
       throws IOException, RestClientException {
     return deleteSubjectMode(DEFAULT_REQUEST_PROPERTIES, subject);
   }
 
-  public String deleteSubjectMode(Map<String, String> requestProperties, String subject)
+  public ModeGetResponse deleteSubjectMode(Map<String, String> requestProperties, String subject)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/mode/{subject}");
     String path = builder.build(subject).toString();
 
-    String response = httpRequest(path, "DELETE", null, requestProperties,
+    ModeGetResponse response = httpRequest(path, "DELETE", null, requestProperties,
         DELETE_SUBJECT_MODE_RESPONSE_TYPE);
     return response;
   }
