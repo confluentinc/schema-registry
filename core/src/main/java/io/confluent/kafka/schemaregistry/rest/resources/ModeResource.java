@@ -170,6 +170,7 @@ public class ModeResource {
       @PathParam("subject") String subject) {
     log.info("Deleting mode for subject {}", subject);
     Mode deletedMode;
+    ModeGetResponse deleteModeResponse;
     try {
       deletedMode = schemaRegistry.getMode(subject);
       if (deletedMode == null) {
@@ -179,6 +180,7 @@ public class ModeResource {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.deleteSubjectModeOrForward(subject, headerProperties);
+      deleteModeResponse = new ModeGetResponse(deletedMode.name());
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -189,6 +191,6 @@ public class ModeResource {
       throw Errors.requestForwardingFailedException("Error while forwarding delete mode request"
           + " to the leader", e);
     }
-    asyncResponse.resume(deletedMode);
+    asyncResponse.resume(deleteModeResponse);
   }
 }
