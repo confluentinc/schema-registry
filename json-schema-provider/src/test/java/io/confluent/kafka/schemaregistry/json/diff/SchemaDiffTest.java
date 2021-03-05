@@ -88,6 +88,7 @@ public class SchemaDiffTest {
 
     final Schema second = SchemaLoader.load(new JSONObject(("{\"properties\": {}}")));
     final List<Difference> changes = SchemaDiff.compare(first, second);
+    // Changing from empty schema to empty object schema is incompatible
     Assert.assertFalse(changes.isEmpty());
   }
 
