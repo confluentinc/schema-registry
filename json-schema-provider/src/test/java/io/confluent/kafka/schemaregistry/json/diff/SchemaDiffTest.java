@@ -88,7 +88,7 @@ public class SchemaDiffTest {
 
     final Schema second = SchemaLoader.load(new JSONObject(("{\"properties\": {}}")));
     final List<Difference> changes = SchemaDiff.compare(first, second);
-    Assert.assertTrue(changes.isEmpty());
+    Assert.assertFalse(changes.isEmpty());
   }
 
   public static String readFile(String fileName) {
