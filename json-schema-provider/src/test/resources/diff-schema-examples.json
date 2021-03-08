@@ -1,5 +1,17 @@
 [
   {
+    "description": "Anything can change to empty schema",
+    "original_schema": {
+      "properties": {
+      }
+    },
+    "update_schema": {
+    },
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect changes to id",
     "original_schema": {
       "id": "something"
@@ -952,6 +964,8 @@
       }
     },
     "update_schema": {
+      "dependencies": {
+      }
     },
     "changes": [
       "DEPENDENCY_SCHEMA_REMOVED #/dependencies/foo"
@@ -1079,9 +1093,13 @@
   {
     "description": "Detect removed maxProperties",
     "original_schema": {
+      "properties": {
+      },
       "maxProperties": 1
     },
     "update_schema": {
+      "properties": {
+      }
     },
     "changes": [
       "MAX_PROPERTIES_REMOVED #/maxProperties"
@@ -1117,9 +1135,13 @@
   {
     "description": "Detect removed minProperties",
     "original_schema": {
+      "properties": {
+      },
       "minProperties": 2
     },
     "update_schema": {
+      "properties": {
+      }
     },
     "changes": [
       "MIN_PROPERTIES_REMOVED #/minProperties"
@@ -1524,9 +1546,13 @@
   {
     "description": "Detect added boolean additional properties",
     "original_schema": {
+      "properties": {
+      },
       "additionalProperties": false
     },
     "update_schema": {
+      "properties": {
+      }
     },
     "changes": [
       "ADDITIONAL_PROPERTIES_ADDED #/additionalProperties"
