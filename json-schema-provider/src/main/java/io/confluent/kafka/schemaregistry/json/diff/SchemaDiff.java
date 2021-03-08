@@ -19,6 +19,7 @@ import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
+import org.everit.json.schema.FalseSchema;
 import org.everit.json.schema.NotSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
@@ -158,8 +159,13 @@ public class SchemaDiff {
     }
 
     if (!original.getClass().equals(update.getClass())) {
-      ctx.addDifference(Type.TYPE_CHANGED);
-      return;
+      // TrueSchema extends EmptySchema
+      if (original instanceof FalseSchema || update instanceof EmptySchema) {
+        return;
+      } else {
+        ctx.addDifference(Type.TYPE_CHANGED);
+        return;
+      }
     }
 
     try (Context.SchemaScope schemaScope = ctx.enterSchema(original)) {
@@ -197,13 +203,7 @@ public class SchemaDiff {
   }
 
   private static Schema normalizeSchema(final Schema schema) {
-    if (schema instanceof EmptySchema) {
-      return ObjectSchema.builder()
-          .id(schema.getId())
-          .title(schema.getTitle())
-          .description(schema.getDescription())
-          .build();
-    } else if (schema instanceof ReferenceSchema) {
+    if (schema instanceof ReferenceSchema) {
       return ((ReferenceSchema) schema).getReferredSchema();
     } else {
       return schema;
