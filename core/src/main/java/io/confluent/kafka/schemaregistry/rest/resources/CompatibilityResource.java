@@ -154,7 +154,7 @@ public class CompatibilityResource {
   }
 
   @POST
-  @Path("/subjects/{subject}/versions/")
+  @Path("/subjects/{subject}/versions")
   @ApiOperation(value = "Test input schema against a subject's schemas for compatibility, "
       + "based on the compatibility level of the subject configured. In other word, "
       + "it will perform the same compatibility check as register for that subject",
@@ -174,7 +174,7 @@ public class CompatibilityResource {
       final @HeaderParam("Content-Type") String contentType,
       final @HeaderParam("Accept") String accept,
       @ApiParam(value = "Subject of the schema version against which compatibility is to be tested",
-          required = true)@PathParam("subject") String subject,
+          required = true) @PathParam("subject") String subject,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request,
       @QueryParam("verbose") boolean verbose) {
