@@ -514,6 +514,13 @@ public class RestService implements Configurable {
     return response.getId();
   }
 
+  public List<String> testCompatibility(String schemaString, String subject, boolean verbose)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    return testCompatibility(request, subject, null, verbose);
+  }
+
   // Visible for testing
   public List<String> testCompatibility(String schemaString, String subject, String version)
       throws IOException, RestClientException {
@@ -551,10 +558,16 @@ public class RestService implements Configurable {
                                         String version,
                                         boolean verbose)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath(
-        "/compatibility/subjects/{subject}/versions/{version}");
-    builder.queryParam("verbose", verbose);
-    String path = builder.build(subject, version).toString();
+    String path;
+    if (version != null) {
+      path = UriBuilder.fromPath("/compatibility/subjects/{subject}/versions/{version}")
+          .queryParam("verbose", verbose)
+          .build(subject, version).toString();
+    } else {
+      path = UriBuilder.fromPath("/compatibility/subjects/{subject}/versions/")
+          .queryParam("verbose", verbose)
+          .build(subject).toString();
+    }
 
     CompatibilityCheckResponse response =
         httpRequest(path, "POST",

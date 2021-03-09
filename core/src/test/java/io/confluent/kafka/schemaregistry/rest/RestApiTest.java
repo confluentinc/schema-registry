@@ -272,6 +272,47 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testIncompatibleSchemaBySubject() throws Exception {
+    String subject = "testSubject";
+
+    String schema1String = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},{\"type\":\"string\",\"name\":\"f2\"}]}";
+    String schema1 = AvroUtils.parseSchema(schema1String).canonicalString();
+
+    String schema2String = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}";
+    String schema2 = AvroUtils.parseSchema(schema2String).canonicalString();
+
+    String schema3String = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},{\"type\":\"string\",\"name\":\"f3\"}]}";
+    String schema3 = AvroUtils.parseSchema(schema3String).canonicalString();
+
+    restApp.restClient.registerSchema(schema1, subject);
+    restApp.restClient.registerSchema(schema2, subject);
+
+    restApp.restClient.updateCompatibility(CompatibilityLevel.FORWARD_TRANSITIVE.name, subject);
+
+    //schema3 is compatible with schema2, but not compatible with schema1
+    boolean isCompatible = restApp.restClient.testCompatibility(schema3, subject, "latest").isEmpty();
+    assertTrue("Schema is compatible with the latest version", isCompatible);
+    isCompatible = restApp.restClient.testCompatibility(schema3, subject, null).isEmpty();
+    assertFalse("Schema should be incompatible with FORWARD_TRANSITIVE setting", isCompatible);
+    try {
+      restApp.restClient.registerSchema(schema3String, subject);
+      fail("Schema register should fail since schema is incompatible");
+    } catch (RestClientException e) {
+      assertEquals("Schema register should fail since schema is incompatible",
+          Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, e.getErrorCode());
+    }
+  }
+
+  @Test
   public void testSchemaRegistrationUnderDiffSubjects() throws Exception {
     String subject1 = "testSubject1";
     String subject2 = "testSubject2";
@@ -737,6 +778,10 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     boolean result = restApp.restClient.testCompatibility(schema, "non-existent-subject", "latest")
                                        .isEmpty();
+    assertTrue("Compatibility succeeds", result);
+
+    result = restApp.restClient.testCompatibility(schema, "non-existent-subject", null)
+        .isEmpty();
     assertTrue("Compatibility succeeds", result);
   }
 
