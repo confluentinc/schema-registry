@@ -207,7 +207,7 @@ public class AvroSchema implements ParsedSchema {
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaObj, references, version);
+    return Objects.hash(canonicalString(), references, version);
   }
 
   @Override
