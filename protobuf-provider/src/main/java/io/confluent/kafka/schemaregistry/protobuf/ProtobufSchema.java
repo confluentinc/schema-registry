@@ -975,11 +975,11 @@ public class ProtobufSchema implements ParsedSchema {
         if (first) {
           // Log first incompatible change as warning
           log.warn("Found incompatible change: {}", incompatibleDiff);
-          errorMessages.add(String.format("Found incompatible change: {}", incompatibleDiff));
+          errorMessages.add(String.format("Found incompatible change: %s", incompatibleDiff));
           first = false;
         } else {
           log.debug("Found incompatible change: {}", incompatibleDiff);
-          errorMessages.add(String.format("Found incompatible change: {}", incompatibleDiff));
+          errorMessages.add(String.format("Found incompatible change: %s", incompatibleDiff));
         }
       }
       return errorMessages;
