@@ -977,7 +977,7 @@ public class JsonSchemaData {
       }
     } else if (jsonSchema instanceof ReferenceSchema) {
       ReferenceSchema refSchema = (ReferenceSchema) jsonSchema;
-      return toConnectSchema(refSchema.getReferredSchema(), version);
+      return toConnectSchema(refSchema.getReferredSchema(), version, forceOptional);
     } else {
       throw new DataException("Unsupported schema type " + jsonSchema.getClass().getName());
     }
