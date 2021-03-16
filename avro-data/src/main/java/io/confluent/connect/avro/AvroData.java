@@ -2046,7 +2046,11 @@ public class AvroData {
                                                                    Object value) {
     if (isEnumSchema(fieldSchema)) {
       String enumSchemaName = fieldSchema.parameters().get(AVRO_TYPE_ENUM);
-      return value.getClass().getName().equals(enumSchemaName);
+      if (value instanceof GenericData.EnumSymbol) {
+        return ((GenericData.EnumSymbol) value).getSchema().getName().equals(enumSchemaName);
+      } else {
+        return value.getClass().getName().equals(enumSchemaName);
+      }
     }
     List<Class> classes = SIMPLE_AVRO_SCHEMA_TYPES.get(fieldSchema.type());
     if (classes == null) {
