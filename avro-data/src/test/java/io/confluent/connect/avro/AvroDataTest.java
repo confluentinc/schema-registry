@@ -1153,39 +1153,28 @@ public class AvroDataTest {
     GenericRecord avroRecord1 = new GenericRecordBuilder(avroSchema)
         .set("id", null)
         .build();
-
     GenericRecord avroRecord2 = new GenericRecordBuilder(avroSchema)
-        .set("id", "anystring")
+        .set("id", "teststring")
         .build();
-
     GenericRecord avroRecord3 = new GenericRecordBuilder(avroSchema)
         .set("id", new GenericData.EnumSymbol(enumField, "A"))
         .build();
 
-
-    GenericData genericData = GenericData.get();
     AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
         .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
         .build();
-
     AvroData avroData = new AvroData(avroDataConfig);
 
-    SchemaAndValue schemaAndValue = avroData.toConnectData(avroSchema, avroRecord3);
-    org.apache.kafka.connect.data.Schema schema = schemaAndValue.schema();
-    Object schemaValue = schemaAndValue.value();
-    System.out.println(schemaAndValue);
-    System.out.println(schema);
-    System.out.println(schemaValue);
+    SchemaAndValue schemaAndValue1 = avroData.toConnectData(avroSchema, avroRecord1);
+    SchemaAndValue schemaAndValue2 = avroData.toConnectData(avroSchema, avroRecord2);
+    SchemaAndValue schemaAndValue3 = avroData.toConnectData(avroSchema, avroRecord3);
 
-
-//    GenericData.Record value = (GenericData.Record) avroData.fromConnectData(schema, schemaValue);
-//
-//    org.apache.avro.Schema userTypeSchema = EnumStringUnion.SCHEMA$.getField("userType").schema();
-//
-//    Object userTypeValue = value.get("userType");
-//
-//    int unionIndex = genericData.resolveUnion(userTypeSchema, userTypeValue);
-//    Assert.assertEquals(2, unionIndex);
+    GenericRecord convertedRecord1 = (GenericRecord) avroData.fromConnectData(schemaAndValue1.schema(), schemaAndValue1.value());
+    assertEquals(avroRecord1.get("id"), convertedRecord1.get("id"));
+    GenericRecord convertedRecord2 = (GenericRecord) avroData.fromConnectData(schemaAndValue2.schema(), schemaAndValue2.value());
+    assertEquals(avroRecord2.get("id"), convertedRecord2.get("id"));
+    GenericRecord convertedRecord3 = (GenericRecord) avroData.fromConnectData(schemaAndValue3.schema(), schemaAndValue3.value());
+    assertEquals(avroRecord3.get("id"), convertedRecord3.get("id"));
   }
 
   // Avro -> Connect. Validate a) all Avro types that convert directly to Avro, b) specialized
