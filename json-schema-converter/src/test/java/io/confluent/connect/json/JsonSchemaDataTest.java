@@ -1288,6 +1288,79 @@ public class JsonSchemaDataTest {
     jsonSchemaData.toConnectSchema(jsonSchema);
   }
 
+  @Test
+  public void testOptionalReferencedSchema() {
+    String schema = "{\n"
+        + "    \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "    \"title\": \"Test\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"additionalProperties\": false,\n"
+        + "    \"properties\": {\n"
+        + "        \"id\": {\n"
+        + "            \"type\": \"string\",\n"
+        + "            \"description\": \"unique id\"\n"
+        + "        },\n"
+        + "        \"createById\": {\n"
+        + "            \"oneOf\": [\n"
+        + "                {\n"
+        + "                    \"type\": \"null\",\n"
+        + "                    \"title\": \"Not included\"\n"
+        + "                },\n"
+        + "                {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                }\n"
+        + "            ],\n"
+        + "            \"description\": \"user id\"\n"
+        + "        },\n"
+        + "        \"complexNode\": {\n"
+        + "            \"oneOf\": [\n"
+        + "                {\n"
+        + "                    \"type\": \"null\",\n"
+        + "                    \"title\": \"Not included\"\n"
+        + "                },\n"
+        + "                {\n"
+        + "                    \"$ref\": \"#/definitions/complexNode\"\n"
+        + "                }\n"
+        + "            ]\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"required\": [\n"
+        + "        \"id\"\n"
+        + "    ],\n"
+        + "    \"definitions\": {\n"
+        + "        \"complexNode\": {\n"
+        + "            \"type\": \"object\",\n"
+        + "            \"additionalProperties\": false,\n"
+        + "            \"properties\": {\n"
+        + "                \"id\": {\n"
+        + "                    \"type\": \"string\",\n"
+        + "                    \"description\": \"unique id\"\n"
+        + "                },\n"
+        + "                \"createById\": {\n"
+        + "                    \"oneOf\": [\n"
+        + "                        {\n"
+        + "                            \"type\": \"null\",\n"
+        + "                            \"title\": \"Not included\"\n"
+        + "                        },\n"
+        + "                        {\n"
+        + "                            \"type\": \"string\"\n"
+        + "                        }\n"
+        + "                    ],\n"
+        + "                    \"description\": \"user id\"\n"
+        + "                }\n"
+        + "            },\n"
+        + "            \"required\": [\n"
+        + "                \"id\"\n"
+        + "            ]\n"
+        + "        }\n"
+        + "    }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertTrue(connectSchema.field("complexNode").schema().isOptional());
+  }
+
   @Ignore
   @Test
   public void testRecursiveSchema() {
