@@ -1588,6 +1588,22 @@
     "compatible": false
   },
   {
+    "description": "Detect adding empty schema to open content model",
+    "original_schema": {
+      "additionalProperties": true
+    },
+    "update_schema": {
+      "additionalProperties": true,
+      "properties": {
+        "foo": true
+      }
+    },
+    "changes": [
+      "PROPERTY_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL #/properties/foo"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect changes to additional properties schema",
     "original_schema": {
       "additionalProperties": {
@@ -1633,6 +1649,32 @@
       "TYPE_CHANGED #/additionalItems"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect adding empty schema to open content model for array",
+    "original_schema": {
+      "type": "array",
+      "additionalItems": true,
+      "items": [
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "update_schema": {
+      "type": "array",
+      "additionalItems": true,
+      "items": [
+        {
+          "type": "number"
+        },
+        true
+      ]
+    },
+    "changes": [
+      "ITEM_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL #/items/1"
+    ],
+    "compatible": true
   },
   {
     "description": "Detect change to oneOf schema",
