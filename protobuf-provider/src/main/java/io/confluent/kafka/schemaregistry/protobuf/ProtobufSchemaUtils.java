@@ -191,15 +191,15 @@ public class ProtobufSchemaUtils {
     return sb.toString();
   }
 
-  private static String toString(OptionElement obj) {
+  private static String toString(OptionElement type) {
     String result;
-    if (OptionElement.Kind.STRING == obj.getKind()) {
-      String name = obj.getName();
-      String value = escapeChars(obj.getValue().toString());
-      String formattedName = obj.isParenthesized() ? String.format("(%s)", name) : name;
+    if (OptionElement.Kind.STRING == type.getKind()) {
+      String name = type.getName();
+      String value = escapeChars(type.getValue().toString());
+      String formattedName = type.isParenthesized() ? String.format("(%s)", name) : name;
       result = String.format("%s = \"%s\"", formattedName, value);
     } else {
-      result = obj.toSchema();
+      result = type.toSchema();
     }
     return String.format("option %s;%n", result);
   }
