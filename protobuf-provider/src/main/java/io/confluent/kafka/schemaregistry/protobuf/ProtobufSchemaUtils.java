@@ -106,7 +106,7 @@ public class ProtobufSchemaUtils {
     if (!protoFile.getOptions().isEmpty()) {
       sb.append('\n');
       for (OptionElement option : protoFile.getOptions()) {
-        sb.append(toString(option));
+        sb.append(toOptionString(option));
       }
     }
     if (!protoFile.getTypes().isEmpty()) {
@@ -127,7 +127,6 @@ public class ProtobufSchemaUtils {
         sb.append(service.toSchema());
       }
     }
-   // String s = sb.toString();
     return sb.toString();
   }
 
@@ -154,7 +153,7 @@ public class ProtobufSchemaUtils {
     if (!type.getOptions().isEmpty()) {
       sb.append('\n');
       for (OptionElement option : type.getOptions()) {
-        appendIndented(sb, toString(option));
+        appendIndented(sb, toOptionString(option));
       }
     }
     if (!type.getFields().isEmpty()) {
@@ -203,7 +202,7 @@ public class ProtobufSchemaUtils {
     }
   }
 
-  private static String toString(OptionElement obj){
+  private static String toOptionString(OptionElement obj) {
     String result;
     if (OptionElement.Kind.STRING.equals(obj.getKind())) {
       String name = escapeChars(obj.getName());
@@ -226,27 +225,27 @@ public class ProtobufSchemaUtils {
         if (curr == 7) {
           // '\a' is ASCII character code 7
           buffer.append("\\a");
-        } else if (curr == '\b'){
+        } else if (curr == '\b') {
           buffer.append("\\b");
-        } else if (curr == '\f'){
+        } else if (curr == '\f') {
           buffer.append("\\f");
         } else if (curr == '\n') {
           buffer.append("\\n");
-        } else if (curr == '\r'){
+        } else if (curr == '\r') {
           buffer.append("\\r");
         } else if (curr == '\t') {
           buffer.append("\\t");
         } else if (curr == 11) {
           // '\v' is ASCII character code 11
           buffer.append("\\v");
-        } else if (curr == '\\'){
+        } else if (curr == '\\') {
           buffer.append("\\\\");
-        } else if (curr == '\''){
+        } else if (curr == '\'') {
           buffer.append("\\\'");
-        } else if (curr == '\"'){
+        } else if (curr == '\"') {
           buffer.append("\\\"");
-        }else {
-          buffer.append(input.charAt(i));
+        } else {
+          buffer.append(curr);
         }
       }
     }
