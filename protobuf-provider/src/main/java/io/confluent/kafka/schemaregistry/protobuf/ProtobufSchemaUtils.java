@@ -251,10 +251,4 @@ public class ProtobufSchemaUtils {
     }
     return buffer.toString();
   }
-
-  public static void main(String[] args) {
-    char my = '\b';
-    System.out.println((int) my);
-    System.out.println(my == 8);
-  }
 }
