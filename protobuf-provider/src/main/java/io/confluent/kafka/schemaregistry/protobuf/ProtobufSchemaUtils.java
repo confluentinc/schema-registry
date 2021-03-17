@@ -106,7 +106,7 @@ public class ProtobufSchemaUtils {
     if (!protoFile.getOptions().isEmpty()) {
       sb.append('\n');
       for (OptionElement option : protoFile.getOptions()) {
-        sb.append(option.toSchemaDeclaration());
+        sb.append(toString(option));
       }
     }
     if (!protoFile.getTypes().isEmpty()) {
@@ -127,7 +127,7 @@ public class ProtobufSchemaUtils {
         sb.append(service.toSchema());
       }
     }
-    String s = sb.toString();
+   // String s = sb.toString();
     return sb.toString();
   }
 
@@ -154,7 +154,7 @@ public class ProtobufSchemaUtils {
     if (!type.getOptions().isEmpty()) {
       sb.append('\n');
       for (OptionElement option : type.getOptions()) {
-        appendIndented(sb, option.toSchemaDeclaration());
+        appendIndented(sb, toString(option));
       }
     }
     if (!type.getFields().isEmpty()) {
@@ -201,5 +201,61 @@ public class ProtobufSchemaUtils {
               .append(line)
               .append('\n');
     }
+  }
+
+  private static String toString(OptionElement obj){
+    String result;
+    if (OptionElement.Kind.STRING.equals(obj.getKind())) {
+      String name = escapeChars(obj.getName());
+      String value = escapeChars(obj.getValue().toString());
+      String formattedName = obj.isParenthesized() ? String.format("(%s)", name) : name;
+      result = String.format("%s = \"%s\"", formattedName, value);
+    } else {
+      result = obj.toSchema();
+    }
+    return String.format("option %s;%n", result);
+  }
+
+  public static String escapeChars(String input) {
+    StringBuilder buffer = new StringBuilder(input.length());
+    for (int i = 0; i < input.length(); i++) {
+      char curr = input.charAt(i);
+      if ((int) curr > 256) {
+        buffer.append("\\u").append(Integer.toHexString((int) curr));
+      } else {
+        if (curr == 7) {
+          // '\a' is ASCII character code 7
+          buffer.append("\\a");
+        } else if (curr == '\b'){
+          buffer.append("\\b");
+        } else if (curr == '\f'){
+          buffer.append("\\f");
+        } else if (curr == '\n') {
+          buffer.append("\\n");
+        } else if (curr == '\r'){
+          buffer.append("\\r");
+        } else if (curr == '\t') {
+          buffer.append("\\t");
+        } else if (curr == 11) {
+          // '\v' is ASCII character code 11
+          buffer.append("\\v");
+        } else if (curr == '\\'){
+          buffer.append("\\\\");
+        } else if (curr == '\''){
+          buffer.append("\\\'");
+        } else if (curr == '\"'){
+          buffer.append("\\\"");
+        }else {
+          buffer.append(input.charAt(i));
+        }
+      }
+    }
+    return buffer.toString();
+  }
+
+  public static void main(String[] args) {
+    char my = '\b';
+    System.out.println((int) my);
+    System.out.println(my == 8);
   }
 }
