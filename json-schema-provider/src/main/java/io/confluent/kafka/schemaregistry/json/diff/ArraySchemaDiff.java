@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.json.diff;
 
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.EmptySchema;
+import org.everit.json.schema.FalseSchema;
 import org.everit.json.schema.Schema;
 
 import java.util.Collections;
@@ -37,6 +38,7 @@ import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_R
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_WITH_FALSE_REMOVED_FROM_CLOSED_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_ITEMS_ADDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_ITEMS_DECREASED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_ITEMS_INCREASED;
@@ -159,8 +161,13 @@ public class ArraySchemaDiff {
               ctx.addDifference(ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
             }
           } else {
-            // incompatible
-            ctx.addDifference(ITEM_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+            if (originalSchema instanceof FalseSchema) {
+              // compatible
+              ctx.addDifference(ITEM_WITH_FALSE_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+            } else {
+              // incompatible
+              ctx.addDifference(ITEM_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+            }
           }
         }
       }
