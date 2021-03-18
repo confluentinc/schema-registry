@@ -252,6 +252,47 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testOptionEscape() throws Exception {
+    String optionSchemaString = "syntax = \"proto3\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "option java_outer_classname = \"TestOptionEscape\";\n"
+        + "option testBackslash = \"backslash\\\\backslash\";\n"
+        + "option testDoubleQuote = \"\\\"something\\\"\";\n"
+        + "option testSingleQuote = \"\\\'something\\\'\";\n"
+        + "option testNewline = \"newline\\n\";\n"
+        + "option testBell = \"bell\\a\";\n"
+        + "option testBackspace = \"backspace\\b\";\n"
+        + "option testFormFeed = \"formFeed\\f\";\n"
+        + "option testCarriageReturn = \"carriageReturn\\r\";\n"
+        + "option testTab = \"tab\\t\";\n"
+        + "option testVerticalTab = \"verticalTab\\v\";\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "message TestOptionEscape {\n"
+        + "    option (source_ref) = \"https://someUrl.com\";\n"
+        + "\n"
+        + "    bool test_bool = 1;\n"
+        + "}\n";
+
+    ProtobufSchema schema = new ProtobufSchema(optionSchemaString);
+    String parsed = schema.canonicalString();
+
+    assertTrue(parsed.contains("backslash\\\\backslash"));
+    assertTrue(parsed.contains("\\\"something\\\""));
+    assertTrue(parsed.contains("\\\'something\\\'"));
+    assertTrue(parsed.contains("newline\\n"));
+    assertTrue(parsed.contains("bell\\a"));
+    assertTrue(parsed.contains("backspace\\b"));
+    assertTrue(parsed.contains("formFeed\\f"));
+    assertTrue(parsed.contains("carriageReturn\\r"));
+    assertTrue(parsed.contains("tab\\t"));
+    assertTrue(parsed.contains("verticalTab\\v"));
+    assertTrue(parsed.contains("https://someUrl.com"));
+  }
+
+  @Test
   public void testRecordToJson() throws Exception {
     DynamicMessage.Builder builder = recordSchema.newMessageBuilder();
     Descriptor desc = builder.getDescriptorForType();
