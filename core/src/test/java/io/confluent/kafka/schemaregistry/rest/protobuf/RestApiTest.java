@@ -225,6 +225,33 @@ public class RestApiTest extends ClusterTestHarness {
     );
   }
 
+  @Test
+  public void testCustomOption() throws Exception {
+    String subject = "test-proto";
+    String enumOptionSchemaString = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "option java_outer_classname = \"TestEnumProtos\";\n"
+        + "option php_namespace = \"Bug\\\\V1\";\n"
+        + "\n"
+        + "message TestEnum {\n"
+        + "  option (some_ref) = \"https://test.com\";\n"
+        + "\n"
+        + "  Suit suit = 1;\n"
+        + "\n"
+        + "  enum Suit {\n"
+        + "    SPADES = 0;\n"
+        + "    HEARTS = 1;\n"
+        + "    DIAMONDS = 2;\n"
+        + "    CLUBS = 3;\n"
+        + "  }\n"
+        + "}\n";
+
+    registerAndVerifySchema(restApp.restClient, enumOptionSchemaString, 1, subject);
+  }
+
   public static void registerAndVerifySchema(
       RestService restService,
       String schemaString,

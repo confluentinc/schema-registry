@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.protobuf;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Ascii;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
@@ -106,7 +107,7 @@ public class ProtobufSchemaUtils {
     if (!protoFile.getOptions().isEmpty()) {
       sb.append('\n');
       for (OptionElement option : protoFile.getOptions()) {
-        sb.append(option.toSchemaDeclaration());
+        sb.append(toString(option));
       }
     }
     if (!protoFile.getTypes().isEmpty()) {
@@ -127,7 +128,6 @@ public class ProtobufSchemaUtils {
         sb.append(service.toSchema());
       }
     }
-    String s = sb.toString();
     return sb.toString();
   }
 
@@ -154,7 +154,7 @@ public class ProtobufSchemaUtils {
     if (!type.getOptions().isEmpty()) {
       sb.append('\n');
       for (OptionElement option : type.getOptions()) {
-        appendIndented(sb, option.toSchemaDeclaration());
+        appendIndented(sb, toString(option));
       }
     }
     if (!type.getFields().isEmpty()) {
@@ -191,6 +191,19 @@ public class ProtobufSchemaUtils {
     return sb.toString();
   }
 
+  private static String toString(OptionElement type) {
+    String result;
+    if (OptionElement.Kind.STRING == type.getKind()) {
+      String name = type.getName();
+      String value = escapeChars(type.getValue().toString());
+      String formattedName = type.isParenthesized() ? String.format("(%s)", name) : name;
+      result = String.format("%s = \"%s\"", formattedName, value);
+    } else {
+      result = type.toSchema();
+    }
+    return String.format("option %s;%n", result);
+  }
+
   private static void appendIndented(StringBuilder sb, String value) {
     List<String> lines = Arrays.asList(value.split("\n"));
     if (lines.size() > 1 && lines.get(lines.size() - 1).isEmpty()) {
@@ -201,5 +214,47 @@ public class ProtobufSchemaUtils {
               .append(line)
               .append('\n');
     }
+  }
+
+  public static String escapeChars(String input) {
+    StringBuilder buffer = new StringBuilder(input.length());
+    for (int i = 0; i < input.length(); i++) {
+      char curr = input.charAt(i);
+      switch (curr) {
+        case Ascii.BEL:
+          buffer.append("\\a");
+          break;
+        case Ascii.BS:
+          buffer.append("\\b");
+          break;
+        case Ascii.FF:
+          buffer.append("\\f");
+          break;
+        case Ascii.NL:
+          buffer.append("\\n");
+          break;
+        case Ascii.CR:
+          buffer.append("\\r");
+          break;
+        case Ascii.HT:
+          buffer.append("\\t");
+          break;
+        case Ascii.VT:
+          buffer.append("\\v");
+          break;
+        case '\\':
+          buffer.append("\\\\");
+          break;
+        case '\'':
+          buffer.append("\\\'");
+          break;
+        case '\"':
+          buffer.append("\\\"");
+          break;
+        default:
+          buffer.append(curr);
+      }
+    }
+    return buffer.toString();
   }
 }
