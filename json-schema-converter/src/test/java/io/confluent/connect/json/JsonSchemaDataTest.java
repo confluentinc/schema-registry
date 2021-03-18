@@ -33,6 +33,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.avro.data.Json;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
@@ -743,6 +744,36 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectRecordWithOptionalAndRequired() {
+    NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
+        .build();
+    StringSchema stringSchema = StringSchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    ObjectSchema schema = ObjectSchema.builder()
+        .addPropertySchema("int8", numberSchema)
+        .addPropertySchema("string", stringSchema)
+        .addRequiredProperty("int8")
+        .title("Record")
+        .build();
+    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+    obj.set("int8", ShortNode.valueOf((short) 12));
+    Schema expectedSchema = SchemaBuilder.struct()
+        .name("Record")
+        .field("int8", Schema.INT8_SCHEMA)
+        .field("string", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Struct struct = new Struct(expectedSchema).put("int8", (byte) 12);
+    JsonSchemaDataConfig jsonSchemaDataConfig = new JsonSchemaDataConfig.Builder()
+        .with(JsonSchemaDataConfig.USE_OPTIONAL_FOR_NON_REQUIRED_CONFIG, true)
+        .build();
+    JsonSchemaData jsonSchemaData = new JsonSchemaData(jsonSchemaDataConfig);
+    checkNonObjectConversion(jsonSchemaData, expectedSchema, struct, schema, obj);
+  }
+
+  @Test
   public void testToConnectRecordWithMissingNonoptional() {
     NumberSchema numberSchema = NumberSchema.builder()
         .requiresInteger(true)
@@ -1244,6 +1275,13 @@ public class JsonSchemaDataTest {
   }
 
   private void checkNonObjectConversion(
+      Schema expectedSchema, Object expected, org.everit.json.schema.Schema schema, JsonNode value
+  ) {
+    checkNonObjectConversion(jsonSchemaData, expectedSchema, expected, schema, value);
+  }
+
+  private void checkNonObjectConversion(
+      JsonSchemaData jsonSchemaData,
       Schema expectedSchema, Object expected, org.everit.json.schema.Schema schema, JsonNode value
   ) {
     Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
