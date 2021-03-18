@@ -32,6 +32,11 @@ import org.apache.kafka.common.config.ConfigException;
 
 public class JsonSchemaDataConfig extends AbstractConfig {
 
+  public static final String USE_OPTIONAL_FOR_NON_REQUIRED_CONFIG = "use.optional.for.nonrequired";
+  public static final boolean USE_OPTIONAL_FOR_NON_REQUIRED_DEFAULT = false;
+  public static final String USE_OPTIONAL_FOR_NON_REQUIRED_DOC =
+      "Whether to set non-required properties to be optional.";
+
   public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.size";
   public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
   public static final String SCHEMAS_CACHE_SIZE_DOC = "Size of the converted schemas cache";
@@ -41,10 +46,15 @@ public class JsonSchemaDataConfig extends AbstractConfig {
   private static final String DECIMAL_FORMAT_DOC =
       "Controls which format this converter will serialize decimals in."
       + " This value is case insensitive and can be either 'BASE64' (default) or 'NUMERIC'";
-  private static final String DECIMAL_FORMAT_DISPLAY = "Decimal Format";
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef().define(
+        USE_OPTIONAL_FOR_NON_REQUIRED_CONFIG,
+        ConfigDef.Type.BOOLEAN,
+        USE_OPTIONAL_FOR_NON_REQUIRED_DEFAULT,
+        ConfigDef.Importance.MEDIUM,
+        USE_OPTIONAL_FOR_NON_REQUIRED_DOC
+    ).define(
         SCHEMAS_CACHE_SIZE_CONFIG,
         ConfigDef.Type.INT,
         SCHEMAS_CACHE_SIZE_DEFAULT,
@@ -63,6 +73,10 @@ public class JsonSchemaDataConfig extends AbstractConfig {
 
   public JsonSchemaDataConfig(Map<?, ?> props) {
     super(baseConfigDef(), props);
+  }
+
+  public boolean useOptionalForNonRequiredProperties() {
+    return getBoolean(USE_OPTIONAL_FOR_NON_REQUIRED_CONFIG);
   }
 
   public int schemaCacheSize() {
