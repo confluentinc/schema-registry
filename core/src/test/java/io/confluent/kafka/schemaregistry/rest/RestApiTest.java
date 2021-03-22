@@ -137,6 +137,34 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRegisterDiffSchemaType() throws Exception {
+    String subject = "testSubject";
+    String avroSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    String jsonSchema = io.confluent.kafka.schemaregistry.rest.json.RestApiTest.getRandomJsonSchemas(1).get(0);
+    String protobufSchema = io.confluent.kafka.schemaregistry.rest.protobuf.RestApiTest.getRandomProtobufSchemas(1).get(0);
+
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+
+    int id1 = restApp.restClient.registerSchema(avroSchema, subject);
+    assertEquals("1st schema registered globally should have id 1", 1,
+        id1);
+
+    boolean isCompatible = restApp.restClient.testCompatibility(jsonSchema, "JSON", null, subject, "latest");
+    assertTrue("Different schema type is allowed when compatibility is NONE", isCompatible);
+
+    int id2 = restApp.restClient.registerSchema(jsonSchema, "JSON", null, subject);
+    assertEquals("2nd schema registered globally should have id 2", 2,
+        id2);
+
+    isCompatible = restApp.restClient.testCompatibility(protobufSchema, "PROTOBUF", null, subject, "latest");
+    assertTrue("Different schema type is allowed when compatibility is NONE", isCompatible);
+
+    int id3 = restApp.restClient.registerSchema(protobufSchema, "PROTOBUF", null, subject);
+    assertEquals("3rd schema registered globally should have id 3", 3,
+        id3);
+  }
+
+  @Test
   public void testImportDifferentSchemaOnSameID() throws Exception {
     String schema1 = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
