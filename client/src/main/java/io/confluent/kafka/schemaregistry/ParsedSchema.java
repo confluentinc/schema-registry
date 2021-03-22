@@ -101,9 +101,11 @@ public interface ParsedSchema {
    */
   default List<String> isCompatible(
       CompatibilityLevel level, List<? extends ParsedSchema> previousSchemas) {
-    for (ParsedSchema previousSchema : previousSchemas) {
-      if (!schemaType().equals(previousSchema.schemaType())) {
-        return Collections.singletonList("Incompatible because of different schema type");
+    if (level != CompatibilityLevel.NONE) {
+      for (ParsedSchema previousSchema : previousSchemas) {
+        if (!schemaType().equals(previousSchema.schemaType())) {
+          return Collections.singletonList("Incompatible because of different schema type");
+        }
       }
     }
     return CompatibilityChecker.checker(level).isCompatible(this, previousSchemas);
