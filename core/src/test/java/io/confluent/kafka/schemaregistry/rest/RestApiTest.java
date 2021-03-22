@@ -149,17 +149,17 @@ public class RestApiTest extends ClusterTestHarness {
     String subject = "testSubject";
 
     String schemaString = "{\"type\":\"record\","
-            + "\"name\":\"myrecord\","
-            + "\"fields\":"
-            + "[{\"type\":\"string\",\"default\":null,\"name\":"
-            + "\"f" + "\"}]}";
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"default\":null,\"name\":"
+        + "\"f" + "\"}]}";
     String schema = AvroUtils.parseSchema(schemaString).canonicalString();
 
     try {
       restApp.restClient.testCompatibility(schema, subject, "latest");
       fail("Testing compatibility for schema with invalid default should fail with "
-              + Errors.INVALID_SCHEMA_ERROR_CODE
-              + " (invalid schema)");
+          + Errors.INVALID_SCHEMA_ERROR_CODE
+          + " (invalid schema)");
     } catch (RestClientException rce) {
       assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
     }
@@ -167,11 +167,39 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       restApp.restClient.registerSchema(schema, subject);
       fail("Registering schema with invalid default should fail with "
-              + Errors.INVALID_SCHEMA_ERROR_CODE
-              + " (invalid schema)");
+          + Errors.INVALID_SCHEMA_ERROR_CODE
+          + " (invalid schema)");
     } catch (RestClientException rce) {
       assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
     }
+  }
+
+  @Test
+  public void testRegisterDiffSchemaType() throws Exception {
+    String subject = "testSubject";
+    String avroSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    String jsonSchema = io.confluent.kafka.schemaregistry.rest.json.RestApiTest.getRandomJsonSchemas(1).get(0);
+    String protobufSchema = io.confluent.kafka.schemaregistry.rest.protobuf.RestApiTest.getRandomProtobufSchemas(1).get(0);
+
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+
+    int id1 = restApp.restClient.registerSchema(avroSchema, subject);
+    assertEquals("1st schema registered globally should have id 1", 1,
+        id1);
+
+    boolean isCompatible = restApp.restClient.testCompatibility(jsonSchema, "JSON", null, subject, "latest", false).isEmpty();
+    assertTrue("Different schema type is allowed when compatibility is NONE", isCompatible);
+
+    int id2 = restApp.restClient.registerSchema(jsonSchema, "JSON", null, subject);
+    assertEquals("2nd schema registered globally should have id 2", 2,
+        id2);
+
+    isCompatible = restApp.restClient.testCompatibility(protobufSchema, "PROTOBUF", null, subject, "latest", false).isEmpty();
+    assertTrue("Different schema type is allowed when compatibility is NONE", isCompatible);
+
+    int id3 = restApp.restClient.registerSchema(protobufSchema, "PROTOBUF", null, subject);
+    assertEquals("3rd schema registered globally should have id 3", 3,
+        id3);
   }
 
   @Test
