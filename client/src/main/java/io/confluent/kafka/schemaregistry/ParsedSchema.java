@@ -99,9 +99,11 @@ public interface ParsedSchema {
    */
   default boolean isCompatible(CompatibilityLevel level,
                                List<? extends ParsedSchema> previousSchemas) {
-    for (ParsedSchema previousSchema : previousSchemas) {
-      if (!schemaType().equals(previousSchema.schemaType())) {
-        return false;
+    if (level != CompatibilityLevel.NONE) {
+      for (ParsedSchema previousSchema : previousSchemas) {
+        if (!schemaType().equals(previousSchema.schemaType())) {
+          return false;
+        }
       }
     }
     return CompatibilityChecker.checker(level).isCompatible(this, previousSchemas);
