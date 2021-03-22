@@ -398,7 +398,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public void reset() {
+  public synchronized void reset() {
     schemaCache.clear();
     idCache.clear();
     versionCache.clear();
