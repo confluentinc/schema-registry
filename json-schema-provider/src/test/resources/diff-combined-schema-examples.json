@@ -487,7 +487,7 @@
     "compatible": true
   },
   {
-    "description": "Detect compatible change from oneOf to allOf schema with more properties",
+    "description": "Detect compatible change from allOf to anyOf schema with more properties",
     "original_schema": {
       "type": "object",
       "properties": {
@@ -521,4 +521,120 @@
     ],
     "compatible": true
   },
+  {
+    "description": "Detect compatible change from non-combined to anyOf schema",
+    "original_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from non-combined to oneOf schema",
+    "original_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from non-combined to allOf schema",
+    "original_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible change from non-combined to allOf schema",
+    "original_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "TYPE_CHANGED #/properties/prop1"
+    ],
+    "compatible": false
+  }
 ]
