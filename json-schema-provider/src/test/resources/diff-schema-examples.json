@@ -1803,6 +1803,190 @@
     "compatible": true
   },
   {
+    "description": "Detect adding to closed content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": false
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ],
+      "additionalItems": true
+    },
+    "changes": [
+      "ITEM_ADDED_TO_CLOSED_CONTENT_MODEL #/items/2",
+      "ADDITIONAL_ITEMS_ADDED #/additionalItems"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removing from closed content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ],
+      "additionalItems": false
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": true
+    },
+    "changes": [
+      "ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL #/items/2",
+      "ADDITIONAL_ITEMS_ADDED #/additionalItems"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removing from open content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": true
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": true
+    },
+    "changes": [
+      "ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL #/items/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect adding to closed content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": false
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": false
+    },
+    "changes": [
+      "ITEM_ADDED_TO_CLOSED_CONTENT_MODEL #/items/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removing number from closed content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": false
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": { "type": "number" }
+    },
+    "changes": [
+      "ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/1",
+      "ADDITIONAL_ITEMS_ADDED #/additionalItems"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect adding number to partially open content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": { "type": "number" }
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": true
+    },
+    "changes": [
+      "ITEM_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/1",
+      "ADDITIONAL_ITEMS_EXTENDED #/additionalItems"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect change to oneOf schema",
     "original_schema": {
       "type": "string"
