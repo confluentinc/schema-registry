@@ -551,7 +551,7 @@ public class RestService implements Configurable {
                     registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
                     requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
     if (verbose) {
-      return response.getMessages();
+      return response.getMessages() == null ? Collections.emptyList() : response.getMessages();
     } else {
       return response.getIsCompatible()
               ? Collections.emptyList() : Collections.singletonList("Schemas are incompatible");
