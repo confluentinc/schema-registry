@@ -48,7 +48,6 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
   private final Map<Schema, DatumWriter<Object>> datumWriterCache = new ConcurrentHashMap<>();
-  private boolean configured = false;
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
@@ -61,7 +60,6 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
             .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
-    configured = true;
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -89,8 +87,11 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected byte[] serializeImpl(
       String subject, Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
-    if (!configured) {
-      throw new InvalidConfigurationException("You must configure() before serialize()");
+    if (schemaRegistry == null) {
+      StringBuilder userFriendlyMsgBuilder = new StringBuilder();
+      userFriendlyMsgBuilder.append("You must configure() before serialize()");
+      userFriendlyMsgBuilder.append(" or use serializer constructor with SchemaRegistryClient");
+      throw new InvalidConfigurationException(userFriendlyMsgBuilder.toString());
     }
     // null needs to treated specially since the client most likely just wants to send
     // an individual null value instead of making the subject a null type. Also, null in
