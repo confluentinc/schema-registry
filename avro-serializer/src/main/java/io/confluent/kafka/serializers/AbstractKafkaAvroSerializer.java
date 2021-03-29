@@ -147,13 +147,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
           throws IOException {
-        BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
+    BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
-        DatumWriter<Object> writer;
-        writer = datumWriterCache.computeIfAbsent(rawSchema,
-          v -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
-        );
-        writer.write(value, encoder);
-        encoder.flush();
+    DatumWriter<Object> writer;
+    writer = datumWriterCache.computeIfAbsent(rawSchema,
+      v -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
+    );
+    writer.write(value, encoder);
+    encoder.flush();
   }
 }
