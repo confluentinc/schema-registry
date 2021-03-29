@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -29,6 +30,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverte
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class RegisterSchemaRequest {
 
   private Integer version;

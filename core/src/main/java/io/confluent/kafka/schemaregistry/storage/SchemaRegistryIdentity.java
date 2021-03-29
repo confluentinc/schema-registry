@@ -16,6 +16,9 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -27,6 +30,8 @@ import java.nio.ByteBuffer;
  * The identity of a schema registry instance. The leader will store the json representation of its
  * identity in Zookeeper.
  */
+@JsonInclude(Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SchemaRegistryIdentity {
 
   public static final int CURRENT_VERSION = 1;
