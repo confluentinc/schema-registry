@@ -47,6 +47,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
   private final Map<Schema, DatumWriter<Object>> datumWriterCache = new ConcurrentHashMap<>();
+  private boolean configured = false;
 
   protected void configure(KafkaAvroSerializerConfig config) {
     configureClientProperties(config, new AvroSchemaProvider());
@@ -55,6 +56,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
     useLatestVersion = config.useLatestVersion();
     latestCompatStrict = config.getLatestCompatibilityStrict();
+    configured = true;
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -68,6 +70,9 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected byte[] serializeImpl(
       String subject, Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
+    if (!configured) {
+      throw new InvalidConfigurationException("You must configure() before serialize()");
+    }
     // null needs to treated specially since the client most likely just wants to send
     // an individual null value instead of making the subject a null type. Also, null in
     // Kafka has a special meaning for deletion in a topic with the compact retention policy.
@@ -107,19 +112,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
               "Unrecognized bytes object of type: " + value.getClass().getName());
         }
       } else {
-        BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
-        DatumWriter<Object> writer;
-        writer = datumWriterCache.computeIfAbsent(rawSchema, v -> {
-          if (value instanceof SpecificRecord) {
-            return new SpecificDatumWriter<>(rawSchema);
-          } else if (useSchemaReflection) {
-            return new ReflectDatumWriter<>(rawSchema);
-          } else {
-            return new GenericDatumWriter<>(rawSchema);
-          }
-        });
-        writer.write(value, encoder);
-        encoder.flush();
+        writeDatum(out, value, rawSchema);
       }
       byte[] bytes = out.toByteArray();
       out.close();
@@ -131,5 +124,22 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     } catch (RestClientException e) {
       throw toKafkaException(e, restClientErrorMsg + schema);
     }
+  }
+
+  private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
+          throws IOException {
+    BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
+    DatumWriter<Object> writer;
+    writer = datumWriterCache.computeIfAbsent(rawSchema, v -> {
+      if (value instanceof SpecificRecord) {
+        return new SpecificDatumWriter<>(rawSchema);
+      } else if (useSchemaReflection) {
+        return new ReflectDatumWriter<>(rawSchema);
+      } else {
+        return new GenericDatumWriter<>(rawSchema);
+      }
+    });
+    writer.write(value, encoder);
+    encoder.flush();
   }
 }
