@@ -972,12 +972,14 @@ public class JsonSchemaData {
         for (Map.Entry<String, org.everit.json.schema.Schema> property : sortedMap.values()) {
           String subFieldName = property.getKey();
           org.everit.json.schema.Schema subSchema = property.getValue();
-          builder.field(subFieldName, toConnectSchema(subSchema));
+          boolean isFieldOptional = config.useOptionalForNonRequiredProperties()
+              && !objectSchema.getRequiredProperties().contains(subFieldName);
+          builder.field(subFieldName, toConnectSchema(subSchema, null, isFieldOptional));
         }
       }
     } else if (jsonSchema instanceof ReferenceSchema) {
       ReferenceSchema refSchema = (ReferenceSchema) jsonSchema;
-      return toConnectSchema(refSchema.getReferredSchema(), version);
+      return toConnectSchema(refSchema.getReferredSchema(), version, forceOptional);
     } else {
       throw new DataException("Unsupported schema type " + jsonSchema.getClass().getName());
     }

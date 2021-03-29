@@ -34,8 +34,8 @@ public class ExtendedWidget {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ExtendedWidget that = (ExtendedWidget) o;
-        return name.equals(that.name) &&
-                age.equals(that.age);
+        return Objects.equals(name, that.name) &&
+                Objects.equals(age, that.age);
     }
 
     @Override

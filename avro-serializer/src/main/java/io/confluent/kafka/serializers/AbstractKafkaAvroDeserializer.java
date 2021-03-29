@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
@@ -45,6 +46,8 @@ import kafka.utils.VerifiableProperties;
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   protected boolean useSpecificAvroReader = false;
+  protected boolean avroReflectionAllowNull = false;
+  protected boolean avroUseLogicalTypeConverters = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
   private final Map<SchemaPair, DatumReader<?>> datumReaderCache = new ConcurrentHashMap<>();
 
@@ -56,6 +59,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     configureClientProperties(config, new AvroSchemaProvider());
     useSpecificAvroReader = config
         .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
+    avroReflectionAllowNull = config
+        .getBoolean(KafkaAvroDeserializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
+    avroUseLogicalTypeConverters = config
+            .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -186,13 +193,21 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       boolean writerSchemaIsPrimitive =
               AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
       if (writerSchemaIsPrimitive) {
-        return new GenericDatumReader<>(writerSchema, finalReaderSchema);
+        GenericData genericData = new GenericData();
+        if (avroUseLogicalTypeConverters) {
+          AvroData.addLogicalTypeConversion(genericData);
+        }
+        return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       } else if (useSchemaReflection) {
         return new ReflectDatumReader<>(writerSchema, finalReaderSchema);
       } else if (useSpecificAvroReader) {
         return new SpecificDatumReader<>(writerSchema, finalReaderSchema);
       } else {
-        return new GenericDatumReader<>(writerSchema, finalReaderSchema);
+        GenericData genericData = new GenericData();
+        if (avroUseLogicalTypeConverters) {
+          AvroData.addLogicalTypeConversion(genericData);
+        }
+        return new GenericDatumReader<>(writerSchema, finalReaderSchema, genericData);
       }
     });
   }
@@ -262,15 +277,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private Schema getReflectionReaderSchema(Schema writerSchema) {
-    // shall we use ReflectData.AllowNull.get() instead?
-    Class<?> readerClass = ReflectData.get().getClass(writerSchema);
+    ReflectData reflectData = avroReflectionAllowNull ? ReflectData.AllowNull.get()
+        : ReflectData.get();
+    Class<?> readerClass = reflectData.getClass(writerSchema);
     if (readerClass == null) {
       throw new SerializationException("Could not find class "
           + writerSchema.getFullName()
           + " specified in writer's schema whilst finding reader's "
           + "schema for a reflected class.");
     }
-    return ReflectData.get().getSchema(readerClass);
+    return reflectData.getSchema(readerClass);
   }
 
   class DeserializationContext {

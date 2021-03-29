@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
+import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import org.junit.Test;
@@ -148,17 +149,17 @@ public class RestApiTest extends ClusterTestHarness {
     String subject = "testSubject";
 
     String schemaString = "{\"type\":\"record\","
-            + "\"name\":\"myrecord\","
-            + "\"fields\":"
-            + "[{\"type\":\"string\",\"default\":null,\"name\":"
-            + "\"f" + "\"}]}";
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"default\":null,\"name\":"
+        + "\"f" + "\"}]}";
     String schema = AvroUtils.parseSchema(schemaString).canonicalString();
 
     try {
       restApp.restClient.testCompatibility(schema, subject, "latest");
       fail("Testing compatibility for schema with invalid default should fail with "
-              + Errors.INVALID_SCHEMA_ERROR_CODE
-              + " (invalid schema)");
+          + Errors.INVALID_SCHEMA_ERROR_CODE
+          + " (invalid schema)");
     } catch (RestClientException rce) {
       assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
     }
@@ -166,11 +167,39 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       restApp.restClient.registerSchema(schema, subject);
       fail("Registering schema with invalid default should fail with "
-              + Errors.INVALID_SCHEMA_ERROR_CODE
-              + " (invalid schema)");
+          + Errors.INVALID_SCHEMA_ERROR_CODE
+          + " (invalid schema)");
     } catch (RestClientException rce) {
       assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
     }
+  }
+
+  @Test
+  public void testRegisterDiffSchemaType() throws Exception {
+    String subject = "testSubject";
+    String avroSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    String jsonSchema = io.confluent.kafka.schemaregistry.rest.json.RestApiTest.getRandomJsonSchemas(1).get(0);
+    String protobufSchema = io.confluent.kafka.schemaregistry.rest.protobuf.RestApiTest.getRandomProtobufSchemas(1).get(0);
+
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+
+    int id1 = restApp.restClient.registerSchema(avroSchema, subject);
+    assertEquals("1st schema registered globally should have id 1", 1,
+        id1);
+
+    boolean isCompatible = restApp.restClient.testCompatibility(jsonSchema, "JSON", null, subject, "latest", false).isEmpty();
+    assertTrue("Different schema type is allowed when compatibility is NONE", isCompatible);
+
+    int id2 = restApp.restClient.registerSchema(jsonSchema, "JSON", null, subject);
+    assertEquals("2nd schema registered globally should have id 2", 2,
+        id2);
+
+    isCompatible = restApp.restClient.testCompatibility(protobufSchema, "PROTOBUF", null, subject, "latest", false).isEmpty();
+    assertTrue("Different schema type is allowed when compatibility is NONE", isCompatible);
+
+    int id3 = restApp.restClient.registerSchema(protobufSchema, "PROTOBUF", null, subject);
+    assertEquals("3rd schema registered globally should have id 3", 3,
+        id3);
   }
 
   @Test
@@ -268,6 +297,47 @@ public class RestApiTest extends ClusterTestHarness {
                                                                     versionOfRegisteredSchema))
                                               .isEmpty();
     assertFalse("Schema should be incompatible with specified version", isCompatible);
+  }
+
+  @Test
+  public void testIncompatibleSchemaBySubject() throws Exception {
+    String subject = "testSubject";
+
+    String schema1String = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},{\"type\":\"string\",\"name\":\"f2\"}]}";
+    String schema1 = AvroUtils.parseSchema(schema1String).canonicalString();
+
+    String schema2String = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}";
+    String schema2 = AvroUtils.parseSchema(schema2String).canonicalString();
+
+    String schema3String = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},{\"type\":\"string\",\"name\":\"f3\"}]}";
+    String schema3 = AvroUtils.parseSchema(schema3String).canonicalString();
+
+    restApp.restClient.registerSchema(schema1, subject);
+    restApp.restClient.registerSchema(schema2, subject);
+
+    restApp.restClient.updateCompatibility(CompatibilityLevel.FORWARD_TRANSITIVE.name, subject);
+
+    //schema3 is compatible with schema2, but not compatible with schema1
+    boolean isCompatible = restApp.restClient.testCompatibility(schema3, subject, "latest").isEmpty();
+    assertTrue("Schema is compatible with the latest version", isCompatible);
+    isCompatible = restApp.restClient.testCompatibility(schema3, subject, null).isEmpty();
+    assertFalse("Schema should be incompatible with FORWARD_TRANSITIVE setting", isCompatible);
+    try {
+      restApp.restClient.registerSchema(schema3String, subject);
+      fail("Schema register should fail since schema is incompatible");
+    } catch (RestClientException e) {
+      assertEquals("Schema register should fail since schema is incompatible",
+          Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, e.getErrorCode());
+    }
   }
 
   @Test
@@ -370,6 +440,14 @@ public class RestApiTest extends ClusterTestHarness {
                  FORWARD.name,
                  restApp.restClient.getConfig(subject).getCompatibilityLevel());
 
+    // delete subject compatibility
+    restApp.restClient.deleteSubjectConfig(subject);
+
+    assertEquals("Compatibility level for this subject should be reverted to none",
+        NONE.name,
+        restApp.restClient
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true)
+            .getCompatibilityLevel());
   }
 
   @Test
@@ -728,6 +806,10 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     boolean result = restApp.restClient.testCompatibility(schema, "non-existent-subject", "latest")
                                        .isEmpty();
+    assertTrue("Compatibility succeeds", result);
+
+    result = restApp.restClient.testCompatibility(schema, "non-existent-subject", null)
+        .isEmpty();
     assertTrue("Compatibility succeeds", result);
   }
 
@@ -1411,6 +1493,45 @@ public class RestApiTest extends ClusterTestHarness {
       if (connection != null) {
         connection.disconnect();
       }
+    }
+  }
+
+  @Test
+  public void testGlobalMode() throws Exception {
+    // test default globalMode
+    assertEquals("READWRITE", restApp.restClient.getMode().getMode());
+
+    //test subjectMode override globalMode
+    String subject = "testSubject";
+    String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
+
+    try {
+      restApp.restClient.getMode(subject).getMode();
+      fail(String.format("Subject %s should not be found when there's no mode override", subject));
+    } catch (RestClientException e) {
+      assertEquals(String.format("No mode override for subject %s, get mode should return Subject Not Found", subject),
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
+    assertEquals("READWRITE", restApp.restClient.getMode(subject, true).getMode());
+
+    restApp.restClient.setMode("READONLY", null);
+    restApp.restClient.setMode("READWRITE", subject);
+    assertEquals("READWRITE", restApp.restClient.getMode(subject).getMode());
+
+    //test delete subject mode
+    restApp.restClient.deleteSubjectMode(subject);
+    assertEquals("READONLY", restApp.restClient.getMode(subject, true).getMode());
+
+    //test READONLY_OVERRIDE globalMode override subjectMode
+    restApp.restClient.setMode("READONLY_OVERRIDE", null);
+    assertEquals("READONLY_OVERRIDE", restApp.restClient.getMode(subject).getMode());
+    try {
+      restApp.restClient.registerSchema(schema, "testSubject2");
+      fail(String.format("Subject %s is in read-only mode", "testSubject2"));
+    } catch (RestClientException rce) {
+      assertEquals("Subject is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
+          .getErrorCode());
     }
   }
 

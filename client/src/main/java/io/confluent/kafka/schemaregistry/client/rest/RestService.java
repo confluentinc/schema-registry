@@ -80,9 +80,6 @@ public class RestService implements Configurable {
   private static final TypeReference<Config> GET_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
       };
-  private static final TypeReference<List<ModeGetResponse>> GET_MODES_RESPONSE_TYPE =
-      new TypeReference<List<ModeGetResponse>>() {
-      };
   private static final TypeReference<ModeGetResponse> GET_MODE_RESPONSE_TYPE =
       new TypeReference<ModeGetResponse>() {
       };
@@ -135,8 +132,11 @@ public class RestService implements Configurable {
   private static final TypeReference<? extends List<Integer>> DELETE_SUBJECT_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
       };
-  private static final TypeReference<String> DELETE_MODE_RESPONSE_TYPE =
-      new TypeReference<String>() {
+  private static final TypeReference<ModeGetResponse> DELETE_SUBJECT_MODE_RESPONSE_TYPE =
+      new TypeReference<ModeGetResponse>() {
+      };
+  private static final TypeReference<Config> DELETE_SUBJECT_CONFIG_RESPONSE_TYPE =
+      new TypeReference<Config>() {
       };
   private static final TypeReference<ServerClusterId> GET_CLUSTER_ID_RESPONSE_TYPE =
       new TypeReference<ServerClusterId>() {
@@ -341,12 +341,22 @@ public class RestService implements Configurable {
     }
   }
 
-  // Allow subclasses to call
-  protected <T> T httpRequest(String path,
-                              String method,
-                              byte[] requestBodyData,
-                              Map<String, String> requestProperties,
-                              TypeReference<T> responseFormat)
+  /**
+   * Send an HTTP request.
+   *
+   * @param path              The relative path
+   * @param method            HTTP method ("GET", "POST", "PUT", etc.)
+   * @param requestBodyData   Bytes to be sent in the request body.
+   * @param requestProperties HTTP header properties.
+   * @param responseFormat    Expected format of the response to the HTTP request.
+   * @param <T>               The type of the deserialized response to the HTTP request.
+   * @return The deserialized response to the HTTP request, or null if no data is expected.
+   */
+  public <T> T httpRequest(String path,
+                           String method,
+                           byte[] requestBodyData,
+                           Map<String, String> requestProperties,
+                           TypeReference<T> responseFormat)
       throws IOException, RestClientException {
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
       String baseUrl = baseUrls.current();
@@ -504,6 +514,13 @@ public class RestService implements Configurable {
     return response.getId();
   }
 
+  public List<String> testCompatibility(String schemaString, String subject, boolean verbose)
+      throws IOException, RestClientException {
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    return testCompatibility(request, subject, null, verbose);
+  }
+
   // Visible for testing
   public List<String> testCompatibility(String schemaString, String subject, String version)
       throws IOException, RestClientException {
@@ -541,17 +558,23 @@ public class RestService implements Configurable {
                                         String version,
                                         boolean verbose)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath(
-        "/compatibility/subjects/{subject}/versions/{version}");
-    builder.queryParam("verbose", verbose);
-    String path = builder.build(subject, version).toString();
+    String path;
+    if (version != null) {
+      path = UriBuilder.fromPath("/compatibility/subjects/{subject}/versions/{version}")
+          .queryParam("verbose", verbose)
+          .build(subject, version).toString();
+    } else {
+      path = UriBuilder.fromPath("/compatibility/subjects/{subject}/versions/")
+          .queryParam("verbose", verbose)
+          .build(subject).toString();
+    }
 
     CompatibilityCheckResponse response =
         httpRequest(path, "POST",
                     registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
                     requestProperties, COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE);
     if (verbose) {
-      return response.getMessages();
+      return response.getMessages() == null ? Collections.emptyList() : response.getMessages();
     } else {
       return response.getIsCompatible()
               ? Collections.emptyList() : Collections.singletonList("Schemas are incompatible");
@@ -590,19 +613,42 @@ public class RestService implements Configurable {
 
   public Config getConfig(String subject)
       throws IOException, RestClientException {
-    return getConfig(DEFAULT_REQUEST_PROPERTIES, subject);
+    return getConfig(DEFAULT_REQUEST_PROPERTIES, subject, false);
   }
 
   public Config getConfig(Map<String, String> requestProperties,
                           String subject)
       throws IOException, RestClientException {
+    return getConfig(requestProperties, subject, false);
+  }
+
+  public Config getConfig(Map<String, String> requestProperties,
+                          String subject,
+                          boolean defaultToGlobal)
+      throws IOException, RestClientException {
     String path = subject != null
-                  ? UriBuilder.fromPath("/config/{subject}").build(subject).toString()
-                  : "/config";
+        ? UriBuilder.fromPath("/config/{subject}")
+        .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
+        : "/config";
 
     Config config =
         httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
     return config;
+  }
+
+  public Config deleteSubjectConfig(String subject)
+      throws IOException, RestClientException {
+    return deleteSubjectConfig(DEFAULT_REQUEST_PROPERTIES, subject);
+  }
+
+  public Config deleteSubjectConfig(Map<String, String> requestProperties, String subject)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/config/{subject}");
+    String path = builder.build(subject).toString();
+
+    Config response = httpRequest(path, "DELETE", null, requestProperties,
+        DELETE_SUBJECT_CONFIG_RESPONSE_TYPE);
+    return response;
   }
 
   public ModeUpdateRequest setMode(String mode)
@@ -636,18 +682,39 @@ public class RestService implements Configurable {
 
   public ModeGetResponse getMode()
       throws IOException, RestClientException {
-    return getMode(null);
+    return getMode(null, false);
   }
 
   public ModeGetResponse getMode(String subject)
       throws IOException, RestClientException {
+    return getMode(subject, false);
+  }
+
+  public ModeGetResponse getMode(String subject, boolean defaultToGlobal)
+      throws IOException, RestClientException {
     String path = subject != null
-                  ? UriBuilder.fromPath("/mode/{subject}").build(subject).toString()
-                  : "/mode";
+        ? UriBuilder.fromPath("/mode/{subject}")
+        .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
+        : "/mode";
 
     ModeGetResponse mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
     return mode;
+  }
+
+  public ModeGetResponse deleteSubjectMode(String subject)
+      throws IOException, RestClientException {
+    return deleteSubjectMode(DEFAULT_REQUEST_PROPERTIES, subject);
+  }
+
+  public ModeGetResponse deleteSubjectMode(Map<String, String> requestProperties, String subject)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/mode/{subject}");
+    String path = builder.build(subject).toString();
+
+    ModeGetResponse response = httpRequest(path, "DELETE", null, requestProperties,
+        DELETE_SUBJECT_MODE_RESPONSE_TYPE);
+    return response;
   }
 
   public List<Schema> getSchemas(

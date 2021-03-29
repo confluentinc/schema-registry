@@ -16,6 +16,8 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,20 +35,31 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
   }
 
   /**
+   * Invoked after the cache is initialized.
+   */
+  @Override
+  public void cacheInitialized() {
+    for (SchemaUpdateHandler handler : handlers) {
+      handler.cacheInitialized();
+    }
+  }
+
+  /**
    * Invoked before every new K,V pair written to the store
    *
    * @param key   Key associated with the data
    * @param value Data written to the store
    */
-  public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
-                                TopicPartition tp, long offset, long timestamp) {
+  @Override
+  public ValidationStatus validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
+                                         TopicPartition tp, long offset, long timestamp) {
     for (SchemaUpdateHandler handler : handlers) {
-      boolean valid = handler.validateUpdate(key, value, tp, offset, timestamp);
-      if (!valid) {
-        return false;
+      ValidationStatus status = handler.validateUpdate(key, value, tp, offset, timestamp);
+      if (status != ValidationStatus.SUCCESS) {
+        return status;
       }
     }
-    return true;
+    return ValidationStatus.SUCCESS;
   }
 
   /**
@@ -68,10 +81,22 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
   }
 
   @Override
-  public void checkpoint(int count) {
+  public Map<TopicPartition, Long> checkpoint(int count) {
+    Map<TopicPartition, Long> result = null;
     for (SchemaUpdateHandler handler : handlers) {
-      handler.checkpoint(count);
+      Map<TopicPartition, Long> offsets = handler.checkpoint(count);
+      if (offsets != null) {
+        if (result != null) {
+          for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
+            // When merging, choose the smaller offset
+            result.merge(entry.getKey(), entry.getValue(), Long::min);
+          }
+        } else {
+          result = new HashMap<>(offsets);
+        }
+      }
     }
+    return result;
   }
 
   @Override

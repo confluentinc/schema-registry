@@ -1588,6 +1588,70 @@
     "compatible": false
   },
   {
+    "description": "Detect adding empty schema to open content model",
+    "original_schema": {
+      "additionalProperties": true
+    },
+    "update_schema": {
+      "additionalProperties": true,
+      "properties": {
+        "foo": true
+      }
+    },
+    "changes": [
+      "PROPERTY_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL #/properties/foo"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removing empty schema from open content model",
+    "original_schema": {
+      "additionalProperties": true,
+      "properties": {
+        "foo": true
+      }
+    },
+    "update_schema": {
+      "additionalProperties": true
+    },
+    "changes": [
+      "PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL #/properties/foo"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect adding false to closed content model",
+    "original_schema": {
+      "additionalProperties": false
+    },
+    "update_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "foo": false
+      }
+    },
+    "changes": [
+      "OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL #/properties/foo"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removing false from closed content model",
+    "original_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "foo": false
+      }
+    },
+    "update_schema": {
+      "additionalProperties": false
+    },
+    "changes": [
+      "PROPERTY_WITH_FALSE_REMOVED_FROM_CLOSED_CONTENT_MODEL #/properties/foo"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect changes to additional properties schema",
     "original_schema": {
       "additionalProperties": {
@@ -1633,6 +1697,294 @@
       "TYPE_CHANGED #/additionalItems"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect adding empty schema to open content model for array",
+    "original_schema": {
+      "type": "array",
+      "additionalItems": true,
+      "items": [
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "update_schema": {
+      "type": "array",
+      "additionalItems": true,
+      "items": [
+        {
+          "type": "number"
+        },
+        true
+      ]
+    },
+    "changes": [
+      "ITEM_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL #/items/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removing empty schema from open content model for array",
+    "original_schema": {
+      "type": "array",
+      "additionalItems": true,
+      "items": [
+        {
+          "type": "number"
+        },
+        true
+      ]
+    },
+    "update_schema": {
+      "type": "array",
+      "additionalItems": true,
+      "items": [
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "changes": [
+      "ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL #/items/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect adding false to closed content model for array",
+    "original_schema": {
+      "type": "array",
+      "additionalItems": false,
+      "items": [
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "update_schema": {
+      "type": "array",
+      "additionalItems": false,
+      "items": [
+        {
+          "type": "number"
+        },
+        false
+      ]
+    },
+    "changes": [
+      "ITEM_ADDED_TO_CLOSED_CONTENT_MODEL #/items/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removing false from closed content model for array",
+    "original_schema": {
+      "type": "array",
+      "additionalItems": false,
+      "items": [
+        {
+          "type": "number"
+        },
+        false
+      ]
+    },
+    "update_schema": {
+      "type": "array",
+      "additionalItems": false,
+      "items": [
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "changes": [
+      "ITEM_WITH_FALSE_REMOVED_FROM_CLOSED_CONTENT_MODEL #/items/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect adding to closed content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": false
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ],
+      "additionalItems": true
+    },
+    "changes": [
+      "ITEM_ADDED_TO_CLOSED_CONTENT_MODEL #/items/2",
+      "ADDITIONAL_ITEMS_ADDED #/additionalItems"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removing from closed content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ],
+      "additionalItems": false
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": true
+    },
+    "changes": [
+      "ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL #/items/2",
+      "ADDITIONAL_ITEMS_ADDED #/additionalItems"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removing from open content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": true
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": true
+    },
+    "changes": [
+      "ITEM_REMOVED_FROM_OPEN_CONTENT_MODEL #/items/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect adding to closed content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": false
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": false
+    },
+    "changes": [
+      "ITEM_ADDED_TO_CLOSED_CONTENT_MODEL #/items/1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect removing number from closed content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": false
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": { "type": "number" }
+    },
+    "changes": [
+      "ITEM_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/1",
+      "ADDITIONAL_ITEMS_ADDED #/additionalItems"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect adding number to partially open content model for array",
+    "original_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": { "type": "number" }
+    },
+    "update_schema": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": true
+    },
+    "changes": [
+      "ITEM_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL #/items/1",
+      "ADDITIONAL_ITEMS_EXTENDED #/additionalItems"
+    ],
+    "compatible": true
   },
   {
     "description": "Detect change to oneOf schema",

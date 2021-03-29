@@ -743,6 +743,36 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectRecordWithOptionalAndRequired() {
+    NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
+        .build();
+    StringSchema stringSchema = StringSchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    ObjectSchema schema = ObjectSchema.builder()
+        .addPropertySchema("int8", numberSchema)
+        .addPropertySchema("string", stringSchema)
+        .addRequiredProperty("int8")
+        .title("Record")
+        .build();
+    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+    obj.set("int8", ShortNode.valueOf((short) 12));
+    Schema expectedSchema = SchemaBuilder.struct()
+        .name("Record")
+        .field("int8", Schema.INT8_SCHEMA)
+        .field("string", Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Struct struct = new Struct(expectedSchema).put("int8", (byte) 12);
+    JsonSchemaDataConfig jsonSchemaDataConfig = new JsonSchemaDataConfig.Builder()
+        .with(JsonSchemaDataConfig.USE_OPTIONAL_FOR_NON_REQUIRED_CONFIG, true)
+        .build();
+    JsonSchemaData jsonSchemaData = new JsonSchemaData(jsonSchemaDataConfig);
+    checkNonObjectConversion(jsonSchemaData, expectedSchema, struct, schema, obj);
+  }
+
+  @Test
   public void testToConnectRecordWithMissingNonoptional() {
     NumberSchema numberSchema = NumberSchema.builder()
         .requiresInteger(true)
@@ -1246,6 +1276,13 @@ public class JsonSchemaDataTest {
   private void checkNonObjectConversion(
       Schema expectedSchema, Object expected, org.everit.json.schema.Schema schema, JsonNode value
   ) {
+    checkNonObjectConversion(jsonSchemaData, expectedSchema, expected, schema, value);
+  }
+
+  private void checkNonObjectConversion(
+      JsonSchemaData jsonSchemaData,
+      Schema expectedSchema, Object expected, org.everit.json.schema.Schema schema, JsonNode value
+  ) {
     Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
     Object jsonValue = jsonSchemaData.toConnectData(connectSchema, value);
     if (connectSchema != null) {
@@ -1286,6 +1323,79 @@ public class JsonSchemaDataTest {
     JsonSchema jsonSchema = new JsonSchema(schema);
     JsonSchemaData jsonSchemaData = new JsonSchemaData();
     jsonSchemaData.toConnectSchema(jsonSchema);
+  }
+
+  @Test
+  public void testOptionalReferencedSchema() {
+    String schema = "{\n"
+        + "    \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "    \"title\": \"Test\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"additionalProperties\": false,\n"
+        + "    \"properties\": {\n"
+        + "        \"id\": {\n"
+        + "            \"type\": \"string\",\n"
+        + "            \"description\": \"unique id\"\n"
+        + "        },\n"
+        + "        \"createById\": {\n"
+        + "            \"oneOf\": [\n"
+        + "                {\n"
+        + "                    \"type\": \"null\",\n"
+        + "                    \"title\": \"Not included\"\n"
+        + "                },\n"
+        + "                {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                }\n"
+        + "            ],\n"
+        + "            \"description\": \"user id\"\n"
+        + "        },\n"
+        + "        \"complexNode\": {\n"
+        + "            \"oneOf\": [\n"
+        + "                {\n"
+        + "                    \"type\": \"null\",\n"
+        + "                    \"title\": \"Not included\"\n"
+        + "                },\n"
+        + "                {\n"
+        + "                    \"$ref\": \"#/definitions/complexNode\"\n"
+        + "                }\n"
+        + "            ]\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"required\": [\n"
+        + "        \"id\"\n"
+        + "    ],\n"
+        + "    \"definitions\": {\n"
+        + "        \"complexNode\": {\n"
+        + "            \"type\": \"object\",\n"
+        + "            \"additionalProperties\": false,\n"
+        + "            \"properties\": {\n"
+        + "                \"id\": {\n"
+        + "                    \"type\": \"string\",\n"
+        + "                    \"description\": \"unique id\"\n"
+        + "                },\n"
+        + "                \"createById\": {\n"
+        + "                    \"oneOf\": [\n"
+        + "                        {\n"
+        + "                            \"type\": \"null\",\n"
+        + "                            \"title\": \"Not included\"\n"
+        + "                        },\n"
+        + "                        {\n"
+        + "                            \"type\": \"string\"\n"
+        + "                        }\n"
+        + "                    ],\n"
+        + "                    \"description\": \"user id\"\n"
+        + "                }\n"
+        + "            },\n"
+        + "            \"required\": [\n"
+        + "                \"id\"\n"
+        + "            ]\n"
+        + "        }\n"
+        + "    }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertTrue(connectSchema.field("complexNode").schema().isOptional());
   }
 
   @Ignore

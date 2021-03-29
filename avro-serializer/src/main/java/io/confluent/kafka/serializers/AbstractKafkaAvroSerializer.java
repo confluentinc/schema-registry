@@ -16,8 +16,18 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
@@ -28,17 +38,6 @@ import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import kafka.utils.VerifiableProperties;
-
 public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSerDe {
 
   private final EncoderFactory encoderFactory = EncoderFactory.get();
@@ -46,6 +45,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean removeJavaProperties;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
+  protected boolean avroReflectionAllowNull = false;
+  protected boolean avroUseLogicalTypeConverters = false;
   private final Map<Schema, DatumWriter<Object>> datumWriterCache = new ConcurrentHashMap<>();
   private boolean configured = false;
 
@@ -56,6 +57,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
     useLatestVersion = config.useLatestVersion();
     latestCompatStrict = config.getLatestCompatibilityStrict();
+    avroReflectionAllowNull = config
+        .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
+    avroUseLogicalTypeConverters = config
+            .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
     configured = true;
   }
 
@@ -65,6 +70,20 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   protected KafkaAvroSerializerConfig serializerConfig(VerifiableProperties props) {
     return new KafkaAvroSerializerConfig(props.props());
+  }
+
+  protected DatumWriter<?> getDatumWriter(Object value, Schema schema) {
+    if (value instanceof SpecificRecord) {
+      return new SpecificDatumWriter<>(schema);
+    } else if (useSchemaReflection) {
+      return new ReflectDatumWriter<>(schema);
+    } else {
+      GenericData genericData = new GenericData();
+      if (avroUseLogicalTypeConverters) {
+        AvroData.addLogicalTypeConversion(genericData);
+      }
+      return new GenericDatumWriter<>(schema, genericData);
+    }
   }
 
   protected byte[] serializeImpl(
@@ -128,18 +147,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
           throws IOException {
-    BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
-    DatumWriter<Object> writer;
-    writer = datumWriterCache.computeIfAbsent(rawSchema, v -> {
-      if (value instanceof SpecificRecord) {
-        return new SpecificDatumWriter<>(rawSchema);
-      } else if (useSchemaReflection) {
-        return new ReflectDatumWriter<>(rawSchema);
-      } else {
-        return new GenericDatumWriter<>(rawSchema);
-      }
-    });
-    writer.write(value, encoder);
-    encoder.flush();
+        BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
+
+        DatumWriter<Object> writer;
+        writer = datumWriterCache.computeIfAbsent(rawSchema,
+          v -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
+        );
+        writer.write(value, encoder);
+        encoder.flush();
   }
 }

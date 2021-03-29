@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>6.1.1</version>
+        <version>[7.0.0-0, 7.0.1-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>6.1.1</version>
+    <version>7.0.0-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -62,6 +62,7 @@
         <module>protobuf-provider</module>
         <module>protobuf-serializer</module>
         <module>protobuf-serde</module>
+        <module>protobuf-types</module>
         <module>json-schema-converter</module>
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
@@ -81,8 +82,7 @@
         <protobuf.version>3.11.4</protobuf.version>
         <wire.version>3.6.0</wire.version>
         <swagger.version>1.6.2</swagger.version>
-        <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
-        <io.confluent.schema-registry.version>6.1.1</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.0.0-0</io.confluent.schema-registry.version>
     </properties>
 
     <repositories>
@@ -118,6 +118,17 @@
                 <groupId>com.google.protobuf</groupId>
                 <artifactId>protobuf-java-util</artifactId>
                 <version>${protobuf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.api.grpc</groupId>
+                <artifactId>googleapis-common-protos</artifactId>
+                <version>0.0.3</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.api.grpc</groupId>
+                <artifactId>proto-google-common-protos</artifactId>
+                <version>1.18.1</version>
+                <scope>test</scope>
             </dependency>
             <dependency>
                 <groupId>com.squareup.wire</groupId>
@@ -273,6 +284,11 @@
             </dependency>
             <dependency>
                 <groupId>io.confluent</groupId>
+                <artifactId>kafka-protobuf-types</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
                 <artifactId>kafka-connect-json-schema-converter</artifactId>
                 <version>${io.confluent.schema-registry.version}</version>
             </dependency>
@@ -350,6 +366,7 @@
                             <configuration>
                                 <protocVersion>${protobuf.version}</protocVersion>
                                 <includeStdTypes>true</includeStdTypes>
+                                <includeMavenTypes>direct</includeMavenTypes>
                                 <addSources>none</addSources>
                                 <outputDirectory>src/test/java</outputDirectory>
                                 <inputDirectories>
@@ -376,7 +393,7 @@
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>${spotbugs.plugin.version}</version>
+                <version>${spotbugs.maven.plugin.version}</version>
                 <configuration>
                     <xmlOutput>true</xmlOutput>
                     <excludeFilterFile>findbugs/findbugs-exclude.xml</excludeFilterFile>

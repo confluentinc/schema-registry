@@ -152,6 +152,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
     }
+    this.storeUpdateHandler.cacheInitialized();
     initLatch.countDown();
   }
 

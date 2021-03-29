@@ -60,6 +60,11 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
 
   @Override
   public void execute() throws MojoExecutionException, MojoFailureException {
+    if (skip) {
+      getLog().info("Plugin execution has been skipped");
+      return;
+    }
+
     errors = 0;
     failures = 0;
 

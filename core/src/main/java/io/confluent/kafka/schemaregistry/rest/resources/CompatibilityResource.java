@@ -20,6 +20,8 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
+
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -148,6 +150,73 @@ public class CompatibilityResource {
 
     CompatibilityCheckResponse compatibilityCheckResponse =
             createCompatiblityCheckResponse(errorMessages, verbose);
+    asyncResponse.resume(compatibilityCheckResponse);
+  }
+
+  @POST
+  @Path("/subjects/{subject}/versions")
+  @ApiOperation(value = "Test input schema against a subject's schemas for compatibility, "
+      + "based on the compatibility level of the subject configured. In other word, "
+      + "it will perform the same compatibility check as register for that subject",
+      notes = "the compatibility level applied for the check is the configured compatibility level "
+          + "for the subject (http:get:: /config/(string: subject)). If this subject's "
+          + "compatibility level was never changed, then the global compatibility level "
+          + "applies (http:get:: /config).",
+      response = CompatibilityCheckResponse.class
+  )
+  @ApiResponses(value = {
+      @ApiResponse(code = 422, message = "Error code 42201 -- Invalid schema or schema type\n"
+          + "Error code 42202 -- Invalid version"),
+      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store") })
+  @PerformanceMetric("compatibility.subjects.versions.verify")
+  public void testCompatibilityForSubject(
+      final @Suspended AsyncResponse asyncResponse,
+      final @HeaderParam("Content-Type") String contentType,
+      final @HeaderParam("Accept") String accept,
+      @ApiParam(value = "Subject of the schema version against which compatibility is to be tested",
+          required = true) @PathParam("subject") String subject,
+      @ApiParam(value = "Schema", required = true)
+      @NotNull RegisterSchemaRequest request,
+      @QueryParam("verbose") boolean verbose) {
+    log.info("Testing schema subject {} compatibility with specified version {}, id {}, type {}",
+        subject, request.getVersion(), request.getId(), request.getSchemaType());
+    // returns true if posted schema is compatible with the specified subject.
+    List<String> errorMessages;
+    List<Schema> previousSchemas = new ArrayList<>();
+    try {
+      //Don't check compatibility against deleted schema
+      schemaRegistry.getAllVersions(subject, false)
+          .forEachRemaining(previousSchemas::add);
+    } catch (SchemaRegistryException e) {
+      throw Errors.storeException("Error while retrieving schema for subject "
+          + subject, e);
+    }
+    Schema schema = new Schema(
+        subject,
+        0,
+        -1,
+        request.getSchemaType() != null ? request.getSchemaType() : AvroSchema.TYPE,
+        request.getReferences(),
+        request.getSchema()
+    );
+    try {
+      errorMessages = schemaRegistry.isCompatible(subject, schema, previousSchemas);
+    } catch (InvalidSchemaException e) {
+      if (verbose) {
+        errorMessages = Collections.singletonList(e.getMessage());
+      } else {
+        throw Errors.invalidSchemaException(e);
+      }
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(
+          "Error while getting compatibility level for subject " + subject, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(
+          "Error while getting compatibility level for subject " + subject, e);
+    }
+
+    CompatibilityCheckResponse compatibilityCheckResponse =
+        createCompatiblityCheckResponse(errorMessages, verbose);
     asyncResponse.resume(compatibilityCheckResponse);
   }
 

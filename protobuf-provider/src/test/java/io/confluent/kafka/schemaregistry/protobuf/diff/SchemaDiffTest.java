@@ -59,15 +59,24 @@ public class SchemaDiffTest {
   public void checkProtobufSchemaCompatibility() throws Exception {
     ObjectMapper objectMapper = new ObjectMapper();
     ArrayNode nodes = (ArrayNode) objectMapper.readTree(readFile("diff-schema-examples.json"));
+    checkProtobufSchemaCompatibility(nodes);
+  }
 
+  @Test
+  public void checkProtobufSchemaCompatibilityForMeta() throws Exception {
+    ObjectMapper objectMapper = new ObjectMapper();
+    ArrayNode nodes =
+            (ArrayNode) objectMapper.readTree(readFile("diff-schema-examples-with-meta.json"));
+    checkProtobufSchemaCompatibility(nodes);
+  }
+
+  private void checkProtobufSchemaCompatibility(ArrayNode nodes) throws Exception {
     for (int i = 0; i < nodes.size(); i++) {
       final ObjectNode testCase = (ObjectNode) nodes.get(i);
       String originalSchema = testCase.get("original_schema").asText();
       String updateSchema = testCase.get("update_schema").asText();
-      ProtoFileElement original = ProtoParser.Companion.parse(
-          Location.get("unknown"), originalSchema);
-      ProtoFileElement update = ProtoParser.Companion.parse(
-          Location.get("unknown"), updateSchema);
+      ProtoFileElement original = getSchema(originalSchema);
+      ProtoFileElement update = getSchema(updateSchema);
       List<SchemaReference> originalSchemaRefs = new ArrayList<>();
       ArrayNode originalRefs = (ArrayNode) testCase.get("original_references");
       if (originalRefs != null) {
@@ -93,9 +102,7 @@ public class SchemaDiffTest {
       if (originalDeps != null) {
         for (JsonNode dep : originalDeps) {
           ObjectNode node = (ObjectNode) dep;
-          String schema = node.get("dependency").asText();
-          ProtoFileElement file = ProtoParser.Companion.parse(
-              Location.get("unknown"), schema);
+          ProtoFileElement file = getDependency(node);
           originalDependencies.put(node.get("name").asText(), file);
         }
       }
@@ -104,9 +111,7 @@ public class SchemaDiffTest {
       if (updateDeps != null) {
         for (JsonNode dep : updateDeps) {
           ObjectNode node = (ObjectNode) dep;
-          String schema = node.get("dependency").asText();
-          ProtoFileElement file = ProtoParser.Companion.parse(
-              Location.get("unknown"), schema);
+          ProtoFileElement file = getDependency(node);
           updateDependencies.put(node.get("name").asText(), file);
         }
       }
@@ -118,10 +123,9 @@ public class SchemaDiffTest {
       }
       final String description = testCase.get("description").asText();
 
-      List<Difference> differences = SchemaDiff.compare(
-          new ProtobufSchema(original, originalSchemaRefs, originalDependencies),
-          new ProtobufSchema(update, updateSchemaRefs, updateDependencies)
-      );
+      ProtobufSchema o = new ProtobufSchema(original, originalSchemaRefs, originalDependencies);
+      ProtobufSchema u = new ProtobufSchema(update, updateSchemaRefs, updateDependencies);
+      List<Difference> differences = SchemaDiff.compare(o, u);
       final List<Difference> incompatibleDiffs = differences.stream()
           .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
           .collect(Collectors.toList());
@@ -134,6 +138,22 @@ public class SchemaDiffTest {
       );
       assertEquals(description, isCompatible, incompatibleDiffs.isEmpty());
     }
+  }
+
+  private ProtoFileElement getSchema(String schema) {
+    if (schema.endsWith(".proto")) {
+      schema = readFile(schema);
+    }
+    return ProtoParser.Companion.parse(
+            Location.get("unknown"), schema);
+  }
+
+  private ProtoFileElement getDependency(ObjectNode node) {
+    String name = node.get("name").asText();
+    JsonNode dep = node.get("dependency");
+    String schema = dep != null ? dep.asText() : readFile(name);
+    return ProtoParser.Companion.parse(
+            Location.get("unknown"), schema);
   }
 
   @Test

@@ -17,6 +17,8 @@ package io.confluent.kafka.schemaregistry.json.diff;
 
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.everit.json.schema.EmptySchema;
+import org.everit.json.schema.FalseSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.Schema;
 
@@ -51,6 +53,8 @@ import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPER
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_REMOVED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.PROPERTY_WITH_FALSE_REMOVED_FROM_CLOSED_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_ATTRIBUTE_ADDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_ATTRIBUTE_REMOVED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.REQUIRED_ATTRIBUTE_WITH_DEFAULT_ADDED;
@@ -198,16 +202,26 @@ public class ObjectSchemaDiff {
                   ctx.addDifference(PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
                 }
               } else {
-                // incompatible
-                ctx.addDifference(PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+                if (originalSchema instanceof FalseSchema) {
+                  // compatible
+                  ctx.addDifference(PROPERTY_WITH_FALSE_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+                } else {
+                  // incompatible
+                  ctx.addDifference(PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+                }
               }
             }
           } else if (originalSchema == null) {
             // We only consider the content model of the original
             // since we can only add properties if the original is a closed content model
             if (isOpenContentModel(original)) {
-              // incompatible
-              ctx.addDifference(PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
+              if (updateSchema instanceof EmptySchema) {
+                // compatible
+                ctx.addDifference(PROPERTY_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL);
+              } else {
+                // incompatible
+                ctx.addDifference(PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
+              }
             } else {
               Schema schemaFromPartial = schemaFromPartiallyOpenContentModel(original, propertyKey);
               if (schemaFromPartial != null) {

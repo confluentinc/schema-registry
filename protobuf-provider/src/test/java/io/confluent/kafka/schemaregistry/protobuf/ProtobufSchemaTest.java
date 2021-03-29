@@ -252,6 +252,47 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testOptionEscape() throws Exception {
+    String optionSchemaString = "syntax = \"proto3\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "option java_outer_classname = \"TestOptionEscape\";\n"
+        + "option testBackslash = \"backslash\\\\backslash\";\n"
+        + "option testDoubleQuote = \"\\\"something\\\"\";\n"
+        + "option testSingleQuote = \"\\\'something\\\'\";\n"
+        + "option testNewline = \"newline\\n\";\n"
+        + "option testBell = \"bell\\a\";\n"
+        + "option testBackspace = \"backspace\\b\";\n"
+        + "option testFormFeed = \"formFeed\\f\";\n"
+        + "option testCarriageReturn = \"carriageReturn\\r\";\n"
+        + "option testTab = \"tab\\t\";\n"
+        + "option testVerticalTab = \"verticalTab\\v\";\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "message TestOptionEscape {\n"
+        + "    option (source_ref) = \"https://someUrl.com\";\n"
+        + "\n"
+        + "    bool test_bool = 1;\n"
+        + "}\n";
+
+    ProtobufSchema schema = new ProtobufSchema(optionSchemaString);
+    String parsed = schema.canonicalString();
+
+    assertTrue(parsed.contains("backslash\\\\backslash"));
+    assertTrue(parsed.contains("\\\"something\\\""));
+    assertTrue(parsed.contains("\\\'something\\\'"));
+    assertTrue(parsed.contains("newline\\n"));
+    assertTrue(parsed.contains("bell\\a"));
+    assertTrue(parsed.contains("backspace\\b"));
+    assertTrue(parsed.contains("formFeed\\f"));
+    assertTrue(parsed.contains("carriageReturn\\r"));
+    assertTrue(parsed.contains("tab\\t"));
+    assertTrue(parsed.contains("verticalTab\\v"));
+    assertTrue(parsed.contains("https://someUrl.com"));
+  }
+
+  @Test
   public void testRecordToJson() throws Exception {
     DynamicMessage.Builder builder = recordSchema.newMessageBuilder();
     Descriptor desc = builder.getDescriptorForType();
@@ -372,6 +413,64 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testMeta() throws Exception {
+    ResourceLoader resourceLoader = new ResourceLoader("/");
+
+    String metaName = "confluent/meta.proto";
+    ProtoFileElement meta = resourceLoader.readObj(metaName);
+    SchemaReference metaRef = new SchemaReference(metaName, metaName, 1);
+
+    String decimalName = "confluent/type/decimal.proto";
+    ProtoFileElement decimal = resourceLoader.readObj(decimalName);
+    SchemaReference decimalRef = new SchemaReference(decimalName, decimalName, 1);
+
+    String descriptorName = "google/protobuf/decriptor.proto";
+    ProtoFileElement descriptor = resourceLoader.readObj(decimalName);
+    SchemaReference descriptorRef = new SchemaReference(descriptorName, descriptorName, 1);
+
+    ProtoFileElement original = resourceLoader.readObj(
+        "io/confluent/kafka/schemaregistry/protobuf/diff/DecimalValue2.proto");
+    List<SchemaReference> refs = new ArrayList<>();
+    refs.add(metaRef);
+    refs.add(decimalRef);
+    refs.add(descriptorRef);
+    Map<String, ProtoFileElement> deps = new HashMap<>();
+    deps.put(metaName, meta);
+    deps.put(decimalName, decimal);
+    deps.put(descriptorName, descriptor);
+    ProtobufSchema schema = new ProtobufSchema(original, refs, deps);
+    Descriptor desc = schema.toDescriptor();
+    ProtobufSchema schema2 = new ProtobufSchema(desc);
+
+    assertTrue(schema.isCompatible(
+        CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
+    assertEquals(schema.canonicalString(), schema2.canonicalString());
+  }
+
+  @Test
+  public void testNativeDependencies() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "\n"
+        + "message DecimalValue {\n"
+        + "  confluent.type.Decimal value = 1 [(confluent.field_meta) = { params: [\n"
+        + "    { value: \"8\", key: \"precision\" },\n"
+        + "    { value: \"3\", key: \"scale\" }\n"
+        + "  ]}];\n"
+        + "}";
+
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    Descriptor desc = schema.toDescriptor();
+    ProtobufSchema schema2 = new ProtobufSchema(desc);
+
+    assertTrue(schema.isCompatible(
+            CompatibilityLevel.BACKWARD, Collections.singletonList(schema2)).isEmpty());
+    assertEquals(schema.canonicalString(), schema2.canonicalString());
+  }
+
+  @Test
   public void testFileDescriptorProto() throws Exception {
     ResourceLoader resourceLoader = new ResourceLoader(
         "/io/confluent/kafka/schemaregistry/protobuf/diff/");
@@ -404,7 +503,7 @@ public class ProtobufSchemaTest {
   @Test
   public void testDefaultOmittedInProto3String() throws Exception {
     MessageDefinition.Builder message = MessageDefinition.newBuilder("msg1");
-    message.addField(null, "string", "field1", 1, "defaultVal");
+    message.addField(null, "string", "field1", 1, "defaultVal", null, null);
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     schema.setSyntax(PROTO3);
     schema.addMessageDefinition(message.build());

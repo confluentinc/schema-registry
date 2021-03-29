@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.SchemaCompatibility.Incompatibility;
-import org.apache.avro.Schemas;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -149,7 +148,7 @@ public class AvroSchema implements ParsedSchema {
         Schema schemaRef = parser.parse(schema);
         schemaRefs.add(schemaRef);
       }
-      canonicalString = Schemas.toString(schemaObj, schemaRefs);
+      canonicalString = schemaObj.toString(schemaRefs, false);
     }
     return canonicalString;
   }
