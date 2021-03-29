@@ -87,6 +87,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected byte[] serializeImpl(
       String subject, Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
+    if (schemaRegistry == null) {
+      StringBuilder userFriendlyMsgBuilder = new StringBuilder();
+      userFriendlyMsgBuilder.append("You must configure() before serialize()");
+      userFriendlyMsgBuilder.append(" or use serializer constructor with SchemaRegistryClient");
+      throw new InvalidConfigurationException(userFriendlyMsgBuilder.toString());
+    }
     // null needs to treated specially since the client most likely just wants to send
     // an individual null value instead of making the subject a null type. Also, null in
     // Kafka has a special meaning for deletion in a topic with the compact retention policy.
@@ -126,14 +132,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
               "Unrecognized bytes object of type: " + value.getClass().getName());
         }
       } else {
-        BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
-
-        DatumWriter<Object> writer;
-        writer = datumWriterCache.computeIfAbsent(rawSchema,
-          v -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
-        );
-        writer.write(value, encoder);
-        encoder.flush();
+        writeDatum(out, value, rawSchema);
       }
       byte[] bytes = out.toByteArray();
       out.close();
@@ -145,5 +144,17 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     } catch (RestClientException e) {
       throw toKafkaException(e, restClientErrorMsg + schema);
     }
+  }
+
+  private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
+          throws IOException {
+    BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
+
+    DatumWriter<Object> writer;
+    writer = datumWriterCache.computeIfAbsent(rawSchema,
+      v -> (DatumWriter<Object>) getDatumWriter(value, rawSchema)
+    );
+    writer.write(value, encoder);
+    encoder.flush();
   }
 }

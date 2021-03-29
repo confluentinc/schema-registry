@@ -35,6 +35,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.util.Utf8;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -329,6 +330,13 @@ public class KafkaAvroSerializerTest {
     avroSerializer.configure(configs, false);
     IndexedRecord avroRecord = createUserRecord();
     avroSerializer.serialize(topic, avroRecord);
+  }
+
+  @Test(expected = InvalidConfigurationException.class)
+  public void testKafkaAvroSerializerWithoutConfigure() {
+    KafkaAvroSerializer unconfiguredSerializer = new KafkaAvroSerializer();
+    IndexedRecord avroRecord = createUserRecord();
+    unconfiguredSerializer.serialize(topic, avroRecord);
   }
 
   @Test
