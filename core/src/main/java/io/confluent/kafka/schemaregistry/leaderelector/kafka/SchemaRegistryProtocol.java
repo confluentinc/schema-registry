@@ -16,6 +16,8 @@
 package io.confluent.kafka.schemaregistry.leaderelector.kafka;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -48,6 +50,7 @@ class SchemaRegistryProtocol {
     return Assignment.fromJson(buffer);
   }
 
+  @JsonInclude(Include.NON_EMPTY)
   @JsonIgnoreProperties(ignoreUnknown = true)
   public static class Assignment {
     public static final int CURRENT_VERSION = 1;
