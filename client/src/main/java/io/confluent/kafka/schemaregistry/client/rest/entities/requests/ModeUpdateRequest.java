@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.IOException;
@@ -23,6 +25,8 @@ import java.io.IOException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.Objects;
 
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ModeUpdateRequest {
 
   private String mode;
