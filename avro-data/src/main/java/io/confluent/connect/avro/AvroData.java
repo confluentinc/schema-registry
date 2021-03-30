@@ -2093,7 +2093,7 @@ public class AvroData {
     if (isEnumSchema(fieldSchema)) {
       String enumSchemaName = fieldSchema.parameters().get(AVRO_TYPE_ENUM);
       if (value instanceof GenericData.EnumSymbol) {
-        return ((GenericData.EnumSymbol) value).getSchema().getName().equals(enumSchemaName);
+        return ((GenericData.EnumSymbol) value).getSchema().getFullName().equals(enumSchemaName);
       } else {
         return value.getClass().getName().equals(enumSchemaName);
       }
