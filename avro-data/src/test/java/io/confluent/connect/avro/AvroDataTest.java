@@ -1137,7 +1137,7 @@ public class AvroDataTest {
   @Test
   public void testEnumStringUnionGeneric() throws Exception {
     org.apache.avro.Schema enumField = org.apache.avro.SchemaBuilder.builder()
-        .enumeration("testEnum").symbols("A", "B", "C", "D");
+        .enumeration("testEnum").namespace("com").symbols("A", "B", "C", "D");
 
     org.apache.avro.Schema unionField = org.apache.avro.SchemaBuilder.builder().unionOf()
         .nullType().and()
@@ -1146,7 +1146,7 @@ public class AvroDataTest {
         .endUnion();
 
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
-        .record("EnumUnionTest").fields()
+        .record("EnumUnionTest").namespace("com").fields()
         .name("id").type(unionField).noDefault()
         .endRecord();
 
