@@ -20,7 +20,6 @@ import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
 import java.time.LocalDate;
 
-import io.confluent.kafka.serializers.KafkaJsonSerializer;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
