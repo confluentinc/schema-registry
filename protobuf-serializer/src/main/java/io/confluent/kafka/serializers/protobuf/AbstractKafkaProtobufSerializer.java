@@ -68,6 +68,11 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected byte[] serializeImpl(
       String subject, String topic, boolean isKey, T object, ProtobufSchema schema
   ) throws SerializationException, InvalidConfigurationException {
+    if (schemaRegistry == null) {
+      throw new InvalidConfigurationException(
+          "SchemaRegistryClient not found. You need to configure the serializer "
+              + "or use serializer constructor with SchemaRegistryClient.");
+    }
     // null needs to treated specially since the client most likely just wants to send
     // an individual null value instead of making the subject a null type. Also, null in
     // Kafka has a special meaning for deletion in a topic with the compact retention policy.

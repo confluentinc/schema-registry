@@ -339,6 +339,13 @@ public class KafkaAvroSerializerTest {
     unconfiguredSerializer.serialize(topic, avroRecord);
   }
 
+  @Test(expected = InvalidConfigurationException.class)
+  public void testKafkaAvroDeserializerWithoutConfigure() {
+    KafkaAvroDeserializer unconfiguredSerializer = new KafkaAvroDeserializer();
+    byte[] randomBytes = "foo".getBytes();
+    unconfiguredSerializer.deserialize(topic, randomBytes);
+  }
+
   @Test
   public void testKafkaAvroSerializerWithPreRegistered() throws IOException, RestClientException {
     Map configs = ImmutableMap.of(

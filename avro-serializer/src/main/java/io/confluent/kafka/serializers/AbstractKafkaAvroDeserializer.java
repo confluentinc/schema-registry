@@ -99,6 +99,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   protected Object deserialize(String topic, Boolean isKey, byte[] payload, Schema readerSchema)
           throws SerializationException {
+    if (schemaRegistry == null) {
+      throw new InvalidConfigurationException(
+          "SchemaRegistryClient not found. You need to configure the deserializer "
+              + "or use deserializer constructor with SchemaRegistryClient.");
+    }
     if (payload == null) {
       return null;
     }
