@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.protobuf;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -226,6 +227,20 @@ public class KafkaProtobufSerializerTest {
     // null -> null
     bytes = protobufSerializer.serialize(topic, null);
     assertEquals(null, protobufDeserializer.deserialize(topic, bytes));
+  }
+
+
+  @Test(expected = InvalidConfigurationException.class)
+  public void testKafkaJsonSchemaSerializerWithoutConfigure() {
+    KafkaProtobufSerializer unconfiguredSerializer = new KafkaProtobufSerializer();
+    unconfiguredSerializer.serialize(topic, HELLO_WORLD_MESSAGE);
+  }
+
+  @Test(expected = InvalidConfigurationException.class)
+  public void testKafkaJsonSchemaDeserializerWithoutConfigure() {
+    KafkaProtobufDeserializer unconfiguredSerializer = new KafkaProtobufDeserializer();
+    byte[] randomBytes = "foo".getBytes();
+    unconfiguredSerializer.deserialize("foo", randomBytes);
   }
 
   @Test

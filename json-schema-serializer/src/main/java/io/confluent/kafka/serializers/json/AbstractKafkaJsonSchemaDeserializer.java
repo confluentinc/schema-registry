@@ -93,7 +93,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected Object deserialize(
       boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload
   ) throws SerializationException, InvalidConfigurationException {
-
+    if (schemaRegistry == null) {
+      throw new InvalidConfigurationException(
+          "SchemaRegistryClient not found. You need to configure the deserializer "
+              + "or use deserializer constructor with SchemaRegistryClient.");
+    }
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
     if (payload == null) {

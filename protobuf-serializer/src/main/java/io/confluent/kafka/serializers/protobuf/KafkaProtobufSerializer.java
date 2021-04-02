@@ -23,6 +23,7 @@ import java.io.IOException;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -71,6 +72,11 @@ public class KafkaProtobufSerializer<T extends Message>
 
   @Override
   public byte[] serialize(String topic, T record) {
+    if (schemaRegistry == null) {
+      throw new InvalidConfigurationException(
+          "SchemaRegistryClient not found. You need to configure the serializer "
+              + "or use serializer constructor with SchemaRegistryClient.");
+    }
     if (record == null) {
       return null;
     }
