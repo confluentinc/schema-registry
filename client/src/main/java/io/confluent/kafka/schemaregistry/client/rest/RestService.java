@@ -756,6 +756,11 @@ public class RestService implements Configurable {
     return getId(DEFAULT_REQUEST_PROPERTIES, null, id, false);
   }
 
+  public SchemaString getId(int id, boolean fetchMaxId)
+      throws IOException, RestClientException {
+    return getId(DEFAULT_REQUEST_PROPERTIES, null, id, fetchMaxId);
+  }
+
   public SchemaString getId(String subject, int id) throws IOException, RestClientException {
     return getId(DEFAULT_REQUEST_PROPERTIES, subject, id, false);
   }
