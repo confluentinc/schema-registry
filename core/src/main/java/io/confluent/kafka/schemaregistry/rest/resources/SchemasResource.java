@@ -106,6 +106,7 @@ public class SchemasResource {
   public SchemaString getSchema(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @QueryParam("subject") String subject,
       @DefaultValue("") @QueryParam("format") String format,
       @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
     SchemaString schema = null;
@@ -134,6 +135,7 @@ public class SchemasResource {
   public Set<String> getSubjects(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @QueryParam("subject") String subject,
       @QueryParam("deleted") boolean lookupDeletedSchema) {
     Set<String> subjects;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
@@ -164,6 +166,7 @@ public class SchemasResource {
   public List<SubjectVersion> getVersions(
       @ApiParam(value = "Globally unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
+      @QueryParam("subject") String subject,
       @QueryParam("deleted") boolean lookupDeletedSchema) {
     List<SubjectVersion> versions;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
