@@ -135,7 +135,7 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_CACHE_SIZE_CONFIG = "schema.cache.size";
   public static final int SCHEMA_CACHE_SIZE_DEFAULT = 1000;
   /**
-   * <code>schema.cache.size</code>
+   * <code>schema.cache.expiry.secs</code>
    */
   public static final String SCHEMA_CACHE_EXPIRY_SECS_CONFIG = "schema.cache.expiry.secs";
   public static final int SCHEMA_CACHE_EXPIRY_SECS_DEFAULT = 300;
