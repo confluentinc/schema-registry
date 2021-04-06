@@ -15,6 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
@@ -109,6 +112,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
   private static final long DESCRIBE_CLUSTER_TIMEOUT_MS = 10000L;
 
   private final SchemaRegistryConfig config;
+  private final LoadingCache<Schema, ParsedSchema> schemaCache;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
@@ -157,6 +161,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
     this.serializer = serializer;
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.defaultMode = Mode.READWRITE;
+    this.schemaCache = CacheBuilder.newBuilder()
+        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
+        .expireAfterAccess(
+            config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
+        .build(new CacheLoader<Schema, ParsedSchema>() {
+          @Override
+          public ParsedSchema load(Schema s) throws Exception {
+            return loadSchema(s.getSchemaType(), s.getSchema(), s.getReferences());
+          }
+        });
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
@@ -906,6 +920,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       String schema,
       List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
       throws InvalidSchemaException {
+    try {
+      return schemaCache.get(new Schema("", 0, -1, schemaType, references, schema));
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof InvalidSchemaException) {
+        throw (InvalidSchemaException) cause;
+      } else if (cause instanceof RuntimeException) {
+        throw (RuntimeException) cause;
+      } else {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  private ParsedSchema loadSchema(
+      String schemaType,
+      String schema,
+      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references)
+      throws InvalidSchemaException {
     if (schemaType == null) {
       schemaType = AvroSchema.TYPE;
     }
@@ -916,9 +949,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, MasterAwareSchemaReg
       throw new InvalidSchemaException(errMsg);
     }
     final String type = schemaType;
+
     ParsedSchema parsedSchema = provider.parseSchema(schema, references)
-            .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
-                    + " with refs " + references + " of type " + type));
+        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
+            + " with refs " + references + " of type " + type));
     return parsedSchema;
   }
 
