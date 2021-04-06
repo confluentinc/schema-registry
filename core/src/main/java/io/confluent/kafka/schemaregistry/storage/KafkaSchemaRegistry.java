@@ -15,6 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -62,6 +65,7 @@ import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 import org.apache.avro.reflect.Nullable;
@@ -102,6 +106,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private final SchemaRegistryConfig config;
   private final Map<String, Object> props;
+  private final LoadingCache<RawSchema, ParsedSchema> schemaCache;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
@@ -158,6 +163,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaClusterId = kafkaClusterId(config);
     this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
     this.providers = initProviders(config);
+    this.schemaCache = CacheBuilder.newBuilder()
+        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
+        .expireAfterAccess(
+            config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
+        .build(new CacheLoader<RawSchema, ParsedSchema>() {
+          @Override
+          public ParsedSchema load(RawSchema s) throws Exception {
+            return loadSchema(s.getSchemaType(), s.getSchema(), s.getReferences(), s.isNew());
+          }
+        });
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
@@ -943,6 +958,26 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           String schema,
           List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
           boolean isNew) throws InvalidSchemaException {
+    try {
+      return schemaCache.get(new RawSchema(schemaType, references, schema, isNew));
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof InvalidSchemaException) {
+        throw (InvalidSchemaException) cause;
+      } else if (cause instanceof RuntimeException) {
+        throw (RuntimeException) cause;
+      } else {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  private ParsedSchema loadSchema(
+      String schemaType,
+      String schema,
+      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
+      boolean isNew)
+      throws InvalidSchemaException {
     if (schemaType == null) {
       schemaType = AvroSchema.TYPE;
     }
@@ -953,9 +988,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throw new InvalidSchemaException(errMsg);
     }
     final String type = schemaType;
+
     ParsedSchema parsedSchema = provider.parseSchema(schema, references, isNew)
-            .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
-                    + " with refs " + references + " of type " + type));
+        .orElseThrow(() -> new InvalidSchemaException("Invalid schema " + schema
+            + " with refs " + references + " of type " + type));
     return parsedSchema;
   }
 
@@ -1551,6 +1587,61 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                     + " "
                     + sslEndpointIdentificationAlgo
                     + " not supported");
+  }
+
+  private static class RawSchema {
+    private String schemaType;
+    private List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references;
+    private String schema;
+    private boolean isNew;
+
+    public RawSchema(
+        String schemaType,
+        List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
+        String schema,
+        boolean isNew) {
+      this.schemaType = schemaType;
+      this.references = references;
+      this.schema = schema;
+      this.isNew = isNew;
+    }
+
+    public String getSchemaType() {
+      return schemaType;
+    }
+
+    public List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference>
+        getReferences() {
+      return references;
+    }
+
+    public String getSchema() {
+      return schema;
+    }
+
+    public boolean isNew() {
+      return isNew;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      RawSchema that = (RawSchema) o;
+      return isNew == that.isNew
+          && Objects.equals(schemaType, that.schemaType)
+          && Objects.equals(references, that.references)
+          && Objects.equals(schema, that.schema);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(schemaType, references, schema, isNew);
+    }
   }
 
   public static class SchemeAndPort {
