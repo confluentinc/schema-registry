@@ -47,9 +47,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
    */
   public ValidationStatus validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
                                          TopicPartition tp, long offset, long timestamp) {
-    // Store the offset and timestamp in the cached value
-    value.setOffset(offset);
-    value.setTimestamp(timestamp);
+    if (value != null) {
+      // Store the offset and timestamp in the cached value
+      value.setOffset(offset);
+      value.setTimestamp(timestamp);
+    }
 
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
