@@ -129,6 +129,29 @@ public class SchemaValuesTest {
 
   }
 
+  @Test
+  public void testSchemaValueDeserializeForOffsetTimestamp() throws SerializationException {
+    String subject = "test";
+    int version = 1;
+    SchemaKey key = new SchemaKey(subject, version);
+    key.setMagicByte(1);
+    Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer = new SchemaRegistrySerializer();
+
+    String
+        schemaValueJson = "{\"subject\":\"test\",\"version\":1,\"id\":1,"
+        + "\"schema\":\"{\\\"type\\\":\\\"record\\\","
+        + "\\\"name\\\":\\\"myrecord\\\","
+        + "\\\"fields\\\":[{\\\"name\\\":\\\"f1067572235\\\","
+        + "\\\"type\\\":\\\"string\\\"}]}\",\"deleted\":true,\"offset\":1,\"ts\":123}";
+
+    SchemaValue schemaValue =
+        (SchemaValue) serializer.deserializeValue(key, schemaValueJson.getBytes());
+
+    assertEquals(1L, schemaValue.getOffset().longValue());
+    assertEquals(123L, schemaValue.getTimestamp().longValue());
+
+  }
+
   private void assertSchemaValue(String subject, int version, int schemaId,
                                  String schema, String type, boolean deleted,
                                  SchemaValue schemaValue) {

@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class SchemaValue implements Comparable<SchemaValue>, SchemaRegistryValue {
+public class SchemaValue extends SchemaRegistryValue implements Comparable<SchemaValue> {
 
   @NotEmpty
   private String subject;

@@ -24,7 +24,7 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ConfigValue implements SchemaRegistryValue {
+public class ConfigValue extends SchemaRegistryValue {
 
   private CompatibilityLevel compatibilityLevel;
 
