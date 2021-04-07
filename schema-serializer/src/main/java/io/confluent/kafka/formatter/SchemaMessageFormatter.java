@@ -17,8 +17,8 @@
 package io.confluent.kafka.formatter;
 
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
-import kafka.common.MessageFormatter;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.record.TimestampType;
