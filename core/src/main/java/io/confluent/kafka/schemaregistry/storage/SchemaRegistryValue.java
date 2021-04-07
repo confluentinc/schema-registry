@@ -15,6 +15,35 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-public interface SchemaRegistryValue {
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
+@JsonInclude(Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public abstract class SchemaRegistryValue {
+
+  protected Long offset;
+  protected Long timestamp;
+
+  @JsonProperty("offset")
+  public Long getOffset() {
+    return this.offset;
+  }
+
+  @JsonProperty("offset")
+  public void setOffset(Long offset) {
+    this.offset = offset;
+  }
+
+  @JsonProperty("ts")
+  public Long getTimestamp() {
+    return this.timestamp;
+  }
+
+  @JsonProperty("ts")
+  public void setTimestamp(Long timestamp) {
+    this.timestamp = timestamp;
+  }
 }

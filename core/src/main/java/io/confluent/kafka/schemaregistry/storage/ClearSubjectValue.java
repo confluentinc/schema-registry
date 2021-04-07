@@ -23,7 +23,7 @@ import javax.validation.constraints.NotEmpty;
 
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ClearSubjectValue implements SchemaRegistryValue {
+public class ClearSubjectValue extends SchemaRegistryValue {
 
   @NotEmpty
   private String subject;

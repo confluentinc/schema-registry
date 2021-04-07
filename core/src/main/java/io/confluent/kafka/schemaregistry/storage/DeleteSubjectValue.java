@@ -26,7 +26,7 @@ import javax.validation.constraints.Min;
 
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class DeleteSubjectValue implements SchemaRegistryValue {
+public class DeleteSubjectValue extends SchemaRegistryValue {
 
   @NotEmpty
   private String subject;

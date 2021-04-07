@@ -22,7 +22,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ModeValue implements SchemaRegistryValue {
+public class ModeValue extends SchemaRegistryValue {
 
   private Mode mode;
 
