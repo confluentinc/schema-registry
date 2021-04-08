@@ -14,6 +14,7 @@
  */
 package io.confluent.kafka.schemaregistry.rest;
 
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -650,6 +651,89 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
             (RestService.DEFAULT_REQUEST_PROPERTIES, "reference", "1"));
+  }
+
+  @Test
+  public void testSchemaReferencesMultipleLevels() throws Exception {
+    String root = "[\"myavro.BudgetDecreased\",\"myavro.BudgetUpdated\"]";
+
+    String ref1 = "{\n"
+        + "  \"type\" : \"record\",\n"
+        + "  \"name\" : \"BudgetDecreased\",\n"
+        + "  \"namespace\" : \"myavro\",\n"
+        + "  \"fields\" : [ {\n"
+        + "    \"name\" : \"buyerId\",\n"
+        + "    \"type\" : \"long\"\n"
+        + "  }, {\n"
+        + "    \"name\" : \"currency\",\n"
+        + "    \"type\" : {\n"
+        + "      \"type\" : \"myavro.currencies.Currency\""
+        + "    }\n"
+        + "  }, {\n"
+        + "    \"name\" : \"amount\",\n"
+        + "    \"type\" : \"double\"\n"
+        + "  } ]\n"
+        + "}";
+
+    String ref2 = "{\n"
+        + "  \"type\" : \"record\",\n"
+        + "  \"name\" : \"BudgetUpdated\",\n"
+        + "  \"namespace\" : \"myavro\",\n"
+        + "  \"fields\" : [ {\n"
+        + "    \"name\" : \"buyerId\",\n"
+        + "    \"type\" : \"long\"\n"
+        + "  }, {\n"
+        + "    \"name\" : \"currency\",\n"
+        + "    \"type\" : {\n"
+        + "      \"type\" : \"myavro.currencies.Currency\""
+        + "    }\n"
+        + "  }, {\n"
+        + "    \"name\" : \"updatedValue\",\n"
+        + "    \"type\" : \"double\"\n"
+        + "  } ]\n"
+        + "}";
+
+    String sharedRef = "{\n"
+        + "      \"type\" : \"enum\",\n"
+        + "      \"name\" : \"Currency\",\n"
+        + "      \"namespace\" : \"myavro.currencies\",\n"
+        + "      \"symbols\" : [ \"EUR\", \"USD\" ]\n"
+        + "    }\n";
+
+    TestUtils.registerAndVerifySchema(
+        restApp.restClient, new AvroSchema(sharedRef).canonicalString(), 1, "shared");
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(ref1);
+    SchemaReference ref = new SchemaReference("myavro.currencies.Currency", "shared", 1);
+    request.setReferences(Collections.singletonList(ref));
+    int registeredId = restApp.restClient.registerSchema(request, "ref1");
+    assertEquals("Registering a new schema should succeed", 2, registeredId);
+
+    request = new RegisterSchemaRequest();
+    request.setSchema(ref2);
+    ref = new SchemaReference("myavro.currencies.Currency", "shared", 1);
+    request.setReferences(Collections.singletonList(ref));
+    registeredId = restApp.restClient.registerSchema(request, "ref2");
+    assertEquals("Registering a new schema should succeed", 3, registeredId);
+
+    request = new RegisterSchemaRequest();
+    request.setSchema(root);
+    SchemaReference r1 = new SchemaReference("myavro.BudgetDecreased", "ref1", 1);
+    SchemaReference r2 = new SchemaReference("myavro.BudgetUpdated", "ref2", 1);
+    request.setReferences(ImmutableList.of(r1, r2));
+    registeredId = restApp.restClient.registerSchema(request, "root");
+    assertEquals("Registering a new schema should succeed", 4, registeredId);
+
+    SchemaString schemaString = restApp.restClient.getId(4);
+    // the newly registered schema should be immediately readable on the leader
+    assertEquals("Registered schema should be found",
+        root,
+        schemaString.getSchemaString());
+
+    assertEquals("Schema references should be found",
+        ImmutableList.of(r1, r2),
+        schemaString.getReferences());
   }
 
   @Test(expected = RestClientException.class)
