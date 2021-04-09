@@ -579,6 +579,22 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testToConnectPreserveSInt() throws Exception {
+    int expectedValue = 12;
+    SInt32ValueOuterClass.SInt32Value.Builder builder =
+        SInt32ValueOuterClass.SInt32Value.newBuilder();
+    builder.setValue(expectedValue);
+    SInt32ValueOuterClass.SInt32Value message = builder.build();
+    SchemaAndValue result = getSchemaAndValue(message);
+
+    ProtobufData protobufData = new ProtobufData();
+    ProtobufSchemaAndValue converted = protobufData.fromConnectData(result.schema(), result.value());
+
+    assertEquals(message.getDescriptorForType().getFields().get(0).getType(),
+        converted.getSchema().toDescriptor().getFields().get(0).getType());
+  }
+
+  @Test
   public void testToConnectInt32WithUInt32() throws Exception {
     final Long UNSIGNED_RESULT = 4294967295L;
     Integer expectedValue = -1;
