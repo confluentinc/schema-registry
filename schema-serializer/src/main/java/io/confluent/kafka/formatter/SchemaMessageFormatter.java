@@ -80,7 +80,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     properties.putAll(configs);
     this.init(properties);
   }
-  
+
   public void init(Properties props) {
     if (props == null) {
       throw new ConfigException("Missing schema registry url!");

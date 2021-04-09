@@ -45,9 +45,8 @@ class ClientConfig extends AbstractConfig {
     CONFIG = new ConfigDef()
         .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG,
                 ConfigDef.Type.STRING,
-                ClientDnsLookup.DEFAULT.toString(),
-                in(ClientDnsLookup.DEFAULT.toString(),
-                   ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                in(ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                    ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                 ConfigDef.Importance.MEDIUM,
                 CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
