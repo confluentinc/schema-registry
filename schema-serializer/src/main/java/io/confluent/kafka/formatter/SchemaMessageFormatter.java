@@ -74,7 +74,13 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       Deserializer keyDeserializer
   );
 
-  @Override
+
+  public void configure(Map<String, ?> configs) {
+    Properties properties = new Properties();
+    properties.putAll(configs);
+    this.init(properties);
+  }
+  
   public void init(Properties props) {
     if (props == null) {
       throw new ConfigException("Missing schema registry url!");
