@@ -28,7 +28,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.util.Properties;
+import java.util.HashMap;
+import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -41,7 +42,7 @@ import static org.junit.Assert.fail;
 
 public class KafkaJsonSchemaFormatterTest {
 
-  private Properties props;
+  private Map<String, String> props;
   private JsonSchemaMessageFormatter formatter;
   private JsonSchema recordSchema = null;
   private JsonSchema keySchema = null;
@@ -50,7 +51,7 @@ public class KafkaJsonSchemaFormatterTest {
 
   @Before
   public void setUp() {
-    props = new Properties();
+    props = new HashMap<>();
     props.put(KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
 
     String userSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}, "
@@ -64,7 +65,7 @@ public class KafkaJsonSchemaFormatterTest {
 
   @Test
   public void testKafkaJsonSchemaValueFormatter() throws Exception {
-    formatter.init(props);
+    formatter.configure(props);
 
     String inputJson = "{\"name\":\"myname\"}\n";
     BufferedReader reader =
@@ -91,7 +92,7 @@ public class KafkaJsonSchemaFormatterTest {
   @Test
   public void testKafkaJsonSchemaKeyValueFormatter() throws Exception {
     props.put("print.key", "true");
-    formatter.init(props);
+    formatter.configure(props);
 
     String inputJson = "10\t{\"name\":\"myname\"}\n";
     BufferedReader reader =
