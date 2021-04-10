@@ -74,6 +74,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       Deserializer keyDeserializer
   );
 
+  @Override
   public void configure(Map<String, ?> configs) {
     Properties properties = new Properties();
     properties.putAll(configs);
