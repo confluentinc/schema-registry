@@ -29,7 +29,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.util.Properties;
+import java.util.HashMap;
+import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -42,7 +43,7 @@ import static org.junit.Assert.fail;
 
 public class KafkaProtobufFormatterTest {
 
-  private Properties props;
+  private Map<String, String> props;
   private ProtobufMessageFormatter formatter;
   private ProtobufSchema recordSchema = null;
   private ProtobufSchema enumSchema = null;
@@ -52,7 +53,7 @@ public class KafkaProtobufFormatterTest {
 
   @Before
   public void setUp() {
-    props = new Properties();
+    props = new HashMap<>();
     props.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
 
     String userSchema = "syntax = \"proto3\"; message User { string name = 1; }";
@@ -69,7 +70,7 @@ public class KafkaProtobufFormatterTest {
 
   @Test
   public void testKafkaProtobufValueFormatter() throws Exception {
-    formatter.init(props);
+    formatter.configure(props);
 
     String inputJson = "{\"name\":\"myname\"}\n";
     BufferedReader reader =
@@ -95,7 +96,7 @@ public class KafkaProtobufFormatterTest {
 
   @Test
   public void testKafkaProtobufEnumValueFormatter() throws Exception {
-    formatter.init(props);
+    formatter.configure(props);
 
     String inputJson = "{\"c1\":\"SPADES\"}\n";
     BufferedReader reader =
@@ -122,7 +123,7 @@ public class KafkaProtobufFormatterTest {
   @Test
   public void testKafkaProtobufKeyValueFormatter() throws Exception {
     props.put("print.key", "true");
-    formatter.init(props);
+    formatter.configure(props);
 
     String inputJson = "{\"key\":10}\t{\"name\":\"myname\"}\n";
     BufferedReader reader =
@@ -149,7 +150,7 @@ public class KafkaProtobufFormatterTest {
 
   @Test
   public void testKafkaProtobufKeyValueFormatterNullMessage() throws Exception {
-    formatter.init(props);
+    formatter.configure(props);
 
     byte[] serializedValue = null;
     ByteArrayOutputStream baos = new ByteArrayOutputStream();

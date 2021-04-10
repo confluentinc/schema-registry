@@ -32,7 +32,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
@@ -75,38 +74,38 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
   );
 
   @Override
-  public void init(Properties props) {
+  public void configure(Map<String, ?> props) {
     if (props == null) {
       throw new ConfigException("Missing schema registry url!");
     }
-    String url = props.getProperty(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
+    String url = getString(props, AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
       throw new ConfigException("Missing schema registry url!");
     }
 
     if (props.containsKey("print.timestamp")) {
-      printTimestamp = props.getProperty("print.timestamp").trim().toLowerCase().equals("true");
+      printTimestamp = getString(props, "print.timestamp").trim().toLowerCase().equals("true");
     }
     if (props.containsKey("print.key")) {
-      printKey = props.getProperty("print.key").trim().toLowerCase().equals("true");
+      printKey = (getString(props, "print.key")).trim().toLowerCase().equals("true");
     }
     if (props.containsKey("key.separator")) {
-      keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8);
+      keySeparator = getString(props, "key.separator").getBytes(StandardCharsets.UTF_8);
     }
     if (props.containsKey("line.separator")) {
-      lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8);
+      lineSeparator = getString(props, "line.separator").getBytes(StandardCharsets.UTF_8);
     }
     Deserializer keyDeserializer = null;
     if (props.containsKey("key.deserializer")) {
       try {
         keyDeserializer =
-            (Deserializer)Class.forName((String) props.get("key.deserializer")).newInstance();
+            (Deserializer)Class.forName(getString(props, "key.deserializer")).newInstance();
       } catch (Exception e) {
         throw new ConfigException("Error initializing Key deserializer", e);
       }
     }
     if (props.containsKey("print.schema.ids")) {
-      printIds = props.getProperty("print.schema.ids").trim().toLowerCase().equals("true");
+      printIds = getString(props, "print.schema.ids").trim().toLowerCase().equals("true");
       if (printIds) {
         printValueId = true;
         if (keyDeserializer == null || keyDeserializer instanceof AbstractKafkaSchemaSerDe) {
@@ -115,7 +114,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       }
     }
     if (props.containsKey("schema.id.separator")) {
-      idSeparator = props.getProperty("schema.id.separator").getBytes(StandardCharsets.UTF_8);
+      idSeparator = getString(props, "schema.id.separator").getBytes(StandardCharsets.UTF_8);
     }
 
     if (this.deserializer == null) {
@@ -125,10 +124,16 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     }
   }
 
-  private Map<String, Object> getPropertiesMap(Properties props) {
+  private String getString(Map<String, ?> props, String s) {
+    return (String) props.get(s);
+  }
+
+  private Map<String, Object> getPropertiesMap(Map<String, ?> props) {
     Map<String, Object> originals = new HashMap<>();
-    for (final String name : props.stringPropertyNames()) {
-      originals.put(name, props.getProperty(name));
+    for (final Map.Entry<String, ?> entry : props.entrySet()) {
+      if (entry.getValue() instanceof String) {
+        originals.put(entry.getKey(), entry.getValue());
+      }
     }
     return originals;
   }

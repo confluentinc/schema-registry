@@ -116,7 +116,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     injectProperties(props);
     props.setProperty("zookeeper.connection.timeout.ms", "30000");
     props.setProperty("sasl.mechanism.inter.broker.protocol", "GSSAPI");
-    props.setProperty(SaslConfigs.SASL_ENABLED_MECHANISMS, "GSSAPI");
+    props.setProperty(SaslConfigs.SASL_JAAS_CONFIG, "GSSAPI");
 
     return KafkaConfig.fromProps(props);
   }

@@ -62,7 +62,7 @@ public class KafkaAvroFormatterTest {
       "\"type\": \"record\"," +
       "\"name\": \"valueRecord\"," +
       "\"fields\": [{\"name\": \"value_field\", \"type\": \"string\"}]}";
-  private Properties props;
+  private Map<String, String> props;
   private AvroMessageFormatter formatter;
   private Schema recordSchema = null;
   private Schema intSchema = null;
@@ -70,7 +70,7 @@ public class KafkaAvroFormatterTest {
 
   @Before
   public void setUp() {
-    props = new Properties();
+    props = new HashMap<>();
     props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
 
     Schema.Parser parser = new Schema.Parser();
@@ -82,7 +82,7 @@ public class KafkaAvroFormatterTest {
 
   @Test
   public void testKafkaAvroValueFormatter() {
-    formatter.init(props);
+    formatter.configure(props);
 
     String inputJson = "{\"name\":\"myname\"}\n";
     BufferedReader reader =
@@ -107,7 +107,7 @@ public class KafkaAvroFormatterTest {
   @Test
   public void testKafkaAvroKeyValueFormatter() {
     props.put("print.key", "true");
-    formatter.init(props);
+    formatter.configure(props);
 
     String inputJson = "10\t{\"name\":\"myname\"}\n";
     BufferedReader reader =
@@ -133,7 +133,7 @@ public class KafkaAvroFormatterTest {
   @Test
   public void testKafkaAvroValueWithTimestampFormatter() {
     props.put("print.timestamp", "true");
-    formatter.init(props);
+    formatter.configure(props);
 
     long timestamp = 1000;
     TimestampType timestampType = TimestampType.LOG_APPEND_TIME;
@@ -181,7 +181,7 @@ public class KafkaAvroFormatterTest {
   public void testStringKey() {
     props.put("print.key", "true");
     formatter = new AvroMessageFormatter(schemaRegistry, new StringDeserializer());
-    formatter.init(props);
+    formatter.configure(props);
 
     String inputJson = "{\"name\":\"myname\"}\n";
     String expectedJson = "TestKey\t"+inputJson;
@@ -210,7 +210,7 @@ public class KafkaAvroFormatterTest {
     props.put("print.key", "true");
     props.put("print.timestamp", "true");
     formatter = new AvroMessageFormatter(schemaRegistry, new StringDeserializer());
-    formatter.init(props);
+    formatter.configure(props);
 
     long timestamp = 1000;
     TimestampType timestampType = TimestampType.LOG_APPEND_TIME;
@@ -240,7 +240,7 @@ public class KafkaAvroFormatterTest {
 
   @Test
   public void testKafkaAvroValueUsingLatestVersion() throws Exception {
-    formatter.init(props);
+    formatter.configure(props);
 
     schemaRegistry.register("topic1-value", new AvroSchema(recordSchema));
 

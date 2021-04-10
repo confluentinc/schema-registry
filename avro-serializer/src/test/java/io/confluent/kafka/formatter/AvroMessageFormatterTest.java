@@ -51,14 +51,14 @@ public class AvroMessageFormatterTest {
   private static final byte[] SCHEMA_ID_BYTES = ByteBuffer.allocate(4).putInt(VALUE_SCHEMA_ID).array();
 
   private AvroMessageFormatter formatter;
-  private Properties props;
+  private Map<String, String> props;
   private SchemaRegistryClient schemaRegistry;
   private ConsumerRecord<byte[], byte[]> recordWithValue;
   private ConsumerRecord<byte[], byte[]> recordWithKeyAndValue;
 
   @Before
   public void setup() throws IOException, RestClientException {
-    props = new Properties();
+    props = new HashMap<>();
     props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
 
     schemaRegistry = new MockSchemaRegistryClient();
@@ -76,7 +76,7 @@ public class AvroMessageFormatterTest {
 
   @Test
   public void testDeserializeBytesIssue506() throws IOException, RestClientException {
-		formatter.init(props);
+		formatter.configure(props);
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
@@ -86,7 +86,7 @@ public class AvroMessageFormatterTest {
 
   @Test
   public void testDeserializeRecordWithKeyAndValue() throws IOException, RestClientException {
-    formatter.init(props);
+    formatter.configure(props);
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
@@ -97,7 +97,7 @@ public class AvroMessageFormatterTest {
   @Test
   public void testDeserializeRecordWithKeyAndValueAndPrintingKey() throws IOException, RestClientException {
     props.put("print.key", "true");
-    formatter.init(props);
+    formatter.configure(props);
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
@@ -110,7 +110,7 @@ public class AvroMessageFormatterTest {
       throws IOException, RestClientException {
     props.put("print.key", "true");
     props.put("print.schema.ids", "false");
-    formatter.init(props);
+    formatter.configure(props);
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
@@ -123,7 +123,7 @@ public class AvroMessageFormatterTest {
       throws IOException, RestClientException {
     props.put("print.key", "true");
     props.put("print.schema.ids", "true");
-    formatter.init(props);
+    formatter.configure(props);
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
@@ -136,7 +136,7 @@ public class AvroMessageFormatterTest {
       throws IOException, RestClientException {
     props.put("print.key", "false");
     props.put("print.schema.ids", "true");
-    formatter.init(props);
+    formatter.configure(props);
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
@@ -150,7 +150,7 @@ public class AvroMessageFormatterTest {
     props.put("print.key", "false");
     props.put("print.schema.ids", "true");
     props.put("schema.id.separator", "___");
-    formatter.init(props);
+    formatter.configure(props);
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
@@ -164,7 +164,7 @@ public class AvroMessageFormatterTest {
     props.put("print.key", "true");
     props.put("print.schema.ids", "true");
     props.put("schema.id.separator", "___");
-    formatter.init(props);
+    formatter.configure(props);
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
