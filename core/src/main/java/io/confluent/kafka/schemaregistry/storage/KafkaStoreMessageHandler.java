@@ -75,6 +75,13 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
               ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
         }
       }
+    } else if (key.getKeyType() == SchemaRegistryKeyType.CONFIG
+        || key.getKeyType() == SchemaRegistryKeyType.MODE) {
+      SubjectValue subjectValue = (SubjectValue) value;
+      if (subjectValue.getSubject() == null) {
+        // handle legacy values
+        subjectValue.setSubject(((SubjectKey) key).getSubject());
+      }
     }
     return ValidationStatus.SUCCESS;
   }

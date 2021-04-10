@@ -24,16 +24,18 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ConfigValue extends SchemaRegistryValue {
+public class ConfigValue extends SubjectValue {
 
   private CompatibilityLevel compatibilityLevel;
 
-  public ConfigValue(@JsonProperty("compatibilityLevel")
-                     CompatibilityLevel compatibilityLevel) {
+  public ConfigValue(@JsonProperty("subject") String subject,
+                     @JsonProperty("compatibilityLevel") CompatibilityLevel compatibilityLevel) {
+    super(subject);
     this.compatibilityLevel = compatibilityLevel;
   }
 
   public ConfigValue() {
+    super(null);
     compatibilityLevel = null;
   }
 
@@ -55,6 +57,9 @@ public class ConfigValue extends SchemaRegistryValue {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
+    if (!super.equals(o)) {
+      return false;
+    }
 
     ConfigValue that = (ConfigValue) o;
 
@@ -66,7 +71,8 @@ public class ConfigValue extends SchemaRegistryValue {
 
   @Override
   public int hashCode() {
-    int result = 31 * compatibilityLevel.hashCode();
+    int result = super.hashCode();
+    result = 31 * result + compatibilityLevel.hashCode();
     return result;
   }
 
