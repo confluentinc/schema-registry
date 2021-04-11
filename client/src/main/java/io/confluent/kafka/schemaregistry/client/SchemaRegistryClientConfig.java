@@ -23,6 +23,9 @@ public class SchemaRegistryClientConfig {
   public static final String CLIENT_NAMESPACE = "schema.registry.";
 
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = "basic.auth.credentials.source";
+  /**
+   * @deprecated use {@link #USER_INFO_CONFIG} instead
+   */
   @Deprecated
   public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
       "schema.registry.basic.auth.user.info";
