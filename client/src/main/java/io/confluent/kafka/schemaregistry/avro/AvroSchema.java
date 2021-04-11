@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Objects;
 
 import org.slf4j.Logger;
@@ -64,9 +65,21 @@ public class AvroSchema implements ParsedSchema {
                     boolean isNew) {
     this.isNew = isNew;
     Schema.Parser parser = getParser();
+    Map<String,Schema> refTypes = new HashMap<String,Schema>();
     for (String schema : resolvedReferences.values()) {
-      parser.parse(schema);
+      Schema.Parser refParser = getParser();
+      refParser.parse(schema);
+      Map<String,Schema> knownTypes = parser.getTypes();
+      Map<String,Schema> parsedTypes = refParser.getTypes();
+      for (Map.Entry<String,Schema> refType : parsedTypes.entrySet()) {
+        String refKey = refType.getKey();
+        if (knownTypes.containsKey(refKey) && knownTypes.get(refKey).equals(refType.getValue())) {
+          continue;
+        }
+        refTypes.put(refKey, refType.getValue());
+      }
     }
+    parser.addTypes(refTypes);
     this.schemaObj = parser.parse(schemaString);
     this.references = Collections.unmodifiableList(references);
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
@@ -142,9 +155,9 @@ public class AvroSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      Schema.Parser parser = getParser();
       List<Schema> schemaRefs = new ArrayList<>();
       for (String schema : resolvedReferences.values()) {
+        Schema.Parser parser = getParser();
         Schema schemaRef = parser.parse(schema);
         schemaRefs.add(schemaRef);
       }
