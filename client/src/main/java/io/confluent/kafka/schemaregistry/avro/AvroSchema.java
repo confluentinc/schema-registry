@@ -217,8 +217,8 @@ public class AvroSchema implements ParsedSchema {
           || !Objects.equals(field1.doc(), field2.doc())) {
         return false;
       }
-      boolean fieldSchemaDocsEqual = metaEqual(field1.schema(), field2.schema());
-      if (!fieldSchemaDocsEqual) {
+      boolean fieldSchemaMetaEqual = metaEqual(field1.schema(), field2.schema());
+      if (!fieldSchemaMetaEqual) {
         return false;
       }
     }
