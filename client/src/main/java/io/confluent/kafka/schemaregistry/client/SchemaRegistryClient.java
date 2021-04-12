@@ -38,8 +38,8 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   /**
    * @deprecated use {@link #register(String, ParsedSchema)} instead;
-   *    for example, you can convert a {@link Schema} into a {@link ParsedSchema} 
-   *    via {@code new AvroSchema(schema)}
+   *     for example, you can convert a {@link Schema} into a {@link ParsedSchema} 
+   *     via {@code new AvroSchema(schema)}
    */
   @Deprecated
   default int register(String subject, org.apache.avro.Schema schema) throws IOException,
@@ -51,8 +51,8 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   /**
    * @deprecated use {@link #register(String, ParsedSchema, int, int)} instead;
-   *    for example, you can convert a {@link Schema} into a {@link ParsedSchema}
-   *    via {@code new AvroSchema(schema)}
+   *     for example, you can convert a {@link Schema} into a {@link ParsedSchema}
+   *     via {@code new AvroSchema(schema)}
    */
   @Deprecated
   default int register(String subject, org.apache.avro.Schema schema, int version, int id)
