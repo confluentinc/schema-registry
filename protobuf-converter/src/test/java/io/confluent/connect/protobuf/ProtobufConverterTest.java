@@ -413,21 +413,6 @@ public class ProtobufConverterTest {
   }
 
   @Test
-  public void testToConnectDataForValuePreserveSInt() throws Exception {
-    converter.configure(SR_CONFIG, false);
-    // extra byte for message index
-    TestMessage sintMessage = TestMessage.newBuilder().setTestSint32(2).build();
-    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0}, sintMessage.toByteArray());
-    schemaRegistry.register("my-topic-value", getSchema(TestMessage.getDescriptor()));
-    SchemaAndValue result = converter.toConnectData("my-topic", input);
-
-    byte[] converted = converter.fromConnectData("my-topic", result.schema(), result.value());
-    TestMessage convertedMessage = TestMessage.parseFrom(Arrays.copyOfRange(converted, PROTOBUF_BYTES_START, converted.length));
-
-    assertEquals(sintMessage, convertedMessage);
-  }
-
-  @Test
   public void testToConnectDataForValueWithSecondMessage() throws Exception {
     converter.configure(SR_CONFIG, false);
     // extra bytes for message index

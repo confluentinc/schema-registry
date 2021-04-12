@@ -42,6 +42,7 @@ import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
 import io.confluent.kafka.serializers.protobuf.test.Int16ValueOuterClass.Int16Value;
 import io.confluent.kafka.serializers.protobuf.test.Int8ValueOuterClass.Int8Value;
+import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos;
 import io.confluent.kafka.serializers.protobuf.test.TimeOfDayValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.TimeOfDayValueOuterClass.TimeOfDayValue;
 import io.confluent.protobuf.type.Decimal;
@@ -579,31 +580,36 @@ public class ProtobufDataTest {
   }
 
   @Test
-  public void testToConnectPreserveSInt() throws Exception {
-    int expectedValue = 12;
-    SInt32ValueOuterClass.SInt32Value.Builder builder =
-        SInt32ValueOuterClass.SInt32Value.newBuilder();
-    builder.setValue(expectedValue);
-    SInt32ValueOuterClass.SInt32Value message = builder.build();
+  public void testConnectDataConversionPreserveSignedAndFixed() throws Exception {
+    TestMessageProtos.TestMessage originMessage = TestMessageProtos.TestMessage.newBuilder()
+        .setTestSint32(1)
+        .setTestSint64(2)
+        .setTestFixed32(3)
+        .setTestFixed64(4)
+        .setTestSfixed32(5)
+        .setTestSfixed64(6)
+        .build();
 
-    ProtobufSchema protobufSchema = new ProtobufSchema(message.getDescriptorForType());
-    DynamicMessage dynamicMessage = DynamicMessage.parseFrom(
-        protobufSchema.toDescriptor(),
-        message.toByteArray()
-    );
-
+    SchemaAndValue schemaAndValue = getSchemaAndValue(originMessage);
     ProtobufData protobufData = new ProtobufData();
-    SchemaAndValue schemaAndValue = protobufData.toConnectData(protobufSchema, dynamicMessage);
-    if (schemaAndValue.schema() != null) {
-      ConnectSchema.validateValue(schemaAndValue.schema(), schemaAndValue.value());
-    }
-    //SchemaAndValue result = getSchemaAndValue(message);
-
     ProtobufSchemaAndValue converted = protobufData.fromConnectData(schemaAndValue.schema(), schemaAndValue.value());
 
+    System.out.println(converted.getSchema());
+    System.out.println(converted.getValue());
 
-//    assertEquals(message.getDescriptorForType().getFields().get(0).getType(),
-//        converted.getSchema().toDescriptor().getFields().get(0).getType());
+    //String [] list = {"test_sint32", "test_sint64", "test_fixed32", "test_fixed64", "test_sfixed32", "test_sfixed64"};
+    String [] list = {"test_sint32", "test_sint64", "test_fixed64", "test_sfixed32", "test_sfixed64"};
+    for (String field: list) {
+
+      assertEquals(String.format("Field %s should have the same type", field),
+          originMessage.getDescriptorForType().findFieldByName(field).getType(),
+          converted.getSchema().toDescriptor().findFieldByName(field).getType());
+    }
+
+    System.out.println(converted.getSchema());
+    DynamicMessage message = (DynamicMessage) converted.getValue();
+
+    System.out.println(TestMessageProtos.TestMessage.parseFrom(message.toByteArray()));
   }
 
   @Test
