@@ -88,6 +88,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE_DOC =
           "Specify how to pick the credentials for Bearer Auth header. ";
 
+  /**
+   * @deprecated use {@link #USER_INFO_CONFIG} instead
+   */
   @Deprecated
   public static final String SCHEMA_REGISTRY_USER_INFO_CONFIG =
       SchemaRegistryClientConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG;
