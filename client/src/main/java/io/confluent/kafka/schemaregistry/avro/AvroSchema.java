@@ -184,6 +184,9 @@ public class AvroSchema implements ParsedSchema {
   }
 
   private boolean metaEqual(Schema schema1, Schema schema2) {
+    if (schema1 == null) {
+      return schema2 == null;
+    }
     Schema.Type type1 = schema1.getType();
     Schema.Type type2 = schema2.getType();
     if (type1 != type2) {
