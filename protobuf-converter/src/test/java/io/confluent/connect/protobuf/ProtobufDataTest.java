@@ -82,6 +82,7 @@ import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue;
 import io.confluent.kafka.serializers.protobuf.test.UInt32ValueOuterClass;
 
+import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_PROP;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION_PREFIX;
 import static io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.newBuilder;
@@ -577,7 +578,12 @@ public class ProtobufDataTest {
     builder.setValue(expectedValue);
     SInt32ValueOuterClass.SInt32Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
-    assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT32_SCHEMA, message, expectedValue), result);
+    Schema sint32Schema = SchemaBuilder.int32()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .parameter(PROTOBUF_TYPE_PROP, "sint32")
+        .build();
+    assertEquals(getExpectedSchemaAndValue(sint32Schema, message, expectedValue), result);
   }
 
   //TODO: remove?
@@ -614,7 +620,12 @@ public class ProtobufDataTest {
     builder.setValue(expectedValue);
     SInt64ValueOuterClass.SInt64Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
-    assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT64_SCHEMA, message, expectedValue), result);
+    Schema sint64Schema = SchemaBuilder.int64()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .parameter(PROTOBUF_TYPE_PROP, "sint64")
+        .build();
+    assertEquals(getExpectedSchemaAndValue(sint64Schema, message, expectedValue), result);
   }
 
   @Test

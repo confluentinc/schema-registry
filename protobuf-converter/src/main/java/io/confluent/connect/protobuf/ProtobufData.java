@@ -935,6 +935,7 @@ public class ProtobufData {
     } else if (isTimestampSchema(schema)) {
       return PROTOBUF_TIMESTAMP_TYPE;
     }
+    String defaultType;
     switch (schema.type()) {
       case INT8:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT8);
@@ -945,15 +946,19 @@ public class ProtobufData {
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT32:
+        defaultType = FieldDescriptor.Type.INT32.toString().toLowerCase();
+        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
+          defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
+        }
         return useWrapperForNullables && schema.isOptional()
-            ? PROTOBUF_INT32_WRAPPER_TYPE
-            : schema.parameters().getOrDefault(PROTOBUF_TYPE_PROP,
-              FieldDescriptor.Type.INT32.toString().toLowerCase());
+            ? PROTOBUF_INT32_WRAPPER_TYPE : defaultType;
       case INT64:
+        defaultType = FieldDescriptor.Type.INT64.toString().toLowerCase();
+        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
+          defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
+        }
         return useWrapperForNullables && schema.isOptional()
-            ? PROTOBUF_INT64_WRAPPER_TYPE
-            : schema.parameters().getOrDefault(PROTOBUF_TYPE_PROP,
-              FieldDescriptor.Type.INT64.toString().toLowerCase());
+            ? PROTOBUF_INT64_WRAPPER_TYPE : defaultType;
       case FLOAT32:
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_FLOAT_WRAPPER_TYPE : FieldDescriptor.Type.FLOAT.toString().toLowerCase();
