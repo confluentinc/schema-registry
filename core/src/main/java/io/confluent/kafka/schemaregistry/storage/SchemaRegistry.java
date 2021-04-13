@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 public interface SchemaRegistry extends SchemaVersionFetcher {
 
   String DEFAULT_TENANT = "default";
+  String DEFAULT_CONTEXT = ".";
 
   void init() throws SchemaRegistryException;
 
