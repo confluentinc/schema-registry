@@ -1266,7 +1266,9 @@ public class ProtobufData {
 
     switch (descriptor.getType()) {
       case INT32:
+      case UINT32:
       case SINT32:
+      case FIXED32:
       case SFIXED32: {
         if (descriptor.getOptions().hasExtension(MetaProto.fieldMeta)) {
           Meta fieldMeta = descriptor.getOptions().getExtension(MetaProto.fieldMeta);
@@ -1289,18 +1291,13 @@ public class ProtobufData {
         break;
       }
 
-      case UINT32:
-      case FIXED32:
       case INT64:
       case UINT64:
       case SINT64:
       case FIXED64:
       case SFIXED64: {
         builder = SchemaBuilder.int64();
-        if (descriptor.getType() != FieldDescriptor.Type.INT64
-            && descriptor.getType() != FieldDescriptor.Type.UINT32
-            && descriptor.getType() != FieldDescriptor.Type.FIXED32
-        ) {
+        if (descriptor.getType() != FieldDescriptor.Type.INT64) {
           builder.parameter(PROTOBUF_TYPE_PROP, descriptor.getType().toString().toLowerCase());
         }
         break;
