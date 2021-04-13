@@ -598,7 +598,7 @@ public class ProtobufDataTest {
     System.out.println(converted.getValue());
 
     //String [] list = {"test_sint32", "test_sint64", "test_fixed32", "test_fixed64", "test_sfixed32", "test_sfixed64"};
-    String [] list = {"test_sint32", "test_sint64", "test_fixed64", "test_sfixed32", "test_sfixed64"};
+    String [] list = {"test_sint32", "test_sint64", "test_fixed64", "test_uint64", "test_sfixed32", "test_sfixed64"};
     for (String field: list) {
 
       assertEquals(String.format("Field %s should have the same type", field),

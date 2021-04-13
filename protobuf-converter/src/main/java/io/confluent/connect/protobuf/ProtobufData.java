@@ -1298,7 +1298,6 @@ public class ProtobufData {
       case SFIXED64: {
         builder = SchemaBuilder.int64();
         if (descriptor.getType() != FieldDescriptor.Type.INT64
-            && descriptor.getType() != FieldDescriptor.Type.UINT64
             && descriptor.getType() != FieldDescriptor.Type.UINT32
             && descriptor.getType() != FieldDescriptor.Type.FIXED32
         ) {
