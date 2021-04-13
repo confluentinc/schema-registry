@@ -200,15 +200,57 @@ public class AvroSchema implements ParsedSchema {
       return false;
     }
     AvroSchema that = (AvroSchema) o;
-    // Can't use schemaObj as it doesn't compare field doc, aliases, etc.
-    return Objects.equals(canonicalString(), that.canonicalString())
+    return Objects.equals(schemaObj, that.schemaObj)
+        && metaEqual(schemaObj, that.schemaObj)
         && Objects.equals(references, that.references)
         && Objects.equals(version, that.version);
   }
 
+  private boolean metaEqual(Schema schema1, Schema schema2) {
+    if (schema1 == null) {
+      return schema2 == null;
+    }
+    Schema.Type type1 = schema1.getType();
+    Schema.Type type2 = schema2.getType();
+    if (type1 != type2) {
+      return false;
+    }
+    switch (type1) {
+      case RECORD:
+        return Objects.equals(schema1.getAliases(), schema2.getAliases())
+            && Objects.equals(schema1.getDoc(), schema2.getDoc())
+            && fieldMetaEqual(schema1.getFields(), schema2.getFields());
+      case ENUM:
+      case FIXED:
+        return Objects.equals(schema1.getAliases(), schema2.getAliases())
+            && Objects.equals(schema1.getDoc(), schema2.getDoc());
+      default:
+        return true;
+    }
+  }
+
+  private boolean fieldMetaEqual(List<Schema.Field> fields1, List<Schema.Field> fields2) {
+    if (fields1.size() != fields2.size()) {
+      return false;
+    }
+    for (int i = 0; i < fields1.size(); i++) {
+      Schema.Field field1 = fields1.get(i);
+      Schema.Field field2 = fields2.get(i);
+      if (!Objects.equals(field1.aliases(), field2.aliases())
+          || !Objects.equals(field1.doc(), field2.doc())) {
+        return false;
+      }
+      boolean fieldSchemaMetaEqual = metaEqual(field1.schema(), field2.schema());
+      if (!fieldSchemaMetaEqual) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   @Override
   public int hashCode() {
-    return Objects.hash(canonicalString(), references, version);
+    return Objects.hash(schemaObj, references, version);
   }
 
   @Override
