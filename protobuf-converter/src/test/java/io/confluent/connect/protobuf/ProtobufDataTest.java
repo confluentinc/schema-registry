@@ -586,21 +586,25 @@ public class ProtobufDataTest {
     assertEquals(getExpectedSchemaAndValue(sint32Schema, message, expectedValue), result);
   }
 
-  //TODO: remove?
-//  @Test
-//  public void testToConnectInt32WithUInt32() throws Exception {
-//    final Long UNSIGNED_RESULT = 4294967295L;
-//    Integer expectedValue = -1;
-//    UInt32ValueOuterClass.UInt32Value.Builder builder =
-//        UInt32ValueOuterClass.UInt32Value.newBuilder();
-//    builder.setValue(expectedValue);
-//    UInt32ValueOuterClass.UInt32Value message = builder.build();
-//    SchemaAndValue result = getSchemaAndValue(message);
-//    assertEquals(
-//        getExpectedSchemaAndValue(OPTIONAL_INT64_SCHEMA, message, UNSIGNED_RESULT),
-//        result
-//    );
-//  }
+  @Test
+  public void testToConnectInt32WithUInt32() throws Exception {
+    final Long UNSIGNED_RESULT = 4294967295L;
+    Integer expectedValue = -1;
+    UInt32ValueOuterClass.UInt32Value.Builder builder =
+        UInt32ValueOuterClass.UInt32Value.newBuilder();
+    builder.setValue(expectedValue);
+    UInt32ValueOuterClass.UInt32Value message = builder.build();
+    SchemaAndValue result = getSchemaAndValue(message);
+    Schema schema = SchemaBuilder.int64()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .parameter(PROTOBUF_TYPE_PROP, "uint32")
+        .build();
+    assertEquals(
+        getExpectedSchemaAndValue(schema, message, UNSIGNED_RESULT),
+        result
+    );
+  }
 
   @Test
   public void testToConnectInt64() throws Exception {
@@ -878,11 +882,10 @@ public class ProtobufDataTest {
     DynamicMessage convertedValue = (DynamicMessage) converted.getValue();
 
     TestMessageProtos.TestMessage parsedMessage = TestMessageProtos.TestMessage.parseFrom(convertedValue.toByteArray());
-//    System.out.println(parsedMessage);
-//    System.out.println(parsedMessage.getTestFixed32());
 
     assertEquals(message, parsedMessage);
-    assertTrue(parsedMessage.toString().contains(String.valueOf(UNSIGNED_RESULT)));
+    assertTrue(parsedMessage.toString().contains("test_fixed32: " + UNSIGNED_RESULT));
+    assertTrue(parsedMessage.toString().contains("test_uint32: " + UNSIGNED_RESULT));
   }
 
   @Test

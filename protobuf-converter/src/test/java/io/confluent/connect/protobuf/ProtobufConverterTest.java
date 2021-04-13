@@ -131,7 +131,7 @@ public class ProtobufConverterTest {
     );
     builder.field(
         "test_fixed32",
-        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(6))
+        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(6))
             .parameter(PROTOBUF_TYPE_PROP, "fixed32").build()
     );
     builder.field(
@@ -169,7 +169,7 @@ public class ProtobufConverterTest {
     );
     builder.field(
         "test_uint32",
-        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(14))
+        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(14))
             .parameter(PROTOBUF_TYPE_PROP, "uint32").build()
     );
     builder.field(
@@ -210,7 +210,7 @@ public class ProtobufConverterTest {
     result.put("test_bytes", ByteBuffer.allocate(0));
     result.put("test_double", 0.0d);
     result.put("test_float", 0.0f);
-    result.put("test_fixed32", 0);
+    result.put("test_fixed32", 0L);
     result.put("test_fixed64", 0L);
     result.put("test_int32", messageInt);
     result.put("test_int64", 0L);
@@ -218,7 +218,7 @@ public class ProtobufConverterTest {
     result.put("test_sfixed64", 0L);
     result.put("test_sint32", 0);
     result.put("test_sint64", 0L);
-    result.put("test_uint32", 0);
+    result.put("test_uint32", 0L);
     result.put("test_uint64", 0L);
     return result;
   }

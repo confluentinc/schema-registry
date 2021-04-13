@@ -364,9 +364,17 @@ public class ProtobufData {
         }
 
         case INT64: {
-          final long longValue = ((Number) value).longValue(); // Check for correct type
-          return useWrapperForNullables && schema.isOptional()
-              ? Int64Value.newBuilder().setValue(longValue).build() : longValue;
+          String protobufType = schema.parameters() != null
+              ? schema.parameters().get(PROTOBUF_TYPE_PROP) : null;
+          if (Objects.equals(protobufType, "uint32") || Objects.equals(protobufType, "fixed32")) {
+            final int intValue = (int) ((Number) value).longValue(); // Check for correct type
+            return useWrapperForNullables && schema.isOptional()
+                ? Int32Value.newBuilder().setValue(intValue).build() : intValue;
+          } else {
+            final long longValue = ((Number) value).longValue(); // Check for correct type
+            return useWrapperForNullables && schema.isOptional()
+                ? Int64Value.newBuilder().setValue(longValue).build() : longValue;
+          }
         }
 
         case FLOAT32: {
@@ -1271,9 +1279,7 @@ public class ProtobufData {
 
     switch (descriptor.getType()) {
       case INT32:
-      case UINT32:
       case SINT32:
-      case FIXED32:
       case SFIXED32: {
         if (descriptor.getOptions().hasExtension(MetaProto.fieldMeta)) {
           Meta fieldMeta = descriptor.getOptions().getExtension(MetaProto.fieldMeta);
@@ -1296,6 +1302,8 @@ public class ProtobufData {
         break;
       }
 
+      case UINT32:
+      case FIXED32:
       case INT64:
       case UINT64:
       case SINT64:
