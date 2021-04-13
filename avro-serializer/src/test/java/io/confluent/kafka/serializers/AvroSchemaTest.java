@@ -44,6 +44,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -87,6 +88,108 @@ public class AvroSchemaTest {
           + "     {\"name\": \"string_default\", \"type\": \"string\", \"default\": null}\n"
           + "]\n"
           + "}";
+
+  private static final Schema recordWithDocSchema = new Schema.Parser().parse(
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"record\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"doc\": \"test\",\n"
+          + " \"fields\": [\n"
+          + "     {\"name\": \"null\", \"type\": \"null\"},\n"
+          + "     {\"name\": \"boolean\", \"type\": \"boolean\"},\n"
+          + "     {\"name\": \"int\", \"type\": \"int\"},\n"
+          + "     {\"name\": \"long\", \"type\": \"long\"},\n"
+          + "     {\"name\": \"float\", \"type\": \"float\"},\n"
+          + "     {\"name\": \"double\", \"type\": \"double\"},\n"
+          + "     {\"name\": \"bytes\", \"type\": \"bytes\"},\n"
+          + "     {\"name\": \"string\", \"type\": \"string\", \"aliases\": [\"string_alias\"]},\n"
+          + "     {\"name\": \"null_default\", \"type\": \"null\", \"default\": null},\n"
+          + "     {\"name\": \"boolean_default\", \"type\": \"boolean\", \"default\": false},\n"
+          + "     {\"name\": \"int_default\", \"type\": \"int\", \"default\": 24},\n"
+          + "     {\"name\": \"long_default\", \"type\": \"long\", \"default\": 4000000000},\n"
+          + "     {\"name\": \"float_default\", \"type\": \"float\", \"default\": 12.3},\n"
+          + "     {\"name\": \"double_default\", \"type\": \"double\", \"default\": 23.2},\n"
+          + "     {\"name\": \"bytes_default\", \"type\": \"bytes\", \"default\": \"bytes\"},\n"
+          + "     {\"name\": \"string_default\", \"type\": \"string\", \"default\": "
+          + "\"default string\"}\n"
+          + "]\n"
+          + "}");
+
+  private static final Schema recordWithAliasesSchema = new Schema.Parser().parse(
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"record\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"aliases\": [\"test\"],\n"
+          + " \"fields\": [\n"
+          + "     {\"name\": \"null\", \"type\": \"null\"},\n"
+          + "     {\"name\": \"boolean\", \"type\": \"boolean\"},\n"
+          + "     {\"name\": \"int\", \"type\": \"int\"},\n"
+          + "     {\"name\": \"long\", \"type\": \"long\"},\n"
+          + "     {\"name\": \"float\", \"type\": \"float\"},\n"
+          + "     {\"name\": \"double\", \"type\": \"double\"},\n"
+          + "     {\"name\": \"bytes\", \"type\": \"bytes\"},\n"
+          + "     {\"name\": \"string\", \"type\": \"string\", \"aliases\": [\"string_alias\"]},\n"
+          + "     {\"name\": \"null_default\", \"type\": \"null\", \"default\": null},\n"
+          + "     {\"name\": \"boolean_default\", \"type\": \"boolean\", \"default\": false},\n"
+          + "     {\"name\": \"int_default\", \"type\": \"int\", \"default\": 24},\n"
+          + "     {\"name\": \"long_default\", \"type\": \"long\", \"default\": 4000000000},\n"
+          + "     {\"name\": \"float_default\", \"type\": \"float\", \"default\": 12.3},\n"
+          + "     {\"name\": \"double_default\", \"type\": \"double\", \"default\": 23.2},\n"
+          + "     {\"name\": \"bytes_default\", \"type\": \"bytes\", \"default\": \"bytes\"},\n"
+          + "     {\"name\": \"string_default\", \"type\": \"string\", \"default\": "
+          + "\"default string\"}\n"
+          + "]\n"
+          + "}");
+
+  private static final Schema recordWithFieldDocSchema = new Schema.Parser().parse(
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"record\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"fields\": [\n"
+          + "     {\"name\": \"null\", \"type\": \"null\", \"doc\": \"test\"},\n"
+          + "     {\"name\": \"boolean\", \"type\": \"boolean\"},\n"
+          + "     {\"name\": \"int\", \"type\": \"int\"},\n"
+          + "     {\"name\": \"long\", \"type\": \"long\"},\n"
+          + "     {\"name\": \"float\", \"type\": \"float\"},\n"
+          + "     {\"name\": \"double\", \"type\": \"double\"},\n"
+          + "     {\"name\": \"bytes\", \"type\": \"bytes\"},\n"
+          + "     {\"name\": \"string\", \"type\": \"string\", \"aliases\": [\"string_alias\"]},\n"
+          + "     {\"name\": \"null_default\", \"type\": \"null\", \"default\": null},\n"
+          + "     {\"name\": \"boolean_default\", \"type\": \"boolean\", \"default\": false},\n"
+          + "     {\"name\": \"int_default\", \"type\": \"int\", \"default\": 24},\n"
+          + "     {\"name\": \"long_default\", \"type\": \"long\", \"default\": 4000000000},\n"
+          + "     {\"name\": \"float_default\", \"type\": \"float\", \"default\": 12.3},\n"
+          + "     {\"name\": \"double_default\", \"type\": \"double\", \"default\": 23.2},\n"
+          + "     {\"name\": \"bytes_default\", \"type\": \"bytes\", \"default\": \"bytes\"},\n"
+          + "     {\"name\": \"string_default\", \"type\": \"string\", \"default\": "
+          + "\"default string\"}\n"
+          + "]\n"
+          + "}");
+
+  private static final Schema recordWithFieldAliasesSchema = new Schema.Parser().parse(
+      "{\"namespace\": \"namespace\",\n"
+          + " \"type\": \"record\",\n"
+          + " \"name\": \"test\",\n"
+          + " \"fields\": [\n"
+          + "     {\"name\": \"null\", \"type\": \"null\", \"aliases\": [\"test\"]},\n"
+          + "     {\"name\": \"boolean\", \"type\": \"boolean\"},\n"
+          + "     {\"name\": \"int\", \"type\": \"int\"},\n"
+          + "     {\"name\": \"long\", \"type\": \"long\"},\n"
+          + "     {\"name\": \"float\", \"type\": \"float\"},\n"
+          + "     {\"name\": \"double\", \"type\": \"double\"},\n"
+          + "     {\"name\": \"bytes\", \"type\": \"bytes\"},\n"
+          + "     {\"name\": \"string\", \"type\": \"string\", \"aliases\": [\"string_alias\"]},\n"
+          + "     {\"name\": \"null_default\", \"type\": \"null\", \"default\": null},\n"
+          + "     {\"name\": \"boolean_default\", \"type\": \"boolean\", \"default\": false},\n"
+          + "     {\"name\": \"int_default\", \"type\": \"int\", \"default\": 24},\n"
+          + "     {\"name\": \"long_default\", \"type\": \"long\", \"default\": 4000000000},\n"
+          + "     {\"name\": \"float_default\", \"type\": \"float\", \"default\": 12.3},\n"
+          + "     {\"name\": \"double_default\", \"type\": \"double\", \"default\": 23.2},\n"
+          + "     {\"name\": \"bytes_default\", \"type\": \"bytes\", \"default\": \"bytes\"},\n"
+          + "     {\"name\": \"string_default\", \"type\": \"string\", \"default\": "
+          + "\"default string\"}\n"
+          + "]\n"
+          + "}");
 
   private static final Schema arraySchema = new Schema.Parser().parse(
       "{\"namespace\": \"namespace\",\n"
@@ -411,6 +514,18 @@ public class AvroSchemaTest {
     assertFalse(schema.isPresent());
   }
 
+  @Test
+  public void testMetaInequalities() throws Exception {
+    AvroSchema schema = new AvroSchema(recordSchema);
+    AvroSchema schema1 = new AvroSchema(recordWithDocSchema);
+    AvroSchema schema2 = new AvroSchema(recordWithAliasesSchema);
+    AvroSchema schema3 = new AvroSchema(recordWithFieldDocSchema);
+    AvroSchema schema4 = new AvroSchema(recordWithFieldAliasesSchema);
+    assertNotEquals(schema, schema1);
+    assertNotEquals(schema, schema2);
+    assertNotEquals(schema, schema3);
+    assertNotEquals(schema, schema4);
+  }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {
     try {
