@@ -47,33 +47,40 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
    */
   public ValidationStatus validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
                                          TopicPartition tp, long offset, long timestamp) {
-    if (value != null) {
-      // Store the offset and timestamp in the cached value
-      value.setOffset(offset);
-      value.setTimestamp(timestamp);
+    if (value == null) {
+      return ValidationStatus.SUCCESS;
     }
+
+    // Store the offset and timestamp in the cached value
+    value.setOffset(offset);
+    value.setTimestamp(timestamp);
 
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
-      if (schemaObj != null) {
-        try {
-          SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
-          if (oldKey != null) {
-            SchemaValue oldSchema;
-            oldSchema = (SchemaValue) lookupCache.get(oldKey);
-            if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
-              log.error("Found a schema with duplicate ID {}.  This schema will not be "
-                      + "registered since a schema already exists with this ID.",
-                  schemaObj.getId());
-              return schemaRegistry.isLeader()
-                  ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
-            }
+      try {
+        SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
+        if (oldKey != null) {
+          SchemaValue oldSchema;
+          oldSchema = (SchemaValue) lookupCache.get(oldKey);
+          if (oldSchema != null && !oldSchema.getSchema().equals(schemaObj.getSchema())) {
+            log.error("Found a schema with duplicate ID {}.  This schema will not be "
+                    + "registered since a schema already exists with this ID.",
+                schemaObj.getId());
+            return schemaRegistry.isLeader()
+                ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
           }
-        } catch (StoreException e) {
-          log.error("Error while retrieving schema", e);
-          return schemaRegistry.isLeader()
-              ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
         }
+      } catch (StoreException e) {
+        log.error("Error while retrieving schema", e);
+        return schemaRegistry.isLeader()
+            ? ValidationStatus.ROLLBACK_FAILURE : ValidationStatus.IGNORE_FAILURE;
+      }
+    } else if (key.getKeyType() == SchemaRegistryKeyType.CONFIG
+        || key.getKeyType() == SchemaRegistryKeyType.MODE) {
+      SubjectValue subjectValue = (SubjectValue) value;
+      if (subjectValue.getSubject() == null) {
+        // handle legacy values
+        subjectValue.setSubject(((SubjectKey) key).getSubject());
       }
     }
     return ValidationStatus.SUCCESS;

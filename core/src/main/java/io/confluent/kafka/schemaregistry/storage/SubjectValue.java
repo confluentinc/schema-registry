@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2021 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -17,15 +17,27 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Objects;
 
-@JsonInclude(Include.NON_EMPTY)
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ClearSubjectValue extends SubjectValue {
+public abstract class SubjectValue extends SchemaRegistryValue {
 
-  public ClearSubjectValue(@JsonProperty("subject") String subject) {
-    super(subject);
+  private String subject;
+
+  public SubjectValue(@JsonProperty("subject") String subject) {
+    this.subject = subject;
+  }
+
+  @JsonProperty("subject")
+  public String getSubject() {
+    return this.subject;
+  }
+
+  @JsonProperty("subject")
+  public void setSubject(String subject) {
+    this.subject = subject;
   }
 
   @Override
@@ -36,18 +48,13 @@ public class ClearSubjectValue extends SubjectValue {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    return super.equals(o);
+
+    SubjectValue that = (SubjectValue) o;
+    return Objects.equals(subject, that.subject);
   }
 
   @Override
   public int hashCode() {
-    return super.hashCode();
-  }
-
-  @Override
-  public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{subject=" + this.getSubject() + "}");
-    return sb.toString();
+    return Objects.hashCode(subject);
   }
 }

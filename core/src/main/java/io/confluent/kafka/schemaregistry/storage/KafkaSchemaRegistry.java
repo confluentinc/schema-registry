@@ -1331,7 +1331,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     ConfigKey configKey = new ConfigKey(subject);
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      kafkaStore.put(configKey, new ConfigValue(newCompatibilityLevel));
+      kafkaStore.put(configKey, new ConfigValue(subject, newCompatibilityLevel));
       log.debug("Wrote new compatibility level: " + newCompatibilityLevel.name + " to the"
                 + " Kafka data store with key " + configKey.toString());
     } catch (StoreException e) {
@@ -1530,7 +1530,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         // Write an event to clear deleted schemas from the caches.
         kafkaStore.put(new ClearSubjectKey(subject), new ClearSubjectValue(subject));
       }
-      kafkaStore.put(modeKey, new ModeValue(mode));
+      kafkaStore.put(modeKey, new ModeValue(subject, mode));
       log.debug("Wrote new mode: " + mode.name() + " to the"
           + " Kafka data store with key " + modeKey.toString());
     } catch (StoreException e) {
