@@ -1644,5 +1644,6 @@ public class RestApiTest extends ClusterTestHarness {
     // Join base URL and path, collapsing any duplicate forward slash delimiters
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
+  
 }
 
