@@ -42,7 +42,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final ConcurrentNavigableMap<K, V> store;
   private final Map<String, Map<Integer, Map<String, Integer>>> guidToSubjectVersions;
   private final Map<String, Map<MD5, Integer>> hashToGuid;
-  private final Map<SchemaKey, Set<Integer>> referencedBy;
+  private final Map<String, Map<SchemaKey, Set<Integer>>> referencedBy;
 
   public InMemoryCache(Serializer<K, V> serializer) {
     this.store = new ConcurrentSkipListMap<>();
@@ -126,7 +126,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public Set<Integer> referencesSchema(SchemaKey schema) throws StoreException {
-    return referencedBy.getOrDefault(schema, Collections.emptySet());
+    Map<SchemaKey, Set<Integer>> refBy =
+            referencedBy.getOrDefault(tenant(), Collections.emptyMap());
+    return refBy.getOrDefault(schema, Collections.emptySet());
   }
 
   @Override
@@ -153,11 +155,14 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
       SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
-      Set<Integer> refBy = referencedBy.get(refKey);
+      Map<SchemaKey, Set<Integer>> refBy = referencedBy.get(tenant());
       if (refBy != null) {
-        refBy.remove(schemaValue.getId());
-        if (refBy.isEmpty()) {
-          referencedBy.remove(refKey);
+        Set<Integer> ids = refBy.get(refKey);
+        if (ids != null) {
+          ids.remove(schemaValue.getId());
+          if (ids.isEmpty()) {
+            refBy.remove(refKey);
+          }
         }
       }
     }
@@ -191,9 +196,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     addToSchemaHashToGuid(schemaKey, schemaValue);
     for (SchemaReference ref : schemaValue.getReferences()) {
       SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
-      Set<Integer> refBy = referencedBy.computeIfAbsent(
+      Map<SchemaKey, Set<Integer>> refBy =
+          referencedBy.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+      Set<Integer> ids = refBy.computeIfAbsent(
               refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
-      refBy.add(schemaValue.getId());
+      ids.add(schemaValue.getId());
     }
   }
 
