@@ -512,7 +512,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           while (retries++ < kafkaStoreMaxRetries) {
             int newId = idGenerator.id(schema);
             // Verify id is not already in use
-            if (lookupCache.schemaKeyById(newId) == null) {
+            if (lookupCache.schemaKeyById(newId, subject) == null) {
               schema.setId(newId);
               if (retries > 1) {
                 log.warn(String.format("Retrying to register the schema with ID %s", newId));
@@ -795,7 +795,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public void checkIfSchemaWithIdExist(int id, Schema schema)
       throws SchemaRegistryException, StoreException {
-    SchemaKey existingKey = this.lookupCache.schemaKeyById(id);
+    SchemaKey existingKey = this.lookupCache.schemaKeyById(id, schema.getSubject());
     if (existingKey != null) {
       SchemaRegistryValue existingValue = this.lookupCache.get(existingKey);
       if (existingValue != null
@@ -1084,18 +1084,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   @Override
-  public SchemaString get(int id) throws SchemaRegistryException {
-    return get(id, null, false);
+  public SchemaString get(int id, String subject) throws SchemaRegistryException {
+    return get(id, subject, null, false);
   }
 
   public SchemaString get(
       int id,
+      String subject,
       String format,
       boolean fetchMaxId
   ) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
-      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
+      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
       if (subjectVersionKey == null) {
         return null;
       }
@@ -1162,13 +1163,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public Set<String> listSubjectsForId(int id) throws SchemaRegistryException {
-    return listSubjectsForId(id, false);
+  public Set<String> listSubjectsForId(int id, String subject) throws SchemaRegistryException {
+    return listSubjectsForId(id, subject, false);
   }
 
-  public Set<String> listSubjectsForId(int id, boolean returnDeleted)
+  public Set<String> listSubjectsForId(int id, String subject, boolean returnDeleted)
       throws SchemaRegistryException {
-    List<SubjectVersion> versions = listVersionsForId(id, returnDeleted);
+    List<SubjectVersion> versions = listVersionsForId(id, subject, returnDeleted);
     return versions != null
         ? versions.stream()
             .map(SubjectVersion::getSubject)
@@ -1176,15 +1177,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         : null;
   }
 
-  public List<SubjectVersion> listVersionsForId(int id) throws SchemaRegistryException {
-    return listVersionsForId(id, false);
+  public List<SubjectVersion> listVersionsForId(int id, String subject)
+      throws SchemaRegistryException {
+    return listVersionsForId(id, subject, false);
   }
 
-  public List<SubjectVersion> listVersionsForId(int id, boolean lookupDeleted)
+  public List<SubjectVersion> listVersionsForId(int id, String subject, boolean lookupDeleted)
       throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
-      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id);
+      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
       if (subjectVersionKey == null) {
         return null;
       }

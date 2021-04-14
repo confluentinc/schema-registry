@@ -552,6 +552,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "subject"
+        in: "query"
+        required: false
+        type: "string"
       - name: "format"
         in: "query"
         required: false
@@ -591,6 +595,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "subject"
+        in: "query"
+        required: false
+        type: "string"
       - name: "deleted"
         in: "query"
         required: false
@@ -628,6 +636,10 @@ paths:
         required: true
         type: "integer"
         format: "int32"
+      - name: "subject"
+        in: "query"
+        required: false
+        type: "string"
       - name: "deleted"
         in: "query"
         required: false

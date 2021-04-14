@@ -753,22 +753,40 @@ public class RestService implements Configurable {
   }
 
   public SchemaString getId(int id) throws IOException, RestClientException {
-    return getId(DEFAULT_REQUEST_PROPERTIES, id, false);
+    return getId(DEFAULT_REQUEST_PROPERTIES, id, null, false);
+  }
+
+  public SchemaString getId(int id, boolean fetchMaxId)
+      throws IOException, RestClientException {
+    return getId(DEFAULT_REQUEST_PROPERTIES, id, null, fetchMaxId);
+  }
+
+  public SchemaString getId(int id, String subject) throws IOException, RestClientException {
+    return getId(DEFAULT_REQUEST_PROPERTIES, id, subject, false);
+  }
+
+  public SchemaString getId(int id, String subject, boolean fetchMaxId)
+      throws IOException, RestClientException {
+    return getId(DEFAULT_REQUEST_PROPERTIES, id, subject, fetchMaxId);
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
                             int id) throws IOException, RestClientException {
-    return getId(requestProperties, id, false);
-  }
-
-  public SchemaString getId(int id, boolean fetchMaxId) throws IOException, RestClientException {
-    return getId(DEFAULT_REQUEST_PROPERTIES, id, fetchMaxId);
+    return getId(requestProperties, id, null, false);
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
-                            int id, boolean fetchMaxId) throws IOException, RestClientException {
+                            int id, String subject) throws IOException, RestClientException {
+    return getId(requestProperties, id, subject, false);
+  }
+
+  public SchemaString getId(Map<String, String> requestProperties,
+      int id, String subject, boolean fetchMaxId) throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}")
         .queryParam("fetchMaxId", fetchMaxId);
+    if (subject != null) {
+      builder.queryParam("subject", subject);
+    }
     String path = builder.build(id).toString();
 
     SchemaString response = httpRequest(path, "GET", null, requestProperties,
@@ -924,21 +942,42 @@ public class RestService implements Configurable {
 
   public List<String> getAllSubjectsById(int id)
       throws IOException, RestClientException {
-    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, id);
+    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, id, null);
+  }
+
+  public List<String> getAllSubjectsById(int id, String subject)
+      throws IOException, RestClientException {
+    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, id, subject);
+  }
+
+  public List<String> getAllSubjectsById(int id, String subject, boolean deleted)
+      throws IOException, RestClientException {
+    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, id, subject, deleted);
   }
 
   public List<String> getAllSubjectsById(Map<String, String> requestProperties,
                                          int id)
       throws IOException, RestClientException {
-    return getAllSubjectsById(requestProperties, id, false);
+    return getAllSubjectsById(requestProperties, id, null, false);
   }
 
   public List<String> getAllSubjectsById(Map<String, String> requestProperties,
                                          int id,
+                                         String subject)
+      throws IOException, RestClientException {
+    return getAllSubjectsById(requestProperties, id, subject, false);
+  }
+
+  public List<String> getAllSubjectsById(Map<String, String> requestProperties,
+                                         int id,
+                                         String subject,
                                          boolean lookupDeleted)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/subjects");
     builder.queryParam("deleted", lookupDeleted);
+    if (subject != null) {
+      builder.queryParam("subject", subject);
+    }
     String path = builder.build(id).toString();
 
     List<String> response = httpRequest(path, "GET", null, requestProperties,
@@ -949,21 +988,42 @@ public class RestService implements Configurable {
 
   public List<SubjectVersion> getAllVersionsById(int id)
       throws IOException, RestClientException {
-    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, id);
+    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, id, null);
+  }
+
+  public List<SubjectVersion> getAllVersionsById(int id, String subject)
+      throws IOException, RestClientException {
+    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, id, subject);
+  }
+
+  public List<SubjectVersion> getAllVersionsById(int id, String subject, boolean deleted)
+      throws IOException, RestClientException {
+    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, id, subject, deleted);
   }
 
   public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
                                                  int id)
       throws IOException, RestClientException {
-    return getAllVersionsById(requestProperties, id, false);
+    return getAllVersionsById(requestProperties, id, null, false);
   }
 
   public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
                                                  int id,
+                                                 String subject)
+      throws IOException, RestClientException {
+    return getAllVersionsById(requestProperties, id, subject, false);
+  }
+
+  public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
+                                                 int id,
+                                                 String subject,
                                                  boolean lookupDeleted)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/versions");
     builder.queryParam("deleted", lookupDeleted);
+    if (subject != null) {
+      builder.queryParam("subject", subject);
+    }
     String path = builder.build(id).toString();
 
     List<SubjectVersion> response = httpRequest(path, "GET", null, requestProperties,

@@ -178,7 +178,7 @@ public class CachedSchemaRegistryClientTest {
         .andReturn(ID_25);
 
     // Expect only one call to getId (the rest should hit the cache)
-    expect(restService.getId(ID_25))
+    expect(restService.getId(ID_25, SUBJECT_0))
         .andReturn(new SchemaString(SCHEMA_STR_0));
 
     replay(restService);
@@ -236,9 +236,9 @@ public class CachedSchemaRegistryClientTest {
         anyObject(List.class), eq(subjectTwo)))
         .andReturn(ID_25);
 
-    expect(restService.getId(eq(ID_25)))
+    expect(restService.getId(ID_25, subjectOne))
             .andReturn(schemaStringOne);
-    expect(restService.getId(eq(ID_25)))
+    expect(restService.getId(ID_25, subjectTwo))
             .andReturn(schemaStringTwo);
 
     replay(restService);
@@ -392,7 +392,7 @@ public class CachedSchemaRegistryClientTest {
         .andReturn(ID_25)
         .anyTimes();
 
-    expect(restService.getId(ID_25))
+    expect(restService.getId(ID_25, SUBJECT_0))
         .andReturn(new SchemaString(SCHEMA_STR_0))
         .anyTimes();
 

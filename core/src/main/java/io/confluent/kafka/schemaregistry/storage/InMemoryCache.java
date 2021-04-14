@@ -132,7 +132,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public SchemaKey schemaKeyById(Integer id) throws StoreException {
+  public SchemaKey schemaKeyById(Integer id, String subject) throws StoreException {
     Map<Integer, Map<String, Integer>> guids =
             guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
     Map<String, Integer> subjectVersions = guids.get(id);

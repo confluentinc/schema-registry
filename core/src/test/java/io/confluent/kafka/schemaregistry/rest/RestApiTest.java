@@ -477,7 +477,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // if fetchMaxId is not provided then the maxId is null
     assertNull(restApp.restClient.getId(1).getMaxId());
-    assertEquals(Integer.valueOf(latestId), restApp.restClient.getId(1, true).getMaxId());
+    assertEquals(Integer.valueOf(latestId), restApp.restClient.getId(1, null, true).getMaxId());
   }
 
   @Test
@@ -838,7 +838,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(Collections.singletonList(subject1), associatedSubjects);
 
     associatedSubjects = restApp.restClient.getAllSubjectsById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, 1, true);
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true);
     assertEquals(associatedSubjects.size(), 2);
     assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
   }
@@ -879,7 +879,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
 
     associatedSubjects = restApp.restClient.getAllVersionsById(
-        RestService.DEFAULT_REQUEST_PROPERTIES, 1, true);
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true);
     assertEquals(associatedSubjects.size(), 2);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
@@ -1644,5 +1644,6 @@ public class RestApiTest extends ClusterTestHarness {
     // Join base URL and path, collapsing any duplicate forward slash delimiters
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
+  
 }
 

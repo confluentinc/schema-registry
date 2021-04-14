@@ -63,9 +63,10 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * Provides the {@link SchemaKey} for the provided schema id.
    *
    * @param id the schema id; never {@code null}
+   * @param subject the subject
    * @return the {@link SchemaKey} if found, otherwise null.
    */
-  SchemaKey schemaKeyById(Integer id) throws StoreException;
+  SchemaKey schemaKeyById(Integer id, String subject) throws StoreException;
 
   /**
    * Callback that is invoked when a schema is registered.

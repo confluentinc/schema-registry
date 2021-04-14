@@ -221,8 +221,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         schema.references(), subject, version, id);
   }
 
-  protected ParsedSchema getSchemaByIdFromRegistry(int id) throws IOException, RestClientException {
-    SchemaString restSchema = restService.getId(id);
+  protected ParsedSchema getSchemaByIdFromRegistry(int id, String subject)
+      throws IOException, RestClientException {
+    SchemaString restSchema = restService.getId(id, subject);
     Optional<ParsedSchema> schema = parseSchema(
         restSchema.getSchemaType(), restSchema.getSchemaString(), restSchema.getReferences());
     return schema.orElseThrow(() -> new IOException("Invalid schema " + restSchema.getSchemaString()
@@ -296,7 +297,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       return cachedSchema;
     }
 
-    final ParsedSchema retrievedSchema = getSchemaByIdFromRegistry(id);
+    final ParsedSchema retrievedSchema = getSchemaByIdFromRegistry(id, subject);
     idSchemaMap.put(id, retrievedSchema);
     return retrievedSchema;
   }
