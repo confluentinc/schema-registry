@@ -965,8 +965,21 @@ public class ProtobufData {
         if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
           defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
         }
+        String wrapperType;
+        switch (defaultType) {
+          case "uint32":
+          case "fixed32":
+            wrapperType = PROTOBUF_UINT32_WRAPPER_TYPE;
+            break;
+          case "uint64":
+          case "fixed64":
+            wrapperType = PROTOBUF_UINT64_WRAPPER_TYPE;
+            break;
+          default:
+            wrapperType = PROTOBUF_INT64_WRAPPER_TYPE;
+        }
         return useWrapperForNullables && schema.isOptional()
-            ? PROTOBUF_INT64_WRAPPER_TYPE : defaultType;
+            ? wrapperType : defaultType;
       case FLOAT32:
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_FLOAT_WRAPPER_TYPE : FieldDescriptor.Type.FLOAT.toString().toLowerCase();
