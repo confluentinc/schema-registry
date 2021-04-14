@@ -57,11 +57,11 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Set<String> listSubjects(boolean returnDeletedSubjects)
           throws SchemaRegistryException;
 
-  Iterator<Schema> getAllVersions(String subject, boolean filterDeletes)
+  Iterator<Schema> getAllVersions(String subject, boolean returnDeletedSchemas)
       throws SchemaRegistryException;
 
   Iterator<Schema> getVersionsWithSubjectPrefix(
-      String prefix, boolean filterDeletes, boolean latestOnly)
+      String prefix, boolean returnDeletedSchemas, boolean latestOnly)
       throws SchemaRegistryException;
 
   Schema getLatestVersion(String subject) throws SchemaRegistryException;
