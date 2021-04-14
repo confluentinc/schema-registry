@@ -753,35 +753,35 @@ public class RestService implements Configurable {
   }
 
   public SchemaString getId(int id) throws IOException, RestClientException {
-    return getId(DEFAULT_REQUEST_PROPERTIES, null, id, false);
+    return getId(DEFAULT_REQUEST_PROPERTIES, id, null, false);
   }
 
   public SchemaString getId(int id, boolean fetchMaxId)
       throws IOException, RestClientException {
-    return getId(DEFAULT_REQUEST_PROPERTIES, null, id, fetchMaxId);
+    return getId(DEFAULT_REQUEST_PROPERTIES, id, null, fetchMaxId);
   }
 
-  public SchemaString getId(String subject, int id) throws IOException, RestClientException {
-    return getId(DEFAULT_REQUEST_PROPERTIES, subject, id, false);
+  public SchemaString getId(int id, String subject) throws IOException, RestClientException {
+    return getId(DEFAULT_REQUEST_PROPERTIES, id, subject, false);
   }
 
-  public SchemaString getId(String subject, int id, boolean fetchMaxId)
+  public SchemaString getId(int id, String subject, boolean fetchMaxId)
       throws IOException, RestClientException {
-    return getId(DEFAULT_REQUEST_PROPERTIES, subject, id, fetchMaxId);
+    return getId(DEFAULT_REQUEST_PROPERTIES, id, subject, fetchMaxId);
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
                             int id) throws IOException, RestClientException {
-    return getId(requestProperties, null, id, false);
+    return getId(requestProperties, id, null, false);
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
-                            String subject, int id) throws IOException, RestClientException {
-    return getId(requestProperties, subject, id, false);
+                            int id, String subject) throws IOException, RestClientException {
+    return getId(requestProperties, id, subject, false);
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
-      String subject, int id, boolean fetchMaxId) throws IOException, RestClientException {
+      int id, String subject, boolean fetchMaxId) throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}")
         .queryParam("fetchMaxId", fetchMaxId);
     if (subject != null) {
@@ -942,35 +942,35 @@ public class RestService implements Configurable {
 
   public List<String> getAllSubjectsById(int id)
       throws IOException, RestClientException {
-    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, null, id);
+    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, id, null);
   }
 
-  public List<String> getAllSubjectsById(String subject, int id)
+  public List<String> getAllSubjectsById(int id, String subject)
       throws IOException, RestClientException {
-    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, subject, id);
+    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, id, subject);
   }
 
-  public List<String> getAllSubjectsById(String subject, int id, boolean deleted)
+  public List<String> getAllSubjectsById(int id, String subject, boolean deleted)
       throws IOException, RestClientException {
-    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, subject, id, deleted);
+    return getAllSubjectsById(DEFAULT_REQUEST_PROPERTIES, id, subject, deleted);
   }
 
   public List<String> getAllSubjectsById(Map<String, String> requestProperties,
                                          int id)
       throws IOException, RestClientException {
-    return getAllSubjectsById(requestProperties, null, id, false);
+    return getAllSubjectsById(requestProperties, id, null, false);
   }
 
   public List<String> getAllSubjectsById(Map<String, String> requestProperties,
-                                         String subject,
-                                         int id)
-      throws IOException, RestClientException {
-    return getAllSubjectsById(requestProperties, subject, id, false);
-  }
-
-  public List<String> getAllSubjectsById(Map<String, String> requestProperties,
-                                         String subject,
                                          int id,
+                                         String subject)
+      throws IOException, RestClientException {
+    return getAllSubjectsById(requestProperties, id, subject, false);
+  }
+
+  public List<String> getAllSubjectsById(Map<String, String> requestProperties,
+                                         int id,
+                                         String subject,
                                          boolean lookupDeleted)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/subjects");
@@ -988,35 +988,35 @@ public class RestService implements Configurable {
 
   public List<SubjectVersion> getAllVersionsById(int id)
       throws IOException, RestClientException {
-    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, null, id);
+    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, id, null);
   }
 
-  public List<SubjectVersion> getAllVersionsById(String subject, int id)
+  public List<SubjectVersion> getAllVersionsById(int id, String subject)
       throws IOException, RestClientException {
-    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, subject, id);
+    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, id, subject);
   }
 
-  public List<SubjectVersion> getAllVersionsById(String subject, int id, boolean deleted)
+  public List<SubjectVersion> getAllVersionsById(int id, String subject, boolean deleted)
       throws IOException, RestClientException {
-    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, subject, id, deleted);
+    return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, id, subject, deleted);
   }
 
   public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
                                                  int id)
       throws IOException, RestClientException {
-    return getAllVersionsById(requestProperties, null, id, false);
+    return getAllVersionsById(requestProperties, id, null, false);
   }
 
   public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
-                                                 String subject,
-                                                 int id)
-      throws IOException, RestClientException {
-    return getAllVersionsById(requestProperties, subject, id, false);
-  }
-
-  public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
-                                                 String subject,
                                                  int id,
+                                                 String subject)
+      throws IOException, RestClientException {
+    return getAllVersionsById(requestProperties, id, subject, false);
+  }
+
+  public List<SubjectVersion> getAllVersionsById(Map<String, String> requestProperties,
+                                                 int id,
+                                                 String subject,
                                                  boolean lookupDeleted)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/versions");
