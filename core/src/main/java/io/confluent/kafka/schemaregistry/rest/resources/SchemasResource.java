@@ -113,7 +113,7 @@ public class SchemasResource {
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";
     try {
-      schema = schemaRegistry.get(id, format, fetchMaxId);
+      schema = schemaRegistry.get(id, subject, format, fetchMaxId);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -142,7 +142,7 @@ public class SchemasResource {
         + id + " from the schema registry";
 
     try {
-      subjects = schemaRegistry.listSubjectsForId(id, lookupDeletedSchema);
+      subjects = schemaRegistry.listSubjectsForId(id, subject, lookupDeletedSchema);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -173,7 +173,7 @@ public class SchemasResource {
                           + id + " from the schema registry";
 
     try {
-      versions = schemaRegistry.listVersionsForId(id, lookupDeletedSchema);
+      versions = schemaRegistry.listVersionsForId(id, subject, lookupDeletedSchema);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);

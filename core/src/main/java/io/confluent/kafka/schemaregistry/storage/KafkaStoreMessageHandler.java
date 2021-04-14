@@ -58,7 +58,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
       try {
-        SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
+        SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId(), schemaObj.getSubject());
         if (oldKey != null) {
           SchemaValue oldSchema;
           oldSchema = (SchemaValue) lookupCache.get(oldKey);

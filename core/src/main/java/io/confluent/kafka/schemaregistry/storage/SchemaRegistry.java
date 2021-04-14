@@ -48,7 +48,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Schema get(String subject, int version, boolean returnDeletedSchema)
       throws SchemaRegistryException;
 
-  SchemaString get(int id) throws SchemaRegistryException;
+  SchemaString get(int id, String subject) throws SchemaRegistryException;
 
   default Set<String> listSubjects() throws SchemaRegistryException {
     return listSubjects(false);
