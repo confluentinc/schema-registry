@@ -42,6 +42,7 @@ import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
 import io.confluent.kafka.serializers.protobuf.test.Int16ValueOuterClass.Int16Value;
 import io.confluent.kafka.serializers.protobuf.test.Int8ValueOuterClass.Int8Value;
+import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos;
 import io.confluent.kafka.serializers.protobuf.test.TimeOfDayValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.TimeOfDayValueOuterClass.TimeOfDayValue;
 import io.confluent.protobuf.type.Decimal;
@@ -81,12 +82,14 @@ import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue;
 import io.confluent.kafka.serializers.protobuf.test.UInt32ValueOuterClass;
 
+import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_PROP;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION_PREFIX;
 import static io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.newBuilder;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class ProtobufDataTest {
 
@@ -575,7 +578,12 @@ public class ProtobufDataTest {
     builder.setValue(expectedValue);
     SInt32ValueOuterClass.SInt32Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
-    assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT32_SCHEMA, message, expectedValue), result);
+    Schema sint32Schema = SchemaBuilder.int32()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .parameter(PROTOBUF_TYPE_PROP, "sint32")
+        .build();
+    assertEquals(getExpectedSchemaAndValue(sint32Schema, message, expectedValue), result);
   }
 
   @Test
@@ -587,8 +595,13 @@ public class ProtobufDataTest {
     builder.setValue(expectedValue);
     UInt32ValueOuterClass.UInt32Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
+    Schema schema = SchemaBuilder.int64()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .parameter(PROTOBUF_TYPE_PROP, "uint32")
+        .build();
     assertEquals(
-        getExpectedSchemaAndValue(OPTIONAL_INT64_SCHEMA, message, UNSIGNED_RESULT),
+        getExpectedSchemaAndValue(schema, message, UNSIGNED_RESULT),
         result
     );
   }
@@ -611,7 +624,12 @@ public class ProtobufDataTest {
     builder.setValue(expectedValue);
     SInt64ValueOuterClass.SInt64Value message = builder.build();
     SchemaAndValue result = getSchemaAndValue(message);
-    assertEquals(getExpectedSchemaAndValue(OPTIONAL_INT64_SCHEMA, message, expectedValue), result);
+    Schema sint64Schema = SchemaBuilder.int64()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .parameter(PROTOBUF_TYPE_PROP, "sint64")
+        .build();
+    assertEquals(getExpectedSchemaAndValue(sint64Schema, message, expectedValue), result);
   }
 
   @Test
@@ -772,6 +790,102 @@ public class ProtobufDataTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     dynamicMessage.writeTo(baos);
     return baos.toByteArray();
+  }
+
+  @Test
+  public void testRoundTripConnectPreserveSignedAndFixed() throws Exception {
+    TestMessageProtos.TestMessage originalMessage = TestMessageProtos.TestMessage.newBuilder()
+        .setTestSint32(12)
+        .setTestSint64(12L)
+        .setTestFixed32(12)
+        .setTestFixed64(12L)
+        .setTestSfixed32(12)
+        .setTestSfixed64(12L)
+        .setTestUint32(12)
+        .setTestUint64(12L)
+        .build();
+
+    SchemaAndValue toConnectResult = getSchemaAndValue(originalMessage);
+    ProtobufData protobufData = new ProtobufData();
+    ProtobufSchemaAndValue fromConnectResult = protobufData.fromConnectData(toConnectResult.schema(), toConnectResult.value());
+    DynamicMessage message = (DynamicMessage) fromConnectResult.getValue();
+
+    MessageElement messageElem = (MessageElement) fromConnectResult.getSchema().rawSchema().getTypes().get(0);
+    FieldElement fieldElem = messageElem.getFields().get(5);
+    assertEquals("test_fixed32", fieldElem.getName());
+    assertEquals("fixed32", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(6);
+    assertEquals("test_fixed64", fieldElem.getName());
+    assertEquals("fixed64", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(9);
+    assertEquals("test_sfixed32", fieldElem.getName());
+    assertEquals("sfixed32", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(10);
+    assertEquals("test_sfixed64", fieldElem.getName());
+    assertEquals("sfixed64", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(11);
+    assertEquals("test_sint32", fieldElem.getName());
+    assertEquals("sint32", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(12);
+    assertEquals("test_sint64", fieldElem.getName());
+    assertEquals("sint64", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(13);
+    assertEquals("test_uint32", fieldElem.getName());
+    assertEquals("uint32", fieldElem.getType());
+    fieldElem = messageElem.getFields().get(14);
+    assertEquals("test_uint64", fieldElem.getName());
+    assertEquals("uint64", fieldElem.getType());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_fixed32");
+    assertEquals(12, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_fixed64");
+    assertEquals(12L, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_sfixed32");
+    assertEquals(12, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_sfixed64");
+    assertEquals(12L, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_sint32");
+    assertEquals(12, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_sint64");
+    assertEquals(12L, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_uint32");
+    assertEquals(12, message.getField(fieldDescriptor));
+    fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName("test_uint64");
+    assertEquals(12L, message.getField(fieldDescriptor));
+
+    TestMessageProtos.TestMessage convertedMessage = TestMessageProtos.TestMessage.parseFrom(message.toByteArray());
+    assertEquals(originalMessage, convertedMessage);
+  }
+
+  @Test
+  public void testRoundTripConnectUInt32Fixed32() throws Exception {
+    final Long UNSIGNED_RESULT = 4294967295L;
+    Integer expectedValue = -1;
+
+    TestMessageProtos.TestMessage message = TestMessageProtos.TestMessage
+        .newBuilder()
+        .setTestFixed32(expectedValue)
+        .setTestUint32(expectedValue)
+        .build();
+    SchemaAndValue result = getSchemaAndValue(message);
+
+    ProtobufData protobufData = new ProtobufData();
+    ProtobufSchemaAndValue converted = protobufData.fromConnectData(result.schema(), result.value());
+    DynamicMessage convertedValue = (DynamicMessage) converted.getValue();
+
+    TestMessageProtos.TestMessage parsedMessage = TestMessageProtos.TestMessage.parseFrom(convertedValue.toByteArray());
+
+    assertEquals(message, parsedMessage);
+    assertTrue(parsedMessage.toString().contains("test_fixed32: " + UNSIGNED_RESULT));
+    assertTrue(parsedMessage.toString().contains("test_uint32: " + UNSIGNED_RESULT));
   }
 
   @Test

@@ -52,6 +52,7 @@ import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessag
 import io.confluent.kafka.serializers.subject.DefaultReferenceSubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
 
+import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_PROP;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -130,11 +131,13 @@ public class ProtobufConverterTest {
     );
     builder.field(
         "test_fixed32",
-        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(6)).build()
+        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(6))
+            .parameter(PROTOBUF_TYPE_PROP, "fixed32").build()
     );
     builder.field(
         "test_fixed64",
-        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(7)).build()
+        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(7))
+            .parameter(PROTOBUF_TYPE_PROP, "fixed64").build()
     );
     builder.field(
         "test_int32",
@@ -146,27 +149,33 @@ public class ProtobufConverterTest {
     );
     builder.field(
         "test_sfixed32",
-        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(10)).build()
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(10))
+            .parameter(PROTOBUF_TYPE_PROP, "sfixed32").build()
     );
     builder.field(
         "test_sfixed64",
-        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(11)).build()
+        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(11))
+            .parameter(PROTOBUF_TYPE_PROP, "sfixed64").build()
     );
     builder.field(
         "test_sint32",
-        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(12)).build()
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(12))
+            .parameter(PROTOBUF_TYPE_PROP, "sint32").build()
     );
     builder.field(
         "test_sint64",
-        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(13)).build()
+        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(13))
+            .parameter(PROTOBUF_TYPE_PROP, "sint64").build()
     );
     builder.field(
         "test_uint32",
-        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(14)).build()
+        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(14))
+            .parameter(PROTOBUF_TYPE_PROP, "uint32").build()
     );
     builder.field(
         "test_uint64",
-        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(15)).build()
+        SchemaBuilder.int64().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(15))
+            .parameter(PROTOBUF_TYPE_PROP, "uint64").build()
     );
     return builder;
   }

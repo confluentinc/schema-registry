@@ -90,6 +90,7 @@ public class ProtobufData {
   public static final String PROTOBUF_TYPE_UNION = NAMESPACE + ".Union";
   public static final String PROTOBUF_TYPE_UNION_PREFIX = PROTOBUF_TYPE_UNION + ".";
   public static final String PROTOBUF_TYPE_TAG = NAMESPACE + ".Tag";
+  public static final String PROTOBUF_TYPE_PROP = NAMESPACE + ".Type";
 
   public static final String PROTOBUF_PRECISION_PROP = "precision";
   public static final String PROTOBUF_SCALE_PROP = "scale";
@@ -363,9 +364,17 @@ public class ProtobufData {
         }
 
         case INT64: {
-          final long longValue = ((Number) value).longValue(); // Check for correct type
-          return useWrapperForNullables && schema.isOptional()
-              ? Int64Value.newBuilder().setValue(longValue).build() : longValue;
+          String protobufType = schema.parameters() != null
+              ? schema.parameters().get(PROTOBUF_TYPE_PROP) : null;
+          if (Objects.equals(protobufType, "uint32") || Objects.equals(protobufType, "fixed32")) {
+            final int intValue = (int) ((Number) value).longValue(); // Check for correct type
+            return useWrapperForNullables && schema.isOptional()
+                ? Int32Value.newBuilder().setValue(intValue).build() : intValue;
+          } else {
+            final long longValue = ((Number) value).longValue(); // Check for correct type
+            return useWrapperForNullables && schema.isOptional()
+                ? Int64Value.newBuilder().setValue(longValue).build() : longValue;
+          }
         }
 
         case FLOAT32: {
@@ -934,6 +943,7 @@ public class ProtobufData {
     } else if (isTimestampSchema(schema)) {
       return PROTOBUF_TIMESTAMP_TYPE;
     }
+    String defaultType;
     switch (schema.type()) {
       case INT8:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT8);
@@ -944,11 +954,32 @@ public class ProtobufData {
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT32:
+        defaultType = FieldDescriptor.Type.INT32.toString().toLowerCase();
+        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
+          defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
+        }
         return useWrapperForNullables && schema.isOptional()
-            ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
+            ? PROTOBUF_INT32_WRAPPER_TYPE : defaultType;
       case INT64:
+        defaultType = FieldDescriptor.Type.INT64.toString().toLowerCase();
+        if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
+          defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
+        }
+        String wrapperType;
+        switch (defaultType) {
+          case "uint32":
+          case "fixed32":
+            wrapperType = PROTOBUF_UINT32_WRAPPER_TYPE;
+            break;
+          case "uint64":
+          case "fixed64":
+            wrapperType = PROTOBUF_UINT64_WRAPPER_TYPE;
+            break;
+          default:
+            wrapperType = PROTOBUF_INT64_WRAPPER_TYPE;
+        }
         return useWrapperForNullables && schema.isOptional()
-            ? PROTOBUF_INT64_WRAPPER_TYPE : FieldDescriptor.Type.INT64.toString().toLowerCase();
+            ? wrapperType : defaultType;
       case FLOAT32:
         return useWrapperForNullables && schema.isOptional()
             ? PROTOBUF_FLOAT_WRAPPER_TYPE : FieldDescriptor.Type.FLOAT.toString().toLowerCase();
@@ -1278,6 +1309,9 @@ public class ProtobufData {
           }
         }
         builder = SchemaBuilder.int32();
+        if (descriptor.getType() != FieldDescriptor.Type.INT32) {
+          builder.parameter(PROTOBUF_TYPE_PROP, descriptor.getType().toString().toLowerCase());
+        }
         break;
       }
 
@@ -1289,6 +1323,9 @@ public class ProtobufData {
       case FIXED64:
       case SFIXED64: {
         builder = SchemaBuilder.int64();
+        if (descriptor.getType() != FieldDescriptor.Type.INT64) {
+          builder.parameter(PROTOBUF_TYPE_PROP, descriptor.getType().toString().toLowerCase());
+        }
         break;
       }
 
