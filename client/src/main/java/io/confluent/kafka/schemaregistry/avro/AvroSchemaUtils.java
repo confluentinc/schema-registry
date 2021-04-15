@@ -122,7 +122,6 @@ public class AvroSchemaUtils {
           transformedSchemas.put(schema, transformedSchema);
         }
         schema = transformedSchema;
-
       }
       return schema;
     } else if (object instanceof Map) {
