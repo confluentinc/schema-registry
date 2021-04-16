@@ -31,6 +31,9 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.reflect.ReflectData;
+import org.apache.kafka.common.cache.Cache;
+import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayInputStream;
@@ -50,7 +53,10 @@ public class AvroSchemaUtils {
   private static final DecoderFactory decoderFactory = DecoderFactory.get();
   private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
+  private static int DEFAULT_CACHE_CAPACITY = 1000;
   private static final Map<String, Schema> primitiveSchemas;
+  private static final Cache<Schema, Schema> transformedSchemas =
+      new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
 
   static {
     primitiveSchemas = new HashMap<>();
@@ -110,7 +116,12 @@ public class AvroSchemaUtils {
     } else if (object instanceof GenericContainer) {
       Schema schema = ((GenericContainer) object).getSchema();
       if (removeJavaProperties) {
-        schema = removeJavaProperties(schema);
+        Schema transformedSchema = transformedSchemas.get(schema);
+        if (transformedSchema == null) {
+          transformedSchema = removeJavaProperties(schema);
+          transformedSchemas.put(schema, transformedSchema);
+        }
+        schema = transformedSchema;
       }
       return schema;
     } else if (object instanceof Map) {
