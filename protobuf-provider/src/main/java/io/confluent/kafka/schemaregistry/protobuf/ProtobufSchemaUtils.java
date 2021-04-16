@@ -246,7 +246,7 @@ public class ProtobufSchemaUtils {
           buffer.append("\\\\");
           break;
         case '\'':
-          buffer.append("\\\'");
+          buffer.append("\\'");
           break;
         case '\"':
           buffer.append("\\\"");
