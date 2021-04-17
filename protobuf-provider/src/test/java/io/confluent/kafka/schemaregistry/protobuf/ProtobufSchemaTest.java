@@ -534,6 +534,44 @@ public class ProtobufSchemaTest {
         schema.toMessageName(new MessageIndexes(Collections.singletonList(0)))));
   }
 
+  @Test
+  public void testNativeTypeImports() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "import \"google/type/date.proto\";\n"
+        + "import \"google/type/timeofday.proto\";\n"
+        + "import \"google/protobuf/any.proto\";\n"
+        + "import \"google/protobuf/duration.proto\";\n"
+        + "import \"google/protobuf/timestamp.proto\";\n"
+        + "\n"
+        + "message TestNativeTypes {\n"
+        + "\n"
+        + "  confluent.type.Decimal test_decimal = 1 [(confluent.field_meta) = {\n"
+        + "    doc: \"test decimal\",\n"
+        + "    params: [\n"
+        + "      {\n"
+        + "        value: \"8\",\n"
+        + "        key: \"precision\"\n"
+        + "      },\n"
+        + "      {\n"
+        + "        value: \"3\",\n"
+        + "        key: \"scale\"\n"
+        + "      }\n"
+        + "    ]\n"
+        + "  }];\n"
+        + "  google.type.Date test_date = 2;\n"
+        + "  google.type.TimeOfDay test_timeofday = 3;\n"
+        + "  google.protobuf.Any test_any = 4;\n"
+        + "  google.protobuf.Duration test_duration = 5;\n"
+        + "  google.protobuf.Timestamp test_timestamp = 6;\n"
+        + "}\n";
+
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    assertNotNull(schema.toDescriptor());
+  }
+
   private static JsonNode jsonTree(String jsonData) {
     try {
       return objectMapper.readTree(jsonData);

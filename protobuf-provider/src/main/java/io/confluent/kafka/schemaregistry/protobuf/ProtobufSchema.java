@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.protobuf;
 
 import com.google.common.collect.ImmutableList;
+import com.google.protobuf.AnyProto;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.DescriptorProto.ReservedRange;
@@ -29,6 +30,7 @@ import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.DurationProto;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.TimestampProto;
 import com.google.protobuf.WrappersProto;
@@ -104,6 +106,8 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String DECIMAL_LOCATION = "confluent/type/decimal.proto";
   public static final String DATE_LOCATION = "google/type/date.proto";
   public static final String TIME_LOCATION = "google/type/timeofday.proto";
+  public static final String ANY_LOCATION = "google/protobuf/any.proto";
+  public static final String DURATION_LOCATION = "google/protobuf/duration.proto";
   public static final String TIMESTAMP_LOCATION = "google/protobuf/timestamp.proto";
   public static final String WRAPPER_LOCATION = "google/protobuf/wrappers.proto";
 
@@ -115,6 +119,10 @@ public class ProtobufSchema implements ParsedSchema {
       toProtoFile(DateProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement TIME_SCHEMA =
       toProtoFile(TimeOfDayProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement ANY_SCHEMA =
+      toProtoFile(AnyProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement DURATION_SCHEMA =
+      toProtoFile(DurationProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement TIMESTAMP_SCHEMA =
       toProtoFile(TimestampProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement WRAPPER_SCHEMA =
@@ -941,6 +949,12 @@ public class ProtobufSchema implements ParsedSchema {
     }
     if (!deps.containsKey(TIME_LOCATION)) {
       deps.put(TIME_LOCATION, TIME_SCHEMA);
+    }
+    if (!deps.containsKey(ANY_LOCATION)) {
+      deps.put(ANY_LOCATION, ANY_SCHEMA);
+    }
+    if (!deps.containsKey(DURATION_LOCATION)) {
+      deps.put(DURATION_LOCATION, DURATION_SCHEMA);
     }
     if (!deps.containsKey(TIMESTAMP_LOCATION)) {
       deps.put(TIMESTAMP_LOCATION, TIMESTAMP_SCHEMA);
