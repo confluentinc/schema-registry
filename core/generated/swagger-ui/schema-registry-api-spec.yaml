@@ -342,7 +342,7 @@ paths:
         200:
           description: "successful operation"
           schema:
-            $ref: "#/definitions/ModeGetResponse"
+            $ref: "#/definitions/Mode"
         500:
           description: "Error code 50001 -- Error in the backend data store"
     put:
@@ -405,7 +405,7 @@ paths:
         200:
           description: "successful operation"
           schema:
-            $ref: "#/definitions/ModeGetResponse"
+            $ref: "#/definitions/Mode"
         404:
           description: "Subject not found"
         500:
@@ -1119,7 +1119,7 @@ definitions:
         - "FULL"
         - "FULL_TRANSITIVE"
         - "NONE"
-  ModeGetResponse:
+  Mode:
     type: "object"
     properties:
       mode:
