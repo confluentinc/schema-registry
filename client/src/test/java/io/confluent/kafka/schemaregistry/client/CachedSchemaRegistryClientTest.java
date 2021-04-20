@@ -15,7 +15,6 @@
  */
 package io.confluent.kafka.schemaregistry.client;
 
-import org.easymock.TestSubject;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -34,7 +33,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -353,7 +352,7 @@ public class CachedSchemaRegistryClientTest {
 
     reset(restService);
 
-    ModeGetResponse modeGetResponse = new ModeGetResponse(mode);
+    Mode modeGetResponse = new Mode(mode);
     expect(restService.getMode()).andReturn(modeGetResponse);
 
     replay(restService);

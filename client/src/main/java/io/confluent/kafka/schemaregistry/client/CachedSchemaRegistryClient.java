@@ -42,7 +42,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
@@ -495,13 +495,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public String getMode() throws IOException, RestClientException {
-    ModeGetResponse response = restService.getMode();
+    Mode response = restService.getMode();
     return response.getMode();
   }
 
   @Override
   public String getMode(String subject) throws IOException, RestClientException {
-    ModeGetResponse response = restService.getMode(subject);
+    Mode response = restService.getMode(subject);
     return response.getMode();
   }
 

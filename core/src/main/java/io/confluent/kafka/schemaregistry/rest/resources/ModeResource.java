@@ -39,7 +39,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
@@ -49,7 +49,6 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.Mode;
 
 @Path("/mode")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -85,9 +84,10 @@ public class ModeResource {
       @Context HttpHeaders headers,
       @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request
   ) {
-    Mode mode;
+    io.confluent.kafka.schemaregistry.storage.Mode mode;
     try {
-      mode = Enum.valueOf(Mode.class, request.getMode().toUpperCase(Locale.ROOT));
+      mode = Enum.valueOf(io.confluent.kafka.schemaregistry.storage.Mode.class,
+          request.getMode().toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
@@ -115,18 +115,18 @@ public class ModeResource {
   @ApiResponses(value = {
       @ApiResponse(code = 404, message = "Subject not found"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
-  public ModeGetResponse getMode(
+  public Mode getMode(
       @ApiParam(value = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
     try {
-      Mode mode = defaultToGlobal
+      io.confluent.kafka.schemaregistry.storage.Mode mode = defaultToGlobal
           ? schemaRegistry.getModeInScope(subject)
           : schemaRegistry.getMode(subject);
       if (mode == null) {
         throw Errors.subjectNotFoundException(subject);
       }
-      return new ModeGetResponse(mode.name());
+      return new Mode(mode.name());
     } catch (SchemaRegistryException e) {
       throw Errors.storeException("Failed to get mode", e);
     }
@@ -151,14 +151,14 @@ public class ModeResource {
   @ApiOperation(value = "Get global mode.")
   @ApiResponses(value = {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
-  public ModeGetResponse getTopLevelMode() {
+  public Mode getTopLevelMode() {
     return getMode(null, false);
   }
 
   @DELETE
   @Path("/{subject}")
   @ApiOperation(value = "Deletes the specified subject-level mode and revert to "
-      + "the global default.", response = Mode.class)
+      + "the global default.", response = io.confluent.kafka.schemaregistry.storage.Mode.class)
   @ApiResponses(value = {
       @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found"),
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")
@@ -169,8 +169,8 @@ public class ModeResource {
       @ApiParam(value = "the name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting mode for subject {}", subject);
-    Mode deletedMode;
-    ModeGetResponse deleteModeResponse;
+    io.confluent.kafka.schemaregistry.storage.Mode deletedMode;
+    Mode deleteModeResponse;
     try {
       deletedMode = schemaRegistry.getMode(subject);
       if (deletedMode == null) {
@@ -180,7 +180,7 @@ public class ModeResource {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.deleteSubjectModeOrForward(subject, headerProperties);
-      deleteModeResponse = new ModeGetResponse(deletedMode.name());
+      deleteModeResponse = new Mode(deletedMode.name());
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {

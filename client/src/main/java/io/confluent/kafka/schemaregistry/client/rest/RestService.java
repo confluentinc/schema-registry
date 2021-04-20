@@ -58,7 +58,7 @@ import javax.ws.rs.core.UriBuilder;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -80,8 +80,8 @@ public class RestService implements Configurable {
   private static final TypeReference<Config> GET_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
       };
-  private static final TypeReference<ModeGetResponse> GET_MODE_RESPONSE_TYPE =
-      new TypeReference<ModeGetResponse>() {
+  private static final TypeReference<Mode> GET_MODE_RESPONSE_TYPE =
+      new TypeReference<Mode>() {
       };
   private static final TypeReference<List<Schema>> GET_SCHEMAS_RESPONSE_TYPE =
       new TypeReference<List<Schema>>() {
@@ -132,8 +132,8 @@ public class RestService implements Configurable {
   private static final TypeReference<? extends List<Integer>> DELETE_SUBJECT_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
       };
-  private static final TypeReference<ModeGetResponse> DELETE_SUBJECT_MODE_RESPONSE_TYPE =
-      new TypeReference<ModeGetResponse>() {
+  private static final TypeReference<Mode> DELETE_SUBJECT_MODE_RESPONSE_TYPE =
+      new TypeReference<Mode>() {
       };
   private static final TypeReference<Config> DELETE_SUBJECT_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
@@ -680,39 +680,39 @@ public class RestService implements Configurable {
     return response;
   }
 
-  public ModeGetResponse getMode()
+  public Mode getMode()
       throws IOException, RestClientException {
     return getMode(null, false);
   }
 
-  public ModeGetResponse getMode(String subject)
+  public Mode getMode(String subject)
       throws IOException, RestClientException {
     return getMode(subject, false);
   }
 
-  public ModeGetResponse getMode(String subject, boolean defaultToGlobal)
+  public Mode getMode(String subject, boolean defaultToGlobal)
       throws IOException, RestClientException {
     String path = subject != null
         ? UriBuilder.fromPath("/mode/{subject}")
         .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
         : "/mode";
 
-    ModeGetResponse mode =
+    Mode mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
     return mode;
   }
 
-  public ModeGetResponse deleteSubjectMode(String subject)
+  public Mode deleteSubjectMode(String subject)
       throws IOException, RestClientException {
     return deleteSubjectMode(DEFAULT_REQUEST_PROPERTIES, subject);
   }
 
-  public ModeGetResponse deleteSubjectMode(Map<String, String> requestProperties, String subject)
+  public Mode deleteSubjectMode(Map<String, String> requestProperties, String subject)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/mode/{subject}");
     String path = builder.build(subject).toString();
 
-    ModeGetResponse response = httpRequest(path, "DELETE", null, requestProperties,
+    Mode response = httpRequest(path, "DELETE", null, requestProperties,
         DELETE_SUBJECT_MODE_RESPONSE_TYPE);
     return response;
   }
