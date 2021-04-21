@@ -327,10 +327,21 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (schemaVersionMap == null) {
       throw new RuntimeException(new RestClientException("Subject Not Found", 404, 40401));
     }
+    int maxVersion = -1;
     for (Map.Entry<ParsedSchema, Integer> entry : schemaVersionMap.entrySet()) {
-      if (entry.getValue() == version) {
-        schema = entry.getKey();
+      if (version == -1) {
+        if (entry.getValue() > maxVersion) {
+          schema = entry.getKey();
+          maxVersion = entry.getValue();
+        }
+      } else {
+        if (entry.getValue() == version) {
+          schema = entry.getKey();
+        }
       }
+    }
+    if (maxVersion != -1) {
+      version = maxVersion;
     }
     int id = -1;
     Map<Integer, ParsedSchema> idSchemaMap = idCache.get(subject);
