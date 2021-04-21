@@ -84,4 +84,40 @@ public class SchemasWithDependenciesTest extends SchemaRegistryTest {
         Assert.assertNotNull("The schema should've been generated", pizza);
         Assert.assertTrue("The schema should contain fields from the dependency", pizza.toString().contains("currency"));
     }
+
+    @Test
+    public void testSchemaWithPreregisteredDependencies() throws Exception {
+        RegisterSchemaRegistryMojo schemaRegistryMojo = new RegisterSchemaRegistryMojo();
+        schemaRegistryMojo.client = new MockSchemaRegistryClient();
+
+        File pizzaFile = new File(tempDirectory, "pizza.avsc");
+        try (
+            FileWriter pizzaWriter = new FileWriter(pizzaFile);
+        ) {
+            pizzaWriter.write(schema);
+        }
+
+        // Preregister Amount
+        schemaRegistryMojo.client.register("Amount", new AvroSchema(dependency));
+
+        Map<String, List<Reference>> schemaRefs = new LinkedHashMap<>();
+        List<Reference> subjectRefs = new ArrayList<>();
+        Reference ref = new Reference();
+        ref.name = "com.pizza.Amount";
+        ref.subject = "Amount";
+        subjectRefs.add(ref);
+        schemaRefs.put("Pizza", subjectRefs);
+        schemaRegistryMojo.references = schemaRefs;
+
+        Map<String, File> schemas = new LinkedHashMap<>();
+        // Don't include Amount
+        schemas.put("Pizza", pizzaFile);
+        schemaRegistryMojo.subjects = schemas;
+
+        schemaRegistryMojo.execute();
+        Schema pizza = ((AvroSchema) schemaRegistryMojo.schemas.get("Pizza")).rawSchema();
+
+        Assert.assertNotNull("The schema should've been generated", pizza);
+        Assert.assertTrue("The schema should contain fields from the dependency", pizza.toString().contains("currency"));
+    }
 }

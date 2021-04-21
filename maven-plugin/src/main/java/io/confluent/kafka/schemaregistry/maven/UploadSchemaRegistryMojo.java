@@ -64,14 +64,14 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     failures = 0;
 
     for (String subject : subjects.keySet()) {
-      processSubject(subject);
+      processSubject(subject, false);
     }
 
     Preconditions.checkState(errors == 0, "One or more exceptions were encountered.");
     Preconditions.checkState(failures == 0, failureMessage());
   }
 
-  private void processSubject(String key) {
+  private void processSubject(String key, boolean isReference) {
     if (subjectsProcessed.contains(key)) {
       return;
     }
@@ -83,8 +83,10 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       List<SchemaReference> schemaReferences = getReferences(key, schemaVersions);
       File file = subjects.get(key);
       if (file == null) {
-        getLog().error("File for " + key + " could not be found.");
-        errors++;
+        if (!isReference) {
+          getLog().error("File for " + key + " could not be found.");
+          errors++;
+        }
         return;
       }
       String schemaString = readFile(file, StandardCharsets.UTF_8);
@@ -125,7 +127,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     List<SchemaReference> result = new ArrayList<>();
     for (Reference ref : refs) {
       // Process refs
-      processSubject(ref.subject);
+      processSubject(ref.subject, true);
 
       Integer version = ref.version != null ? ref.version : schemaVersions.get(ref.subject);
       if (version == null) {
