@@ -60,6 +60,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
@@ -90,6 +91,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaRegistry {
 
@@ -252,7 +255,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   protected IdGenerator identityGenerator(SchemaRegistryConfig config) {
     config.checkBootstrapServers();
-    IdGenerator idGenerator = new IncrementalIdGenerator();
+    IdGenerator idGenerator = new IncrementalIdGenerator(this);
     idGenerator.configure(config);
     return idGenerator;
   }
@@ -482,6 +485,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       schema.setReferences(parsedSchema.references());
 
       if (isCompatible) {
+        // save the context key
+        QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+        if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+          ContextKey contextKey = new ContextKey(qs.getTenant(), qs.getContext());
+          if (kafkaStore.get(contextKey) == null) {
+            ContextValue contextValue = new ContextValue(qs.getTenant(), qs.getContext());
+            kafkaStore.put(contextKey, contextValue);
+          }
+        }
+
         // assign a guid and put the schema in the kafka store
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
@@ -495,7 +508,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         } else {
           int retries = 0;
           while (retries++ < kafkaStoreMaxRetries) {
-            int newId = idGenerator.id(schema);
+            int newId = idGenerator.id(new SchemaValue(schema));
             // Verify id is not already in use
             if (lookupCache.schemaKeyById(newId, subject) == null) {
               schema.setId(newId);
@@ -511,13 +524,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
                 + "to generating an ID that is already in use.");
           }
         }
-        for (SchemaValue schemaValue : deletedVersions) {
-          if (schemaValue.getId().equals(schema.getId())) {
+        for (SchemaValue deleted : deletedVersions) {
+          if (deleted.getId().equals(schema.getId())) {
             // Tombstone previous version with the same ID
-            SchemaKey key = new SchemaKey(schemaValue.getSubject(), schemaValue.getVersion());
+            SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
             kafkaStore.delete(key);
           }
         }
+
         return schema.getId();
       } else {
         throw new IncompatibleSchemaException(
@@ -1081,7 +1095,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   ) throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
-      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
+      SchemaKey subjectVersionKey = getSchemaKeyUsingContexts(id, subject);
       if (subjectVersionKey == null) {
         return null;
       }
@@ -1114,9 +1128,50 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       schemaString.setSchemaString(schema.getSchema());
     }
     if (fetchMaxId) {
-      schemaString.setMaxId(idGenerator.getMaxId(id));
+      schemaString.setMaxId(idGenerator.getMaxId(schema));
     }
     return schemaString;
+  }
+
+  private SchemaKey getSchemaKeyUsingContexts(int id, String subject)
+          throws StoreException, SchemaRegistryException {
+    SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
+    if (subjectVersionKey != null) {
+      return subjectVersionKey;
+    }
+    if (subject == null) {
+      return null;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+    if (isQualifiedSubject) {
+      return null;
+    }
+    // Try qualifying the subject with each known context
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue v = (ContextValue) iter.next();
+        QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), subject);
+        SchemaKey key = lookupCache.schemaKeyById(id, qualSub.toQualifiedSubject());
+        if (key != null) {
+          return key;
+        }
+      }
+    }
+    return null;
+  }
+
+  private CloseableIterator<SchemaRegistryValue> allContexts() throws SchemaRegistryException {
+    try {
+      ContextKey key1 = new ContextKey(
+              String.valueOf(Character.MIN_VALUE), String.valueOf(Character.MIN_VALUE));
+      ContextKey key2 = new ContextKey(
+              String.valueOf(Character.MAX_VALUE), String.valueOf(Character.MAX_VALUE));
+      return kafkaStore.getAll(key1, key2);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error from the backend Kafka store", e);
+    }
   }
 
   public List<Integer> getReferencedBy(String subject, VersionId versionId)
@@ -1171,7 +1226,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws SchemaRegistryException {
     SchemaValue schema = null;
     try {
-      SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
+      SchemaKey subjectVersionKey = getSchemaKeyUsingContexts(id, subject);
       if (subjectVersionKey == null) {
         return null;
       }

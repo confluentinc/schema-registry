@@ -309,7 +309,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
     AvroSchema schemaFromRegistry() {
       try {
-        return (AvroSchema) schemaRegistry.getSchemaById(schemaId);
+        String subjectName = isKey == null || strategyUsesSchema(isKey)
+            ? getContext() : getSubject();
+        return (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subjectName, schemaId);
       } catch (IOException e) {
         throw new SerializationException("Error retrieving Avro "
                                          + getSchemaType(isKey)
@@ -344,7 +346,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
     String getSubject() {
-      return subjectName(topic, isKey, schemaFromRegistry());
+      boolean usesSchema = isKey != null && strategyUsesSchema(isKey);
+      return subjectName(topic, isKey, usesSchema ? schemaFromRegistry() : null);
+    }
+
+    String getContext() {
+      return getContextName(topic);
     }
 
     String getTopic() {
