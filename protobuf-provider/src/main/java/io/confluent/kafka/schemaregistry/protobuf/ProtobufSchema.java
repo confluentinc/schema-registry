@@ -137,6 +137,7 @@ public class ProtobufSchema implements ParsedSchema {
       toProtoFile(WrappersProto.getDescriptor().toProto()) ;
 
   private static final HashMap<String, ProtoFileElement> ALL_DEPENDENCIES;
+  
   static {
     ALL_DEPENDENCIES = new HashMap<>();
     ALL_DEPENDENCIES.put(META_LOCATION, META_SCHEMA);
