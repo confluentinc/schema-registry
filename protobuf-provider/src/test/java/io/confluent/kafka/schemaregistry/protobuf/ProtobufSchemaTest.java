@@ -544,7 +544,10 @@ public class ProtobufSchemaTest {
         + "import \"google/type/timeofday.proto\";\n"
         + "import \"google/protobuf/any.proto\";\n"
         + "import \"google/protobuf/duration.proto\";\n"
+        + "import \"google/protobuf/empty.proto\";\n"
+        + "import \"google/protobuf/struct.proto\";\n"
         + "import \"google/protobuf/timestamp.proto\";\n"
+        + "import \"google/protobuf/wrappers.proto\";\n"
         + "\n"
         + "message TestNativeTypes {\n"
         + "\n"
@@ -565,7 +568,10 @@ public class ProtobufSchemaTest {
         + "  google.type.TimeOfDay test_timeofday = 3;\n"
         + "  google.protobuf.Any test_any = 4;\n"
         + "  google.protobuf.Duration test_duration = 5;\n"
-        + "  google.protobuf.Timestamp test_timestamp = 6;\n"
+        + "  google.protobuf.Empty test_empty = 6;\n"
+        + "  google.protobuf.Struct test_struct = 7;\n"
+        + "  google.protobuf.Timestamp test_timestamp = 8;\n"
+        + "  google.protobuf.StringValue test_wrapper = 9;\n"
         + "}\n";
 
     ProtobufSchema schema = new ProtobufSchema(schemaString);

@@ -32,6 +32,8 @@ import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DurationProto;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.EmptyProto;
+import com.google.protobuf.StructProto;
 import com.google.protobuf.TimestampProto;
 import com.google.protobuf.WrappersProto;
 import com.google.type.DateProto;
@@ -108,6 +110,8 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String TIME_LOCATION = "google/type/timeofday.proto";
   public static final String ANY_LOCATION = "google/protobuf/any.proto";
   public static final String DURATION_LOCATION = "google/protobuf/duration.proto";
+  public static final String EMPTY_LOCATION = "google/protobuf/empty.proto";
+  public static final String STRUCT_LOCATION = "google/protobuf/struct.proto";
   public static final String TIMESTAMP_LOCATION = "google/protobuf/timestamp.proto";
   public static final String WRAPPER_LOCATION = "google/protobuf/wrappers.proto";
 
@@ -123,10 +127,29 @@ public class ProtobufSchema implements ParsedSchema {
       toProtoFile(AnyProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement DURATION_SCHEMA =
       toProtoFile(DurationProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement EMPTY_SCHEMA =
+      toProtoFile(EmptyProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement STRUCT_SCHEMA =
+      toProtoFile(StructProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement TIMESTAMP_SCHEMA =
       toProtoFile(TimestampProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement WRAPPER_SCHEMA =
       toProtoFile(WrappersProto.getDescriptor().toProto()) ;
+
+  private static final HashMap<String, ProtoFileElement> ALL_DEPENDENCIES;
+  static {
+    ALL_DEPENDENCIES = new HashMap<>();
+    ALL_DEPENDENCIES.put(META_LOCATION, META_SCHEMA);
+    ALL_DEPENDENCIES.put(DECIMAL_LOCATION, DECIMAL_SCHEMA);
+    ALL_DEPENDENCIES.put(DATE_LOCATION, DATE_SCHEMA);
+    ALL_DEPENDENCIES.put(TIME_LOCATION, TIME_SCHEMA);
+    ALL_DEPENDENCIES.put(ANY_LOCATION, ANY_SCHEMA);
+    ALL_DEPENDENCIES.put(DURATION_LOCATION, DURATION_SCHEMA);
+    ALL_DEPENDENCIES.put(EMPTY_LOCATION, EMPTY_SCHEMA);
+    ALL_DEPENDENCIES.put(STRUCT_LOCATION, STRUCT_SCHEMA);
+    ALL_DEPENDENCIES.put(TIMESTAMP_LOCATION, TIMESTAMP_SCHEMA);
+    ALL_DEPENDENCIES.put(WRAPPER_LOCATION, WRAPPER_SCHEMA);
+  }
 
   private final ProtoFileElement schemaObj;
 
@@ -938,29 +961,10 @@ public class ProtobufSchema implements ParsedSchema {
 
   public Map<String, ProtoFileElement> dependenciesWithLogicalTypes() {
     Map<String, ProtoFileElement> deps = new HashMap<>(dependencies);
-    if (!deps.containsKey(META_LOCATION)) {
-      deps.put(META_LOCATION, META_SCHEMA);
-    }
-    if (!deps.containsKey(DECIMAL_LOCATION)) {
-      deps.put(DECIMAL_LOCATION, DECIMAL_SCHEMA);
-    }
-    if (!deps.containsKey(DATE_LOCATION)) {
-      deps.put(DATE_LOCATION, DATE_SCHEMA);
-    }
-    if (!deps.containsKey(TIME_LOCATION)) {
-      deps.put(TIME_LOCATION, TIME_SCHEMA);
-    }
-    if (!deps.containsKey(ANY_LOCATION)) {
-      deps.put(ANY_LOCATION, ANY_SCHEMA);
-    }
-    if (!deps.containsKey(DURATION_LOCATION)) {
-      deps.put(DURATION_LOCATION, DURATION_SCHEMA);
-    }
-    if (!deps.containsKey(TIMESTAMP_LOCATION)) {
-      deps.put(TIMESTAMP_LOCATION, TIMESTAMP_SCHEMA);
-    }
-    if (!deps.containsKey(WRAPPER_LOCATION)) {
-      deps.put(WRAPPER_LOCATION, WRAPPER_SCHEMA);
+    for (Map.Entry<String, ProtoFileElement> entry : ALL_DEPENDENCIES.entrySet()) {
+      if (!deps.containsKey(entry.getKey())) {
+        deps.put(entry.getKey(), entry.getValue());
+      }
     }
     return deps;
   }
