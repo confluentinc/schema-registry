@@ -1024,6 +1024,7 @@ public class JsonSchemaData {
     EnumSchema enumSchema = null;
     NumberSchema numberSchema = null;
     StringSchema stringSchema = null;
+    CombinedSchema combinedSubschema = null;
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
       if (subSchema instanceof ConstSchema) {
         constSchema = (ConstSchema) subSchema;
@@ -1033,6 +1034,8 @@ public class JsonSchemaData {
         numberSchema = (NumberSchema) subSchema;
       } else if (subSchema instanceof StringSchema) {
         stringSchema = (StringSchema) subSchema;
+      } else if (subSchema instanceof CombinedSchema) {
+        combinedSubschema = (CombinedSchema) subSchema;
       }
     }
     if (constSchema != null && stringSchema != null) {
@@ -1047,6 +1050,11 @@ public class JsonSchemaData {
         && stringSchema.getFormatValidator() != null) {
       // This is a number or integer with a format
       return toConnectSchema(numberSchema, version, forceOptional);
+    } else if (combinedSubschema != null
+        && stringSchema != null
+        && stringSchema.getFormatValidator() != null) {
+      // This is an optional number or integer with a format
+      return toConnectSchema(combinedSubschema, version, forceOptional);
     } else {
       throw new IllegalArgumentException("Unsupported criterion "
           + combinedSchema.getCriterion() + " for " + combinedSchema);
