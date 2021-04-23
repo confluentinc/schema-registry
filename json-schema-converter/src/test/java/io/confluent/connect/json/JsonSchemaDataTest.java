@@ -69,6 +69,7 @@ import static org.apache.kafka.connect.data.Decimal.LOGICAL_NAME;
 import static org.apache.kafka.connect.data.Decimal.SCALE_FIELD;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class JsonSchemaDataTest {
@@ -1322,7 +1323,103 @@ public class JsonSchemaDataTest {
         + "}";
     JsonSchema jsonSchema = new JsonSchema(schema);
     JsonSchemaData jsonSchemaData = new JsonSchemaData();
-    jsonSchemaData.toConnectSchema(jsonSchema);
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertFalse(connectSchema.field("id").schema().isOptional());
+    assertFalse(connectSchema.field("num").schema().isOptional());
+  }
+
+  @Test
+  public void testOptionalNumericFormats() {
+    String schema = "{\n"
+        + "  \"title\": \"numerics with format\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"id\": {\n"
+        + "      \"format\": \"int32\",\n"
+        + "      \"type\": [\n"
+        + "        \"null\",\n"
+        + "        \"number\"\n"
+        + "      ]"
+        + "    },\n"
+        + "    \"num\": {\n"
+        + "      \"format\": \"double\",\n"
+        + "      \"type\": [\n"
+        + "        \"null\",\n"
+        + "        \"integer\"\n"
+        + "      ]"
+        + "    }\n"
+        + "  },\n"
+        + "  \"required\": [\n"
+        + "    \"id\"\n"
+        + "  ],\n"
+        + "  \"additionalProperties\": false\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertTrue(connectSchema.field("id").schema().isOptional());
+    assertTrue(connectSchema.field("num").schema().isOptional());
+  }
+
+  @Test
+  public void testStringFormats() {
+    String schema = "{\n"
+        + "  \"title\": \"strings with format\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"id\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"format\": \"password\"\n"
+        + "    },\n"
+        + "    \"str\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"format\": \"uuid\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"required\": [\n"
+        + "    \"id\"\n"
+        + "  ],\n"
+        + "  \"additionalProperties\": false\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertFalse(connectSchema.field("id").schema().isOptional());
+    assertFalse(connectSchema.field("str").schema().isOptional());
+  }
+
+  @Test
+  public void testOptionalStringFormats() {
+    String schema = "{\n"
+        + "  \"title\": \"strings with format\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"id\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"format\": \"password\",\n"
+        + "      \"type\": [\n"
+        + "        \"null\",\n"
+        + "        \"string\"\n"
+        + "      ]"
+        + "    },\n"
+        + "    \"str\": {\n"
+        + "      \"format\": \"uuid\",\n"
+        + "      \"type\": [\n"
+        + "        \"null\",\n"
+        + "        \"string\"\n"
+        + "      ]"
+        + "    }\n"
+        + "  },\n"
+        + "  \"required\": [\n"
+        + "    \"id\"\n"
+        + "  ],\n"
+        + "  \"additionalProperties\": false\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertTrue(connectSchema.field("id").schema().isOptional());
+    assertTrue(connectSchema.field("str").schema().isOptional());
   }
 
   @Test
