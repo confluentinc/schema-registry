@@ -19,11 +19,17 @@ package io.confluent.connect.protobuf;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Field;
+import com.google.protobuf.ListValue;
+import com.google.protobuf.NullValue;
 import com.google.protobuf.Timestamp;
+import com.google.protobuf.Value;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue;
+import java.util.List;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -528,6 +534,38 @@ public class ProtobufConverterTest {
     SchemaAndValue expected = new SchemaAndValue(schema, struct);
 
     assertEquals(expected, result);
+  }
+
+  @Test
+  public void testToConnectDataForProtobufStruct() throws Exception {
+    Value v = Value.newBuilder().setNumberValue(123).build();
+    ListValue listValue = ListValue.newBuilder().addValues(v).build();
+    Value value = Value.newBuilder().setListValue(listValue).build();
+    com.google.protobuf.Struct.Builder builder = com.google.protobuf.Struct.newBuilder();
+    builder.putFields("key", value);
+    com.google.protobuf.Struct struct = builder.build();
+
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    configs.put(ProtobufDataConfig.ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG, true);
+    converter.configure(configs, false);
+    // extra bytes for message index
+    final byte[] input = concat(new byte[]{0, 0, 0, 0, 1, 0},
+        struct.toByteArray());
+    schemaRegistry.register("my-topic-value", getSchema(com.google.protobuf.Struct.getDescriptor()));
+    SchemaAndValue result = converter.toConnectData("my-topic", input);
+
+    Struct data1 = (Struct) result.value();
+    Map<String, Object> map = (Map<String, Object>) data1.get("fields");
+    Struct data2 = (Struct) map.get("key");
+    Struct data3 = (Struct) data2.get("kind_0");
+    Struct data4 = (Struct) data3.get("list_value");
+    List<Struct> list = (List<Struct>) data4.get("values");
+    Struct data5 = list.get(0);
+    Struct data6 = (Struct) data5.get("kind_0");
+    Number value1 = (Number) data6.get("number_value");
+
+    assertEquals(123, value1.intValue());
   }
 
   @Test

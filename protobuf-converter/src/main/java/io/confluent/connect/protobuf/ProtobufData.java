@@ -1510,8 +1510,8 @@ public class ProtobufData {
   }
 
   /**
-   * Wraps a SchemaBuilder but overrides the parameters.
-   * Parameters are used to specify the field tags.
+   * Wraps a SchemaBuilder.
+   * The internal builder should never be returned, so that the schema is not built prematurely.
    */
   static class SchemaWrapper extends SchemaBuilder {
 
@@ -1531,12 +1531,14 @@ public class ProtobufData {
 
     @Override
     public SchemaBuilder optional() {
-      return builder.optional();
+      builder.optional();
+      return this;
     }
 
     @Override
     public SchemaBuilder required() {
-      return builder.required();
+      builder.required();
+      return this;
     }
 
     @Override
@@ -1546,7 +1548,8 @@ public class ProtobufData {
 
     @Override
     public SchemaBuilder defaultValue(Object value) {
-      return builder.defaultValue(value);
+      builder.defaultValue(value);
+      return this;
     }
 
     @Override
@@ -1556,7 +1559,8 @@ public class ProtobufData {
 
     @Override
     public SchemaBuilder name(String name) {
-      return builder.name(name);
+      builder.name(name);
+      return this;
     }
 
     @Override
@@ -1566,7 +1570,8 @@ public class ProtobufData {
 
     @Override
     public SchemaBuilder version(Integer version) {
-      return builder.version(version);
+      builder.version(version);
+      return this;
     }
 
     @Override
@@ -1576,7 +1581,8 @@ public class ProtobufData {
 
     @Override
     public SchemaBuilder doc(String doc) {
-      return builder.doc(doc);
+      builder.doc(doc);
+      return this;
     }
 
     @Override
@@ -1613,7 +1619,8 @@ public class ProtobufData {
 
     @Override
     public SchemaBuilder field(String fieldName, Schema fieldSchema) {
-      return builder.field(fieldName, fieldSchema);
+      builder.field(fieldName, fieldSchema);
+      return this;
     }
 
     @Override
