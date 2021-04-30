@@ -2064,6 +2064,31 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testFloatWithInvalidDefault() {
+    final String s = "{"
+        + "  \"type\": \"record\","
+        + "  \"name\": \"SomeThing\","
+        + "  \"namespace\": \"com.acme.property\","
+        + "  \"fields\": ["
+        + "    {"
+        + "      \"name\": \"f\","
+        + "      \"type\": \"float\","
+        + "      \"default\": [1.23]"
+        + "    }"
+        + "  ]"
+        + "}";
+
+    // Don't validate defaults
+    org.apache.avro.Schema avroSchema =
+        new org.apache.avro.Schema.Parser().setValidateDefaults(false).parse(s);
+
+    AvroData avroData = new AvroData(0);
+    Schema schema = avroData.toConnectSchema(avroSchema);
+
+    assertNull(schema.field("f").schema().defaultValue());
+  }
+
+  @Test
   public void testArrayOfRecordWithNullNamespace() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.array().items()
             .record("item").fields()

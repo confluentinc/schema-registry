@@ -1684,8 +1684,14 @@ public class AvroData {
           if (connectMetaData && field.doc() != null) {
             builder.parameter(AVRO_FIELD_DOC_PREFIX_PROP + field.name(), field.doc());
           }
+          Object defaultVal = null;
+          try {
+            defaultVal = field.defaultVal();
+          } catch (Exception e) {
+            log.warn("Ignoring invalid default for field " + field, e);
+          }
           Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
-                  field.defaultVal(), field.doc(), toConnectContext);
+                  defaultVal, field.doc(), toConnectContext);
           builder.field(field.name(), fieldSchema);
         }
         break;
