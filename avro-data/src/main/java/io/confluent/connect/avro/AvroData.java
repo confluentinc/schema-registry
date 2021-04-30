@@ -1688,7 +1688,7 @@ public class AvroData {
           try {
             defaultVal = field.defaultVal();
           } catch (Exception e) {
-            // ignore
+            log.warn("Ignoring invalid default for field " + field, e);
           }
           Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
                   defaultVal, field.doc(), toConnectContext);
