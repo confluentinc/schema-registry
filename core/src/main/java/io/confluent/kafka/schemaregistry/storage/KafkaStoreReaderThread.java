@@ -187,6 +187,10 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     log.debug("Kafka store reader thread started");
   }
 
+  public Map<TopicPartition, Long> checkpoints() {
+    return checkpointFileCache;
+  }
+
   @Override
   public void doWork() {
     try {
