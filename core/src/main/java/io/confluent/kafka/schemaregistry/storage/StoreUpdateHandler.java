@@ -39,7 +39,7 @@ public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
   /**
    * Invoked after the cache is initialized.
    */
-  default void cacheInitialized() {
+  default void cacheInitialized(Map<TopicPartition, Long> checkpoints) {
   }
 
   /**
