@@ -86,7 +86,7 @@ Documentation
    installation
    config
    schema_registry_tutorial
-   ../../cloud/connect/schema-reg-cloud-config
+   Schema Registry and Confluent Cloud <https://docs.confluent.io/cloud/current/cp-component/schema-reg-cloud-config.html>
    using
    monitoring
    operations
