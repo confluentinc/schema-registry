@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.protobuf;
 
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.AnyProto;
+import com.google.protobuf.ApiProto;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.DescriptorProto.ReservedRange;
@@ -33,8 +34,11 @@ import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DurationProto;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.EmptyProto;
+import com.google.protobuf.FieldMaskProto;
+import com.google.protobuf.SourceContextProto;
 import com.google.protobuf.StructProto;
 import com.google.protobuf.TimestampProto;
+import com.google.protobuf.TypeProto;
 import com.google.protobuf.WrappersProto;
 import com.google.type.DateProto;
 import com.google.type.TimeOfDayProto;
@@ -109,10 +113,15 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String DATE_LOCATION = "google/type/date.proto";
   public static final String TIME_LOCATION = "google/type/timeofday.proto";
   public static final String ANY_LOCATION = "google/protobuf/any.proto";
+  public static final String API_LOCATION = "google/protobuf/api.proto";
+  public static final String DESCRIPTOR_LOCATION = "google/protobuf/descriptor.proto";
   public static final String DURATION_LOCATION = "google/protobuf/duration.proto";
   public static final String EMPTY_LOCATION = "google/protobuf/empty.proto";
+  public static final String FIELD_MASK_LOCATION = "google/protobuf/field_mask.proto";
+  public static final String SOURCE_CONTEXT_LOCATION = "google/protobuf/source_context.proto";
   public static final String STRUCT_LOCATION = "google/protobuf/struct.proto";
   public static final String TIMESTAMP_LOCATION = "google/protobuf/timestamp.proto";
+  public static final String TYPE_LOCATION = "google/protobuf/type.proto";
   public static final String WRAPPER_LOCATION = "google/protobuf/wrappers.proto";
 
   private static final ProtoFileElement META_SCHEMA =
@@ -125,14 +134,24 @@ public class ProtobufSchema implements ParsedSchema {
       toProtoFile(TimeOfDayProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement ANY_SCHEMA =
       toProtoFile(AnyProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement API_SCHEMA =
+      toProtoFile(ApiProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement DESCRIPTOR_SCHEMA =
+      toProtoFile(DescriptorProtos.getDescriptor().toProto()) ;
   private static final ProtoFileElement DURATION_SCHEMA =
       toProtoFile(DurationProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement EMPTY_SCHEMA =
       toProtoFile(EmptyProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement FIELD_MASK_SCHEMA =
+      toProtoFile(FieldMaskProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement SOURCE_CONTEXT_SCHEMA =
+      toProtoFile(SourceContextProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement STRUCT_SCHEMA =
       toProtoFile(StructProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement TIMESTAMP_SCHEMA =
       toProtoFile(TimestampProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement TYPE_SCHEMA =
+      toProtoFile(TypeProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement WRAPPER_SCHEMA =
       toProtoFile(WrappersProto.getDescriptor().toProto()) ;
 
@@ -145,10 +164,15 @@ public class ProtobufSchema implements ParsedSchema {
     ALL_DEPENDENCIES.put(DATE_LOCATION, DATE_SCHEMA);
     ALL_DEPENDENCIES.put(TIME_LOCATION, TIME_SCHEMA);
     ALL_DEPENDENCIES.put(ANY_LOCATION, ANY_SCHEMA);
+    ALL_DEPENDENCIES.put(API_LOCATION, API_SCHEMA);
+    ALL_DEPENDENCIES.put(DESCRIPTOR_LOCATION, DESCRIPTOR_SCHEMA);
     ALL_DEPENDENCIES.put(DURATION_LOCATION, DURATION_SCHEMA);
     ALL_DEPENDENCIES.put(EMPTY_LOCATION, EMPTY_SCHEMA);
+    ALL_DEPENDENCIES.put(FIELD_MASK_LOCATION, FIELD_MASK_SCHEMA);
+    ALL_DEPENDENCIES.put(SOURCE_CONTEXT_LOCATION, SOURCE_CONTEXT_SCHEMA);
     ALL_DEPENDENCIES.put(STRUCT_LOCATION, STRUCT_SCHEMA);
     ALL_DEPENDENCIES.put(TIMESTAMP_LOCATION, TIMESTAMP_SCHEMA);
+    ALL_DEPENDENCIES.put(TYPE_LOCATION, TYPE_SCHEMA);
     ALL_DEPENDENCIES.put(WRAPPER_LOCATION, WRAPPER_SCHEMA);
   }
 
