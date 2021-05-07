@@ -24,6 +24,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 
+import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.ExtendElement;
 import com.squareup.wire.schema.internal.parser.ExtensionsElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
@@ -40,6 +41,7 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -110,10 +112,18 @@ public class ProtobufSchemaUtils {
         sb.append(toString(option));
       }
     }
-    if (!protoFile.getTypes().isEmpty()) {
+    List<MessageElement> messages = getMessages(protoFile);
+    if (!messages.isEmpty()) {
       sb.append('\n');
-      for (TypeElement typeElement : protoFile.getTypes()) {
-        sb.append(toString(typeElement));
+      for (MessageElement message : messages) {
+        sb.append(toString(message));
+      }
+    }
+    List<EnumElement> enums = getEnums(protoFile);
+    if (!enums.isEmpty()) {
+      sb.append('\n');
+      for (EnumElement enumElem : enums) {
+        sb.append(toString(enumElem));
       }
     }
     if (!protoFile.getExtendDeclarations().isEmpty()) {
@@ -181,10 +191,18 @@ public class ProtobufSchemaUtils {
         appendIndented(sb, extension.toSchema());
       }
     }
-    if (!type.getNestedTypes().isEmpty()) {
+    List<MessageElement> messages = getNestedMessages(type);
+    if (!messages.isEmpty()) {
       sb.append('\n');
-      for (TypeElement nestedType : type.getNestedTypes()) {
-        appendIndented(sb, toString(nestedType));
+      for (MessageElement message : messages) {
+        sb.append(toString(message));
+      }
+    }
+    List<EnumElement> enums = getNestedEnums(type);
+    if (!enums.isEmpty()) {
+      sb.append('\n');
+      for (EnumElement enumElem : enums) {
+        sb.append(toString(enumElem));
       }
     }
     sb.append("}\n");
@@ -256,5 +274,41 @@ public class ProtobufSchemaUtils {
       }
     }
     return buffer.toString();
+  }
+
+  private static List<MessageElement> getMessages(List<TypeElement> types) {
+    List<MessageElement> messages = new ArrayList<>();
+    for (TypeElement type : types) {
+      if (type instanceof MessageElement) {
+        messages.add((MessageElement) type);
+      }
+    }
+    return messages;
+  }
+
+  private static List<MessageElement> getMessages(ProtoFileElement protoFile) {
+    return getMessages(protoFile.getTypes());
+  }
+
+  private static List<MessageElement> getNestedMessages(MessageElement message) {
+    return getMessages(message.getNestedTypes());
+  }
+
+  private static List<EnumElement> getEnums(List<TypeElement> types) {
+    List<EnumElement> enums = new ArrayList<>();
+    for (TypeElement type : types) {
+      if (type instanceof EnumElement) {
+        enums.add((EnumElement) type);
+      }
+    }
+    return enums;
+  }
+
+  private static List<EnumElement> getEnums(ProtoFileElement protoFile) {
+    return getEnums(protoFile.getTypes());
+  }
+
+  private static List<EnumElement> getNestedEnums(MessageElement message) {
+    return getEnums(message.getNestedTypes());
   }
 }
