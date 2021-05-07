@@ -115,16 +115,12 @@ public class ProtobufSchemaUtils {
     if (!protoFile.getTypes().isEmpty()) {
       sb.append('\n');
       List<MessageElement> messages = getMessages(protoFile.getTypes());
-      if (!messages.isEmpty()) {
-        for (MessageElement message : messages) {
-          sb.append(toString(message));
-        }
+      for (MessageElement message : messages) {
+        sb.append(toString(message));
       }
       List<EnumElement> enums = getEnums(protoFile.getTypes());
-      if (!enums.isEmpty()) {
-        for (EnumElement enumElem : enums) {
-          sb.append(toString(enumElem));
-        }
+      for (EnumElement enumElem : enums) {
+        sb.append(toString(enumElem));
       }
     }
     if (!protoFile.getExtendDeclarations().isEmpty()) {
@@ -195,16 +191,12 @@ public class ProtobufSchemaUtils {
     if (!type.getNestedTypes().isEmpty()) {
       sb.append('\n');
       List<MessageElement> messages = getMessages(type.getNestedTypes());
-      if (!messages.isEmpty()) {
-        for (MessageElement message : messages) {
-          sb.append(toString(message));
-        }
+      for (MessageElement message : messages) {
+        sb.append(toString(message));
       }
       List<EnumElement> enums = getEnums(type.getNestedTypes());
-      if (!enums.isEmpty()) {
-        for (EnumElement enumElem : enums) {
-          sb.append(toString(enumElem));
-        }
+      for (EnumElement enumElem : enums) {
+        sb.append(toString(enumElem));
       }
     }
     sb.append("}\n");
