@@ -41,7 +41,6 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -114,13 +113,15 @@ public class ProtobufSchemaUtils {
     }
     if (!protoFile.getTypes().isEmpty()) {
       sb.append('\n');
-      List<MessageElement> messages = getMessages(protoFile.getTypes());
-      for (MessageElement message : messages) {
-        sb.append(toString(message));
+      for (TypeElement typeElement : protoFile.getTypes()) {
+        if (typeElement instanceof MessageElement) {
+          sb.append(toString((MessageElement) typeElement));
+        }
       }
-      List<EnumElement> enums = getEnums(protoFile.getTypes());
-      for (EnumElement enumElem : enums) {
-        sb.append(toString(enumElem));
+      for (TypeElement typeElement : protoFile.getTypes()) {
+        if (typeElement instanceof EnumElement) {
+          sb.append(toString((EnumElement) typeElement));
+        }
       }
     }
     if (!protoFile.getExtendDeclarations().isEmpty()) {
@@ -138,12 +139,8 @@ public class ProtobufSchemaUtils {
     return sb.toString();
   }
 
-  private static String toString(TypeElement type) {
-    if (type instanceof MessageElement) {
-      return toString((MessageElement) type);
-    } else {
-      return type.toSchema();
-    }
+  private static String toString(EnumElement type) {
+    return type.toSchema();
   }
 
   private static String toString(MessageElement type) {
@@ -190,13 +187,15 @@ public class ProtobufSchemaUtils {
     }
     if (!type.getNestedTypes().isEmpty()) {
       sb.append('\n');
-      List<MessageElement> messages = getMessages(type.getNestedTypes());
-      for (MessageElement message : messages) {
-        sb.append(toString(message));
+      for (TypeElement typeElement : type.getNestedTypes()) {
+        if (typeElement instanceof MessageElement) {
+          sb.append(toString((MessageElement) typeElement));
+        }
       }
-      List<EnumElement> enums = getEnums(type.getNestedTypes());
-      for (EnumElement enumElem : enums) {
-        sb.append(toString(enumElem));
+      for (TypeElement typeElement : type.getNestedTypes()) {
+        if (typeElement instanceof EnumElement) {
+          sb.append(toString((EnumElement) typeElement));
+        }
       }
     }
     sb.append("}\n");
@@ -268,25 +267,5 @@ public class ProtobufSchemaUtils {
       }
     }
     return buffer.toString();
-  }
-
-  private static List<MessageElement> getMessages(List<TypeElement> types) {
-    List<MessageElement> messages = new ArrayList<>();
-    for (TypeElement type : types) {
-      if (type instanceof MessageElement) {
-        messages.add((MessageElement) type);
-      }
-    }
-    return messages;
-  }
-
-  private static List<EnumElement> getEnums(List<TypeElement> types) {
-    List<EnumElement> enums = new ArrayList<>();
-    for (TypeElement type : types) {
-      if (type instanceof EnumElement) {
-        enums.add((EnumElement) type);
-      }
-    }
-    return enums;
   }
 }
