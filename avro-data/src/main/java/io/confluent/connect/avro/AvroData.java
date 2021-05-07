@@ -669,7 +669,7 @@ public class AvroData {
         }
       } else {
         throw new DataException(
-            "An optinal schema should have an Avro Union type, not "
+            "An optional schema should have an Avro Union type, not "
                 + schema.type());
       }
     }
