@@ -189,12 +189,12 @@ public class ProtobufSchemaUtils {
       sb.append('\n');
       for (TypeElement typeElement : type.getNestedTypes()) {
         if (typeElement instanceof MessageElement) {
-          sb.append(toString((MessageElement) typeElement));
+          appendIndented(sb, toString((MessageElement) typeElement));
         }
       }
       for (TypeElement typeElement : type.getNestedTypes()) {
         if (typeElement instanceof EnumElement) {
-          sb.append(toString((EnumElement) typeElement));
+          appendIndented(sb, toString((EnumElement) typeElement));
         }
       }
     }
