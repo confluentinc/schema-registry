@@ -137,6 +137,39 @@ public class ProtobufSchemaTest {
 
   private static final ProtobufSchema enumSchema = new ProtobufSchema(enumSchemaString);
 
+  private static final String enumBeforeMessageSchemaString = "syntax = \"proto3\";\n"
+      + "\n"
+      + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+      + "option java_outer_classname = \"TestEnumProtos\";\n"
+      + "\n"
+      + "enum Suit {\n"
+      + "  SPADES = 0;\n"
+      + "  HEARTS = 1;\n"
+      + "  DIAMONDS = 2;\n"
+      + "  CLUBS = 3;\n"
+      + "}\n"
+      + "message TestEnum {\n"
+      + "  int32 suit = 1;\n"
+      + "}\n";
+
+  private static final String enumAfterMessageSchemaString = "syntax = \"proto3\";\n"
+      + "\n"
+      + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+      + "option java_outer_classname = \"TestEnumProtos\";\n"
+      + "\n"
+      + "message TestEnum {\n"
+      + "  int32 suit = 1;\n"
+      + "}\n"
+      + "enum Suit {\n"
+      + "  SPADES = 0;\n"
+      + "  HEARTS = 1;\n"
+      + "  DIAMONDS = 2;\n"
+      + "  CLUBS = 3;\n"
+      + "}\n";
+
+  private static final ProtobufSchema enumBeforeMessageSchema =
+      new ProtobufSchema(enumBeforeMessageSchemaString);
+
   @Test
   public void testRecordToProtobuf() throws Exception {
     String json = "{\n"
@@ -474,6 +507,13 @@ public class ProtobufSchemaTest {
     // in one or more referenced schemas
     assertNotNull(schema.toDescriptor(
         schema.toMessageName(new MessageIndexes(Collections.singletonList(0)))));
+  }
+
+  @Test
+  public void testEnumAfterMessage() throws Exception {
+    assertEquals(enumAfterMessageSchemaString, enumBeforeMessageSchema.canonicalString());
+    assertEquals(enumAfterMessageSchemaString,
+        new ProtobufSchema(enumBeforeMessageSchema.toDescriptor()).canonicalString());
   }
 
   private static JsonNode jsonTree(String jsonData) {
