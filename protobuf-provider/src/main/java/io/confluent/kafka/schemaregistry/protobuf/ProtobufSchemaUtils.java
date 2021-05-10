@@ -24,6 +24,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 
+import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.ExtendElement;
 import com.squareup.wire.schema.internal.parser.ExtensionsElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
@@ -113,7 +114,14 @@ public class ProtobufSchemaUtils {
     if (!protoFile.getTypes().isEmpty()) {
       sb.append('\n');
       for (TypeElement typeElement : protoFile.getTypes()) {
-        sb.append(toString(typeElement));
+        if (typeElement instanceof MessageElement) {
+          sb.append(toString((MessageElement) typeElement));
+        }
+      }
+      for (TypeElement typeElement : protoFile.getTypes()) {
+        if (typeElement instanceof EnumElement) {
+          sb.append(toString((EnumElement) typeElement));
+        }
       }
     }
     if (!protoFile.getExtendDeclarations().isEmpty()) {
@@ -131,12 +139,8 @@ public class ProtobufSchemaUtils {
     return sb.toString();
   }
 
-  private static String toString(TypeElement type) {
-    if (type instanceof MessageElement) {
-      return toString((MessageElement) type);
-    } else {
-      return type.toSchema();
-    }
+  private static String toString(EnumElement type) {
+    return type.toSchema();
   }
 
   private static String toString(MessageElement type) {
@@ -183,8 +187,15 @@ public class ProtobufSchemaUtils {
     }
     if (!type.getNestedTypes().isEmpty()) {
       sb.append('\n');
-      for (TypeElement nestedType : type.getNestedTypes()) {
-        appendIndented(sb, toString(nestedType));
+      for (TypeElement typeElement : type.getNestedTypes()) {
+        if (typeElement instanceof MessageElement) {
+          appendIndented(sb, toString((MessageElement) typeElement));
+        }
+      }
+      for (TypeElement typeElement : type.getNestedTypes()) {
+        if (typeElement instanceof EnumElement) {
+          appendIndented(sb, toString((EnumElement) typeElement));
+        }
       }
     }
     sb.append("}\n");
