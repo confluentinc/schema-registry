@@ -31,17 +31,17 @@ public final class TestMessageOptionalProtos {
         getTestStringBytes();
 
     /**
-     * <code>string test_optional_string = 2;</code>
+     * <code>optional string test_optional_string = 2;</code>
      * @return Whether the testOptionalString field is set.
      */
     boolean hasTestOptionalString();
     /**
-     * <code>string test_optional_string = 2;</code>
+     * <code>optional string test_optional_string = 2;</code>
      * @return The testOptionalString.
      */
     java.lang.String getTestOptionalString();
     /**
-     * <code>string test_optional_string = 2;</code>
+     * <code>optional string test_optional_string = 2;</code>
      * @return The bytes for testOptionalString.
      */
     com.google.protobuf.ByteString
@@ -181,7 +181,7 @@ public final class TestMessageOptionalProtos {
     public static final int TEST_OPTIONAL_STRING_FIELD_NUMBER = 2;
     private volatile java.lang.Object testOptionalString_;
     /**
-     * <code>string test_optional_string = 2;</code>
+     * <code>optional string test_optional_string = 2;</code>
      * @return Whether the testOptionalString field is set.
      */
     @java.lang.Override
@@ -189,7 +189,7 @@ public final class TestMessageOptionalProtos {
       return ((bitField0_ & 0x00000001) != 0);
     }
     /**
-     * <code>string test_optional_string = 2;</code>
+     * <code>optional string test_optional_string = 2;</code>
      * @return The testOptionalString.
      */
     @java.lang.Override
@@ -206,7 +206,7 @@ public final class TestMessageOptionalProtos {
       }
     }
     /**
-     * <code>string test_optional_string = 2;</code>
+     * <code>optional string test_optional_string = 2;</code>
      * @return The bytes for testOptionalString.
      */
     @java.lang.Override
@@ -634,14 +634,14 @@ public final class TestMessageOptionalProtos {
 
       private java.lang.Object testOptionalString_ = "";
       /**
-       * <code>string test_optional_string = 2;</code>
+       * <code>optional string test_optional_string = 2;</code>
        * @return Whether the testOptionalString field is set.
        */
       public boolean hasTestOptionalString() {
         return ((bitField0_ & 0x00000001) != 0);
       }
       /**
-       * <code>string test_optional_string = 2;</code>
+       * <code>optional string test_optional_string = 2;</code>
        * @return The testOptionalString.
        */
       public java.lang.String getTestOptionalString() {
@@ -657,7 +657,7 @@ public final class TestMessageOptionalProtos {
         }
       }
       /**
-       * <code>string test_optional_string = 2;</code>
+       * <code>optional string test_optional_string = 2;</code>
        * @return The bytes for testOptionalString.
        */
       public com.google.protobuf.ByteString
@@ -674,7 +674,7 @@ public final class TestMessageOptionalProtos {
         }
       }
       /**
-       * <code>string test_optional_string = 2;</code>
+       * <code>optional string test_optional_string = 2;</code>
        * @param value The testOptionalString to set.
        * @return This builder for chaining.
        */
@@ -689,7 +689,7 @@ public final class TestMessageOptionalProtos {
         return this;
       }
       /**
-       * <code>string test_optional_string = 2;</code>
+       * <code>optional string test_optional_string = 2;</code>
        * @return This builder for chaining.
        */
       public Builder clearTestOptionalString() {
@@ -699,7 +699,7 @@ public final class TestMessageOptionalProtos {
         return this;
       }
       /**
-       * <code>string test_optional_string = 2;</code>
+       * <code>optional string test_optional_string = 2;</code>
        * @param value The bytes for testOptionalString to set.
        * @return This builder for chaining.
        */

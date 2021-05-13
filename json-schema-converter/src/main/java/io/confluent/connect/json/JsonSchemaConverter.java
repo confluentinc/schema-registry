@@ -43,7 +43,6 @@ import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerConfig;
  * Implementation of Converter that supports JSON with JSON Schema.
  */
 public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Converter {
-
   private SchemaRegistryClient schemaRegistry;
   private Serializer serializer;
   private Deserializer deserializer;
