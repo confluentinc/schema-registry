@@ -39,7 +39,7 @@ public final class Ref {
   /**
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.ReferencedMessage}
    */
-  public  static final class ReferencedMessage extends
+  public static final class ReferencedMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.ReferencedMessage)
       ReferencedMessageOrBuilder {
@@ -131,6 +131,7 @@ public final class Ref {
      * <code>string ref_id = 1;</code>
      * @return The refId.
      */
+    @java.lang.Override
     public java.lang.String getRefId() {
       java.lang.Object ref = refId_;
       if (ref instanceof java.lang.String) {
@@ -147,6 +148,7 @@ public final class Ref {
      * <code>string ref_id = 1;</code>
      * @return The bytes for refId.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString
         getRefIdBytes() {
       java.lang.Object ref = refId_;
@@ -167,6 +169,7 @@ public final class Ref {
      * <code>bool is_active = 2;</code>
      * @return The isActive.
      */
+    @java.lang.Override
     public boolean getIsActive() {
       return isActive_;
     }
@@ -572,6 +575,7 @@ public final class Ref {
        * <code>bool is_active = 2;</code>
        * @return The isActive.
        */
+      @java.lang.Override
       public boolean getIsActive() {
         return isActive_;
       }

@@ -488,13 +488,16 @@ public class ProtobufSchema implements ParsedSchema {
     );
   }
 
-  private Field.Label label(FileDescriptorProto file, FieldDescriptorProto fd) {
+  private static Field.Label label(FileDescriptorProto file, FieldDescriptorProto fd) {
+    if (!fd.hasLabel()) {
+      return null;
+    }
     boolean isProto3 = file.getSyntax().equals(PROTO3);
     switch (fd.getLabel()) {
       case LABEL_REQUIRED:
         return isProto3 ? null : Field.Label.REQUIRED;
       case LABEL_OPTIONAL:
-        return isProto3 ? null : Field.Label.OPTIONAL;
+        return Field.Label.OPTIONAL;
       case LABEL_REPEATED:
         return Field.Label.REPEATED;
       default:

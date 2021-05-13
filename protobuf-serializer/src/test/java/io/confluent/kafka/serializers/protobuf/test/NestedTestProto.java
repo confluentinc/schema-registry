@@ -84,6 +84,10 @@ public final class NestedTestProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
+      if (this == UNRECOGNIZED) {
+        throw new java.lang.IllegalStateException(
+            "Can't get the descriptor of an unrecognized enum value.");
+      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -124,6 +128,11 @@ public final class NestedTestProto {
 
     /**
      * <code>string kafka_user_id = 1;</code>
+     * @return Whether the kafkaUserId field is set.
+     */
+    boolean hasKafkaUserId();
+    /**
+     * <code>string kafka_user_id = 1;</code>
      * @return The kafkaUserId.
      */
     java.lang.String getKafkaUserId();
@@ -134,6 +143,11 @@ public final class NestedTestProto {
     com.google.protobuf.ByteString
         getKafkaUserIdBytes();
 
+    /**
+     * <code>int32 other_user_id = 2;</code>
+     * @return Whether the otherUserId field is set.
+     */
+    boolean hasOtherUserId();
     /**
      * <code>int32 other_user_id = 2;</code>
      * @return The otherUserId.
@@ -160,7 +174,7 @@ public final class NestedTestProto {
   /**
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.UserId}
    */
-  public  static final class UserId extends
+  public static final class UserId extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.UserId)
       UserIdOrBuilder {
@@ -305,6 +319,13 @@ public final class NestedTestProto {
     public static final int KAFKA_USER_ID_FIELD_NUMBER = 1;
     /**
      * <code>string kafka_user_id = 1;</code>
+     * @return Whether the kafkaUserId field is set.
+     */
+    public boolean hasKafkaUserId() {
+      return userIdCase_ == 1;
+    }
+    /**
+     * <code>string kafka_user_id = 1;</code>
      * @return The kafkaUserId.
      */
     public java.lang.String getKafkaUserId() {
@@ -350,8 +371,17 @@ public final class NestedTestProto {
     public static final int OTHER_USER_ID_FIELD_NUMBER = 2;
     /**
      * <code>int32 other_user_id = 2;</code>
+     * @return Whether the otherUserId field is set.
+     */
+    @java.lang.Override
+    public boolean hasOtherUserId() {
+      return userIdCase_ == 2;
+    }
+    /**
+     * <code>int32 other_user_id = 2;</code>
      * @return The otherUserId.
      */
+    @java.lang.Override
     public int getOtherUserId() {
       if (userIdCase_ == 2) {
         return (java.lang.Integer) userId_;
@@ -364,6 +394,7 @@ public final class NestedTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.MessageId another_id = 3;</code>
      * @return Whether the anotherId field is set.
      */
+    @java.lang.Override
     public boolean hasAnotherId() {
       return userIdCase_ == 3;
     }
@@ -371,6 +402,7 @@ public final class NestedTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.MessageId another_id = 3;</code>
      * @return The anotherId.
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.MessageId getAnotherId() {
       if (userIdCase_ == 3) {
          return (io.confluent.kafka.serializers.protobuf.test.NestedTestProto.MessageId) userId_;
@@ -380,6 +412,7 @@ public final class NestedTestProto {
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.MessageId another_id = 3;</code>
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.MessageIdOrBuilder getAnotherIdOrBuilder() {
       if (userIdCase_ == 3) {
          return (io.confluent.kafka.serializers.protobuf.test.NestedTestProto.MessageId) userId_;
@@ -779,8 +812,17 @@ public final class NestedTestProto {
 
       /**
        * <code>string kafka_user_id = 1;</code>
+       * @return Whether the kafkaUserId field is set.
+       */
+      @java.lang.Override
+      public boolean hasKafkaUserId() {
+        return userIdCase_ == 1;
+      }
+      /**
+       * <code>string kafka_user_id = 1;</code>
        * @return The kafkaUserId.
        */
+      @java.lang.Override
       public java.lang.String getKafkaUserId() {
         java.lang.Object ref = "";
         if (userIdCase_ == 1) {
@@ -802,6 +844,7 @@ public final class NestedTestProto {
        * <code>string kafka_user_id = 1;</code>
        * @return The bytes for kafkaUserId.
        */
+      @java.lang.Override
       public com.google.protobuf.ByteString
           getKafkaUserIdBytes() {
         java.lang.Object ref = "";
@@ -866,6 +909,13 @@ public final class NestedTestProto {
 
       /**
        * <code>int32 other_user_id = 2;</code>
+       * @return Whether the otherUserId field is set.
+       */
+      public boolean hasOtherUserId() {
+        return userIdCase_ == 2;
+      }
+      /**
+       * <code>int32 other_user_id = 2;</code>
        * @return The otherUserId.
        */
       public int getOtherUserId() {
@@ -904,6 +954,7 @@ public final class NestedTestProto {
        * <code>.io.confluent.kafka.serializers.protobuf.test.MessageId another_id = 3;</code>
        * @return Whether the anotherId field is set.
        */
+      @java.lang.Override
       public boolean hasAnotherId() {
         return userIdCase_ == 3;
       }
@@ -911,6 +962,7 @@ public final class NestedTestProto {
        * <code>.io.confluent.kafka.serializers.protobuf.test.MessageId another_id = 3;</code>
        * @return The anotherId.
        */
+      @java.lang.Override
       public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.MessageId getAnotherId() {
         if (anotherIdBuilder_ == null) {
           if (userIdCase_ == 3) {
@@ -1004,6 +1056,7 @@ public final class NestedTestProto {
       /**
        * <code>.io.confluent.kafka.serializers.protobuf.test.MessageId another_id = 3;</code>
        */
+      @java.lang.Override
       public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.MessageIdOrBuilder getAnotherIdOrBuilder() {
         if ((userIdCase_ == 3) && (anotherIdBuilder_ != null)) {
           return anotherIdBuilder_.getMessageOrBuilder();
@@ -1107,7 +1160,7 @@ public final class NestedTestProto {
   /**
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.MessageId}
    */
-  public  static final class MessageId extends
+  public static final class MessageId extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.MessageId)
       MessageIdOrBuilder {
@@ -1194,6 +1247,7 @@ public final class NestedTestProto {
      * <code>string id = 1;</code>
      * @return The id.
      */
+    @java.lang.Override
     public java.lang.String getId() {
       java.lang.Object ref = id_;
       if (ref instanceof java.lang.String) {
@@ -1210,6 +1264,7 @@ public final class NestedTestProto {
      * <code>string id = 1;</code>
      * @return The bytes for id.
      */
+    @java.lang.Override
     public com.google.protobuf.ByteString
         getIdBytes() {
       java.lang.Object ref = id_;
@@ -1660,6 +1715,11 @@ public final class NestedTestProto {
 
     /**
      * <code>string one_id = 1;</code>
+     * @return Whether the oneId field is set.
+     */
+    boolean hasOneId();
+    /**
+     * <code>string one_id = 1;</code>
      * @return The oneId.
      */
     java.lang.String getOneId();
@@ -1670,6 +1730,11 @@ public final class NestedTestProto {
     com.google.protobuf.ByteString
         getOneIdBytes();
 
+    /**
+     * <code>int32 other_id = 2;</code>
+     * @return Whether the otherId field is set.
+     */
+    boolean hasOtherId();
     /**
      * <code>int32 other_id = 2;</code>
      * @return The otherId.
@@ -1687,7 +1752,7 @@ public final class NestedTestProto {
   /**
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.ComplexType}
    */
-  public  static final class ComplexType extends
+  public static final class ComplexType extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.ComplexType)
       ComplexTypeOrBuilder {
@@ -1821,6 +1886,13 @@ public final class NestedTestProto {
     public static final int ONE_ID_FIELD_NUMBER = 1;
     /**
      * <code>string one_id = 1;</code>
+     * @return Whether the oneId field is set.
+     */
+    public boolean hasOneId() {
+      return someValCase_ == 1;
+    }
+    /**
+     * <code>string one_id = 1;</code>
      * @return The oneId.
      */
     public java.lang.String getOneId() {
@@ -1866,8 +1938,17 @@ public final class NestedTestProto {
     public static final int OTHER_ID_FIELD_NUMBER = 2;
     /**
      * <code>int32 other_id = 2;</code>
+     * @return Whether the otherId field is set.
+     */
+    @java.lang.Override
+    public boolean hasOtherId() {
+      return someValCase_ == 2;
+    }
+    /**
+     * <code>int32 other_id = 2;</code>
      * @return The otherId.
      */
+    @java.lang.Override
     public int getOtherId() {
       if (someValCase_ == 2) {
         return (java.lang.Integer) someVal_;
@@ -1881,6 +1962,7 @@ public final class NestedTestProto {
      * <code>bool is_active = 3;</code>
      * @return The isActive.
      */
+    @java.lang.Override
     public boolean getIsActive() {
       return isActive_;
     }
@@ -2269,8 +2351,17 @@ public final class NestedTestProto {
 
       /**
        * <code>string one_id = 1;</code>
+       * @return Whether the oneId field is set.
+       */
+      @java.lang.Override
+      public boolean hasOneId() {
+        return someValCase_ == 1;
+      }
+      /**
+       * <code>string one_id = 1;</code>
        * @return The oneId.
        */
+      @java.lang.Override
       public java.lang.String getOneId() {
         java.lang.Object ref = "";
         if (someValCase_ == 1) {
@@ -2292,6 +2383,7 @@ public final class NestedTestProto {
        * <code>string one_id = 1;</code>
        * @return The bytes for oneId.
        */
+      @java.lang.Override
       public com.google.protobuf.ByteString
           getOneIdBytes() {
         java.lang.Object ref = "";
@@ -2356,6 +2448,13 @@ public final class NestedTestProto {
 
       /**
        * <code>int32 other_id = 2;</code>
+       * @return Whether the otherId field is set.
+       */
+      public boolean hasOtherId() {
+        return someValCase_ == 2;
+      }
+      /**
+       * <code>int32 other_id = 2;</code>
        * @return The otherId.
        */
       public int getOtherId() {
@@ -2393,6 +2492,7 @@ public final class NestedTestProto {
        * <code>bool is_active = 3;</code>
        * @return The isActive.
        */
+      @java.lang.Override
       public boolean getIsActive() {
         return isActive_;
       }
@@ -2617,7 +2717,7 @@ public final class NestedTestProto {
    *
    * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.NestedMessage}
    */
-  public  static final class NestedMessage extends
+  public static final class NestedMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.NestedMessage)
       NestedMessageOrBuilder {
@@ -2863,6 +2963,10 @@ public final class NestedTestProto {
 
       public final com.google.protobuf.Descriptors.EnumValueDescriptor
           getValueDescriptor() {
+        if (this == UNRECOGNIZED) {
+          throw new java.lang.IllegalStateException(
+              "Can't get the descriptor of an unrecognized enum value.");
+        }
         return getDescriptor().getValues().get(ordinal());
       }
       public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -2874,10 +2978,12 @@ public final class NestedTestProto {
         return io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.getDescriptor().getEnumTypes().get(0);
       }
 
-      private static final InnerEnum[] VALUES = {
-        ZERO, ALSO_ZERO, 
-      };
-
+      private static final InnerEnum[] VALUES = getStaticValuesArray();
+      private static InnerEnum[] getStaticValuesArray() {
+        return new InnerEnum[] {
+          ZERO, ALSO_ZERO, 
+        };
+      }
       public static InnerEnum valueOf(
           com.google.protobuf.Descriptors.EnumValueDescriptor desc) {
         if (desc.getType() != getDescriptor()) {
@@ -2904,12 +3010,12 @@ public final class NestedTestProto {
         com.google.protobuf.MessageOrBuilder {
 
       /**
-       * <code>string id = 1[json_name = "id"];</code>
+       * <code>string id = 1 [json_name = "id"];</code>
        * @return The id.
        */
       java.lang.String getId();
       /**
-       * <code>string id = 1[json_name = "id"];</code>
+       * <code>string id = 1 [json_name = "id"];</code>
        * @return The bytes for id.
        */
       com.google.protobuf.ByteString
@@ -2935,7 +3041,7 @@ public final class NestedTestProto {
     /**
      * Protobuf type {@code io.confluent.kafka.serializers.protobuf.test.NestedMessage.InnerMessage}
      */
-    public  static final class InnerMessage extends
+    public static final class InnerMessage extends
         com.google.protobuf.GeneratedMessageV3 implements
         // @@protoc_insertion_point(message_implements:io.confluent.kafka.serializers.protobuf.test.NestedMessage.InnerMessage)
         InnerMessageOrBuilder {
@@ -3045,9 +3151,10 @@ public final class NestedTestProto {
       public static final int ID_FIELD_NUMBER = 1;
       private volatile java.lang.Object id_;
       /**
-       * <code>string id = 1[json_name = "id"];</code>
+       * <code>string id = 1 [json_name = "id"];</code>
        * @return The id.
        */
+      @java.lang.Override
       public java.lang.String getId() {
         java.lang.Object ref = id_;
         if (ref instanceof java.lang.String) {
@@ -3061,9 +3168,10 @@ public final class NestedTestProto {
         }
       }
       /**
-       * <code>string id = 1[json_name = "id"];</code>
+       * <code>string id = 1 [json_name = "id"];</code>
        * @return The bytes for id.
        */
+      @java.lang.Override
       public com.google.protobuf.ByteString
           getIdBytes() {
         java.lang.Object ref = id_;
@@ -3084,6 +3192,7 @@ public final class NestedTestProto {
        * <code>repeated int32 ids = 2 [packed = true];</code>
        * @return A list containing the ids.
        */
+      @java.lang.Override
       public java.util.List<java.lang.Integer>
           getIdsList() {
         return ids_;
@@ -3456,7 +3565,7 @@ public final class NestedTestProto {
 
         private java.lang.Object id_ = "";
         /**
-         * <code>string id = 1[json_name = "id"];</code>
+         * <code>string id = 1 [json_name = "id"];</code>
          * @return The id.
          */
         public java.lang.String getId() {
@@ -3472,7 +3581,7 @@ public final class NestedTestProto {
           }
         }
         /**
-         * <code>string id = 1[json_name = "id"];</code>
+         * <code>string id = 1 [json_name = "id"];</code>
          * @return The bytes for id.
          */
         public com.google.protobuf.ByteString
@@ -3489,7 +3598,7 @@ public final class NestedTestProto {
           }
         }
         /**
-         * <code>string id = 1[json_name = "id"];</code>
+         * <code>string id = 1 [json_name = "id"];</code>
          * @param value The id to set.
          * @return This builder for chaining.
          */
@@ -3504,7 +3613,7 @@ public final class NestedTestProto {
           return this;
         }
         /**
-         * <code>string id = 1[json_name = "id"];</code>
+         * <code>string id = 1 [json_name = "id"];</code>
          * @return This builder for chaining.
          */
         public Builder clearId() {
@@ -3514,7 +3623,7 @@ public final class NestedTestProto {
           return this;
         }
         /**
-         * <code>string id = 1[json_name = "id"];</code>
+         * <code>string id = 1 [json_name = "id"];</code>
          * @param value The bytes for id to set.
          * @return This builder for chaining.
          */
@@ -3667,6 +3776,7 @@ public final class NestedTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.UserId user_id = 1;</code>
      * @return Whether the userId field is set.
      */
+    @java.lang.Override
     public boolean hasUserId() {
       return userId_ != null;
     }
@@ -3674,12 +3784,14 @@ public final class NestedTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.UserId user_id = 1;</code>
      * @return The userId.
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.UserId getUserId() {
       return userId_ == null ? io.confluent.kafka.serializers.protobuf.test.NestedTestProto.UserId.getDefaultInstance() : userId_;
     }
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.UserId user_id = 1;</code>
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.UserIdOrBuilder getUserIdOrBuilder() {
       return getUserId();
     }
@@ -3690,6 +3802,7 @@ public final class NestedTestProto {
      * <code>bool is_active = 2;</code>
      * @return The isActive.
      */
+    @java.lang.Override
     public boolean getIsActive() {
       return isActive_;
     }
@@ -3735,6 +3848,7 @@ public final class NestedTestProto {
      * <code>.google.protobuf.Timestamp updated_at = 4;</code>
      * @return Whether the updatedAt field is set.
      */
+    @java.lang.Override
     public boolean hasUpdatedAt() {
       return updatedAt_ != null;
     }
@@ -3742,12 +3856,14 @@ public final class NestedTestProto {
      * <code>.google.protobuf.Timestamp updated_at = 4;</code>
      * @return The updatedAt.
      */
+    @java.lang.Override
     public com.google.protobuf.Timestamp getUpdatedAt() {
       return updatedAt_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : updatedAt_;
     }
     /**
      * <code>.google.protobuf.Timestamp updated_at = 4;</code>
      */
+    @java.lang.Override
     public com.google.protobuf.TimestampOrBuilder getUpdatedAtOrBuilder() {
       return getUpdatedAt();
     }
@@ -3758,14 +3874,14 @@ public final class NestedTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 5;</code>
      * @return The enum numeric value on the wire for status.
      */
-    public int getStatusValue() {
+    @java.lang.Override public int getStatusValue() {
       return status_;
     }
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 5;</code>
      * @return The status.
      */
-    public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status getStatus() {
+    @java.lang.Override public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status getStatus() {
       @SuppressWarnings("deprecation")
       io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status result = io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.valueOf(status_);
       return result == null ? io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.UNRECOGNIZED : result;
@@ -3777,6 +3893,7 @@ public final class NestedTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.ComplexType complex_type = 6;</code>
      * @return Whether the complexType field is set.
      */
+    @java.lang.Override
     public boolean hasComplexType() {
       return complexType_ != null;
     }
@@ -3784,12 +3901,14 @@ public final class NestedTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.ComplexType complex_type = 6;</code>
      * @return The complexType.
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.ComplexType getComplexType() {
       return complexType_ == null ? io.confluent.kafka.serializers.protobuf.test.NestedTestProto.ComplexType.getDefaultInstance() : complexType_;
     }
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.ComplexType complex_type = 6;</code>
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.ComplexTypeOrBuilder getComplexTypeOrBuilder() {
       return getComplexType();
     }
@@ -3824,6 +3943,7 @@ public final class NestedTestProto {
      * <code>map&lt;string, string&gt; map_type = 7;</code>
      */
 
+    @java.lang.Override
     public boolean containsMapType(
         java.lang.String key) {
       if (key == null) { throw new java.lang.NullPointerException(); }
@@ -3832,6 +3952,7 @@ public final class NestedTestProto {
     /**
      * Use {@link #getMapTypeMap()} instead.
      */
+    @java.lang.Override
     @java.lang.Deprecated
     public java.util.Map<java.lang.String, java.lang.String> getMapType() {
       return getMapTypeMap();
@@ -3839,6 +3960,7 @@ public final class NestedTestProto {
     /**
      * <code>map&lt;string, string&gt; map_type = 7;</code>
      */
+    @java.lang.Override
 
     public java.util.Map<java.lang.String, java.lang.String> getMapTypeMap() {
       return internalGetMapType().getMap();
@@ -3846,6 +3968,7 @@ public final class NestedTestProto {
     /**
      * <code>map&lt;string, string&gt; map_type = 7;</code>
      */
+    @java.lang.Override
 
     public java.lang.String getMapTypeOrDefault(
         java.lang.String key,
@@ -3858,6 +3981,7 @@ public final class NestedTestProto {
     /**
      * <code>map&lt;string, string&gt; map_type = 7;</code>
      */
+    @java.lang.Override
 
     public java.lang.String getMapTypeOrThrow(
         java.lang.String key) {
@@ -3876,6 +4000,7 @@ public final class NestedTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.NestedMessage.InnerMessage inner = 8;</code>
      * @return Whether the inner field is set.
      */
+    @java.lang.Override
     public boolean hasInner() {
       return inner_ != null;
     }
@@ -3883,12 +4008,14 @@ public final class NestedTestProto {
      * <code>.io.confluent.kafka.serializers.protobuf.test.NestedMessage.InnerMessage inner = 8;</code>
      * @return The inner.
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.InnerMessage getInner() {
       return inner_ == null ? io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.InnerMessage.getDefaultInstance() : inner_;
     }
     /**
      * <code>.io.confluent.kafka.serializers.protobuf.test.NestedMessage.InnerMessage inner = 8;</code>
      */
+    @java.lang.Override
     public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessage.InnerMessageOrBuilder getInnerOrBuilder() {
       return getInner();
     }
@@ -4545,6 +4672,7 @@ public final class NestedTestProto {
        * <code>bool is_active = 2;</code>
        * @return The isActive.
        */
+      @java.lang.Override
       public boolean getIsActive() {
         return isActive_;
       }
@@ -4804,7 +4932,7 @@ public final class NestedTestProto {
        * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 5;</code>
        * @return The enum numeric value on the wire for status.
        */
-      public int getStatusValue() {
+      @java.lang.Override public int getStatusValue() {
         return status_;
       }
       /**
@@ -4813,6 +4941,7 @@ public final class NestedTestProto {
        * @return This builder for chaining.
        */
       public Builder setStatusValue(int value) {
+        
         status_ = value;
         onChanged();
         return this;
@@ -4821,6 +4950,7 @@ public final class NestedTestProto {
        * <code>.io.confluent.kafka.serializers.protobuf.test.Status status = 5;</code>
        * @return The status.
        */
+      @java.lang.Override
       public io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status getStatus() {
         @SuppressWarnings("deprecation")
         io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status result = io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status.valueOf(status_);
@@ -5000,6 +5130,7 @@ public final class NestedTestProto {
        * <code>map&lt;string, string&gt; map_type = 7;</code>
        */
 
+      @java.lang.Override
       public boolean containsMapType(
           java.lang.String key) {
         if (key == null) { throw new java.lang.NullPointerException(); }
@@ -5008,6 +5139,7 @@ public final class NestedTestProto {
       /**
        * Use {@link #getMapTypeMap()} instead.
        */
+      @java.lang.Override
       @java.lang.Deprecated
       public java.util.Map<java.lang.String, java.lang.String> getMapType() {
         return getMapTypeMap();
@@ -5015,6 +5147,7 @@ public final class NestedTestProto {
       /**
        * <code>map&lt;string, string&gt; map_type = 7;</code>
        */
+      @java.lang.Override
 
       public java.util.Map<java.lang.String, java.lang.String> getMapTypeMap() {
         return internalGetMapType().getMap();
@@ -5022,6 +5155,7 @@ public final class NestedTestProto {
       /**
        * <code>map&lt;string, string&gt; map_type = 7;</code>
        */
+      @java.lang.Override
 
       public java.lang.String getMapTypeOrDefault(
           java.lang.String key,
@@ -5034,6 +5168,7 @@ public final class NestedTestProto {
       /**
        * <code>map&lt;string, string&gt; map_type = 7;</code>
        */
+      @java.lang.Override
 
       public java.lang.String getMapTypeOrThrow(
           java.lang.String key) {
