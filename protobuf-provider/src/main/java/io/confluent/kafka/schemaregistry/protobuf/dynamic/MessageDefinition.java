@@ -20,7 +20,6 @@ package io.confluent.kafka.schemaregistry.protobuf.dynamic;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
-import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Label;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 
 import java.util.HashMap;
@@ -77,7 +76,8 @@ public class MessageDefinition {
         Boolean isPacked
     ) {
       FieldDescriptorProto.Label protoLabel = sLabelMap.get(label);
-      doAddField(protoLabel, isProto3Optional, type, name, num, defaultVal, jsonName, isPacked, null);
+      doAddField(
+          protoLabel, isProto3Optional, type, name, num, defaultVal, jsonName, isPacked, null);
       return this;
     }
 
