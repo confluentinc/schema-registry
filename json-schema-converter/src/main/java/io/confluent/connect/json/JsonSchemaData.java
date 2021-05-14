@@ -1038,27 +1038,39 @@ public class JsonSchemaData {
         combinedSubschema = (CombinedSchema) subSchema;
       }
     }
-    if (constSchema != null && stringSchema != null) {
-      return toConnectSchema(stringSchema, version, forceOptional);
-    } else if (constSchema != null && numberSchema != null) {
-      return toConnectSchema(numberSchema, version, forceOptional);
-    } else if (enumSchema != null && stringSchema != null) {
-      // This is a string enum
-      return toConnectSchema(enumSchema, version, forceOptional);
-    } else if (numberSchema != null
-        && stringSchema != null
-        && stringSchema.getFormatValidator() != null) {
-      // This is a number or integer with a format
-      return toConnectSchema(numberSchema, version, forceOptional);
-    } else if (combinedSubschema != null
-        && stringSchema != null
-        && stringSchema.getFormatValidator() != null) {
-      // This is an optional number or integer with a format
-      return toConnectSchema(combinedSubschema, version, forceOptional);
-    } else {
-      throw new IllegalArgumentException("Unsupported criterion "
-          + combinedSchema.getCriterion() + " for " + combinedSchema);
+    if (constSchema != null) {
+      if (stringSchema != null) {
+        // Ignore the const, return the string
+        return toConnectSchema(stringSchema, version, forceOptional);
+      } else if (numberSchema != null) {
+        // Ignore the const, return the number or integer
+        return toConnectSchema(numberSchema, version, forceOptional);
+      } else if (combinedSubschema != null) {
+        // Ignore the const, return the combined subschema
+        return toConnectSchema(combinedSubschema, version, forceOptional);
+      }
+    } else if (enumSchema != null) {
+      if (stringSchema != null) {
+        // Return a string enum
+        return toConnectSchema(enumSchema, version, forceOptional);
+      } else if (numberSchema != null) {
+        // Ignore the enum, return the number or integer
+        return toConnectSchema(numberSchema, version, forceOptional);
+      } else if (combinedSubschema != null) {
+        // Ignore the enum, return the combined subschema
+        return toConnectSchema(combinedSubschema, version, forceOptional);
+      }
+    } else if (stringSchema != null && stringSchema.getFormatValidator() != null) {
+      if (numberSchema != null) {
+        // This is a number or integer with a format
+        return toConnectSchema(numberSchema, version, forceOptional);
+      } else if (combinedSubschema != null) {
+        // This is an optional number or integer with a format
+        return toConnectSchema(combinedSubschema, version, forceOptional);
+      }
     }
+    throw new IllegalArgumentException("Unsupported criterion "
+        + combinedSchema.getCriterion() + " for " + combinedSchema);
   }
 
   private interface JsonToConnectTypeConverter {
