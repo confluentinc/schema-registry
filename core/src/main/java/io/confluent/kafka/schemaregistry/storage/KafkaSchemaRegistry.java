@@ -1515,6 +1515,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schemaList.add(previousSchema);
       }
     }
+    Collections.sort(schemaList);
     return schemaList;
   }
 
@@ -1525,6 +1526,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       SchemaValue schemaValue = (SchemaValue) schemas.next();
       schemaList.add(schemaValue);
     }
+    Collections.sort(schemaList);
     return schemaList;
   }
 
