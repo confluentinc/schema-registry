@@ -1019,8 +1019,8 @@ public class JsonSchemaDataTest {
     checkNonObjectConversion(expectedSchema, "one", schema, TextNode.valueOf("one"));
   }
 
-  @Test(expected = IllegalArgumentException.class)
-  public void testToConnectIntEnumInAllOfIsInvalid() {
+  @Test
+  public void testToConnectIntEnumInAllOfIsValid() {
     NumberSchema numberSchema = NumberSchema.builder().build();
     EnumSchema enumSchema = EnumSchema.builder()
         .possibleValue(1)
@@ -1031,13 +1031,39 @@ public class JsonSchemaDataTest {
     schemas.add(numberSchema);
     schemas.add(enumSchema);
     CombinedSchema schema = CombinedSchema.allOf(schemas).build();
-    Schema expectedSchema = new SchemaBuilder(Schema.Type.STRING).parameter(JSON_TYPE_ENUM, "")
-        .parameter(JSON_TYPE_ENUM + ".1", "1")
-        .parameter(JSON_TYPE_ENUM + ".2", "2")
-        .parameter(JSON_TYPE_ENUM + ".3", "3")
-        .build();
+    Schema expectedSchema = new SchemaBuilder(Schema.Type.FLOAT64).build();
 
-    checkNonObjectConversion(expectedSchema, 1, schema, IntNode.valueOf(1));
+    checkNonObjectConversion(expectedSchema, 123.45, schema, DoubleNode.valueOf(123.45));
+  }
+
+  @Test
+  public void testToConnectUnionEnumInAllOfIsValid() {
+    NumberSchema firstSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int8"))
+        .build();
+    NumberSchema secondSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(Collections.singletonMap("connect.type", "int16"))
+        .build();
+    CombinedSchema oneof = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
+        .build();
+    EnumSchema enumSchema = EnumSchema.builder()
+        .possibleValue(1)
+        .possibleValue(2)
+        .possibleValue(3)
+        .build();
+    List<org.everit.json.schema.Schema> schemas = new ArrayList<>();
+    schemas.add(oneof);
+    schemas.add(enumSchema);
+    CombinedSchema schema = CombinedSchema.allOf(schemas).build();
+    SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.OPTIONAL_INT8_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.OPTIONAL_INT16_SCHEMA);
+    Schema expectedSchema = builder.build();
+
+    Struct expected = new Struct(expectedSchema).put(JSON_TYPE_ONE_OF + ".field.0", (byte) 12);
+    checkNonObjectConversion(expectedSchema, expected, schema, ShortNode.valueOf((short) 12));
   }
 
   @Test
