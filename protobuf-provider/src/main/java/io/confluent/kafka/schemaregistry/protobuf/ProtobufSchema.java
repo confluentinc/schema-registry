@@ -225,7 +225,8 @@ public class ProtobufSchema implements ParsedSchema {
         this.dependencies,
         this.canonicalString,
         this.dynamicSchema,
-        null  // reset descriptor since it depends on name
+        // reset descriptor if names not equal
+        Objects.equals(this.name, name) ? this.descriptor : null
     );
   }
 
