@@ -33,6 +33,7 @@ import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessag
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status;
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.UserId;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage;
+import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 
 import static org.junit.Assert.assertEquals;
 
@@ -50,6 +51,10 @@ public class KafkaProtobufSerializerTest {
 
   private static final String TEST_MSG_STRING = "Hello World";
   private static final TestMessage HELLO_WORLD_MESSAGE = TestMessage.newBuilder()
+      .setTestString(TEST_MSG_STRING)
+      .setTestInt32(123)
+      .build();
+  private static final TestMessage2 HELLO_WORLD_MESSAGE2 = TestMessage2.newBuilder()
       .setTestString(TEST_MSG_STRING)
       .setTestInt32(123)
       .build();
@@ -193,6 +198,28 @@ public class KafkaProtobufSerializerTest {
     message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
     assertEquals(HELLO_WORLD_MESSAGE.getTestString(), getField(message, "test_string"));
     assertEquals(HELLO_WORLD_MESSAGE.getTestInt32(), getField(message, "test_int32"));
+
+
+    // specific -> derived
+    bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE2);
+    assertEquals(HELLO_WORLD_MESSAGE2, deriveTypeDeserializer.deserialize(topic, bytes));
+
+    // specific -> dynamic
+    bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE2);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals(HELLO_WORLD_MESSAGE2.getTestString(), getField(message, "test_string"));
+    assertEquals(HELLO_WORLD_MESSAGE2.getTestInt32(), getField(message, "test_int32"));
+
+    // dynamic -> derived
+    bytes = protobufSerializer.serialize(topic, message);
+    assertEquals(HELLO_WORLD_MESSAGE2, deriveTypeDeserializer.deserialize(topic, bytes));
+
+    // dynamic -> dynamic
+    bytes = protobufSerializer.serialize(topic, message);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals(HELLO_WORLD_MESSAGE2.getTestString(), getField(message, "test_string"));
+    assertEquals(HELLO_WORLD_MESSAGE2.getTestInt32(), getField(message, "test_int32"));
+
 
     // specific -> specific
     bytes = protobufSerializer.serialize(topic, NESTED_MESSAGE);

@@ -310,7 +310,8 @@ public class ProtobufSchema implements ParsedSchema {
         this.dependencies,
         this.canonicalString,
         this.dynamicSchema,
-        this.descriptor
+        // reset descriptor if names not equal
+        Objects.equals(this.name, name) ? this.descriptor : null
     );
   }
 
