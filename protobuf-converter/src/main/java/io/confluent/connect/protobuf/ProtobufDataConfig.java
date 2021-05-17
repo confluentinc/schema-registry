@@ -31,6 +31,11 @@ public class ProtobufDataConfig extends AbstractConfig {
       "Toggle for enabling/disabling enhanced protobuf schema support: "
           + "package name preservation";
 
+  public static final String SCRUB_INVALID_NAMES_CONFIG = "scrub.invalid.names";
+  public static final boolean SCRUB_INVALID_NAMES_DEFAULT = false;
+  public static final String SCRUB_INVALID_NAMES_DOC =
+      "Whether to scrub invalid names by replacing invalid characters with valid ones";
+
   public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.config";
   public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
   public static final String SCHEMAS_CACHE_SIZE_DOC = "Size of the converted schemas cache";
@@ -42,6 +47,8 @@ public class ProtobufDataConfig extends AbstractConfig {
             ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DEFAULT,
             ConfigDef.Importance.MEDIUM,
             ENHANCED_PROTOBUF_SCHEMA_SUPPORT_DOC)
+        .define(SCRUB_INVALID_NAMES_CONFIG, ConfigDef.Type.BOOLEAN, SCRUB_INVALID_NAMES_DEFAULT,
+            ConfigDef.Importance.MEDIUM, SCRUB_INVALID_NAMES_DOC)
         .define(SCHEMAS_CACHE_SIZE_CONFIG,
             ConfigDef.Type.INT,
             SCHEMAS_CACHE_SIZE_DEFAULT,
@@ -56,6 +63,10 @@ public class ProtobufDataConfig extends AbstractConfig {
 
   public boolean isEnhancedProtobufSchemaSupport() {
     return this.getBoolean(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG);
+  }
+
+  public boolean isScrubInvalidNames() {
+    return this.getBoolean(SCRUB_INVALID_NAMES_CONFIG);
   }
 
   public int schemaCacheSize() {
