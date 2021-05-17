@@ -96,9 +96,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       );
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
-          String.format("Failed to access Avro data from topic %s caused by %s",
-              topic,
-              e.getMessage())
+          String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
       );
     }
   }
@@ -124,9 +122,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       );
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
-          String.format("Failed to access Avro data from topic %s caused by %s",
-              topic,
-              e.getMessage())
+          String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
       );
     }
   }
