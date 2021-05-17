@@ -26,9 +26,12 @@ import com.google.protobuf.Descriptors.OneofDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.Timestamps;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -81,11 +84,15 @@ public class ProtobufData {
       + GOOGLE_PROTOBUF_TIMESTAMP_NAME;
   public static final String GOOGLE_PROTOBUF_TIMESTAMP_LOCATION = "google/protobuf/timestamp.proto";
 
+  private static Pattern NAME_START_CHAR = Pattern.compile("^[A-Za-z]");  // underscore not allowed
+  private static Pattern NAME_INVALID_CHARS = Pattern.compile("[^A-Za-z0-9_]");
+
   private int defaultSchemaNameIndex = 0;
 
   private final Cache<Schema, ProtobufSchema> fromConnectSchemaCache;
   private final Cache<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean enhancedSchemaSupport;
+  private boolean scrubInvalidNames;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -104,6 +111,7 @@ public class ProtobufData {
     toConnectSchemaCache =
         new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
+    this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
   }
 
   /**
@@ -373,12 +381,14 @@ public class ProtobufData {
     if (cachedSchema != null) {
       return cachedSchema;
     }
-    String name = schema.name();
-    if (name == null) {
-      name = DEFAULT_SCHEMA_NAME + "1";
-    }
+    String fullName = getNameOrDefault(schema.name());
+    String[] split = splitName(fullName);
+    String namespace = split[0];
+    String name = scrubName(split[1]);
+    FromConnectContext ctx = new FromConnectContext();
+    ctx.add(fullName);
     ProtobufSchema resultSchema = new ProtobufSchema(
-        rawSchemaFromConnectSchema(schema).getMessageDescriptor(name)
+        rawSchemaFromConnectSchema(ctx, namespace, name, schema).getMessageDescriptor(name)
     );
     fromConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
@@ -387,22 +397,17 @@ public class ProtobufData {
   /*
    * DynamicSchema is used as a temporary helper class and should not be exposed in the API.
    */
-  private DynamicSchema rawSchemaFromConnectSchema(Schema rootElem) {
+  private DynamicSchema rawSchemaFromConnectSchema(
+      FromConnectContext ctx, String namespace, String name, Schema rootElem) {
     if (rootElem.type() != Schema.Type.STRUCT) {
       throw new IllegalArgumentException("Unsupported root schema of type " + rootElem.type());
     }
     try {
       DynamicSchema.Builder schema = DynamicSchema.newBuilder();
       schema.setSyntax(ProtobufSchema.PROTO3);
-      String fullName = getNameOrDefault(rootElem.name());
-      String[] split = splitName(fullName);
-      String namespace = split[0];
-      String name = split[1];
       if (namespace != null) {
         schema.setPackage(namespace);
       }
-      FromConnectContext ctx = new FromConnectContext();
-      ctx.add(fullName);
       schema.addMessageDefinition(messageDefinitionFromConnectSchema(ctx, schema, name, rootElem));
       return schema.build();
     } catch (Descriptors.DescriptorValidationException e) {
@@ -425,7 +430,7 @@ public class ProtobufData {
           schema,
           message,
           fieldSchema,
-          field.name(),
+          scrubName(field.name()),
           tag
       );
       if (fieldDef != null) {
@@ -458,7 +463,7 @@ public class ProtobufData {
           schema,
           message,
           field.schema(),
-          field.name(),
+          scrubName(field.name()),
           tag
       );
       if (fieldDef != null) {
@@ -1058,6 +1063,27 @@ public class ProtobufData {
       return fullName.substring(indexLastDot + 1);
     } else {
       return fullName;
+    }
+  }
+
+  private String scrubName(String name) {
+    return scrubInvalidNames ? doScrubName(name) : name;
+  }
+
+  // Visible for testing
+  protected static String doScrubName(String name) {
+    try {
+      if (name == null) {
+        return name;
+      }
+      String encoded = URLEncoder.encode(name, "UTF-8");
+      if (!NAME_START_CHAR.matcher(encoded).lookingAt()) {
+        encoded = "x" + encoded;  // use an arbitrary valid prefix
+      }
+      encoded = NAME_INVALID_CHARS.matcher(encoded).replaceAll("_");
+      return encoded;
+    } catch (UnsupportedEncodingException e) {
+      return name;
     }
   }
 
