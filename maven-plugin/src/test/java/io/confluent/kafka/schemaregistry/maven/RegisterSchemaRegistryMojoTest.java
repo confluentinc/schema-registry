@@ -15,7 +15,10 @@
  */
 package io.confluent.kafka.schemaregistry.maven;
 
+import static io.confluent.kafka.schemaregistry.maven.UploadSchemaRegistryMojo.PERCENT_REPLACEMENT;
+
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import java.net.URLDecoder;
 import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -60,6 +63,34 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
       expectedVersions.put(keySubject, version);
       subjectToFile.put(valueSubject, valueSchemaFile);
       expectedVersions.put(valueSubject, version);
+    }
+
+    this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+
+    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
+  }
+
+  @Test
+  public void registerSubjectWithSlash() throws IOException, MojoFailureException, MojoExecutionException {
+    Map<String, Integer> expectedVersions = new LinkedHashMap<>();
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    int version = 1;
+    for (int i = 0; i < 100; i++) {
+      // Slash is _:2F
+      String keySubject = String.format("TestSubject%03d_:2Fkey", i);
+      String valueSubject = String.format("TestSubject%03d_:2Fvalue", i);
+      Schema keySchema = Schema.create(Schema.Type.STRING);
+      Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
+      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
+      writeSchema(keySchemaFile, keySchema);
+      writeSchema(valueSchemaFile, valueSchema);
+      subjectToFile.put(keySubject, keySchemaFile);
+      expectedVersions.put(UploadSchemaRegistryMojo.decode(keySubject), version);
+      subjectToFile.put(valueSubject, valueSchemaFile);
+      expectedVersions.put(UploadSchemaRegistryMojo.decode(valueSubject), version);
     }
 
     this.mojo.subjects = subjectToFile;
