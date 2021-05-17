@@ -264,6 +264,35 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testFromConnectWithInvalidName() {
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCRUB_INVALID_NAMES_CONFIG, true)
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData avroData = new AvroData(avroDataConfig);
+    Schema schema = SchemaBuilder.struct()
+        .name("org.acme.invalid record-name")
+        .field("invalid field-name", Schema.STRING_SCHEMA)
+        .build();
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+        .record("invalid_record_name").namespace("org.acme") // default values
+        .fields()
+        .requiredString("invalid_field_name")
+        .endRecord();
+    assertThat(avroData.fromConnectSchema(schema), equalTo(avroSchema));
+  }
+
+  @Test
+  public void testNameScrubbing() {
+    assertEquals("abc_2B____", AvroData.doScrubName("abc+-.*_"));
+    assertEquals("abc_def", AvroData.doScrubName("abc-def"));
+    assertEquals("abc_2Bdef", AvroData.doScrubName("abc+def"));
+    assertEquals("abc__def", AvroData.doScrubName("abc  def"));
+    assertEquals("abc_def", AvroData.doScrubName("abc.def"));
+    assertEquals("x0abc_def", AvroData.doScrubName("0abc.def"));
+  }
+
+  @Test
   public void testFromConnectComplex() {
     Schema schema = SchemaBuilder.struct()
         .field("int8", SchemaBuilder.int8().defaultValue((byte) 2).doc("int8 field").build())
