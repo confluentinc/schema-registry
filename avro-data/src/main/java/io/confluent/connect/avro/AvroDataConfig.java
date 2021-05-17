@@ -31,6 +31,11 @@ public class AvroDataConfig extends AbstractConfig {
       "Toggle for enabling/disabling enhanced avro schema support: Enum symbol preservation and "
       + "Package Name awareness";
 
+  public static final String SCRUB_INVALID_NAMES_CONFIG = "scrub.invalid.names";
+  public static final boolean SCRUB_INVALID_NAMES_DEFAULT = false;
+  public static final String SCRUB_INVALID_NAMES_DOC =
+      "Whether to scrub invalid names by replacing invalid characters with valid ones";
+
   public static final String CONNECT_META_DATA_CONFIG = "connect.meta.data";
   public static final boolean CONNECT_META_DATA_DEFAULT = true;
   public static final String CONNECT_META_DATA_DOC =
@@ -49,6 +54,8 @@ public class AvroDataConfig extends AbstractConfig {
                 ENHANCED_AVRO_SCHEMA_SUPPORT_DEFAULT,
                 ConfigDef.Importance.MEDIUM,
                 ENHANCED_AVRO_SCHEMA_SUPPORT_DOC)
+        .define(SCRUB_INVALID_NAMES_CONFIG, ConfigDef.Type.BOOLEAN, SCRUB_INVALID_NAMES_DEFAULT,
+                ConfigDef.Importance.MEDIUM, SCRUB_INVALID_NAMES_DOC)
         .define(CONNECT_META_DATA_CONFIG, ConfigDef.Type.BOOLEAN, CONNECT_META_DATA_DEFAULT,
                 ConfigDef.Importance.LOW, CONNECT_META_DATA_DOC)
         .define(SCHEMAS_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMAS_CACHE_SIZE_DEFAULT,
@@ -65,6 +72,10 @@ public class AvroDataConfig extends AbstractConfig {
 
   public boolean isConnectMetaData() {
     return this.getBoolean(CONNECT_META_DATA_CONFIG);
+  }
+
+  public boolean isScrubInvalidNames() {
+    return this.getBoolean(SCRUB_INVALID_NAMES_CONFIG);
   }
 
   public int getSchemasCacheSize() {
