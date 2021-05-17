@@ -1311,6 +1311,33 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testFromConnectWithInvalidName() {
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.SCRUB_INVALID_NAMES_CONFIG, true)
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    Schema schema = SchemaBuilder.struct()
+        .name("org.acme.invalid record-name")
+        .field("invalid field-name", Schema.STRING_SCHEMA)
+        .build();
+    ProtobufSchema protobufSchema = protobufData.fromConnectSchema(schema);
+    Descriptor descriptor = protobufSchema.toDescriptor();
+    assertEquals("invalid_record_name", descriptor.getName());
+    assertEquals("invalid_field_name", descriptor.getFields().get(0).getName());
+  }
+
+  @Test
+  public void testNameScrubbing() {
+    assertEquals("abc_2B____", ProtobufData.doScrubName("abc+-.*_"));
+    assertEquals("abc_def", ProtobufData.doScrubName("abc-def"));
+    assertEquals("abc_2Bdef", ProtobufData.doScrubName("abc+def"));
+    assertEquals("abc__def", ProtobufData.doScrubName("abc  def"));
+    assertEquals("abc_def", ProtobufData.doScrubName("abc.def"));
+    assertEquals("x0abc_def", ProtobufData.doScrubName("0abc.def"));
+    assertEquals("x_abc_def", ProtobufData.doScrubName("_abc.def"));
+  }
+
+  @Test
   public void testToConnectRecursiveSchema() {
     ProtobufSchema protobufSchema = new ProtobufSchema(
         RecursiveKeyValue.RecursiveKeyValueMessage.getDescriptor());

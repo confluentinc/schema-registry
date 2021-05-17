@@ -266,29 +266,68 @@ public class AvroDataTest {
 
   @Test
   public void testFromConnectFixedUnion() {
-    org.apache.avro.Schema sampleSchema = org.apache.avro.SchemaBuilder.builder().fixed("sample").size(4);
-    org.apache.avro.Schema otherSchema = org.apache.avro.SchemaBuilder.builder().fixed("other").size(6);
-    org.apache.avro.Schema sameOtherSchema = org.apache.avro.SchemaBuilder.builder().fixed("sameOther").size(6);
+    org.apache.avro.Schema sampleSchema = org.apache.avro.SchemaBuilder.builder().fixed("sample")
+        .size(4);
+    org.apache.avro.Schema otherSchema = org.apache.avro.SchemaBuilder.builder().fixed("other")
+        .size(6);
+    org.apache.avro.Schema sameOtherSchema = org.apache.avro.SchemaBuilder.builder()
+        .fixed("sameOther").size(6);
     org.apache.avro.Schema unionSchema = org.apache.avro.SchemaBuilder.builder()
-            .unionOf().type(sampleSchema).and().type(otherSchema).and().type(sameOtherSchema)
-            .endUnion();
+        .unionOf().type(sampleSchema).and().type(otherSchema).and().type(sameOtherSchema)
+        .endUnion();
     Schema union = SchemaBuilder.struct()
-            .name(AVRO_TYPE_UNION)
-            .field("sample", SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE, "4").optional().build())
-            .field("other", SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional().build())
-            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional().build())
-            .build();
+        .name(AVRO_TYPE_UNION)
+        .field("sample",
+            SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE, "4").optional()
+                .build())
+        .field("other",
+            SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional()
+                .build())
+        .field("sameOther",
+            SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE, "6")
+                .optional().build())
+        .build();
     Struct unionSample = new Struct(union).put("sample", ByteBuffer.wrap("foob".getBytes()));
     Struct unionOther = new Struct(union).put("other", ByteBuffer.wrap("foobar".getBytes()));
-    Struct unionSameOther = new Struct(union).put("sameOther", ByteBuffer.wrap("foobar".getBytes()));
+    Struct unionSameOther = new Struct(union)
+        .put("sameOther", ByteBuffer.wrap("foobar".getBytes()));
 
     GenericData genericData = GenericData.get();
     assertEquals(0,
-            genericData.resolveUnion(unionSchema, avroData.fromConnectData(union, unionSample)));
+        genericData.resolveUnion(unionSchema, avroData.fromConnectData(union, unionSample)));
     assertEquals(1,
-            genericData.resolveUnion(unionSchema, avroData.fromConnectData(union, unionOther)));
+        genericData.resolveUnion(unionSchema, avroData.fromConnectData(union, unionOther)));
     assertEquals(2,
-            genericData.resolveUnion(unionSchema, avroData.fromConnectData(union, unionSameOther)));
+        genericData.resolveUnion(unionSchema, avroData.fromConnectData(union, unionSameOther)));
+  }
+  
+  @Test
+  public void testFromConnectWithInvalidName() {
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCRUB_INVALID_NAMES_CONFIG, true)
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData avroData = new AvroData(avroDataConfig);
+    Schema schema = SchemaBuilder.struct()
+        .name("org.acme.invalid record-name")
+        .field("invalid field-name", Schema.STRING_SCHEMA)
+        .build();
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+        .record("invalid_record_name").namespace("org.acme") // default values
+        .fields()
+        .requiredString("invalid_field_name")
+        .endRecord();
+    assertThat(avroData.fromConnectSchema(schema), equalTo(avroSchema));
+  }
+
+  @Test
+  public void testNameScrubbing() {
+    assertEquals("abc_2B____", AvroData.doScrubName("abc+-.*_"));
+    assertEquals("abc_def", AvroData.doScrubName("abc-def"));
+    assertEquals("abc_2Bdef", AvroData.doScrubName("abc+def"));
+    assertEquals("abc__def", AvroData.doScrubName("abc  def"));
+    assertEquals("abc_def", AvroData.doScrubName("abc.def"));
+    assertEquals("x0abc_def", AvroData.doScrubName("0abc.def"));
   }
 
   @Test

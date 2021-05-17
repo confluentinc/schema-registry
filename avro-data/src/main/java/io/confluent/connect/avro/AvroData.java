@@ -21,6 +21,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.regex.Pattern;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -108,6 +111,9 @@ public class AvroData {
   public static final String AVRO_TYPE_ANYTHING = NAMESPACE + ".Anything";
 
   private static final Map<String, Schema.Type> NON_AVRO_TYPES_BY_TYPE_CODE = new HashMap<>();
+
+  private static Pattern NAME_START_CHAR = Pattern.compile("^[A-Za-z_]");
+  private static Pattern NAME_INVALID_CHARS = Pattern.compile("[^A-Za-z0-9_]");
 
   static {
     NON_AVRO_TYPES_BY_TYPE_CODE.put(CONNECT_TYPE_INT8, Schema.Type.INT8);
@@ -315,6 +321,7 @@ public class AvroData {
   private Cache<AvroSchema, Schema> toConnectSchemaCache;
   private boolean connectMetaData;
   private boolean enhancedSchemaSupport;
+  private boolean scrubInvalidNames;
 
   public AvroData(int cacheSize) {
     this(new AvroDataConfig.Builder()
@@ -331,6 +338,7 @@ public class AvroData {
             avroDataConfig.getSchemasCacheSize()));
     this.connectMetaData = avroDataConfig.isConnectMetaData();
     this.enhancedSchemaSupport = avroDataConfig.isEnhancedAvroSchemaSupport();
+    this.scrubInvalidNames = avroDataConfig.isScrubInvalidNames();
   }
 
   /**
@@ -764,7 +772,7 @@ public class AvroData {
     if (schema.name() != null) {
       String[] split = splitName(schema.name());
       namespace = split[0];
-      name = split[1];
+      name = scrubName(split[1]);
     }
 
     // Extra type annotation information for otherwise lossy conversions
@@ -908,11 +916,12 @@ public class AvroData {
           }
           List<org.apache.avro.Schema.Field> fields = new ArrayList<>();
           for (Field field : schema.fields()) {
+            String fieldName = scrubName(field.name());
             String fieldDoc = schema.parameters() != null
                 ? schema.parameters()
                   .get(AVRO_FIELD_DOC_PREFIX_PROP + field.name())
                 : null;
-            addAvroRecordField(fields, field.name(), field.schema(), fieldDoc, fromConnectContext);
+            addAvroRecordField(fields, fieldName, field.schema(), fieldDoc, fromConnectContext);
           }
           baseSchema.setFields(fields);
         }
@@ -1050,6 +1059,27 @@ public class AvroData {
     }
     fromConnectSchemaCache.put(schema, finalSchema);
     return finalSchema;
+  }
+
+  private String scrubName(String name) {
+    return scrubInvalidNames ? doScrubName(name) : name;
+  }
+
+  // Visible for testing
+  protected static String doScrubName(String name) {
+    try {
+      if (name == null) {
+        return name;
+      }
+      String encoded = URLEncoder.encode(name, "UTF-8");
+      if (!NAME_START_CHAR.matcher(encoded).lookingAt()) {
+        encoded = "x" + encoded;  // use an arbitrary valid prefix
+      }
+      encoded = NAME_INVALID_CHARS.matcher(encoded).replaceAll("_");
+      return encoded;
+    } catch (UnsupportedEncodingException e) {
+      return name;
+    }
   }
 
   public org.apache.avro.Schema fromConnectSchemaWithCycle(
