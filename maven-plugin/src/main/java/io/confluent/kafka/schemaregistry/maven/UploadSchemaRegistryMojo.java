@@ -108,7 +108,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       }
 
       String subject = key;
-      if (decodeUrl) {
+      if (decodeUrl && subject.contains(PERCENT_REPLACEMENT)) {
         subject = decode(subject);
       }
       boolean success = processSchema(subject, file, schema.get(), schemaVersions);
