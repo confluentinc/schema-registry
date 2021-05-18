@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -27,6 +28,7 @@ public class ValidateSchemaRegistryMojo extends UploadSchemaRegistryMojo {
 
   @Override
   protected boolean processSchema(String subject,
+                                  File schemaPath,
                                   ParsedSchema schema,
                                   Map<String, Integer> schemaVersions)
       throws IOException, RestClientException {
