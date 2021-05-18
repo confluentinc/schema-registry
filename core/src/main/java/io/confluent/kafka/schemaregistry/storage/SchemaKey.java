@@ -16,9 +16,8 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import org.codehaus.jackson.annotate.JsonPropertyOrder;
-import org.hibernate.validator.constraints.NotEmpty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import javax.validation.constraints.NotEmpty;
 
 import javax.validation.constraints.Min;
 
