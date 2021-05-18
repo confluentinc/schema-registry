@@ -95,8 +95,7 @@ public class AvroConverter implements Converter {
       );
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
-          String.format("Failed to access Avro data from topic %s :", topic),
-          e
+          String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
       );
     }
   }
@@ -127,8 +126,7 @@ public class AvroConverter implements Converter {
       );
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
-          String.format("Failed to access Avro data from topic %s :", topic),
-          e
+          String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
       );
     }
   }
