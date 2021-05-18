@@ -15,21 +15,16 @@
  */
 package io.confluent.kafka.schemaregistry.maven;
 
-import static io.confluent.kafka.schemaregistry.maven.UploadSchemaRegistryMojo.PERCENT_REPLACEMENT;
-
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
-import java.net.URLDecoder;
 import org.apache.avro.Schema;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.hamcrest.core.IsEqual;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -122,7 +117,7 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
     }
 
     this.mojo.subjects = subjectToFile;
-    this.mojo.decodeUrl = false;
+    this.mojo.decodeSubject = false;
     this.mojo.execute();
 
     Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));

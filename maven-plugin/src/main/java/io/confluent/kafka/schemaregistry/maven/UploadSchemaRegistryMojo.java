@@ -56,7 +56,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
   Map<String, List<Reference>> references = new HashMap<>();
 
   @Parameter(required = false)
-  boolean decodeUrl = true;
+  boolean decodeSubject = true;
 
   Map<String, ParsedSchema> schemas = new HashMap<>();
   Map<String, Integer> schemaVersions = new HashMap<>();
@@ -108,7 +108,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       }
 
       String subject = key;
-      if (decodeUrl && subject.contains(PERCENT_REPLACEMENT)) {
+      if (decodeSubject && subject.contains(PERCENT_REPLACEMENT)) {
         subject = decode(subject);
       }
       boolean success = processSchema(subject, file, schema.get(), schemaVersions);
