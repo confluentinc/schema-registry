@@ -44,7 +44,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 
 public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
 
-  public static final String PERCENT_REPLACEMENT = "_:";
+  public static final String PERCENT_REPLACEMENT = "_x";
 
   @Parameter(required = true)
   Map<String, File> subjects = new HashMap<>();
@@ -54,6 +54,9 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
 
   @Parameter(required = false)
   Map<String, List<Reference>> references = new HashMap<>();
+
+  @Parameter(required = false)
+  boolean decodeUrl = true;
 
   Map<String, ParsedSchema> schemas = new HashMap<>();
   Map<String, Integer> schemaVersions = new HashMap<>();
@@ -105,7 +108,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       }
 
       String subject = key;
-      if (subject.contains(PERCENT_REPLACEMENT)) {
+      if (decodeUrl) {
         subject = decode(subject);
       }
       boolean success = processSchema(subject, file, schema.get(), schemaVersions);
@@ -121,7 +124,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
   }
 
   protected static String decode(String subject) throws UnsupportedEncodingException {
-    // Replace underscore-colon with percent sign, since percent is not allowed in XML name
+    // Replace _x colon with percent sign, since percent is not allowed in XML name
     subject = subject.replaceAll(PERCENT_REPLACEMENT, "%");
     return URLDecoder.decode(subject, "UTF-8");
   }

@@ -78,9 +78,9 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
     Map<String, File> subjectToFile = new LinkedHashMap<>();
     int version = 1;
     for (int i = 0; i < 100; i++) {
-      // Slash is _:2F
-      String keySubject = String.format("TestSubject%03d_:2Fkey", i);
-      String valueSubject = String.format("TestSubject%03d_:2Fvalue", i);
+      // Slash is _x2F
+      String keySubject = String.format("TestSubject%03d_x2Fkey", i);
+      String valueSubject = String.format("TestSubject%03d_x2Fvalue", i);
       Schema keySchema = Schema.create(Schema.Type.STRING);
       Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
       File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
@@ -94,6 +94,35 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
     }
 
     this.mojo.subjects = subjectToFile;
+    this.mojo.execute();
+
+    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
+  }
+
+  @Test
+  public void registerSubjectWithSlashDontDecode() throws IOException, MojoFailureException, MojoExecutionException {
+    Map<String, Integer> expectedVersions = new LinkedHashMap<>();
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    int version = 1;
+    for (int i = 0; i < 100; i++) {
+      // Slash is _x2F
+      String keySubject = String.format("TestSubject%03d_x2Fkey", i);
+      String valueSubject = String.format("TestSubject%03d_x2Fvalue", i);
+      Schema keySchema = Schema.create(Schema.Type.STRING);
+      Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
+      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
+      writeSchema(keySchemaFile, keySchema);
+      writeSchema(valueSchemaFile, valueSchema);
+      subjectToFile.put(keySubject, keySchemaFile);
+      expectedVersions.put(keySubject, version);
+      subjectToFile.put(valueSubject, valueSchemaFile);
+      expectedVersions.put(valueSubject, version);
+    }
+
+    this.mojo.subjects = subjectToFile;
+    this.mojo.decodeUrl = false;
     this.mojo.execute();
 
     Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
