@@ -37,11 +37,10 @@ public class TestCompatibilitySchemaRegistryMojo extends UploadSchemaRegistryMoj
 
   @Override
   protected boolean processSchema(String subject,
+                                  File schemaPath,
                                   ParsedSchema schema,
                                   Map<String, Integer> schemaVersions)
       throws IOException, RestClientException {
-
-    File schemaPath = this.subjects.get(subject);
 
     if (getLog().isDebugEnabled()) {
       getLog().debug(
