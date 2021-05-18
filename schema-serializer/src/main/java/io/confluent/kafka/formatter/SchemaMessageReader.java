@@ -286,7 +286,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
       try {
         return (Serializer) Class.forName((String) props.get("key.serializer")).newInstance();
       } catch (Exception e) {
-        throw new ConfigException("Error initializing Key serializer", e);
+        throw new ConfigException("Error initializing Key serializer: " + e.getMessage());
       }
     } else {
       return null;
