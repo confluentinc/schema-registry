@@ -102,7 +102,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
         keyDeserializer =
             (Deserializer)Class.forName((String) props.get("key.deserializer")).newInstance();
       } catch (Exception e) {
-        throw new ConfigException("Error initializing Key deserializer", e);
+        throw new ConfigException("Error initializing Key deserializer: " + e.getMessage());
       }
     }
     if (props.containsKey("print.schema.ids")) {
