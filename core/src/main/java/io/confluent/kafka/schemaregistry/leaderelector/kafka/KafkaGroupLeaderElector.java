@@ -32,7 +32,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
@@ -99,7 +98,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           MetricsReporter.class
       );
       reporters.add(new JmxReporter());
-      MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
+      MetricsContext metricsContext = schemaRegistry.getMetricsContainer().getMetricsContext();
 
       Time time = Time.SYSTEM;
 
