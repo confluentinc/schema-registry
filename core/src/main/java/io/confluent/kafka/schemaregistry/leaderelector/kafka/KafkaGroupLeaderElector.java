@@ -99,7 +99,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           MetricsReporter.class
       );
       reporters.add(new JmxReporter());
-      MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, config.originals());
+      MetricsContext metricsContext = schemaRegistry.getMetricsContainer().getMetricsContext();
 
       Time time = Time.SYSTEM;
 
