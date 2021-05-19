@@ -85,7 +85,7 @@ public class MetricsContainer {
 
     reporters.add(getJmxReporter(config));
 
-    metricsContext = getMetricsContext(config, kafkaClusterId);
+    metricsContext = buildMetricsContext(config, kafkaClusterId);
 
     MetricConfig metricConfig =
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -125,6 +125,10 @@ public class MetricsContainer {
 
     this.protobufSchemasDeleted = createMetric("protobuf-schemas-deleted",
             "Number of deleted Protobuf schemas");
+  }
+
+  public MetricsContext getMetricsContext() {
+    return metricsContext;
   }
 
   private static MetricsReporter getJmxReporter(SchemaRegistryConfig config) {
@@ -192,8 +196,8 @@ public class MetricsContainer {
     }
   }
 
-  private static MetricsContext getMetricsContext(SchemaRegistryConfig config,
-                                                  String kafkaClusterId) {
+  private static MetricsContext buildMetricsContext(SchemaRegistryConfig config,
+                                                    String kafkaClusterId) {
     String srGroupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
 
     Map<String, Object> metadata =
