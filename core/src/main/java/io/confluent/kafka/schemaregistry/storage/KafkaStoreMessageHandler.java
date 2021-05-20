@@ -15,7 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +53,7 @@ public class KafkaStoreMessageHandler
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
       if (schemaObj != null) {
+        normalize(schemaObj);
         SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId());
         if (oldKey != null) {
           SchemaValue oldSchema;
@@ -70,6 +73,15 @@ public class KafkaStoreMessageHandler
       }
     }
     return true;
+  }
+
+  @VisibleForTesting
+  protected static void normalize(SchemaValue schemaValue) {
+    if (ProtobufSchema.TYPE.equals(schemaValue.getSchemaType())) {
+      // Normalize the schema if it is Protobuf (due to changes in Protobuf canonicalization)
+      String normalized = new ProtobufSchema(schemaValue.getSchema()).canonicalString();
+      schemaValue.setSchema(normalized);
+    }
   }
 
   /**
