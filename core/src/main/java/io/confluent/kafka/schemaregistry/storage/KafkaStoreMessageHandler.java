@@ -49,6 +49,7 @@ public class KafkaStoreMessageHandler
    * @param key   Key associated with the data
    * @param value Data written to the store
    */
+  @Override
   public boolean validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value) {
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
