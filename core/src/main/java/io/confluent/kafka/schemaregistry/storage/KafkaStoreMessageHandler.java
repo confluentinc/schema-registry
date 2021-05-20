@@ -15,10 +15,12 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
@@ -45,6 +47,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
    * @param key   Key associated with the data
    * @param value Data written to the store
    */
+  @Override
   public ValidationStatus validateUpdate(SchemaRegistryKey key, SchemaRegistryValue value,
                                          TopicPartition tp, long offset, long timestamp) {
     if (value == null) {
@@ -57,6 +60,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
+      normalize(schemaObj);
       try {
         SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId(), schemaObj.getSubject());
         if (oldKey != null) {
@@ -84,6 +88,15 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       }
     }
     return ValidationStatus.SUCCESS;
+  }
+
+  @VisibleForTesting
+  protected static void normalize(SchemaValue schemaValue) {
+    if (ProtobufSchema.TYPE.equals(schemaValue.getSchemaType())) {
+      // Normalize the schema if it is Protobuf (due to changes in Protobuf canonicalization)
+      String normalized = new ProtobufSchema(schemaValue.getSchema()).canonicalString();
+      schemaValue.setSchema(normalized);
+    }
   }
 
   /**

@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.junit.Test;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
@@ -149,7 +150,15 @@ public class SchemaValuesTest {
 
     assertEquals(1L, schemaValue.getOffset().longValue());
     assertEquals(123L, schemaValue.getTimestamp().longValue());
+  }
 
+  @Test
+  public void testSchemaValueNormalize() {
+    String oldSchema = "syntax = \"proto3\";\npackage com.mycorp.mynamespace;\n\n// Test Comment.\r\nmessage value {\n  int32 myField1 = 1;\n}\n";
+    String newSchema = "syntax = \"proto3\";\npackage com.mycorp.mynamespace;\n\nmessage value {\n  int32 myField1 = 1;\n}\n";
+    SchemaValue schemaValue = new SchemaValue("sub", 1, 0, ProtobufSchema.TYPE, null, oldSchema, false);
+    KafkaStoreMessageHandler.normalize(schemaValue);
+    assertEquals(newSchema, schemaValue.getSchema());
   }
 
   private void assertSchemaValue(String subject, int version, int schemaId,
