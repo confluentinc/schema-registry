@@ -49,6 +49,9 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
   @Parameter(required = false)
   List<String> schemaProviders = new ArrayList<>();
 
+  @Parameter
+  Map<String, String> sslConfigs = new HashMap<>();
+
   protected SchemaRegistryClient client;
 
   void client(SchemaRegistryClient client) {
@@ -63,6 +66,9 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
         // a single schema registry URL, so there is no additional utility of the URL source.
         config.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
         config.put(SchemaRegistryClientConfig.USER_INFO_CONFIG, userInfoConfig);
+      }
+      if (sslConfigs != null && !sslConfigs.isEmpty()) {
+        config.putAll(sslConfigs);
       }
       List<SchemaProvider> providers = schemaProviders != null && !schemaProviders.isEmpty()
                                        ? schemaProviders()
