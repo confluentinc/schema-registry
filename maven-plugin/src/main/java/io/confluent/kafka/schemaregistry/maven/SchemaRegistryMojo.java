@@ -50,7 +50,7 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
   List<String> schemaProviders = new ArrayList<>();
 
   @Parameter
-  Map<String, String> sslConfigs = new HashMap<>();
+  Map<String, String> configs = new HashMap<>();
 
   protected SchemaRegistryClient client;
 
@@ -67,8 +67,8 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
         config.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
         config.put(SchemaRegistryClientConfig.USER_INFO_CONFIG, userInfoConfig);
       }
-      if (sslConfigs != null && !sslConfigs.isEmpty()) {
-        config.putAll(sslConfigs);
+      if (configs != null && !configs.isEmpty()) {
+        config.putAll(configs);
       }
       List<SchemaProvider> providers = schemaProviders != null && !schemaProviders.isEmpty()
                                        ? schemaProviders()
