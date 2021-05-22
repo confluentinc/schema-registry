@@ -75,8 +75,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    *
    * @param schemaKey   the registered SchemaKey; never {@code null}
    * @param schemaValue the registered SchemaValue; never {@code null}
+   * @param oldSchemaValue the previous SchemaValue
    */
-  void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue);
+  void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue);
 
   /**
    * Callback that is invoked when a schema is deleted.
@@ -85,8 +86,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    *
    * @param schemaKey   the deleted SchemaKey; never {@code null}
    * @param schemaValue the deleted SchemaValue; never {@code null}
+   * @param oldSchemaValue the previous SchemaValue
    */
-  void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue);
+  void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue);
 
   /**
    * Callback that is invoked when a schema is tombstoned.

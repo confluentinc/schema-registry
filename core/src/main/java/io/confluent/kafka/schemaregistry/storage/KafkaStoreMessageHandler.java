@@ -137,7 +137,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         if (schemaValue != null) {
           schemaValue.setDeleted(true);
           lookupCache.put(schemaKey, schemaValue);
-          lookupCache.schemaDeleted(schemaKey, schemaValue);
+          lookupCache.schemaDeleted(schemaKey, schemaValue, schemaValue);
         }
       } catch (StoreException e) {
         log.error("Failed to delete subject {} in the local cache", subject, e);
@@ -163,11 +163,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       idGenerator.schemaRegistered(schemaKey, schemaValue);
 
       if (schemaValue.isDeleted()) {
-        lookupCache.schemaDeleted(schemaKey, schemaValue);
+        lookupCache.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
         updateMetrics(metricsContainer.getSchemasDeleted(),
                       metricsContainer.getSchemasDeleted(getSchemaType(schemaValue)));
       } else {
-        lookupCache.schemaRegistered(schemaKey, schemaValue);
+        lookupCache.schemaRegistered(schemaKey, schemaValue, oldSchemaValue);
         updateMetrics(metricsContainer.getSchemasCreated(),
                       metricsContainer.getSchemasCreated(getSchemaType(schemaValue)));
       }

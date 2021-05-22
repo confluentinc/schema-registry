@@ -144,7 +144,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue) {
+  public void schemaDeleted(
+      SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     Map<Integer, Map<String, Integer>> guids =
             guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
@@ -187,7 +188,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
+  public void schemaRegistered(
+      SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     Map<Integer, Map<String, Integer>> guids =
             guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
