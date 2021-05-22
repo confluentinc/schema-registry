@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.DEFAULT_TENANT;
 
+import java.util.Map;
 import java.util.Set;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
@@ -142,8 +143,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * Clears the cache of deleted schemas that match the given subject.
    *
    * @param subject the subject, or null for all subjects
+   * @return the number of schemas cleared by schema type
    */
-  void clearSubjects(String subject) throws StoreException;
+  Map<String, Integer> clearSubjects(String subject) throws StoreException;
 
   default String tenant() {
     return DEFAULT_TENANT;
