@@ -25,6 +25,8 @@ import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.json.diff.Difference;
+import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -286,6 +288,29 @@ public class JsonSchemaTest {
     Object envelope = JsonSchemaUtils.envelope(schema, null);
     JsonSchema schema2 = JsonSchemaUtils.getSchema(envelope);
     assertEquals(schema, schema2);
+  }
+
+  @Test
+  public void testRecursiveSchema() {
+    String schema = "{\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"$id\": \"task.schema.json\",\n"
+        + "  \"title\": \"Task\",\n"
+        + "  \"description\": \"A task\",\n"
+        + "  \"type\": [\"null\", \"object\"],\n"
+        + "  \"properties\": {\n"
+        + "    \"parent\": {\n"
+        + "        \"$ref\": \"task.schema.json\"\n"
+        + "    },    \n"
+        + "    \"title\": {\n"
+        + "        \"description\": \"Task title\",\n"
+        + "        \"type\": \"string\"\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    List<Difference> diff = SchemaDiff.compare(jsonSchema.rawSchema(), jsonSchema.rawSchema());
+    assertEquals(0, diff.size());
   }
 
   private static Map<String, String> getJsonSchemaWithReferences() {
