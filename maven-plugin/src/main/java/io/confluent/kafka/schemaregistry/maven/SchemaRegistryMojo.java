@@ -61,14 +61,14 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
   protected SchemaRegistryClient client() {
     if (null == this.client) {
       Map<String, String> config = new HashMap<>();
+      if (configs != null && !configs.isEmpty()) {
+        config.putAll(configs);
+      }
       if (userInfoConfig != null) {
         // Note that BASIC_AUTH_CREDENTIALS_SOURCE is not configurable as the plugin only supports
         // a single schema registry URL, so there is no additional utility of the URL source.
         config.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
         config.put(SchemaRegistryClientConfig.USER_INFO_CONFIG, userInfoConfig);
-      }
-      if (configs != null && !configs.isEmpty()) {
-        config.putAll(configs);
       }
       List<SchemaProvider> providers = schemaProviders != null && !schemaProviders.isEmpty()
                                        ? schemaProviders()
