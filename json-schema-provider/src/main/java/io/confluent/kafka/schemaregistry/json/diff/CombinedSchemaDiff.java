@@ -15,12 +15,14 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.utils.Edge;
 import io.confluent.kafka.schemaregistry.json.utils.MaximumCardinalityMatch;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.CombinedSchema.ValidationCriterion;
 import org.everit.json.schema.Schema;
@@ -42,8 +44,10 @@ class CombinedSchemaDiff {
     Difference.Type type = compareCriteria(ctx, original.getCriterion(), update.getCriterion());
     if (type != COMBINED_TYPE_CHANGED) {
       // Use sets to collapse duplicate entries
-      final Set<Schema> originalSubschemas = new LinkedHashSet<>(original.getSubschemas());
-      final Set<Schema> updateSubschemas = new LinkedHashSet<>(update.getSubschemas());
+      final Set<JsonSchema> originalSubschemas = original.getSubschemas().stream()
+          .map(JsonSchema::new).collect(Collectors.toCollection(LinkedHashSet::new));
+      final Set<JsonSchema> updateSubschemas = update.getSubschemas().stream()
+          .map(JsonSchema::new).collect(Collectors.toCollection(LinkedHashSet::new));
       int originalSize = originalSubschemas.size();
       int updateSize = updateSubschemas.size();
       if (originalSize < updateSize) {
@@ -61,26 +65,26 @@ class CombinedSchemaDiff {
       }
 
       int index = 0;
-      Set<Edge<Schema, List<Difference>>> compatibleEdges = new HashSet<>();
-      for (Schema originalSubschema : originalSubschemas) {
+      Set<Edge<JsonSchema, List<Difference>>> compatibleEdges = new HashSet<>();
+      for (JsonSchema originalSubschema : originalSubschemas) {
         try (Context.PathScope pathScope = ctx.enterPath(original.getCriterion() + "/" + index)) {
-          for (Schema updateSubschema : updateSubschemas) {
+          for (JsonSchema updateSubschema : updateSubschemas) {
             final Context subctx = ctx.getSubcontext();
-            SchemaDiff.compare(subctx, originalSubschema, updateSubschema);
+            SchemaDiff.compare(subctx, originalSubschema.rawSchema(), updateSubschema.rawSchema());
             if (subctx.isCompatible()) {
               compatibleEdges.add(
-                  new Edge(originalSubschema, updateSubschema, subctx.getDifferences()));
+                  new Edge<>(originalSubschema, updateSubschema, subctx.getDifferences()));
             }
           }
         }
         index++;
       }
 
-      MaximumCardinalityMatch<Schema, List<Difference>> match =
+      MaximumCardinalityMatch<JsonSchema, List<Difference>> match =
           new MaximumCardinalityMatch<>(compatibleEdges, originalSubschemas, updateSubschemas);
-      Set<Edge<Schema, List<Difference>>> matching = match.getMatching();
+      Set<Edge<JsonSchema, List<Difference>>> matching = match.getMatching();
 
-      for (Edge<Schema, List<Difference>> matchingEdge : matching) {
+      for (Edge<JsonSchema, List<Difference>> matchingEdge : matching) {
         ctx.addDifferences(matchingEdge.value());
       }
       if (matching.size() < Math.min(originalSize, updateSize)) {
