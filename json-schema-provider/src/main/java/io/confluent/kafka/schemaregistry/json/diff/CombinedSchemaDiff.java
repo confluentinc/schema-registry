@@ -25,7 +25,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.CombinedSchema.ValidationCriterion;
-import org.everit.json.schema.Schema;
 
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.COMBINED_TYPE_CHANGED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.COMBINED_TYPE_EXTENDED;
