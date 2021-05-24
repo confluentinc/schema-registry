@@ -16,12 +16,14 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -144,7 +146,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue) {
+  public void schemaDeleted(
+      SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     Map<Integer, Map<String, Integer>> guids =
             guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
@@ -187,7 +190,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
+  public void schemaRegistered(
+      SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     Map<Integer, Map<String, Integer>> guids =
             guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<String, Integer> subjectVersions =
@@ -296,11 +300,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void clearSubjects(String subject) throws StoreException {
-    clearSubjects(matchingSubjectPredicate(subject));
+  public Map<String, Integer> clearSubjects(String subject) throws StoreException {
+    return clearSubjects(matchingSubjectPredicate(subject));
   }
 
-  private void clearSubjects(Predicate<String> match) {
+  private Map<String, Integer> clearSubjects(Predicate<String> match) {
     BiPredicate<String, Integer> matchDeleted = matchDeleted(match);
 
     Map<Integer, Map<String, Integer>> guids =
@@ -315,14 +319,24 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     }
 
     // Delete from store later as the previous deletions rely on the store
+    Map<String, Integer> counts = new HashMap<>();
     store.entrySet().removeIf(e -> {
       if (e.getKey() instanceof SchemaKey) {
         SchemaKey key = (SchemaKey) e.getKey();
         SchemaValue value = (SchemaValue) e.getValue();
-        return match.test(key.getSubject()) && value.isDeleted();
+        boolean isMatch = match.test(key.getSubject()) && value.isDeleted();
+        if (isMatch) {
+          String schematype = value.getSchemaType();
+          if (schematype == null) {
+            schematype = AvroSchema.TYPE;
+          }
+          counts.merge(schematype, 1, Integer::sum);
+        }
+        return isMatch;
       }
       return false;
     });
+    return counts;
   }
 
   protected Predicate<String> matchingSubjectPredicate(String subject) {
