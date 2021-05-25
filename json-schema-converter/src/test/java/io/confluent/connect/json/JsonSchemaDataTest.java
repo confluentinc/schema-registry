@@ -1525,7 +1525,6 @@ public class JsonSchemaDataTest {
   public void testToConnectRecursiveSchema() {
     JsonSchema jsonSchema = getRecursiveJsonSchema();
     JsonSchemaData jsonSchemaData = new JsonSchemaData();
-    jsonSchemaData.toConnectSchema(jsonSchema);
     Schema expected = getRecursiveSchema();
     Schema actual = jsonSchemaData.toConnectSchema(jsonSchema);
     assertEquals(expected.field("title"), actual.field("title"));
