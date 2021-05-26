@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 import java.util.Set;
 import org.apache.kafka.common.cache.Cache;
@@ -91,6 +93,8 @@ public class JsonSchemaData {
   public static final String CONNECT_TYPE_BYTES = "bytes";
   public static final String CONNECT_TYPE_MAP = "map";
 
+  public static final String DEFAULT_ID_PREFIX = "#id";
+  public static final String JSON_ID_PROP = NAMESPACE + ".Id";
   public static final String JSON_TYPE_ENUM = NAMESPACE + ".Enum";
   public static final String JSON_TYPE_ENUM_PREFIX = JSON_TYPE_ENUM + ".";
   public static final String JSON_TYPE_ONE_OF = NAMESPACE + ".OneOf";
@@ -357,6 +361,8 @@ public class JsonSchemaData {
     });
   }
 
+  private int idIndex = 0;
+
   private JsonSchemaDataConfig config;
   private Cache<Schema, org.everit.json.schema.Schema> fromConnectSchemaCache;
   private Cache<JsonSchema, Schema> toConnectSchemaCache;
@@ -600,10 +606,12 @@ public class JsonSchemaData {
   }
 
   public JsonSchema fromConnectSchema(Schema schema) {
-    return new JsonSchema(rawSchemaFromConnectSchema(schema));
+    FromConnectContext ctx = new FromConnectContext();
+    return new JsonSchema(rawSchemaFromConnectSchema(ctx, schema));
   }
 
-  private org.everit.json.schema.Schema rawSchemaFromConnectSchema(Schema schema) {
+  private org.everit.json.schema.Schema rawSchemaFromConnectSchema(
+      FromConnectContext ctx, Schema schema) {
     if (schema == null) {
       return null;
     }
@@ -611,20 +619,27 @@ public class JsonSchemaData {
     if (cachedSchema != null) {
       return cachedSchema;
     }
-    org.everit.json.schema.Schema resultSchema = rawSchemaFromConnectSchema(schema, null);
+    org.everit.json.schema.Schema resultSchema = rawSchemaFromConnectSchema(ctx, schema, null);
     fromConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
   }
 
-  private org.everit.json.schema.Schema rawSchemaFromConnectSchema(Schema schema, Integer index) {
-    return rawSchemaFromConnectSchema(schema, index, false);
+  private org.everit.json.schema.Schema rawSchemaFromConnectSchema(
+      FromConnectContext ctx, Schema schema, Integer index) {
+    return rawSchemaFromConnectSchema(ctx, schema, index, false);
   }
 
   private org.everit.json.schema.Schema rawSchemaFromConnectSchema(
-      Schema schema, Integer index, boolean ignoreOptional
+      FromConnectContext ctx, Schema schema, Integer index, boolean ignoreOptional
   ) {
     if (schema == null) {
       return null;
+    }
+
+    String id = null;
+    if (schema.parameters() != null && schema.parameters().containsKey(JSON_ID_PROP)) {
+      id = schema.parameters().get(JSON_ID_PROP);
+      ctx.add(id);
     }
 
     org.everit.json.schema.Schema.Builder builder;
@@ -678,21 +693,21 @@ public class JsonSchemaData {
         break;
       case ARRAY:
         builder = ArraySchema.builder().allItemSchema(
-            rawSchemaFromConnectSchema(schema.valueSchema()));
+            rawSchemaFromConnectSchema(ctx, schema.valueSchema()));
         break;
       case MAP:
         // JSON Schema only supports string keys
         if (schema.keySchema().type() == Schema.Type.STRING && !schema.keySchema().isOptional()) {
           org.everit.json.schema.Schema valueSchema =
-              rawSchemaFromConnectSchema(schema.valueSchema());
+              rawSchemaFromConnectSchema(ctx, schema.valueSchema());
           builder = ObjectSchema.builder().schemaOfAdditionalProperties(valueSchema);
           unprocessedProps.put(CONNECT_TYPE_PROP, CONNECT_TYPE_MAP);
         } else {
           ObjectSchema.Builder entryBuilder = ObjectSchema.builder();
           org.everit.json.schema.Schema keySchema =
-              rawSchemaFromConnectSchema(schema.keySchema(), 0);
+              rawSchemaFromConnectSchema(ctx, schema.keySchema(), 0);
           org.everit.json.schema.Schema valueSchema =
-              rawSchemaFromConnectSchema(schema.valueSchema(), 1);
+              rawSchemaFromConnectSchema(ctx, schema.valueSchema(), 1);
           entryBuilder.addPropertySchema(KEY_FIELD, keySchema);
           entryBuilder.addPropertySchema(VALUE_FIELD, valueSchema);
           builder = ArraySchema.builder().allItemSchema(entryBuilder.build());
@@ -707,7 +722,7 @@ public class JsonSchemaData {
             combinedBuilder.subschema(NullSchema.INSTANCE);
           }
           for (Field field : schema.fields()) {
-            combinedBuilder.subschema(rawSchemaFromConnectSchema(nonOptional(field.schema()),
+            combinedBuilder.subschema(rawSchemaFromConnectSchema(ctx, nonOptional(field.schema()),
                 field.index(),
                 true
             ));
@@ -717,15 +732,24 @@ public class JsonSchemaData {
           CombinedSchema.Builder combinedBuilder = CombinedSchema.builder();
           combinedBuilder.criterion(CombinedSchema.ONE_CRITERION);
           combinedBuilder.subschema(NullSchema.INSTANCE);
-          combinedBuilder.subschema(rawSchemaFromConnectSchema(nonOptional(schema)));
+          combinedBuilder.subschema(rawSchemaFromConnectSchema(ctx, nonOptional(schema)));
           builder = combinedBuilder;
         } else {
           ObjectSchema.Builder objectBuilder = ObjectSchema.builder();
           for (Field field : schema.fields()) {
-            org.everit.json.schema.Schema fieldSchema = rawSchemaFromConnectSchema(field.schema(),
-                field.index()
-            );
-            objectBuilder.addPropertySchema(field.name(), fieldSchema);
+            Schema fieldSchema = field.schema();
+            String refId = null;
+            if (fieldSchema.parameters() != null
+                && fieldSchema.parameters().containsKey(JSON_ID_PROP)) {
+              refId = fieldSchema.parameters().get(JSON_ID_PROP);
+            }
+            org.everit.json.schema.Schema jsonSchema;
+            if (refId != null && ctx.contains(refId)) {
+              jsonSchema = ReferenceSchema.builder().refValue(refId).build();
+            } else {
+              jsonSchema = rawSchemaFromConnectSchema(ctx, fieldSchema, field.index());
+            }
+            objectBuilder.addPropertySchema(field.name(), jsonSchema);
           }
           builder = objectBuilder;
         }
@@ -773,6 +797,9 @@ public class JsonSchemaData {
           unprocessedProps = new HashMap<>();
         }
       }
+    }
+    if (id != null) {
+      builder.id(id);
     }
     if (index != null) {
       unprocessedProps.put(CONNECT_INDEX_PROP, index);
@@ -829,22 +856,30 @@ public class JsonSchemaData {
     if (cachedSchema != null) {
       return cachedSchema;
     }
-    Schema resultSchema = toConnectSchema(schema.rawSchema(), schema.version(), false);
+    ToConnectContext ctx = new ToConnectContext();
+    Schema resultSchema = toConnectSchema(ctx, schema.rawSchema(), schema.version(), false);
     toConnectSchemaCache.put(schema, resultSchema);
     return resultSchema;
   }
 
   @VisibleForTesting
   protected Schema toConnectSchema(org.everit.json.schema.Schema jsonSchema) {
-    return toConnectSchema(jsonSchema, null);
+    ToConnectContext ctx = new ToConnectContext();
+    return toConnectSchema(ctx, jsonSchema, null);
   }
 
-  private Schema toConnectSchema(org.everit.json.schema.Schema jsonSchema, Integer version) {
-    return toConnectSchema(jsonSchema, version, false);
+  private Schema toConnectSchema(ToConnectContext ctx, org.everit.json.schema.Schema jsonSchema) {
+    return toConnectSchema(ctx, jsonSchema, null);
   }
 
   private Schema toConnectSchema(
-      org.everit.json.schema.Schema jsonSchema, Integer version, boolean forceOptional
+      ToConnectContext ctx, org.everit.json.schema.Schema jsonSchema, Integer version) {
+    return toConnectSchema(ctx, jsonSchema, version, false);
+  }
+
+  private Schema toConnectSchema(
+      ToConnectContext ctx, org.everit.json.schema.Schema jsonSchema,
+      Integer version, boolean forceOptional
   ) {
     if (jsonSchema == null) {
       return null;
@@ -905,7 +940,7 @@ public class JsonSchemaData {
       if (criterion == CombinedSchema.ONE_CRITERION || criterion == CombinedSchema.ANY_CRITERION) {
         name = JSON_TYPE_ONE_OF;
       } else if (criterion == CombinedSchema.ALL_CRITERION) {
-        return allOfToConnectSchema(combinedSchema, version, forceOptional);
+        return allOfToConnectSchema(ctx, combinedSchema, version, forceOptional);
       } else {
         throw new IllegalArgumentException("Unsupported criterion: " + criterion);
       }
@@ -920,7 +955,7 @@ public class JsonSchemaData {
           }
         }
         if (foundNullSchema) {
-          return toConnectSchema(nonNullSchema, version, true);
+          return toConnectSchema(ctx, nonNullSchema, version, true);
         }
       }
       int index = 0;
@@ -930,7 +965,7 @@ public class JsonSchemaData {
           builder.optional();
         } else {
           String subFieldName = name + ".field." + index++;
-          builder.field(subFieldName, toConnectSchema(subSchema, null, true));
+          builder.field(subFieldName, toConnectSchema(ctx, subSchema, null, true));
         }
       }
     } else if (jsonSchema instanceof ArraySchema) {
@@ -942,22 +977,23 @@ public class JsonSchemaData {
       String type = (String) arraySchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
       if (CONNECT_TYPE_MAP.equals(type) && itemsSchema instanceof ObjectSchema) {
         ObjectSchema objectSchema = (ObjectSchema) itemsSchema;
-        builder = SchemaBuilder.map(toConnectSchema(objectSchema.getPropertySchemas()
+        builder = SchemaBuilder.map(toConnectSchema(ctx, objectSchema.getPropertySchemas()
                 .get(KEY_FIELD)),
-            toConnectSchema(objectSchema.getPropertySchemas().get(VALUE_FIELD))
+            toConnectSchema(ctx, objectSchema.getPropertySchemas().get(VALUE_FIELD))
         );
       } else {
-        builder = SchemaBuilder.array(toConnectSchema(itemsSchema));
+        builder = SchemaBuilder.array(toConnectSchema(ctx, itemsSchema));
       }
     } else if (jsonSchema instanceof ObjectSchema) {
       ObjectSchema objectSchema = (ObjectSchema) jsonSchema;
       String type = (String) objectSchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
       if (CONNECT_TYPE_MAP.equals(type)) {
         builder = SchemaBuilder.map(Schema.STRING_SCHEMA,
-            toConnectSchema(objectSchema.getSchemaOfAdditionalProperties())
+            toConnectSchema(ctx, objectSchema.getSchemaOfAdditionalProperties())
         );
       } else {
         builder = SchemaBuilder.struct();
+        ctx.put(objectSchema, builder);
         Map<String, org.everit.json.schema.Schema> properties = objectSchema.getPropertySchemas();
         SortedMap<Integer, Map.Entry<String, org.everit.json.schema.Schema>> sortedMap =
             new TreeMap<>();
@@ -974,12 +1010,18 @@ public class JsonSchemaData {
           org.everit.json.schema.Schema subSchema = property.getValue();
           boolean isFieldOptional = config.useOptionalForNonRequiredProperties()
               && !objectSchema.getRequiredProperties().contains(subFieldName);
-          builder.field(subFieldName, toConnectSchema(subSchema, null, isFieldOptional));
+          builder.field(subFieldName, toConnectSchema(ctx, subSchema, null, isFieldOptional));
         }
       }
     } else if (jsonSchema instanceof ReferenceSchema) {
       ReferenceSchema refSchema = (ReferenceSchema) jsonSchema;
-      return toConnectSchema(refSchema.getReferredSchema(), version, forceOptional);
+      SchemaBuilder refBuilder = ctx.get(refSchema.getReferredSchema());
+      if (refBuilder != null) {
+        refBuilder.parameter(JSON_ID_PROP, DEFAULT_ID_PREFIX + (++idIndex));
+        return new SchemaWrapper(refBuilder);
+      } else {
+        return toConnectSchema(ctx, refSchema.getReferredSchema(), version, forceOptional);
+      }
     } else {
       throw new DataException("Unsupported schema type " + jsonSchema.getClass().getName());
     }
@@ -1019,7 +1061,8 @@ public class JsonSchemaData {
   }
 
   private Schema allOfToConnectSchema(
-      CombinedSchema combinedSchema, Integer version, boolean forceOptional) {
+      ToConnectContext ctx, CombinedSchema combinedSchema,
+      Integer version, boolean forceOptional) {
     ConstSchema constSchema = null;
     EnumSchema enumSchema = null;
     NumberSchema numberSchema = null;
@@ -1041,32 +1084,32 @@ public class JsonSchemaData {
     if (constSchema != null) {
       if (stringSchema != null) {
         // Ignore the const, return the string
-        return toConnectSchema(stringSchema, version, forceOptional);
+        return toConnectSchema(ctx, stringSchema, version, forceOptional);
       } else if (numberSchema != null) {
         // Ignore the const, return the number or integer
-        return toConnectSchema(numberSchema, version, forceOptional);
+        return toConnectSchema(ctx, numberSchema, version, forceOptional);
       } else if (combinedSubschema != null) {
         // Ignore the const, return the combined subschema
-        return toConnectSchema(combinedSubschema, version, forceOptional);
+        return toConnectSchema(ctx, combinedSubschema, version, forceOptional);
       }
     } else if (enumSchema != null) {
       if (stringSchema != null) {
         // Return a string enum
-        return toConnectSchema(enumSchema, version, forceOptional);
+        return toConnectSchema(ctx, enumSchema, version, forceOptional);
       } else if (numberSchema != null) {
         // Ignore the enum, return the number or integer
-        return toConnectSchema(numberSchema, version, forceOptional);
+        return toConnectSchema(ctx, numberSchema, version, forceOptional);
       } else if (combinedSubschema != null) {
         // Ignore the enum, return the combined subschema
-        return toConnectSchema(combinedSubschema, version, forceOptional);
+        return toConnectSchema(ctx, combinedSubschema, version, forceOptional);
       }
     } else if (stringSchema != null && stringSchema.getFormatValidator() != null) {
       if (numberSchema != null) {
         // This is a number or integer with a format
-        return toConnectSchema(numberSchema, version, forceOptional);
+        return toConnectSchema(ctx, numberSchema, version, forceOptional);
       } else if (combinedSubschema != null) {
         // This is an optional number or integer with a format
-        return toConnectSchema(combinedSubschema, version, forceOptional);
+        return toConnectSchema(ctx, combinedSubschema, version, forceOptional);
       }
     }
     throw new IllegalArgumentException("Unsupported criterion "
@@ -1083,5 +1126,188 @@ public class JsonSchemaData {
 
   private interface JsonToConnectLogicalTypeConverter {
     Object convert(Schema schema, JsonNode value);
+  }
+
+  /**
+   * Wraps a SchemaBuilder.
+   * The internal builder should never be returned, so that the schema is not built prematurely.
+   */
+  static class SchemaWrapper extends SchemaBuilder {
+
+    private final SchemaBuilder builder;
+    // Parameters that override the ones in builder
+    private final Map<String, String> parameters;
+
+    public SchemaWrapper(SchemaBuilder builder) {
+      super(Type.STRUCT);
+      this.builder = builder;
+      this.parameters = new LinkedHashMap<>();
+    }
+
+    @Override
+    public boolean isOptional() {
+      return builder.isOptional();
+    }
+
+    @Override
+    public SchemaBuilder optional() {
+      builder.optional();
+      return this;
+    }
+
+    @Override
+    public SchemaBuilder required() {
+      builder.required();
+      return this;
+    }
+
+    @Override
+    public Object defaultValue() {
+      return builder.defaultValue();
+    }
+
+    @Override
+    public SchemaBuilder defaultValue(Object value) {
+      builder.defaultValue(value);
+      return this;
+    }
+
+    @Override
+    public String name() {
+      return builder.name();
+    }
+
+    @Override
+    public SchemaBuilder name(String name) {
+      builder.name(name);
+      return this;
+    }
+
+    @Override
+    public Integer version() {
+      return builder.version();
+    }
+
+    @Override
+    public SchemaBuilder version(Integer version) {
+      builder.version(version);
+      return this;
+    }
+
+    @Override
+    public String doc() {
+      return builder.doc();
+    }
+
+    @Override
+    public SchemaBuilder doc(String doc) {
+      builder.doc(doc);
+      return this;
+    }
+
+    @Override
+    public Map<String, String> parameters() {
+      Map<String, String> allParameters = new HashMap<>();
+      if (builder.parameters() != null) {
+        allParameters.putAll(builder.parameters());
+      }
+      allParameters.putAll(parameters);
+      return allParameters;
+    }
+
+    @Override
+    public SchemaBuilder parameters(Map<String, String> props) {
+      parameters.putAll(props);
+      return this;
+    }
+
+    @Override
+    public SchemaBuilder parameter(String propertyName, String propertyValue) {
+      parameters.put(propertyName, propertyValue);
+      return this;
+    }
+
+    @Override
+    public Type type() {
+      return builder.type();
+    }
+
+    @Override
+    public List<Field> fields() {
+      return builder.fields();
+    }
+
+    @Override
+    public Field field(String fieldName) {
+      return builder.field(fieldName);
+    }
+
+    @Override
+    public SchemaBuilder field(String fieldName, Schema fieldSchema) {
+      builder.field(fieldName, fieldSchema);
+      return this;
+    }
+
+    @Override
+    public Schema keySchema() {
+      return builder.keySchema();
+    }
+
+    @Override
+    public Schema valueSchema() {
+      return builder.valueSchema();
+    }
+
+    @Override
+    public Schema build() {
+      // Don't create a ConnectSchema
+      return this;
+    }
+
+    @Override
+    public Schema schema() {
+      // Don't create a ConnectSchema
+      return this;
+    }
+  }
+
+  /**
+   * Class that holds the context for performing {@code toConnectSchema}
+   */
+  private static class ToConnectContext {
+    private final Map<org.everit.json.schema.Schema, SchemaBuilder> schemaToStructMap;
+
+    public ToConnectContext() {
+      this.schemaToStructMap = new IdentityHashMap<>();
+    }
+
+    public SchemaBuilder get(org.everit.json.schema.Schema schema) {
+      return schemaToStructMap.get(schema);
+    }
+
+    public void put(org.everit.json.schema.Schema schema, SchemaBuilder builder) {
+      schemaToStructMap.put(schema, builder);
+    }
+  }
+
+  /**
+   * Class that holds the context for performing {@code fromConnectSchema}
+   */
+  private static class FromConnectContext {
+    private final Set<String> ids;
+
+    public FromConnectContext() {
+      this.ids = new HashSet<>();
+    }
+
+    public boolean contains(String id) {
+      return id != null ? ids.contains(id) : false;
+    }
+
+    public void add(String id) {
+      if (id != null) {
+        ids.add(id);
+      }
+    }
   }
 }

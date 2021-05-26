@@ -31,6 +31,7 @@ import com.fasterxml.jackson.databind.node.ShortNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.connect.json.JsonSchemaData.SchemaWrapper;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.kafka.connect.data.ConnectSchema;
@@ -49,7 +50,6 @@ import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.StringSchema;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.math.BigDecimal;
@@ -1521,46 +1521,61 @@ public class JsonSchemaDataTest {
     assertTrue(connectSchema.field("complexNode").schema().isOptional());
   }
 
-  @Ignore
   @Test
-  public void testRecursiveSchema() {
-    String recursiveSchema = "{\n"
-        + "  \"title\": \"cyclic - DefaultCyclic\",\n"
-        + "  \"type\": \"object\",\n"
-        + "  \"definitions\": {\n"
-        + "    \"DefaultCyclic_106\": {\n"
-        + "      \"type\": \"object\",\n"
-        + "      \"properties\": {\n"
-        + "        \"id\": {\n"
-        + "          \"type\": \"integer\"\n"
-        + "        },\n"
-        + "        \"me\": {\n"
-        + "          \"type\": \"object\",\n"
-        + "          \"$ref\": \"#/definitions/DefaultCyclic_106\"\n"
-        + "        }\n"
-        + "      },\n"
-        + "      \"additionalProperties\": false,\n"
-        + "      \"required\": [\n"
-        + "        \"id\"\n"
-        + "      ]\n"
-        + "    }\n"
-        + "  },\n"
-        + "  \"properties\": {\n"
-        + "    \"id\": {\n"
-        + "      \"type\": \"integer\"\n"
-        + "    },\n"
-        + "    \"me\": {\n"
-        + "      \"type\": \"object\",\n"
-        + "      \"$ref\": \"#/definitions/DefaultCyclic_106\"\n"
-        + "    }\n"
-        + "  },\n"
-        + "  \"required\": [\n"
-        + "    \"id\"\n"
-        + "  ],\n"
-        + "  \"additionalProperties\": false\n"
-        + "}";
-    JsonSchema jsonSchema = new JsonSchema(recursiveSchema);
+  public void testToConnectRecursiveSchema() {
+    JsonSchema jsonSchema = getRecursiveJsonSchema();
     JsonSchemaData jsonSchemaData = new JsonSchemaData();
-    jsonSchemaData.toConnectSchema(jsonSchema);
+    Schema expected = getRecursiveSchema();
+    Schema actual = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertEquals(expected.field("title"), actual.field("title"));
+    Schema expectedNested = expected.field("parent").schema();
+    Schema actualNested = actual.field("parent").schema();
+    assertEquals(expectedNested.name(), actualNested.name());
+    assertEquals(expectedNested.type(), actualNested.type());
+  }
+
+  @Test
+  public void testFromConnectRecursiveSchema() {
+    JsonSchema expected = getRecursiveJsonSchema();
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    JsonSchema jsonSchema = jsonSchemaData.fromConnectSchema(getRecursiveSchema());
+    assertEquals(expected, jsonSchema);
+  }
+
+  private JsonSchema getRecursiveJsonSchema() {
+    String schema = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"title\": \"Task\",\n"
+        + "  \"description\": \"A task\",\n"
+        + "  \"id\": \"#id1\",\n"
+        + "  \"properties\": {\n"
+        + "    \"parent\": {\n"
+        + "      \"$ref\": \"#id1\"\n"
+        + "    },\n"
+        + "    \"title\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"description\": \"Task title\",\n"
+        + "      \"connect.index\": 1\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n";
+    return new JsonSchema(schema);
+  }
+
+  private Schema getRecursiveSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("Task");
+    schemaBuilder.doc("A task");
+    schemaBuilder.parameter(JsonSchemaData.JSON_ID_PROP, "#id1");
+    schemaBuilder.field("parent",
+        new SchemaWrapper(schemaBuilder)
+            .build()
+    );
+    schemaBuilder.field("title",
+        SchemaBuilder.string()
+            .doc("Task title")
+            .build()
+    );
+    return schemaBuilder.build();
   }
 }
