@@ -1505,6 +1505,7 @@ public class ProtobufData {
   static class SchemaWrapper extends SchemaBuilder {
 
     private final SchemaBuilder builder;
+    // Parameters that override the ones in builder
     private final Map<String, String> parameters;
 
     public SchemaWrapper(SchemaBuilder builder) {
@@ -1576,7 +1577,12 @@ public class ProtobufData {
 
     @Override
     public Map<String, String> parameters() {
-      return parameters;
+      Map<String, String> allParameters = new HashMap<>();
+      if (builder.parameters() != null) {
+        allParameters.putAll(builder.parameters());
+      }
+      allParameters.putAll(parameters);
+      return allParameters;
     }
 
     @Override
