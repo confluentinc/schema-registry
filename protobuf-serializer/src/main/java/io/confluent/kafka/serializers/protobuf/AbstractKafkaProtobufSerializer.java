@@ -175,7 +175,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   ) throws IOException, RestClientException {
     List<SchemaReference> references = new ArrayList<>();
     for (String dep : protoFileElement.getImports()) {
-      if (ProtobufSchema.knownDependencies().contains(dep)) {
+      if (ProtobufSchema.knownTypes().contains(dep)) {
         continue;
       }
       Schema subschema = resolveDependencies(schemaRegistry,
@@ -193,7 +193,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       references.add(new SchemaReference(dep, subschema.getSubject(), subschema.getVersion()));
     }
     for (String dep : protoFileElement.getPublicImports()) {
-      if (ProtobufSchema.knownDependencies().contains(dep)) {
+      if (ProtobufSchema.knownTypes().contains(dep)) {
         continue;
       }
       Schema subschema = resolveDependencies(schemaRegistry,
