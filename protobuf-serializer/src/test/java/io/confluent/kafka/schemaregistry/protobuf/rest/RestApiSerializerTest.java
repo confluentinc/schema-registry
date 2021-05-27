@@ -20,6 +20,15 @@ import com.acme.glup.MetadataProto;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
+import io.confluent.connect.protobuf.test.DescriptorRef;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.serializers.subject.DefaultReferenceSubjectNameStrategy;
+import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
+import java.io.IOException;
+import java.util.List;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -171,7 +180,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
         ), "kafka_user_id")
     );
 
-    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 6);
+    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 4);
     assertEquals(ProtobufSchemaUtils.getSchema(DEPENDENCY_MESSAGE).canonicalString(),
         schema.canonicalString()
     );
@@ -218,10 +227,111 @@ public class RestApiSerializerTest extends ClusterTestHarness {
         getField((DynamicMessage) getField(message, "glup_origin"), "hostname")
     );
 
-    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 4);
+    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 3);
     assertEquals(ProtobufSchemaUtils.getSchema(CLICK_CAS_MESSAGE).canonicalString(),
         schema.canonicalString()
     );
+  }
+
+  @Test
+  public void testWellKnownType() throws Exception {
+    String schemaString = getSchemaWithWellKnownType();
+    String subject = "wellknown";
+    registerAndVerifySchema(restApp.restClient, schemaString, Collections.emptyList(), 1, subject);
+
+    DescriptorRef.DescriptorMessage descMessage =
+        DescriptorRef.DescriptorMessage.newBuilder()
+            .setKey(123)
+            .setValue(DescriptorRef.DescriptorMessage.getDescriptor().toProto())
+            .build();
+
+    Properties serializerConfig = new Properties();
+    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
+        10,
+        Collections.singletonList(new ProtobufSchemaProvider()),
+        Collections.emptyMap(),
+        Collections.emptyMap()
+    );
+    KafkaProtobufSerializer protobufSerializer = new KafkaProtobufSerializer(schemaRegistry,
+        new HashMap(serializerConfig)
+    );
+
+    KafkaProtobufDeserializer protobufDeserializer = new KafkaProtobufDeserializer(schemaRegistry);
+
+    Properties deserializerConfig = new Properties();
+    deserializerConfig.put(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus"
+    );
+    KafkaProtobufDeserializer descMessageDeserializer = new KafkaProtobufDeserializer(
+        schemaRegistry,
+        new HashMap(deserializerConfig),
+        DescriptorRef.DescriptorMessage.class
+    );
+
+    byte[] bytes;
+
+    // specific -> specific
+    bytes = protobufSerializer.serialize(topic, descMessage);
+    assertEquals(descMessage, descMessageDeserializer.deserialize(topic, bytes));
+
+    // specific -> dynamic
+    bytes = protobufSerializer.serialize(topic, descMessage);
+    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals(descMessage.getKey(), getField(message, "key"));
+
+    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId(subject, 1);
+    assertEquals(ProtobufSchemaUtils.getSchema(descMessage).canonicalString(),
+        schema.canonicalString()
+    );
+
+    // additional resolve dependencies check
+    ReferenceSubjectNameStrategy strategy = new DefaultReferenceSubjectNameStrategy();
+    ProtobufSchema resolvedSchema = ProtobufSchemaUtils.getSchema(descMessage);
+    resolvedSchema = KafkaProtobufSerializer.resolveDependencies(
+        schemaRegistry, false, false, true, null, strategy, subject, false, resolvedSchema);
+    assertEquals(schema, resolvedSchema);
+  }
+
+  public static void registerAndVerifySchema(
+      RestService restService,
+      String schemaString,
+      List<SchemaReference> references,
+      int expectedId,
+      String subject
+  ) throws IOException, RestClientException {
+    int registeredId = restService.registerSchema(schemaString,
+        ProtobufSchema.TYPE,
+        references,
+        subject
+    );
+    assertEquals(
+        "Registering a new schema should succeed",
+        (long) expectedId,
+        (long) registeredId
+    );
+    assertEquals(
+        "Registered schema should be found",
+        schemaString.trim(),
+        restService.getId(expectedId).getSchemaString().trim()
+    );
+  }
+
+  private static String getSchemaWithWellKnownType() {
+    String schema = "syntax = \"proto3\";\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.connect.protobuf.test\";\n"
+        + "option java_outer_classname = \"DescriptorRef\";\n"
+        + "\n"
+        + "message DescriptorMessage {\n"
+        + "  int32 key = 1;\n"
+        + "  .google.protobuf.DescriptorProto value = 2;\n"
+        + "}";
+    return schema;
   }
 }
 

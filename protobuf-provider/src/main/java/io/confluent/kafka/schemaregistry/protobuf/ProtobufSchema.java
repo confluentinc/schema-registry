@@ -176,6 +176,10 @@ public class ProtobufSchema implements ParsedSchema {
     ALL_DEPENDENCIES.put(WRAPPER_LOCATION, WRAPPER_SCHEMA);
   }
 
+  public static Set<String> knownDependencies() {
+    return ALL_DEPENDENCIES.keySet();
+  }
+
   private final ProtoFileElement schemaObj;
 
   private final Integer version;
