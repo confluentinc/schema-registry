@@ -28,7 +28,7 @@ public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfi
   public static final String SKIP_KNOWN_TYPES_CONFIG =
       "skip.known.types";
   public static final String SKIP_KNOWN_TYPES_DOC =
-      "Whether to skip known types when registering or looking up schemas.";
+      "Whether to skip known types when registering or looking up schema dependencies.";
 
   public static final String REFERENCE_SUBJECT_NAME_STRATEGY_CONFIG =
       "reference.subject.name.strategy";
