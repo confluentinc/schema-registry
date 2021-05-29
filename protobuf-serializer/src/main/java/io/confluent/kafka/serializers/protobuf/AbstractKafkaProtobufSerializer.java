@@ -165,8 +165,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
    * @param latestCompatStrict whether to check that the latest subject version is backward
    *                           compatible with the schema of the object
    * @param latestVersions     an optional cache of latest subject versions, may be null
-   * @param skipKnownTypes     whether to skip known types when registering or looking up
-   *                           schema dependencies
+   * @param skipKnownTypes     whether to skip known types when resolving schema dependencies
    * @param strategy           the strategy for determining the subject name for a reference
    * @param topic              the topic
    * @param isKey              whether the object is the record key
