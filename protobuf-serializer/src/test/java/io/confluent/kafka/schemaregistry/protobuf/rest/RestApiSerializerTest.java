@@ -142,6 +142,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    serializerConfig.put(KafkaProtobufSerializerConfig.SKIP_KNOWN_TYPES_CONFIG, false);
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
         10,
         Collections.singletonList(new ProtobufSchemaProvider()),
@@ -180,7 +181,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
         ), "kafka_user_id")
     );
 
-    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 4);
+    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 6);
     assertEquals(ProtobufSchemaUtils.getSchema(DEPENDENCY_MESSAGE).canonicalString(),
         schema.canonicalString()
     );
@@ -191,6 +192,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    serializerConfig.put(KafkaProtobufSerializerConfig.SKIP_KNOWN_TYPES_CONFIG, false);
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
         10,
         Collections.singletonList(new ProtobufSchemaProvider()),
@@ -227,7 +229,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
         getField((DynamicMessage) getField(message, "glup_origin"), "hostname")
     );
 
-    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 3);
+    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 4);
     assertEquals(ProtobufSchemaUtils.getSchema(CLICK_CAS_MESSAGE).canonicalString(),
         schema.canonicalString()
     );
@@ -291,7 +293,7 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     ReferenceSubjectNameStrategy strategy = new DefaultReferenceSubjectNameStrategy();
     ProtobufSchema resolvedSchema = ProtobufSchemaUtils.getSchema(descMessage);
     resolvedSchema = KafkaProtobufSerializer.resolveDependencies(
-        schemaRegistry, false, false, true, null, strategy, subject, false, resolvedSchema);
+        schemaRegistry, false, false, true, null, true, strategy, subject, false, resolvedSchema);
     assertEquals(schema, resolvedSchema);
   }
 

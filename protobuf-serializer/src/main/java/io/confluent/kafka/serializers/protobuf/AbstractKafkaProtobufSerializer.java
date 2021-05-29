@@ -47,6 +47,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected boolean autoRegisterSchema;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
+  protected boolean skipKnownTypes;
   protected ReferenceSubjectNameStrategy referenceSubjectNameStrategy;
 
   protected void configure(KafkaProtobufSerializerConfig config) {
@@ -54,6 +55,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     this.autoRegisterSchema = config.autoRegisterSchema();
     this.useLatestVersion = config.useLatestVersion();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
+    this.skipKnownTypes = config.skipKnownTypes();
     this.referenceSubjectNameStrategy = config.referenceSubjectNameStrategyInstance();
   }
 
@@ -85,7 +87,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     try {
       schema = resolveDependencies(schemaRegistry, autoRegisterSchema,
           useLatestVersion, latestCompatStrict, latestVersions,
-          referenceSubjectNameStrategy, topic, isKey, schema);
+          skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
@@ -141,6 +143,47 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean isKey,
       ProtobufSchema schema
   ) throws IOException, RestClientException {
+    return resolveDependencies(
+        schemaRegistry,
+        autoRegisterSchema,
+        useLatestVersion,
+        latestCompatStrict,
+        latestVersions,
+        true,
+        strategy,
+        topic,
+        isKey,
+        schema);
+  }
+
+  /**
+   * Resolve schema dependencies recursively.
+   *
+   * @param schemaRegistry     schema registry client
+   * @param autoRegisterSchema whether to automatically register schemas
+   * @param useLatestVersion   whether to use the latest schema version for serialization
+   * @param latestCompatStrict whether to check that the latest schema version is backward
+   *                           compatible with the schema of the object
+   * @param latestVersions     an optional cache of latest schema versions, may be null
+   * @param skipKnownTypes     whether to skip known types when registering or looking up schemas
+   * @param strategy           the strategy for determining the subject name for a reference
+   * @param topic              the topic
+   * @param isKey              whether the object is the record key
+   * @param schema             the schema
+   * @return the schema with resolved dependencies
+   */
+  public static ProtobufSchema resolveDependencies(
+      SchemaRegistryClient schemaRegistry,
+      boolean autoRegisterSchema,
+      boolean useLatestVersion,
+      boolean latestCompatStrict,
+      Cache<SubjectSchema, ParsedSchema> latestVersions,
+      boolean skipKnownTypes,
+      ReferenceSubjectNameStrategy strategy,
+      String topic,
+      boolean isKey,
+      ProtobufSchema schema
+  ) throws IOException, RestClientException {
     if (schema.dependencies().isEmpty() || !schema.references().isEmpty()) {
       // Dependencies already resolved
       return schema;
@@ -150,6 +193,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         useLatestVersion,
         latestCompatStrict,
         latestVersions,
+        skipKnownTypes,
         strategy,
         topic,
         isKey,
@@ -166,6 +210,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean useLatestVersion,
       boolean latestCompatStrict,
       Cache<SubjectSchema, ParsedSchema> latestVersions,
+      boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,
       boolean isKey,
@@ -175,7 +220,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   ) throws IOException, RestClientException {
     List<SchemaReference> references = new ArrayList<>();
     for (String dep : protoFileElement.getImports()) {
-      if (ProtobufSchema.knownTypes().contains(dep)) {
+      if (skipKnownTypes && ProtobufSchema.knownTypes().contains(dep)) {
         continue;
       }
       Schema subschema = resolveDependencies(schemaRegistry,
@@ -183,6 +228,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           useLatestVersion,
           latestCompatStrict,
           latestVersions,
+          skipKnownTypes,
           strategy,
           topic,
           isKey,
@@ -193,7 +239,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       references.add(new SchemaReference(dep, subschema.getSubject(), subschema.getVersion()));
     }
     for (String dep : protoFileElement.getPublicImports()) {
-      if (ProtobufSchema.knownTypes().contains(dep)) {
+      if (skipKnownTypes && ProtobufSchema.knownTypes().contains(dep)) {
         continue;
       }
       Schema subschema = resolveDependencies(schemaRegistry,
@@ -201,6 +247,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           useLatestVersion,
           latestCompatStrict,
           latestVersions,
+          skipKnownTypes,
           strategy,
           topic,
           isKey,

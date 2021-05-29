@@ -87,7 +87,7 @@ public class KafkaProtobufSerializer<T extends Message>
         // Ensure dependencies are resolved before caching
         schema = resolveDependencies(schemaRegistry, autoRegisterSchema,
             useLatestVersion, latestCompatStrict, latestVersions,
-            referenceSubjectNameStrategy, topic, isKey, schema);
+            skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       } catch (IOException | RestClientException e) {
         throw new SerializationException("Error serializing Protobuf message", e);
       }
