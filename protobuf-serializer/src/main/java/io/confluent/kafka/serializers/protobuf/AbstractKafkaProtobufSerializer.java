@@ -122,10 +122,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
    *
    * @param schemaRegistry     schema registry client
    * @param autoRegisterSchema whether to automatically register schemas
-   * @param useLatestVersion   whether to use the latest schema version for serialization
-   * @param latestCompatStrict whether to check that the latest schema version is backward
+   * @param useLatestVersion   whether to use the latest subject version for serialization
+   * @param latestCompatStrict whether to check that the latest subject version is backward
    *                           compatible with the schema of the object
-   * @param latestVersions     an optional cache of latest schema versions, may be null
+   * @param latestVersions     an optional cache of latest subject versions, may be null
    * @param strategy           the strategy for determining the subject name for a reference
    * @param topic              the topic
    * @param isKey              whether the object is the record key
@@ -161,10 +161,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
    *
    * @param schemaRegistry     schema registry client
    * @param autoRegisterSchema whether to automatically register schemas
-   * @param useLatestVersion   whether to use the latest schema version for serialization
-   * @param latestCompatStrict whether to check that the latest schema version is backward
+   * @param useLatestVersion   whether to use the latest subject version for serialization
+   * @param latestCompatStrict whether to check that the latest subject version is backward
    *                           compatible with the schema of the object
-   * @param latestVersions     an optional cache of latest schema versions, may be null
+   * @param latestVersions     an optional cache of latest subject versions, may be null
    * @param skipKnownTypes     whether to skip known types when registering or looking up
    *                           schema dependencies
    * @param strategy           the strategy for determining the subject name for a reference
