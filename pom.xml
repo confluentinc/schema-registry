@@ -64,6 +64,7 @@
         <podam.version>6.0.2.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
+        <jackson.mapper.asl.version>1.9.14.jdk17-redhat-00001</jackson.mapper.asl.version>
     </properties>
 
     <repositories>
@@ -71,6 +72,10 @@
             <id>confluent</id>
             <name>Confluent</name>
             <url>https://packages.confluent.io/maven/</url>
+        </repository>
+        <repository>
+            <id>redhat-repo</id>
+            <url>https://maven.repository.redhat.com/ga/</url>
         </repository>
     </repositories>
 
@@ -80,7 +85,19 @@
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro</artifactId>
                 <version>${avro.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.codehaus.jackson</groupId>
+                        <artifactId>jackson-mapper-asl</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
+            <dependency>
+                <groupId>org.codehaus.jackson</groupId>
+                <artifactId>jackson-mapper-asl</artifactId>
+                <version>${jackson.mapper.asl.version}</version>
+            </dependency>
+
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
