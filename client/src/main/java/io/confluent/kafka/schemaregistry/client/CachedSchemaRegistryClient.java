@@ -149,7 +149,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       List<SchemaProvider> providers,
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
-    log.debug("CachedSchemaRegistryClient configs: {}", configs);
     this.identityMapCapacity = identityMapCapacity;
     this.schemaCache = new HashMap<String, Map<ParsedSchema, Integer>>();
     this.idCache = new HashMap<String, Map<Integer, ParsedSchema>>();
