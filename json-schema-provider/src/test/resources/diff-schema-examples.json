@@ -1177,6 +1177,22 @@
   {
     "description": "Detect changes to all items schema",
     "original_schema": {
+      "type": "array"
+    },
+    "update_schema": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "changes": [
+      "SCHEMA_ADDED #/items"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect changes to all items schema",
+    "original_schema": {
       "type": "array",
       "items": {
         "type": "string"
@@ -1188,7 +1204,7 @@
     "changes": [
       "SCHEMA_REMOVED #/items"
     ],
-    "compatible": false
+    "compatible": true
   },
   {
     "description": "Detect changes to items schema list",
