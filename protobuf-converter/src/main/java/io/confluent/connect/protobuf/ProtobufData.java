@@ -1375,10 +1375,7 @@ public class ProtobufData {
             break;
           default:
             if (useWrapperForNullables) {
-              builder = toUnwrappedSchema(fullName);
-              if (builder == null) {
-                builder = toStructSchema(ctx, descriptor);
-              }
+              builder = toUnwrappedSchema(ctx, descriptor);
             } else {
               builder = toStructSchema(ctx, descriptor);
             }
@@ -1405,20 +1402,8 @@ public class ProtobufData {
     return builder.build();
   }
 
-  private SchemaBuilder toStructSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
+  private SchemaBuilder toUnwrappedSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
     String fullName = descriptor.getMessageType().getFullName();
-    SchemaBuilder builder = ctx.get(fullName);
-    if (builder != null) {
-      builder = new SchemaWrapper(builder);
-    } else {
-      builder = SchemaBuilder.struct();
-      ctx.put(fullName, builder);
-      builder = toConnectSchema(ctx, builder, descriptor.getMessageType(), null);
-    }
-    return builder;
-  }
-
-  private SchemaBuilder toUnwrappedSchema(String fullName) {
     switch (fullName) {
       case PROTOBUF_DOUBLE_WRAPPER_TYPE:
         return SchemaBuilder.float64();
@@ -1439,8 +1424,21 @@ public class ProtobufData {
       case PROTOBUF_BYTES_WRAPPER_TYPE:
         return SchemaBuilder.bytes();
       default:
-        return null;
+        return toStructSchema(ctx, descriptor);
     }
+  }
+
+  private SchemaBuilder toStructSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
+    String fullName = descriptor.getMessageType().getFullName();
+    SchemaBuilder builder = ctx.get(fullName);
+    if (builder != null) {
+      builder = new SchemaWrapper(builder);
+    } else {
+      builder = SchemaBuilder.struct();
+      ctx.put(fullName, builder);
+      builder = toConnectSchema(ctx, builder, descriptor.getMessageType(), null);
+    }
+    return builder;
   }
 
   private static boolean isMapDescriptor(
