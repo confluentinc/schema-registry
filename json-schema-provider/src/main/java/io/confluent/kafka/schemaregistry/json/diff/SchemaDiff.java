@@ -45,6 +45,7 @@ public class SchemaDiff {
     changes.add(Type.DESCRIPTION_CHANGED);
     changes.add(Type.TITLE_CHANGED);
     changes.add(Type.DEFAULT_CHANGED);
+    changes.add(Type.SCHEMA_REMOVED);
     changes.add(Type.TYPE_EXTENDED);
 
     changes.add(Type.MAX_LENGTH_INCREASED);
@@ -118,7 +119,8 @@ public class SchemaDiff {
     if (original == null && update == null) {
       return;
     } else if (original == null) {
-      throw new IllegalArgumentException("Original schema not provided");
+      ctx.addDifference(Type.SCHEMA_ADDED);
+      return;
     } else if (update == null) {
       ctx.addDifference(Type.SCHEMA_REMOVED);
       return;
