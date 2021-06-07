@@ -1375,7 +1375,7 @@ public class ProtobufData {
             break;
           default:
             if (useWrapperForNullables) {
-              builder = toUnwrappedSchema(ctx, descriptor);
+              builder = toUnwrappedOrStructSchema(ctx, descriptor);
             } else {
               builder = toStructSchema(ctx, descriptor);
             }
@@ -1402,7 +1402,7 @@ public class ProtobufData {
     return builder.build();
   }
 
-  private SchemaBuilder toUnwrappedSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
+  private SchemaBuilder toUnwrappedOrStructSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
     String fullName = descriptor.getMessageType().getFullName();
     switch (fullName) {
       case PROTOBUF_DOUBLE_WRAPPER_TYPE:
