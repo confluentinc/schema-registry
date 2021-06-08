@@ -1374,11 +1374,7 @@ public class ProtobufData {
             builder = Timestamp.builder();
             break;
           default:
-            if (useWrapperForNullables) {
-              builder = toUnwrappedOrStructSchema(ctx, descriptor);
-            } else {
-              builder = toStructSchema(ctx, descriptor);
-            }
+            builder = toUnwrappedOrStructSchema(ctx, descriptor);
             break;
         }
         builder.optional();
@@ -1403,6 +1399,9 @@ public class ProtobufData {
   }
 
   private SchemaBuilder toUnwrappedOrStructSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
+    if (!useWrapperForNullables) {
+      return toStructSchema(ctx, descriptor);
+    }
     String fullName = descriptor.getMessageType().getFullName();
     switch (fullName) {
       case PROTOBUF_DOUBLE_WRAPPER_TYPE:
