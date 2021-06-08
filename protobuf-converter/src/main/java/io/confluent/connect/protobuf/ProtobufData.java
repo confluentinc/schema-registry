@@ -1398,7 +1398,8 @@ public class ProtobufData {
     return builder.build();
   }
 
-  private SchemaBuilder toUnwrappedOrStructSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
+  private SchemaBuilder toUnwrappedOrStructSchema(
+          ToConnectContext ctx, FieldDescriptor descriptor) {
     if (!useWrapperForNullables) {
       return toStructSchema(ctx, descriptor);
     }
