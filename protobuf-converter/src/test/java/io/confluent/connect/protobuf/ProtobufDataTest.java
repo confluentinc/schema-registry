@@ -35,6 +35,7 @@ import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
+import io.confluent.connect.protobuf.test.KeyValueWrapper;
 import io.confluent.connect.protobuf.test.RecursiveKeyValue;
 import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass.DateValue;
@@ -441,12 +442,16 @@ public class ProtobufDataTest {
   }
 
   private SchemaAndValue getSchemaAndValue(Message message) throws Exception {
+    ProtobufData protobufData = new ProtobufData();
+    return getSchemaAndValue(protobufData, message);
+  }
+
+  private SchemaAndValue getSchemaAndValue(ProtobufData protobufData, Message message) throws Exception {
     ProtobufSchema protobufSchema = new ProtobufSchema(message.getDescriptorForType());
     DynamicMessage dynamicMessage = DynamicMessage.parseFrom(
-        protobufSchema.toDescriptor(),
-        message.toByteArray()
+            protobufSchema.toDescriptor(),
+            message.toByteArray()
     );
-    ProtobufData protobufData = new ProtobufData();
     SchemaAndValue schemaAndValue = protobufData.toConnectData(protobufSchema, dynamicMessage);
     if (schemaAndValue.schema() != null) {
       ConnectSchema.validateValue(schemaAndValue.schema(), schemaAndValue.value());
@@ -784,7 +789,10 @@ public class ProtobufDataTest {
   }
 
   private byte[] getMessageBytes(SchemaAndValue schemaAndValue) throws Exception {
-    ProtobufData protobufData = new ProtobufData();
+    return getMessageBytes(new ProtobufData(), schemaAndValue);
+  }
+
+  private byte[] getMessageBytes(ProtobufData protobufData, SchemaAndValue schemaAndValue) throws Exception {
     ProtobufSchemaAndValue protobufSchemaAndValue = protobufData.fromConnectData(schemaAndValue);
     DynamicMessage dynamicMessage = (DynamicMessage) protobufSchemaAndValue.getValue();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -893,9 +901,8 @@ public class ProtobufDataTest {
     NestedMessage nestedMessage = createNestedTestProtoStringUserId();
     SchemaAndValue schemaAndValue = getSchemaAndValue(nestedMessage);
     byte[] messageBytes = getMessageBytes(schemaAndValue);
-    Message message = NestedTestProto.NestedMessage.parseFrom(messageBytes);
 
-    assertArrayEquals(messageBytes, message.toByteArray());
+    assertArrayEquals(messageBytes, nestedMessage.toByteArray());
   }
 
   @Test
@@ -903,9 +910,8 @@ public class ProtobufDataTest {
     NestedMessage nestedMessage = createNestedTestProtoIntUserId();
     SchemaAndValue schemaAndValue = getSchemaAndValue(nestedMessage);
     byte[] messageBytes = getMessageBytes(schemaAndValue);
-    Message message = NestedTestProto.NestedMessage.parseFrom(messageBytes);
 
-    assertArrayEquals(messageBytes, message.toByteArray());
+    assertArrayEquals(messageBytes, nestedMessage.toByteArray());
   }
 
   @Test
@@ -913,9 +919,8 @@ public class ProtobufDataTest {
     NestedMessage nestedMessage = createEmptyNestedTestProto();
     SchemaAndValue schemaAndValue = getSchemaAndValue(nestedMessage);
     byte[] messageBytes = getMessageBytes(schemaAndValue);
-    Message message = NestedTestProto.NestedMessage.parseFrom(messageBytes);
 
-    assertArrayEquals(messageBytes, message.toByteArray());
+    assertArrayEquals(messageBytes, nestedMessage.toByteArray());
   }
 
   @Test
@@ -1335,6 +1340,88 @@ public class ProtobufDataTest {
     assertEquals("abc_def", ProtobufData.doScrubName("abc.def"));
     assertEquals("x0abc_def", ProtobufData.doScrubName("0abc.def"));
     assertEquals("x_abc_def", ProtobufData.doScrubName("_abc.def"));
+  }
+
+  @Test
+  public void testRoundTripConnectNoWrapperForNullables() throws Exception {
+    KeyValueWrapper.KeyValueWrapperMessage message =
+            KeyValueWrapper.KeyValueWrapperMessage.newBuilder()
+                    .setKey(123)
+                    .setWrappedValue(StringValue.newBuilder().setValue("hi").build())
+                    .build();
+    SchemaAndValue schemaAndValue = getSchemaAndValue(message);
+    Schema expectedSchema = getExpectedNoWrapperForNullablesSchema();
+    assertSchemasEqual(expectedSchema, schemaAndValue.schema());
+    Struct expected = getExpectedNoWrapperForNullablesData();
+    assertEquals(expected, schemaAndValue.value());
+
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  private Schema getExpectedNoWrapperForNullablesSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("KeyValueWrapperMessage");
+    schemaBuilder.field("key",
+            SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    schemaBuilder.field("wrappedValue",
+            SchemaBuilder.struct().name("StringValue").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2))
+                    .field("value", SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build())
+                    .build()
+    );
+    return schemaBuilder.build();
+  }
+
+  private Struct getExpectedNoWrapperForNullablesData() {
+    Schema schema = getExpectedNoWrapperForNullablesSchema();
+    Struct result = new Struct(schema.schema());
+    Struct value = new Struct(schema.field("wrappedValue").schema());
+    value.put("value", "hi");
+    result.put("key", 123);
+    result.put("wrappedValue", value);
+    return result;
+  }
+
+  @Test
+  public void testRoundTripConnectWrapperForNullables() throws Exception {
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+            .with(ProtobufDataConfig.WRAPPER_FOR_NULLABLES_CONFIG, true)
+            .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    KeyValueWrapper.KeyValueWrapperMessage message =
+            KeyValueWrapper.KeyValueWrapperMessage.newBuilder()
+                    .setKey(123)
+                    .setWrappedValue(StringValue.newBuilder().setValue("hi").build())
+                    .build();
+    SchemaAndValue schemaAndValue = getSchemaAndValue(protobufData, message);
+    Schema expectedSchema = getExpectedWrapperForNullablesSchema();
+    assertSchemasEqual(expectedSchema, schemaAndValue.schema());
+    Struct expected = getExpectedWrapperForNullablesData();
+    assertEquals(expected, schemaAndValue.value());
+
+    byte[] messageBytes = getMessageBytes(protobufData, schemaAndValue);
+    assertArrayEquals(messageBytes, message.toByteArray());
+  }
+
+  private Schema getExpectedWrapperForNullablesSchema() {
+    final SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+    schemaBuilder.name("KeyValueWrapperMessage");
+    schemaBuilder.field("key",
+            SchemaBuilder.int32().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    schemaBuilder.field("wrappedValue",
+            SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    return schemaBuilder.build();
+  }
+
+  private Struct getExpectedWrapperForNullablesData() {
+    Schema schema = getExpectedWrapperForNullablesSchema();
+    Struct result = new Struct(schema.schema());
+    result.put("key", 123);
+    result.put("wrappedValue", "hi");
+    return result;
   }
 
   @Test

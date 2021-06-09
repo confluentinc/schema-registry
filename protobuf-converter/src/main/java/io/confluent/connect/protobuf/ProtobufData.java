@@ -1410,42 +1410,8 @@ public class ProtobufData {
           case PROTOBUF_TIMESTAMP_TYPE:
             builder = Timestamp.builder();
             break;
-          case PROTOBUF_DOUBLE_WRAPPER_TYPE:
-            builder = SchemaBuilder.float64();
-            break;
-          case PROTOBUF_FLOAT_WRAPPER_TYPE:
-            builder = SchemaBuilder.float32();
-            break;
-          case PROTOBUF_INT64_WRAPPER_TYPE:
-            builder = SchemaBuilder.int64();
-            break;
-          case PROTOBUF_UINT64_WRAPPER_TYPE:
-            builder = SchemaBuilder.int64();
-            break;
-          case PROTOBUF_INT32_WRAPPER_TYPE:
-            builder = SchemaBuilder.int32();
-            break;
-          case PROTOBUF_UINT32_WRAPPER_TYPE:
-            builder = SchemaBuilder.int64();
-            break;
-          case PROTOBUF_BOOL_WRAPPER_TYPE:
-            builder = SchemaBuilder.bool();
-            break;
-          case PROTOBUF_STRING_WRAPPER_TYPE:
-            builder = SchemaBuilder.string();
-            break;
-          case PROTOBUF_BYTES_WRAPPER_TYPE:
-            builder = SchemaBuilder.bytes();
-            break;
           default:
-            builder = ctx.get(fullName);
-            if (builder != null) {
-              builder = new SchemaWrapper(builder);
-            } else {
-              builder = SchemaBuilder.struct();
-              ctx.put(fullName, builder);
-              builder = toConnectSchema(ctx, builder, descriptor.getMessageType(), null);
-            }
+            builder = toUnwrappedOrStructSchema(ctx, descriptor);
             break;
         }
         builder.optional();
@@ -1467,6 +1433,49 @@ public class ProtobufData {
     }
     builder.parameter(PROTOBUF_TYPE_TAG, String.valueOf(descriptor.getNumber()));
     return builder.build();
+  }
+
+  private SchemaBuilder toUnwrappedOrStructSchema(
+          ToConnectContext ctx, FieldDescriptor descriptor) {
+    if (!useWrapperForNullables) {
+      return toStructSchema(ctx, descriptor);
+    }
+    String fullName = descriptor.getMessageType().getFullName();
+    switch (fullName) {
+      case PROTOBUF_DOUBLE_WRAPPER_TYPE:
+        return SchemaBuilder.float64();
+      case PROTOBUF_FLOAT_WRAPPER_TYPE:
+        return SchemaBuilder.float32();
+      case PROTOBUF_INT64_WRAPPER_TYPE:
+        return SchemaBuilder.int64();
+      case PROTOBUF_UINT64_WRAPPER_TYPE:
+        return SchemaBuilder.int64();
+      case PROTOBUF_INT32_WRAPPER_TYPE:
+        return SchemaBuilder.int32();
+      case PROTOBUF_UINT32_WRAPPER_TYPE:
+        return SchemaBuilder.int64();
+      case PROTOBUF_BOOL_WRAPPER_TYPE:
+        return SchemaBuilder.bool();
+      case PROTOBUF_STRING_WRAPPER_TYPE:
+        return SchemaBuilder.string();
+      case PROTOBUF_BYTES_WRAPPER_TYPE:
+        return SchemaBuilder.bytes();
+      default:
+        return toStructSchema(ctx, descriptor);
+    }
+  }
+
+  private SchemaBuilder toStructSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
+    String fullName = descriptor.getMessageType().getFullName();
+    SchemaBuilder builder = ctx.get(fullName);
+    if (builder != null) {
+      builder = new SchemaWrapper(builder);
+    } else {
+      builder = SchemaBuilder.struct();
+      ctx.put(fullName, builder);
+      builder = toConnectSchema(ctx, builder, descriptor.getMessageType(), null);
+    }
+    return builder;
   }
 
   private static boolean isMapDescriptor(
