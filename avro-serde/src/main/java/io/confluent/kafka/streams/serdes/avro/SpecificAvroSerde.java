@@ -102,6 +102,9 @@ public class SpecificAvroSerde<T extends org.apache.avro.specific.SpecificRecord
     return inner.deserializer();
   }
 
+  /**
+   * WARNING: Only call this method once as only first call is used.
+   */
   @Override
   public void configure(final Map<String, ?> serdeConfig, final boolean isSerdeForRecordKeys) {
     inner.serializer().configure(serdeConfig, isSerdeForRecordKeys);
