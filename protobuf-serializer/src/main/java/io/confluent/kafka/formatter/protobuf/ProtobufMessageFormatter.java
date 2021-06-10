@@ -88,6 +88,7 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
     Message object = deserializer.deserialize(data);
     try {
       output.print(object == null ? null : JsonFormat.printer()
+          .preservingProtoFieldNames()
           .includingDefaultValueFields()
           .omittingInsignificantWhitespace()
           .print(object));
