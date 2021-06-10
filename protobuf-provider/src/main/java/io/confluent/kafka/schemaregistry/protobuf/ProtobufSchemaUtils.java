@@ -74,7 +74,6 @@ public class ProtobufSchemaUtils {
       return null;
     }
     String jsonString = JsonFormat.printer()
-        .preservingProtoFieldNames()
         .includingDefaultValueFields()
         .omittingInsignificantWhitespace()
         .print(message);

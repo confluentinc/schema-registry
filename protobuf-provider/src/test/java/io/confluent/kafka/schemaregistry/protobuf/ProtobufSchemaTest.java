@@ -363,36 +363,36 @@ public class ProtobufSchemaTest {
 
     JsonNode result = objectMapper.readTree(ProtobufSchemaUtils.toJson(message));
     assertTrue(result.isObject());
-    assertTrue(result.get("test_string").isTextual());
-    assertEquals("string", result.get("test_string").textValue());
-    assertTrue(result.get("test_bool").isBoolean());
-    assertEquals(true, result.get("test_bool").booleanValue());
-    assertTrue(result.get("test_bytes").isTextual());
-    assertEquals("aGVsbG8=", result.get("test_bytes").textValue());
-    assertTrue(result.get("test_double").isDouble());
-    assertEquals(800.25, result.get("test_double").doubleValue(), 0.01);
-    assertTrue(result.get("test_float").isDouble());
-    assertEquals(23.4f, result.get("test_float").doubleValue(), 0.1);
-    assertTrue(result.get("test_fixed32").isInt());
-    assertEquals(32, result.get("test_fixed32").intValue());
-    assertTrue(result.get("test_fixed64").isTextual());
-    assertEquals("64", result.get("test_fixed64").textValue());
-    assertTrue(result.get("test_int32").isInt());
-    assertEquals(32, result.get("test_int32").intValue());
-    assertTrue(result.get("test_int64").isTextual());
-    assertEquals("64", result.get("test_int64").textValue());
-    assertTrue(result.get("test_sfixed32").isInt());
-    assertEquals(32, result.get("test_sfixed32").intValue());
-    assertTrue(result.get("test_sfixed64").isTextual());
-    assertEquals("64", result.get("test_sfixed64").textValue());
-    assertTrue(result.get("test_sint32").isInt());
-    assertEquals(32, result.get("test_sint32").intValue());
-    assertTrue(result.get("test_sint64").isTextual());
-    assertEquals("64", result.get("test_sint64").textValue());
-    assertTrue(result.get("test_uint32").isInt());
-    assertEquals(32, result.get("test_uint32").intValue());
-    assertTrue(result.get("test_uint64").isTextual());
-    assertEquals("64", result.get("test_uint64").textValue());
+    assertTrue(result.get("test_str").isTextual());
+    assertEquals("string", result.get("test_str").textValue());
+    assertTrue(result.get("testBool").isBoolean());
+    assertEquals(true, result.get("testBool").booleanValue());
+    assertTrue(result.get("testBytes").isTextual());
+    assertEquals("aGVsbG8=", result.get("testBytes").textValue());
+    assertTrue(result.get("testDouble").isDouble());
+    assertEquals(800.25, result.get("testDouble").doubleValue(), 0.01);
+    assertTrue(result.get("testFloat").isDouble());
+    assertEquals(23.4f, result.get("testFloat").doubleValue(), 0.1);
+    assertTrue(result.get("testFixed32").isInt());
+    assertEquals(32, result.get("testFixed32").intValue());
+    assertTrue(result.get("testFixed64").isTextual());
+    assertEquals("64", result.get("testFixed64").textValue());
+    assertTrue(result.get("testInt32").isInt());
+    assertEquals(32, result.get("testInt32").intValue());
+    assertTrue(result.get("testInt64").isTextual());
+    assertEquals("64", result.get("testInt64").textValue());
+    assertTrue(result.get("testSfixed32").isInt());
+    assertEquals(32, result.get("testSfixed32").intValue());
+    assertTrue(result.get("testSfixed64").isTextual());
+    assertEquals("64", result.get("testSfixed64").textValue());
+    assertTrue(result.get("testSint32").isInt());
+    assertEquals(32, result.get("testSint32").intValue());
+    assertTrue(result.get("testSint64").isTextual());
+    assertEquals("64", result.get("testSint64").textValue());
+    assertTrue(result.get("testUint32").isInt());
+    assertEquals(32, result.get("testUint32").intValue());
+    assertTrue(result.get("testUint64").isTextual());
+    assertEquals("64", result.get("testUint64").textValue());
   }
 
   @Test
@@ -404,7 +404,7 @@ public class ProtobufSchemaTest {
     DynamicMessage message = builder.build();
     JsonNode result = objectMapper.readTree(ProtobufSchemaUtils.toJson(message));
 
-    JsonNode fieldNode = result.get("test_array");
+    JsonNode fieldNode = result.get("testArray");
     assertTrue(fieldNode.isArray());
     assertEquals(3, fieldNode.size());
     assertEquals(JsonNodeFactory.instance.textNode("one"), fieldNode.get(0));
@@ -437,7 +437,7 @@ public class ProtobufSchemaTest {
     DynamicMessage message = builder.build();
     JsonNode result = objectMapper.readTree(ProtobufSchemaUtils.toJson(message));
 
-    JsonNode fieldNode = result.get("test_map");
+    JsonNode fieldNode = result.get("testMap");
     assertEquals(2, fieldNode.size());
     assertNotNull(fieldNode.get("first"));
     assertEquals("one", fieldNode.get("first").asText());

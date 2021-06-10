@@ -55,6 +55,7 @@ public class KafkaProtobufFormatterTest {
   public void setUp() {
     props = new Properties();
     props.put(KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put("preserve.json.field.name", "true");
 
     String userSchema = "syntax = \"proto3\"; message User { string name = 1; }";
     recordSchema = new ProtobufSchema(userSchema);
