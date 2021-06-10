@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Properties;
 
 import io.confluent.kafka.formatter.SchemaMessageDeserializer;
 import io.confluent.kafka.formatter.SchemaMessageFormatter;
@@ -59,6 +60,8 @@ import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer
  */
 public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
 
+  private boolean preserveFieldNames = false;
+
   /**
    * Constructor needed by kafka console consumer.
    */
@@ -84,13 +87,25 @@ public class ProtobufMessageFormatter extends SchemaMessageFormatter<Message> {
   }
 
   @Override
+  public void init(Properties props) {
+    super.init(props);
+
+    if (props.containsKey("preserve.json.field.name")) {
+      preserveFieldNames = props.getProperty("preserve.json.field.name")
+              .trim().toLowerCase().equals("true");
+    }
+  }
+
+  @Override
   protected void writeTo(byte[] data, PrintStream output) throws IOException {
     Message object = deserializer.deserialize(data);
     try {
-      output.print(object == null ? null : JsonFormat.printer()
-          .includingDefaultValueFields()
-          .omittingInsignificantWhitespace()
-          .print(object));
+      JsonFormat.Printer printer = JsonFormat.printer()
+              .includingDefaultValueFields()
+              .omittingInsignificantWhitespace();
+      output.print(object == null ? null :
+              this.preserveFieldNames ? printer.preservingProtoFieldNames().print(object)
+                      : printer.print(object));
     } catch (InvalidProtocolBufferException e) {
       throw new SerializationException("Error serializing Protobuf data to json", e);
     }
