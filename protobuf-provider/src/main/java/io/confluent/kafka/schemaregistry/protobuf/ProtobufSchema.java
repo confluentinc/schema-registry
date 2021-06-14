@@ -33,6 +33,8 @@ import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.TimestampProto;
 import com.google.protobuf.WrappersProto;
 import com.google.type.DateProto;
+import com.google.type.DayOfWeekProto;
+import com.google.type.MoneyProto;
 import com.google.type.TimeOfDayProto;
 import com.squareup.wire.Syntax;
 import com.squareup.wire.schema.Field;
@@ -104,6 +106,8 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String DECIMAL_LOCATION = "confluent/type/decimal.proto";
   public static final String DATE_LOCATION = "google/type/date.proto";
   public static final String TIME_LOCATION = "google/type/timeofday.proto";
+  public static final String DAY_LOCATION = "google/type/dayofweek.proto";
+  public static final String MONEY_LOCATION = "google/type/money.proto";
   public static final String TIMESTAMP_LOCATION = "google/protobuf/timestamp.proto";
   public static final String WRAPPER_LOCATION = "google/protobuf/wrappers.proto";
 
@@ -115,6 +119,10 @@ public class ProtobufSchema implements ParsedSchema {
       toProtoFile(DateProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement TIME_SCHEMA =
       toProtoFile(TimeOfDayProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement DAY_SCHEMA =
+      toProtoFile(DayOfWeekProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement MONEY_SCHEMA =
+      toProtoFile(MoneyProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement TIMESTAMP_SCHEMA =
       toProtoFile(TimestampProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement WRAPPER_SCHEMA =
@@ -942,6 +950,12 @@ public class ProtobufSchema implements ParsedSchema {
     }
     if (!deps.containsKey(TIME_LOCATION)) {
       deps.put(TIME_LOCATION, TIME_SCHEMA);
+    }
+    if (!deps.containsKey(DAY_LOCATION)) {
+      deps.put(DAY_LOCATION, DAY_SCHEMA);
+    }
+    if (!deps.containsKey(MONEY_LOCATION)) {
+      deps.put(MONEY_LOCATION, MONEY_SCHEMA);
     }
     if (!deps.containsKey(TIMESTAMP_LOCATION)) {
       deps.put(TIMESTAMP_LOCATION, TIMESTAMP_SCHEMA);
