@@ -41,6 +41,8 @@ import com.google.protobuf.TimestampProto;
 import com.google.protobuf.TypeProto;
 import com.google.protobuf.WrappersProto;
 import com.google.type.DateProto;
+import com.google.type.DayOfWeekProto;
+import com.google.type.MoneyProto;
 import com.google.type.TimeOfDayProto;
 import com.squareup.wire.Syntax;
 import com.squareup.wire.schema.Field;
@@ -112,6 +114,8 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String DECIMAL_LOCATION = "confluent/type/decimal.proto";
   public static final String DATE_LOCATION = "google/type/date.proto";
   public static final String TIME_LOCATION = "google/type/timeofday.proto";
+  public static final String DAY_LOCATION = "google/type/dayofweek.proto";
+  public static final String MONEY_LOCATION = "google/type/money.proto";
   public static final String ANY_LOCATION = "google/protobuf/any.proto";
   public static final String API_LOCATION = "google/protobuf/api.proto";
   public static final String DESCRIPTOR_LOCATION = "google/protobuf/descriptor.proto";
@@ -132,6 +136,10 @@ public class ProtobufSchema implements ParsedSchema {
       toProtoFile(DateProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement TIME_SCHEMA =
       toProtoFile(TimeOfDayProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement DAY_SCHEMA =
+          toProtoFile(DayOfWeekProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement MONEY_SCHEMA =
+          toProtoFile(MoneyProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement ANY_SCHEMA =
       toProtoFile(AnyProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement API_SCHEMA =
@@ -163,6 +171,8 @@ public class ProtobufSchema implements ParsedSchema {
     KNOWN_DEPENDENCIES.put(DECIMAL_LOCATION, DECIMAL_SCHEMA);
     KNOWN_DEPENDENCIES.put(DATE_LOCATION, DATE_SCHEMA);
     KNOWN_DEPENDENCIES.put(TIME_LOCATION, TIME_SCHEMA);
+    KNOWN_DEPENDENCIES.put(DAY_LOCATION, DAY_SCHEMA);
+    KNOWN_DEPENDENCIES.put(MONEY_LOCATION, MONEY_SCHEMA);
     KNOWN_DEPENDENCIES.put(ANY_LOCATION, ANY_SCHEMA);
     KNOWN_DEPENDENCIES.put(API_LOCATION, API_SCHEMA);
     KNOWN_DEPENDENCIES.put(DESCRIPTOR_LOCATION, DESCRIPTOR_SCHEMA);
