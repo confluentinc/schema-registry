@@ -53,7 +53,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
   @Parameter(required = false)
   File outputDirectory;
 
-  @Parameter(required = true)
+  @Parameter(required = false)
   Map<String, File> subjects = new HashMap<>();
 
   @Parameter(required = false)
