@@ -19,6 +19,8 @@ package io.confluent.kafka.schemaregistry.maven;
 import com.google.common.base.Preconditions;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+
+import org.apache.commons.compress.utils.FileNameUtils;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -29,6 +31,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -45,6 +49,9 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
 
   public static final String PERCENT_REPLACEMENT = "_x";
+
+  @Parameter(required = false)
+  File outputDirectory;
 
   @Parameter(required = true)
   Map<String, File> subjects = new HashMap<>();
@@ -74,6 +81,10 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
 
     errors = 0;
     failures = 0;
+
+    if (subjects.size() == 0 && outputDirectory != null) {
+      subjects = Arrays.stream(outputDirectory.listFiles()).collect(Collectors.toMap(f -> FileNameUtils.getBaseName(f.getName()), f -> f));
+    }
 
     for (String subject : subjects.keySet()) {
       processSubject(subject, false);
