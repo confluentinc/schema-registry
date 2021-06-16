@@ -500,8 +500,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       boolean isPermanent)
       throws IOException, RestClientException {
     if (versionCache.containsKey(subject)) {
-      versionCache.get(subject).values().remove(Integer.valueOf(version));
-      return 0;
+      Map<ParsedSchema, Integer> schemaVersionMap = versionCache.get(subject);
+      for (Map.Entry<ParsedSchema, Integer> entry : schemaVersionMap.entrySet()) {
+        if (entry.getValue().equals(Integer.valueOf(version))) {
+          if (schemaVersionMap.containsValue(Integer.valueOf(version))) {
+            schemaVersionMap.values().remove(entry.getValue());
+          }
+
+          if (isPermanent) {
+            idCache.get(subject).remove(entry.getValue());
+          }
+          return Integer.valueOf(version);
+        }
+      }
     }
     return -1;
   }
