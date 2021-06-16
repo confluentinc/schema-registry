@@ -503,12 +503,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       Map<ParsedSchema, Integer> schemaVersionMap = versionCache.get(subject);
       for (Map.Entry<ParsedSchema, Integer> entry : schemaVersionMap.entrySet()) {
         if (entry.getValue().equals(Integer.valueOf(version))) {
-          if (schemaVersionMap.containsValue(Integer.valueOf(version))) {
-            schemaVersionMap.values().remove(entry.getValue());
-          }
+          schemaVersionMap.values().remove(entry.getValue());
 
           if (isPermanent) {
             idCache.get(subject).remove(entry.getValue());
+            schemaCache.get(subject).remove(entry.getKey());
           }
           return Integer.valueOf(version);
         }
