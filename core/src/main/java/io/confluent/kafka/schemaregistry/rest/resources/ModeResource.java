@@ -117,7 +117,7 @@ public class ModeResource {
     try {
       Mode mode = schemaRegistry.getMode(subject);
       if (mode == null) {
-        throw Errors.subjectNotFoundException(subject);
+        throw Errors.subjectLevelModeNotConfiguredException(subject);
       }
       return new ModeGetResponse(mode.name());
     } catch (SchemaRegistryException e) {
