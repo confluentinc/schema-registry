@@ -1594,8 +1594,8 @@ public class RestApiTest extends ClusterTestHarness {
       restApp.restClient.getMode(subject).getMode();
       fail(String.format("Subject %s should not be found when there's no mode override", subject));
     } catch (RestClientException e) {
-      assertEquals(String.format("No mode override for subject %s, get mode should return Subject Not Found", subject),
-          Errors.SUBJECT_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+      assertEquals(String.format("No mode override for subject %s, get mode should return not configured", subject),
+          Errors.SUBJECT_LEVEL_MODE_NOT_CONFIGURED_ERROR_CODE, e.getErrorCode());
     }
     assertEquals("READWRITE", restApp.restClient.getMode(subject, true).getMode());
 
