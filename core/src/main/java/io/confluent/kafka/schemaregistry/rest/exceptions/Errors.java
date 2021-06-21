@@ -42,6 +42,12 @@ public class Errors {
   public static final String SCHEMAVERSION_NOT_SOFT_DELETED_MESSAGE_FORMAT = "Subject '%s' Version %s was not deleted "
           + "first before being permanently deleted";
   public static final int SCHEMAVERSION_NOT_SOFT_DELETED_ERROR_CODE = 40407;
+  public static final String SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_MESSAGE_FORMAT = "Subject '%s' does not have "
+          + "subject-level compatibility configured";
+  public static final int SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE = 40408;
+  public static final String SUBJECT_LEVEL_MODE_NOT_CONFIGURED_MESSAGE_FORMAT = "Subject '%s' does not have "
+          + "subject-level mode configured";
+  public static final int SUBJECT_LEVEL_MODE_NOT_CONFIGURED_ERROR_CODE = 40409;
 
 
 
@@ -81,12 +87,26 @@ public class Errors {
 
   public static RestException schemaVersionSoftDeletedException(String subject, String version) {
     return new RestNotFoundException(
-            String.format(SCHEMAVERSION_SOFT_DELETED_MESSAGE_FORMAT, subject, version), SCHEMAVERSION_SOFT_DELETED_ERROR_CODE);
+            String.format(SCHEMAVERSION_SOFT_DELETED_MESSAGE_FORMAT, subject, version),
+            SCHEMAVERSION_SOFT_DELETED_ERROR_CODE);
   }
 
   public static RestException schemaVersionNotSoftDeletedException(String subject, String version) {
     return new RestNotFoundException(
-            String.format(SCHEMAVERSION_NOT_SOFT_DELETED_MESSAGE_FORMAT, subject, version), SCHEMAVERSION_NOT_SOFT_DELETED_ERROR_CODE);
+            String.format(SCHEMAVERSION_NOT_SOFT_DELETED_MESSAGE_FORMAT, subject, version),
+            SCHEMAVERSION_NOT_SOFT_DELETED_ERROR_CODE);
+  }
+
+  public static RestException subjectLevelCompatibilityNotConfiguredException(String subject) {
+    return new RestNotFoundException(
+            String.format(SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_MESSAGE_FORMAT, subject),
+            SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE);
+  }
+
+  public static RestException subjectLevelModeNotConfiguredException(String subject) {
+    return new RestNotFoundException(
+            String.format(SUBJECT_LEVEL_MODE_NOT_CONFIGURED_MESSAGE_FORMAT, subject),
+            SUBJECT_LEVEL_MODE_NOT_CONFIGURED_ERROR_CODE);
   }
 
   public static RestException versionNotFoundException(Integer id) {
