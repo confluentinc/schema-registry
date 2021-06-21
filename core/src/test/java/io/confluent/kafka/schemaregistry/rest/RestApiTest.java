@@ -938,7 +938,7 @@ public class RestApiTest extends ClusterTestHarness {
            + " error code (subject not found)");
     } catch (RestClientException rce) {
       assertEquals("Subject not found",
-                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+                   Errors.SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE,
                    rce.getErrorCode());
     }
   }
@@ -1338,8 +1338,8 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       restApp.restClient.getConfig(subject);
     } catch (RestClientException rce) {
-      assertEquals("Compatibility Level doesn't exist", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce
-          .getErrorCode());
+      assertEquals("Compatibility Level doesn't exist",
+              Errors.SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE, rce.getErrorCode());
     }
     assertEquals("Top Compatibility Level Exists", CompatibilityLevel.FULL.name, restApp
         .restClient.getConfig(null).getCompatibilityLevel());
@@ -1532,8 +1532,8 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       restApp.restClient.getConfig(subject);
     } catch (RestClientException rce) {
-      assertEquals("Compatibility Level doesn't exist", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce
-          .getErrorCode());
+      assertEquals("Compatibility Level doesn't exist",
+              Errors.SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE, rce.getErrorCode());
     }
     assertEquals("Top Compatibility Level Exists", CompatibilityLevel.FULL.name, restApp
         .restClient.getConfig(null).getCompatibilityLevel());

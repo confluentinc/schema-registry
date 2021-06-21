@@ -124,7 +124,7 @@ public class ModeResource {
           ? schemaRegistry.getModeInScope(subject)
           : schemaRegistry.getMode(subject);
       if (mode == null) {
-        throw Errors.subjectNotFoundException(subject);
+        throw Errors.subjectLevelModeNotConfiguredException(subject);
       }
       return new Mode(mode.name());
     } catch (SchemaRegistryException e) {
