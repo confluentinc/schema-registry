@@ -257,11 +257,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
       if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
         config = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
-        if (config != null) {
-          return config.getCompatibilityLevel();
-        }
+      } else {
+        config = (ConfigValue) get((K) new ConfigKey(null));
       }
-      config = (ConfigValue) get((K) new ConfigKey(null));
       return config != null ? config.getCompatibilityLevel() : defaultForTopLevel;
     } else {
       return null;
@@ -285,11 +283,9 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
       if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
         modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
-        if (modeValue != null) {
-          return modeValue.getMode();
-        }
+      } else {
+        modeValue = (ModeValue) get((K) new ModeKey(null));
       }
-      modeValue = (ModeValue) get((K) new ModeKey(null));
       return modeValue != null ? modeValue.getMode() : defaultForTopLevel;
     } else {
       return null;
