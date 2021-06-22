@@ -29,18 +29,20 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static final String CONTEXT_PREFIX = CONTEXT_DELIMITER + ".";
 
+  private static final String WILDCARD = "*";
+
   private final String tenant;
   private final String context;
   private final String subject;
 
   // visible for testing
   protected QualifiedSubject(String tenant, String qualifiedSubject) {
-    String contextSubject = qualifiedSubject;
+    String contextSubject = qualifiedSubject != null ? qualifiedSubject : "";
     if (!DEFAULT_TENANT.equals(tenant)) {
-      int ix = qualifiedSubject.indexOf(TENANT_DELIMITER);
+      int ix = contextSubject.indexOf(TENANT_DELIMITER);
       if (ix >= 0) {
-        String tenantPrefix = qualifiedSubject.substring(0, ix);
-        contextSubject = qualifiedSubject.substring(ix + 1);
+        String tenantPrefix = contextSubject.substring(0, ix);
+        contextSubject = contextSubject.substring(ix + 1);
         // set actual tenant, we only really care whether the passed in tenant was "default"
         tenant = tenantPrefix;
       } else {
@@ -62,7 +64,8 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
       }
     } else {
       context = DEFAULT_CONTEXT;
-      subject = contextSubject;
+      // check for wildcard for backward compatibility
+      subject = WILDCARD.equals(contextSubject) ? "" : contextSubject;
     }
 
     this.tenant = tenant;
