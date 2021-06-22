@@ -488,7 +488,10 @@ public class ProtobufSchema implements ParsedSchema {
     );
   }
 
-  private Field.Label label(FileDescriptorProto file, FieldDescriptorProto fd) {
+  private static Field.Label label(FileDescriptorProto file, FieldDescriptorProto fd) {
+    if (fd.getProto3Optional()) {
+      return Field.Label.OPTIONAL;
+    }
     boolean isProto3 = file.getSyntax().equals(PROTO3);
     switch (fd.getLabel()) {
       case LABEL_REQUIRED:
@@ -578,7 +581,7 @@ public class ProtobufSchema implements ParsedSchema {
       }
       for (TypeElement typeElem : rootElem.getTypes()) {
         if (typeElem instanceof MessageElement) {
-          MessageDefinition message = toDynamicMessage((MessageElement) typeElem);
+          MessageDefinition message = toDynamicMessage(syntax, (MessageElement) typeElem);
           schema.addMessageDefinition(message);
         } else if (typeElem instanceof EnumElement) {
           EnumDefinition enumer = toDynamicEnum((EnumElement) typeElem);
@@ -622,13 +625,14 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   private static MessageDefinition toDynamicMessage(
+      Syntax syntax,
       MessageElement messageElem
   ) {
     log.trace("*** message: {}", messageElem.getName());
     MessageDefinition.Builder message = MessageDefinition.newBuilder(messageElem.getName());
     for (TypeElement type : messageElem.getNestedTypes()) {
       if (type instanceof MessageElement) {
-        message.addMessageDefinition(toDynamicMessage((MessageElement) type));
+        message.addMessageDefinition(toDynamicMessage(syntax, (MessageElement) type));
       } else if (type instanceof EnumElement) {
         message.addEnumDefinition(toDynamicEnum((EnumElement) type));
       }
@@ -657,6 +661,7 @@ public class ProtobufSchema implements ParsedSchema {
       }
       Field.Label fieldLabel = field.getLabel();
       String label = fieldLabel != null ? fieldLabel.toString().toLowerCase() : null;
+      boolean isProto3Optional = "optional".equals(label) && syntax == Syntax.PROTO_3;
       String fieldType = field.getType();
       String defaultVal = field.getDefaultValue();
       String jsonName = field.getJsonName();
@@ -677,6 +682,7 @@ public class ProtobufSchema implements ParsedSchema {
       }
       message.addField(
           label,
+          isProto3Optional,
           fieldType,
           field.getName(),
           field.getTag(),
