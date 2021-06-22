@@ -541,7 +541,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
           if (isPermanent) {
             idCache.get(subject).remove(entry.getValue());
-            schemaCache.get(subject).remove(entry.getKey());
+            schemaCache.get(subject).remove(new WrappedParsedSchema(entry.getKey()));
           }
           return Integer.valueOf(version);
         }
