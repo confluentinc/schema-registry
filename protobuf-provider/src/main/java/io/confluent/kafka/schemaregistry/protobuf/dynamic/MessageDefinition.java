@@ -74,11 +74,12 @@ public class MessageDefinition {
         String doc,
         Map<String, String> params
     ) {
-      return addField(label, type, name, num, defaultVal, null, doc, params, null);
+      return addField(label, false, type, name, num, defaultVal, null, doc, params, null);
     }
 
     public Builder addField(
         String label,
+        boolean isProto3Optional,
         String type,
         String name,
         int num,
@@ -89,7 +90,8 @@ public class MessageDefinition {
         Boolean isPacked
     ) {
       FieldDescriptorProto.Label protoLabel = sLabelMap.get(label);
-      doAddField(protoLabel, type, name, num, defaultVal, jsonName, doc, params, isPacked, null);
+      doAddField(protoLabel, isProto3Optional, type, name, num,
+              defaultVal, jsonName, doc, params, isPacked, null);
       return this;
     }
 
@@ -157,6 +159,7 @@ public class MessageDefinition {
 
     private void doAddField(
         FieldDescriptorProto.Label label,
+        boolean isProto3Optional,
         String type,
         String name,
         int num,
@@ -172,6 +175,7 @@ public class MessageDefinition {
       if (label != null) {
         fieldBuilder.setLabel(label);
       }
+      fieldBuilder.setProto3Optional(isProto3Optional);
       FieldDescriptorProto.Type primType = sTypeMap.get(type);
       if (primType != null) {
         fieldBuilder.setType(primType);
@@ -240,6 +244,7 @@ public class MessageDefinition {
     ) {
       mMsgBuilder.doAddField(
           FieldDescriptorProto.Label.LABEL_OPTIONAL,
+          false,
           type,
           name,
           num,

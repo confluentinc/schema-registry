@@ -52,7 +52,7 @@ public final class TimestampValueOuterClass {
    *
    * Protobuf type {@code TimestampValue}
    */
-  public  static final class TimestampValue extends
+  public static final class TimestampValue extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:TimestampValue)
       TimestampValueOrBuilder {
@@ -149,6 +149,7 @@ public final class TimestampValueOuterClass {
      * <code>.google.protobuf.Timestamp value = 1;</code>
      * @return Whether the value field is set.
      */
+    @java.lang.Override
     public boolean hasValue() {
       return value_ != null;
     }
@@ -160,6 +161,7 @@ public final class TimestampValueOuterClass {
      * <code>.google.protobuf.Timestamp value = 1;</code>
      * @return The value.
      */
+    @java.lang.Override
     public com.google.protobuf.Timestamp getValue() {
       return value_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : value_;
     }
@@ -170,6 +172,7 @@ public final class TimestampValueOuterClass {
      *
      * <code>.google.protobuf.Timestamp value = 1;</code>
      */
+    @java.lang.Override
     public com.google.protobuf.TimestampOrBuilder getValueOrBuilder() {
       return getValue();
     }

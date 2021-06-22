@@ -79,8 +79,9 @@
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.4.21</kotlin.version>
         <json-schema.version>1.12.2</json-schema.version>
-        <protobuf.version>3.11.4</protobuf.version>
+        <protobuf.version>3.17.0</protobuf.version>
         <proto-google-common-protos.version>2.3.2</proto-google-common-protos.version>
+        <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <wire.version>3.6.0</wire.version>
         <swagger.version>1.6.2</swagger.version>
         <io.confluent.schema-registry.version>7.0.0-0</io.confluent.schema-registry.version>
@@ -351,7 +352,7 @@
                 <plugin>
                     <groupId>com.github.os72</groupId>
                     <artifactId>protoc-jar-maven-plugin</artifactId>
-                    <version>${protobuf.version}</version>
+                    <version>${protoc.jar.maven.plugin.version}</version>
                     <executions>
                         <execution>
                             <phase>generate-test-sources</phase>
@@ -359,6 +360,7 @@
                                 <goal>run</goal>
                             </goals>
                             <configuration>
+                                <protocArtifact>com.google.protobuf:protoc:${protobuf.version}</protocArtifact>
                                 <protocVersion>${protobuf.version}</protocVersion>
                                 <includeStdTypes>true</includeStdTypes>
                                 <includeMavenTypes>direct</includeMavenTypes>
