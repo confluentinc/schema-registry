@@ -51,7 +51,6 @@
         <dependency>
             <groupId>com.google.api.grpc</groupId>
             <artifactId>proto-google-common-protos</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>

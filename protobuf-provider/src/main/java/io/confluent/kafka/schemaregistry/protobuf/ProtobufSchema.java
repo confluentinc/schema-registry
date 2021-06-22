@@ -40,7 +40,20 @@ import com.google.protobuf.StructProto;
 import com.google.protobuf.TimestampProto;
 import com.google.protobuf.TypeProto;
 import com.google.protobuf.WrappersProto;
+import com.google.type.CalendarPeriodProto;
+import com.google.type.ColorProto;
 import com.google.type.DateProto;
+import com.google.type.DateTimeProto;
+import com.google.type.DayOfWeekProto;
+import com.google.type.ExprProto;
+import com.google.type.FractionProto;
+import com.google.type.IntervalProto;
+import com.google.type.LatLngProto;
+import com.google.type.MoneyProto;
+import com.google.type.MonthProto;
+import com.google.type.PhoneNumberProto;
+import com.google.type.PostalAddressProto;
+import com.google.type.QuaternionProto;
 import com.google.type.TimeOfDayProto;
 import com.squareup.wire.Syntax;
 import com.squareup.wire.schema.Field;
@@ -108,10 +121,24 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final Location DEFAULT_LOCATION = Location.get("");
 
-  public static final String META_LOCATION = "confluent/meta.proto";
-  public static final String DECIMAL_LOCATION = "confluent/type/decimal.proto";
+  public static final String CFLT_META_LOCATION = "confluent/meta.proto";
+  public static final String CFLT_DECIMAL_LOCATION = "confluent/type/decimal.proto";
+  public static final String CALENDAR_PERIOD_LOCATION = "google/type/calendar_period.proto";
+  public static final String COLOR_LOCATION = "google/type/color.proto";
   public static final String DATE_LOCATION = "google/type/date.proto";
-  public static final String TIME_LOCATION = "google/type/timeofday.proto";
+  public static final String DATETIME_LOCATION = "google/type/datetime.proto";
+  public static final String DAY_OF_WEEK_LOCATION = "google/type/dayofweek.proto";
+  public static final String DECIMAL_LOCATION = "google/type/decimal.proto";
+  public static final String EXPR_LOCATION = "google/type/expr.proto";
+  public static final String FRACTION_LOCATION = "google/type/fraction.proto";
+  public static final String INTERVAL_LOCATION = "google/type/interval.proto";
+  public static final String LATLNG_LOCATION = "google/type/latlng.proto";
+  public static final String MONEY_LOCATION = "google/type/money.proto";
+  public static final String MONTH_LOCATION = "google/type/month.proto";
+  public static final String PHONE_NUMBER_LOCATION = "google/type/phone_number.proto";
+  public static final String POSTAL_ADDRESS_LOCATION = "google/type/postal_address.proto";
+  public static final String QUATERNION_LOCATION = "google/type/quaternion.proto";
+  public static final String TIME_OF_DAY_LOCATION = "google/type/timeofday.proto";
   public static final String ANY_LOCATION = "google/protobuf/any.proto";
   public static final String API_LOCATION = "google/protobuf/api.proto";
   public static final String DESCRIPTOR_LOCATION = "google/protobuf/descriptor.proto";
@@ -124,13 +151,41 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String TYPE_LOCATION = "google/protobuf/type.proto";
   public static final String WRAPPER_LOCATION = "google/protobuf/wrappers.proto";
 
-  private static final ProtoFileElement META_SCHEMA =
+  private static final ProtoFileElement CFLT_META_SCHEMA =
       toProtoFile(MetaProto.getDescriptor().toProto()) ;
-  private static final ProtoFileElement DECIMAL_SCHEMA =
+  private static final ProtoFileElement CFLT_DECIMAL_SCHEMA =
       toProtoFile(DecimalProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement CALENDAR_PERIOD_SCHEMA =
+      toProtoFile(CalendarPeriodProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement COLOR_SCHEMA =
+      toProtoFile(ColorProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement DATE_SCHEMA =
       toProtoFile(DateProto.getDescriptor().toProto()) ;
-  private static final ProtoFileElement TIME_SCHEMA =
+  private static final ProtoFileElement DATETIME_SCHEMA =
+      toProtoFile(DateTimeProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement DAY_OF_WEEK_SCHEMA =
+      toProtoFile(DayOfWeekProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement DECIMAL_SCHEMA =
+      toProtoFile(com.google.type.DecimalProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement EXPR_SCHEMA =
+      toProtoFile(ExprProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement FRACTION_SCHEMA =
+      toProtoFile(FractionProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement INTERVAL_SCHEMA =
+      toProtoFile(IntervalProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement LATLNG_SCHEMA =
+      toProtoFile(LatLngProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement MONEY_SCHEMA =
+      toProtoFile(MoneyProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement MONTH_SCHEMA =
+      toProtoFile(MonthProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement PHONE_NUMBER_SCHEMA =
+      toProtoFile(PhoneNumberProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement POSTAL_ADDRESS_SCHEMA =
+      toProtoFile(PostalAddressProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement QUATERNION_SCHEMA =
+      toProtoFile(QuaternionProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement TIME_OF_DAY_SCHEMA =
       toProtoFile(TimeOfDayProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement ANY_SCHEMA =
       toProtoFile(AnyProto.getDescriptor().toProto()) ;
@@ -159,10 +214,24 @@ public class ProtobufSchema implements ParsedSchema {
   
   static {
     KNOWN_DEPENDENCIES = new HashMap<>();
-    KNOWN_DEPENDENCIES.put(META_LOCATION, META_SCHEMA);
-    KNOWN_DEPENDENCIES.put(DECIMAL_LOCATION, DECIMAL_SCHEMA);
+    KNOWN_DEPENDENCIES.put(CFLT_META_LOCATION, CFLT_META_SCHEMA);
+    KNOWN_DEPENDENCIES.put(CFLT_DECIMAL_LOCATION, CFLT_DECIMAL_SCHEMA);
+    KNOWN_DEPENDENCIES.put(CALENDAR_PERIOD_LOCATION, CALENDAR_PERIOD_SCHEMA);
+    KNOWN_DEPENDENCIES.put(COLOR_LOCATION, COLOR_SCHEMA);
     KNOWN_DEPENDENCIES.put(DATE_LOCATION, DATE_SCHEMA);
-    KNOWN_DEPENDENCIES.put(TIME_LOCATION, TIME_SCHEMA);
+    KNOWN_DEPENDENCIES.put(DATETIME_LOCATION, DATETIME_SCHEMA);
+    KNOWN_DEPENDENCIES.put(DAY_OF_WEEK_LOCATION, DAY_OF_WEEK_SCHEMA);
+    KNOWN_DEPENDENCIES.put(DECIMAL_LOCATION, DECIMAL_SCHEMA);
+    KNOWN_DEPENDENCIES.put(EXPR_LOCATION, EXPR_SCHEMA);
+    KNOWN_DEPENDENCIES.put(FRACTION_LOCATION, FRACTION_SCHEMA);
+    KNOWN_DEPENDENCIES.put(INTERVAL_LOCATION, INTERVAL_SCHEMA);
+    KNOWN_DEPENDENCIES.put(LATLNG_LOCATION, LATLNG_SCHEMA);
+    KNOWN_DEPENDENCIES.put(MONEY_LOCATION, MONEY_SCHEMA);
+    KNOWN_DEPENDENCIES.put(MONTH_LOCATION, MONTH_SCHEMA);
+    KNOWN_DEPENDENCIES.put(PHONE_NUMBER_LOCATION, PHONE_NUMBER_SCHEMA);
+    KNOWN_DEPENDENCIES.put(POSTAL_ADDRESS_LOCATION, POSTAL_ADDRESS_SCHEMA);
+    KNOWN_DEPENDENCIES.put(QUATERNION_LOCATION, QUATERNION_SCHEMA);
+    KNOWN_DEPENDENCIES.put(TIME_OF_DAY_LOCATION, TIME_OF_DAY_SCHEMA);
     KNOWN_DEPENDENCIES.put(ANY_LOCATION, ANY_SCHEMA);
     KNOWN_DEPENDENCIES.put(API_LOCATION, API_SCHEMA);
     KNOWN_DEPENDENCIES.put(DESCRIPTOR_LOCATION, DESCRIPTOR_SCHEMA);
