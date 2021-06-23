@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.utils;
 
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
@@ -71,19 +72,12 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     this.tenant = tenant;
     this.context = context;
     this.subject = subject;
-    validate();
   }
 
   public QualifiedSubject(String tenant, String context, String subject) {
     this.tenant = tenant != null ? tenant : DEFAULT_TENANT;
     this.context = context != null ? context : DEFAULT_CONTEXT;
     this.subject = subject != null ? subject : "";
-  }
-
-  private void validate() throws IllegalArgumentException {
-    // TODO check that tenant and context are not null
-    // TODO check that context follows name syntax (allow hyphen)
-    // TODO check that if subject is non-null, it does not start with ":."
   }
 
   public String getTenant() {
