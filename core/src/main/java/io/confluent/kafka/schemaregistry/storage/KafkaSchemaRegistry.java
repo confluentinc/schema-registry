@@ -1195,12 +1195,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Set<String> listSubjects(boolean returnDeletedSubjects)
           throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryKey> allKeys = kafkaStore.getAllKeys()) {
-      return extractUniqueSubjects(allKeys,
-              returnDeletedSubjects);
+      return extractUniqueSubjects(allKeys, returnDeletedSubjects);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
     }
+  }
+
+  public Set<String> listSubjectsWithPrefix(String prefix, boolean returnDeletedSubjects)
+      throws SchemaRegistryException {
+    Set<String> subjects = new HashSet<>();
+    Iterator<Schema> iter = getVersionsWithSubjectPrefix(prefix, returnDeletedSubjects, false);
+    while (iter.hasNext()) {
+      subjects.add(iter.next().getSubject());
+    }
+    return subjects;
   }
 
   public Set<String> listSubjectsForId(int id, String subject) throws SchemaRegistryException {

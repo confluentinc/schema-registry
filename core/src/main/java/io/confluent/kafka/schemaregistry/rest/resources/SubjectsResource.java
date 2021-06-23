@@ -20,6 +20,7 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
+import javax.ws.rs.DefaultValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,10 +124,13 @@ public class SubjectsResource {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")})
   @PerformanceMetric("subjects.list")
   public Set<String> list(
+          @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
           @QueryParam("deleted") boolean lookupDeletedSubjects
   ) {
     try {
-      return schemaRegistry.listSubjects(lookupDeletedSubjects);
+      return subjectPrefix == null || subjectPrefix.isEmpty()
+          ? schemaRegistry.listSubjects(lookupDeletedSubjects)
+          : schemaRegistry.listSubjectsWithPrefix(subjectPrefix, lookupDeletedSubjects);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {
