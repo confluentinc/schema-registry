@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.utils;
 
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
