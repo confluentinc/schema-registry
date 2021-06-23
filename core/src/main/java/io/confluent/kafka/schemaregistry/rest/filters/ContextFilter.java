@@ -76,7 +76,7 @@ public class ContextFilter implements ContainerRequestFilter {
 
       if (subjectPathFound) {
         if (!uriPathStr.startsWith(CONTEXT_PREFIX)) {
-          modifiedUriPathStr = formattedContext(context);
+          modifiedUriPathStr = formattedContext(context) + uriPathStr;
         }
 
         subjectPathFound = false;

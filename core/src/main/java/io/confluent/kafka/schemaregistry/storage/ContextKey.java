@@ -76,7 +76,7 @@ public class ContextKey extends SchemaRegistryKey {
   @Override
   public int compareTo(SchemaRegistryKey o) {
     int compare = super.compareTo(o);
-    if (compare != 0) {
+    if (compare == 0) {
       ContextKey that = (ContextKey) o;
       if (this.getTenant() == null && that.getTenant() == null) {
         // pass
