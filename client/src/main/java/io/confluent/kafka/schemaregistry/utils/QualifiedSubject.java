@@ -112,7 +112,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   @Override
   public String toString() {
-    return toQualifiedContext() + subject;
+    return toQualifiedSubject();
   }
 
   public String toQualifiedContext() {
@@ -125,7 +125,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public String toQualifiedSubject() {
-    return toString();
+    return toQualifiedContext() + subject;
   }
 
   public static QualifiedSubject create(String tenant, String qualifiedSubject) {
