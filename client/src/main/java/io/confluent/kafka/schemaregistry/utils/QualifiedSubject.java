@@ -23,9 +23,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static final String DEFAULT_CONTEXT = ".";
 
-  public static final char TENANT_DELIMITER = '_';
+  public static final String TENANT_DELIMITER = "_";
 
-  public static final char CONTEXT_DELIMITER = ':';
+  public static final String CONTEXT_DELIMITER = ":";
 
   public static final String CONTEXT_SEPARATOR = ".";
 
