@@ -27,7 +27,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static final char CONTEXT_DELIMITER = ':';
 
-  public static final String CONTEXT_PREFIX = CONTEXT_DELIMITER + ".";
+  public static final String CONTEXT_SEPARATOR = ".";
+
+  public static final String CONTEXT_PREFIX = CONTEXT_DELIMITER + CONTEXT_SEPARATOR;
 
   private static final String WILDCARD = "*";
 
