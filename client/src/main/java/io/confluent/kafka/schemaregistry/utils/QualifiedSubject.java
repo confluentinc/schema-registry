@@ -112,19 +112,15 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   @Override
   public String toString() {
-    String qualifiedContext = toQualifiedContext();
+    return toQualifiedContext() + subject;
+  }
+
+  public String toQualifiedContext() {
+    String qualifiedContext = CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
     if (DEFAULT_TENANT.equals(tenant)) {
       return qualifiedContext;
     } else {
       return tenant + TENANT_DELIMITER + qualifiedContext;
-    }
-  }
-
-  public String toQualifiedContext() {
-    if (DEFAULT_CONTEXT.equals(context)) {
-      return subject;
-    } else {
-      return CONTEXT_DELIMITER + context + CONTEXT_DELIMITER + subject;
     }
   }
 
