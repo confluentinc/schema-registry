@@ -77,6 +77,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final K noopKey;
   private volatile long lastWrittenOffset = -1L;
   private final SchemaRegistryConfig config;
+  private final Lock leaderLock = new ReentrantLock();
   private final Lock lock = new ReentrantLock();
 
   public KafkaStore(SchemaRegistryConfig config,
@@ -495,7 +496,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   }
 
   public Lock leaderLock() {
-    return lock;
+    return leaderLock;
   }
 
   public Lock lockFor(String subject) {
