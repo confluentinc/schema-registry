@@ -1287,7 +1287,7 @@ public class AvroData {
   private Object toConnectData(Schema schema, Object value, ToConnectContext toConnectContext,
                                boolean doLogicalConversion) {
     validateSchemaValue(schema, value);
-    if (value == null) {
+    if (value == null || value == JsonProperties.NULL_VALUE) {
       return null;
     }
     try {
