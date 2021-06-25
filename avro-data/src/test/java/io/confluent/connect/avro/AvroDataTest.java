@@ -2118,6 +2118,49 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testNestedRecordWithNullDefault() {
+    final String fullSchema = "{"
+        + "  \"name\": \"RecordWithObjectDefault\","
+        + "  \"type\": \"record\","
+        + "  \"fields\": [{"
+        + "    \"name\": \"obj\","
+        + "      \"default\": {\"nullableString\": null},"
+        + "      \"type\": {"
+        + "        \"name\": \"Object\","
+        + "        \"type\": \"record\","
+        + "        \"fields\": [{"
+        + "            \"name\": \"nullableString\","
+        + "            \"type\": [\"null\",\"string\"]}"
+        + "        ]}"
+        + "    }]"
+        + "}";
+
+    org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(fullSchema);
+
+    org.apache.avro.Schema innerSchema = new org.apache.avro.Schema.Parser().parse("{"
+        + "        \"name\": \"Object\","
+        + "        \"type\": \"record\","
+        + "        \"fields\": [{"
+        + "            \"name\": \"nullableString\","
+        + "            \"type\": [\"null\",\"string\"]}"
+        + "        ]}");
+
+    AvroData avroData = new AvroData(0);
+
+    // test record:
+    // {"obj": {"nullableString": null}}
+    GenericRecord nestedRecord = new GenericRecordBuilder(avroSchema)
+        .set("obj", new GenericRecordBuilder(innerSchema).set("nullableString", null).build())
+        .build();
+
+    SchemaAndValue schemaAndValue = avroData.toConnectData(avroSchema, nestedRecord);
+    Struct value = (Struct)schemaAndValue.value();
+    assertNotNull(value.get("obj"));
+    Struct objFieldValue = (Struct)value.get("obj");
+    assertNull(objFieldValue.get("nullableString"));
+  }
+
+  @Test
   public void testArrayOfRecordWithNullNamespace() {
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.array().items()
             .record("item").fields()
