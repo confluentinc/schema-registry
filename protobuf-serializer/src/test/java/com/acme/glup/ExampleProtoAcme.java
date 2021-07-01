@@ -166,7 +166,7 @@ public final class ExampleProtoAcme {
   /**
    * Protobuf type {@code Acme.Glup.ClickCas}
    */
-  public static final class ClickCas extends
+  public  static final class ClickCas extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.ClickCas)
       ClickCasOrBuilder {
@@ -318,7 +318,6 @@ public final class ExampleProtoAcme {
      * <code>.Acme.Glup.Origin glup_origin = 1;</code>
      * @return Whether the glupOrigin field is set.
      */
-    @java.lang.Override
     public boolean hasGlupOrigin() {
       return glupOrigin_ != null;
     }
@@ -326,14 +325,12 @@ public final class ExampleProtoAcme {
      * <code>.Acme.Glup.Origin glup_origin = 1;</code>
      * @return The glupOrigin.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.Origin getGlupOrigin() {
       return glupOrigin_ == null ? com.acme.glup.MetadataProto.Origin.getDefaultInstance() : glupOrigin_;
     }
     /**
      * <code>.Acme.Glup.Origin glup_origin = 1;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.OriginOrBuilder getGlupOriginOrBuilder() {
       return getGlupOrigin();
     }
@@ -344,7 +341,6 @@ public final class ExampleProtoAcme {
      * <code>.Acme.Glup.Partition partition = 2;</code>
      * @return Whether the partition field is set.
      */
-    @java.lang.Override
     public boolean hasPartition() {
       return partition_ != null;
     }
@@ -352,14 +348,12 @@ public final class ExampleProtoAcme {
      * <code>.Acme.Glup.Partition partition = 2;</code>
      * @return The partition.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.Partition getPartition() {
       return partition_ == null ? com.acme.glup.MetadataProto.Partition.getDefaultInstance() : partition_;
     }
     /**
      * <code>.Acme.Glup.Partition partition = 2;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.PartitionOrBuilder getPartitionOrBuilder() {
       return getPartition();
     }
@@ -370,7 +364,6 @@ public final class ExampleProtoAcme {
      * <code>string uid = 5;</code>
      * @return The uid.
      */
-    @java.lang.Override
     public java.lang.String getUid() {
       java.lang.Object ref = uid_;
       if (ref instanceof java.lang.String) {
@@ -387,7 +380,6 @@ public final class ExampleProtoAcme {
      * <code>string uid = 5;</code>
      * @return The bytes for uid.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getUidBytes() {
       java.lang.Object ref = uid_;
@@ -437,7 +429,6 @@ public final class ExampleProtoAcme {
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
 
-    @java.lang.Override
     public boolean containsSetFields(
         int key) {
       
@@ -446,7 +437,6 @@ public final class ExampleProtoAcme {
     /**
      * Use {@link #getSetFieldsMap()} instead.
      */
-    @java.lang.Override
     @java.lang.Deprecated
     public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFields() {
       return getSetFieldsMap();
@@ -459,7 +449,6 @@ public final class ExampleProtoAcme {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFieldsMap() {
       return internalGetSetFields().getMap();
@@ -472,7 +461,6 @@ public final class ExampleProtoAcme {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public boolean getSetFieldsOrDefault(
         int key,
@@ -490,7 +478,6 @@ public final class ExampleProtoAcme {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public boolean getSetFieldsOrThrow(
         int key) {
@@ -512,7 +499,6 @@ public final class ExampleProtoAcme {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public java.util.List<com.acme.glup.MetadataProto.ControlMessage.Watermark> getControlMessageList() {
       return controlMessage_;
     }
@@ -523,7 +509,6 @@ public final class ExampleProtoAcme {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public java.util.List<? extends com.acme.glup.MetadataProto.ControlMessage.WatermarkOrBuilder> 
         getControlMessageOrBuilderList() {
       return controlMessage_;
@@ -535,7 +520,6 @@ public final class ExampleProtoAcme {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public int getControlMessageCount() {
       return controlMessage_.size();
     }
@@ -546,7 +530,6 @@ public final class ExampleProtoAcme {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.ControlMessage.Watermark getControlMessage(int index) {
       return controlMessage_.get(index);
     }
@@ -557,7 +540,6 @@ public final class ExampleProtoAcme {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.ControlMessage.WatermarkOrBuilder getControlMessageOrBuilder(
         int index) {
       return controlMessage_.get(index);
@@ -1380,7 +1362,6 @@ public final class ExampleProtoAcme {
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
 
-      @java.lang.Override
       public boolean containsSetFields(
           int key) {
         
@@ -1389,7 +1370,6 @@ public final class ExampleProtoAcme {
       /**
        * Use {@link #getSetFieldsMap()} instead.
        */
-      @java.lang.Override
       @java.lang.Deprecated
       public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFields() {
         return getSetFieldsMap();
@@ -1402,7 +1382,6 @@ public final class ExampleProtoAcme {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFieldsMap() {
         return internalGetSetFields().getMap();
@@ -1415,7 +1394,6 @@ public final class ExampleProtoAcme {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public boolean getSetFieldsOrDefault(
           int key,
@@ -1433,7 +1411,6 @@ public final class ExampleProtoAcme {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public boolean getSetFieldsOrThrow(
           int key) {

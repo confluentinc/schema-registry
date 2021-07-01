@@ -128,10 +128,6 @@ public final class MetadataProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -245,10 +241,6 @@ public final class MetadataProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -375,10 +367,6 @@ public final class MetadataProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -483,10 +471,6 @@ public final class MetadataProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -650,10 +634,6 @@ public final class MetadataProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -864,10 +844,6 @@ public final class MetadataProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -981,10 +957,6 @@ public final class MetadataProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -1132,10 +1104,6 @@ public final class MetadataProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -1267,10 +1235,6 @@ public final class MetadataProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -1389,10 +1353,6 @@ public final class MetadataProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -1463,7 +1423,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.KafkaMessageOptions}
    */
-  public static final class KafkaMessageOptions extends
+  public  static final class KafkaMessageOptions extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.KafkaMessageOptions)
       KafkaMessageOptionsOrBuilder {
@@ -2260,7 +2220,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.DataSet}
    */
-  public static final class DataSet extends
+  public  static final class DataSet extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.DataSet)
       DataSetOrBuilder {
@@ -2410,7 +2370,6 @@ public final class MetadataProto {
      * <code>string id = 1;</code>
      * @return The id.
      */
-    @java.lang.Override
     public java.lang.String getId() {
       java.lang.Object ref = id_;
       if (ref instanceof java.lang.String) {
@@ -2433,7 +2392,6 @@ public final class MetadataProto {
      * <code>string id = 1;</code>
      * @return The bytes for id.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getIdBytes() {
       java.lang.Object ref = id_;
@@ -2457,7 +2415,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.DataSetFormat format = 2;</code>
      */
-    @java.lang.Override
     public java.util.List<com.acme.glup.MetadataProto.DataSetFormat> getFormatList() {
       return format_;
     }
@@ -2468,7 +2425,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.DataSetFormat format = 2;</code>
      */
-    @java.lang.Override
     public java.util.List<? extends com.acme.glup.MetadataProto.DataSetFormatOrBuilder> 
         getFormatOrBuilderList() {
       return format_;
@@ -2480,7 +2436,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.DataSetFormat format = 2;</code>
      */
-    @java.lang.Override
     public int getFormatCount() {
       return format_.size();
     }
@@ -2491,7 +2446,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.DataSetFormat format = 2;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.DataSetFormat getFormat(int index) {
       return format_.get(index);
     }
@@ -2502,7 +2456,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.DataSetFormat format = 2;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.DataSetFormatOrBuilder getFormatOrBuilder(
         int index) {
       return format_.get(index);
@@ -2518,7 +2471,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.PartitionScheme partition_scheme = 3;</code>
      * @return The enum numeric value on the wire for partitionScheme.
      */
-    @java.lang.Override public int getPartitionSchemeValue() {
+    public int getPartitionSchemeValue() {
       return partitionScheme_;
     }
     /**
@@ -2529,7 +2482,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.PartitionScheme partition_scheme = 3;</code>
      * @return The partitionScheme.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.PartitionScheme getPartitionScheme() {
+    public com.acme.glup.MetadataProto.PartitionScheme getPartitionScheme() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.PartitionScheme result = com.acme.glup.MetadataProto.PartitionScheme.valueOf(partitionScheme_);
       return result == null ? com.acme.glup.MetadataProto.PartitionScheme.UNRECOGNIZED : result;
@@ -2545,7 +2498,6 @@ public final class MetadataProto {
      * <code>string java_class = 4;</code>
      * @return The javaClass.
      */
-    @java.lang.Override
     public java.lang.String getJavaClass() {
       java.lang.Object ref = javaClass_;
       if (ref instanceof java.lang.String) {
@@ -2566,7 +2518,6 @@ public final class MetadataProto {
      * <code>string java_class = 4;</code>
      * @return The bytes for javaClass.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getJavaClassBytes() {
       java.lang.Object ref = javaClass_;
@@ -2591,7 +2542,6 @@ public final class MetadataProto {
      * <code>bool for_tests = 5;</code>
      * @return The forTests.
      */
-    @java.lang.Override
     public boolean getForTests() {
       return forTests_;
     }
@@ -2606,7 +2556,6 @@ public final class MetadataProto {
      * <code>string owner = 6;</code>
      * @return The owner.
      */
-    @java.lang.Override
     public java.lang.String getOwner() {
       java.lang.Object ref = owner_;
       if (ref instanceof java.lang.String) {
@@ -2627,7 +2576,6 @@ public final class MetadataProto {
      * <code>string owner = 6;</code>
      * @return The bytes for owner.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getOwnerBytes() {
       java.lang.Object ref = owner_;
@@ -2652,7 +2600,6 @@ public final class MetadataProto {
      * <code>bool private = 7;</code>
      * @return The private.
      */
-    @java.lang.Override
     public boolean getPrivate() {
       return private_;
     }
@@ -2667,7 +2614,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.DataSetKind kind = 8;</code>
      * @return The enum numeric value on the wire for kind.
      */
-    @java.lang.Override public int getKindValue() {
+    public int getKindValue() {
       return kind_;
     }
     /**
@@ -2678,7 +2625,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.DataSetKind kind = 8;</code>
      * @return The kind.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.DataSetKind getKind() {
+    public com.acme.glup.MetadataProto.DataSetKind getKind() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.DataSetKind result = com.acme.glup.MetadataProto.DataSetKind.valueOf(kind_);
       return result == null ? com.acme.glup.MetadataProto.DataSetKind.UNRECOGNIZED : result;
@@ -2694,7 +2641,6 @@ public final class MetadataProto {
      * <code>int32 retention_days = 9;</code>
      * @return The retentionDays.
      */
-    @java.lang.Override
     public int getRetentionDays() {
       return retentionDays_;
     }
@@ -3608,7 +3554,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.PartitionScheme partition_scheme = 3;</code>
        * @return The enum numeric value on the wire for partitionScheme.
        */
-      @java.lang.Override public int getPartitionSchemeValue() {
+      public int getPartitionSchemeValue() {
         return partitionScheme_;
       }
       /**
@@ -3621,7 +3567,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setPartitionSchemeValue(int value) {
-        
         partitionScheme_ = value;
         onChanged();
         return this;
@@ -3634,7 +3579,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.PartitionScheme partition_scheme = 3;</code>
        * @return The partitionScheme.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.PartitionScheme getPartitionScheme() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.PartitionScheme result = com.acme.glup.MetadataProto.PartitionScheme.valueOf(partitionScheme_);
@@ -3778,7 +3722,6 @@ public final class MetadataProto {
        * <code>bool for_tests = 5;</code>
        * @return The forTests.
        */
-      @java.lang.Override
       public boolean getForTests() {
         return forTests_;
       }
@@ -3917,7 +3860,6 @@ public final class MetadataProto {
        * <code>bool private = 7;</code>
        * @return The private.
        */
-      @java.lang.Override
       public boolean getPrivate() {
         return private_;
       }
@@ -3960,7 +3902,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.DataSetKind kind = 8;</code>
        * @return The enum numeric value on the wire for kind.
        */
-      @java.lang.Override public int getKindValue() {
+      public int getKindValue() {
         return kind_;
       }
       /**
@@ -3973,7 +3915,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setKindValue(int value) {
-        
         kind_ = value;
         onChanged();
         return this;
@@ -3986,7 +3927,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.DataSetKind kind = 8;</code>
        * @return The kind.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.DataSetKind getKind() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.DataSetKind result = com.acme.glup.MetadataProto.DataSetKind.valueOf(kind_);
@@ -4034,7 +3974,6 @@ public final class MetadataProto {
        * <code>int32 retention_days = 9;</code>
        * @return The retentionDays.
        */
-      @java.lang.Override
       public int getRetentionDays() {
         return retentionDays_;
       }
@@ -4182,7 +4121,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.DataSetChunk}
    */
-  public static final class DataSetChunk extends
+  public  static final class DataSetChunk extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.DataSetChunk)
       DataSetChunkOrBuilder {
@@ -4295,14 +4234,12 @@ public final class MetadataProto {
     /**
      * <code>repeated .Acme.Glup.Partition partition = 1;</code>
      */
-    @java.lang.Override
     public java.util.List<com.acme.glup.MetadataProto.Partition> getPartitionList() {
       return partition_;
     }
     /**
      * <code>repeated .Acme.Glup.Partition partition = 1;</code>
      */
-    @java.lang.Override
     public java.util.List<? extends com.acme.glup.MetadataProto.PartitionOrBuilder> 
         getPartitionOrBuilderList() {
       return partition_;
@@ -4310,21 +4247,18 @@ public final class MetadataProto {
     /**
      * <code>repeated .Acme.Glup.Partition partition = 1;</code>
      */
-    @java.lang.Override
     public int getPartitionCount() {
       return partition_.size();
     }
     /**
      * <code>repeated .Acme.Glup.Partition partition = 1;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.Partition getPartition(int index) {
       return partition_.get(index);
     }
     /**
      * <code>repeated .Acme.Glup.Partition partition = 1;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.PartitionOrBuilder getPartitionOrBuilder(
         int index) {
       return partition_.get(index);
@@ -4336,7 +4270,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.DataSetFormat format = 2;</code>
      * @return Whether the format field is set.
      */
-    @java.lang.Override
     public boolean hasFormat() {
       return format_ != null;
     }
@@ -4344,14 +4277,12 @@ public final class MetadataProto {
      * <code>.Acme.Glup.DataSetFormat format = 2;</code>
      * @return The format.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.DataSetFormat getFormat() {
       return format_ == null ? com.acme.glup.MetadataProto.DataSetFormat.getDefaultInstance() : format_;
     }
     /**
      * <code>.Acme.Glup.DataSetFormat format = 2;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.DataSetFormatOrBuilder getFormatOrBuilder() {
       return getFormat();
     }
@@ -4362,7 +4293,6 @@ public final class MetadataProto {
      * <code>string datasetId = 3;</code>
      * @return The datasetId.
      */
-    @java.lang.Override
     public java.lang.String getDatasetId() {
       java.lang.Object ref = datasetId_;
       if (ref instanceof java.lang.String) {
@@ -4379,7 +4309,6 @@ public final class MetadataProto {
      * <code>string datasetId = 3;</code>
      * @return The bytes for datasetId.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getDatasetIdBytes() {
       java.lang.Object ref = datasetId_;
@@ -5456,7 +5385,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.DataSetFormat}
    */
-  public static final class DataSetFormat extends
+  public  static final class DataSetFormat extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.DataSetFormat)
       DataSetFormatOrBuilder {
@@ -5611,7 +5540,6 @@ public final class MetadataProto {
      * <code>string path = 1;</code>
      * @return The path.
      */
-    @java.lang.Override
     public java.lang.String getPath() {
       java.lang.Object ref = path_;
       if (ref instanceof java.lang.String) {
@@ -5632,7 +5560,6 @@ public final class MetadataProto {
      * <code>string path = 1;</code>
      * @return The bytes for path.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getPathBytes() {
       java.lang.Object ref = path_;
@@ -5657,7 +5584,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.HDFSDataFormat file_format = 2;</code>
      * @return The enum numeric value on the wire for fileFormat.
      */
-    @java.lang.Override public int getFileFormatValue() {
+    public int getFileFormatValue() {
       return fileFormat_;
     }
     /**
@@ -5668,7 +5595,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.HDFSDataFormat file_format = 2;</code>
      * @return The fileFormat.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.HDFSDataFormat getFileFormat() {
+    public com.acme.glup.MetadataProto.HDFSDataFormat getFileFormat() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.HDFSDataFormat result = com.acme.glup.MetadataProto.HDFSDataFormat.valueOf(fileFormat_);
       return result == null ? com.acme.glup.MetadataProto.HDFSDataFormat.UNRECOGNIZED : result;
@@ -5684,7 +5611,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.PartitionScheme partition_scheme = 3;</code>
      * @return The enum numeric value on the wire for partitionScheme.
      */
-    @java.lang.Override public int getPartitionSchemeValue() {
+    public int getPartitionSchemeValue() {
       return partitionScheme_;
     }
     /**
@@ -5695,7 +5622,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.PartitionScheme partition_scheme = 3;</code>
      * @return The partitionScheme.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.PartitionScheme getPartitionScheme() {
+    public com.acme.glup.MetadataProto.PartitionScheme getPartitionScheme() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.PartitionScheme result = com.acme.glup.MetadataProto.PartitionScheme.valueOf(partitionScheme_);
       return result == null ? com.acme.glup.MetadataProto.PartitionScheme.UNRECOGNIZED : result;
@@ -5711,7 +5638,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.HDFSPartition start_partition = 4;</code>
      * @return Whether the startPartition field is set.
      */
-    @java.lang.Override
     public boolean hasStartPartition() {
       return startPartition_ != null;
     }
@@ -5723,7 +5649,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.HDFSPartition start_partition = 4;</code>
      * @return The startPartition.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.HDFSPartition getStartPartition() {
       return startPartition_ == null ? com.acme.glup.MetadataProto.HDFSPartition.getDefaultInstance() : startPartition_;
     }
@@ -5734,7 +5659,6 @@ public final class MetadataProto {
      *
      * <code>.Acme.Glup.HDFSPartition start_partition = 4;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.HDFSPartitionOrBuilder getStartPartitionOrBuilder() {
       return getStartPartition();
     }
@@ -5749,7 +5673,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.HDFSPartition end_partition = 5;</code>
      * @return Whether the endPartition field is set.
      */
-    @java.lang.Override
     public boolean hasEndPartition() {
       return endPartition_ != null;
     }
@@ -5761,7 +5684,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.HDFSPartition end_partition = 5;</code>
      * @return The endPartition.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.HDFSPartition getEndPartition() {
       return endPartition_ == null ? com.acme.glup.MetadataProto.HDFSPartition.getDefaultInstance() : endPartition_;
     }
@@ -5772,7 +5694,6 @@ public final class MetadataProto {
      *
      * <code>.Acme.Glup.HDFSPartition end_partition = 5;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.HDFSPartitionOrBuilder getEndPartitionOrBuilder() {
       return getEndPartition();
     }
@@ -5787,7 +5708,6 @@ public final class MetadataProto {
      * <code>int32 retention_days = 7;</code>
      * @return The retentionDays.
      */
-    @java.lang.Override
     public int getRetentionDays() {
       return retentionDays_;
     }
@@ -5802,7 +5722,6 @@ public final class MetadataProto {
      * <code>int32 priority = 8;</code>
      * @return The priority.
      */
-    @java.lang.Override
     public int getPriority() {
       return priority_;
     }
@@ -5817,7 +5736,6 @@ public final class MetadataProto {
      * <code>string label = 9;</code>
      * @return The label.
      */
-    @java.lang.Override
     public java.lang.String getLabel() {
       java.lang.Object ref = label_;
       if (ref instanceof java.lang.String) {
@@ -5838,7 +5756,6 @@ public final class MetadataProto {
      * <code>string label = 9;</code>
      * @return The bytes for label.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getLabelBytes() {
       java.lang.Object ref = label_;
@@ -5863,7 +5780,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.MonitoringLevel monitoring_level = 10;</code>
      * @return The enum numeric value on the wire for monitoringLevel.
      */
-    @java.lang.Override public int getMonitoringLevelValue() {
+    public int getMonitoringLevelValue() {
       return monitoringLevel_;
     }
     /**
@@ -5874,7 +5791,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.MonitoringLevel monitoring_level = 10;</code>
      * @return The monitoringLevel.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.MonitoringLevel getMonitoringLevel() {
+    public com.acme.glup.MetadataProto.MonitoringLevel getMonitoringLevel() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.MonitoringLevel result = com.acme.glup.MetadataProto.MonitoringLevel.valueOf(monitoringLevel_);
       return result == null ? com.acme.glup.MetadataProto.MonitoringLevel.UNRECOGNIZED : result;
@@ -6450,7 +6367,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.HDFSDataFormat file_format = 2;</code>
        * @return The enum numeric value on the wire for fileFormat.
        */
-      @java.lang.Override public int getFileFormatValue() {
+      public int getFileFormatValue() {
         return fileFormat_;
       }
       /**
@@ -6463,7 +6380,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setFileFormatValue(int value) {
-        
         fileFormat_ = value;
         onChanged();
         return this;
@@ -6476,7 +6392,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.HDFSDataFormat file_format = 2;</code>
        * @return The fileFormat.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.HDFSDataFormat getFileFormat() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.HDFSDataFormat result = com.acme.glup.MetadataProto.HDFSDataFormat.valueOf(fileFormat_);
@@ -6524,7 +6439,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.PartitionScheme partition_scheme = 3;</code>
        * @return The enum numeric value on the wire for partitionScheme.
        */
-      @java.lang.Override public int getPartitionSchemeValue() {
+      public int getPartitionSchemeValue() {
         return partitionScheme_;
       }
       /**
@@ -6537,7 +6452,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setPartitionSchemeValue(int value) {
-        
         partitionScheme_ = value;
         onChanged();
         return this;
@@ -6550,7 +6464,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.PartitionScheme partition_scheme = 3;</code>
        * @return The partitionScheme.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.PartitionScheme getPartitionScheme() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.PartitionScheme result = com.acme.glup.MetadataProto.PartitionScheme.valueOf(partitionScheme_);
@@ -6908,7 +6821,6 @@ public final class MetadataProto {
        * <code>int32 retention_days = 7;</code>
        * @return The retentionDays.
        */
-      @java.lang.Override
       public int getRetentionDays() {
         return retentionDays_;
       }
@@ -6951,7 +6863,6 @@ public final class MetadataProto {
        * <code>int32 priority = 8;</code>
        * @return The priority.
        */
-      @java.lang.Override
       public int getPriority() {
         return priority_;
       }
@@ -7090,7 +7001,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.MonitoringLevel monitoring_level = 10;</code>
        * @return The enum numeric value on the wire for monitoringLevel.
        */
-      @java.lang.Override public int getMonitoringLevelValue() {
+      public int getMonitoringLevelValue() {
         return monitoringLevel_;
       }
       /**
@@ -7103,7 +7014,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setMonitoringLevelValue(int value) {
-        
         monitoringLevel_ = value;
         onChanged();
         return this;
@@ -7116,7 +7026,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.MonitoringLevel monitoring_level = 10;</code>
        * @return The monitoringLevel.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.MonitoringLevel getMonitoringLevel() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.MonitoringLevel result = com.acme.glup.MetadataProto.MonitoringLevel.valueOf(monitoringLevel_);
@@ -7238,7 +7147,7 @@ public final class MetadataProto {
   /**
    * Protobuf type {@code Acme.Glup.HDFSOptions}
    */
-  public static final class HDFSOptions extends
+  public  static final class HDFSOptions extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions)
       HDFSOptionsOrBuilder {
@@ -7446,7 +7355,7 @@ public final class MetadataProto {
     /**
      * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions}
      */
-    public static final class ImportOptions extends
+    public  static final class ImportOptions extends
         com.google.protobuf.GeneratedMessageV3 implements
         // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions)
         ImportOptionsOrBuilder {
@@ -7614,7 +7523,7 @@ public final class MetadataProto {
       /**
        * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.View}
        */
-      public static final class View extends
+      public  static final class View extends
           com.google.protobuf.GeneratedMessageV3 implements
           // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.View)
           ViewOrBuilder {
@@ -7733,7 +7642,7 @@ public final class MetadataProto {
          *
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.View.HiveOptions}
          */
-        public static final class HiveOptions extends
+        public  static final class HiveOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.View.HiveOptions)
             HiveOptionsOrBuilder {
@@ -7824,7 +7733,7 @@ public final class MetadataProto {
            * <code>.Acme.Glup.PartitionScheme partitioning = 3;</code>
            * @return The enum numeric value on the wire for partitioning.
            */
-          @java.lang.Override public int getPartitioningValue() {
+          public int getPartitioningValue() {
             return partitioning_;
           }
           /**
@@ -7835,7 +7744,7 @@ public final class MetadataProto {
            * <code>.Acme.Glup.PartitionScheme partitioning = 3;</code>
            * @return The partitioning.
            */
-          @java.lang.Override public com.acme.glup.MetadataProto.PartitionScheme getPartitioning() {
+          public com.acme.glup.MetadataProto.PartitionScheme getPartitioning() {
             @SuppressWarnings("deprecation")
             com.acme.glup.MetadataProto.PartitionScheme result = com.acme.glup.MetadataProto.PartitionScheme.valueOf(partitioning_);
             return result == null ? com.acme.glup.MetadataProto.PartitionScheme.UNRECOGNIZED : result;
@@ -8157,7 +8066,7 @@ public final class MetadataProto {
              * <code>.Acme.Glup.PartitionScheme partitioning = 3;</code>
              * @return The enum numeric value on the wire for partitioning.
              */
-            @java.lang.Override public int getPartitioningValue() {
+            public int getPartitioningValue() {
               return partitioning_;
             }
             /**
@@ -8170,7 +8079,6 @@ public final class MetadataProto {
              * @return This builder for chaining.
              */
             public Builder setPartitioningValue(int value) {
-              
               partitioning_ = value;
               onChanged();
               return this;
@@ -8183,7 +8091,6 @@ public final class MetadataProto {
              * <code>.Acme.Glup.PartitionScheme partitioning = 3;</code>
              * @return The partitioning.
              */
-            @java.lang.Override
             public com.acme.glup.MetadataProto.PartitionScheme getPartitioning() {
               @SuppressWarnings("deprecation")
               com.acme.glup.MetadataProto.PartitionScheme result = com.acme.glup.MetadataProto.PartitionScheme.valueOf(partitioning_);
@@ -8284,7 +8191,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.View.HiveOptions hive = 10;</code>
          * @return Whether the hive field is set.
          */
-        @java.lang.Override
         public boolean hasHive() {
           return hive_ != null;
         }
@@ -8296,7 +8202,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.View.HiveOptions hive = 10;</code>
          * @return The hive.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.HiveOptions getHive() {
           return hive_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.HiveOptions.getDefaultInstance() : hive_;
         }
@@ -8307,7 +8212,6 @@ public final class MetadataProto {
          *
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.View.HiveOptions hive = 10;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.HiveOptionsOrBuilder getHiveOrBuilder() {
           return getHive();
         }
@@ -9121,7 +9025,7 @@ public final class MetadataProto {
       /**
        * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator}
        */
-      public static final class Generator extends
+      public  static final class Generator extends
           com.google.protobuf.GeneratedMessageV3 implements
           // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator)
           GeneratorOrBuilder {
@@ -9464,7 +9368,7 @@ public final class MetadataProto {
         /**
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.DedupOptions}
          */
-        public static final class DedupOptions extends
+        public  static final class DedupOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.DedupOptions)
             DedupOptionsOrBuilder {
@@ -9581,7 +9485,6 @@ public final class MetadataProto {
            * <code>string input_dataset_id = 1;</code>
            * @return The inputDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getInputDatasetId() {
             java.lang.Object ref = inputDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -9602,7 +9505,6 @@ public final class MetadataProto {
            * <code>string input_dataset_id = 1;</code>
            * @return The bytes for inputDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getInputDatasetIdBytes() {
             java.lang.Object ref = inputDatasetId_;
@@ -9627,7 +9529,6 @@ public final class MetadataProto {
            * <code>string input_format_label = 2;</code>
            * @return The inputFormatLabel.
            */
-          @java.lang.Override
           public java.lang.String getInputFormatLabel() {
             java.lang.Object ref = inputFormatLabel_;
             if (ref instanceof java.lang.String) {
@@ -9648,7 +9549,6 @@ public final class MetadataProto {
            * <code>string input_format_label = 2;</code>
            * @return The bytes for inputFormatLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getInputFormatLabelBytes() {
             java.lang.Object ref = inputFormatLabel_;
@@ -9673,7 +9573,6 @@ public final class MetadataProto {
            * <code>string output_dataset_id = 3;</code>
            * @return The outputDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getOutputDatasetId() {
             java.lang.Object ref = outputDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -9694,7 +9593,6 @@ public final class MetadataProto {
            * <code>string output_dataset_id = 3;</code>
            * @return The bytes for outputDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getOutputDatasetIdBytes() {
             java.lang.Object ref = outputDatasetId_;
@@ -9719,7 +9617,6 @@ public final class MetadataProto {
            * <code>string output_format_label = 4;</code>
            * @return The outputFormatLabel.
            */
-          @java.lang.Override
           public java.lang.String getOutputFormatLabel() {
             java.lang.Object ref = outputFormatLabel_;
             if (ref instanceof java.lang.String) {
@@ -9740,7 +9637,6 @@ public final class MetadataProto {
            * <code>string output_format_label = 4;</code>
            * @return The bytes for outputFormatLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getOutputFormatLabelBytes() {
             java.lang.Object ref = outputFormatLabel_;
@@ -9767,7 +9663,6 @@ public final class MetadataProto {
            * <code>bool use_hippo_cuttle_job = 5;</code>
            * @return The useHippoCuttleJob.
            */
-          @java.lang.Override
           public boolean getUseHippoCuttleJob() {
             return useHippoCuttleJob_;
           }
@@ -10538,7 +10433,6 @@ public final class MetadataProto {
              * <code>bool use_hippo_cuttle_job = 5;</code>
              * @return The useHippoCuttleJob.
              */
-            @java.lang.Override
             public boolean getUseHippoCuttleJob() {
               return useHippoCuttleJob_;
             }
@@ -10705,7 +10599,7 @@ public final class MetadataProto {
         /**
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions}
          */
-        public static final class Kafka2HdfsOptions extends
+        public  static final class Kafka2HdfsOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions)
             Kafka2HdfsOptionsOrBuilder {
@@ -10815,7 +10709,6 @@ public final class MetadataProto {
            * <code>string topic = 1;</code>
            * @return The topic.
            */
-          @java.lang.Override
           public java.lang.String getTopic() {
             java.lang.Object ref = topic_;
             if (ref instanceof java.lang.String) {
@@ -10836,7 +10729,6 @@ public final class MetadataProto {
            * <code>string topic = 1;</code>
            * @return The bytes for topic.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getTopicBytes() {
             java.lang.Object ref = topic_;
@@ -10861,7 +10753,6 @@ public final class MetadataProto {
            * <code>bool deduplicate = 3;</code>
            * @return The deduplicate.
            */
-          @java.lang.Override
           public boolean getDeduplicate() {
             return deduplicate_;
           }
@@ -10876,7 +10767,6 @@ public final class MetadataProto {
            * <code>string output_dataset_id = 4;</code>
            * @return The outputDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getOutputDatasetId() {
             java.lang.Object ref = outputDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -10897,7 +10787,6 @@ public final class MetadataProto {
            * <code>string output_dataset_id = 4;</code>
            * @return The bytes for outputDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getOutputDatasetIdBytes() {
             java.lang.Object ref = outputDatasetId_;
@@ -10922,7 +10811,6 @@ public final class MetadataProto {
            * <code>string output_format_label = 5;</code>
            * @return The outputFormatLabel.
            */
-          @java.lang.Override
           public java.lang.String getOutputFormatLabel() {
             java.lang.Object ref = outputFormatLabel_;
             if (ref instanceof java.lang.String) {
@@ -10943,7 +10831,6 @@ public final class MetadataProto {
            * <code>string output_format_label = 5;</code>
            * @return The bytes for outputFormatLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getOutputFormatLabelBytes() {
             java.lang.Object ref = outputFormatLabel_;
@@ -11417,7 +11304,6 @@ public final class MetadataProto {
              * <code>bool deduplicate = 3;</code>
              * @return The deduplicate.
              */
-            @java.lang.Override
             public boolean getDeduplicate() {
               return deduplicate_;
             }
@@ -11722,7 +11608,7 @@ public final class MetadataProto {
         /**
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfig}
          */
-        public static final class KacohaConfig extends
+        public  static final class KacohaConfig extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfig)
             KacohaConfigOrBuilder {
@@ -11816,7 +11702,6 @@ public final class MetadataProto {
            * <code>int32 partitions_per_task = 1;</code>
            * @return The partitionsPerTask.
            */
-          @java.lang.Override
           public int getPartitionsPerTask() {
             return partitionsPerTask_;
           }
@@ -11831,7 +11716,6 @@ public final class MetadataProto {
            * <code>int32 poll_buffer_size_bytes = 2;</code>
            * @return The pollBufferSizeBytes.
            */
-          @java.lang.Override
           public int getPollBufferSizeBytes() {
             return pollBufferSizeBytes_;
           }
@@ -12164,7 +12048,6 @@ public final class MetadataProto {
              * <code>int32 partitions_per_task = 1;</code>
              * @return The partitionsPerTask.
              */
-            @java.lang.Override
             public int getPartitionsPerTask() {
               return partitionsPerTask_;
             }
@@ -12207,7 +12090,6 @@ public final class MetadataProto {
              * <code>int32 poll_buffer_size_bytes = 2;</code>
              * @return The pollBufferSizeBytes.
              */
-            @java.lang.Override
             public int getPollBufferSizeBytes() {
               return pollBufferSizeBytes_;
             }
@@ -12346,7 +12228,7 @@ public final class MetadataProto {
         /**
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc}
          */
-        public static final class KacohaConfigPerDc extends
+        public  static final class KacohaConfigPerDc extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc)
             KacohaConfigPerDcOrBuilder {
@@ -12450,7 +12332,7 @@ public final class MetadataProto {
            * <code>.Acme.Glup.DataCenter dc = 1;</code>
            * @return The enum numeric value on the wire for dc.
            */
-          @java.lang.Override public int getDcValue() {
+          public int getDcValue() {
             return dc_;
           }
           /**
@@ -12461,7 +12343,7 @@ public final class MetadataProto {
            * <code>.Acme.Glup.DataCenter dc = 1;</code>
            * @return The dc.
            */
-          @java.lang.Override public com.acme.glup.MetadataProto.DataCenter getDc() {
+          public com.acme.glup.MetadataProto.DataCenter getDc() {
             @SuppressWarnings("deprecation")
             com.acme.glup.MetadataProto.DataCenter result = com.acme.glup.MetadataProto.DataCenter.valueOf(dc_);
             return result == null ? com.acme.glup.MetadataProto.DataCenter.UNRECOGNIZED : result;
@@ -12477,7 +12359,6 @@ public final class MetadataProto {
            * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfig config = 2;</code>
            * @return Whether the config field is set.
            */
-          @java.lang.Override
           public boolean hasConfig() {
             return config_ != null;
           }
@@ -12489,7 +12370,6 @@ public final class MetadataProto {
            * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfig config = 2;</code>
            * @return The config.
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig getConfig() {
             return config_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig.getDefaultInstance() : config_;
           }
@@ -12500,7 +12380,6 @@ public final class MetadataProto {
            *
            * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfig config = 2;</code>
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigOrBuilder getConfigOrBuilder() {
             return getConfig();
           }
@@ -12845,7 +12724,7 @@ public final class MetadataProto {
              * <code>.Acme.Glup.DataCenter dc = 1;</code>
              * @return The enum numeric value on the wire for dc.
              */
-            @java.lang.Override public int getDcValue() {
+            public int getDcValue() {
               return dc_;
             }
             /**
@@ -12858,7 +12737,6 @@ public final class MetadataProto {
              * @return This builder for chaining.
              */
             public Builder setDcValue(int value) {
-              
               dc_ = value;
               onChanged();
               return this;
@@ -12871,7 +12749,6 @@ public final class MetadataProto {
              * <code>.Acme.Glup.DataCenter dc = 1;</code>
              * @return The dc.
              */
-            @java.lang.Override
             public com.acme.glup.MetadataProto.DataCenter getDc() {
               @SuppressWarnings("deprecation")
               com.acme.glup.MetadataProto.DataCenter result = com.acme.glup.MetadataProto.DataCenter.valueOf(dc_);
@@ -13265,7 +13142,7 @@ public final class MetadataProto {
         /**
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.KaCoHaOptions}
          */
-        public static final class KaCoHaOptions extends
+        public  static final class KaCoHaOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.KaCoHaOptions)
             KaCoHaOptionsOrBuilder {
@@ -13402,7 +13279,6 @@ public final class MetadataProto {
            * <code>string topic = 1;</code>
            * @return The topic.
            */
-          @java.lang.Override
           public java.lang.String getTopic() {
             java.lang.Object ref = topic_;
             if (ref instanceof java.lang.String) {
@@ -13423,7 +13299,6 @@ public final class MetadataProto {
            * <code>string topic = 1;</code>
            * @return The bytes for topic.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getTopicBytes() {
             java.lang.Object ref = topic_;
@@ -13448,7 +13323,6 @@ public final class MetadataProto {
            * <code>string output_dataset_id = 2;</code>
            * @return The outputDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getOutputDatasetId() {
             java.lang.Object ref = outputDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -13469,7 +13343,6 @@ public final class MetadataProto {
            * <code>string output_dataset_id = 2;</code>
            * @return The bytes for outputDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getOutputDatasetIdBytes() {
             java.lang.Object ref = outputDatasetId_;
@@ -13494,7 +13367,6 @@ public final class MetadataProto {
            * <code>bool deduplicate = 3;</code>
            * @return The deduplicate.
            */
-          @java.lang.Override
           public boolean getDeduplicate() {
             return deduplicate_;
           }
@@ -13509,7 +13381,6 @@ public final class MetadataProto {
            * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfig config = 4;</code>
            * @return Whether the config field is set.
            */
-          @java.lang.Override
           public boolean hasConfig() {
             return config_ != null;
           }
@@ -13521,7 +13392,6 @@ public final class MetadataProto {
            * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfig config = 4;</code>
            * @return The config.
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig getConfig() {
             return config_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig.getDefaultInstance() : config_;
           }
@@ -13532,7 +13402,6 @@ public final class MetadataProto {
            *
            * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfig config = 4;</code>
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigOrBuilder getConfigOrBuilder() {
             return getConfig();
           }
@@ -13547,7 +13416,6 @@ public final class MetadataProto {
            * <code>string output_format_label = 5;</code>
            * @return The outputFormatLabel.
            */
-          @java.lang.Override
           public java.lang.String getOutputFormatLabel() {
             java.lang.Object ref = outputFormatLabel_;
             if (ref instanceof java.lang.String) {
@@ -13568,7 +13436,6 @@ public final class MetadataProto {
            * <code>string output_format_label = 5;</code>
            * @return The bytes for outputFormatLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getOutputFormatLabelBytes() {
             java.lang.Object ref = outputFormatLabel_;
@@ -13592,7 +13459,6 @@ public final class MetadataProto {
            *
            * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc config_per_dc = 6;</code>
            */
-          @java.lang.Override
           public java.util.List<com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc> getConfigPerDcList() {
             return configPerDc_;
           }
@@ -13603,7 +13469,6 @@ public final class MetadataProto {
            *
            * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc config_per_dc = 6;</code>
            */
-          @java.lang.Override
           public java.util.List<? extends com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDcOrBuilder> 
               getConfigPerDcOrBuilderList() {
             return configPerDc_;
@@ -13615,7 +13480,6 @@ public final class MetadataProto {
            *
            * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc config_per_dc = 6;</code>
            */
-          @java.lang.Override
           public int getConfigPerDcCount() {
             return configPerDc_.size();
           }
@@ -13626,7 +13490,6 @@ public final class MetadataProto {
            *
            * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc config_per_dc = 6;</code>
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc getConfigPerDc(int index) {
             return configPerDc_.get(index);
           }
@@ -13637,7 +13500,6 @@ public final class MetadataProto {
            *
            * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc config_per_dc = 6;</code>
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDcOrBuilder getConfigPerDcOrBuilder(
               int index) {
             return configPerDc_.get(index);
@@ -14285,7 +14147,6 @@ public final class MetadataProto {
              * <code>bool deduplicate = 3;</code>
              * @return The deduplicate.
              */
-            @java.lang.Override
             public boolean getDeduplicate() {
               return deduplicate_;
             }
@@ -14995,7 +14856,7 @@ public final class MetadataProto {
         /**
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.DataloaderOptions}
          */
-        public static final class DataloaderOptions extends
+        public  static final class DataloaderOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.DataloaderOptions)
             DataloaderOptionsOrBuilder {
@@ -15118,7 +14979,6 @@ public final class MetadataProto {
            * <code>repeated .Acme.Glup.Platform platform = 1;</code>
            * @return A list containing the platform.
            */
-          @java.lang.Override
           public java.util.List<com.acme.glup.MetadataProto.Platform> getPlatformList() {
             return new com.google.protobuf.Internal.ListAdapter<
                 java.lang.Integer, com.acme.glup.MetadataProto.Platform>(platform_, platform_converter_);
@@ -15132,7 +14992,6 @@ public final class MetadataProto {
            * <code>repeated .Acme.Glup.Platform platform = 1;</code>
            * @return The count of platform.
            */
-          @java.lang.Override
           public int getPlatformCount() {
             return platform_.size();
           }
@@ -15146,7 +15005,6 @@ public final class MetadataProto {
            * @param index The index of the element to return.
            * @return The platform at the given index.
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.Platform getPlatform(int index) {
             return platform_converter_.convert(platform_.get(index));
           }
@@ -15159,7 +15017,6 @@ public final class MetadataProto {
            * <code>repeated .Acme.Glup.Platform platform = 1;</code>
            * @return A list containing the enum numeric values on the wire for platform.
            */
-          @java.lang.Override
           public java.util.List<java.lang.Integer>
           getPlatformValueList() {
             return platform_;
@@ -15174,7 +15031,6 @@ public final class MetadataProto {
            * @param index The index of the value to return.
            * @return The enum numeric value on the wire of platform at the given index.
            */
-          @java.lang.Override
           public int getPlatformValue(int index) {
             return platform_.get(index);
           }
@@ -15944,7 +15800,7 @@ public final class MetadataProto {
         /**
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.SyncOptions}
          */
-        public static final class SyncOptions extends
+        public  static final class SyncOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.SyncOptions)
             SyncOptionsOrBuilder {
@@ -16105,7 +15961,6 @@ public final class MetadataProto {
            * <code>.Acme.Glup.Location from = 1;</code>
            * @return Whether the from field is set.
            */
-          @java.lang.Override
           public boolean hasFrom() {
             return from_ != null;
           }
@@ -16117,7 +15972,6 @@ public final class MetadataProto {
            * <code>.Acme.Glup.Location from = 1;</code>
            * @return The from.
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.Location getFrom() {
             return from_ == null ? com.acme.glup.MetadataProto.Location.getDefaultInstance() : from_;
           }
@@ -16128,7 +15982,6 @@ public final class MetadataProto {
            *
            * <code>.Acme.Glup.Location from = 1;</code>
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.LocationOrBuilder getFromOrBuilder() {
             return getFrom();
           }
@@ -16143,7 +15996,6 @@ public final class MetadataProto {
            * <code>string source_namespace = 3;</code>
            * @return The sourceNamespace.
            */
-          @java.lang.Override
           public java.lang.String getSourceNamespace() {
             java.lang.Object ref = sourceNamespace_;
             if (ref instanceof java.lang.String) {
@@ -16164,7 +16016,6 @@ public final class MetadataProto {
            * <code>string source_namespace = 3;</code>
            * @return The bytes for sourceNamespace.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getSourceNamespaceBytes() {
             java.lang.Object ref = sourceNamespace_;
@@ -16201,7 +16052,6 @@ public final class MetadataProto {
            * <code>repeated .Acme.Glup.Platform platforms = 6;</code>
            * @return A list containing the platforms.
            */
-          @java.lang.Override
           public java.util.List<com.acme.glup.MetadataProto.Platform> getPlatformsList() {
             return new com.google.protobuf.Internal.ListAdapter<
                 java.lang.Integer, com.acme.glup.MetadataProto.Platform>(platforms_, platforms_converter_);
@@ -16216,7 +16066,6 @@ public final class MetadataProto {
            * <code>repeated .Acme.Glup.Platform platforms = 6;</code>
            * @return The count of platforms.
            */
-          @java.lang.Override
           public int getPlatformsCount() {
             return platforms_.size();
           }
@@ -16231,7 +16080,6 @@ public final class MetadataProto {
            * @param index The index of the element to return.
            * @return The platforms at the given index.
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.Platform getPlatforms(int index) {
             return platforms_converter_.convert(platforms_.get(index));
           }
@@ -16245,7 +16093,6 @@ public final class MetadataProto {
            * <code>repeated .Acme.Glup.Platform platforms = 6;</code>
            * @return A list containing the enum numeric values on the wire for platforms.
            */
-          @java.lang.Override
           public java.util.List<java.lang.Integer>
           getPlatformsValueList() {
             return platforms_;
@@ -16261,7 +16108,6 @@ public final class MetadataProto {
            * @param index The index of the value to return.
            * @return The enum numeric value on the wire of platforms at the given index.
            */
-          @java.lang.Override
           public int getPlatformsValue(int index) {
             return platforms_.get(index);
           }
@@ -16277,7 +16123,6 @@ public final class MetadataProto {
            * <code>bool is_backfilling = 8;</code>
            * @return The isBackfilling.
            */
-          @java.lang.Override
           public boolean getIsBackfilling() {
             return isBackfilling_;
           }
@@ -16292,7 +16137,6 @@ public final class MetadataProto {
            * <code>string to_label = 9;</code>
            * @return The toLabel.
            */
-          @java.lang.Override
           public java.lang.String getToLabel() {
             java.lang.Object ref = toLabel_;
             if (ref instanceof java.lang.String) {
@@ -16313,7 +16157,6 @@ public final class MetadataProto {
            * <code>string to_label = 9;</code>
            * @return The bytes for toLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getToLabelBytes() {
             java.lang.Object ref = toLabel_;
@@ -16338,7 +16181,6 @@ public final class MetadataProto {
            * <code>string to_dataset_id = 10;</code>
            * @return The toDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getToDatasetId() {
             java.lang.Object ref = toDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -16359,7 +16201,6 @@ public final class MetadataProto {
            * <code>string to_dataset_id = 10;</code>
            * @return The bytes for toDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getToDatasetIdBytes() {
             java.lang.Object ref = toDatasetId_;
@@ -16384,7 +16225,6 @@ public final class MetadataProto {
            * <code>bool with_backfilling = 11;</code>
            * @return The withBackfilling.
            */
-          @java.lang.Override
           public boolean getWithBackfilling() {
             return withBackfilling_;
           }
@@ -16399,7 +16239,6 @@ public final class MetadataProto {
            * <code>bool is_scheduled_on_source = 12;</code>
            * @return The isScheduledOnSource.
            */
-          @java.lang.Override
           public boolean getIsScheduledOnSource() {
             return isScheduledOnSource_;
           }
@@ -17340,7 +17179,6 @@ public final class MetadataProto {
              * <code>bool is_backfilling = 8;</code>
              * @return The isBackfilling.
              */
-            @java.lang.Override
             public boolean getIsBackfilling() {
               return isBackfilling_;
             }
@@ -17575,7 +17413,6 @@ public final class MetadataProto {
              * <code>bool with_backfilling = 11;</code>
              * @return The withBackfilling.
              */
-            @java.lang.Override
             public boolean getWithBackfilling() {
               return withBackfilling_;
             }
@@ -17618,7 +17455,6 @@ public final class MetadataProto {
              * <code>bool is_scheduled_on_source = 12;</code>
              * @return The isScheduledOnSource.
              */
-            @java.lang.Override
             public boolean getIsScheduledOnSource() {
               return isScheduledOnSource_;
             }
@@ -17807,7 +17643,7 @@ public final class MetadataProto {
         /**
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.BackupOptions}
          */
-        public static final class BackupOptions extends
+        public  static final class BackupOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.BackupOptions)
             BackupOptionsOrBuilder {
@@ -17939,7 +17775,6 @@ public final class MetadataProto {
            * <code>.Acme.Glup.Location from = 1;</code>
            * @return Whether the from field is set.
            */
-          @java.lang.Override
           public boolean hasFrom() {
             return from_ != null;
           }
@@ -17951,7 +17786,6 @@ public final class MetadataProto {
            * <code>.Acme.Glup.Location from = 1;</code>
            * @return The from.
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.Location getFrom() {
             return from_ == null ? com.acme.glup.MetadataProto.Location.getDefaultInstance() : from_;
           }
@@ -17962,7 +17796,6 @@ public final class MetadataProto {
            *
            * <code>.Acme.Glup.Location from = 1;</code>
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.LocationOrBuilder getFromOrBuilder() {
             return getFrom();
           }
@@ -17977,7 +17810,6 @@ public final class MetadataProto {
            * <code>string source_namespace = 2;</code>
            * @return The sourceNamespace.
            */
-          @java.lang.Override
           public java.lang.String getSourceNamespace() {
             java.lang.Object ref = sourceNamespace_;
             if (ref instanceof java.lang.String) {
@@ -17998,7 +17830,6 @@ public final class MetadataProto {
            * <code>string source_namespace = 2;</code>
            * @return The bytes for sourceNamespace.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getSourceNamespaceBytes() {
             java.lang.Object ref = sourceNamespace_;
@@ -18033,7 +17864,6 @@ public final class MetadataProto {
            * <code>repeated .Acme.Glup.Platform platforms = 3;</code>
            * @return A list containing the platforms.
            */
-          @java.lang.Override
           public java.util.List<com.acme.glup.MetadataProto.Platform> getPlatformsList() {
             return new com.google.protobuf.Internal.ListAdapter<
                 java.lang.Integer, com.acme.glup.MetadataProto.Platform>(platforms_, platforms_converter_);
@@ -18046,7 +17876,6 @@ public final class MetadataProto {
            * <code>repeated .Acme.Glup.Platform platforms = 3;</code>
            * @return The count of platforms.
            */
-          @java.lang.Override
           public int getPlatformsCount() {
             return platforms_.size();
           }
@@ -18059,7 +17888,6 @@ public final class MetadataProto {
            * @param index The index of the element to return.
            * @return The platforms at the given index.
            */
-          @java.lang.Override
           public com.acme.glup.MetadataProto.Platform getPlatforms(int index) {
             return platforms_converter_.convert(platforms_.get(index));
           }
@@ -18071,7 +17899,6 @@ public final class MetadataProto {
            * <code>repeated .Acme.Glup.Platform platforms = 3;</code>
            * @return A list containing the enum numeric values on the wire for platforms.
            */
-          @java.lang.Override
           public java.util.List<java.lang.Integer>
           getPlatformsValueList() {
             return platforms_;
@@ -18085,7 +17912,6 @@ public final class MetadataProto {
            * @param index The index of the value to return.
            * @return The enum numeric value on the wire of platforms at the given index.
            */
-          @java.lang.Override
           public int getPlatformsValue(int index) {
             return platforms_.get(index);
           }
@@ -19097,7 +18923,7 @@ public final class MetadataProto {
          *
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.TranscodingOptions}
          */
-        public static final class TranscodingOptions extends
+        public  static final class TranscodingOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.TranscodingOptions)
             TranscodingOptionsOrBuilder {
@@ -19228,7 +19054,6 @@ public final class MetadataProto {
            * <code>string input_dataset_id = 1;</code>
            * @return The inputDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getInputDatasetId() {
             java.lang.Object ref = inputDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -19249,7 +19074,6 @@ public final class MetadataProto {
            * <code>string input_dataset_id = 1;</code>
            * @return The bytes for inputDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getInputDatasetIdBytes() {
             java.lang.Object ref = inputDatasetId_;
@@ -19274,7 +19098,6 @@ public final class MetadataProto {
            * <code>string output_dataset_id = 2;</code>
            * @return The outputDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getOutputDatasetId() {
             java.lang.Object ref = outputDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -19295,7 +19118,6 @@ public final class MetadataProto {
            * <code>string output_dataset_id = 2;</code>
            * @return The bytes for outputDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getOutputDatasetIdBytes() {
             java.lang.Object ref = outputDatasetId_;
@@ -19320,7 +19142,7 @@ public final class MetadataProto {
            * <code>.Acme.Glup.HDFSDataFormat input_format = 3;</code>
            * @return The enum numeric value on the wire for inputFormat.
            */
-          @java.lang.Override public int getInputFormatValue() {
+          public int getInputFormatValue() {
             return inputFormat_;
           }
           /**
@@ -19331,7 +19153,7 @@ public final class MetadataProto {
            * <code>.Acme.Glup.HDFSDataFormat input_format = 3;</code>
            * @return The inputFormat.
            */
-          @java.lang.Override public com.acme.glup.MetadataProto.HDFSDataFormat getInputFormat() {
+          public com.acme.glup.MetadataProto.HDFSDataFormat getInputFormat() {
             @SuppressWarnings("deprecation")
             com.acme.glup.MetadataProto.HDFSDataFormat result = com.acme.glup.MetadataProto.HDFSDataFormat.valueOf(inputFormat_);
             return result == null ? com.acme.glup.MetadataProto.HDFSDataFormat.UNRECOGNIZED : result;
@@ -19347,7 +19169,7 @@ public final class MetadataProto {
            * <code>.Acme.Glup.HDFSDataFormat output_format = 4;</code>
            * @return The enum numeric value on the wire for outputFormat.
            */
-          @java.lang.Override public int getOutputFormatValue() {
+          public int getOutputFormatValue() {
             return outputFormat_;
           }
           /**
@@ -19358,7 +19180,7 @@ public final class MetadataProto {
            * <code>.Acme.Glup.HDFSDataFormat output_format = 4;</code>
            * @return The outputFormat.
            */
-          @java.lang.Override public com.acme.glup.MetadataProto.HDFSDataFormat getOutputFormat() {
+          public com.acme.glup.MetadataProto.HDFSDataFormat getOutputFormat() {
             @SuppressWarnings("deprecation")
             com.acme.glup.MetadataProto.HDFSDataFormat result = com.acme.glup.MetadataProto.HDFSDataFormat.valueOf(outputFormat_);
             return result == null ? com.acme.glup.MetadataProto.HDFSDataFormat.UNRECOGNIZED : result;
@@ -19374,7 +19196,6 @@ public final class MetadataProto {
            * <code>string input_dataset_label = 5;</code>
            * @return The inputDatasetLabel.
            */
-          @java.lang.Override
           public java.lang.String getInputDatasetLabel() {
             java.lang.Object ref = inputDatasetLabel_;
             if (ref instanceof java.lang.String) {
@@ -19395,7 +19216,6 @@ public final class MetadataProto {
            * <code>string input_dataset_label = 5;</code>
            * @return The bytes for inputDatasetLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getInputDatasetLabelBytes() {
             java.lang.Object ref = inputDatasetLabel_;
@@ -19420,7 +19240,6 @@ public final class MetadataProto {
            * <code>string output_dataset_label = 6;</code>
            * @return The outputDatasetLabel.
            */
-          @java.lang.Override
           public java.lang.String getOutputDatasetLabel() {
             java.lang.Object ref = outputDatasetLabel_;
             if (ref instanceof java.lang.String) {
@@ -19441,7 +19260,6 @@ public final class MetadataProto {
            * <code>string output_dataset_label = 6;</code>
            * @return The bytes for outputDatasetLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getOutputDatasetLabelBytes() {
             java.lang.Object ref = outputDatasetLabel_;
@@ -19466,7 +19284,6 @@ public final class MetadataProto {
            * <code>bool is_by_platform = 7;</code>
            * @return The isByPlatform.
            */
-          @java.lang.Override
           public boolean getIsByPlatform() {
             return isByPlatform_;
           }
@@ -20079,7 +19896,7 @@ public final class MetadataProto {
              * <code>.Acme.Glup.HDFSDataFormat input_format = 3;</code>
              * @return The enum numeric value on the wire for inputFormat.
              */
-            @java.lang.Override public int getInputFormatValue() {
+            public int getInputFormatValue() {
               return inputFormat_;
             }
             /**
@@ -20092,7 +19909,6 @@ public final class MetadataProto {
              * @return This builder for chaining.
              */
             public Builder setInputFormatValue(int value) {
-              
               inputFormat_ = value;
               onChanged();
               return this;
@@ -20105,7 +19921,6 @@ public final class MetadataProto {
              * <code>.Acme.Glup.HDFSDataFormat input_format = 3;</code>
              * @return The inputFormat.
              */
-            @java.lang.Override
             public com.acme.glup.MetadataProto.HDFSDataFormat getInputFormat() {
               @SuppressWarnings("deprecation")
               com.acme.glup.MetadataProto.HDFSDataFormat result = com.acme.glup.MetadataProto.HDFSDataFormat.valueOf(inputFormat_);
@@ -20153,7 +19968,7 @@ public final class MetadataProto {
              * <code>.Acme.Glup.HDFSDataFormat output_format = 4;</code>
              * @return The enum numeric value on the wire for outputFormat.
              */
-            @java.lang.Override public int getOutputFormatValue() {
+            public int getOutputFormatValue() {
               return outputFormat_;
             }
             /**
@@ -20166,7 +19981,6 @@ public final class MetadataProto {
              * @return This builder for chaining.
              */
             public Builder setOutputFormatValue(int value) {
-              
               outputFormat_ = value;
               onChanged();
               return this;
@@ -20179,7 +19993,6 @@ public final class MetadataProto {
              * <code>.Acme.Glup.HDFSDataFormat output_format = 4;</code>
              * @return The outputFormat.
              */
-            @java.lang.Override
             public com.acme.glup.MetadataProto.HDFSDataFormat getOutputFormat() {
               @SuppressWarnings("deprecation")
               com.acme.glup.MetadataProto.HDFSDataFormat result = com.acme.glup.MetadataProto.HDFSDataFormat.valueOf(outputFormat_);
@@ -20419,7 +20232,6 @@ public final class MetadataProto {
              * <code>bool is_by_platform = 7;</code>
              * @return The isByPlatform.
              */
-            @java.lang.Override
             public boolean getIsByPlatform() {
               return isByPlatform_;
             }
@@ -20602,7 +20414,7 @@ public final class MetadataProto {
         /**
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.SamplerOptions}
          */
-        public static final class SamplerOptions extends
+        public  static final class SamplerOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.SamplerOptions)
             SamplerOptionsOrBuilder {
@@ -20719,7 +20531,6 @@ public final class MetadataProto {
            * <code>string input_dataset_id = 1;</code>
            * @return The inputDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getInputDatasetId() {
             java.lang.Object ref = inputDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -20740,7 +20551,6 @@ public final class MetadataProto {
            * <code>string input_dataset_id = 1;</code>
            * @return The bytes for inputDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getInputDatasetIdBytes() {
             java.lang.Object ref = inputDatasetId_;
@@ -20765,7 +20575,6 @@ public final class MetadataProto {
            * <code>string input_format_label = 2;</code>
            * @return The inputFormatLabel.
            */
-          @java.lang.Override
           public java.lang.String getInputFormatLabel() {
             java.lang.Object ref = inputFormatLabel_;
             if (ref instanceof java.lang.String) {
@@ -20786,7 +20595,6 @@ public final class MetadataProto {
            * <code>string input_format_label = 2;</code>
            * @return The bytes for inputFormatLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getInputFormatLabelBytes() {
             java.lang.Object ref = inputFormatLabel_;
@@ -20811,7 +20619,6 @@ public final class MetadataProto {
            * <code>string output_dataset_id = 3;</code>
            * @return The outputDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getOutputDatasetId() {
             java.lang.Object ref = outputDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -20832,7 +20639,6 @@ public final class MetadataProto {
            * <code>string output_dataset_id = 3;</code>
            * @return The bytes for outputDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getOutputDatasetIdBytes() {
             java.lang.Object ref = outputDatasetId_;
@@ -20857,7 +20663,6 @@ public final class MetadataProto {
            * <code>string output_format_label = 4;</code>
            * @return The outputFormatLabel.
            */
-          @java.lang.Override
           public java.lang.String getOutputFormatLabel() {
             java.lang.Object ref = outputFormatLabel_;
             if (ref instanceof java.lang.String) {
@@ -20878,7 +20683,6 @@ public final class MetadataProto {
            * <code>string output_format_label = 4;</code>
            * @return The bytes for outputFormatLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getOutputFormatLabelBytes() {
             java.lang.Object ref = outputFormatLabel_;
@@ -20903,7 +20707,6 @@ public final class MetadataProto {
            * <code>float sampling_rate = 5;</code>
            * @return The samplingRate.
            */
-          @java.lang.Override
           public float getSamplingRate() {
             return samplingRate_;
           }
@@ -21673,7 +21476,6 @@ public final class MetadataProto {
              * <code>float sampling_rate = 5;</code>
              * @return The samplingRate.
              */
-            @java.lang.Override
             public float getSamplingRate() {
               return samplingRate_;
             }
@@ -21892,7 +21694,7 @@ public final class MetadataProto {
          *
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.ComparatorOptions}
          */
-        public static final class ComparatorOptions extends
+        public  static final class ComparatorOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.ComparatorOptions)
             ComparatorOptionsOrBuilder {
@@ -22018,7 +21820,6 @@ public final class MetadataProto {
            * <code>string left_dataset_id = 1;</code>
            * @return The leftDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getLeftDatasetId() {
             java.lang.Object ref = leftDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -22039,7 +21840,6 @@ public final class MetadataProto {
            * <code>string left_dataset_id = 1;</code>
            * @return The bytes for leftDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getLeftDatasetIdBytes() {
             java.lang.Object ref = leftDatasetId_;
@@ -22064,7 +21864,6 @@ public final class MetadataProto {
            * <code>string left_format_label = 2;</code>
            * @return The leftFormatLabel.
            */
-          @java.lang.Override
           public java.lang.String getLeftFormatLabel() {
             java.lang.Object ref = leftFormatLabel_;
             if (ref instanceof java.lang.String) {
@@ -22085,7 +21884,6 @@ public final class MetadataProto {
            * <code>string left_format_label = 2;</code>
            * @return The bytes for leftFormatLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getLeftFormatLabelBytes() {
             java.lang.Object ref = leftFormatLabel_;
@@ -22110,7 +21908,6 @@ public final class MetadataProto {
            * <code>string right_dataset_id = 3;</code>
            * @return The rightDatasetId.
            */
-          @java.lang.Override
           public java.lang.String getRightDatasetId() {
             java.lang.Object ref = rightDatasetId_;
             if (ref instanceof java.lang.String) {
@@ -22131,7 +21928,6 @@ public final class MetadataProto {
            * <code>string right_dataset_id = 3;</code>
            * @return The bytes for rightDatasetId.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getRightDatasetIdBytes() {
             java.lang.Object ref = rightDatasetId_;
@@ -22156,7 +21952,6 @@ public final class MetadataProto {
            * <code>string right_format_label = 4;</code>
            * @return The rightFormatLabel.
            */
-          @java.lang.Override
           public java.lang.String getRightFormatLabel() {
             java.lang.Object ref = rightFormatLabel_;
             if (ref instanceof java.lang.String) {
@@ -22177,7 +21972,6 @@ public final class MetadataProto {
            * <code>string right_format_label = 4;</code>
            * @return The bytes for rightFormatLabel.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getRightFormatLabelBytes() {
             java.lang.Object ref = rightFormatLabel_;
@@ -22202,7 +21996,6 @@ public final class MetadataProto {
            * <code>string hostname = 5;</code>
            * @return The hostname.
            */
-          @java.lang.Override
           public java.lang.String getHostname() {
             java.lang.Object ref = hostname_;
             if (ref instanceof java.lang.String) {
@@ -22223,7 +22016,6 @@ public final class MetadataProto {
            * <code>string hostname = 5;</code>
            * @return The bytes for hostname.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getHostnameBytes() {
             java.lang.Object ref = hostname_;
@@ -22248,7 +22040,6 @@ public final class MetadataProto {
            * <code>string ignored_fields = 6;</code>
            * @return The ignoredFields.
            */
-          @java.lang.Override
           public java.lang.String getIgnoredFields() {
             java.lang.Object ref = ignoredFields_;
             if (ref instanceof java.lang.String) {
@@ -22269,7 +22060,6 @@ public final class MetadataProto {
            * <code>string ignored_fields = 6;</code>
            * @return The bytes for ignoredFields.
            */
-          @java.lang.Override
           public com.google.protobuf.ByteString
               getIgnoredFieldsBytes() {
             java.lang.Object ref = ignoredFields_;
@@ -23312,7 +23102,7 @@ public final class MetadataProto {
         /**
          * Protobuf type {@code Acme.Glup.HDFSOptions.ImportOptions.Generator.ExternalOptions}
          */
-        public static final class ExternalOptions extends
+        public  static final class ExternalOptions extends
             com.google.protobuf.GeneratedMessageV3 implements
             // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSOptions.ImportOptions.Generator.ExternalOptions)
             ExternalOptionsOrBuilder {
@@ -23733,7 +23523,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.DataloaderOptions dataloader = 1;</code>
          * @return Whether the dataloader field is set.
          */
-        @java.lang.Override
         public boolean hasDataloader() {
           return dataloader_ != null;
         }
@@ -23745,7 +23534,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.DataloaderOptions dataloader = 1;</code>
          * @return The dataloader.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DataloaderOptions getDataloader() {
           return dataloader_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DataloaderOptions.getDefaultInstance() : dataloader_;
         }
@@ -23756,7 +23544,6 @@ public final class MetadataProto {
          *
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.DataloaderOptions dataloader = 1;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DataloaderOptionsOrBuilder getDataloaderOrBuilder() {
           return getDataloader();
         }
@@ -23767,7 +23554,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions kafka2hdfs = 2;</code>
          * @return Whether the kafka2hdfs field is set.
          */
-        @java.lang.Override
         public boolean hasKafka2Hdfs() {
           return kafka2Hdfs_ != null;
         }
@@ -23775,14 +23561,12 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions kafka2hdfs = 2;</code>
          * @return The kafka2hdfs.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions getKafka2Hdfs() {
           return kafka2Hdfs_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions.getDefaultInstance() : kafka2Hdfs_;
         }
         /**
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions kafka2hdfs = 2;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptionsOrBuilder getKafka2HdfsOrBuilder() {
           return getKafka2Hdfs();
         }
@@ -23793,7 +23577,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.SyncOptions sync = 3;</code>
          * @return Whether the sync field is set.
          */
-        @java.lang.Override
         public boolean hasSync() {
           return sync_ != null;
         }
@@ -23801,14 +23584,12 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.SyncOptions sync = 3;</code>
          * @return The sync.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SyncOptions getSync() {
           return sync_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SyncOptions.getDefaultInstance() : sync_;
         }
         /**
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.SyncOptions sync = 3;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SyncOptionsOrBuilder getSyncOrBuilder() {
           return getSync();
         }
@@ -23819,7 +23600,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.ExternalOptions external = 4;</code>
          * @return Whether the external field is set.
          */
-        @java.lang.Override
         public boolean hasExternal() {
           return external_ != null;
         }
@@ -23827,14 +23607,12 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.ExternalOptions external = 4;</code>
          * @return The external.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions getExternal() {
           return external_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions.getDefaultInstance() : external_;
         }
         /**
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.ExternalOptions external = 4;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptionsOrBuilder getExternalOrBuilder() {
           return getExternal();
         }
@@ -23845,7 +23623,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.BackupOptions backup = 5;</code>
          * @return Whether the backup field is set.
          */
-        @java.lang.Override
         public boolean hasBackup() {
           return backup_ != null;
         }
@@ -23853,14 +23630,12 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.BackupOptions backup = 5;</code>
          * @return The backup.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.BackupOptions getBackup() {
           return backup_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.BackupOptions.getDefaultInstance() : backup_;
         }
         /**
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.BackupOptions backup = 5;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.BackupOptionsOrBuilder getBackupOrBuilder() {
           return getBackup();
         }
@@ -23871,7 +23646,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.TranscodingOptions transcoding = 6;</code>
          * @return Whether the transcoding field is set.
          */
-        @java.lang.Override
         public boolean hasTranscoding() {
           return transcoding_ != null;
         }
@@ -23879,14 +23653,12 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.TranscodingOptions transcoding = 6;</code>
          * @return The transcoding.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.TranscodingOptions getTranscoding() {
           return transcoding_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.TranscodingOptions.getDefaultInstance() : transcoding_;
         }
         /**
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.TranscodingOptions transcoding = 6;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.TranscodingOptionsOrBuilder getTranscodingOrBuilder() {
           return getTranscoding();
         }
@@ -23897,7 +23669,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.KaCoHaOptions kacoha = 7;</code>
          * @return Whether the kacoha field is set.
          */
-        @java.lang.Override
         public boolean hasKacoha() {
           return kacoha_ != null;
         }
@@ -23905,14 +23676,12 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.KaCoHaOptions kacoha = 7;</code>
          * @return The kacoha.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KaCoHaOptions getKacoha() {
           return kacoha_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KaCoHaOptions.getDefaultInstance() : kacoha_;
         }
         /**
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.KaCoHaOptions kacoha = 7;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KaCoHaOptionsOrBuilder getKacohaOrBuilder() {
           return getKacoha();
         }
@@ -23923,7 +23692,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.DedupOptions deduplicate = 8;</code>
          * @return Whether the deduplicate field is set.
          */
-        @java.lang.Override
         public boolean hasDeduplicate() {
           return deduplicate_ != null;
         }
@@ -23931,14 +23699,12 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.DedupOptions deduplicate = 8;</code>
          * @return The deduplicate.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DedupOptions getDeduplicate() {
           return deduplicate_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DedupOptions.getDefaultInstance() : deduplicate_;
         }
         /**
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.DedupOptions deduplicate = 8;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DedupOptionsOrBuilder getDeduplicateOrBuilder() {
           return getDeduplicate();
         }
@@ -23949,7 +23715,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.SamplerOptions sampler = 9;</code>
          * @return Whether the sampler field is set.
          */
-        @java.lang.Override
         public boolean hasSampler() {
           return sampler_ != null;
         }
@@ -23957,14 +23722,12 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.SamplerOptions sampler = 9;</code>
          * @return The sampler.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SamplerOptions getSampler() {
           return sampler_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SamplerOptions.getDefaultInstance() : sampler_;
         }
         /**
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.SamplerOptions sampler = 9;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SamplerOptionsOrBuilder getSamplerOrBuilder() {
           return getSampler();
         }
@@ -23979,7 +23742,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.ComparatorOptions comparator = 10;</code>
          * @return Whether the comparator field is set.
          */
-        @java.lang.Override
         public boolean hasComparator() {
           return comparator_ != null;
         }
@@ -23991,7 +23753,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.ComparatorOptions comparator = 10;</code>
          * @return The comparator.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ComparatorOptions getComparator() {
           return comparator_ == null ? com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ComparatorOptions.getDefaultInstance() : comparator_;
         }
@@ -24002,7 +23763,6 @@ public final class MetadataProto {
          *
          * <code>.Acme.Glup.HDFSOptions.ImportOptions.Generator.ComparatorOptions comparator = 10;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ComparatorOptionsOrBuilder getComparatorOrBuilder() {
           return getComparator();
         }
@@ -24016,7 +23776,6 @@ public final class MetadataProto {
          *
          * <code>repeated .Acme.Glup.Location to = 250;</code>
          */
-        @java.lang.Override
         public java.util.List<com.acme.glup.MetadataProto.Location> getToList() {
           return to_;
         }
@@ -24027,7 +23786,6 @@ public final class MetadataProto {
          *
          * <code>repeated .Acme.Glup.Location to = 250;</code>
          */
-        @java.lang.Override
         public java.util.List<? extends com.acme.glup.MetadataProto.LocationOrBuilder> 
             getToOrBuilderList() {
           return to_;
@@ -24039,7 +23797,6 @@ public final class MetadataProto {
          *
          * <code>repeated .Acme.Glup.Location to = 250;</code>
          */
-        @java.lang.Override
         public int getToCount() {
           return to_.size();
         }
@@ -24050,7 +23807,6 @@ public final class MetadataProto {
          *
          * <code>repeated .Acme.Glup.Location to = 250;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.Location getTo(int index) {
           return to_.get(index);
         }
@@ -24061,7 +23817,6 @@ public final class MetadataProto {
          *
          * <code>repeated .Acme.Glup.Location to = 250;</code>
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.LocationOrBuilder getToOrBuilder(
             int index) {
           return to_.get(index);
@@ -24073,7 +23828,6 @@ public final class MetadataProto {
          * <code>string namespace = 251;</code>
          * @return The namespace.
          */
-        @java.lang.Override
         public java.lang.String getNamespace() {
           java.lang.Object ref = namespace_;
           if (ref instanceof java.lang.String) {
@@ -24090,7 +23844,6 @@ public final class MetadataProto {
          * <code>string namespace = 251;</code>
          * @return The bytes for namespace.
          */
-        @java.lang.Override
         public com.google.protobuf.ByteString
             getNamespaceBytes() {
           java.lang.Object ref = namespace_;
@@ -24115,7 +23868,6 @@ public final class MetadataProto {
          * <code>string start_date = 253;</code>
          * @return The startDate.
          */
-        @java.lang.Override
         public java.lang.String getStartDate() {
           java.lang.Object ref = startDate_;
           if (ref instanceof java.lang.String) {
@@ -24136,7 +23888,6 @@ public final class MetadataProto {
          * <code>string start_date = 253;</code>
          * @return The bytes for startDate.
          */
-        @java.lang.Override
         public com.google.protobuf.ByteString
             getStartDateBytes() {
           java.lang.Object ref = startDate_;
@@ -24161,7 +23912,6 @@ public final class MetadataProto {
          * <code>string stop_date = 254;</code>
          * @return The stopDate.
          */
-        @java.lang.Override
         public java.lang.String getStopDate() {
           java.lang.Object ref = stopDate_;
           if (ref instanceof java.lang.String) {
@@ -24182,7 +23932,6 @@ public final class MetadataProto {
          * <code>string stop_date = 254;</code>
          * @return The bytes for stopDate.
          */
-        @java.lang.Override
         public com.google.protobuf.ByteString
             getStopDateBytes() {
           java.lang.Object ref = stopDate_;
@@ -24207,7 +23956,6 @@ public final class MetadataProto {
          * <code>bool ignore_cn = 255;</code>
          * @return The ignoreCn.
          */
-        @java.lang.Override
         public boolean getIgnoreCn() {
           return ignoreCn_;
         }
@@ -26774,7 +26522,6 @@ public final class MetadataProto {
            * <code>bool ignore_cn = 255;</code>
            * @return The ignoreCn.
            */
-          @java.lang.Override
           public boolean getIgnoreCn() {
             return ignoreCn_;
           }
@@ -26870,7 +26617,6 @@ public final class MetadataProto {
        * <code>string owner = 1;</code>
        * @return The owner.
        */
-      @java.lang.Override
       public java.lang.String getOwner() {
         java.lang.Object ref = owner_;
         if (ref instanceof java.lang.String) {
@@ -26891,7 +26637,6 @@ public final class MetadataProto {
        * <code>string owner = 1;</code>
        * @return The bytes for owner.
        */
-      @java.lang.Override
       public com.google.protobuf.ByteString
           getOwnerBytes() {
         java.lang.Object ref = owner_;
@@ -26912,7 +26657,6 @@ public final class MetadataProto {
        * <code>string name = 2;</code>
        * @return The name.
        */
-      @java.lang.Override
       public java.lang.String getName() {
         java.lang.Object ref = name_;
         if (ref instanceof java.lang.String) {
@@ -26929,7 +26673,6 @@ public final class MetadataProto {
        * <code>string name = 2;</code>
        * @return The bytes for name.
        */
-      @java.lang.Override
       public com.google.protobuf.ByteString
           getNameBytes() {
         java.lang.Object ref = name_;
@@ -26950,14 +26693,14 @@ public final class MetadataProto {
        * <code>.Acme.Glup.PartitionScheme partitioning = 4;</code>
        * @return The enum numeric value on the wire for partitioning.
        */
-      @java.lang.Override public int getPartitioningValue() {
+      public int getPartitioningValue() {
         return partitioning_;
       }
       /**
        * <code>.Acme.Glup.PartitionScheme partitioning = 4;</code>
        * @return The partitioning.
        */
-      @java.lang.Override public com.acme.glup.MetadataProto.PartitionScheme getPartitioning() {
+      public com.acme.glup.MetadataProto.PartitionScheme getPartitioning() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.PartitionScheme result = com.acme.glup.MetadataProto.PartitionScheme.valueOf(partitioning_);
         return result == null ? com.acme.glup.MetadataProto.PartitionScheme.UNRECOGNIZED : result;
@@ -26969,14 +26712,14 @@ public final class MetadataProto {
        * <code>.Acme.Glup.HDFSDataFormat format = 5;</code>
        * @return The enum numeric value on the wire for format.
        */
-      @java.lang.Override public int getFormatValue() {
+      public int getFormatValue() {
         return format_;
       }
       /**
        * <code>.Acme.Glup.HDFSDataFormat format = 5;</code>
        * @return The format.
        */
-      @java.lang.Override public com.acme.glup.MetadataProto.HDFSDataFormat getFormat() {
+      public com.acme.glup.MetadataProto.HDFSDataFormat getFormat() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.HDFSDataFormat result = com.acme.glup.MetadataProto.HDFSDataFormat.valueOf(format_);
         return result == null ? com.acme.glup.MetadataProto.HDFSDataFormat.UNRECOGNIZED : result;
@@ -26993,7 +26736,6 @@ public final class MetadataProto {
        * <code>bool private = 6;</code>
        * @return The private.
        */
-      @java.lang.Override
       public boolean getPrivate() {
         return private_;
       }
@@ -27003,14 +26745,12 @@ public final class MetadataProto {
       /**
        * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.Generator generator = 11;</code>
        */
-      @java.lang.Override
       public java.util.List<com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator> getGeneratorList() {
         return generator_;
       }
       /**
        * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.Generator generator = 11;</code>
        */
-      @java.lang.Override
       public java.util.List<? extends com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.GeneratorOrBuilder> 
           getGeneratorOrBuilderList() {
         return generator_;
@@ -27018,21 +26758,18 @@ public final class MetadataProto {
       /**
        * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.Generator generator = 11;</code>
        */
-      @java.lang.Override
       public int getGeneratorCount() {
         return generator_.size();
       }
       /**
        * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.Generator generator = 11;</code>
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator getGenerator(int index) {
         return generator_.get(index);
       }
       /**
        * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.Generator generator = 11;</code>
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.GeneratorOrBuilder getGeneratorOrBuilder(
           int index) {
         return generator_.get(index);
@@ -27043,14 +26780,12 @@ public final class MetadataProto {
       /**
        * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.View view = 12;</code>
        */
-      @java.lang.Override
       public java.util.List<com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View> getViewList() {
         return view_;
       }
       /**
        * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.View view = 12;</code>
        */
-      @java.lang.Override
       public java.util.List<? extends com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.ViewOrBuilder> 
           getViewOrBuilderList() {
         return view_;
@@ -27058,21 +26793,18 @@ public final class MetadataProto {
       /**
        * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.View view = 12;</code>
        */
-      @java.lang.Override
       public int getViewCount() {
         return view_.size();
       }
       /**
        * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.View view = 12;</code>
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View getView(int index) {
         return view_.get(index);
       }
       /**
        * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions.View view = 12;</code>
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.ViewOrBuilder getViewOrBuilder(
           int index) {
         return view_.get(index);
@@ -27736,7 +27468,7 @@ public final class MetadataProto {
          * <code>.Acme.Glup.PartitionScheme partitioning = 4;</code>
          * @return The enum numeric value on the wire for partitioning.
          */
-        @java.lang.Override public int getPartitioningValue() {
+        public int getPartitioningValue() {
           return partitioning_;
         }
         /**
@@ -27745,7 +27477,6 @@ public final class MetadataProto {
          * @return This builder for chaining.
          */
         public Builder setPartitioningValue(int value) {
-          
           partitioning_ = value;
           onChanged();
           return this;
@@ -27754,7 +27485,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.PartitionScheme partitioning = 4;</code>
          * @return The partitioning.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.PartitionScheme getPartitioning() {
           @SuppressWarnings("deprecation")
           com.acme.glup.MetadataProto.PartitionScheme result = com.acme.glup.MetadataProto.PartitionScheme.valueOf(partitioning_);
@@ -27790,7 +27520,7 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSDataFormat format = 5;</code>
          * @return The enum numeric value on the wire for format.
          */
-        @java.lang.Override public int getFormatValue() {
+        public int getFormatValue() {
           return format_;
         }
         /**
@@ -27799,7 +27529,6 @@ public final class MetadataProto {
          * @return This builder for chaining.
          */
         public Builder setFormatValue(int value) {
-          
           format_ = value;
           onChanged();
           return this;
@@ -27808,7 +27537,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.HDFSDataFormat format = 5;</code>
          * @return The format.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.HDFSDataFormat getFormat() {
           @SuppressWarnings("deprecation")
           com.acme.glup.MetadataProto.HDFSDataFormat result = com.acme.glup.MetadataProto.HDFSDataFormat.valueOf(format_);
@@ -27849,7 +27577,6 @@ public final class MetadataProto {
          * <code>bool private = 6;</code>
          * @return The private.
          */
-        @java.lang.Override
         public boolean getPrivate() {
           return private_;
         }
@@ -28422,14 +28149,12 @@ public final class MetadataProto {
     /**
      * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions import = 3;</code>
      */
-    @java.lang.Override
     public java.util.List<com.acme.glup.MetadataProto.HDFSOptions.ImportOptions> getImportList() {
       return import_;
     }
     /**
      * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions import = 3;</code>
      */
-    @java.lang.Override
     public java.util.List<? extends com.acme.glup.MetadataProto.HDFSOptions.ImportOptionsOrBuilder> 
         getImportOrBuilderList() {
       return import_;
@@ -28437,21 +28162,18 @@ public final class MetadataProto {
     /**
      * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions import = 3;</code>
      */
-    @java.lang.Override
     public int getImportCount() {
       return import_.size();
     }
     /**
      * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions import = 3;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.HDFSOptions.ImportOptions getImport(int index) {
       return import_.get(index);
     }
     /**
      * <code>repeated .Acme.Glup.HDFSOptions.ImportOptions import = 3;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.HDFSOptions.ImportOptionsOrBuilder getImportOrBuilder(
         int index) {
       return import_.get(index);
@@ -29123,7 +28845,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.ProducerTransportOptions}
    */
-  public static final class ProducerTransportOptions extends
+  public  static final class ProducerTransportOptions extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.ProducerTransportOptions)
       ProducerTransportOptionsOrBuilder {
@@ -29217,7 +28939,6 @@ public final class MetadataProto {
      * <code>bool syslog = 1;</code>
      * @return The syslog.
      */
-    @java.lang.Override
     public boolean getSyslog() {
       return syslog_;
     }
@@ -29232,7 +28953,6 @@ public final class MetadataProto {
      * <code>bool kafka = 2;</code>
      * @return The kafka.
      */
-    @java.lang.Override
     public boolean getKafka() {
       return kafka_;
     }
@@ -29572,7 +29292,6 @@ public final class MetadataProto {
        * <code>bool syslog = 1;</code>
        * @return The syslog.
        */
-      @java.lang.Override
       public boolean getSyslog() {
         return syslog_;
       }
@@ -29615,7 +29334,6 @@ public final class MetadataProto {
        * <code>bool kafka = 2;</code>
        * @return The kafka.
        */
-      @java.lang.Override
       public boolean getKafka() {
         return kafka_;
       }
@@ -29733,7 +29451,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.PropertyOptions}
    */
-  public static final class PropertyOptions extends
+  public  static final class PropertyOptions extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.PropertyOptions)
       PropertyOptionsOrBuilder {
@@ -29827,7 +29545,6 @@ public final class MetadataProto {
      * <code>bool valuable = 1;</code>
      * @return The valuable.
      */
-    @java.lang.Override
     public boolean getValuable() {
       return valuable_;
     }
@@ -29842,7 +29559,6 @@ public final class MetadataProto {
      * <code>bool high_volume = 2;</code>
      * @return The highVolume.
      */
-    @java.lang.Override
     public boolean getHighVolume() {
       return highVolume_;
     }
@@ -30182,7 +29898,6 @@ public final class MetadataProto {
        * <code>bool valuable = 1;</code>
        * @return The valuable.
        */
-      @java.lang.Override
       public boolean getValuable() {
         return valuable_;
       }
@@ -30225,7 +29940,6 @@ public final class MetadataProto {
        * <code>bool high_volume = 2;</code>
        * @return The highVolume.
        */
-      @java.lang.Override
       public boolean getHighVolume() {
         return highVolume_;
       }
@@ -30500,7 +30214,7 @@ public final class MetadataProto {
   /**
    * Protobuf type {@code Acme.Glup.GlupOptions}
    */
-  public static final class GlupOptions extends
+  public  static final class GlupOptions extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.GlupOptions)
       GlupOptionsOrBuilder {
@@ -30665,7 +30379,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.KafkaMessageOptions kafka = 1;</code>
      * @return Whether the kafka field is set.
      */
-    @java.lang.Override
     public boolean hasKafka() {
       return kafka_ != null;
     }
@@ -30677,7 +30390,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.KafkaMessageOptions kafka = 1;</code>
      * @return The kafka.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.KafkaMessageOptions getKafka() {
       return kafka_ == null ? com.acme.glup.MetadataProto.KafkaMessageOptions.getDefaultInstance() : kafka_;
     }
@@ -30688,7 +30400,6 @@ public final class MetadataProto {
      *
      * <code>.Acme.Glup.KafkaMessageOptions kafka = 1;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.KafkaMessageOptionsOrBuilder getKafkaOrBuilder() {
       return getKafka();
     }
@@ -30703,7 +30414,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.HDFSOptions hdfs = 2;</code>
      * @return Whether the hdfs field is set.
      */
-    @java.lang.Override
     public boolean hasHdfs() {
       return hdfs_ != null;
     }
@@ -30715,7 +30425,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.HDFSOptions hdfs = 2;</code>
      * @return The hdfs.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.HDFSOptions getHdfs() {
       return hdfs_ == null ? com.acme.glup.MetadataProto.HDFSOptions.getDefaultInstance() : hdfs_;
     }
@@ -30726,7 +30435,6 @@ public final class MetadataProto {
      *
      * <code>.Acme.Glup.HDFSOptions hdfs = 2;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.HDFSOptionsOrBuilder getHdfsOrBuilder() {
       return getHdfs();
     }
@@ -30741,7 +30449,6 @@ public final class MetadataProto {
      * <code>uint32 sampling_pct = 3;</code>
      * @return The samplingPct.
      */
-    @java.lang.Override
     public int getSamplingPct() {
       return samplingPct_;
     }
@@ -30756,7 +30463,6 @@ public final class MetadataProto {
      * <code>uint32 preprod_sampling_pct = 4;</code>
      * @return The preprodSamplingPct.
      */
-    @java.lang.Override
     public int getPreprodSamplingPct() {
       return preprodSamplingPct_;
     }
@@ -30770,7 +30476,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.DataSet dataset = 5;</code>
      */
-    @java.lang.Override
     public java.util.List<com.acme.glup.MetadataProto.DataSet> getDatasetList() {
       return dataset_;
     }
@@ -30781,7 +30486,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.DataSet dataset = 5;</code>
      */
-    @java.lang.Override
     public java.util.List<? extends com.acme.glup.MetadataProto.DataSetOrBuilder> 
         getDatasetOrBuilderList() {
       return dataset_;
@@ -30793,7 +30497,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.DataSet dataset = 5;</code>
      */
-    @java.lang.Override
     public int getDatasetCount() {
       return dataset_.size();
     }
@@ -30804,7 +30507,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.DataSet dataset = 5;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.DataSet getDataset(int index) {
       return dataset_.get(index);
     }
@@ -30815,7 +30517,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.DataSet dataset = 5;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.DataSetOrBuilder getDatasetOrBuilder(
         int index) {
       return dataset_.get(index);
@@ -30831,7 +30532,6 @@ public final class MetadataProto {
      * <code>uint32 message_sampling_pct = 6;</code>
      * @return The messageSamplingPct.
      */
-    @java.lang.Override
     public int getMessageSamplingPct() {
       return messageSamplingPct_;
     }
@@ -30846,7 +30546,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.ProducerTransportOptions producers = 7;</code>
      * @return Whether the producers field is set.
      */
-    @java.lang.Override
     public boolean hasProducers() {
       return producers_ != null;
     }
@@ -30858,7 +30557,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.ProducerTransportOptions producers = 7;</code>
      * @return The producers.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.ProducerTransportOptions getProducers() {
       return producers_ == null ? com.acme.glup.MetadataProto.ProducerTransportOptions.getDefaultInstance() : producers_;
     }
@@ -30869,7 +30567,6 @@ public final class MetadataProto {
      *
      * <code>.Acme.Glup.ProducerTransportOptions producers = 7;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.ProducerTransportOptionsOrBuilder getProducersOrBuilder() {
       return getProducers();
     }
@@ -30884,7 +30581,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.PropertyOptions properties = 8;</code>
      * @return Whether the properties field is set.
      */
-    @java.lang.Override
     public boolean hasProperties() {
       return properties_ != null;
     }
@@ -30896,7 +30592,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.PropertyOptions properties = 8;</code>
      * @return The properties.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.PropertyOptions getProperties() {
       return properties_ == null ? com.acme.glup.MetadataProto.PropertyOptions.getDefaultInstance() : properties_;
     }
@@ -30907,7 +30602,6 @@ public final class MetadataProto {
      *
      * <code>.Acme.Glup.PropertyOptions properties = 8;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.PropertyOptionsOrBuilder getPropertiesOrBuilder() {
       return getProperties();
     }
@@ -31744,7 +31438,6 @@ public final class MetadataProto {
        * <code>uint32 sampling_pct = 3;</code>
        * @return The samplingPct.
        */
-      @java.lang.Override
       public int getSamplingPct() {
         return samplingPct_;
       }
@@ -31787,7 +31480,6 @@ public final class MetadataProto {
        * <code>uint32 preprod_sampling_pct = 4;</code>
        * @return The preprodSamplingPct.
        */
-      @java.lang.Override
       public int getPreprodSamplingPct() {
         return preprodSamplingPct_;
       }
@@ -32142,7 +31834,6 @@ public final class MetadataProto {
        * <code>uint32 message_sampling_pct = 6;</code>
        * @return The messageSamplingPct.
        */
-      @java.lang.Override
       public int getMessageSamplingPct() {
         return messageSamplingPct_;
       }
@@ -32628,7 +32319,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.GlupFieldOptions}
    */
-  public static final class GlupFieldOptions extends
+  public  static final class GlupFieldOptions extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.GlupFieldOptions)
       GlupFieldOptionsOrBuilder {
@@ -32763,7 +32454,6 @@ public final class MetadataProto {
      * <code>bool sampled = 1;</code>
      * @return The sampled.
      */
-    @java.lang.Override
     public boolean getSampled() {
       return sampled_;
     }
@@ -32774,7 +32464,6 @@ public final class MetadataProto {
      * <code>bool sampling_key = 2;</code>
      * @return The samplingKey.
      */
-    @java.lang.Override
     public boolean getSamplingKey() {
       return samplingKey_;
     }
@@ -32795,7 +32484,6 @@ public final class MetadataProto {
      * <code>repeated .Acme.Glup.Platform disabled_platform = 3;</code>
      * @return A list containing the disabledPlatform.
      */
-    @java.lang.Override
     public java.util.List<com.acme.glup.MetadataProto.Platform> getDisabledPlatformList() {
       return new com.google.protobuf.Internal.ListAdapter<
           java.lang.Integer, com.acme.glup.MetadataProto.Platform>(disabledPlatform_, disabledPlatform_converter_);
@@ -32804,7 +32492,6 @@ public final class MetadataProto {
      * <code>repeated .Acme.Glup.Platform disabled_platform = 3;</code>
      * @return The count of disabledPlatform.
      */
-    @java.lang.Override
     public int getDisabledPlatformCount() {
       return disabledPlatform_.size();
     }
@@ -32813,7 +32500,6 @@ public final class MetadataProto {
      * @param index The index of the element to return.
      * @return The disabledPlatform at the given index.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.Platform getDisabledPlatform(int index) {
       return disabledPlatform_converter_.convert(disabledPlatform_.get(index));
     }
@@ -32821,7 +32507,6 @@ public final class MetadataProto {
      * <code>repeated .Acme.Glup.Platform disabled_platform = 3;</code>
      * @return A list containing the enum numeric values on the wire for disabledPlatform.
      */
-    @java.lang.Override
     public java.util.List<java.lang.Integer>
     getDisabledPlatformValueList() {
       return disabledPlatform_;
@@ -32831,7 +32516,6 @@ public final class MetadataProto {
      * @param index The index of the value to return.
      * @return The enum numeric value on the wire of disabledPlatform at the given index.
      */
-    @java.lang.Override
     public int getDisabledPlatformValue(int index) {
       return disabledPlatform_.get(index);
     }
@@ -32843,7 +32527,6 @@ public final class MetadataProto {
      * <code>bool should_clean_pii = 4;</code>
      * @return The shouldCleanPii.
      */
-    @java.lang.Override
     public boolean getShouldCleanPii() {
       return shouldCleanPii_;
     }
@@ -32859,7 +32542,6 @@ public final class MetadataProto {
      * <code>bool pending_deletion = 5;</code>
      * @return The pendingDeletion.
      */
-    @java.lang.Override
     public boolean getPendingDeletion() {
       return pendingDeletion_;
     }
@@ -32874,7 +32556,6 @@ public final class MetadataProto {
      * <code>string added_at = 6;</code>
      * @return The addedAt.
      */
-    @java.lang.Override
     public java.lang.String getAddedAt() {
       java.lang.Object ref = addedAt_;
       if (ref instanceof java.lang.String) {
@@ -32895,7 +32576,6 @@ public final class MetadataProto {
      * <code>string added_at = 6;</code>
      * @return The bytes for addedAt.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getAddedAtBytes() {
       java.lang.Object ref = addedAt_;
@@ -33338,7 +33018,6 @@ public final class MetadataProto {
        * <code>bool sampled = 1;</code>
        * @return The sampled.
        */
-      @java.lang.Override
       public boolean getSampled() {
         return sampled_;
       }
@@ -33369,7 +33048,6 @@ public final class MetadataProto {
        * <code>bool sampling_key = 2;</code>
        * @return The samplingKey.
        */
-      @java.lang.Override
       public boolean getSamplingKey() {
         return samplingKey_;
       }
@@ -33540,7 +33218,6 @@ public final class MetadataProto {
        * <code>bool should_clean_pii = 4;</code>
        * @return The shouldCleanPii.
        */
-      @java.lang.Override
       public boolean getShouldCleanPii() {
         return shouldCleanPii_;
       }
@@ -33576,7 +33253,6 @@ public final class MetadataProto {
        * <code>bool pending_deletion = 5;</code>
        * @return The pendingDeletion.
        */
-      @java.lang.Override
       public boolean getPendingDeletion() {
         return pendingDeletion_;
       }
@@ -33801,7 +33477,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.JsonMapping}
    */
-  public static final class JsonMapping extends
+  public  static final class JsonMapping extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.JsonMapping)
       JsonMappingOrBuilder {
@@ -33897,7 +33573,6 @@ public final class MetadataProto {
      * <code>string name = 1;</code>
      * @return The name.
      */
-    @java.lang.Override
     public java.lang.String getName() {
       java.lang.Object ref = name_;
       if (ref instanceof java.lang.String) {
@@ -33918,7 +33593,6 @@ public final class MetadataProto {
      * <code>string name = 1;</code>
      * @return The bytes for name.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getNameBytes() {
       java.lang.Object ref = name_;
@@ -33943,7 +33617,6 @@ public final class MetadataProto {
      * <code>bool skip = 2;</code>
      * @return The skip.
      */
-    @java.lang.Override
     public boolean getSkip() {
       return skip_;
     }
@@ -34377,7 +34050,6 @@ public final class MetadataProto {
        * <code>bool skip = 2;</code>
        * @return The skip.
        */
-      @java.lang.Override
       public boolean getSkip() {
         return skip_;
       }
@@ -34507,7 +34179,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.JsonAlias}
    */
-  public static final class JsonAlias extends
+  public  static final class JsonAlias extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.JsonAlias)
       JsonAliasOrBuilder {
@@ -34603,7 +34275,6 @@ public final class MetadataProto {
      * <code>string name = 1;</code>
      * @return The name.
      */
-    @java.lang.Override
     public java.lang.String getName() {
       java.lang.Object ref = name_;
       if (ref instanceof java.lang.String) {
@@ -34624,7 +34295,6 @@ public final class MetadataProto {
      * <code>string name = 1;</code>
      * @return The bytes for name.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getNameBytes() {
       java.lang.Object ref = name_;
@@ -34651,7 +34321,6 @@ public final class MetadataProto {
      * <code>bool use_enum_field_id = 3;</code>
      * @return The useEnumFieldId.
      */
-    @java.lang.Override
     public boolean getUseEnumFieldId() {
       return useEnumFieldId_;
     }
@@ -35088,7 +34757,6 @@ public final class MetadataProto {
        * <code>bool use_enum_field_id = 3;</code>
        * @return The useEnumFieldId.
        */
-      @java.lang.Override
       public boolean getUseEnumFieldId() {
         return useEnumFieldId_;
       }
@@ -35322,7 +34990,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.BaseGlupMessage}
    */
-  public static final class BaseGlupMessage extends
+  public  static final class BaseGlupMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.BaseGlupMessage)
       BaseGlupMessageOrBuilder {
@@ -35467,7 +35135,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.Origin glup_origin = 1;</code>
      * @return Whether the glupOrigin field is set.
      */
-    @java.lang.Override
     public boolean hasGlupOrigin() {
       return glupOrigin_ != null;
     }
@@ -35475,14 +35142,12 @@ public final class MetadataProto {
      * <code>.Acme.Glup.Origin glup_origin = 1;</code>
      * @return The glupOrigin.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.Origin getGlupOrigin() {
       return glupOrigin_ == null ? com.acme.glup.MetadataProto.Origin.getDefaultInstance() : glupOrigin_;
     }
     /**
      * <code>.Acme.Glup.Origin glup_origin = 1;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.OriginOrBuilder getGlupOriginOrBuilder() {
       return getGlupOrigin();
     }
@@ -35493,7 +35158,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.Partition partition = 2;</code>
      * @return Whether the partition field is set.
      */
-    @java.lang.Override
     public boolean hasPartition() {
       return partition_ != null;
     }
@@ -35501,14 +35165,12 @@ public final class MetadataProto {
      * <code>.Acme.Glup.Partition partition = 2;</code>
      * @return The partition.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.Partition getPartition() {
       return partition_ == null ? com.acme.glup.MetadataProto.Partition.getDefaultInstance() : partition_;
     }
     /**
      * <code>.Acme.Glup.Partition partition = 2;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.PartitionOrBuilder getPartitionOrBuilder() {
       return getPartition();
     }
@@ -35548,7 +35210,6 @@ public final class MetadataProto {
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
 
-    @java.lang.Override
     public boolean containsSetFields(
         int key) {
       
@@ -35557,7 +35218,6 @@ public final class MetadataProto {
     /**
      * Use {@link #getSetFieldsMap()} instead.
      */
-    @java.lang.Override
     @java.lang.Deprecated
     public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFields() {
       return getSetFieldsMap();
@@ -35570,7 +35230,6 @@ public final class MetadataProto {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFieldsMap() {
       return internalGetSetFields().getMap();
@@ -35583,7 +35242,6 @@ public final class MetadataProto {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public boolean getSetFieldsOrDefault(
         int key,
@@ -35601,7 +35259,6 @@ public final class MetadataProto {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public boolean getSetFieldsOrThrow(
         int key) {
@@ -35623,7 +35280,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public java.util.List<com.acme.glup.MetadataProto.ControlMessage.Watermark> getControlMessageList() {
       return controlMessage_;
     }
@@ -35634,7 +35290,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public java.util.List<? extends com.acme.glup.MetadataProto.ControlMessage.WatermarkOrBuilder> 
         getControlMessageOrBuilderList() {
       return controlMessage_;
@@ -35646,7 +35301,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public int getControlMessageCount() {
       return controlMessage_.size();
     }
@@ -35657,7 +35311,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.ControlMessage.Watermark getControlMessage(int index) {
       return controlMessage_.get(index);
     }
@@ -35668,7 +35321,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.ControlMessage.WatermarkOrBuilder getControlMessageOrBuilder(
         int index) {
       return controlMessage_.get(index);
@@ -36402,7 +36054,6 @@ public final class MetadataProto {
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
 
-      @java.lang.Override
       public boolean containsSetFields(
           int key) {
         
@@ -36411,7 +36062,6 @@ public final class MetadataProto {
       /**
        * Use {@link #getSetFieldsMap()} instead.
        */
-      @java.lang.Override
       @java.lang.Deprecated
       public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFields() {
         return getSetFieldsMap();
@@ -36424,7 +36074,6 @@ public final class MetadataProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFieldsMap() {
         return internalGetSetFields().getMap();
@@ -36437,7 +36086,6 @@ public final class MetadataProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public boolean getSetFieldsOrDefault(
           int key,
@@ -36455,7 +36103,6 @@ public final class MetadataProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public boolean getSetFieldsOrThrow(
           int key) {
@@ -37019,7 +36666,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.ForwardedWatermarkMessage}
    */
-  public static final class ForwardedWatermarkMessage extends
+  public  static final class ForwardedWatermarkMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.ForwardedWatermarkMessage)
       ForwardedWatermarkMessageOrBuilder {
@@ -37146,7 +36793,6 @@ public final class MetadataProto {
      * <code>int64 original_kafka_offset = 5;</code>
      * @return The originalKafkaOffset.
      */
-    @java.lang.Override
     public long getOriginalKafkaOffset() {
       return originalKafkaOffset_;
     }
@@ -37161,7 +36807,6 @@ public final class MetadataProto {
      * <code>int64 timestamp = 6;</code>
      * @return The timestamp.
      */
-    @java.lang.Override
     public long getTimestamp() {
       return timestamp_;
     }
@@ -37176,7 +36821,6 @@ public final class MetadataProto {
      * <code>bool consolidation_enabled = 7;</code>
      * @return The consolidationEnabled.
      */
-    @java.lang.Override
     public boolean getConsolidationEnabled() {
       return consolidationEnabled_;
     }
@@ -37191,7 +36835,6 @@ public final class MetadataProto {
      * <code>string dataset_id = 10;</code>
      * @return The datasetId.
      */
-    @java.lang.Override
     public java.lang.String getDatasetId() {
       java.lang.Object ref = datasetId_;
       if (ref instanceof java.lang.String) {
@@ -37212,7 +36855,6 @@ public final class MetadataProto {
      * <code>string dataset_id = 10;</code>
      * @return The bytes for datasetId.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getDatasetIdBytes() {
       java.lang.Object ref = datasetId_;
@@ -37237,7 +36879,6 @@ public final class MetadataProto {
      * <code>string dataset_format_label = 11;</code>
      * @return The datasetFormatLabel.
      */
-    @java.lang.Override
     public java.lang.String getDatasetFormatLabel() {
       java.lang.Object ref = datasetFormatLabel_;
       if (ref instanceof java.lang.String) {
@@ -37258,7 +36899,6 @@ public final class MetadataProto {
      * <code>string dataset_format_label = 11;</code>
      * @return The bytes for datasetFormatLabel.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getDatasetFormatLabelBytes() {
       java.lang.Object ref = datasetFormatLabel_;
@@ -37282,7 +36922,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public java.util.List<com.acme.glup.MetadataProto.ControlMessage.Watermark> getControlMessageList() {
       return controlMessage_;
     }
@@ -37293,7 +36932,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public java.util.List<? extends com.acme.glup.MetadataProto.ControlMessage.WatermarkOrBuilder> 
         getControlMessageOrBuilderList() {
       return controlMessage_;
@@ -37305,7 +36943,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public int getControlMessageCount() {
       return controlMessage_.size();
     }
@@ -37316,7 +36953,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.ControlMessage.Watermark getControlMessage(int index) {
       return controlMessage_.get(index);
     }
@@ -37327,7 +36963,6 @@ public final class MetadataProto {
      *
      * <code>repeated .Acme.Glup.ControlMessage.Watermark control_message = 2097151 [(.Acme.Glup.json) = { ... }</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.ControlMessage.WatermarkOrBuilder getControlMessageOrBuilder(
         int index) {
       return controlMessage_.get(index);
@@ -37776,7 +37411,6 @@ public final class MetadataProto {
        * <code>int64 original_kafka_offset = 5;</code>
        * @return The originalKafkaOffset.
        */
-      @java.lang.Override
       public long getOriginalKafkaOffset() {
         return originalKafkaOffset_;
       }
@@ -37819,7 +37453,6 @@ public final class MetadataProto {
        * <code>int64 timestamp = 6;</code>
        * @return The timestamp.
        */
-      @java.lang.Override
       public long getTimestamp() {
         return timestamp_;
       }
@@ -37862,7 +37495,6 @@ public final class MetadataProto {
        * <code>bool consolidation_enabled = 7;</code>
        * @return The consolidationEnabled.
        */
-      @java.lang.Override
       public boolean getConsolidationEnabled() {
         return consolidationEnabled_;
       }
@@ -38521,7 +38153,7 @@ public final class MetadataProto {
   /**
    * Protobuf type {@code Acme.Glup.Location}
    */
-  public static final class Location extends
+  public  static final class Location extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.Location)
       LocationOrBuilder {
@@ -38629,14 +38261,14 @@ public final class MetadataProto {
      * <code>.Acme.Glup.Environment env = 1;</code>
      * @return The enum numeric value on the wire for env.
      */
-    @java.lang.Override public int getEnvValue() {
+    public int getEnvValue() {
       return env_;
     }
     /**
      * <code>.Acme.Glup.Environment env = 1;</code>
      * @return The env.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.Environment getEnv() {
+    public com.acme.glup.MetadataProto.Environment getEnv() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.Environment result = com.acme.glup.MetadataProto.Environment.valueOf(env_);
       return result == null ? com.acme.glup.MetadataProto.Environment.UNRECOGNIZED : result;
@@ -38648,14 +38280,14 @@ public final class MetadataProto {
      * <code>.Acme.Glup.DataCenter dc = 2;</code>
      * @return The enum numeric value on the wire for dc.
      */
-    @java.lang.Override public int getDcValue() {
+    public int getDcValue() {
       return dc_;
     }
     /**
      * <code>.Acme.Glup.DataCenter dc = 2;</code>
      * @return The dc.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.DataCenter getDc() {
+    public com.acme.glup.MetadataProto.DataCenter getDc() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.DataCenter result = com.acme.glup.MetadataProto.DataCenter.valueOf(dc_);
       return result == null ? com.acme.glup.MetadataProto.DataCenter.UNRECOGNIZED : result;
@@ -38671,7 +38303,6 @@ public final class MetadataProto {
      * <code>string label = 3;</code>
      * @return The label.
      */
-    @java.lang.Override
     public java.lang.String getLabel() {
       java.lang.Object ref = label_;
       if (ref instanceof java.lang.String) {
@@ -38692,7 +38323,6 @@ public final class MetadataProto {
      * <code>string label = 3;</code>
      * @return The bytes for label.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getLabelBytes() {
       java.lang.Object ref = label_;
@@ -38717,7 +38347,6 @@ public final class MetadataProto {
      * <code>string dataset_id = 4;</code>
      * @return The datasetId.
      */
-    @java.lang.Override
     public java.lang.String getDatasetId() {
       java.lang.Object ref = datasetId_;
       if (ref instanceof java.lang.String) {
@@ -38738,7 +38367,6 @@ public final class MetadataProto {
      * <code>string dataset_id = 4;</code>
      * @return The bytes for datasetId.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getDatasetIdBytes() {
       java.lang.Object ref = datasetId_;
@@ -39109,7 +38737,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.Environment env = 1;</code>
        * @return The enum numeric value on the wire for env.
        */
-      @java.lang.Override public int getEnvValue() {
+      public int getEnvValue() {
         return env_;
       }
       /**
@@ -39118,7 +38746,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setEnvValue(int value) {
-        
         env_ = value;
         onChanged();
         return this;
@@ -39127,7 +38754,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.Environment env = 1;</code>
        * @return The env.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.Environment getEnv() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.Environment result = com.acme.glup.MetadataProto.Environment.valueOf(env_);
@@ -39163,7 +38789,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.DataCenter dc = 2;</code>
        * @return The enum numeric value on the wire for dc.
        */
-      @java.lang.Override public int getDcValue() {
+      public int getDcValue() {
         return dc_;
       }
       /**
@@ -39172,7 +38798,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setDcValue(int value) {
-        
         dc_ = value;
         onChanged();
         return this;
@@ -39181,7 +38806,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.DataCenter dc = 2;</code>
        * @return The dc.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.DataCenter getDc() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.DataCenter result = com.acme.glup.MetadataProto.DataCenter.valueOf(dc_);
@@ -39549,7 +39173,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.Origin}
    */
-  public static final class Origin extends
+  public  static final class Origin extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.Origin)
       OriginOrBuilder {
@@ -39666,7 +39290,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.DataCenter datacenter = 1;</code>
      * @return The enum numeric value on the wire for datacenter.
      */
-    @java.lang.Override public int getDatacenterValue() {
+    public int getDatacenterValue() {
       return datacenter_;
     }
     /**
@@ -39677,7 +39301,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.DataCenter datacenter = 1;</code>
      * @return The datacenter.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.DataCenter getDatacenter() {
+    public com.acme.glup.MetadataProto.DataCenter getDatacenter() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.DataCenter result = com.acme.glup.MetadataProto.DataCenter.valueOf(datacenter_);
       return result == null ? com.acme.glup.MetadataProto.DataCenter.UNRECOGNIZED : result;
@@ -39694,7 +39318,6 @@ public final class MetadataProto {
      * <code>fixed32 ip4 = 2 [(.Acme.Glup.json_mapping) = { ... }</code>
      * @return The ip4.
      */
-    @java.lang.Override
     public int getIp4() {
       return ip4_;
     }
@@ -39709,7 +39332,6 @@ public final class MetadataProto {
      * <code>string hostname = 3;</code>
      * @return The hostname.
      */
-    @java.lang.Override
     public java.lang.String getHostname() {
       java.lang.Object ref = hostname_;
       if (ref instanceof java.lang.String) {
@@ -39730,7 +39352,6 @@ public final class MetadataProto {
      * <code>string hostname = 3;</code>
      * @return The bytes for hostname.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getHostnameBytes() {
       java.lang.Object ref = hostname_;
@@ -39755,7 +39376,6 @@ public final class MetadataProto {
      * <code>string container_task = 4 [(.Acme.Glup.json_mapping) = { ... }</code>
      * @return The containerTask.
      */
-    @java.lang.Override
     public java.lang.String getContainerTask() {
       java.lang.Object ref = containerTask_;
       if (ref instanceof java.lang.String) {
@@ -39776,7 +39396,6 @@ public final class MetadataProto {
      * <code>string container_task = 4 [(.Acme.Glup.json_mapping) = { ... }</code>
      * @return The bytes for containerTask.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getContainerTaskBytes() {
       java.lang.Object ref = containerTask_;
@@ -39797,7 +39416,6 @@ public final class MetadataProto {
      * <code>string container_app = 5 [(.Acme.Glup.json_mapping) = { ... }</code>
      * @return The containerApp.
      */
-    @java.lang.Override
     public java.lang.String getContainerApp() {
       java.lang.Object ref = containerApp_;
       if (ref instanceof java.lang.String) {
@@ -39814,7 +39432,6 @@ public final class MetadataProto {
      * <code>string container_app = 5 [(.Acme.Glup.json_mapping) = { ... }</code>
      * @return The bytes for containerApp.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getContainerAppBytes() {
       java.lang.Object ref = containerApp_;
@@ -40211,7 +39828,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.DataCenter datacenter = 1;</code>
        * @return The enum numeric value on the wire for datacenter.
        */
-      @java.lang.Override public int getDatacenterValue() {
+      public int getDatacenterValue() {
         return datacenter_;
       }
       /**
@@ -40224,7 +39841,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setDatacenterValue(int value) {
-        
         datacenter_ = value;
         onChanged();
         return this;
@@ -40237,7 +39853,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.DataCenter datacenter = 1;</code>
        * @return The datacenter.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.DataCenter getDatacenter() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.DataCenter result = com.acme.glup.MetadataProto.DataCenter.valueOf(datacenter_);
@@ -40286,7 +39901,6 @@ public final class MetadataProto {
        * <code>fixed32 ip4 = 2 [(.Acme.Glup.json_mapping) = { ... }</code>
        * @return The ip4.
        */
-      @java.lang.Override
       public int getIp4() {
         return ip4_;
       }
@@ -40668,7 +40282,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.ControlMessage}
    */
-  public static final class ControlMessage extends
+  public  static final class ControlMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.ControlMessage)
       ControlMessageOrBuilder {
@@ -40843,10 +40457,6 @@ public final class MetadataProto {
 
       public final com.google.protobuf.Descriptors.EnumValueDescriptor
           getValueDescriptor() {
-        if (this == UNRECOGNIZED) {
-          throw new java.lang.IllegalStateException(
-              "Can't get the descriptor of an unrecognized enum value.");
-        }
         return getDescriptor().getValues().get(ordinal());
       }
       public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -40922,7 +40532,7 @@ public final class MetadataProto {
     /**
      * Protobuf type {@code Acme.Glup.ControlMessage.WatermarkOrigin}
      */
-    public static final class WatermarkOrigin extends
+    public  static final class WatermarkOrigin extends
         com.google.protobuf.GeneratedMessageV3 implements
         // @@protoc_insertion_point(message_implements:Acme.Glup.ControlMessage.WatermarkOrigin)
         WatermarkOriginOrBuilder {
@@ -41023,7 +40633,6 @@ public final class MetadataProto {
        * <code>string kafka_topic = 1;</code>
        * @return The kafkaTopic.
        */
-      @java.lang.Override
       public java.lang.String getKafkaTopic() {
         java.lang.Object ref = kafkaTopic_;
         if (ref instanceof java.lang.String) {
@@ -41040,7 +40649,6 @@ public final class MetadataProto {
        * <code>string kafka_topic = 1;</code>
        * @return The bytes for kafkaTopic.
        */
-      @java.lang.Override
       public com.google.protobuf.ByteString
           getKafkaTopicBytes() {
         java.lang.Object ref = kafkaTopic_;
@@ -41061,14 +40669,14 @@ public final class MetadataProto {
        * <code>.Acme.Glup.DataCenter datacenter = 2;</code>
        * @return The enum numeric value on the wire for datacenter.
        */
-      @java.lang.Override public int getDatacenterValue() {
+      public int getDatacenterValue() {
         return datacenter_;
       }
       /**
        * <code>.Acme.Glup.DataCenter datacenter = 2;</code>
        * @return The datacenter.
        */
-      @java.lang.Override public com.acme.glup.MetadataProto.DataCenter getDatacenter() {
+      public com.acme.glup.MetadataProto.DataCenter getDatacenter() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.DataCenter result = com.acme.glup.MetadataProto.DataCenter.valueOf(datacenter_);
         return result == null ? com.acme.glup.MetadataProto.DataCenter.UNRECOGNIZED : result;
@@ -41080,14 +40688,14 @@ public final class MetadataProto {
        * <code>.Acme.Glup.ControlMessage.Cluster cluster = 3;</code>
        * @return The enum numeric value on the wire for cluster.
        */
-      @java.lang.Override public int getClusterValue() {
+      public int getClusterValue() {
         return cluster_;
       }
       /**
        * <code>.Acme.Glup.ControlMessage.Cluster cluster = 3;</code>
        * @return The cluster.
        */
-      @java.lang.Override public com.acme.glup.MetadataProto.ControlMessage.Cluster getCluster() {
+      public com.acme.glup.MetadataProto.ControlMessage.Cluster getCluster() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.ControlMessage.Cluster result = com.acme.glup.MetadataProto.ControlMessage.Cluster.valueOf(cluster_);
         return result == null ? com.acme.glup.MetadataProto.ControlMessage.Cluster.UNRECOGNIZED : result;
@@ -41508,7 +41116,7 @@ public final class MetadataProto {
          * <code>.Acme.Glup.DataCenter datacenter = 2;</code>
          * @return The enum numeric value on the wire for datacenter.
          */
-        @java.lang.Override public int getDatacenterValue() {
+        public int getDatacenterValue() {
           return datacenter_;
         }
         /**
@@ -41517,7 +41125,6 @@ public final class MetadataProto {
          * @return This builder for chaining.
          */
         public Builder setDatacenterValue(int value) {
-          
           datacenter_ = value;
           onChanged();
           return this;
@@ -41526,7 +41133,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.DataCenter datacenter = 2;</code>
          * @return The datacenter.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.DataCenter getDatacenter() {
           @SuppressWarnings("deprecation")
           com.acme.glup.MetadataProto.DataCenter result = com.acme.glup.MetadataProto.DataCenter.valueOf(datacenter_);
@@ -41562,7 +41168,7 @@ public final class MetadataProto {
          * <code>.Acme.Glup.ControlMessage.Cluster cluster = 3;</code>
          * @return The enum numeric value on the wire for cluster.
          */
-        @java.lang.Override public int getClusterValue() {
+        public int getClusterValue() {
           return cluster_;
         }
         /**
@@ -41571,7 +41177,6 @@ public final class MetadataProto {
          * @return This builder for chaining.
          */
         public Builder setClusterValue(int value) {
-          
           cluster_ = value;
           onChanged();
           return this;
@@ -41580,7 +41185,6 @@ public final class MetadataProto {
          * <code>.Acme.Glup.ControlMessage.Cluster cluster = 3;</code>
          * @return The cluster.
          */
-        @java.lang.Override
         public com.acme.glup.MetadataProto.ControlMessage.Cluster getCluster() {
           @SuppressWarnings("deprecation")
           com.acme.glup.MetadataProto.ControlMessage.Cluster result = com.acme.glup.MetadataProto.ControlMessage.Cluster.valueOf(cluster_);
@@ -41884,7 +41488,7 @@ public final class MetadataProto {
     /**
      * Protobuf type {@code Acme.Glup.ControlMessage.Watermark}
      */
-    public static final class Watermark extends
+    public  static final class Watermark extends
         com.google.protobuf.GeneratedMessageV3 implements
         // @@protoc_insertion_point(message_implements:Acme.Glup.ControlMessage.Watermark)
         WatermarkOrBuilder {
@@ -42057,7 +41661,6 @@ public final class MetadataProto {
        * <code>string type = 1;</code>
        * @return The type.
        */
-      @java.lang.Override
       public java.lang.String getType() {
         java.lang.Object ref = type_;
         if (ref instanceof java.lang.String) {
@@ -42078,7 +41681,6 @@ public final class MetadataProto {
        * <code>string type = 1;</code>
        * @return The bytes for type.
        */
-      @java.lang.Override
       public com.google.protobuf.ByteString
           getTypeBytes() {
         java.lang.Object ref = type_;
@@ -42103,7 +41705,6 @@ public final class MetadataProto {
        * <code>string hostname = 2;</code>
        * @return The hostname.
        */
-      @java.lang.Override
       public java.lang.String getHostname() {
         java.lang.Object ref = hostname_;
         if (ref instanceof java.lang.String) {
@@ -42124,7 +41725,6 @@ public final class MetadataProto {
        * <code>string hostname = 2;</code>
        * @return The bytes for hostname.
        */
-      @java.lang.Override
       public com.google.protobuf.ByteString
           getHostnameBytes() {
         java.lang.Object ref = hostname_;
@@ -42149,7 +41749,6 @@ public final class MetadataProto {
        * <code>string kafka_topic = 3;</code>
        * @return The kafkaTopic.
        */
-      @java.lang.Override
       public java.lang.String getKafkaTopic() {
         java.lang.Object ref = kafkaTopic_;
         if (ref instanceof java.lang.String) {
@@ -42170,7 +41769,6 @@ public final class MetadataProto {
        * <code>string kafka_topic = 3;</code>
        * @return The bytes for kafkaTopic.
        */
-      @java.lang.Override
       public com.google.protobuf.ByteString
           getKafkaTopicBytes() {
         java.lang.Object ref = kafkaTopic_;
@@ -42195,7 +41793,6 @@ public final class MetadataProto {
        * <code>int32 partition = 4;</code>
        * @return The partition.
        */
-      @java.lang.Override
       public int getPartition() {
         return partition_;
       }
@@ -42210,7 +41807,6 @@ public final class MetadataProto {
        * <code>int32 partition_count = 5;</code>
        * @return The partitionCount.
        */
-      @java.lang.Override
       public int getPartitionCount() {
         return partitionCount_;
       }
@@ -42225,7 +41821,6 @@ public final class MetadataProto {
        * <code>bytes process_uuid = 6;</code>
        * @return The processUuid.
        */
-      @java.lang.Override
       public com.google.protobuf.ByteString getProcessUuid() {
         return processUuid_;
       }
@@ -42240,7 +41835,6 @@ public final class MetadataProto {
        * <code>string region = 7;</code>
        * @return The region.
        */
-      @java.lang.Override
       public java.lang.String getRegion() {
         java.lang.Object ref = region_;
         if (ref instanceof java.lang.String) {
@@ -42261,7 +41855,6 @@ public final class MetadataProto {
        * <code>string region = 7;</code>
        * @return The bytes for region.
        */
-      @java.lang.Override
       public com.google.protobuf.ByteString
           getRegionBytes() {
         java.lang.Object ref = region_;
@@ -42286,7 +41879,6 @@ public final class MetadataProto {
        * <code>int32 timestamp_seconds = 8 [(.Acme.Glup.json) = { ... }</code>
        * @return The timestampSeconds.
        */
-      @java.lang.Override
       public int getTimestampSeconds() {
         return timestampSeconds_;
       }
@@ -42301,7 +41893,6 @@ public final class MetadataProto {
        * <code>string cluster = 9;</code>
        * @return The cluster.
        */
-      @java.lang.Override
       public java.lang.String getCluster() {
         java.lang.Object ref = cluster_;
         if (ref instanceof java.lang.String) {
@@ -42322,7 +41913,6 @@ public final class MetadataProto {
        * <code>string cluster = 9;</code>
        * @return The bytes for cluster.
        */
-      @java.lang.Override
       public com.google.protobuf.ByteString
           getClusterBytes() {
         java.lang.Object ref = cluster_;
@@ -42347,7 +41937,6 @@ public final class MetadataProto {
        * <code>string environment = 10;</code>
        * @return The environment.
        */
-      @java.lang.Override
       public java.lang.String getEnvironment() {
         java.lang.Object ref = environment_;
         if (ref instanceof java.lang.String) {
@@ -42368,7 +41957,6 @@ public final class MetadataProto {
        * <code>string environment = 10;</code>
        * @return The bytes for environment.
        */
-      @java.lang.Override
       public com.google.protobuf.ByteString
           getEnvironmentBytes() {
         java.lang.Object ref = environment_;
@@ -42417,7 +42005,6 @@ public final class MetadataProto {
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
 
-      @java.lang.Override
       public boolean containsSetFields(
           int key) {
         
@@ -42426,7 +42013,6 @@ public final class MetadataProto {
       /**
        * Use {@link #getSetFieldsMap()} instead.
        */
-      @java.lang.Override
       @java.lang.Deprecated
       public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFields() {
         return getSetFieldsMap();
@@ -42438,7 +42024,6 @@ public final class MetadataProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFieldsMap() {
         return internalGetSetFields().getMap();
@@ -42450,7 +42035,6 @@ public final class MetadataProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public boolean getSetFieldsOrDefault(
           int key,
@@ -42467,7 +42051,6 @@ public final class MetadataProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public boolean getSetFieldsOrThrow(
           int key) {
@@ -43283,7 +42866,6 @@ public final class MetadataProto {
          * <code>int32 partition = 4;</code>
          * @return The partition.
          */
-        @java.lang.Override
         public int getPartition() {
           return partition_;
         }
@@ -43326,7 +42908,6 @@ public final class MetadataProto {
          * <code>int32 partition_count = 5;</code>
          * @return The partitionCount.
          */
-        @java.lang.Override
         public int getPartitionCount() {
           return partitionCount_;
         }
@@ -43369,7 +42950,6 @@ public final class MetadataProto {
          * <code>bytes process_uuid = 6;</code>
          * @return The processUuid.
          */
-        @java.lang.Override
         public com.google.protobuf.ByteString getProcessUuid() {
           return processUuid_;
         }
@@ -43511,7 +43091,6 @@ public final class MetadataProto {
          * <code>int32 timestamp_seconds = 8 [(.Acme.Glup.json) = { ... }</code>
          * @return The timestampSeconds.
          */
-        @java.lang.Override
         public int getTimestampSeconds() {
           return timestampSeconds_;
         }
@@ -43771,7 +43350,6 @@ public final class MetadataProto {
          * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
          */
 
-        @java.lang.Override
         public boolean containsSetFields(
             int key) {
           
@@ -43780,7 +43358,6 @@ public final class MetadataProto {
         /**
          * Use {@link #getSetFieldsMap()} instead.
          */
-        @java.lang.Override
         @java.lang.Deprecated
         public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFields() {
           return getSetFieldsMap();
@@ -43792,7 +43369,6 @@ public final class MetadataProto {
          *
          * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
          */
-        @java.lang.Override
 
         public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFieldsMap() {
           return internalGetSetFields().getMap();
@@ -43804,7 +43380,6 @@ public final class MetadataProto {
          *
          * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
          */
-        @java.lang.Override
 
         public boolean getSetFieldsOrDefault(
             int key,
@@ -43821,7 +43396,6 @@ public final class MetadataProto {
          *
          * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
          */
-        @java.lang.Override
 
         public boolean getSetFieldsOrThrow(
             int key) {
@@ -43951,7 +43525,6 @@ public final class MetadataProto {
      * <code>.Acme.Glup.ControlMessage.Watermark watermark = 1;</code>
      * @return Whether the watermark field is set.
      */
-    @java.lang.Override
     public boolean hasWatermark() {
       return watermark_ != null;
     }
@@ -43959,14 +43532,12 @@ public final class MetadataProto {
      * <code>.Acme.Glup.ControlMessage.Watermark watermark = 1;</code>
      * @return The watermark.
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.ControlMessage.Watermark getWatermark() {
       return watermark_ == null ? com.acme.glup.MetadataProto.ControlMessage.Watermark.getDefaultInstance() : watermark_;
     }
     /**
      * <code>.Acme.Glup.ControlMessage.Watermark watermark = 1;</code>
      */
-    @java.lang.Override
     public com.acme.glup.MetadataProto.ControlMessage.WatermarkOrBuilder getWatermarkOrBuilder() {
       return getWatermark();
     }
@@ -44513,7 +44084,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.Partition}
    */
-  public static final class Partition extends
+  public  static final class Partition extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.Partition)
       PartitionOrBuilder {
@@ -44616,7 +44187,6 @@ public final class MetadataProto {
      * <code>uint64 timestamp_seconds = 1 [(.Acme.Glup.json_mapping) = { ... }</code>
      * @return The timestampSeconds.
      */
-    @java.lang.Override
     public long getTimestampSeconds() {
       return timestampSeconds_;
     }
@@ -44627,14 +44197,14 @@ public final class MetadataProto {
      * <code>.Acme.Glup.Platform host_platform = 2;</code>
      * @return The enum numeric value on the wire for hostPlatform.
      */
-    @java.lang.Override public int getHostPlatformValue() {
+    public int getHostPlatformValue() {
       return hostPlatform_;
     }
     /**
      * <code>.Acme.Glup.Platform host_platform = 2;</code>
      * @return The hostPlatform.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.Platform getHostPlatform() {
+    public com.acme.glup.MetadataProto.Platform getHostPlatform() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.Platform result = com.acme.glup.MetadataProto.Platform.valueOf(hostPlatform_);
       return result == null ? com.acme.glup.MetadataProto.Platform.UNRECOGNIZED : result;
@@ -44650,7 +44220,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.EventType event_type = 3 [(.Acme.Glup.json_mapping) = { ... }</code>
      * @return The enum numeric value on the wire for eventType.
      */
-    @java.lang.Override public int getEventTypeValue() {
+    public int getEventTypeValue() {
       return eventType_;
     }
     /**
@@ -44661,7 +44231,7 @@ public final class MetadataProto {
      * <code>.Acme.Glup.EventType event_type = 3 [(.Acme.Glup.json_mapping) = { ... }</code>
      * @return The eventType.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.EventType getEventType() {
+    public com.acme.glup.MetadataProto.EventType getEventType() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.EventType result = com.acme.glup.MetadataProto.EventType.valueOf(eventType_);
       return result == null ? com.acme.glup.MetadataProto.EventType.UNRECOGNIZED : result;
@@ -45016,7 +44586,6 @@ public final class MetadataProto {
        * <code>uint64 timestamp_seconds = 1 [(.Acme.Glup.json_mapping) = { ... }</code>
        * @return The timestampSeconds.
        */
-      @java.lang.Override
       public long getTimestampSeconds() {
         return timestampSeconds_;
       }
@@ -45055,7 +44624,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.Platform host_platform = 2;</code>
        * @return The enum numeric value on the wire for hostPlatform.
        */
-      @java.lang.Override public int getHostPlatformValue() {
+      public int getHostPlatformValue() {
         return hostPlatform_;
       }
       /**
@@ -45064,7 +44633,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setHostPlatformValue(int value) {
-        
         hostPlatform_ = value;
         onChanged();
         return this;
@@ -45073,7 +44641,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.Platform host_platform = 2;</code>
        * @return The hostPlatform.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.Platform getHostPlatform() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.Platform result = com.acme.glup.MetadataProto.Platform.valueOf(hostPlatform_);
@@ -45113,7 +44680,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.EventType event_type = 3 [(.Acme.Glup.json_mapping) = { ... }</code>
        * @return The enum numeric value on the wire for eventType.
        */
-      @java.lang.Override public int getEventTypeValue() {
+      public int getEventTypeValue() {
         return eventType_;
       }
       /**
@@ -45126,7 +44693,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setEventTypeValue(int value) {
-        
         eventType_ = value;
         onChanged();
         return this;
@@ -45139,7 +44705,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.EventType event_type = 3 [(.Acme.Glup.json_mapping) = { ... }</code>
        * @return The eventType.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.EventType getEventType() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.EventType result = com.acme.glup.MetadataProto.EventType.valueOf(eventType_);
@@ -45286,7 +44851,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.HDFSPartition}
    */
-  public static final class HDFSPartition extends
+  public  static final class HDFSPartition extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.HDFSPartition)
       HDFSPartitionOrBuilder {
@@ -45394,7 +44959,6 @@ public final class MetadataProto {
      * <code>uint64 timestamp_seconds = 1;</code>
      * @return The timestampSeconds.
      */
-    @java.lang.Override
     public long getTimestampSeconds() {
       return timestampSeconds_;
     }
@@ -45405,14 +44969,14 @@ public final class MetadataProto {
      * <code>.Acme.Glup.Platform host_platform = 2;</code>
      * @return The enum numeric value on the wire for hostPlatform.
      */
-    @java.lang.Override public int getHostPlatformValue() {
+    public int getHostPlatformValue() {
       return hostPlatform_;
     }
     /**
      * <code>.Acme.Glup.Platform host_platform = 2;</code>
      * @return The hostPlatform.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.Platform getHostPlatform() {
+    public com.acme.glup.MetadataProto.Platform getHostPlatform() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.Platform result = com.acme.glup.MetadataProto.Platform.valueOf(hostPlatform_);
       return result == null ? com.acme.glup.MetadataProto.Platform.UNRECOGNIZED : result;
@@ -45424,14 +44988,14 @@ public final class MetadataProto {
      * <code>.Acme.Glup.EventType event_type = 3;</code>
      * @return The enum numeric value on the wire for eventType.
      */
-    @java.lang.Override public int getEventTypeValue() {
+    public int getEventTypeValue() {
       return eventType_;
     }
     /**
      * <code>.Acme.Glup.EventType event_type = 3;</code>
      * @return The eventType.
      */
-    @java.lang.Override public com.acme.glup.MetadataProto.EventType getEventType() {
+    public com.acme.glup.MetadataProto.EventType getEventType() {
       @SuppressWarnings("deprecation")
       com.acme.glup.MetadataProto.EventType result = com.acme.glup.MetadataProto.EventType.valueOf(eventType_);
       return result == null ? com.acme.glup.MetadataProto.EventType.UNRECOGNIZED : result;
@@ -45449,7 +45013,6 @@ public final class MetadataProto {
      * <code>int32 depth = 4;</code>
      * @return The depth.
      */
-    @java.lang.Override
     public int getDepth() {
       return depth_;
     }
@@ -45820,7 +45383,6 @@ public final class MetadataProto {
        * <code>uint64 timestamp_seconds = 1;</code>
        * @return The timestampSeconds.
        */
-      @java.lang.Override
       public long getTimestampSeconds() {
         return timestampSeconds_;
       }
@@ -45859,7 +45421,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.Platform host_platform = 2;</code>
        * @return The enum numeric value on the wire for hostPlatform.
        */
-      @java.lang.Override public int getHostPlatformValue() {
+      public int getHostPlatformValue() {
         return hostPlatform_;
       }
       /**
@@ -45868,7 +45430,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setHostPlatformValue(int value) {
-        
         hostPlatform_ = value;
         onChanged();
         return this;
@@ -45877,7 +45438,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.Platform host_platform = 2;</code>
        * @return The hostPlatform.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.Platform getHostPlatform() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.Platform result = com.acme.glup.MetadataProto.Platform.valueOf(hostPlatform_);
@@ -45913,7 +45473,7 @@ public final class MetadataProto {
        * <code>.Acme.Glup.EventType event_type = 3;</code>
        * @return The enum numeric value on the wire for eventType.
        */
-      @java.lang.Override public int getEventTypeValue() {
+      public int getEventTypeValue() {
         return eventType_;
       }
       /**
@@ -45922,7 +45482,6 @@ public final class MetadataProto {
        * @return This builder for chaining.
        */
       public Builder setEventTypeValue(int value) {
-        
         eventType_ = value;
         onChanged();
         return this;
@@ -45931,7 +45490,6 @@ public final class MetadataProto {
        * <code>.Acme.Glup.EventType event_type = 3;</code>
        * @return The eventType.
        */
-      @java.lang.Override
       public com.acme.glup.MetadataProto.EventType getEventType() {
         @SuppressWarnings("deprecation")
         com.acme.glup.MetadataProto.EventType result = com.acme.glup.MetadataProto.EventType.valueOf(eventType_);
@@ -45973,7 +45531,6 @@ public final class MetadataProto {
        * <code>int32 depth = 4;</code>
        * @return The depth.
        */
-      @java.lang.Override
       public int getDepth() {
         return depth_;
       }
@@ -46148,7 +45705,7 @@ public final class MetadataProto {
    *
    * Protobuf type {@code Acme.Glup.Hash128}
    */
-  public static final class Hash128 extends
+  public  static final class Hash128 extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.Hash128)
       Hash128OrBuilder {
@@ -46268,7 +45825,6 @@ public final class MetadataProto {
      * <code>fixed64 most_sig_bits = 1;</code>
      * @return The mostSigBits.
      */
-    @java.lang.Override
     public long getMostSigBits() {
       return mostSigBits_;
     }
@@ -46283,7 +45839,6 @@ public final class MetadataProto {
      * <code>fixed64 least_sig_bits = 2;</code>
      * @return The leastSigBits.
      */
-    @java.lang.Override
     public long getLeastSigBits() {
       return leastSigBits_;
     }
@@ -46322,7 +45877,6 @@ public final class MetadataProto {
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
 
-    @java.lang.Override
     public boolean containsSetFields(
         int key) {
       
@@ -46331,7 +45885,6 @@ public final class MetadataProto {
     /**
      * Use {@link #getSetFieldsMap()} instead.
      */
-    @java.lang.Override
     @java.lang.Deprecated
     public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFields() {
       return getSetFieldsMap();
@@ -46343,7 +45896,6 @@ public final class MetadataProto {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFieldsMap() {
       return internalGetSetFields().getMap();
@@ -46355,7 +45907,6 @@ public final class MetadataProto {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public boolean getSetFieldsOrDefault(
         int key,
@@ -46372,7 +45923,6 @@ public final class MetadataProto {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public boolean getSetFieldsOrThrow(
         int key) {
@@ -46770,7 +46320,6 @@ public final class MetadataProto {
        * <code>fixed64 most_sig_bits = 1;</code>
        * @return The mostSigBits.
        */
-      @java.lang.Override
       public long getMostSigBits() {
         return mostSigBits_;
       }
@@ -46813,7 +46362,6 @@ public final class MetadataProto {
        * <code>fixed64 least_sig_bits = 2;</code>
        * @return The leastSigBits.
        */
-      @java.lang.Override
       public long getLeastSigBits() {
         return leastSigBits_;
       }
@@ -46881,7 +46429,6 @@ public final class MetadataProto {
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
 
-      @java.lang.Override
       public boolean containsSetFields(
           int key) {
         
@@ -46890,7 +46437,6 @@ public final class MetadataProto {
       /**
        * Use {@link #getSetFieldsMap()} instead.
        */
-      @java.lang.Override
       @java.lang.Deprecated
       public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFields() {
         return getSetFieldsMap();
@@ -46902,7 +46448,6 @@ public final class MetadataProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFieldsMap() {
         return internalGetSetFields().getMap();
@@ -46914,7 +46459,6 @@ public final class MetadataProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public boolean getSetFieldsOrDefault(
           int key,
@@ -46931,7 +46475,6 @@ public final class MetadataProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public boolean getSetFieldsOrThrow(
           int key) {
