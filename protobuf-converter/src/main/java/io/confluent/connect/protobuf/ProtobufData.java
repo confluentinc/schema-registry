@@ -1116,13 +1116,14 @@ public class ProtobufData {
           break;
         case BYTES:
           if (useWrapperForNullables && schema.isOptional()) {
-            converted = ((ByteString) getWrappedValue((Message) value)).asReadOnlyByteBuffer();
+            converted = ByteBuffer.wrap(
+                ((ByteString) getWrappedValue((Message) value)).toByteArray());
           } else if (value instanceof byte[]) {
             converted = ByteBuffer.wrap((byte[]) value);
           } else if (value instanceof ByteBuffer) {
             converted = value;
           } else if (value instanceof ByteString) {
-            converted = ((ByteString) value).asReadOnlyByteBuffer();
+            converted = ByteBuffer.wrap(((ByteString) value).toByteArray());
           } else {
             throw new DataException("Invalid class for bytes type, expecting byte[], ByteBuffer, "
                 + "or ByteString but found "

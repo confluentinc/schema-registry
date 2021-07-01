@@ -658,7 +658,7 @@ public class ProtobufConverterTest {
         .put("float64", 12.2)
         .put("boolean", true)
         .put("string", "foo")
-        .put("bytes", ByteBuffer.wrap("foo".getBytes()).asReadOnlyBuffer())
+        .put("bytes", ByteBuffer.wrap("foo".getBytes()))
         .put("array", Arrays.asList("a", "b", "c"))
         .put("map", Collections.singletonMap("field", 1));
 
