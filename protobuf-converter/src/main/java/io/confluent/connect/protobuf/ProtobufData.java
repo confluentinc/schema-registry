@@ -28,6 +28,7 @@ import com.google.protobuf.Message;
 import com.google.protobuf.util.Timestamps;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.nio.ByteOrder;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Set;
@@ -761,7 +762,7 @@ public class ProtobufData {
           } else if (value instanceof ByteBuffer) {
             converted = value;
           } else if (value instanceof ByteString) {
-            converted = ((ByteString) value).asReadOnlyByteBuffer();
+            converted = ByteBuffer.wrap(((ByteString) value).toByteArray());
           } else {
             throw new DataException("Invalid class for bytes type, expecting byte[], ByteBuffer, "
                 + "or ByteString but found "
