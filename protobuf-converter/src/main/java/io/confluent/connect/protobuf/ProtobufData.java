@@ -1085,7 +1085,8 @@ public class ProtobufData {
           break;
         case BYTES:
           if (useWrapperForNullables && schema.isOptional()) {
-            converted = ((ByteString) getWrappedValue((Message) value)).asReadOnlyByteBuffer();
+            converted = ByteBuffer.wrap(
+                ((ByteString) getWrappedValue((Message) value)).toByteArray());
           } else if (value instanceof byte[]) {
             converted = ByteBuffer.wrap((byte[]) value);
           } else if (value instanceof ByteBuffer) {
