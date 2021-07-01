@@ -27,7 +27,7 @@ public final class Key {
   /**
    * Protobuf type {@code KeyMessage}
    */
-  public static final class KeyMessage extends
+  public  static final class KeyMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:KeyMessage)
       KeyMessageOrBuilder {
@@ -112,7 +112,6 @@ public final class Key {
      * <code>int32 key = 1;</code>
      * @return The key.
      */
-    @java.lang.Override
     public int getKey() {
       return key_;
     }
@@ -424,7 +423,6 @@ public final class Key {
        * <code>int32 key = 1;</code>
        * @return The key.
        */
-      @java.lang.Override
       public int getKey() {
         return key_;
       }
