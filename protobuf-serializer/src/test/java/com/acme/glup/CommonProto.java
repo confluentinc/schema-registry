@@ -89,10 +89,6 @@ public final class CommonProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -265,10 +261,6 @@ public final class CommonProto {
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalStateException(
-            "Can't get the descriptor of an unrecognized enum value.");
-      }
       return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
@@ -398,7 +390,7 @@ public final class CommonProto {
    *
    * Protobuf type {@code Acme.Glup.Consent}
    */
-  public static final class Consent extends
+  public  static final class Consent extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Acme.Glup.Consent)
       ConsentOrBuilder {
@@ -520,7 +512,6 @@ public final class CommonProto {
      * <code>bool identification_forbidden = 1;</code>
      * @return The identificationForbidden.
      */
-    @java.lang.Override
     public boolean getIdentificationForbidden() {
       return identificationForbidden_;
     }
@@ -535,7 +526,7 @@ public final class CommonProto {
      * <code>.Acme.Glup.IdentificationForbiddenReason reason = 2;</code>
      * @return The enum numeric value on the wire for reason.
      */
-    @java.lang.Override public int getReasonValue() {
+    public int getReasonValue() {
       return reason_;
     }
     /**
@@ -546,7 +537,7 @@ public final class CommonProto {
      * <code>.Acme.Glup.IdentificationForbiddenReason reason = 2;</code>
      * @return The reason.
      */
-    @java.lang.Override public com.acme.glup.CommonProto.IdentificationForbiddenReason getReason() {
+    public com.acme.glup.CommonProto.IdentificationForbiddenReason getReason() {
       @SuppressWarnings("deprecation")
       com.acme.glup.CommonProto.IdentificationForbiddenReason result = com.acme.glup.CommonProto.IdentificationForbiddenReason.valueOf(reason_);
       return result == null ? com.acme.glup.CommonProto.IdentificationForbiddenReason.UNRECOGNIZED : result;
@@ -586,7 +577,6 @@ public final class CommonProto {
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
 
-    @java.lang.Override
     public boolean containsSetFields(
         int key) {
       
@@ -595,7 +585,6 @@ public final class CommonProto {
     /**
      * Use {@link #getSetFieldsMap()} instead.
      */
-    @java.lang.Override
     @java.lang.Deprecated
     public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFields() {
       return getSetFieldsMap();
@@ -607,7 +596,6 @@ public final class CommonProto {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFieldsMap() {
       return internalGetSetFields().getMap();
@@ -619,7 +607,6 @@ public final class CommonProto {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public boolean getSetFieldsOrDefault(
         int key,
@@ -636,7 +623,6 @@ public final class CommonProto {
      *
      * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
      */
-    @java.lang.Override
 
     public boolean getSetFieldsOrThrow(
         int key) {
@@ -1033,7 +1019,6 @@ public final class CommonProto {
        * <code>bool identification_forbidden = 1;</code>
        * @return The identificationForbidden.
        */
-      @java.lang.Override
       public boolean getIdentificationForbidden() {
         return identificationForbidden_;
       }
@@ -1076,7 +1061,7 @@ public final class CommonProto {
        * <code>.Acme.Glup.IdentificationForbiddenReason reason = 2;</code>
        * @return The enum numeric value on the wire for reason.
        */
-      @java.lang.Override public int getReasonValue() {
+      public int getReasonValue() {
         return reason_;
       }
       /**
@@ -1089,7 +1074,6 @@ public final class CommonProto {
        * @return This builder for chaining.
        */
       public Builder setReasonValue(int value) {
-        
         reason_ = value;
         onChanged();
         return this;
@@ -1102,7 +1086,6 @@ public final class CommonProto {
        * <code>.Acme.Glup.IdentificationForbiddenReason reason = 2;</code>
        * @return The reason.
        */
-      @java.lang.Override
       public com.acme.glup.CommonProto.IdentificationForbiddenReason getReason() {
         @SuppressWarnings("deprecation")
         com.acme.glup.CommonProto.IdentificationForbiddenReason result = com.acme.glup.CommonProto.IdentificationForbiddenReason.valueOf(reason_);
@@ -1175,7 +1158,6 @@ public final class CommonProto {
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
 
-      @java.lang.Override
       public boolean containsSetFields(
           int key) {
         
@@ -1184,7 +1166,6 @@ public final class CommonProto {
       /**
        * Use {@link #getSetFieldsMap()} instead.
        */
-      @java.lang.Override
       @java.lang.Deprecated
       public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFields() {
         return getSetFieldsMap();
@@ -1196,7 +1177,6 @@ public final class CommonProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public java.util.Map<java.lang.Integer, java.lang.Boolean> getSetFieldsMap() {
         return internalGetSetFields().getMap();
@@ -1208,7 +1188,6 @@ public final class CommonProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public boolean getSetFieldsOrDefault(
           int key,
@@ -1225,7 +1204,6 @@ public final class CommonProto {
        *
        * <code>map&lt;int32, bool&gt; set_fields = 50010;</code>
        */
-      @java.lang.Override
 
       public boolean getSetFieldsOrThrow(
           int key) {
