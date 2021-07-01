@@ -28,7 +28,6 @@ import com.google.protobuf.Message;
 import com.google.protobuf.util.Timestamps;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.nio.ByteOrder;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Set;
