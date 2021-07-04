@@ -39,6 +39,9 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
+        <!-- TODO update confluent-security-plugins-common to 
+             have direct dependency so jakarta.ws.rs 
+             and org.glassfish.jersey.core can be removed here -->
         <dependency>
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>

@@ -45,8 +45,6 @@ import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 
-import javax.ws.rs.core.Response.Status.Family;
-
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
  */
@@ -236,7 +234,7 @@ public abstract class AbstractKafkaSchemaSerDe {
   }
 
   protected static KafkaException toKafkaException(RestClientException e, String errorMessage) {
-    if (Family.familyOf(e.getErrorCode()) == Family.CLIENT_ERROR) {
+    if (e.getErrorCode() / 100 == 5 /* HTTP 500 Server Error */) {
       return new InvalidConfigurationException(e.getMessage());
     } else {
       return new SerializationException(errorMessage, e);
