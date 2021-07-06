@@ -31,7 +31,7 @@ public final class Int8ValueOuterClass {
    *
    * Protobuf type {@code Int8Value}
    */
-  public  static final class Int8Value extends
+  public static final class Int8Value extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:Int8Value)
       Int8ValueOrBuilder {
@@ -116,6 +116,7 @@ public final class Int8ValueOuterClass {
      * <code>int32 value = 1 [(.confluent.field_meta) = { ... }</code>
      * @return The value.
      */
+    @java.lang.Override
     public int getValue() {
       return value_;
     }
@@ -431,6 +432,7 @@ public final class Int8ValueOuterClass {
        * <code>int32 value = 1 [(.confluent.field_meta) = { ... }</code>
        * @return The value.
        */
+      @java.lang.Override
       public int getValue() {
         return value_;
       }

@@ -42,7 +42,7 @@ public final class DescriptorRef {
   /**
    * Protobuf type {@code DescriptorMessage}
    */
-  public  static final class DescriptorMessage extends
+  public static final class DescriptorMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:DescriptorMessage)
       DescriptorMessageOrBuilder {
@@ -140,6 +140,7 @@ public final class DescriptorRef {
      * <code>int32 key = 1;</code>
      * @return The key.
      */
+    @java.lang.Override
     public int getKey() {
       return key_;
     }
@@ -150,6 +151,7 @@ public final class DescriptorRef {
      * <code>.google.protobuf.DescriptorProto value = 2;</code>
      * @return Whether the value field is set.
      */
+    @java.lang.Override
     public boolean hasValue() {
       return value_ != null;
     }
@@ -157,12 +159,14 @@ public final class DescriptorRef {
      * <code>.google.protobuf.DescriptorProto value = 2;</code>
      * @return The value.
      */
+    @java.lang.Override
     public com.google.protobuf.DescriptorProtos.DescriptorProto getValue() {
       return value_ == null ? com.google.protobuf.DescriptorProtos.DescriptorProto.getDefaultInstance() : value_;
     }
     /**
      * <code>.google.protobuf.DescriptorProto value = 2;</code>
      */
+    @java.lang.Override
     public com.google.protobuf.DescriptorProtos.DescriptorProtoOrBuilder getValueOrBuilder() {
       return getValue();
     }
@@ -515,6 +519,7 @@ public final class DescriptorRef {
        * <code>int32 key = 1;</code>
        * @return The key.
        */
+      @java.lang.Override
       public int getKey() {
         return key_;
       }
