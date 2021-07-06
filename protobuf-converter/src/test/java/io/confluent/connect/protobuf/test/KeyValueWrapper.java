@@ -42,7 +42,7 @@ public final class KeyValueWrapper {
   /**
    * Protobuf type {@code KeyValueWrapperMessage}
    */
-  public  static final class KeyValueWrapperMessage extends
+  public static final class KeyValueWrapperMessage extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:KeyValueWrapperMessage)
       KeyValueWrapperMessageOrBuilder {
@@ -140,6 +140,7 @@ public final class KeyValueWrapper {
      * <code>int32 key = 1;</code>
      * @return The key.
      */
+    @java.lang.Override
     public int getKey() {
       return key_;
     }
@@ -150,6 +151,7 @@ public final class KeyValueWrapper {
      * <code>.google.protobuf.StringValue wrappedValue = 2;</code>
      * @return Whether the wrappedValue field is set.
      */
+    @java.lang.Override
     public boolean hasWrappedValue() {
       return wrappedValue_ != null;
     }
@@ -157,12 +159,14 @@ public final class KeyValueWrapper {
      * <code>.google.protobuf.StringValue wrappedValue = 2;</code>
      * @return The wrappedValue.
      */
+    @java.lang.Override
     public com.google.protobuf.StringValue getWrappedValue() {
       return wrappedValue_ == null ? com.google.protobuf.StringValue.getDefaultInstance() : wrappedValue_;
     }
     /**
      * <code>.google.protobuf.StringValue wrappedValue = 2;</code>
      */
+    @java.lang.Override
     public com.google.protobuf.StringValueOrBuilder getWrappedValueOrBuilder() {
       return getWrappedValue();
     }
@@ -504,6 +508,7 @@ public final class KeyValueWrapper {
        * <code>int32 key = 1;</code>
        * @return The key.
        */
+      @java.lang.Override
       public int getKey() {
         return key_;
       }

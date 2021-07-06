@@ -52,7 +52,7 @@ public final class TimeOfDayValueOuterClass {
    *
    * Protobuf type {@code TimeOfDayValue}
    */
-  public  static final class TimeOfDayValue extends
+  public static final class TimeOfDayValue extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:TimeOfDayValue)
       TimeOfDayValueOrBuilder {
@@ -149,6 +149,7 @@ public final class TimeOfDayValueOuterClass {
      * <code>.google.type.TimeOfDay value = 1;</code>
      * @return Whether the value field is set.
      */
+    @java.lang.Override
     public boolean hasValue() {
       return value_ != null;
     }
@@ -160,6 +161,7 @@ public final class TimeOfDayValueOuterClass {
      * <code>.google.type.TimeOfDay value = 1;</code>
      * @return The value.
      */
+    @java.lang.Override
     public com.google.type.TimeOfDay getValue() {
       return value_ == null ? com.google.type.TimeOfDay.getDefaultInstance() : value_;
     }
@@ -170,6 +172,7 @@ public final class TimeOfDayValueOuterClass {
      *
      * <code>.google.type.TimeOfDay value = 1;</code>
      */
+    @java.lang.Override
     public com.google.type.TimeOfDayOrBuilder getValueOrBuilder() {
       return getValue();
     }
