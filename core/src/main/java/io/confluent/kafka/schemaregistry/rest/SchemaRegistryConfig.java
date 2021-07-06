@@ -642,16 +642,13 @@ public class SchemaRegistryConfig extends RestConfig {
     return compatibilityType;
   }
 
-  public boolean useKafkaCoordination() {
-    boolean haveStoreConnectionUrl = !getString(KAFKASTORE_CONNECTION_URL_CONFIG).isEmpty();
+  public void checkBootstrapServers() {
     boolean haveBootstrapServers = !getList(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG).isEmpty();
-    if (!haveStoreConnectionUrl && ! haveBootstrapServers) {
+    if (!haveBootstrapServers) {
       throw new ConfigException(
-          "Must configure at least one bootstrap connection method, either "
-          + KAFKASTORE_CONNECTION_URL_CONFIG + " or " + KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
+          "Must specify bootstrap servers using " + KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
       );
     }
-    return haveBootstrapServers;
   }
 
   public String bootstrapBrokers() {
