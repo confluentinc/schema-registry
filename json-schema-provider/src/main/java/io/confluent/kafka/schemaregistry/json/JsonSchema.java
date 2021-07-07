@@ -76,7 +76,7 @@ public class JsonSchema implements ParsedSchema {
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
-  private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
+  private ObjectMapper objectMapper = Jackson.newObjectMapper();
 
   public JsonSchema(JsonNode jsonNode) {
     this(jsonNode, Collections.emptyList(), Collections.emptyMap(), null);
@@ -128,6 +128,10 @@ public class JsonSchema implements ParsedSchema {
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON " + schemaObj.toString(), e);
     }
+  }
+
+  public void setObjectMapper(ObjectMapper objectMapper) {
+    this.objectMapper = objectMapper;
   }
 
   private JsonSchema(

@@ -18,8 +18,9 @@ package io.confluent.kafka.serializers.json;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
-import java.time.LocalDate;
 
+import java.time.LocalDate;
+import java.util.Arrays;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
@@ -125,6 +126,13 @@ public class KafkaJsonSchemaSerializerTest {
     User user = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
 
     byte[] bytes = serializer.serialize("foo", user);
+    byte[] payload = Arrays.copyOfRange(bytes, 5, bytes.length);
+
+    // Test for raw serialization result
+    String expected = "{\"firstName\":\"john\",\"lastName\":\"doe\",\"age\":50,\"nickName\":\"jack\",\"birthdate\":\"2018-12-27\"}";
+    assertEquals(expected, new String(payload));
+
+    // Test for round-trip with deserializer
     Object deserialized = getDeserializer(User.class).deserialize(topic, bytes);
     assertEquals(user, deserialized);
 

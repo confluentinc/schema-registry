@@ -90,6 +90,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     if (object == null) {
       return null;
     }
+    // We need to validate the schema with the same parameters for the mapper
+    schema.setObjectMapper(objectMapper);
     String restClientErrorMsg = "";
     try {
       int id;
