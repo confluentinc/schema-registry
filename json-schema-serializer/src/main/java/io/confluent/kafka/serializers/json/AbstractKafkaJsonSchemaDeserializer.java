@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.json;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kafka.utils.VerifiableProperties;
 import org.apache.kafka.common.config.ConfigException;
@@ -116,27 +117,37 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
 
       String typeName = schema.getString(typeProperty);
 
-      Object value;
-      if (type != null && !Object.class.equals(type)) {
-        value = objectMapper.readValue(buffer.array(), start, length, type);
-      } else if (typeName != null) {
-        value = deriveType(buffer, length, start, typeName);
-      } else if (Object.class.equals(type)) {
-        value = objectMapper.readValue(buffer.array(), start, length, type);
-      } else {
-        // Return JsonNode if type is null
-        value = objectMapper.readTree(new ByteArrayInputStream(buffer.array(), start, length));
-      }
-
+      JsonNode jsonNode = null;
       if (validate) {
         try {
-          schema.validate(value);
+          jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+          schema.validate(jsonNode);
         } catch (JsonProcessingException | ValidationException e) {
           throw new SerializationException("JSON "
-              + value
+              + jsonNode
               + " does not match schema "
               + schema.canonicalString(), e);
         }
+      }
+
+      Object value;
+      if (type != null && !Object.class.equals(type)) {
+        value = jsonNode != null
+            ? objectMapper.convertValue(jsonNode, type)
+            : objectMapper.readValue(buffer.array(), start, length, type);
+      } else if (typeName != null) {
+        value = jsonNode != null
+            ? deriveType(jsonNode, typeName)
+            : deriveType(buffer, length, start, typeName);
+      } else if (Object.class.equals(type)) {
+        value = jsonNode != null
+            ? objectMapper.convertValue(jsonNode, type)
+            : objectMapper.readValue(buffer.array(), start, length, type);
+      } else {
+        // Return JsonNode if type is null
+        value = jsonNode != null
+            ? jsonNode
+            : objectMapper.readTree(new ByteArrayInputStream(buffer.array(), start, length));
       }
 
       if (includeSchemaAndVersion) {
@@ -168,6 +179,15 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     try {
       Class<?> cls = Class.forName(typeName);
       return objectMapper.readValue(buffer.array(), start, length, cls);
+    } catch (ClassNotFoundException e) {
+      throw new SerializationException("Class " + typeName + " could not be found.");
+    }
+  }
+
+  private Object deriveType(JsonNode jsonNode, String typeName) throws IOException {
+    try {
+      Class<?> cls = Class.forName(typeName);
+      return objectMapper.convertValue(jsonNode, cls);
     } catch (ClassNotFoundException e) {
       throw new SerializationException("Class " + typeName + " could not be found.");
     }
