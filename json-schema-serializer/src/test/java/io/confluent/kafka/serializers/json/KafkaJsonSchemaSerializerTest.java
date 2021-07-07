@@ -160,6 +160,11 @@ public class KafkaJsonSchemaSerializerTest {
     @JsonProperty
     public Optional<String> nickName;
     @JsonProperty
+    @JsonSchemaInject(
+        // Ensure type of LocalDate is string
+        strings = {@JsonSchemaString(path = "type", value = "string")},
+        merge = false
+    )
     public LocalDate birthdate;
 
     public User() {}

@@ -16,6 +16,7 @@
 package io.confluent.kafka.serializers.json;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
@@ -104,7 +105,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       }
       if (validate) {
         try {
-          schema.validate(object);
+          JsonNode jsonNode = objectMapper.convertValue(object, JsonNode.class);
+          schema.validate(jsonNode);
         } catch (JsonProcessingException | ValidationException e) {
           throw new SerializationException("JSON "
               + object
