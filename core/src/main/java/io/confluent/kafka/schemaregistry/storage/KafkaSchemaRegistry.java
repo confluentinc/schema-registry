@@ -252,7 +252,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   protected IdGenerator identityGenerator(SchemaRegistryConfig config) {
     config.checkBootstrapServers();
-    return new IncrementalIdGenerator();
+    IdGenerator idGenerator = new IncrementalIdGenerator();
+    idGenerator.configure(config);
+    return idGenerator;
   }
 
   public IdGenerator getIdentityGenerator() {
