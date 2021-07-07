@@ -111,6 +111,15 @@ public class JsonSchemaUtils {
       SpecificationVersion specVersion,
       boolean useOneofForNullables,
       SchemaRegistryClient client) throws IOException {
+    return getSchema(object, specVersion, useOneofForNullables, jsonMapper, client);
+  }
+
+  public static JsonSchema getSchema(
+      Object object,
+      SpecificationVersion specVersion,
+      boolean useOneofForNullables,
+      ObjectMapper objectMapper,
+      SchemaRegistryClient client) throws IOException {
     if (object == null) {
       return null;
     }
@@ -158,7 +167,7 @@ public class JsonSchemaUtils {
         break;
     }
     config = config.withJsonSchemaDraft(draft);
-    JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(jsonMapper, config);
+    JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(objectMapper, config);
     JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(cls);
     return new JsonSchema(jsonSchema);
   }
