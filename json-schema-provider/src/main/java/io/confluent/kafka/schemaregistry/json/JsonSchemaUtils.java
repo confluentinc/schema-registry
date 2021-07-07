@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.json;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
@@ -103,12 +104,13 @@ public class JsonSchemaUtils {
 
   public static JsonSchema getSchema(Object object, SchemaRegistryClient client)
       throws IOException {
-    return getSchema(object, null, true, client);
+    return getSchema(object, null, false, true, client);
   }
 
   public static JsonSchema getSchema(
       Object object,
       SpecificationVersion specVersion,
+      boolean iso8601Dates,
       boolean useOneofForNullables,
       SchemaRegistryClient client) throws IOException {
     if (object == null) {
@@ -119,6 +121,9 @@ public class JsonSchemaUtils {
     }
     if (isEnvelope(object)) {
       return getSchemaFromEnvelope((JsonNode) object);
+    }
+    if (iso8601Dates) {
+      jsonMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
     }
     Class<?> cls = object.getClass();
     if (cls.isAnnotationPresent(Schema.class)) {

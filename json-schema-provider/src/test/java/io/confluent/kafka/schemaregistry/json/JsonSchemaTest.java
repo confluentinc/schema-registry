@@ -22,11 +22,12 @@ import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.NumericNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
+import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -213,6 +214,72 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testDateAsDateTimeString() throws IOException {
+    TestDateObj testDateObj = new TestDateObj();
+    JsonNode actual = JsonSchemaUtils.getSchema(testDateObj, SpecificationVersion.DRAFT_4, true, true, null).toJsonNode();
+    String json = "{\n"
+        + "    \"$schema\": \"http://json-schema.org/draft-04/schema#\",\n"
+        + "    \"title\": \"Test Date Obj\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"additionalProperties\": false,\n"
+        + "    \"properties\":\n"
+        + "    {\n"
+        + "        \"dateTime\":\n"
+        + "        {\n"
+        + "            \"oneOf\":\n"
+        + "            [\n"
+        + "                {\n"
+        + "                    \"type\": \"null\",\n"
+        + "                    \"title\": \"Not included\"\n"
+        + "                },\n"
+        + "                {\n"
+        + "                    \"type\": \"string\",\n"
+        + "                    \"format\": \"date-time\"\n"
+        + "                }\n"
+        + "            ]\n"
+        + "        }\n"
+        + "    }\n"
+        + "}";
+    System.out.println(actual);
+    JsonNode expected = objectMapper.readTree(json);
+    assertEquals(expected, actual);
+  }
+
+  @Test
+  public void testDateAsIntArray() throws IOException {
+    TestDateObj testDateObj = new TestDateObj();
+    JsonNode actual = JsonSchemaUtils.getSchema(testDateObj, SpecificationVersion.DRAFT_4, false, true, null).toJsonNode();
+    String json = "{\n"
+        + "    \"$schema\": \"http://json-schema.org/draft-04/schema#\",\n"
+        + "    \"title\": \"Test Date Obj\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"additionalProperties\": false,\n"
+        + "    \"properties\":\n"
+        + "    {\n"
+        + "        \"dateTime\":\n"
+        + "        {\n"
+        + "            \"oneOf\":\n"
+        + "            [\n"
+        + "                {\n"
+        + "                    \"type\": \"null\",\n"
+        + "                    \"title\": \"Not included\"\n"
+        + "                },\n"
+        + "                {\n"
+        + "                    \"type\": \"array\",\n"
+        + "                    \"items\":\n"
+        + "                    {\n"
+        + "                        \"type\": \"integer\"\n"
+        + "                    }\n"
+        + "                }\n"
+        + "            ]\n"
+        + "        }\n"
+        + "    }\n"
+        + "}";
+    JsonNode expected = objectMapper.readTree(json);
+    assertEquals(expected, actual);
+  }
+
+  @Test
   public void testRecordToJson() throws Exception {
     String json = "{\n"
         + "    \"null\": null,\n"
@@ -249,7 +316,7 @@ public class JsonSchemaTest {
   public void testSchemaWithDraft4() throws Exception {
     TestObj testObj = new TestObj();
     String actual =
-        JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_4, true, null).toString();
+        JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_4, false, true, null).toString();
     String expected = "{\"$schema\":\"http://json-schema.org/draft-04/schema#\","
         + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
         + "\"properties\":{\"prop\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},"
@@ -272,7 +339,7 @@ public class JsonSchemaTest {
   public void testSchemaWithoutOneofs() throws Exception {
     TestObj testObj = new TestObj();
     String actual =
-        JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_7, false, null).toString();
+        JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_7, false, false, null).toString();
     String expected = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\","
         + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
         + "\"properties\":{\"prop\":{\"type\":\"string\"}}}";
@@ -339,5 +406,9 @@ public class JsonSchemaTest {
     public String getProp() {
       return prop;
     }
+  }
+  static class TestDateObj {
+    private LocalDateTime dateTime;
+    public LocalDateTime getDateTime() {return dateTime;}
   }
 }

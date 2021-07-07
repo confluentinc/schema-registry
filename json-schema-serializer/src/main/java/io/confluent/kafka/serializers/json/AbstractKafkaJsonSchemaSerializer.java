@@ -43,6 +43,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected SpecificationVersion specVersion;
   protected boolean oneofForNullables;
+  protected boolean iso8601Dates;
   protected boolean validate;
 
   protected void configure(KafkaJsonSchemaSerializerConfig config) {
@@ -59,6 +60,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.specVersion = SpecificationVersion.get(
         config.getString(KafkaJsonSchemaSerializerConfig.SCHEMA_SPEC_VERSION));
     this.oneofForNullables = config.getBoolean(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES);
+    this.iso8601Dates = config.getBoolean(KafkaJsonSchemaSerializerConfig.WRITE_DATES_AS_ISO8601);
     this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
   }
 
