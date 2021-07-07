@@ -87,7 +87,8 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   private JsonSchema getSchema(T record) {
     try {
-      return JsonSchemaUtils.getSchema(record, specVersion, oneofForNullables, schemaRegistry);
+      return JsonSchemaUtils.getSchema(
+          record, specVersion, oneofForNullables, objectMapper, schemaRegistry);
     } catch (IOException e) {
       throw new SerializationException(e);
     }
