@@ -49,10 +49,8 @@ import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedExcepti
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
-import io.confluent.kafka.schemaregistry.id.ZookeeperIdGenerator;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.leaderelector.kafka.KafkaGroupLeaderElector;
-import io.confluent.kafka.schemaregistry.leaderelector.zookeeper.ZookeeperLeaderElector;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
@@ -253,12 +251,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   protected IdGenerator identityGenerator(SchemaRegistryConfig config) {
-    IdGenerator idGenerator;
-    if (config.useKafkaCoordination()) {
-      idGenerator = new IncrementalIdGenerator();
-    } else {
-      idGenerator = new ZookeeperIdGenerator();
-    }
+    config.checkBootstrapServers();
+    IdGenerator idGenerator = new IncrementalIdGenerator();
     idGenerator.configure(config);
     return idGenerator;
   }
@@ -314,18 +308,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
 
     try {
-      if (config.useKafkaCoordination()) {
-        log.info("Joining schema registry with Kafka-based coordination");
-        leaderElector = new KafkaGroupLeaderElector(config, myIdentity, this);
-      } else {
-        log.info("Joining schema registry with Zookeeper-based coordination");
-        log.warn("*****************************************************************************");
-        log.warn("Zookeeper-based coordination is deprecated and will be removed in the future.");
-        log.warn("Please switch to Kafka-based coordination with "
-            + "\"kafkastore.bootstrap.servers\".");
-        log.warn("*****************************************************************************");
-        leaderElector = new ZookeeperLeaderElector(config, myIdentity, this);
-      }
+      config.checkBootstrapServers();
+      log.info("Joining schema registry with Kafka-based coordination");
+      leaderElector = new KafkaGroupLeaderElector(config, myIdentity, this);
       leaderElector.init();
     } catch (SchemaRegistryStoreException e) {
       throw new SchemaRegistryInitializationException(
