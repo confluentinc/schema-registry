@@ -25,7 +25,7 @@
               files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AvroSchemaUtils|CompatibilityResource|KafkaSchemaRegistry|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|MockSchemaRegistryClient|SchemaRegistrySerializer|SchemaValue|SubjectVersionsResource|ProtobufSchema|SchemaDiff|FieldSchemaDiff|MessageSchemaDiff|DynamicSchema|SchemaMessageFormatter|ProtobufData|JsonSchema|JSON.*|AbstractKafkaJsonSchemaDeserializer|JsonSchemaData|JsonSchemaUtils|ProtobufSchemaUtils|SchemaMessageReader).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AvroData|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|ProtobufData|ProtobufSchemaUtils|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader).java"/>
+              files="(AvroData|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|AbstractKafkaJsonSchemaDeserializer|ProtobufData|ProtobufSchemaUtils|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader).java"/>
 
     <suppress checks="JavaNCSS"
               files="(AvroData|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema).java"/>
