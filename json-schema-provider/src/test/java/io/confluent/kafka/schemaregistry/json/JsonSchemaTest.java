@@ -240,7 +240,6 @@ public class JsonSchemaTest {
         + "        }\n"
         + "    }\n"
         + "}";
-    System.out.println(actual);
     JsonNode expected = objectMapper.readTree(json);
     assertEquals(expected, actual);
   }

@@ -122,9 +122,7 @@ public class JsonSchemaUtils {
     if (isEnvelope(object)) {
       return getSchemaFromEnvelope((JsonNode) object);
     }
-    if (iso8601Dates) {
-      jsonMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
-    }
+    jsonMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, !iso8601Dates);
     Class<?> cls = object.getClass();
     if (cls.isAnnotationPresent(Schema.class)) {
       Schema schema = (Schema) cls.getAnnotation(Schema.class);
