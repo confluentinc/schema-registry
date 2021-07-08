@@ -349,7 +349,8 @@ public class AvroData {
   }
 
   protected Object fromConnectData(Schema schema, org.apache.avro.Schema avroSchema, Object value) {
-    return fromConnectData(schema, avroSchema, value, true, false, enhancedSchemaSupport);
+    return fromConnectData(schema, avroSchema, value, true, false,
+        enhancedSchemaSupport, scrubInvalidNames);
   }
 
   /**
@@ -370,9 +371,13 @@ public class AvroData {
    * @return the converted data
    */
   private static Object fromConnectData(
-      Schema schema, org.apache.avro.Schema avroSchema,
-      Object logicalValue, boolean requireContainer,
-      boolean requireSchemalessContainerNull, boolean enhancedSchemaSupport
+      Schema schema,
+      org.apache.avro.Schema avroSchema,
+      Object logicalValue,
+      boolean requireContainer,
+      boolean requireSchemalessContainerNull,
+      boolean enhancedSchemaSupport,
+      boolean scrubInvalidNames
   ) {
     Schema.Type schemaType = schema != null
                              ? schema.type()
@@ -502,7 +507,8 @@ public class AvroData {
                     val,
                     false,
                     true,
-                    enhancedSchemaSupport
+                    enhancedSchemaSupport,
+                    scrubInvalidNames
                 )
             );
           }
@@ -525,7 +531,7 @@ public class AvroData {
               // Key is a String, no conversion needed
               Object convertedValue = fromConnectData(schema.valueSchema(),
                   underlyingAvroSchema.getValueType(),
-                  entry.getValue(), false, true, enhancedSchemaSupport
+                  entry.getValue(), false, true, enhancedSchemaSupport, scrubInvalidNames
               );
               converted.put((String) entry.getKey(), convertedValue);
             }
@@ -542,10 +548,11 @@ public class AvroData {
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               Object keyConverted = fromConnectData(schema != null ? schema.keySchema() : null,
                                                     avroKeySchema, entry.getKey(), false, true,
-                  enhancedSchemaSupport);
+                                                    enhancedSchemaSupport, scrubInvalidNames);
               Object valueConverted = fromConnectData(schema != null ? schema.valueSchema() : null,
                                                       avroValueSchema, entry.getValue(), false,
-                                                      true, enhancedSchemaSupport);
+                                                      true, enhancedSchemaSupport,
+                                                      scrubInvalidNames);
               converted.add(
                   new GenericRecordBuilder(elementSchema)
                       .set(KEY_FIELD, keyConverted)
@@ -576,22 +583,25 @@ public class AvroData {
                     object,
                     false,
                     true,
-                    enhancedSchemaSupport
+                    enhancedSchemaSupport,
+                    scrubInvalidNames
                 );
               }
             }
-            return fromConnectData(schema, avroSchema, null, false, true, enhancedSchemaSupport);
+            return fromConnectData(schema, avroSchema, null, false, true,
+                enhancedSchemaSupport, scrubInvalidNames);
           } else {
             org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
                 schema, avroSchema);
             GenericRecordBuilder convertedBuilder = new GenericRecordBuilder(underlyingAvroSchema);
             for (Field field : schema.fields()) {
-              org.apache.avro.Schema.Field theField = underlyingAvroSchema.getField(field.name());
+              String fieldName = scrubName(field.name(), scrubInvalidNames);
+              org.apache.avro.Schema.Field theField = underlyingAvroSchema.getField(fieldName);
               org.apache.avro.Schema fieldAvroSchema = theField.schema();
               convertedBuilder.set(
-                  field.name(),
+                  fieldName,
                   fromConnectData(field.schema(), fieldAvroSchema, struct.get(field), false,
-                      true, enhancedSchemaSupport)
+                      true, enhancedSchemaSupport, scrubInvalidNames)
               );
             }
             return convertedBuilder.build();
@@ -751,7 +761,7 @@ public class AvroData {
     if (schema.name() != null) {
       String[] split = splitName(schema.name());
       namespace = split[0];
-      name = scrubName(split[1]);
+      name = split[1];
     }
 
     // Extra type annotation information for otherwise lossy conversions
@@ -891,7 +901,7 @@ public class AvroData {
             String fieldName = scrubName(field.name());
             String fieldDoc = schema.parameters() != null
                 ? schema.parameters()
-                  .get(AVRO_FIELD_DOC_PREFIX_PROP + field.name())
+                  .get(AVRO_FIELD_DOC_PREFIX_PROP + fieldName)
                 : null;
             addAvroRecordField(fields, fieldName, field.schema(), fieldDoc, fromConnectContext);
           }
@@ -1034,6 +1044,10 @@ public class AvroData {
   }
 
   private String scrubName(String name) {
+    return scrubName(name, scrubInvalidNames);
+  }
+
+  private static String scrubName(String name, boolean scrubInvalidNames) {
     return scrubInvalidNames ? doScrubName(name) : name;
   }
 
@@ -1113,7 +1127,7 @@ public class AvroData {
   // though you can get a default value from the schema, default values for complex structures need
   // to perform the same translation but those defaults will be part of the original top-level
   // (complex type) default value, not part of the child schema.
-  private static JsonNode defaultValueFromConnect(Schema schema, Object value) {
+  private JsonNode defaultValueFromConnect(Schema schema, Object value) {
     try {
       // If this is a logical type, convert it from the convenient Java type to the underlying
       // serializeable format
@@ -1175,8 +1189,9 @@ public class AvroData {
           ObjectNode node = JsonNodeFactory.instance.objectNode();
           Struct struct = ((Struct) defaultVal);
           for (Field field : (schema.fields())) {
+            String fieldName = scrubName(field.name(), scrubInvalidNames);
             JsonNode fieldDef = defaultValueFromConnect(field.schema(), struct.get(field));
-            node.put(field.name(), fieldDef);
+            node.put(fieldName, fieldDef);
           }
           return node;
         }
@@ -2103,7 +2118,7 @@ public class AvroData {
   /**
    * Split a full dotted-syntax name into a namespace and a single-component name.
    */
-  private static String[] splitName(String fullName) {
+  private String[] splitName(String fullName) {
     String[] result = new String[2];
     int indexLastDot = fullName.lastIndexOf('.');
     if (indexLastDot >= 0) {
@@ -2113,6 +2128,7 @@ public class AvroData {
       result[0] = null;
       result[1] = fullName;
     }
+    result[1] = scrubName(result[1]);
     return result;
   }
 

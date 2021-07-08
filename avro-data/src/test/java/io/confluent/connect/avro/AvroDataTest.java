@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
@@ -274,12 +275,20 @@ public class AvroDataTest {
         .name("org.acme.invalid record-name")
         .field("invalid field-name", Schema.STRING_SCHEMA)
         .build();
-    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+    Struct struct = new Struct(schema);
+    struct.put("invalid field-name", "foo");
+    org.apache.avro.Schema expectedSchema = org.apache.avro.SchemaBuilder
         .record("invalid_record_name").namespace("org.acme") // default values
         .fields()
         .requiredString("invalid_field_name")
         .endRecord();
-    assertThat(avroData.fromConnectSchema(schema), equalTo(avroSchema));
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+    GenericRecord convertedRecord = (GenericRecord) avroData.fromConnectData(schema, struct);
+    assertEquals("invalid_record_name", avroSchema.getName());
+    assertEquals("invalid_field_name", avroSchema.getFields().get(0).name());
+    assertEquals("invalid_record_name", convertedRecord.getSchema().getName());
+    assertEquals("invalid_field_name", convertedRecord.getSchema().getFields().get(0).name());
+    assertEquals("foo", convertedRecord.get("invalid_field_name"));
   }
 
   @Test
