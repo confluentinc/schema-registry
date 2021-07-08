@@ -324,11 +324,14 @@ public class ProtobufData {
     ProtobufSchema protobufSchema = fromConnectSchema(schema);
     Object ctx = null;
     if (schema != null) {
-      String name = schema.name();
-      if (name == null) {
-        name = DEFAULT_SCHEMA_NAME + "1";
+      String fullName = schema.name();
+      if (fullName == null) {
+        fullName = DEFAULT_SCHEMA_NAME + "1";
       }
-      ctx = protobufSchema.toDescriptor(name);
+      String[] split = splitName(fullName);
+      String namespace = split[0];
+      String name = split[1];
+      ctx = protobufSchema.toDescriptor(namespace != null ? namespace + "." + name : name);
     }
     return new ProtobufSchemaAndValue(
         protobufSchema,
@@ -477,8 +480,9 @@ public class ProtobufData {
             for (Field field : schema.fields()) {
               Object object = struct.get(field);
               if (object != null) {
-                Object fieldCtx = getFieldType(ctx, field.name());
-                return new Pair<>(field.name(),
+                String fieldName = scrubName(field.name());
+                Object fieldCtx = getFieldType(ctx, fieldName);
+                return new Pair<>(fieldName,
                     fromConnectData(fieldCtx, field.schema(), scope, object, protobufSchema)
                 );
               }
@@ -492,7 +496,8 @@ public class ProtobufData {
               throw new DataException("Invalid message name: " + scopedStructName);
             }
             for (Field field : schema.fields()) {
-              Object fieldCtx = getFieldType(ctx, field.name());
+              String fieldName = scrubName(field.name());
+              Object fieldCtx = getFieldType(ctx, fieldName);
               Object fieldValue = fromConnectData(
                   fieldCtx,
                   field.schema(),
@@ -509,10 +514,10 @@ public class ProtobufData {
                   fieldValue = union.getValue();
                 } else {
                   fieldDescriptor = messageBuilder.getDescriptorForType()
-                      .findFieldByName(field.name());
+                      .findFieldByName(fieldName);
                 }
                 if (fieldDescriptor == null) {
-                  throw new DataException("Cannot find field with name " + field.name());
+                  throw new DataException("Cannot find field with name " + fieldName);
                 }
                 messageBuilder.setField(fieldDescriptor, fieldValue);
               }
@@ -606,7 +611,7 @@ public class ProtobufData {
     String fullName = getNameOrDefault(schema.name());
     String[] split = splitName(fullName);
     String namespace = split[0];
-    String name = scrubName(split[1]);
+    String name = split[1];
     FromConnectContext ctx = new FromConnectContext();
     ctx.add(fullName);
     ProtobufSchema resultSchema = new ProtobufSchema(
@@ -1492,7 +1497,7 @@ public class ProtobufData {
   /**
    * Split a full dotted-syntax name into a namespace and a single-component name.
    */
-  private static String[] splitName(String fullName) {
+  private String[] splitName(String fullName) {
     String[] result = new String[2];
     int indexLastDot = fullName.lastIndexOf('.');
     if (indexLastDot >= 0) {
@@ -1502,6 +1507,7 @@ public class ProtobufData {
       result[0] = null;
       result[1] = fullName;
     }
+    result[1] = scrubName(result[1]);
     return result;
   }
 
@@ -1511,11 +1517,13 @@ public class ProtobufData {
   private String getUnqualifiedName(String name) {
     String fullName = getNameOrDefault(name);
     int indexLastDot = fullName.lastIndexOf('.');
+    String result;
     if (indexLastDot >= 0) {
-      return fullName.substring(indexLastDot + 1);
+      result = fullName.substring(indexLastDot + 1);
     } else {
-      return fullName;
+      result = fullName;
     }
+    return scrubName(result);
   }
 
   private String scrubName(String name) {
