@@ -1211,10 +1211,19 @@ public class ProtobufDataTest {
         .name("org.acme.invalid record-name")
         .field("invalid field-name", Schema.STRING_SCHEMA)
         .build();
-    ProtobufSchema protobufSchema = protobufData.fromConnectSchema(schema);
+    Struct struct = new Struct(schema);
+    struct.put("invalid field-name", "foo");
+    SchemaAndValue schemaAndValue = new SchemaAndValue(schema, struct);
+    ProtobufSchemaAndValue protobufSchemaAndValue = protobufData.fromConnectData(schemaAndValue);
+    ProtobufSchema protobufSchema = protobufSchemaAndValue.getSchema();
     Descriptor descriptor = protobufSchema.toDescriptor();
+    DynamicMessage message = (DynamicMessage) protobufSchemaAndValue.getValue();
+    Descriptor messageDescriptor = message.getDescriptorForType();
     assertEquals("invalid_record_name", descriptor.getName());
     assertEquals("invalid_field_name", descriptor.getFields().get(0).getName());
+    assertEquals("invalid_record_name", messageDescriptor.getName());
+    assertEquals("invalid_field_name", messageDescriptor.getFields().get(0).getName());
+    assertEquals("foo", message.getField(messageDescriptor.getFields().get(0)));
   }
 
   @Test
