@@ -297,8 +297,8 @@ public class SchemaRegistryCoordinatorTest {
     assertEquals(LEADER_INFO, rebalanceListener.assignments.get(0).leaderIdentity());
   }
 
-  private FindCoordinatorResponse groupCoordinatorResponse(Node node,String key,  Errors error) {
-    return FindCoordinatorResponse.prepareResponse(error,key, node);
+  private FindCoordinatorResponse groupCoordinatorResponse(Node node, String key,  Errors error) {
+    return FindCoordinatorResponse.prepareResponse(error, key, node);
   }
 
   private JoinGroupResponse joinGroupLeaderResponse(
