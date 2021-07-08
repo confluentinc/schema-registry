@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
@@ -1116,6 +1117,10 @@ public class AvroData {
   // (complex type) default value, not part of the child schema.
   private static JsonNode defaultValueFromConnect(Schema schema, Object value) {
     try {
+      if (value == null) {
+        return NullNode.getInstance();
+      }
+
       // If this is a logical type, convert it from the convenient Java type to the underlying
       // serializeable format
       Object defaultVal = toAvroLogical(schema, value);
