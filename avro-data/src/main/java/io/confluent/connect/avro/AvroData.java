@@ -372,7 +372,7 @@ public class AvroData {
    *                                       null
    * @return the converted data
    */
-  private static Object fromConnectData(
+  private Object fromConnectData(
       Schema schema,
       org.apache.avro.Schema avroSchema,
       Object logicalValue,
@@ -2101,7 +2101,7 @@ public class AvroData {
   }
 
 
-  private static String unionMemberFieldName(org.apache.avro.Schema schema,
+  private String unionMemberFieldName(org.apache.avro.Schema schema,
                                              boolean enhancedSchemaSupport) {
     if (schema.getType() == org.apache.avro.Schema.Type.RECORD
         || schema.getType() == org.apache.avro.Schema.Type.ENUM
@@ -2115,7 +2115,7 @@ public class AvroData {
     return schema.getType().getName();
   }
 
-  private static String unionMemberFieldName(Schema schema, boolean enhancedSchemaSupport) {
+  private String unionMemberFieldName(Schema schema, boolean enhancedSchemaSupport) {
     if (schema.type() == Schema.Type.STRUCT || isEnumSchema(schema)) {
       if (enhancedSchemaSupport) {
         return schema.name();
@@ -2143,9 +2143,9 @@ public class AvroData {
             && schema.parameters().containsKey(CONNECT_AVRO_FIXED_SIZE);
   }
 
-  private static boolean isInstanceOfAvroSchemaTypeForSimpleSchema(Schema fieldSchema,
-                                                                   Object value,
-                                                                   boolean enhancedSchemaSupport) {
+  private boolean isInstanceOfAvroSchemaTypeForSimpleSchema(Schema fieldSchema,
+                                                            Object value,
+                                                            boolean enhancedSchemaSupport) {
     if (isEnumSchema(fieldSchema)) {
       String enumSchemaName = fieldSchema.parameters().get(AVRO_TYPE_ENUM);
       if (value instanceof GenericData.EnumSymbol) {
@@ -2177,10 +2177,10 @@ public class AvroData {
   /**
    * Returns true if the fixed value size of the value matches the expected size
    */
-  private static boolean fixedValueSizeMatch(Schema fieldSchema,
-                                             Object value,
-                                             int size,
-                                             boolean enhancedSchemaSupport) {
+  private boolean fixedValueSizeMatch(Schema fieldSchema,
+                                      Object value,
+                                      int size,
+                                      boolean enhancedSchemaSupport) {
     if (value instanceof byte[]) {
       return ((byte[]) value).length == size;
     } else if (value instanceof ByteBuffer) {
