@@ -80,9 +80,15 @@ public class SchemaDiff {
       final ProtobufSchema update
   ) {
     Map<String, SchemaReference> originalReferences = original.references().stream()
-        .collect(Collectors.toMap(SchemaReference::getName, r -> r));
+        .collect(Collectors.toMap(
+            SchemaReference::getName,
+            r -> r,
+            (existing, replacement) -> replacement));
     Map<String, SchemaReference> updateReferences = update.references().stream()
-        .collect(Collectors.toMap(SchemaReference::getName, r -> r));
+        .collect(Collectors.toMap(
+            SchemaReference::getName,
+            r -> r,
+            (existing, replacement) -> replacement));
     Map<String, ProtoFileElement> originalDependencies = original.dependenciesWithLogicalTypes();
     Map<String, ProtoFileElement> updateDependencies = update.dependenciesWithLogicalTypes();
     final Context ctx = new Context(COMPATIBLE_CHANGES);
