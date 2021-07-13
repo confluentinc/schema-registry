@@ -86,10 +86,6 @@
             <artifactId>netty-codec</artifactId>
             <version>${netty.version}</version>
         </dependency>
-        <dependency>
-            <groupId>com.101tec</groupId>
-            <artifactId>zkclient</artifactId>
-        </dependency>
 
         <dependency>
             <groupId>io.confluent</groupId>
