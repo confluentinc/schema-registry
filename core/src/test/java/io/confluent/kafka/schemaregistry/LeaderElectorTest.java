@@ -614,7 +614,7 @@ public class LeaderElectorTest extends ClusterTestHarness {
     for (RestApp restApp: cluster) {
       for (int i = 0; i < 3; i++) {
         SchemaRegistryIdentity leaderIdentity = restApp.leaderIdentity();
-        // There can be some latency in all the nodes picking up the new leader from ZK so we need
+        // There can be some latency in all the nodes picking up the new leader so we need
         // to allow for some retries here.
         if (leaderIdentity == null) {
           try {

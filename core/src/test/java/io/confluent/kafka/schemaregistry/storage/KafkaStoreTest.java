@@ -55,7 +55,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Before
   public void setup() {
-    log.debug("Zk conn url = " + zkConnect);
   }
 
   @After

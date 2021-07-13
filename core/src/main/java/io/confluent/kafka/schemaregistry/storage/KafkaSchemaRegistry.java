@@ -344,7 +344,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   /**
    * 'Inform' this SchemaRegistry instance which SchemaRegistry is the current leader.
    * If this instance is set as the new leader, ensure it is up-to-date with data in
-   * the kafka store, and tell Zookeeper to allocate the next batch of schema IDs.
+   * the kafka store.
    *
    * @param newLeader Identity of the current leader. null means no leader is alive.
    */
