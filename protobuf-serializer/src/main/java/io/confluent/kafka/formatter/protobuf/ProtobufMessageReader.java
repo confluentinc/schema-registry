@@ -42,7 +42,7 @@ import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
  * command.
  *
  * <p>Send Protobuf record as value.
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic t1 \
+ * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic t1 \
  * --line-reader io.confluent.kafka.formatter.ProtobufMessageReader \
  * --property schema.registry.url=http://localhost:8081 \
  * --property value.schema='syntax = "proto3"; message MyRecord { string f1 = 1; }'

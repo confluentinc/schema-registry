@@ -213,23 +213,9 @@ public class SchemaRegistryConfig extends RestConfig {
       "A list of Kafka brokers to connect to. For example, "
       + "`PLAINTEXT://hostname:9092,SSL://hostname2:9092`\n"
       + "\n"
-      + "The effect of this setting depends on whether you specify `kafkastore.connection.url`."
-      + "\n"
-      + "If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these "
+      + "The Kafka cluster containing these "
       + "bootstrap servers will be used both to coordinate schema registry instances (leader "
-      + "election) and store schema data."
-      + "\n"
-      + "If `kafkastore.connection.url` is specified, then this setting is used to control how "
-      + "the schema registry connects to Kafka to store schema data and is particularly important "
-      + "when Kafka security is enabled. When this configuration is not specified, the Schema "
-      + "Registry's internal Kafka clients will get their Kafka bootstrap server list from "
-      + "ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available "
-      + "listeners matching the `kafkastore.security.protocol` setting will be used."
-      + "\n"
-      + "By specifiying this configuration, you can control which endpoints are used to connect "
-      + "to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but "
-      + "the Schema Registry may need to be configured with just one of those endpoints, for "
-      + "example to control which security protocol it uses.";
+      + "election) and store schema data.";
   protected static final String KAFKASTORE_GROUP_ID_DOC =
       "Use this setting to override the group.id for the KafkaStore consumer.\n"
       + "This setting can become important when security is enabled, to ensure stability over "
@@ -259,7 +245,7 @@ public class SchemaRegistryConfig extends RestConfig {
       "  A list of classes to use as StoreUpdateHandler. Implementing the interface "
           + "<code>StoreUpdateHandler</code> allows you to handle Kafka store update events.";
   protected static final String HOST_DOC =
-      "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
+      "The host name. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
   protected static final String SCHEMA_PROVIDERS_DOC =
       "  A list of classes to use as SchemaProvider. Implementing the interface "
@@ -665,12 +651,9 @@ public class SchemaRegistryConfig extends RestConfig {
     }
 
     if (sb.length() == 0) {
-      throw new ConfigException("No supported Kafka endpoints are configured. Either "
+      throw new ConfigException("No supported Kafka endpoints are configured. "
                                 + KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
                                 + " must have at least one endpoint matching "
-                                + KAFKASTORE_SECURITY_PROTOCOL_CONFIG
-                                + " or broker endpoints loaded from ZooKeeper "
-                                + "must have at least one endpoint matching "
                                 + KAFKASTORE_SECURITY_PROTOCOL_CONFIG + ".");
     }
 

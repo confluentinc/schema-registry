@@ -39,18 +39,21 @@ import org.apache.kafka.common.serialization.Deserializer;
  *
  * <p>1. To read only the value of the messages in JSON
  * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
- *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
+ *   --bootstrap-server localhost:9092
+ *   --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
  *   --property schema.registry.url=http://localhost:8081
  *
  * <p>2. To read both the key and the value of the messages in JSON
  * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
- *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
+ *   --bootstrap-server localhost:9092
+ *   --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
  *   --property schema.registry.url=http://localhost:8081 \
  *   --property print.key=true
  *
  * <p>3. To read the key, value, and timestamp of the messages in JSON
  * bin/kafka-console-consumer.sh --consumer.config config/consumer.properties --topic t1 \
- *   --zookeeper localhost:2181 --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
+ *   --bootstrap-server localhost:9092
+ *   --formatter io.confluent.kafka.formatter.AvroMessageFormatter \
  *   --property schema.registry.url=http://localhost:8081 \
  *   --property print.key=true \
  *   --property print.timestamp=true
