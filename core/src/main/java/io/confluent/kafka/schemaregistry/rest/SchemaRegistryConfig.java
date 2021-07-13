@@ -16,14 +16,12 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.utils.ZkUtils;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
 import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -64,11 +62,6 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   public static final String KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG = "kafkastore.bootstrap.servers";
   public static final String KAFKASTORE_GROUP_ID_CONFIG = "kafkastore.group.id";
-  /**
-   * <code>kafkastore.zk.session.timeout.ms</code>
-   */
-  public static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG
-      = "kafkastore.zk.session.timeout.ms";
   /**
    * <code>kafkastore.topic</code>
    */
@@ -150,7 +143,6 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_CACHE_EXPIRY_SECS_CONFIG = "schema.cache.expiry.secs";
   public static final int SCHEMA_CACHE_EXPIRY_SECS_DEFAULT = 300;
 
-  public static final String ZOOKEEPER_SET_ACL_CONFIG = "zookeeper.set.acl";
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
   public static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG =
@@ -243,12 +235,6 @@ public class SchemaRegistryConfig extends RestConfig {
       + "This setting can become important when security is enabled, to ensure stability over "
       + "the schema registry consumer's group.id\n"
       + "Without this configuration, group.id will be \"schema-registry-<host>-<port>\"";
-  protected static final String SCHEMAREGISTRY_ZK_NAMESPACE_DOC =
-      "The string that is used as the zookeeper namespace for storing schema registry "
-      + "metadata. SchemaRegistry instances which are part of the same schema registry service "
-      + "should have the same ZooKeeper namespace.";
-  protected static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC =
-      "Zookeeper session timeout";
   protected static final String KAFKASTORE_TOPIC_DOC =
       "The durable single partition topic that acts"
       + "as the durable log for the data";
@@ -275,12 +261,6 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String HOST_DOC =
       "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
-  protected static final String
-      ZOOKEEPER_SET_ACL_DOC =
-      "Whether or not to set an ACL in ZooKeeper when znodes are created and ZooKeeper SASL "
-      + "authentication is "
-      + "configured. IMPORTANT: if set to `true`, the SASL principal must be the same as the Kafka"
-      + " brokers.";
   protected static final String SCHEMA_PROVIDERS_DOC =
       "  A list of classes to use as SchemaProvider. Implementing the interface "
           + "<code>SchemaProvider</code> allows you to add custom schema types to Schema Registry.";
@@ -374,7 +354,6 @@ public class SchemaRegistryConfig extends RestConfig {
       = "A list of ``http`` headers to forward from follower to leader, "
       + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
 
-  private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
@@ -385,12 +364,8 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private Properties originalProperties;
 
-  private ZkUtils zkUtils;
-
-
   static {
     config = baseSchemaRegistryConfigDef();
-
   }
 
   public static ConfigDef baseSchemaRegistryConfigDef() {
@@ -410,12 +385,10 @@ public class SchemaRegistryConfig extends RestConfig {
         KAFKASTORE_BOOTSTRAP_SERVERS_DOC
     )
     .define(SCHEMAREGISTRY_GROUP_ID_CONFIG, ConfigDef.Type.STRING, "schema-registry",
-            ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_GROUP_ID_DOC
+        ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_GROUP_ID_DOC
     )
     .define(INTER_INSTANCE_HEADERS_WHITELIST_CONFIG, ConfigDef.Type.LIST, "",
-        ConfigDef.Importance.LOW, INTER_INSTANCE_HEADERS_WHITELIST_DOC)
-    .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 30000, atLeast(0),
-            ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC
+        ConfigDef.Importance.LOW, INTER_INSTANCE_HEADERS_WHITELIST_DOC
     )
     .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKASTORE_TOPIC,
         ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_DOC
@@ -464,9 +437,6 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_EXPIRY_SECS_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_EXPIRY_SECS_DOC
-    )
-    .define(ZOOKEEPER_SET_ACL_CONFIG, ConfigDef.Type.BOOLEAN, ZOOKEEPER_SET_ACL_DEFAULT,
-        ConfigDef.Importance.HIGH, ZOOKEEPER_SET_ACL_DOC
     )
     .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, null,
         ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
@@ -643,49 +613,11 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   public String bootstrapBrokers() {
-    int zkSessionTimeoutMs = getInt(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
-
-    List<String> bootstrapServersConfig = getList(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
-    List<String> endpoints;
-
-    if (bootstrapServersConfig.isEmpty()) {
-      ZkUtils zkUtils = null;
-      try {
-        zkUtils =
-            new ZkUtils(getString(KAFKASTORE_CONNECTION_URL_CONFIG),
-                zkSessionTimeoutMs,
-                zkSessionTimeoutMs,
-                checkZkAclConfig()
-            );
-        List<Broker> brokerSeq = zkUtils.getAllBrokersInCluster();
-        endpoints = brokersToEndpoints(brokerSeq);
-      } finally {
-        if (zkUtils != null) {
-          zkUtils.close();
-        }
-        log.debug("Kafka store zookeeper client shut down");
-      }
-    } else {
-      endpoints = bootstrapServersConfig;
-    }
+    List<String> endpoints = getList(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
     return endpointsToBootstrapServers(
         endpoints,
         this.getString(KAFKASTORE_SECURITY_PROTOCOL_CONFIG)
     );
-  }
-
-  /**
-   * Checks if the user has configured ZooKeeper ACLs or not. Throws an exception if the ZooKeeper
-   * client is set to create znodes with an ACL, yet the JAAS config is not present. Otherwise,
-   * returns whether or not the user has enabled ZooKeeper ACLs.
-   */
-  public boolean checkZkAclConfig() {
-    if (getBoolean(ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils.isZkSaslEnabled()) {
-      throw new ConfigException(ZOOKEEPER_SET_ACL_CONFIG
-                                + " is set to true but ZooKeeper's "
-                                + "JAAS SASL configuration is not configured.");
-    }
-    return getBoolean(ZOOKEEPER_SET_ACL_CONFIG);
   }
 
   static List<String> brokersToEndpoints(List<Broker> brokers) {
