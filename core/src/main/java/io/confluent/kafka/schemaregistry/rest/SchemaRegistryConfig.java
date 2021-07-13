@@ -208,7 +208,7 @@ public class SchemaRegistryConfig extends RestConfig {
       + "this setting unique for each cluster.";
 
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
-      "Zookeeper URL for the Kafka cluster";
+      "ZooKeeper URL for the Kafka cluster";
   protected static final String KAFKASTORE_BOOTSTRAP_SERVERS_DOC =
       "A list of Kafka brokers to connect to. For example, "
       + "`PLAINTEXT://hostname:9092,SSL://hostname2:9092`\n"
