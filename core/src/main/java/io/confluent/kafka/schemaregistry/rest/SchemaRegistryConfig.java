@@ -126,11 +126,6 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String MODE_MUTABILITY = "mode.mutability";
   public static final boolean DEFAULT_MODE_MUTABILITY = true;
   /**
-   * <code>schema.registry.zk.name</code>*
-   */
-  public static final String SCHEMAREGISTRY_ZK_NAMESPACE = "schema.registry.zk.namespace";
-  public static final String DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE = "schema_registry";
-  /**
    * <code>host.name</code>
    */
   public static final String HOST_NAME_CONFIG = "host.name";
@@ -413,10 +408,6 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.MEDIUM,
         KAFKASTORE_BOOTSTRAP_SERVERS_DOC
-    )
-    .define(SCHEMAREGISTRY_ZK_NAMESPACE, ConfigDef.Type.STRING,
-            DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
-            ConfigDef.Importance.LOW, SCHEMAREGISTRY_ZK_NAMESPACE_DOC
     )
     .define(SCHEMAREGISTRY_GROUP_ID_CONFIG, ConfigDef.Type.STRING, "schema-registry",
             ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_GROUP_ID_DOC
@@ -780,38 +771,6 @@ public class SchemaRegistryConfig extends RestConfig {
       return deprecatedValue;
     }
     return getString(INTER_INSTANCE_PROTOCOL_CONFIG);
-  }
-
-  public synchronized ZkUtils zkUtils() {
-    if (zkUtils == null) {
-      boolean zkAclsEnabled = checkZkAclConfig();
-      String srZkNamespace = getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
-      String srClusterZkUrl = getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
-      int zkSessionTimeoutMs = getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
-
-      int kafkaNamespaceIndex = srClusterZkUrl.indexOf("/");
-      String zkConnForNamespaceCreation = kafkaNamespaceIndex > 0
-          ? srClusterZkUrl.substring(0, kafkaNamespaceIndex)
-          : srClusterZkUrl;
-
-      final String schemaRegistryNamespace = "/" + srZkNamespace;
-      final String schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;
-
-      ZkUtils zkUtilsForNamespaceCreation = new ZkUtils(
-          zkConnForNamespaceCreation, zkSessionTimeoutMs, zkSessionTimeoutMs, zkAclsEnabled);
-      zkUtilsForNamespaceCreation.makeSurePersistentPathExists(
-          schemaRegistryNamespace);
-      log.info("Created schema registry namespace {} {}",
-          zkConnForNamespaceCreation, schemaRegistryNamespace);
-      zkUtilsForNamespaceCreation.close();
-      zkUtils = new ZkUtils(
-          schemaRegistryZkUrl,
-          zkSessionTimeoutMs,
-          zkSessionTimeoutMs,
-          zkAclsEnabled
-      );
-    }
-    return zkUtils;
   }
 
   public List<String> whitelistHeaders() {
