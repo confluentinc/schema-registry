@@ -118,7 +118,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public String toQualifiedContext() {
-    String qualifiedContext = CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
+    String qualifiedContext = context.equals(DEFAULT_CONTEXT)
+        ? ""
+        : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
     if (DEFAULT_TENANT.equals(tenant)) {
       return qualifiedContext;
     } else {
