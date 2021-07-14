@@ -510,6 +510,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public Collection<String> getAllSubjectsByPrefix(String subjectPrefix) throws IOException,
+      RestClientException {
+    return restService.getAllSubjects(subjectPrefix, false);
+  }
+
+  @Override
   public synchronized void reset() {
     schemaCache.clear();
     idCache.clear();

@@ -83,7 +83,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         || key.getKeyType() == SchemaRegistryKeyType.MODE) {
       SubjectValue subjectValue = (SubjectValue) value;
       if (subjectValue.getSubject() == null) {
-        // handle legacy values
+        // handle legacy values that don't have subject in the value
         subjectValue.setSubject(((SubjectKey) key).getSubject());
       }
     }

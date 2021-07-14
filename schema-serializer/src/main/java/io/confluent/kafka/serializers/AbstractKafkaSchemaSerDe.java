@@ -19,6 +19,10 @@ package io.confluent.kafka.serializers;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import java.util.Objects;
 import java.util.Optional;
+
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.confluent.kafka.serializers.context.NullContextNameStrategy;
+import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.common.KafkaException;
@@ -55,6 +59,7 @@ public abstract class AbstractKafkaSchemaSerDe {
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
   protected SchemaRegistryClient schemaRegistry;
+  protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
   protected Cache<SubjectSchema, ParsedSchema> latestVersions =
@@ -83,6 +88,8 @@ public abstract class AbstractKafkaSchemaSerDe {
         );
       }
     }
+
+    contextNameStrategy = config.contextNameStrategy();
     keySubjectNameStrategy = config.keySubjectNameStrategy();
     valueSubjectNameStrategy = config.valueSubjectNameStrategy();
     useSchemaReflection = config.useSchemaReflection();
@@ -93,11 +100,36 @@ public abstract class AbstractKafkaSchemaSerDe {
    */
   protected String getSubjectName(String topic, boolean isKey, Object value, ParsedSchema schema) {
     Object subjectNameStrategy = subjectNameStrategy(isKey);
+    String subject;
     if (subjectNameStrategy instanceof SubjectNameStrategy) {
-      return ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
+      subject = ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
     } else {
-      return ((io.confluent.kafka.serializers.subject.SubjectNameStrategy) subjectNameStrategy)
+      subject = ((io.confluent.kafka.serializers.subject.SubjectNameStrategy) subjectNameStrategy)
           .getSubjectName(topic, isKey, value);
+    }
+    return getContextName(topic, subject);
+  }
+
+  protected String getContextName(String topic) {
+    return getContextName(topic, null);
+  }
+
+  private String getContextName(String topic, String subject) {
+    String contextName = contextNameStrategy.contextName(topic);
+    if (contextName != null) {
+      QualifiedSubject cs = new QualifiedSubject(null, contextName, subject);
+      return cs.toQualifiedSubject();
+    } else {
+      return subject;
+    }
+  }
+
+  protected boolean strategyUsesSchema(boolean isKey) {
+    Object subjectNameStrategy = subjectNameStrategy(isKey);
+    if (subjectNameStrategy instanceof SubjectNameStrategy) {
+      return ((SubjectNameStrategy) subjectNameStrategy).usesSchema();
+    } else {
+      return false;
     }
   }
 

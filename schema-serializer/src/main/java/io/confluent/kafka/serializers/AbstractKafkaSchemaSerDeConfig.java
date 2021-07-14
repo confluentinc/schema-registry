@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import io.confluent.kafka.serializers.context.NullContextNameStrategy;
+import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -106,7 +108,13 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
           .BEARER_AUTH_TOKEN_CONFIG;
   public static final String BEARER_AUTH_TOKEN_DEFAULT = "";
   public static final String BEARER_AUTH_TOKEN_DOC =
-          "Specify the Bearer token to be used for authentication";
+      "Specify the Bearer token to be used for authentication";
+
+  public static final String CONTEXT_NAME_STRATEGY = "context.name.strategy";
+  public static final String CONTEXT_NAME_STRATEGY_DEFAULT =
+      NullContextNameStrategy.class.getName();
+  public static final String CONTEXT_NAME_STRATEGY_DOC =
+      "A class used to determine the schema registry context.";
 
   public static final String KEY_SUBJECT_NAME_STRATEGY = "key.subject.name.strategy";
   public static final String KEY_SUBJECT_NAME_STRATEGY_DEFAULT =
@@ -161,6 +169,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
         .define(BEARER_AUTH_TOKEN_CONFIG, Type.PASSWORD, BEARER_AUTH_TOKEN_DEFAULT,
                 Importance.MEDIUM, BEARER_AUTH_TOKEN_DOC)
+        .define(CONTEXT_NAME_STRATEGY, Type.CLASS, CONTEXT_NAME_STRATEGY_DEFAULT,
+                Importance.MEDIUM, CONTEXT_NAME_STRATEGY_DOC)
         .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
         .define(VALUE_SUBJECT_NAME_STRATEGY, Type.CLASS, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
@@ -202,6 +212,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean getLatestCompatibilityStrict() {
     return this.getBoolean(LATEST_COMPATIBILITY_STRICT);
+  }
+
+  public ContextNameStrategy contextNameStrategy() {
+    return this.getConfiguredInstance(CONTEXT_NAME_STRATEGY, ContextNameStrategy.class);
   }
 
   public Object keySubjectNameStrategy() {
