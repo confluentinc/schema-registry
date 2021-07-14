@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Confluent Inc.
+ * Copyright 2021 Confluent Inc.
  */
 
 package io.confluent.kafka.schemaregistry.rest.filters;
