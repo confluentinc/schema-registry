@@ -173,6 +173,11 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
 
+  default Collection<String> getAllSubjectsByPrefix(String subjectPrefix) throws IOException,
+      RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   @Deprecated
   default int getId(String subject, org.apache.avro.Schema schema)
       throws IOException, RestClientException {

@@ -31,6 +31,11 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 public class TopicRecordNameStrategy extends RecordNameStrategy {
 
   @Override
+  public boolean usesSchema() {
+    return true;
+  }
+
+  @Override
   public String subjectName(String topic, boolean isKey, ParsedSchema schema) {
     if (schema == null) {
       return null;

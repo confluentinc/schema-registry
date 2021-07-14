@@ -922,21 +922,34 @@ public class RestService implements Configurable {
   }
 
   public List<String> getAllSubjects(boolean deletedSubjects)
-          throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/subjects");
-    builder.queryParam("deleted", deletedSubjects);
-    String path = builder.build().toString();
-    List<String> response = httpRequest(path,
-            "GET",
-            null, DEFAULT_REQUEST_PROPERTIES,
-            ALL_TOPICS_RESPONSE_TYPE);
-    return response;
+      throws IOException, RestClientException {
+    return getAllSubjects(DEFAULT_REQUEST_PROPERTIES, null, deletedSubjects);
+  }
+
+  public List<String> getAllSubjects(String subjectPrefix, boolean deletedSubjects)
+      throws IOException, RestClientException {
+    return getAllSubjects(DEFAULT_REQUEST_PROPERTIES, subjectPrefix, deletedSubjects);
   }
 
   public List<String> getAllSubjects(Map<String, String> requestProperties)
       throws IOException, RestClientException {
     List<String> response = httpRequest("/subjects", "GET", null, requestProperties,
                                         ALL_TOPICS_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<String> getAllSubjects(Map<String, String> requestProperties,
+                                     String subjectPrefix,
+                                     boolean deletedSubjects)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects");
+    builder.queryParam("deleted", deletedSubjects);
+    if (subjectPrefix != null) {
+      builder.queryParam("subjectPrefix", subjectPrefix);
+    }
+    String path = builder.build().toString();
+    List<String> response = httpRequest(path, "GET", null, requestProperties,
+        ALL_TOPICS_RESPONSE_TYPE);
     return response;
   }
 

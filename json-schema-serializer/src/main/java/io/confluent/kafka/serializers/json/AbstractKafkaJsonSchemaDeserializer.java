@@ -109,8 +109,9 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     try {
       ByteBuffer buffer = getByteBuffer(payload);
       id = buffer.getInt();
-      JsonSchema schema = ((JsonSchema) schemaRegistry.getSchemaById(id));
-      String subject = null;
+      String subject = isKey == null || strategyUsesSchema(isKey)
+          ? getContextName(topic) : subjectName(topic, isKey, null);
+      JsonSchema schema = ((JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id));
       if (includeSchemaAndVersion) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(id, schema, subject, isKey);
