@@ -104,6 +104,9 @@ public class RestService implements Configurable {
   private static final TypeReference<List<Integer>> ALL_VERSIONS_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
       };
+  private static final TypeReference<List<String>> ALL_CONTEXTS_RESPONSE_TYPE =
+      new TypeReference<List<String>>() {
+      };
   private static final TypeReference<List<String>> ALL_TOPICS_RESPONSE_TYPE =
       new TypeReference<List<String>>() {
       };
@@ -913,6 +916,20 @@ public class RestService implements Configurable {
 
     List<Integer> response = httpRequest(path, "GET", null, requestProperties,
             ALL_VERSIONS_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<String> getAllContexts()
+      throws IOException, RestClientException {
+    return getAllContexts(DEFAULT_REQUEST_PROPERTIES);
+  }
+
+  public List<String> getAllContexts(Map<String, String> requestProperties)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/contexts");
+    String path = builder.build().toString();
+    List<String> response = httpRequest(path, "GET", null, requestProperties,
+        ALL_CONTEXTS_RESPONSE_TYPE);
     return response;
   }
 

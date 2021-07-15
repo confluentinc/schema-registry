@@ -41,6 +41,7 @@ import java.net.HttpURLConnection;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -77,6 +78,11 @@ public class RestApiTest extends ClusterTestHarness {
                    Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
                    rce.getErrorCode());
     }
+
+    // test getAllContexts
+    assertEquals("Getting all subjects should return default context",
+        Collections.singletonList(DEFAULT_CONTEXT),
+        restApp.restClient.getAllContexts());
 
     // test getAllSubjects with no existing data
     assertEquals("Getting all subjects should return empty",
@@ -1354,8 +1360,8 @@ public class RestApiTest extends ClusterTestHarness {
     String subject2 = "test2";
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject2);;
     List<String> expectedResponse = new ArrayList<>();
-    expectedResponse.add(subject2);
     expectedResponse.add(subject1);
+    expectedResponse.add(subject2);
     assertEquals("Current Subjects", expectedResponse,
             restApp.restClient.getAllSubjects());
     List<Integer> deletedResponse = new ArrayList<>();
@@ -1369,8 +1375,8 @@ public class RestApiTest extends ClusterTestHarness {
             restApp.restClient.getAllSubjects());
 
     expectedResponse = new ArrayList<>();
-    expectedResponse.add(subject2);
     expectedResponse.add(subject1);
+    expectedResponse.add(subject2);
     assertEquals("Current Subjects", expectedResponse,
             restApp.restClient.getAllSubjects(true));
 
