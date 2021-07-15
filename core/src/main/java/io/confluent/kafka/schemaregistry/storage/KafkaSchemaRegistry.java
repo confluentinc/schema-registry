@@ -64,6 +64,7 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
@@ -81,7 +82,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -1191,6 +1191,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
+  public List<String> listContexts() throws SchemaRegistryException {
+    List<String> contexts = new ArrayList<>();
+    contexts.add(DEFAULT_CONTEXT);
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue contextValue = (ContextValue) iter.next();
+        contexts.add(contextValue.getContext());
+      }
+    }
+    return contexts;
+  }
+
   @Override
   public Set<String> listSubjects(boolean returnDeletedSubjects)
           throws SchemaRegistryException {
@@ -1204,7 +1216,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public Set<String> listSubjectsWithPrefix(String prefix, boolean returnDeletedSubjects)
       throws SchemaRegistryException {
-    Set<String> subjects = new HashSet<>();
+    Set<String> subjects = new LinkedHashSet<>();
     Iterator<Schema> iter = getVersionsWithSubjectPrefix(prefix, returnDeletedSubjects, false);
     while (iter.hasNext()) {
       subjects.add(iter.next().getSubject());
@@ -1280,7 +1292,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryKey> allKeys,
                                             boolean returnDeletedSubjects)
       throws StoreException {
-    Set<String> subjects = new HashSet<String>();
+    Set<String> subjects = new LinkedHashSet<>();
     while (allKeys.hasNext()) {
       SchemaRegistryKey k = allKeys.next();
       if (k instanceof SchemaKey) {

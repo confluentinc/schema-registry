@@ -5,6 +5,7 @@
 package io.confluent.kafka.schemaregistry.rest.filters;
 
 import com.google.common.annotations.VisibleForTesting;
+import java.net.URI;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,13 +36,20 @@ public class ContextFilter implements ContainerRequestFilter {
 
     String path = requestContext.getUriInfo().getPath(false);
     if (path.startsWith("contexts/")) {
-      ContextAndPath contextAndPath = modifyUriPath(path);
       UriBuilder builder = requestContext.getUriInfo().getRequestUriBuilder();
-      builder.replacePath(contextAndPath.path);
-      replaceQueryParams(
-          builder, contextAndPath, requestContext.getUriInfo().getQueryParameters(false));
-      requestContext.setRequestUri(builder.build());
+      MultivaluedMap<String, String> queryParams =
+          requestContext.getUriInfo().getQueryParameters(false);
+      URI uri = modifyUri(builder, path, queryParams);
+      requestContext.setRequestUri(uri);
     }
+  }
+
+  @VisibleForTesting
+  URI modifyUri(UriBuilder builder, String path, MultivaluedMap<String, String> queryParams) {
+    ContextAndPath contextAndPath = modifyUriPath(path);
+    builder.replacePath(contextAndPath.path);
+    replaceQueryParams(builder, contextAndPath, queryParams);
+    return builder.build();
   }
 
   /**
@@ -97,6 +105,9 @@ public class ContextFilter implements ContainerRequestFilter {
     }
     if (configOrModeFound && subjectPathFound) {
       modifiedPath.append(formattedContext(context)).append("/");
+    } else if (contextPathFound) {
+      // Must be a root contexts only
+      modifiedPath.append("contexts").append("/");
     }
 
     return new ContextAndPath(context, modifiedPath.toString());
