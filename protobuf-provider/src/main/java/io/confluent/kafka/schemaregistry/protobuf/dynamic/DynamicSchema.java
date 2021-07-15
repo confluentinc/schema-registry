@@ -385,6 +385,11 @@ public class DynamicSchema {
 
     // Note: added
     public Builder addDependency(String dependency) {
+      for (int i = 0; i < mFileDescProtoBuilder.getDependencyCount(); i++) {
+        if (mFileDescProtoBuilder.getDependency(i).equals(dependency)) {
+          return this;
+        }
+      }
       mFileDescProtoBuilder.addDependency(dependency);
       return this;
     }
