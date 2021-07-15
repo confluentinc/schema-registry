@@ -1053,6 +1053,17 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testFromConnectComplexDuplicateImports() {
+    Schema schema = SchemaBuilder.struct()
+        .field("createdAt", org.apache.kafka.connect.data.Timestamp.SCHEMA)
+        .field("updatedAt", org.apache.kafka.connect.data.Timestamp.SCHEMA)
+        .build();
+
+    ProtobufSchema protobufSchema = new ProtobufData().fromConnectSchema(schema);
+    assertEquals(1, protobufSchema.rawSchema().getImports().size());
+  }
+
+  @Test
   public void testFromConnectNull() throws Exception {
     ProtobufData protobufData = new ProtobufData();
     Schema schema = SchemaBuilder.struct().field(VALUE_FIELD_NAME, OPTIONAL_BOOLEAN_SCHEMA).build();
