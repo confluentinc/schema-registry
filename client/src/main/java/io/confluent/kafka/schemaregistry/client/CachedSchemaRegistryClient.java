@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -46,6 +48,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeGetRe
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
+import io.confluent.kafka.schemaregistry.utils.ExceptionUtil;
 
 
 /**
@@ -57,12 +60,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private final RestService restService;
   private final int identityMapCapacity;
-  private final Map<String, Map<ParsedSchema, Integer>> schemaCache;
-  private final Map<String, Map<Integer, ParsedSchema>> idCache;
+  private final ConcurrentMap<String, ConcurrentMap<ParsedSchema, Integer>> schemaCache;
+  private final ConcurrentMap<String, ConcurrentMap<Integer, ParsedSchema>> idCache;
   private final Map<String, Map<ParsedSchema, Integer>> versionCache;
   private final Map<String, SchemaProvider> providers;
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
+  private static final String NO_SUBJECT_KEY = "NO_SUBJECT_KEY";
 
   static {
     DEFAULT_REQUEST_PROPERTIES =
@@ -150,11 +154,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
     this.identityMapCapacity = identityMapCapacity;
-    this.schemaCache = new HashMap<String, Map<ParsedSchema, Integer>>();
-    this.idCache = new HashMap<String, Map<Integer, ParsedSchema>>();
-    this.versionCache = new HashMap<String, Map<ParsedSchema, Integer>>();
+    this.schemaCache = new ConcurrentHashMap<>();
+    this.idCache = new ConcurrentHashMap<>();
+    this.versionCache = new HashMap<>();
     this.restService = restService;
-    this.idCache.put(null, new HashMap<Integer, ParsedSchema>());
+    this.idCache.put(NO_SUBJECT_KEY, new ConcurrentHashMap<>());
     this.providers = providers != null && !providers.isEmpty()
                      ? providers.stream().collect(Collectors.toMap(p -> p.schemaType(), p -> p))
                      : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
@@ -182,7 +186,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
               e -> e.getKey().substring(SchemaRegistryClientConfig.CLIENT_NAMESPACE.length()),
               Map.Entry::getValue));
       SslFactory sslFactory = new SslFactory(sslConfigs);
-      if (sslFactory != null && sslFactory.sslContext() != null) {
+      if (sslFactory.sslContext() != null) {
         restService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
       }
     }
@@ -246,58 +250,64 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized int register(String subject, ParsedSchema schema)
+  public int register(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     return register(subject, schema, 0, -1);
   }
 
   @Override
-  public synchronized int register(String subject, ParsedSchema schema, int version, int id)
+  public int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
-    final Map<ParsedSchema, Integer> schemaIdMap =
-        schemaCache.computeIfAbsent(subject, k -> new HashMap<>());
+    final ConcurrentMap<ParsedSchema, Integer> schemaIdMap =
+            schemaCache.computeIfAbsent(
+              Optional.ofNullable(subject).orElse(NO_SUBJECT_KEY),
+              k -> new ConcurrentHashMap<>()
+            );
 
-    final Integer cachedId = schemaIdMap.get(schema);
-    if (cachedId != null) {
-      if (id >= 0 && id != cachedId) {
-        throw new IllegalStateException("Schema already registered with id "
-            + cachedId + " instead of input id " + id);
+    final int cachedId = schemaIdMap.computeIfAbsent(schema, k -> {
+      if (schemaIdMap.size() >= identityMapCapacity) {
+        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
       }
-      return cachedId;
-    }
 
-    if (schemaIdMap.size() >= identityMapCapacity) {
-      throw new IllegalStateException("Too many schema objects created for " + subject + "!");
-    }
+      try {
+        final int retrievedId = id >= 0
+                ? registerAndGetId(subject, k, version, id)
+                : registerAndGetId(subject, k);
+        idCache.get(NO_SUBJECT_KEY).put(retrievedId, k);
+        return retrievedId;
+      } catch (IOException | RestClientException e) {
+        throw ExceptionUtil.sneakythrow(e);
+      }
+    });
 
-    final int retrievedId = id >= 0
-                            ? registerAndGetId(subject, schema, version, id)
-                            : registerAndGetId(subject, schema);
-    schemaIdMap.put(schema, retrievedId);
-    idCache.get(null).put(retrievedId, schema);
-    return retrievedId;
+    if (id >= 0 && id != cachedId) {
+      throw new IllegalStateException("Schema already registered with id "
+              + cachedId + " instead of input id " + id);
+    }
+    return cachedId;
   }
 
   @Override
-  public synchronized ParsedSchema getSchemaById(int id) throws IOException, RestClientException {
+  public ParsedSchema getSchemaById(int id) throws IOException, RestClientException {
     return getSchemaBySubjectAndId(null, id);
   }
 
   @Override
-  public synchronized ParsedSchema getSchemaBySubjectAndId(String subject, int id)
+  public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
+    final ConcurrentMap<Integer, ParsedSchema> idSchemaMap =
+            idCache.computeIfAbsent(
+              Optional.ofNullable(subject).orElse(NO_SUBJECT_KEY),
+              k -> new ConcurrentHashMap<>()
+            );
 
-    final Map<Integer, ParsedSchema> idSchemaMap = idCache
-        .computeIfAbsent(subject, k -> new HashMap<>());
-
-    final ParsedSchema cachedSchema = idSchemaMap.get(id);
-    if (cachedSchema != null) {
-      return cachedSchema;
-    }
-
-    final ParsedSchema retrievedSchema = getSchemaByIdFromRegistry(id);
-    idSchemaMap.put(id, retrievedSchema);
-    return retrievedSchema;
+    return idSchemaMap.computeIfAbsent(id, k -> {
+      try {
+        return getSchemaByIdFromRegistry(k);
+      } catch (IOException | RestClientException e) {
+        throw ExceptionUtil.sneakythrow(e);
+      }
+    });
   }
 
   @Override
@@ -393,24 +403,28 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public synchronized int getId(String subject, ParsedSchema schema)
+  public int getId(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
-    final Map<ParsedSchema, Integer> schemaIdMap =
-        schemaCache.computeIfAbsent(subject, k -> new HashMap<>());
 
-    final Integer cachedId = schemaIdMap.get(schema);
-    if (cachedId != null) {
-      return cachedId;
-    }
+    final ConcurrentMap<ParsedSchema, Integer> schemaIdMap =
+            schemaCache.computeIfAbsent(
+              Optional.ofNullable(subject).orElse(NO_SUBJECT_KEY),
+              k -> new ConcurrentHashMap<>()
+            );
 
-    if (schemaIdMap.size() >= identityMapCapacity) {
-      throw new IllegalStateException("Too many schema objects created for " + subject + "!");
-    }
+    return schemaIdMap.computeIfAbsent(schema, k -> {
+      if (schemaIdMap.size() >= identityMapCapacity) {
+        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
+      }
 
-    final int retrievedId = getIdFromRegistry(subject, schema);
-    schemaIdMap.put(schema, retrievedId);
-    idCache.get(null).put(retrievedId, schema);
-    return retrievedId;
+      try {
+        Integer cachedId = getIdFromRegistry(subject, schema);
+        idCache.get(NO_SUBJECT_KEY).put(cachedId, schema);
+        return cachedId;
+      } catch (IOException | RestClientException e) {
+        throw ExceptionUtil.sneakythrow(e);
+      }
+    });
   }
 
   @Override
@@ -513,6 +527,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     schemaCache.clear();
     idCache.clear();
     versionCache.clear();
-    idCache.put(null, new HashMap<Integer, ParsedSchema>());
+    idCache.put(NO_SUBJECT_KEY, new ConcurrentHashMap<>());
   }
 }
