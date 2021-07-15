@@ -179,4 +179,31 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
     this.mojo.subjects = subjectToFile;
     this.mojo.execute();
   }
+
+  @Test
+  public void shouldTakeSchemasFromOutputDirectoryIfNoSubjectsProvided() throws IOException, MojoFailureException, MojoExecutionException {
+    Map<String, Integer> expectedVersions = new LinkedHashMap<>();
+
+    Map<String, File> subjectToFile = new LinkedHashMap<>();
+    int version = 1;
+    for (int i = 0; i < 2; i++) {
+      String keySubject = String.format("TestSubject%03d-key", i);
+      String valueSubject = String.format("TestSubject%03d-value", i);
+      Schema keySchema = Schema.create(Schema.Type.STRING);
+      Schema valueSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)));
+      File keySchemaFile = new File(this.tempDirectory, keySubject + ".avsc");
+      File valueSchemaFile = new File(this.tempDirectory, valueSubject + ".avsc");
+      writeSchema(keySchemaFile, keySchema);
+      writeSchema(valueSchemaFile, valueSchema);
+      subjectToFile.put(keySubject, keySchemaFile);
+      expectedVersions.put(keySubject, version);
+      subjectToFile.put(valueSubject, valueSchemaFile);
+      expectedVersions.put(valueSubject, version);
+    }
+
+    this.mojo.outputDirectory = this.tempDirectory;
+    this.mojo.execute();
+
+    Assert.assertThat(this.mojo.schemaVersions, IsEqual.equalTo(expectedVersions));
+  }
 }
