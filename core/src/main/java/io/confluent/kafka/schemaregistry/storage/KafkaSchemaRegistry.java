@@ -128,6 +128,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final MetricsContainer metricsContainer;
   private final Map<String, SchemaProvider> providers;
   private final String kafkaClusterId;
+  private final String schemaRegistryClusterId;
 
   public KafkaSchemaRegistry(SchemaRegistryConfig config,
                              Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer)
@@ -162,6 +163,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.defaultMode = Mode.READWRITE;
     this.kafkaClusterId = kafkaClusterId(config);
+    this.schemaRegistryClusterId =
+        config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
     this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
     this.providers = initProviders(config);
     this.schemaCache = CacheBuilder.newBuilder()
@@ -1479,6 +1482,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public String getKafkaClusterId() {
     return kafkaClusterId;
+  }
+
+  public String getSchemaRegistryClusterId() {
+    return schemaRegistryClusterId;
   }
 
   public CompatibilityLevel getCompatibilityLevel(String subject)
