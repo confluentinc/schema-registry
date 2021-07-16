@@ -54,7 +54,7 @@ public class ServerMetadataResource {
   @PerformanceMetric("metadata.id")
   public ServerClusterId getClusterId() {
     String kafkaClusterId = schemaRegistry.getKafkaClusterId();
-    String schemaRegistryClusterId = schemaRegistry.getSchemaRegistryClusterId();
+    String schemaRegistryClusterId = schemaRegistry.getGroupId();
     return ServerClusterId.of(kafkaClusterId, schemaRegistryClusterId);
   }
 }
