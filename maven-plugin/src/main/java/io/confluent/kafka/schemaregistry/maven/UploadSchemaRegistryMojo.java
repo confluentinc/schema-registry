@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.maven;
 import com.google.common.base.Preconditions;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -88,15 +89,23 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       return;
     }
 
-    getLog().debug(String.format("Processing schema for subject(%s).", key));
+    StringBuilder message = new StringBuilder(
+            String.format("Processing schema for subject(%s).", key));
+    if (isReference) {
+      message.append("Obtained via references");
+    }
+    getLog().info(message.toString());
 
-    String schemaType = schemaTypes.getOrDefault(key, AvroSchema.TYPE);
     try {
-      List<SchemaReference> schemaReferences = getReferences(key, schemaVersions);
-      File file = subjects.get(key);
+      //Use encoded subject for reference, subjects, schematype maps lookup
+      //as xml tag cannot contain "/"
+      String encodedSubject = encode(key);
+      String schemaType = schemaTypes.getOrDefault(encodedSubject, AvroSchema.TYPE);
+      List<SchemaReference> schemaReferences = getReferences(encodedSubject, schemaVersions);
+      File file = subjects.get(encodedSubject);
       if (file == null) {
         if (!isReference) {
-          getLog().error("File for " + key + " could not be found.");
+          getLog().error("File for " + encodedSubject + " could not be found.");
           errors++;
         }
         return;
@@ -105,21 +114,23 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
       Optional<ParsedSchema> schema = client().parseSchema(
           schemaType, schemaString, schemaReferences);
       if (schema.isPresent()) {
-        schemas.put(key, schema.get());
+        schemas.put(encodedSubject, schema.get());
       } else {
-        getLog().error("Schema for " + key + " could not be parsed.");
+        getLog().error("Schema for " + encodedSubject + " could not be parsed.");
         errors++;
         return;
       }
 
-      String subject = key;
-      if (decodeSubject && subject.contains(PERCENT_REPLACEMENT)) {
-        subject = decode(subject);
-      }
+      //Decode the subject before registering it to schema registry
+      String subject = decode(encodedSubject);
       boolean success = processSchema(subject, file, schema.get(), schemaVersions);
       if (!success) {
         failures++;
       }
+      //processSchema() adds decoded subject as key and registered version to schemaVersions map.
+      //Here we are just adding encoded subject as key and same registered version
+      //as value to schemaVersions map.
+      addOriginalKeyToSchemaVersions(key, subject);
     } catch (Exception ex) {
       getLog().error("Exception thrown while processing " + key, ex);
       errors++;
@@ -128,10 +139,53 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     }
   }
 
-  protected static String decode(String subject) throws UnsupportedEncodingException {
-    // Replace _x colon with percent sign, since percent is not allowed in XML name
-    subject = subject.replaceAll(PERCENT_REPLACEMENT, "%");
-    return URLDecoder.decode(subject, "UTF-8");
+  private void addOriginalKeyToSchemaVersions(String key, String subject) {
+    //Add original encoded key to schemaVersions map.
+    if (!schemaVersions.containsKey(key)) {
+      Integer version = schemaVersions.get(subject);
+      schemaVersions.put(key, version);
+      getLog().info(
+          String.format(
+              "Marking subject(%s) as registered with version %s as it was "
+              + "registered under subject(%s)",
+              key,
+              version,
+              subject
+          ));
+    }
+  }
+
+  protected String decode(String encodedSubject) throws UnsupportedEncodingException {
+    String subject = encodedSubject;
+    //Default value of decodeSubject flag is true and we don't intend to
+    //set it to false in our pom.xml
+    if (decodeSubject && encodedSubject.contains(PERCENT_REPLACEMENT)) {
+      // Replace _x with percent sign, since percent is not allowed in XML name
+      subject = encodedSubject.replaceAll(PERCENT_REPLACEMENT, "%");
+      subject = URLDecoder.decode(subject, "UTF-8");
+      getLog().info(
+          String.format(
+              "key (%s) decoded to subject(%s)",
+              encodedSubject,
+              subject
+          ));
+    }
+    return subject;
+  }
+
+  private String encode(String subject) throws UnsupportedEncodingException {
+    String encodedSubject = subject;
+    if (subject.contains("/")) {
+      encodedSubject = URLEncoder.encode(subject, "UTF8");
+      encodedSubject = encodedSubject.replaceAll("%", PERCENT_REPLACEMENT);
+      getLog().info(
+          String.format(
+              "key (%s) encoded to subject(%s)",
+              subject,
+              encodedSubject
+          ));
+    }
+    return encodedSubject;
   }
 
   protected abstract boolean processSchema(String subject,
@@ -145,21 +199,30 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     return "Failed to process one or more schemas.";
   }
 
-  private List<SchemaReference> getReferences(String subject, Map<String, Integer> schemaVersions) {
+  private List<SchemaReference> getReferences(String subject, Map<String, Integer> schemaVersions)
+          throws UnsupportedEncodingException {
     List<Reference> refs = references.getOrDefault(subject, Collections.emptyList());
     List<SchemaReference> result = new ArrayList<>();
     for (Reference ref : refs) {
       // Process refs
       processSubject(ref.subject, true);
 
-      Integer version = ref.version != null ? ref.version : schemaVersions.get(ref.subject);
+      //Use decoded subject name as key for finding registered schema versions.
+      String decodedRefSubject = decode(ref.subject);
+      Integer version = ref.version != null ? ref.version : schemaVersions.get(decodedRefSubject);
       if (version == null) {
         getLog().warn(
-            String.format("Version not specified for ref with name '%s' and subject '%s', "
-                + "using latest version", ref.name, ref.subject));
+            String.format(
+                "Version not specified for ref with name '%s' and subject '%s"
+                + " (aka decoded subject %s)', using latest version",
+                ref.name,
+                ref.subject,
+                decodedRefSubject
+        ));
         version = -1;
       }
-      result.add(new SchemaReference(ref.name, ref.subject, version));
+      // Always pass decoded subject name in otherwise you will get exceptions.
+      result.add(new SchemaReference(ref.name, decodedRefSubject, version));
     }
     return result;
   }

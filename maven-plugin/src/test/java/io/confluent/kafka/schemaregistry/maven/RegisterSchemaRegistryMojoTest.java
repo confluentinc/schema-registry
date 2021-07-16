@@ -83,9 +83,11 @@ public class RegisterSchemaRegistryMojoTest extends SchemaRegistryTest {
       writeSchema(keySchemaFile, keySchema);
       writeSchema(valueSchemaFile, valueSchema);
       subjectToFile.put(keySubject, keySchemaFile);
-      expectedVersions.put(UploadSchemaRegistryMojo.decode(keySubject), version);
+      expectedVersions.put(keySubject, version);
+      expectedVersions.put(mojo.decode(keySubject), version);
       subjectToFile.put(valueSubject, valueSchemaFile);
-      expectedVersions.put(UploadSchemaRegistryMojo.decode(valueSubject), version);
+      expectedVersions.put(valueSubject, version);
+      expectedVersions.put(mojo.decode(valueSubject), version);
     }
 
     this.mojo.subjects = subjectToFile;
