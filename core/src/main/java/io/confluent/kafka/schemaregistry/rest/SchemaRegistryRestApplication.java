@@ -105,7 +105,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new SubjectVersionsResource(schemaRegistry));
     config.register(new CompatibilityResource(schemaRegistry));
     config.register(new ModeResource(schemaRegistry));
-    config.register(new ServerMetadataResource(schemaRegistry, schemaRegistryConfig));
+    config.register(new ServerMetadataResource(schemaRegistry));
     config.register(new ContextFilter());
     config.register(new RestCallMetricFilter(
             schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
