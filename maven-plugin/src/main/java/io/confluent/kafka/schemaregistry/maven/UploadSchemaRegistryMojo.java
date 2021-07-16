@@ -19,6 +19,8 @@ package io.confluent.kafka.schemaregistry.maven;
 import com.google.common.base.Preconditions;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -70,6 +72,12 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     errors = 0;
     failures = 0;
 
+    if (decodeSubject) {
+      subjects = decode(subjects);
+      schemaTypes = decode(schemaTypes);
+      references = decode(references);
+    }
+
     for (String subject : subjects.keySet()) {
       processSubject(subject, false);
     }
@@ -107,11 +115,7 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
         return;
       }
 
-      String subject = key;
-      if (decodeSubject && subject.contains(PERCENT_REPLACEMENT)) {
-        subject = decode(subject);
-      }
-      boolean success = processSchema(subject, file, schema.get(), schemaVersions);
+      boolean success = processSchema(key, file, schema.get(), schemaVersions);
       if (!success) {
         failures++;
       }
@@ -123,10 +127,21 @@ public abstract class UploadSchemaRegistryMojo extends SchemaRegistryMojo {
     }
   }
 
-  protected static String decode(String subject) throws UnsupportedEncodingException {
-    // Replace _x colon with percent sign, since percent is not allowed in XML name
-    subject = subject.replaceAll(PERCENT_REPLACEMENT, "%");
-    return URLDecoder.decode(subject, "UTF-8");
+  protected static <V> Map<String, V> decode(Map<String, V> map) {
+    return map.entrySet().stream()
+        .collect(Collectors.toMap(
+            e -> e.getKey().contains(PERCENT_REPLACEMENT) ? decode(e.getKey()) : e.getKey(),
+            Entry::getValue));
+  }
+
+  protected static String decode(String subject) {
+    try {
+      // Replace _x colon with percent sign, since percent is not allowed in XML name
+      subject = subject.replaceAll(PERCENT_REPLACEMENT, "%");
+      return URLDecoder.decode(subject, "UTF-8");
+    } catch (UnsupportedEncodingException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   protected abstract boolean processSchema(String subject,
