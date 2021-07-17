@@ -76,4 +76,9 @@ public class DeleteSubjectValue extends SubjectValue {
     sb.append("version=" + this.version + "}");
     return sb.toString();
   }
+
+  @Override
+  public DeleteSubjectKey toKey() {
+    return new DeleteSubjectKey(getSubject());
+  }
 }

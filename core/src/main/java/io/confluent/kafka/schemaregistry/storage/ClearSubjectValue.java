@@ -50,4 +50,9 @@ public class ClearSubjectValue extends SubjectValue {
     sb.append("{subject=" + this.getSubject() + "}");
     return sb.toString();
   }
+
+  @Override
+  public ClearSubjectKey toKey() {
+    return new ClearSubjectKey(getSubject());
+  }
 }
