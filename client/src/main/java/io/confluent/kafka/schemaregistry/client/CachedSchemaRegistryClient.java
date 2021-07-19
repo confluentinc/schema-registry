@@ -479,6 +479,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public void deleteCompatibility(String subject) throws IOException, RestClientException {
+    restService.deleteSubjectConfig(subject);
+  }
+
+  @Override
   public String setMode(String mode)
       throws IOException, RestClientException {
     ModeUpdateRequest response = restService.setMode(mode);
@@ -502,6 +507,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public String getMode(String subject) throws IOException, RestClientException {
     Mode response = restService.getMode(subject);
     return response.getMode();
+  }
+
+  @Override
+  public void deleteMode(String subject) throws IOException, RestClientException {
+    restService.deleteSubjectMode(subject);
   }
 
   @Override

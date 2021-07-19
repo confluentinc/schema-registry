@@ -82,4 +82,9 @@ public class ConfigValue extends SubjectValue {
     sb.append("{compatibilityLevel=" + this.compatibilityLevel + "}");
     return sb.toString();
   }
+
+  @Override
+  public ConfigKey toKey() {
+    return new ConfigKey(getSubject());
+  }
 }
