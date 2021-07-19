@@ -161,6 +161,10 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
 
   public String getCompatibility(String subject) throws IOException, RestClientException;
 
+  default void deleteCompatibility(String subject) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public String setMode(String mode)
       throws IOException, RestClientException;
 
@@ -170,6 +174,10 @@ public interface SchemaRegistryClient extends SchemaVersionFetcher {
   public String getMode() throws IOException, RestClientException;
 
   public String getMode(String subject) throws IOException, RestClientException;
+
+  default void deleteMode(String subject) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   public Collection<String> getAllSubjects() throws IOException, RestClientException;
 

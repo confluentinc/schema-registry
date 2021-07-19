@@ -221,4 +221,9 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     result = this.version - that.version;
     return result;
   }
+
+  @Override
+  public SchemaKey toKey() {
+    return new SchemaKey(getSubject(), getVersion());
+  }
 }

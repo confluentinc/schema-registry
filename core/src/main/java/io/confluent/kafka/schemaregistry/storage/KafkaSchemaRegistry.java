@@ -530,7 +530,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           if (deleted.getId().equals(schema.getId())) {
             // Tombstone previous version with the same ID
             SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
-            kafkaStore.delete(key);
+            kafkaStore.put(key, null);
           }
         }
 

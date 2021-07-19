@@ -80,4 +80,9 @@ public class ModeValue extends SubjectValue {
     sb.append("{mode=" + this.mode + "}");
     return sb.toString();
   }
+
+  @Override
+  public ModeKey toKey() {
+    return new ModeKey(getSubject());
+  }
 }
