@@ -301,6 +301,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
+    if (subject == null) {
+      subject = NO_SUBJECT;
+    }
 
     final Map<Integer, ParsedSchema> idSchemaMap = idCache
         .computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
