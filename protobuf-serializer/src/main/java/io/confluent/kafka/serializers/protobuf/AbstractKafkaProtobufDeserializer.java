@@ -20,7 +20,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import java.util.Objects;
-import kafka.utils.VerifiableProperties;
+import java.util.Properties;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -83,8 +83,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     }
   }
 
-  protected KafkaProtobufDeserializerConfig deserializerConfig(VerifiableProperties props) {
-    return new KafkaProtobufDeserializerConfig(props.props());
+  protected KafkaProtobufDeserializerConfig deserializerConfig(Properties props) {
+    return new KafkaProtobufDeserializerConfig(props);
   }
 
   /**
