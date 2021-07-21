@@ -22,14 +22,12 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 import java.util.Set;
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -364,8 +362,8 @@ public class JsonSchemaData {
   private int idIndex = 0;
 
   private JsonSchemaDataConfig config;
-  private Cache<Schema, org.everit.json.schema.Schema> fromConnectSchemaCache;
-  private Cache<JsonSchema, Schema> toConnectSchemaCache;
+  private Map<Schema, org.everit.json.schema.Schema> fromConnectSchemaCache;
+  private Map<JsonSchema, Schema> toConnectSchemaCache;
 
   public JsonSchemaData() {
     this(new JsonSchemaDataConfig.Builder().with(
@@ -376,10 +374,8 @@ public class JsonSchemaData {
 
   public JsonSchemaData(JsonSchemaDataConfig jsonSchemaDataConfig) {
     this.config = jsonSchemaDataConfig;
-    fromConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(jsonSchemaDataConfig.schemaCacheSize()));
-    toConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(jsonSchemaDataConfig.schemaCacheSize()));
+    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
+    toConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
   }
 
   /**

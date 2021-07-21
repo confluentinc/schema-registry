@@ -80,7 +80,7 @@ public class JsonSchemaDataConfig extends AbstractConfig {
   }
 
   public int schemaCacheSize() {
-    return getInt(SCHEMAS_CACHE_SIZE_CONFIG);
+    return Math.max(1, this.getInt(SCHEMAS_CACHE_SIZE_CONFIG));
   }
 
   /**
