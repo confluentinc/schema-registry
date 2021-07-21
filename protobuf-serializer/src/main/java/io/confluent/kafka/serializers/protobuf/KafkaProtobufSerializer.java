@@ -59,7 +59,7 @@ public class KafkaProtobufSerializer<T extends Message>
                                  int cacheCapacity) {
     schemaRegistry = client;
     configure(serializerConfig(props));
-    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }
 
   @Override
