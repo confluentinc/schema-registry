@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -152,11 +152,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
     this.identityMapCapacity = identityMapCapacity;
-    this.schemaCache = new ConcurrentHashMap<>();
-    this.idCache = new ConcurrentHashMap<>();
-    this.versionCache = new ConcurrentHashMap<>();
+    this.schemaCache = new BoundedConcurrentHashMap<>(identityMapCapacity);
+    this.idCache = new BoundedConcurrentHashMap<>(identityMapCapacity);
+    this.versionCache = new BoundedConcurrentHashMap<>(identityMapCapacity);
     this.restService = restService;
-    this.idCache.put(NO_SUBJECT, new ConcurrentHashMap<>());
+    this.idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(identityMapCapacity));
     this.providers = providers != null && !providers.isEmpty()
                      ? providers.stream().collect(Collectors.toMap(p -> p.schemaType(), p -> p))
                      : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
@@ -257,8 +257,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
-    final Map<ParsedSchema, Integer> schemaIdMap =
-        schemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+    final Map<ParsedSchema, Integer> schemaIdMap = schemaCache.computeIfAbsent(
+        subject, k -> new BoundedConcurrentHashMap<>(identityMapCapacity));
 
     Integer cachedId = schemaIdMap.get(schema);
     if (cachedId != null) {
@@ -271,10 +271,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       if (cachedId != null) {
         checkId(id, cachedId);
         return cachedId;
-      }
-
-      if (schemaIdMap.size() >= identityMapCapacity) {
-        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
       }
 
       final int retrievedId = id >= 0
@@ -305,8 +301,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       subject = NO_SUBJECT;
     }
 
-    final Map<Integer, ParsedSchema> idSchemaMap = idCache
-        .computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+    final Map<Integer, ParsedSchema> idSchemaMap = idCache.computeIfAbsent(
+        subject, k -> new BoundedConcurrentHashMap<>(identityMapCapacity));
 
     ParsedSchema cachedSchema = idSchemaMap.get(id);
     if (cachedSchema != null) {
@@ -394,8 +390,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int getVersion(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
-    final Map<ParsedSchema, Integer> schemaVersionMap =
-        versionCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+    final Map<ParsedSchema, Integer> schemaVersionMap = versionCache.computeIfAbsent(
+        subject, k -> new BoundedConcurrentHashMap<>(identityMapCapacity));
 
     Integer cachedVersion = schemaVersionMap.get(schema);
     if (cachedVersion != null) {
@@ -406,10 +402,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       cachedVersion = schemaVersionMap.get(schema);
       if (cachedVersion != null) {
         return cachedVersion;
-      }
-
-      if (schemaVersionMap.size() >= identityMapCapacity) {
-        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
       }
 
       final int retrievedVersion = getVersionFromRegistry(subject, schema);
@@ -427,8 +419,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int getId(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
-    final Map<ParsedSchema, Integer> schemaIdMap =
-        schemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+    final Map<ParsedSchema, Integer> schemaIdMap = schemaCache.computeIfAbsent(
+        subject, k -> new BoundedConcurrentHashMap<>(identityMapCapacity));
 
     Integer cachedId = schemaIdMap.get(schema);
     if (cachedId != null) {
@@ -439,10 +431,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       cachedId = schemaIdMap.get(schema);
       if (cachedId != null) {
         return cachedId;
-      }
-
-      if (schemaIdMap.size() >= identityMapCapacity) {
-        throw new IllegalStateException("Too many schema objects created for " + subject + "!");
       }
 
       final int retrievedId = getIdFromRegistry(subject, schema);
@@ -568,6 +556,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     schemaCache.clear();
     idCache.clear();
     versionCache.clear();
-    idCache.put(NO_SUBJECT, new ConcurrentHashMap<>());
+    idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(identityMapCapacity));
   }
 }
