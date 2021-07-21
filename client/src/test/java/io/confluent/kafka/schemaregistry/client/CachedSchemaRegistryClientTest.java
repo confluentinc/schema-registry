@@ -159,13 +159,9 @@ public class CachedSchemaRegistryClientTest {
       client.register(SUBJECT_0, avroSchema(i));  // Each one results in new id.
     }
 
-    try {
-      // This call should exceed the identityMapCapacity
-      client.register(SUBJECT_0, avroSchema(IDENTITY_MAP_CAPACITY));
-      fail();
-    } catch (IllegalStateException e) {
-      //
-    }
+    // This call should exceed the identityMapCapacity
+    // Due to BoundedConcurrencyHashMap it should succeed
+    client.register(SUBJECT_0, avroSchema(IDENTITY_MAP_CAPACITY));
 
     verify(restService);
   }
