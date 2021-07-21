@@ -19,11 +19,9 @@ package io.confluent.kafka.serializers.protobuf;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.Objects;
 import java.util.Properties;
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -50,10 +48,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected boolean deriveType;
-  private Cache<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
+  private Map<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
-    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
+    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   /**
@@ -181,12 +179,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {
     Pair<String, ProtobufSchema> cacheKey = new Pair<>(name, schema);
-    ProtobufSchema schemaWithName = schemaCache.get(cacheKey);
-    if (schemaWithName == null) {
-      schemaWithName = schema.copy(name);
-      schemaCache.put(cacheKey, schemaWithName);
-    }
-    return schemaWithName;
+    return schemaCache.computeIfAbsent(cacheKey, k -> schema.copy(name));
   }
 
   private Object deriveType(ByteBuffer buffer, ProtobufSchema schema) {

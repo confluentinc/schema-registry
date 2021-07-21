@@ -19,10 +19,8 @@ package io.confluent.kafka.serializers.protobuf;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.IOException;
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
@@ -39,18 +37,18 @@ public class KafkaProtobufSerializer<T extends Message>
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
   private boolean isKey;
-  private Cache<Descriptor, ProtobufSchema> schemaCache;
+  private Map<Descriptor, ProtobufSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaProtobufSerializer() {
-    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
+    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client) {
     schemaRegistry = client;
-    schemaCache = new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
+    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -61,7 +59,7 @@ public class KafkaProtobufSerializer<T extends Message>
                                  int cacheCapacity) {
     schemaRegistry = client;
     configure(serializerConfig(props));
-    schemaCache = new SynchronizedCache<>(new LRUCache<>(cacheCapacity));
+    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   @Override

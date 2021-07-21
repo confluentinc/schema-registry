@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.regex.Pattern;
@@ -33,9 +34,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.internal.JacksonUtils;
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -318,8 +316,8 @@ public class AvroData {
     });
   }
 
-  private Cache<Schema, org.apache.avro.Schema> fromConnectSchemaCache;
-  private Cache<AvroSchema, Schema> toConnectSchemaCache;
+  private Map<Schema, org.apache.avro.Schema> fromConnectSchemaCache;
+  private Map<AvroSchema, Schema> toConnectSchemaCache;
   private boolean connectMetaData;
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
@@ -331,12 +329,8 @@ public class AvroData {
   }
 
   public AvroData(AvroDataConfig avroDataConfig) {
-    fromConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(
-            avroDataConfig.getSchemasCacheSize()));
-    toConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(
-            avroDataConfig.getSchemasCacheSize()));
+    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(avroDataConfig.getSchemasCacheSize());
+    toConnectSchemaCache = new BoundedConcurrentHashMap<>(avroDataConfig.getSchemasCacheSize());
     this.connectMetaData = avroDataConfig.isConnectMetaData();
     this.enhancedSchemaSupport = avroDataConfig.isEnhancedAvroSchemaSupport();
     this.scrubInvalidNames = avroDataConfig.isScrubInvalidNames();

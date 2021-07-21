@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.Iterator;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
@@ -31,9 +32,6 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.reflect.ReflectData;
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayInputStream;
@@ -55,8 +53,8 @@ public class AvroSchemaUtils {
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
   private static final Map<String, Schema> primitiveSchemas;
-  private static final Cache<Schema, Schema> transformedSchemas =
-      new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
+  private static final Map<Schema, Schema> transformedSchemas =
+      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
 
   static {
     primitiveSchemas = new HashMap<>();
@@ -117,12 +115,8 @@ public class AvroSchemaUtils {
     } else if (object instanceof GenericContainer) {
       Schema schema = ((GenericContainer) object).getSchema();
       if (removeJavaProperties) {
-        Schema transformedSchema = transformedSchemas.get(schema);
-        if (transformedSchema == null) {
-          transformedSchema = removeJavaProperties(schema);
-          transformedSchemas.put(schema, transformedSchema);
-        }
-        schema = transformedSchema;
+        final Schema s = schema;
+        schema = transformedSchemas.computeIfAbsent(s, k -> removeJavaProperties(s));
       }
       return schema;
     } else if (object instanceof Map) {

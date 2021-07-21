@@ -25,14 +25,13 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.util.Utf8;
-import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
@@ -1122,7 +1121,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaFromConnectConversion() {
-    Cache<org.apache.avro.Schema, Schema> cache =
+    Map<org.apache.avro.Schema, Schema> cache =
         Whitebox.getInternalState(avroData, "fromConnectSchemaCache");
     assertEquals(0, cache.size());
 
@@ -2124,7 +2123,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaToConnectConversion() {
-    Cache<Schema, org.apache.avro.Schema> cache =
+    Map<Schema, org.apache.avro.Schema> cache =
         Whitebox.getInternalState(avroData, "toConnectSchemaCache");
     assertEquals(0, cache.size());
 
