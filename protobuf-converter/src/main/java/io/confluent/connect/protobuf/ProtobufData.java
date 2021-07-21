@@ -33,6 +33,7 @@ import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.util.Timestamps;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.utils.DecimalUtils;
@@ -46,9 +47,6 @@ import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
@@ -290,8 +288,8 @@ public class ProtobufData {
 
   private int defaultSchemaNameIndex = 0;
 
-  private final Cache<Schema, ProtobufSchema> fromConnectSchemaCache;
-  private final Cache<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
+  private final Map<Schema, ProtobufSchema> fromConnectSchemaCache;
+  private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean enhancedSchemaSupport;
   private boolean scrubInvalidNames;
   private boolean useWrapperForNullables;
@@ -308,10 +306,8 @@ public class ProtobufData {
   }
 
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
-    fromConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
-    toConnectSchemaCache =
-        new SynchronizedCache<>(new LRUCache<>(protobufDataConfig.schemaCacheSize()));
+    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
+    toConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
     this.scrubInvalidNames = protobufDataConfig.isScrubInvalidNames();
     this.useWrapperForNullables = protobufDataConfig.useWrapperForNullables();

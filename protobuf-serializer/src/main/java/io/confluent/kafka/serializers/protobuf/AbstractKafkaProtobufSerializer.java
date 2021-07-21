@@ -19,7 +19,6 @@ package io.confluent.kafka.serializers.protobuf;
 import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -137,7 +136,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Cache<SubjectSchema, ParsedSchema> latestVersions,
+      Map<SubjectSchema, ParsedSchema> latestVersions,
       ReferenceSubjectNameStrategy strategy,
       String topic,
       boolean isKey,
@@ -177,7 +176,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Cache<SubjectSchema, ParsedSchema> latestVersions,
+      Map<SubjectSchema, ParsedSchema> latestVersions,
       boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,
@@ -209,7 +208,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Cache<SubjectSchema, ParsedSchema> latestVersions,
+      Map<SubjectSchema, ParsedSchema> latestVersions,
       boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,

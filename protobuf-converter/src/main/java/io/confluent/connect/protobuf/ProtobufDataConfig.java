@@ -84,7 +84,7 @@ public class ProtobufDataConfig extends AbstractConfig {
   }
 
   public int schemaCacheSize() {
-    return this.getInt(SCHEMAS_CACHE_SIZE_CONFIG);
+    return Math.max(1, this.getInt(SCHEMAS_CACHE_SIZE_CONFIG));
   }
 
   public static class Builder {

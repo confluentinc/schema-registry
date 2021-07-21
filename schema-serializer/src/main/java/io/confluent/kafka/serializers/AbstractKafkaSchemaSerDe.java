@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -26,9 +27,6 @@ import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.cache.Cache;
-import org.apache.kafka.common.cache.LRUCache;
-import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -62,8 +60,8 @@ public abstract class AbstractKafkaSchemaSerDe {
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
   protected Object keySubjectNameStrategy = new TopicNameStrategy();
   protected Object valueSubjectNameStrategy = new TopicNameStrategy();
-  protected Cache<SubjectSchema, ParsedSchema> latestVersions =
-      new SynchronizedCache<>(new LRUCache<>(DEFAULT_CACHE_CAPACITY));
+  protected Map<SubjectSchema, ParsedSchema> latestVersions =
+      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   protected boolean useSchemaReflection;
 
 
@@ -195,7 +193,7 @@ public abstract class AbstractKafkaSchemaSerDe {
       SchemaRegistryClient schemaRegistry,
       String subject,
       ParsedSchema schema,
-      Cache<SubjectSchema, ParsedSchema> cache,
+      Map<SubjectSchema, ParsedSchema> cache,
       boolean latestCompatStrict)
       throws IOException, RestClientException {
     SubjectSchema ss = new SubjectSchema(subject, schema);
