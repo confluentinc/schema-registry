@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
@@ -41,7 +42,6 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import kafka.utils.VerifiableProperties;
 
 public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaSerDe {
   private final DecoderFactory decoderFactory = DecoderFactory.get();
@@ -69,8 +69,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return new KafkaAvroDeserializerConfig(props);
   }
 
-  protected KafkaAvroDeserializerConfig deserializerConfig(VerifiableProperties props) {
-    return new KafkaAvroDeserializerConfig(props.props());
+  protected KafkaAvroDeserializerConfig deserializerConfig(Properties props) {
+    return new KafkaAvroDeserializerConfig(props);
   }
 
   /**

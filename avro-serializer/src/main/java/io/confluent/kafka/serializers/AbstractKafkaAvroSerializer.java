@@ -23,8 +23,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
@@ -66,8 +66,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     return new KafkaAvroSerializerConfig(props);
   }
 
-  protected KafkaAvroSerializerConfig serializerConfig(VerifiableProperties props) {
-    return new KafkaAvroSerializerConfig(props.props());
+  protected KafkaAvroSerializerConfig serializerConfig(Properties props) {
+    return new KafkaAvroSerializerConfig(props);
   }
 
   protected DatumWriter<?> getDatumWriter(Object value, Schema schema) {
