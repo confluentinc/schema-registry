@@ -53,8 +53,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private static final String WILDCARD = "*";
 
   private String defaultCompatibility = "BACKWARD";
-  private final Map<String, Map<WrappedParsedSchema, Integer>> schemaCache;
-  private final Map<WrappedParsedSchema, Integer> schemaIdCache;
+  private final Map<String, Map<ParsedSchema, Integer>> schemaCache;
+  private final Map<ParsedSchema, Integer> schemaIdCache;
   private final Map<String, Map<Integer, ParsedSchema>> idCache;
   private final Map<String, Map<ParsedSchema, Integer>> versionCache;
   private final Map<String, String> compatibilityCache;
@@ -67,7 +67,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   public MockSchemaRegistryClient(List<SchemaProvider> providers) {
-    schemaCache = new HashMap<String, Map<WrappedParsedSchema, Integer>>();
+    schemaCache = new HashMap<String, Map<ParsedSchema, Integer>>();
     schemaIdCache = new HashMap<>();
     idCache = new HashMap<String, Map<Integer, ParsedSchema>>();
     versionCache = new HashMap<String, Map<ParsedSchema, Integer>>();
@@ -85,39 +85,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       provider.configure(schemaProviderConfigs);
     }
   }
-
-  private static class WrappedParsedSchema {
-    ParsedSchema parsedSchema;
-
-    public WrappedParsedSchema(ParsedSchema schema) {
-      this.parsedSchema = schema;
-    }
-
-    public ParsedSchema getParsedSchema() {
-      return this.parsedSchema;
-    }
-
-    @Override
-    public int hashCode() {
-      return parsedSchema.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-
-      WrappedParsedSchema that = (WrappedParsedSchema) o;
-      return Objects.equals(parsedSchema, that.parsedSchema)
-              && Objects.equals(parsedSchema.name(), that.parsedSchema.name());
-    }
-  }
-
 
   @Override
   public Optional<ParsedSchema> parseSchema(
@@ -157,10 +124,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       idSchemaMap = new HashMap<Integer, ParsedSchema>();
     }
     if (registerRequest) {
-      Integer schemaId = schemaIdCache.get(new WrappedParsedSchema(schema));
+      Integer schemaId = schemaIdCache.get(schema);
       if (schemaId == null) {
         schemaId = id >= 0 ? id : ids.incrementAndGet();
-        schemaIdCache.put(new WrappedParsedSchema(schema), schemaId);
+        schemaIdCache.put(schema, schemaId);
       } else if (id >= 0 && id != schemaId) {
         throw new IllegalStateException("Schema already registered with id "
             + schemaId + " instead of input id " + id);
@@ -219,16 +186,16 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
-    Map<WrappedParsedSchema, Integer> schemaIdMap;
+    Map<ParsedSchema, Integer> schemaIdMap;
     if (schemaCache.containsKey(subject)) {
       schemaIdMap = schemaCache.get(subject);
     } else {
-      schemaIdMap = new HashMap<WrappedParsedSchema, Integer>();
+      schemaIdMap = new HashMap<ParsedSchema, Integer>();
       schemaCache.put(subject, schemaIdMap);
     }
 
-    if (schemaIdMap.containsKey(new WrappedParsedSchema(schema))) {
-      int schemaId = schemaIdMap.get(new WrappedParsedSchema(schema));
+    if (schemaIdMap.containsKey(schema)) {
+      int schemaId = schemaIdMap.get(schema);
       if (id >= 0 && id != schemaId) {
         throw new IllegalStateException("Schema already registered with id "
             + schemaId + " instead of input id " + id);
@@ -236,7 +203,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       return schemaId;
     } else {
       id = getIdFromRegistry(subject, schema, true, id);
-      schemaIdMap.put(new WrappedParsedSchema(schema), id);
+      schemaIdMap.put(schema, id);
       if (!idCache.get(null).containsKey(id)) {
         idCache.get(null).put(id, schema);
       }
