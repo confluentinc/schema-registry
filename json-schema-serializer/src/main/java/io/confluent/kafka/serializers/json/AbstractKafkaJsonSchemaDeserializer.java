@@ -20,7 +20,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import kafka.utils.VerifiableProperties;
+import java.util.Properties;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -71,8 +71,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     }
   }
 
-  protected KafkaJsonSchemaDeserializerConfig deserializerConfig(VerifiableProperties props) {
-    return new KafkaJsonSchemaDeserializerConfig(props.props());
+  protected KafkaJsonSchemaDeserializerConfig deserializerConfig(Properties props) {
+    return new KafkaJsonSchemaDeserializerConfig(props);
   }
 
   /**
