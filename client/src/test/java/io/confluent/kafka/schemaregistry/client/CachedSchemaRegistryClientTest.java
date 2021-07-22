@@ -53,7 +53,7 @@ import static org.junit.Assert.fail;
 
 public class CachedSchemaRegistryClientTest {
 
-  private static final int IDENTITY_MAP_CAPACITY = 5;
+  private static final int CACHE_CAPACITY = 5;
   private static final String SCHEMA_STR_0 = avroSchemaString(0);
   private static final AvroSchema AVRO_SCHEMA_0 = avroSchema(0);
   private static final String SUBJECT_0 = "foo";
@@ -70,7 +70,7 @@ public class CachedSchemaRegistryClientTest {
   public void setUp() {
     restService = createNiceMock(RestService.class);
 
-    client = new CachedSchemaRegistryClient(restService, IDENTITY_MAP_CAPACITY, new HashMap<>());
+    client = new CachedSchemaRegistryClient(restService, CACHE_CAPACITY, new HashMap<>());
   }
 
   @Test
@@ -83,7 +83,7 @@ public class CachedSchemaRegistryClientTest {
     // Headers should be configured regardless of the value of the "configs" parameter
     new CachedSchemaRegistryClient(
         restService,
-        IDENTITY_MAP_CAPACITY,
+        CACHE_CAPACITY,
         null,
         headers
     );
@@ -104,7 +104,7 @@ public class CachedSchemaRegistryClientTest {
     duplicateConfigs.put("schema.registry.key", "value");
     new CachedSchemaRegistryClient(
         restService,
-        IDENTITY_MAP_CAPACITY,
+        CACHE_CAPACITY,
         duplicateConfigs,
         null
     );
@@ -155,17 +155,13 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    for (int i = 0; i != IDENTITY_MAP_CAPACITY; ++i) {
+    for (int i = 0; i != CACHE_CAPACITY; ++i) {
       client.register(SUBJECT_0, avroSchema(i));  // Each one results in new id.
     }
 
-    try {
-      // This call should exceed the identityMapCapacity
-      client.register(SUBJECT_0, avroSchema(IDENTITY_MAP_CAPACITY));
-      fail();
-    } catch (IllegalStateException e) {
-      //
-    }
+    // This call should exceed the cache capacity
+    // Due to BoundedConcurrencyHashMap it should succeed
+    client.register(SUBJECT_0, avroSchema(CACHE_CAPACITY));
 
     verify(restService);
   }
@@ -430,7 +426,7 @@ public class CachedSchemaRegistryClientTest {
     new CachedSchemaRegistryClient(
             // Sets initial credential set for URL provider
             new RestService("http://user:password@sr.com:8020"),
-            IDENTITY_MAP_CAPACITY,
+        CACHE_CAPACITY,
             config,
             null
     );
@@ -461,7 +457,7 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    for (int i = 0; i != IDENTITY_MAP_CAPACITY; ++i) {
+    for (int i = 0; i != CACHE_CAPACITY; ++i) {
       client.register(SUBJECT_0, avroSchema(i));  // Each one results in new id.
     }
 

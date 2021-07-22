@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -311,7 +312,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
           }
           return Stream.empty();
         })
-        .collect(Collectors.toSet());
+        .collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
   @Override

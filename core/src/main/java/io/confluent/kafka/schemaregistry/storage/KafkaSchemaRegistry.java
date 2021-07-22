@@ -1236,7 +1236,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return versions != null
         ? versions.stream()
             .map(SubjectVersion::getSubject)
-            .collect(Collectors.toSet())
+            .collect(Collectors.toCollection(LinkedHashSet::new))
         : null;
   }
 
