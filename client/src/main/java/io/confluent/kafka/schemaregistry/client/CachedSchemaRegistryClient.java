@@ -56,7 +56,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private static final Logger log = LoggerFactory.getLogger(CachedSchemaRegistryClient.class);
 
   private final RestService restService;
-  private final int identityMapCapacity;
+  private final int cacheCapacity;
   private final Map<String, Map<ParsedSchema, Integer>> schemaCache;
   private final Map<String, Map<Integer, ParsedSchema>> idCache;
   private final Map<String, Map<ParsedSchema, Integer>> versionCache;
@@ -71,92 +71,92 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         Collections.singletonMap("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
   }
 
-  public CachedSchemaRegistryClient(String baseUrl, int identityMapCapacity) {
-    this(new RestService(baseUrl), identityMapCapacity);
+  public CachedSchemaRegistryClient(String baseUrl, int cacheCapacity) {
+    this(new RestService(baseUrl), cacheCapacity);
   }
 
-  public CachedSchemaRegistryClient(List<String> baseUrls, int identityMapCapacity) {
-    this(new RestService(baseUrls), identityMapCapacity);
+  public CachedSchemaRegistryClient(List<String> baseUrls, int cacheCapacity) {
+    this(new RestService(baseUrls), cacheCapacity);
   }
 
-  public CachedSchemaRegistryClient(RestService restService, int identityMapCapacity) {
-    this(restService, identityMapCapacity, null);
+  public CachedSchemaRegistryClient(RestService restService, int cacheCapacity) {
+    this(restService, cacheCapacity, null);
   }
 
   public CachedSchemaRegistryClient(
       String baseUrl,
-      int identityMapCapacity,
+      int cacheCapacity,
       Map<String, ?> originals) {
-    this(baseUrl, identityMapCapacity, originals, null);
+    this(baseUrl, cacheCapacity, originals, null);
   }
 
   public CachedSchemaRegistryClient(
       List<String> baseUrls,
-      int identityMapCapacity,
+      int cacheCapacity,
       Map<String, ?> originals) {
-    this(baseUrls, identityMapCapacity, originals, null);
+    this(baseUrls, cacheCapacity, originals, null);
   }
 
   public CachedSchemaRegistryClient(
       List<String> baseUrls,
-      int identityMapCapacity,
+      int cacheCapacity,
       List<SchemaProvider> providers,
       Map<String, ?> originals) {
-    this(new RestService(baseUrls), identityMapCapacity, providers, originals, null);
+    this(new RestService(baseUrls), cacheCapacity, providers, originals, null);
   }
 
   public CachedSchemaRegistryClient(
       RestService restService,
-      int identityMapCapacity,
+      int cacheCapacity,
       Map<String, ?> configs) {
-    this(restService, identityMapCapacity, null, configs, null);
+    this(restService, cacheCapacity, null, configs, null);
   }
 
   public CachedSchemaRegistryClient(
       String baseUrl,
-      int identityMapCapacity,
+      int cacheCapacity,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(new RestService(baseUrl), identityMapCapacity, null, originals, httpHeaders);
+    this(new RestService(baseUrl), cacheCapacity, null, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
       List<String> baseUrls,
-      int identityMapCapacity,
+      int cacheCapacity,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(new RestService(baseUrls), identityMapCapacity, null, originals, httpHeaders);
+    this(new RestService(baseUrls), cacheCapacity, null, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
       List<String> baseUrls,
-      int identityMapCapacity,
+      int cacheCapacity,
       List<SchemaProvider> providers,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(new RestService(baseUrls), identityMapCapacity, providers, originals, httpHeaders);
+    this(new RestService(baseUrls), cacheCapacity, providers, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
       RestService restService,
-      int identityMapCapacity,
+      int cacheCapacity,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(restService, identityMapCapacity, null, originals, httpHeaders);
+    this(restService, cacheCapacity, null, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
       RestService restService,
-      int identityMapCapacity,
+      int cacheCapacity,
       List<SchemaProvider> providers,
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
-    this.identityMapCapacity = identityMapCapacity;
-    this.schemaCache = new BoundedConcurrentHashMap<>(identityMapCapacity);
-    this.idCache = new BoundedConcurrentHashMap<>(identityMapCapacity);
-    this.versionCache = new BoundedConcurrentHashMap<>(identityMapCapacity);
+    this.cacheCapacity = cacheCapacity;
+    this.schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.idCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.versionCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.restService = restService;
-    this.idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(identityMapCapacity));
+    this.idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(cacheCapacity));
     this.providers = providers != null && !providers.isEmpty()
                      ? providers.stream().collect(Collectors.toMap(p -> p.schemaType(), p -> p))
                      : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
@@ -258,7 +258,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
     final Map<ParsedSchema, Integer> schemaIdMap = schemaCache.computeIfAbsent(
-        subject, k -> new BoundedConcurrentHashMap<>(identityMapCapacity));
+        subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
 
     Integer cachedId = schemaIdMap.get(schema);
     if (cachedId != null) {
@@ -302,7 +302,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     final Map<Integer, ParsedSchema> idSchemaMap = idCache.computeIfAbsent(
-        subject, k -> new BoundedConcurrentHashMap<>(identityMapCapacity));
+        subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
 
     ParsedSchema cachedSchema = idSchemaMap.get(id);
     if (cachedSchema != null) {
@@ -391,7 +391,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public int getVersion(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     final Map<ParsedSchema, Integer> schemaVersionMap = versionCache.computeIfAbsent(
-        subject, k -> new BoundedConcurrentHashMap<>(identityMapCapacity));
+        subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
 
     Integer cachedVersion = schemaVersionMap.get(schema);
     if (cachedVersion != null) {
@@ -420,7 +420,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public int getId(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
     final Map<ParsedSchema, Integer> schemaIdMap = schemaCache.computeIfAbsent(
-        subject, k -> new BoundedConcurrentHashMap<>(identityMapCapacity));
+        subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
 
     Integer cachedId = schemaIdMap.get(schema);
     if (cachedId != null) {
@@ -556,6 +556,6 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     schemaCache.clear();
     idCache.clear();
     versionCache.clear();
-    idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(identityMapCapacity));
+    idCache.put(NO_SUBJECT, new BoundedConcurrentHashMap<>(cacheCapacity));
   }
 }
