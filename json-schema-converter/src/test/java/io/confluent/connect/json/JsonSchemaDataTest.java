@@ -744,6 +744,36 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectRecordWithNoAdditionalProperties() {
+    NumberSchema numberSchema = NumberSchema.builder()
+        .requiresInteger(true)
+        .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
+        .build();
+    StringSchema stringSchema = StringSchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
+        .build();
+    ObjectSchema schema = ObjectSchema.builder()
+        .addPropertySchema("int8", numberSchema)
+        .addPropertySchema("string", stringSchema)
+        .additionalProperties(false)
+        .title("Record")
+        .build();
+    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+    obj.set("int8", ShortNode.valueOf((short) 12));
+    Schema expectedSchema = SchemaBuilder.struct()
+        .name("Record")
+        .field("int8", Schema.INT8_SCHEMA)
+        .field("string", Schema.STRING_SCHEMA)
+        .build();
+    Struct struct = new Struct(expectedSchema).put("int8", (byte) 12);
+    JsonSchemaDataConfig jsonSchemaDataConfig = new JsonSchemaDataConfig.Builder()
+        .with(JsonSchemaDataConfig.OBJECT_ADDITIONAL_PROPERTIES_CONFIG, false)
+        .build();
+    JsonSchemaData jsonSchemaData = new JsonSchemaData(jsonSchemaDataConfig);
+    checkNonObjectConversion(jsonSchemaData, expectedSchema, struct, schema, obj);
+  }
+
+  @Test
   public void testToConnectRecordWithOptionalAndRequired() {
     NumberSchema numberSchema = NumberSchema.builder()
         .requiresInteger(true)
