@@ -54,6 +54,17 @@
             <groupId>org.apache.kafka</groupId>
             <artifactId>connect-runtime</artifactId>
             <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>log4j</groupId>
+                    <artifactId>log4j</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>confluent-log4j</artifactId>
+            <version>${confluent-log4j.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
