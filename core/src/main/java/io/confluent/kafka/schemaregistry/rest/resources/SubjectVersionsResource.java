@@ -247,8 +247,9 @@ public class SubjectVersionsResource {
         @PathParam("subject") String subjectName,
       @ApiParam(value = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
-    log.info("Registering new schema: subject {}, version {}, id {}, type {}",
-             subjectName, request.getVersion(), request.getId(), request.getSchemaType());
+    log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
+             subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
+            request.getSchema() == null ? 0 : request.getSchema().length());
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
