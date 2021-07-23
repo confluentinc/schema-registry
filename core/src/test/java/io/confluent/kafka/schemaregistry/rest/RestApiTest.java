@@ -210,6 +210,37 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testRegisterDiffContext() throws Exception {
+    List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    String subject = "testSubject";
+    String avroSchema = avroSchemas.get(0);
+
+    int id1 = restApp.restClient.registerSchema(avroSchema, subject);
+    assertEquals("1st schema registered in first context should have id 1", 1,
+        id1);
+
+    String subject2 = ":.ctx:testSubject";
+    String avroSchema2 = avroSchemas.get(1);
+
+    int id2 = restApp.restClient.registerSchema(avroSchema2, subject2);
+    assertEquals("2nd schema registered in second context should have id 1", 1,
+        id2);
+
+    List<String> subjects = restApp.restClient.getAllSubjects();
+    assertEquals(Collections.singletonList(subject), subjects);
+
+    List<Schema> schemas = restApp.restClient.getSchemas(null, false, false);
+    assertEquals(avroSchema, schemas.get(0).getSchema());
+
+    List<String> subjects2 = restApp.restClient.getAllSubjects(":.ctx:", false);
+    assertEquals(Collections.singletonList(subject2), subjects2);
+
+    List<Schema> schemas2 = restApp.restClient.getSchemas(":.ctx:", false, false);
+    assertEquals(avroSchema2, schemas2.get(0).getSchema());
+  }
+
+  @Test
   public void testImportDifferentSchemaOnSameID() throws Exception {
     String schema1 = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
