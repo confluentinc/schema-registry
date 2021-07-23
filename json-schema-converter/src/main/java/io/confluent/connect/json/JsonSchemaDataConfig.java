@@ -32,6 +32,11 @@ import org.apache.kafka.common.config.ConfigException;
 
 public class JsonSchemaDataConfig extends AbstractConfig {
 
+  public static final String OBJECT_ADDITIONAL_PROPERTIES_CONFIG = "object.additional.properties";
+  public static final boolean OBJECT_ADDITIONAL_PROPERTIES_DEFAULT = true;
+  public static final String OBJECT_ADDITIONAL_PROPERTIES_DOC =
+      "Whether to allow additional properties for object schemas.";
+
   public static final String USE_OPTIONAL_FOR_NON_REQUIRED_CONFIG = "use.optional.for.nonrequired";
   public static final boolean USE_OPTIONAL_FOR_NON_REQUIRED_DEFAULT = false;
   public static final String USE_OPTIONAL_FOR_NON_REQUIRED_DOC =
@@ -49,6 +54,12 @@ public class JsonSchemaDataConfig extends AbstractConfig {
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef().define(
+        OBJECT_ADDITIONAL_PROPERTIES_CONFIG,
+        ConfigDef.Type.BOOLEAN,
+        OBJECT_ADDITIONAL_PROPERTIES_DEFAULT,
+        ConfigDef.Importance.MEDIUM,
+        OBJECT_ADDITIONAL_PROPERTIES_DOC
+    ).define(
         USE_OPTIONAL_FOR_NON_REQUIRED_CONFIG,
         ConfigDef.Type.BOOLEAN,
         USE_OPTIONAL_FOR_NON_REQUIRED_DEFAULT,
@@ -73,6 +84,10 @@ public class JsonSchemaDataConfig extends AbstractConfig {
 
   public JsonSchemaDataConfig(Map<?, ?> props) {
     super(baseConfigDef(), props);
+  }
+
+  public boolean allowAdditionalProperties() {
+    return getBoolean(OBJECT_ADDITIONAL_PROPERTIES_CONFIG);
   }
 
   public boolean useOptionalForNonRequiredProperties() {

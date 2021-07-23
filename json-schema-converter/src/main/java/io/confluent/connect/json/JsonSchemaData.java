@@ -751,6 +751,9 @@ public class JsonSchemaData {
             }
             objectBuilder.addPropertySchema(field.name(), jsonSchema);
           }
+          if (!config.allowAdditionalProperties()) {
+            objectBuilder.additionalProperties(false);
+          }
           builder = objectBuilder;
         }
         break;
