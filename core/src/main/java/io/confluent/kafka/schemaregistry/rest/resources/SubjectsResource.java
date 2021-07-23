@@ -129,7 +129,7 @@ public class SubjectsResource {
   ) {
     try {
       return schemaRegistry.listSubjectsWithPrefix(
-          subjectPrefix != null? subjectPrefix : "", lookupDeletedSubjects);
+          subjectPrefix != null ? subjectPrefix : "", lookupDeletedSubjects);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {
