@@ -128,9 +128,8 @@ public class SubjectsResource {
           @QueryParam("deleted") boolean lookupDeletedSubjects
   ) {
     try {
-      return subjectPrefix == null || subjectPrefix.isEmpty()
-          ? schemaRegistry.listSubjects(lookupDeletedSubjects)
-          : schemaRegistry.listSubjectsWithPrefix(subjectPrefix, lookupDeletedSubjects);
+      return schemaRegistry.listSubjectsWithPrefix(
+          subjectPrefix != null? subjectPrefix : "", lookupDeletedSubjects);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {
