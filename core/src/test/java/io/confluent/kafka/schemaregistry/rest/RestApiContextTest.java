@@ -44,7 +44,6 @@ public class RestApiContextTest extends ClusterTestHarness {
     int schemasInSubject2 = 5;
     List<Integer> allVersionsInSubject2 = new ArrayList<Integer>();
     List<String> allSchemasInSubject2 = TestUtils.getRandomCanonicalAvroString(schemasInSubject2);
-    List<String> allSubjects = new ArrayList<String>();
 
     // test getAllVersions with no existing data
     try {
@@ -60,7 +59,7 @@ public class RestApiContextTest extends ClusterTestHarness {
 
     // test getAllSubjects with no existing data
     assertEquals("Getting all subjects should return empty",
-                 allSubjects,
+                 Collections.emptyList(),
                  restApp.restClient.getAllSubjects());
 
     // test registering and verifying new schemas in subject1
@@ -73,7 +72,6 @@ public class RestApiContextTest extends ClusterTestHarness {
       schemaIdCounter++;
       allVersionsInSubject1.add(expectedVersion);
     }
-    allSubjects.add(subject1);
 
     // test re-registering existing schemas
     for (int i = 0; i < schemasInSubject1; i++) {
@@ -96,7 +94,6 @@ public class RestApiContextTest extends ClusterTestHarness {
       schemaIdCounter++;
       allVersionsInSubject2.add(expectedVersion);
     }
-    allSubjects.add(subject2);
 
     // test getAllVersions with existing data
     assertEquals("Getting all versions from subject1 should match all registered versions",
@@ -117,8 +114,8 @@ public class RestApiContextTest extends ClusterTestHarness {
                  restApp.restClient.getAllSubjects(":.ctx2:", false));
 
     // test getAllSubjects with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
-                 allSubjects,
+    assertEquals("Getting all subjects should match no registered subjects",
+                 Collections.emptyList(),
                  restApp.restClient.getAllSubjects());
   }
 
