@@ -67,13 +67,17 @@
             <version>1.5.22</version>
         </dependency>
         <dependency>
-            <groupId>io.swagger.core.v3</groupId>
+            <groupId>io.swagger</groupId>
             <artifactId>swagger-core</artifactId>
-            <version>2.1.7</version>
+            <version>1.6.2</version>
             <exclusions>
                 <exclusion>
                     <groupId>javax.validation</groupId>
                     <artifactId>validation-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>guava</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
