@@ -25,7 +25,9 @@ import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
  * A utility class for Jackson.
  */
 public class Jackson {
-  private Jackson() { /* singleton */ }
+  private Jackson() {
+    /* singleton */
+  }
 
   /**
    * Creates a new {@link ObjectMapper}.

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,7 +48,9 @@ public final class MockSchemaRegistry {
   private static final Map<String, SchemaRegistryClient> SCOPED_CLIENTS = new HashMap<>();
 
   // Not instantiable. All access is via static methods.
-  private MockSchemaRegistry() { }
+  private MockSchemaRegistry() {
+
+  }
 
   /**
    * Get a client for a mocked Schema Registry. The {@code scope} represents a particular registry,
