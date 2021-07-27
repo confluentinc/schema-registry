@@ -671,8 +671,8 @@ public class ProtobufSchema implements ParsedSchema {
         fieldType = toMapEntry(field.getName());
         MessageDefinition.Builder mapMessage = MessageDefinition.newBuilder(fieldType);
         mapMessage.setMapEntry(true);
-        mapMessage.addField(null, keyType.getSimpleName(), KEY_FIELD, 1, null);
-        mapMessage.addField(null, valueType.getSimpleName(), VALUE_FIELD, 2, null);
+        mapMessage.addField(null, keyType.toString(), KEY_FIELD, 1, null);
+        mapMessage.addField(null, valueType.toString(), VALUE_FIELD, 2, null);
         message.addMessageDefinition(mapMessage.build());
       }
       message.addField(
