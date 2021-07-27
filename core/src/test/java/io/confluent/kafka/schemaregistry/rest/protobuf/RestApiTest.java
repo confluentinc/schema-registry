@@ -177,6 +177,46 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Registered schema should be found", 3, registeredSchema.getId().intValue());
   }
 
+  @Test
+  public void testSchemaReferencesPkg() throws Exception {
+    String msg1 = "syntax = \"proto3\";\n" +
+        "package pkg1;\n" +
+        "\n" +
+        "option go_package = \"pkg1pb\";\n" +
+        "option java_multiple_files = true;\n" +
+        "option java_outer_classname = \"Msg1Proto\";\n" +
+        "option java_package = \"com.pkg1\";\n" +
+        "\n" +
+        "message Message1 {\n" +
+        "  string s = 1;\n" +
+        "}\n";
+    String subject = "pkg1/msg1.proto";
+    registerAndVerifySchema(restApp.restClient, msg1, 1, subject);
+    subject = "pkg2/msg2.proto";
+    String msg2 = "syntax = \"proto3\";\n" +
+        "package pkg2;\n" +
+        "\n" +
+        "option go_package = \"pkg2pb\";\n" +
+        "option java_multiple_files = true;\n" +
+        "option java_outer_classname = \"Msg2Proto\";\n" +
+        "option java_package = \"com.pkg2\";\n" +
+        "\n" +
+        "import \"pkg1/msg1.proto\";\n" +
+        "\n" +
+        "message Message2 {\n" +
+        "  map<string, pkg1.Message1> map = 1;\n" +
+        "  pkg1.Message1 f2 = 2;\n" +
+        "}\n";
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(msg2);
+    request.setSchemaType(ProtobufSchema.TYPE);
+    SchemaReference meta = new SchemaReference("pkg1/msg1.proto", "pkg1/msg1.proto", 1);
+    List<SchemaReference> refs = Arrays.asList( meta);
+    request.setReferences(refs);
+    int registeredId = restApp.restClient.registerSchema(request, subject);
+    assertEquals("Registering a new schema should succeed", 2, registeredId);
+  }
+
   @Test(expected = RestClientException.class)
   public void testSchemaMissingReferences() throws Exception {
     Map<String, String> schemas = getProtobufSchemaWithDependencies();
