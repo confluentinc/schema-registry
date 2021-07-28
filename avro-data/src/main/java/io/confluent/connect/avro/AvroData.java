@@ -1866,7 +1866,7 @@ public class AvroData {
     Object connectDefault = schema.getObjectProp(CONNECT_DEFAULT_VALUE_PROP);
     if (fieldDefaultVal == null) {
       fieldDefaultVal = JacksonUtils.toJsonNode(connectDefault);
-    } else if (connectDefault == null) {
+    } else if (connectMetaData && connectDefault == null) {
       builder.parameter(AVRO_FIELD_DEFAULT_FLAG_PROP, "true");
     }
     if (fieldDefaultVal != null) {
