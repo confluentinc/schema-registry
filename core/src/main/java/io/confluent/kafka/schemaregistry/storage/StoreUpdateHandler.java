@@ -43,6 +43,13 @@ public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
   }
 
   /**
+   * Invoked before a batch of updates.
+   * @param count batch count
+   */
+  default void startBatch(int count) {
+  }
+
+  /**
    * Invoked before every new K,V pair written to the store
    *
    * @param key   Key associated with the data
@@ -69,13 +76,21 @@ public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
   void handleUpdate(K key, V value, V oldValue, TopicPartition tp, long offset, long timestamp);
 
   /**
-   * Invoked after a batch of updates.
+   * Retrieve the offsets to checkpoint.
    *
    * @param count batch count
    * @return the offsets to checkpoint, or null
    */
   default Map<TopicPartition, Long> checkpoint(int count) {
     return null;
+  }
+
+  /**
+   * Invoked after a batch of updates.
+   *
+   * @param count batch count
+   */
+  default void endBatch(int count) {
   }
 
   @Override
