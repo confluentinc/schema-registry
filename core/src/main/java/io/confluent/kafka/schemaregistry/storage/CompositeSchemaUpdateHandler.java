@@ -44,6 +44,13 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
     }
   }
 
+  @Override
+  public void startBatch(int count) {
+    for (SchemaUpdateHandler handler : handlers) {
+      handler.startBatch(count);
+    }
+  }
+
   /**
    * Invoked before every new K,V pair written to the store
    *
@@ -97,6 +104,13 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
       }
     }
     return result;
+  }
+
+  @Override
+  public void endBatch(int count) {
+    for (SchemaUpdateHandler handler : handlers) {
+      handler.endBatch(count);
+    }
   }
 
   @Override

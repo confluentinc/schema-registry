@@ -195,6 +195,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   public void doWork() {
     try {
       ConsumerRecords<byte[], byte[]> records = consumer.poll(Long.MAX_VALUE);
+      storeUpdateHandler.startBatch(records.count());
       for (ConsumerRecord<byte[], byte[]> record : records) {
         K messageKey = null;
         try {
@@ -289,6 +290,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           log.warn("Failed to flush", se);
         }
       }
+      storeUpdateHandler.endBatch(records.count());
     } catch (WakeupException we) {
       // do nothing because the thread is closing -- see shutdown()
     } catch (RecordTooLargeException rtle) {
