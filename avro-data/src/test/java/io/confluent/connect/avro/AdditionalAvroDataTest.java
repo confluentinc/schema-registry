@@ -332,4 +332,28 @@ public class AdditionalAvroDataTest
             outputAvroSchema.getField("anotherStringField").schema());
     }
 
+    @Test
+    public void testRepeatedTypeWithDefaultWithoutConnectMetaData() throws IOException {
+        AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+                .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 1)
+                .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+                .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+                .build();
+
+        avroData = new AvroData(avroDataConfig);
+
+        Schema avroSchema =
+                new Parser().parse(new File("src/test/avro/RepeatedTypeWithDefault.avsc"));
+
+        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
+        Assert.assertNull(connectSchema.field("stringField").schema().parameters());
+        Assert.assertFalse(connectSchema.field("enumFieldWithDiffDefault").schema().parameters().containsKey(
+                AvroData.AVRO_FIELD_DEFAULT_FLAG_PROP));
+
+        // will not guarantee lossless transform if turn off connect.meta.data
+        // since we cannot distinguish Enum default from field default, the Enum default will be drop
+        Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
+        Assert.assertEquals("B", outputAvroSchema.getField("enumFieldWithDiffDefault").defaultVal());
+        Assert.assertNull(outputAvroSchema.getField("enumFieldWithDiffDefault").schema().getEnumDefault());
+    }
 }
