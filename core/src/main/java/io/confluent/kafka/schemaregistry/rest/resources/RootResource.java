@@ -15,8 +15,11 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import java.util.HashMap;
-import java.util.Map;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 
 import javax.validation.Valid;
 import javax.ws.rs.Consumes;
@@ -24,15 +27,11 @@ import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-
-import io.confluent.kafka.schemaregistry.client.rest.Versions;
-
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import java.util.HashMap;
+import java.util.Map;
 
 
 @Path("/")
-@Api(value = "/")
 @Produces(
     {Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED, Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
      Versions.JSON_WEIGHTED})
@@ -41,21 +40,22 @@ import io.swagger.annotations.ApiOperation;
 public class RootResource {
 
   @GET
-  @ApiOperation(value = "Schema Registry Root Resource",
-      notes = "The Root resource is a no-op.",
-      response = Map.class)
+  @Operation(summary = "Schema Registry Root Resource",
+      description = "The Root resource is a no-op.",
+      responses = {@ApiResponse(content = @Content(schema = @Schema(implementation = Map.class)))})
   public Map<String, String> get() {
-    // Currently this just provides an endpoint that's a nop and can be used to check for
+    // Currently this just provides an endpoint that's a nop
+    //and can be used to check for
     // liveness and can be used for tests that need to test the server setup rather than the
     // functionality of a specific resource. Some APIs provide a listing of endpoints as their
     // root resource; it might be nice to provide that.
-    return new HashMap<String, String>();
+    return new HashMap<>();
   }
 
   @POST
   public Map<String, String> post(@Valid Map<String, String> request) {
     // This version allows testing with posted entities
-    return new HashMap<String, String>();
+    return new HashMap<>();
   }
 
 }

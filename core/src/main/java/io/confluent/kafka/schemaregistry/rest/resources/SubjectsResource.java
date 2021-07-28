@@ -15,22 +15,29 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
-import javax.ws.rs.DefaultValue;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.rest.annotations.PerformanceMetric;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -42,17 +49,9 @@ import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
-
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.client.rest.Versions;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.rest.annotations.PerformanceMetric;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Path("/subjects")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -73,21 +72,22 @@ public class SubjectsResource {
 
   @POST
   @Path("/{subject}")
-  @ApiOperation(value = "Check if a schema has already been registered under the specified subject."
+  @Operation(summary = "Check if a schema has already been registered under the specified subject."
       + " If so, this returns the schema string along with its globally unique identifier, its "
-      + "version under this subject and the subject name.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found\n"
+      + "version under this subject and the subject name.", responses = {
+      @ApiResponse(content = @Content(schema =
+      @io.swagger.v3.oas.annotations.media.Schema(implementation = Schema.class))),
+      @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40403 -- Schema not found"),
-      @ApiResponse(code = 500, message = "Internal server error", response = Schema.class),
+      @ApiResponse(responseCode = "500", description = "Internal server error")
   })
   @PerformanceMetric("subjects.get-schema")
   public void lookUpSchemaUnderSubject(
       final @Suspended AsyncResponse asyncResponse,
-      @ApiParam(value = "Subject under which the schema will be registered", required = true)
-        @PathParam("subject") String subject,
+      @Parameter(description = "Subject under which the schema will be registered", required = true)
+      @PathParam("subject") String subject,
       @QueryParam("deleted") boolean lookupDeletedSchema,
-      @ApiParam(value = "Schema", required = true)
+      @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Schema lookup under subject {}, deleted {}, type {}",
              subject, lookupDeletedSchema, request.getSchemaType());
@@ -100,7 +100,7 @@ public class SubjectsResource {
         request.getReferences(),
         request.getSchema()
     );
-    io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema = null;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
     try {
       if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
         throw Errors.subjectNotFoundException(subject);
@@ -119,13 +119,14 @@ public class SubjectsResource {
 
   @GET
   @Valid
-  @ApiOperation(value = "Get a list of registered subjects.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")})
+  @Operation(summary = "Get a list of registered subjects.", responses = {
+      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+          + "datastore")
+  })
   @PerformanceMetric("subjects.list")
   public Set<String> list(
-          @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
-          @QueryParam("deleted") boolean lookupDeletedSubjects
+      @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
+      @QueryParam("deleted") boolean lookupDeletedSubjects
   ) {
     try {
       return schemaRegistry.listSubjectsWithPrefix(
@@ -139,18 +140,20 @@ public class SubjectsResource {
 
   @DELETE
   @Path("/{subject}")
-  @ApiOperation(value = "Deletes the specified subject and its associated compatibility level if "
+  @Operation(summary = "Deletes the specified subject and its associated compatibility level if "
       + "registered. It is recommended to use this API only when a topic needs to be recycled or "
-      + "in development environment.", response = Integer.class, responseContainer = "List")
-  @ApiResponses(value = {
-      @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")
+      + "in development environment.", responses = {
+      @ApiResponse(content = @Content(array = @ArraySchema(schema =
+      @io.swagger.v3.oas.annotations.media.Schema(implementation = Integer.class)))),
+      @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
+      @ApiResponse(responseCode = "500",
+          description = "Error code 50001 -- Error in the backend datastore")
   })
   @PerformanceMetric("subjects.delete-subject")
   public void deleteSubject(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @ApiParam(value = "the name of the subject", required = true)
+      @Parameter(description = "the name of the subject", required = true)
       @PathParam("subject") String subject,
       @QueryParam("permanent") boolean permanentDelete) {
     log.info("Deleting subject {}", subject);

@@ -15,10 +15,22 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,18 +49,6 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import java.util.Locale;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.client.rest.Versions;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
-import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 
 @Path("/mode")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -70,19 +70,20 @@ public class ModeResource {
 
   @Path("/{subject}")
   @PUT
-  @ApiOperation(value = "Update mode for the specified subject.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 422, message = "Error code 42204 -- Invalid mode\n"
+  @Operation(summary = "Update mode for the specified subject.", responses = {
+      @ApiResponse(responseCode = "422", description = "Error code 42204 -- Invalid mode\n"
           + "Error code 42205 -- Operation not permitted"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
-          + "Error code 50003 -- Error while forwarding the request to the primary\n"
-          + "Error code 50004 -- Unknown leader")
+      @ApiResponse(responseCode = "500",
+          description = "Error code 50001 -- Error in the backend data store\n"
+              + "Error code 50003 -- Error while forwarding the request to the primary\n"
+              + "Error code 50004 -- Unknown leader")
   })
+
   public ModeUpdateRequest updateMode(
-      @ApiParam(value = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
       @Context HttpHeaders headers,
-      @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request
+      @Parameter(description = "Update Request", required = true) @NotNull ModeUpdateRequest request
   ) {
     io.confluent.kafka.schemaregistry.storage.Mode mode;
     try {
@@ -111,12 +112,13 @@ public class ModeResource {
 
   @Path("/{subject}")
   @GET
-  @ApiOperation(value = "Get mode for a subject.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 404, message = "Subject not found"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
+  @Operation(summary = "Get mode for a subject.", responses = {
+      @ApiResponse(responseCode = "404", description = "Subject not found"),
+      @ApiResponse(responseCode = "500",
+          description = "Error code 50001 -- Error in the backend data store")
+  })
   public Mode getMode(
-      @ApiParam(value = "Name of the Subject", required = true)
+      @Parameter(description = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
     try {
@@ -133,40 +135,45 @@ public class ModeResource {
   }
 
   @PUT
-  @ApiOperation(value = "Update global mode.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 422, message = "Error code 42204 -- Invalid mode\n"
+  @Operation(summary = "Update global mode.", responses = {
+      @ApiResponse(responseCode = "422", description = "Error code 42204 -- Invalid mode\n"
           + "Error code 42205 -- Operation not permitted"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
-          + "Error code 50003 -- Error while forwarding the request to the primary\n"
-          + "Error code 50004 -- Unknown leader")
+      @ApiResponse(responseCode = "500", description =
+          "Error code 50001 -- Error in the backend data store\n"
+              + "Error code 50003 -- Error while forwarding the request to the primary\n"
+              + "Error code 50004 -- Unknown leader")
   })
   public ModeUpdateRequest updateTopLevelMode(
       @Context HttpHeaders headers,
-      @ApiParam(value = "Update Request", required = true) @NotNull ModeUpdateRequest request) {
+      @Parameter(description = "Update Request", required = true)
+      @NotNull ModeUpdateRequest request) {
     return updateMode(null, headers, request);
   }
 
   @GET
-  @ApiOperation(value = "Get global mode.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
+  @Operation(summary = "Get global mode.", responses = {
+      @ApiResponse(responseCode = "500",
+          description = "Error code 50001 -- Error in the backend data store")
+  })
   public Mode getTopLevelMode() {
     return getMode(null, false);
   }
 
   @DELETE
   @Path("/{subject}")
-  @ApiOperation(value = "Deletes the specified subject-level mode and revert to "
-      + "the global default.", response = io.confluent.kafka.schemaregistry.storage.Mode.class)
-  @ApiResponses(value = {
-      @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")
+  @Operation(summary = "Deletes the specified subject-level mode and revert to "
+      + "the global default.", responses = {
+      @ApiResponse(content = @Content(
+          schema = @Schema(implementation = io.confluent.kafka.schemaregistry.storage.Mode.class))
+      ),
+      @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
+      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+          + "datastore")
   })
   public void deleteSubjectMode(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @ApiParam(value = "the name of the subject", required = true)
+      @Parameter(description = "the name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting mode for subject {}", subject);
     io.confluent.kafka.schemaregistry.storage.Mode deletedMode;

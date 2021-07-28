@@ -83,7 +83,7 @@
         <proto-google-common-protos.version>2.3.2</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
         <wire.version>3.6.0</wire.version>
-        <swagger.version>1.6.2</swagger.version>
+        <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.1.0-0</io.confluent.schema-registry.version>
     </properties>
 
@@ -189,12 +189,12 @@
                 <version>${podam.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.swagger</groupId>
+                <groupId>io.swagger.core.v3</groupId>
                 <artifactId>swagger-annotations</artifactId>
                 <version>${swagger.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.swagger</groupId>
+                <groupId>io.swagger.core.v3</groupId>
                 <artifactId>swagger-core</artifactId>
                 <version>${swagger.version}</version>
                 <exclusions>
