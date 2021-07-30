@@ -152,10 +152,11 @@ public class SubjectVersionsResource {
   @Path("/{version}/referencedby")
   @Operation(summary = "Get the schemas that reference the specified schema.", responses = {
       @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
-          + "Error code 40402 -- Version not found"), @ApiResponse(responseCode = "422",
-      description = "Error code 42202 -- Invalid version"), @ApiResponse(responseCode = "500",
-      description = "Error code 50001 -- Error in the backend data store"
-  )})
+          + "Error code 40402 -- Version not found"),
+      @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
+      @ApiResponse(responseCode = "500",
+          description = "Error code 50001 -- Error in the backend data store"
+      )})
   public List<Integer> getReferencedBy(
       @Parameter(description = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
@@ -243,17 +244,18 @@ public class SubjectVersionsResource {
       + "schema registration request will be forwarded to one of the instances designated as "
       + "the primary. If the primary is not available, the client will get an error code "
       + "indicating that the forwarding has failed.", responses = {
-      @ApiResponse(content = @Content(schema =
-      @io.swagger.v3.oas.annotations.media.Schema(implementation = RegisterSchemaResponse.class))),
-      @ApiResponse(responseCode = "409", description = "Incompatible schema"),
-      @ApiResponse(responseCode = "422", description = "Error code 42201 -- Invalid schema or "
+        @ApiResponse(content = @Content(schema =
+          @io.swagger.v3.oas.annotations.media.Schema(
+             implementation = RegisterSchemaResponse.class))),
+        @ApiResponse(responseCode = "409", description = "Incompatible schema"),
+        @ApiResponse(responseCode = "422", description = "Error code 42201 -- Invalid schema or "
           + "schema type"),
-      @ApiResponse(responseCode = "500", description =
+        @ApiResponse(responseCode = "500", description =
           "Error code 50001 -- Error in the backend data store\n"
               + "Error code 50002 -- Operation timed out\n"
               + "Error code 50003 -- Error while forwarding the request to the primary")
 
-  })
+      })
   public void register(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
@@ -316,14 +318,14 @@ public class SubjectVersionsResource {
       + "development environments or under extreme circumstances where-in, its required to delete "
       + "a previously registered schema for compatibility purposes or re-register previously "
       + "registered schema.", responses = {
-      @ApiResponse(content = @Content(schema =
-      @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class))),
-      @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
+        @ApiResponse(content = @Content(schema =
+          @io.swagger.v3.oas.annotations.media.Schema(implementation = int.class))),
+        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40402 -- Version not found"),
-      @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
-      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+        @ApiResponse(responseCode = "422", description = "Error code 42202 -- Invalid version"),
+        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "data store")
-  })
+      })
   public void deleteSchemaVersion(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,

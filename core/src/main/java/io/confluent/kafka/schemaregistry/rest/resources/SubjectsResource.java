@@ -75,12 +75,12 @@ public class SubjectsResource {
   @Operation(summary = "Check if a schema has already been registered under the specified subject."
       + " If so, this returns the schema string along with its globally unique identifier, its "
       + "version under this subject and the subject name.", responses = {
-      @ApiResponse(content = @Content(schema =
-      @io.swagger.v3.oas.annotations.media.Schema(implementation = Schema.class))),
-      @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
+        @ApiResponse(content = @Content(schema =
+          @io.swagger.v3.oas.annotations.media.Schema(implementation = Schema.class))),
+        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
           + "Error code 40403 -- Schema not found"),
-      @ApiResponse(responseCode = "500", description = "Internal server error")
-  })
+        @ApiResponse(responseCode = "500", description = "Internal server error")
+      })
   @PerformanceMetric("subjects.get-schema")
   public void lookUpSchemaUnderSubject(
       final @Suspended AsyncResponse asyncResponse,
@@ -143,12 +143,12 @@ public class SubjectsResource {
   @Operation(summary = "Deletes the specified subject and its associated compatibility level if "
       + "registered. It is recommended to use this API only when a topic needs to be recycled or "
       + "in development environment.", responses = {
-      @ApiResponse(content = @Content(array = @ArraySchema(schema =
-      @io.swagger.v3.oas.annotations.media.Schema(implementation = Integer.class)))),
-      @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
-      @ApiResponse(responseCode = "500",
+        @ApiResponse(content = @Content(array = @ArraySchema(schema =
+          @io.swagger.v3.oas.annotations.media.Schema(implementation = Integer.class)))),
+        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
+        @ApiResponse(responseCode = "500",
           description = "Error code 50001 -- Error in the backend datastore")
-  })
+      })
   @PerformanceMetric("subjects.delete-subject")
   public void deleteSubject(
       final @Suspended AsyncResponse asyncResponse,

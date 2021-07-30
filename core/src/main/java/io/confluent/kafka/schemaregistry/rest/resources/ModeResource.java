@@ -163,13 +163,13 @@ public class ModeResource {
   @Path("/{subject}")
   @Operation(summary = "Deletes the specified subject-level mode and revert to "
       + "the global default.", responses = {
-      @ApiResponse(content = @Content(
+        @ApiResponse(content = @Content(
           schema = @Schema(implementation = io.confluent.kafka.schemaregistry.storage.Mode.class))
-      ),
-      @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
-      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+          ),
+        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
+        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
           + "datastore")
-  })
+      })
   public void deleteSubjectMode(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,

@@ -48,7 +48,7 @@ public class ServerMetadataResource {
   @GET
   @Path("/id")
   @Operation(summary = "Get the server metadata", responses = {
-          @ApiResponse(responseCode = "500",
+      @ApiResponse(responseCode = "500",
                        description = "Error code 50001 -- Error in the backend data store\n")
   })
   @PerformanceMetric("metadata.id")
