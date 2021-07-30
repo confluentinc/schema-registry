@@ -15,14 +15,24 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Map;
 
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
@@ -37,18 +47,7 @@ import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
-
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.client.rest.Versions;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
-import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import java.util.Map;
 
 @Path("/config")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -70,17 +69,19 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @PUT
-  @ApiOperation(value = "Update compatibility level for the specified subject.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 422, message = "Error code 42203 -- Invalid compatibility level\n"
-          + "Error code 40402 -- Version not found"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
-          + "Error code 50003 -- Error while forwarding the request to the primary")
+  @Operation(summary = "Update compatibility level for the specified subject.", responses = {
+      @ApiResponse(responseCode = "422", description =
+          "Error code 42203 -- Invalid compatibility level\n"
+              + "Error code 40402 -- Version not found"),
+      @ApiResponse(responseCode = "500", description =
+          "Error code 50001 -- Error in the backend data store\n"
+              + "Error code 50003 -- Error while forwarding the request to the primary")
   })
   public ConfigUpdateRequest updateSubjectLevelConfig(
-      @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
+      @Parameter(description = "Name of the Subject", required = true)
+      @PathParam("subject") String subject,
       @Context HttpHeaders headers,
-      @ApiParam(value = "Config Update Request", required = true)
+      @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
@@ -107,14 +108,15 @@ public class ConfigResource {
 
   @Path("/{subject}")
   @GET
-  @ApiOperation(value = "Get compatibility level for a subject.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 404, message = "Subject not found"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store")})
+  @Operation(summary = "Get compatibility level for a subject.", responses = {
+      @ApiResponse(responseCode = "404", description = "Subject not found"),
+      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+          + "data store")
+  })
   public Config getSubjectLevelConfig(
       @PathParam("subject") String subject,
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
-    Config config = null;
+    Config config;
     try {
       CompatibilityLevel compatibilityLevel =
           defaultToGlobal
@@ -133,15 +135,16 @@ public class ConfigResource {
   }
 
   @PUT
-  @ApiOperation(value = "Update global compatibility level.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 422, message = "Error code 42203 -- Invalid compatibility level"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n"
-          + "Error code 50003 -- Error while forwarding the request to the primary\n")
+  @Operation(summary = "Update global compatibility level.", responses = {
+      @ApiResponse(responseCode = "422", description = "Error code 42203 -- Invalid compatibility"
+          + " level"),
+      @ApiResponse(responseCode = "500", description =
+          "Error code 50001 -- Error in the backend data store\n"
+              + "Error code 50003 -- Error while forwarding the request to the primary\n")
   })
   public ConfigUpdateRequest updateTopLevelConfig(
       @Context HttpHeaders headers,
-      @ApiParam(value = "Config Update Request", required = true)
+      @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
@@ -167,12 +170,12 @@ public class ConfigResource {
   }
 
   @GET
-  @ApiOperation(value = "Get global compatibility level.")
-  @ApiResponses(value = {@ApiResponse(code = 500,
-      message = "Error code 50001 -- Error in the backend data store")}
-  )
+  @Operation(summary = "Get global compatibility level.", responses = {
+      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+          + "data store")
+  })
   public Config getTopLevelConfig() {
-    Config config = null;
+    Config config;
     try {
       CompatibilityLevel compatibilityLevel = schemaRegistry.getCompatibilityLevel(null);
       config = new Config(compatibilityLevel == null ? null : compatibilityLevel.name);
@@ -184,16 +187,18 @@ public class ConfigResource {
 
   @DELETE
   @Path("/{subject}")
-  @ApiOperation(value = "Deletes the specified subject-level compatibility level config and "
-      + "revert to the global default.", response = CompatibilityLevel.class)
-  @ApiResponses(value = {
-      @ApiResponse(code = 404, message = "Error code 40401 -- Subject not found"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")
-  })
+  @Operation(summary = "Deletes the specified subject-level compatibility level config and "
+      + "revert to the global default.", responses = {
+        @ApiResponse(content = @Content(
+            schema = @Schema(implementation = CompatibilityLevel.class))),
+        @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found"),
+        @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+          + "datastore")
+      })
   public void deleteSubjectConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
-      @ApiParam(value = "the name of the subject", required = true)
+      @Parameter(description = "the name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting compatibility setting for subject {}", subject);
     Config deletedConfig;
