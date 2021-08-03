@@ -1165,10 +1165,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private CloseableIterator<SchemaRegistryValue> allContexts() throws SchemaRegistryException {
     try {
-      ContextKey key1 = new ContextKey(
-              String.valueOf(Character.MIN_VALUE), String.valueOf(Character.MIN_VALUE));
-      ContextKey key2 = new ContextKey(
-              String.valueOf(Character.MAX_VALUE), String.valueOf(Character.MAX_VALUE));
+      ContextKey key1 = new ContextKey(tenant(), String.valueOf(Character.MIN_VALUE));
+      ContextKey key2 = new ContextKey(tenant(), String.valueOf(Character.MAX_VALUE));
       return kafkaStore.getAll(key1, key2);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
