@@ -64,6 +64,7 @@
         <podam.version>6.0.2.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
+        <commons.compress.version>1.21</commons.compress.version>
     </properties>
 
     <repositories>
@@ -80,6 +81,17 @@
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro</artifactId>
                 <version>${avro.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.apache.commons</groupId>
+                        <artifactId>commons-compress</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>${commons.compress.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>
