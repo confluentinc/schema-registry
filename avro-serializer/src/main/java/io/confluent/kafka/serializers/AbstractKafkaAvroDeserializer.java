@@ -132,7 +132,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaAvroSer
    *
    * @param payload the serialized data
    * @return a GenericContainer with the schema and data, either as a {@link NonRecordContainer},
-   * {@link org.apache.avro.generic.GenericRecord}, or {@link SpecificRecord}
+   *     {@link org.apache.avro.generic.GenericRecord}, or {@link SpecificRecord}
    */
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
       String topic, boolean isKey, byte[] payload)
