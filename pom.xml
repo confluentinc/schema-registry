@@ -81,6 +81,7 @@
         <wire.version>3.6.0</wire.version>
         <swagger.version>1.6.2</swagger.version>
         <spotbugs.plugin.version>4.0.0</spotbugs.plugin.version>
+        <commons.compress.version>1.21</commons.compress.version>
     </properties>
 
     <repositories>
@@ -101,6 +102,11 @@
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro</artifactId>
                 <version>${avro.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>${commons.compress.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>
