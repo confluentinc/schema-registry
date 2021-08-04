@@ -19,15 +19,15 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 
 import java.util.Comparator;
 
-public class SchemaKeyComparator<K> implements Comparator<K> {
+public class SubjectKeyComparator<K> implements Comparator<K> {
 
   private final LookupCache<K, ?> lookupCache;
 
-  public SchemaKeyComparator() {
+  public SubjectKeyComparator() {
     this.lookupCache = null;
   }
 
-  public SchemaKeyComparator(LookupCache<K, ?> lookupCache) {
+  public SubjectKeyComparator(LookupCache<K, ?> lookupCache) {
     this.lookupCache = lookupCache;
   }
 

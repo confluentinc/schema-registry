@@ -51,7 +51,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final Map<String, Map<String, Map<SchemaKey, Set<Integer>>>> referencedBy;
 
   public InMemoryCache(Serializer<K, V> serializer) {
-    this.store = new ConcurrentSkipListMap<>(new SchemaKeyComparator<>(this));
+    this.store = new ConcurrentSkipListMap<>(new SubjectKeyComparator<>(this));
     this.guidToSubjectVersions = new ConcurrentHashMap<>();
     this.hashToGuid = new ConcurrentHashMap<>();
     this.referencedBy = new ConcurrentHashMap<>();
