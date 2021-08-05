@@ -102,8 +102,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public static final int MAX_VERSION = Integer.MAX_VALUE;
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
 
-  private static final long DESCRIBE_CLUSTER_TIMEOUT_MS = 10000L;
-
   private final SchemaRegistryConfig config;
   private final Map<String, Object> props;
   private final LoadingCache<RawSchema, ParsedSchema> schemaCache;
@@ -1319,7 +1317,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       return adminClient
               .describeCluster()
               .clusterId()
-              .get(DESCRIBE_CLUSTER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+              .get(initTimeout, TimeUnit.MILLISECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       throw new SchemaRegistryException("Failed to get Kafka cluster ID", e);
     }
