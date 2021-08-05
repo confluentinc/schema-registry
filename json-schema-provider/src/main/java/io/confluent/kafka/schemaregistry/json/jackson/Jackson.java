@@ -31,7 +31,9 @@ import static com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKN
  * A utility class for Jackson.
  */
 public class Jackson {
-  private Jackson() { /* singleton */ }
+  private Jackson() {
+    /* singleton */
+  }
 
   /**
    * Creates a new {@link ObjectMapper}.
