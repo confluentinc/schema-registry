@@ -102,7 +102,7 @@ public class ProtobufConverter implements Converter {
       ), e);
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
-          String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
+          String.format("Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
       );
     }
   }
@@ -133,7 +133,7 @@ public class ProtobufConverter implements Converter {
       ), e);
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
-          String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
+          String.format("Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
       );
     }
   }
