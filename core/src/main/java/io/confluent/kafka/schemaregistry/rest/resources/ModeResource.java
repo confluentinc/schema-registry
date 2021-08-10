@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -85,6 +86,9 @@ public class ModeResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Update Request", required = true) @NotNull ModeUpdateRequest request
   ) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     io.confluent.kafka.schemaregistry.storage.Mode mode;
     try {
       mode = Enum.valueOf(io.confluent.kafka.schemaregistry.storage.Mode.class,
@@ -121,6 +125,9 @@ public class ModeResource {
       @Parameter(description = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     try {
       io.confluent.kafka.schemaregistry.storage.Mode mode = defaultToGlobal
           ? schemaRegistry.getModeInScope(subject)
@@ -176,6 +183,9 @@ public class ModeResource {
       @Parameter(description = "the name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting mode for subject {}", subject);
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     io.confluent.kafka.schemaregistry.storage.Mode deletedMode;
     Mode deleteModeResponse;
     try {

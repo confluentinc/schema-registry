@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -107,7 +108,10 @@ public class CompatibilityResource {
     log.info("Testing schema subject {} compatibility between existing version {} and "
              + "specified version {}, id {}, type {}",
              subject, version, request.getVersion(), request.getId(), request.getSchemaType());
-    // returns true if posted schema is compatible with the specified version. "latest" is 
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
+    // returns true if posted schema is compatible with the specified version. "latest" is
     // a special version
     List<String> errorMessages;
     VersionId versionId = parseVersionId(version);
@@ -193,6 +197,9 @@ public class CompatibilityResource {
       @QueryParam("verbose") boolean verbose) {
     log.info("Testing schema subject {} compatibility with specified version {}, id {}, type {}",
         subject, request.getVersion(), request.getId(), request.getSchemaType());
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     // returns true if posted schema is compatible with the specified subject.
     List<String> errorMessages;
     List<Schema> previousSchemas = new ArrayList<>();

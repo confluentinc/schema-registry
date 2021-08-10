@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -91,6 +92,9 @@ public class SubjectsResource {
       @NotNull RegisterSchemaRequest request) {
     log.info("Schema lookup under subject {}, deleted {}, type {}",
              subject, lookupDeletedSchema, request.getSchemaType());
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     // returns version if the schema exists. Otherwise returns 404
     Schema schema = new Schema(
         subject,
@@ -157,6 +161,9 @@ public class SubjectsResource {
       @PathParam("subject") String subject,
       @QueryParam("permanent") boolean permanentDelete) {
     log.info("Deleting subject {}", subject);
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     List<Integer> deletedVersions;
     try {
       if (!schemaRegistry.hasSubjects(subject, true)) {

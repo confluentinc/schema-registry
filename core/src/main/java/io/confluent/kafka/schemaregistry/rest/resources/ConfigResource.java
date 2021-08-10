@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -88,6 +89,9 @@ public class ConfigResource {
     if (compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
@@ -116,6 +120,9 @@ public class ConfigResource {
   public Config getSubjectLevelConfig(
       @PathParam("subject") String subject,
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     Config config;
     try {
       CompatibilityLevel compatibilityLevel =
@@ -201,6 +208,9 @@ public class ConfigResource {
       @Parameter(description = "the name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting compatibility setting for subject {}", subject);
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     Config deletedConfig;
     try {
       CompatibilityLevel currentCompatibility = schemaRegistry.getCompatibilityLevel(subject);
