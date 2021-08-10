@@ -31,8 +31,6 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static final String CONTEXT_PREFIX = CONTEXT_DELIMITER + CONTEXT_SEPARATOR;
 
-  private static final String WILDCARD = "*";
-
   private final String tenant;
   private final String context;
   private final String subject;
@@ -66,8 +64,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
       }
     } else {
       context = DEFAULT_CONTEXT;
-      // check for wildcard for backward compatibility
-      subject = WILDCARD.equals(contextSubject) ? "" : contextSubject;
+      subject = contextSubject;
     }
 
     this.tenant = tenant;
@@ -143,6 +140,18 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   public static String contextFor(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     return qs != null ? qs.getContext() : DEFAULT_CONTEXT;
+  }
+
+  /**
+   * Normalizes the given qualified subject name.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the qualified subject name
+   * @return the normalized subject name
+   */
+  public static String normalize(String tenant, String qualifiedSubject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    return qs != null ? qs.toQualifiedSubject() : "";
   }
 
   @Override

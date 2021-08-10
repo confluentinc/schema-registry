@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
@@ -87,6 +88,9 @@ public class ConfigResource {
     if (compatibilityLevel == null) {
       throw new RestInvalidCompatibilityException();
     }
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
@@ -114,6 +118,9 @@ public class ConfigResource {
   public Config getSubjectLevelConfig(
       @PathParam("subject") String subject,
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     Config config = null;
     try {
       CompatibilityLevel compatibilityLevel =
@@ -196,6 +203,9 @@ public class ConfigResource {
       @ApiParam(value = "the name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.info("Deleting compatibility setting for subject {}", subject);
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     Config deletedConfig;
     try {
       CompatibilityLevel currentCompatibility = schemaRegistry.getCompatibilityLevel(subject);

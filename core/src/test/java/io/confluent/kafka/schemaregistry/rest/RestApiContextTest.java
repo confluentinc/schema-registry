@@ -210,6 +210,9 @@ public class RestApiContextTest extends ClusterTestHarness {
     assertEquals("Getting all versions from subject3 should match all registered versions",
         allVersionsInSubject3,
         noCtxRestClient3.getAllVersions(subject3));
+    assertEquals("Getting all versions from subject3 should match all registered versions",
+        allVersionsInSubject3,
+        noCtxRestClient3.getAllVersions(":.:" + subject3));
 
     // test getAllSubjects with existing data
     assertEquals("Getting all subjects should match all registered subjects",

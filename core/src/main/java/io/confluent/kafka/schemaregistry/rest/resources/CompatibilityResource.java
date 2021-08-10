@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
@@ -101,7 +102,10 @@ public class CompatibilityResource {
     log.info("Testing schema subject {} compatibility between existing version {} and "
              + "specified version {}, id {}, type {}",
              subject, version, request.getVersion(), request.getId(), request.getSchemaType());
-    // returns true if posted schema is compatible with the specified version. "latest" is 
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
+    // returns true if posted schema is compatible with the specified version. "latest" is
     // a special version
     List<String> errorMessages;
     VersionId versionId = parseVersionId(version);
@@ -180,6 +184,9 @@ public class CompatibilityResource {
       @QueryParam("verbose") boolean verbose) {
     log.info("Testing schema subject {} compatibility with specified version {}, id {}, type {}",
         subject, request.getVersion(), request.getId(), request.getSchemaType());
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     // returns true if posted schema is compatible with the specified subject.
     List<String> errorMessages;
     List<Schema> previousSchemas = new ArrayList<>();
