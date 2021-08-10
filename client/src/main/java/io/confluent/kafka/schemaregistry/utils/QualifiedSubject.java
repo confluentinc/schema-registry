@@ -151,7 +151,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
    */
   public static String normalize(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
-    return qs != null ? qs.toQualifiedSubject() : "";
+    return qs != null ? qs.toQualifiedSubject() : null;
   }
 
   @Override
