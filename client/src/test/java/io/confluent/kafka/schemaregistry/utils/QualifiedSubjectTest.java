@@ -127,7 +127,7 @@ public class QualifiedSubjectTest {
     QualifiedSubject qs = new QualifiedSubject("tenant1", "tenant1_*");
     assertEquals("tenant1", qs.getTenant());
     assertEquals(DEFAULT_CONTEXT, qs.getContext());
-    assertEquals("", qs.getSubject());
+    assertEquals("*", qs.getSubject());
   }
 
   @Test

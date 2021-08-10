@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
@@ -100,6 +101,9 @@ public class SubjectVersionsResource {
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version,
       @QueryParam("deleted") boolean lookupDeletedSchema) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
@@ -153,6 +157,9 @@ public class SubjectVersionsResource {
   public List<Integer> getReferencedBy(
       @ApiParam(value = "Name of the Subject", required = true)@PathParam("subject") String subject,
       @ApiParam(value = VERSION_PARAM_DESC, required = true)@PathParam("version") String version) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
@@ -186,6 +193,9 @@ public class SubjectVersionsResource {
       @ApiParam(value = "Name of the Subject", required = true)
         @PathParam("subject") String subject,
       @QueryParam("deleted") boolean lookupDeletedSchema) {
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     // check if subject exists. If not, throw 404
     Iterator<Schema> allSchemasForThisTopic = null;
     List<Integer> allVersions = new ArrayList<Integer>();
@@ -250,6 +260,8 @@ public class SubjectVersionsResource {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
+
+    subjectName = QualifiedSubject.normalize(schemaRegistry.tenant(), subjectName);
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
@@ -316,6 +328,9 @@ public class SubjectVersionsResource {
         @PathParam("version") String version,
       @QueryParam("permanent") boolean permanentDelete) {
     log.info("Deleting schema version {} from subject {}", version, subject);
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     VersionId versionId = null;
     try {
       versionId = new VersionId(version);
