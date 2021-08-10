@@ -121,7 +121,7 @@ public class ContextFilter implements ContainerRequestFilter {
     if (!context.startsWith(".")) {
       context = "." + context;
     }
-    return CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
+    return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
   private void replaceQueryParams(
