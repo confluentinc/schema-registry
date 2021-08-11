@@ -22,6 +22,7 @@ import java.io.IOException;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_SEPARATOR;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 @PreMatching
@@ -84,7 +85,7 @@ public class ContextFilter implements ContainerRequestFilter {
       }
 
       if (subjectPathFound) {
-        if (!uriPathStr.startsWith(CONTEXT_PREFIX)) {
+        if (!uriPathStr.startsWith(CONTEXT_PREFIX) && !uriPathStr.startsWith(CONTEXT_WILDCARD)) {
           modifiedUriPathStr = formattedContext(context) + uriPathStr;
         }
 
@@ -159,7 +160,9 @@ public class ContextFilter implements ContainerRequestFilter {
       if (subject == null) {
         subject = "";
       }
-      subject = formattedContext(context) + subject;
+      if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
+        subject = formattedContext(context) + subject;
+      }
       builder.replaceQueryParam("subjectPrefix", subject);
     }
   }
