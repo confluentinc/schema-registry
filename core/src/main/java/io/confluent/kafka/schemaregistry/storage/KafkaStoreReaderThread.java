@@ -214,7 +214,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             } finally {
               offsetUpdateLock.unlock();
             }
-          } catch (StoreException se) {
+          } catch (Exception se) {
             log.error("Failed to add record from the Kafka topic"
                       + topic
                       + " the local store", se);
