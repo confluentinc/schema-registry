@@ -1,5 +1,6 @@
 package io.confluent.kafka.schemaregistry.utils;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 import static org.junit.Assert.assertEquals;
@@ -30,6 +31,15 @@ public class QualifiedSubjectTest {
     assertEquals("tenant1", qs.getTenant());
     assertEquals(".ctx1", qs.getContext());
     assertEquals("'sub''ject1'", qs.getSubject());
+  }
+
+  @Test
+  public void testContextWildcard() {
+    // Treated as a subject since a leading dot is required for the context
+    QualifiedSubject qs = new QualifiedSubject("tenant1", "tenant1_:*:");
+    assertEquals("tenant1", qs.getTenant());
+    assertEquals("*", qs.getContext());
+    assertEquals("", qs.getSubject());
   }
 
   @Test

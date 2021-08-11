@@ -92,6 +92,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaRegistry {
@@ -1364,8 +1367,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private CloseableIterator<SchemaRegistryValue> allVersions(
           String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
     try {
-      String start = subjectOrPrefix;
-      String end = isPrefix ? subjectOrPrefix + Character.MAX_VALUE : subjectOrPrefix;
+      String start;
+      String end;
+      int idx = subjectOrPrefix.indexOf(CONTEXT_WILDCARD);
+      if (idx >= 0) {
+        // Context wildcard match
+        String prefix = subjectOrPrefix.substring(0, idx);
+        start = prefix + CONTEXT_PREFIX + CONTEXT_DELIMITER;
+        end = prefix + CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER;
+      } else {
+        start = subjectOrPrefix;
+        end = isPrefix ? subjectOrPrefix + Character.MAX_VALUE : subjectOrPrefix;
+      }
       SchemaKey key1 = new SchemaKey(start, MIN_VERSION);
       SchemaKey key2 = new SchemaKey(end, MAX_VERSION);
       return kafkaStore.getAll(key1, key2);

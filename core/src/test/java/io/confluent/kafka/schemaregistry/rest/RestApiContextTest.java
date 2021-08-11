@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.rest;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -117,6 +118,16 @@ public class RestApiContextTest extends ClusterTestHarness {
     assertEquals("Getting all subjects should match no registered subjects",
                  Collections.emptyList(),
                  restApp.restClient.getAllSubjects());
+
+    // test getAllSubjectsWithPrefix with context wildcard
+    assertEquals("Getting all subjects should match all registered subjects",
+        ImmutableList.of(subject1, subject2),
+        restApp.restClient.getAllSubjects(":*:", false));
+
+    // test getSchemas with context wildcard
+    assertEquals("Getting all schemas should match all registered subjects",
+        schemasInSubject1 + schemasInSubject2,
+        restApp.restClient.getSchemas(":*:", false, false).size());
   }
 
   @Test
