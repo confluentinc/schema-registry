@@ -5,7 +5,9 @@
 package io.confluent.kafka.schemaregistry.rest.filters;
 
 import java.net.URI;
+import java.util.Collections;
 import javax.ws.rs.core.MultivaluedHashMap;
+import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.UriBuilder;
 import org.junit.Assert;
 import org.junit.Test;
@@ -86,6 +88,24 @@ public class ContextFilterTest {
     Assert.assertEquals(
         "Query param must change",
         "subject=:.test-ctx:",
+        uri.getQuery()
+    );
+  }
+
+  @Test
+  public void testWildcardContextUnmodified() {
+    String path = "/contexts/:.:/schemas/";
+    MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
+    queryParams.put("subjectPrefix", Collections.singletonList(":*:"));
+    URI uri = contextFilter.modifyUri(UriBuilder.fromPath(path), path, queryParams);
+    Assert.assertEquals(
+        "URI must not change",
+        "/schemas/",
+        uri.getPath()
+    );
+    Assert.assertEquals(
+        "Query param must not change",
+        "subjectPrefix=:*:",
         uri.getQuery()
     );
   }

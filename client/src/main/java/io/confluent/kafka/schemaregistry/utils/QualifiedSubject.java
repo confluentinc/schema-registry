@@ -31,6 +31,10 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static final String CONTEXT_PREFIX = CONTEXT_DELIMITER + CONTEXT_SEPARATOR;
 
+  public static final String WILDCARD = "*";
+
+  public static final String CONTEXT_WILDCARD = CONTEXT_DELIMITER + WILDCARD + CONTEXT_DELIMITER;
+
   private final String tenant;
   private final String context;
   private final String subject;
@@ -62,6 +66,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
         context = contextSubject.substring(1);      // skip CONTEXT_DELIMITER
         subject = "";
       }
+    } else if (contextSubject.startsWith(CONTEXT_WILDCARD)) {
+      context = WILDCARD;
+      subject = contextSubject.substring(CONTEXT_WILDCARD.length());
     } else {
       context = DEFAULT_CONTEXT;
       subject = contextSubject;
