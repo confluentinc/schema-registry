@@ -35,6 +35,26 @@ public class ContextFilterTest {
   }
 
   @Test
+  public void testSubjectPartOfUriDefaultContext() {
+    String path = "/contexts/:.:/subjects/test-subject/versions";
+    Assert.assertEquals(
+        "Subject must be prefixed",
+        "/subjects/test-subject/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testNoSubjectDefaultContext() {
+    String path = "/contexts/:.:/subjects";
+    Assert.assertEquals(
+        "Subject must be prefixed",
+        "/subjects/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
   public void testMissingLeadingDotInContext() {
     String path = "/contexts/test-ctx/subjects/test-subject/versions";
     Assert.assertEquals(
@@ -124,8 +144,18 @@ public class ContextFilterTest {
   public void testModeUriWithoutSubject() {
     String path = "/contexts/.test-ctx/mode";
     Assert.assertEquals(
-        "Wildcard must be prefixed",
+        "Mode must be prefixed",
         "/mode/:.test-ctx:/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testModeUriWithoutSubjectDefaultContext() {
+    String path = "/contexts/:.:/mode";
+    Assert.assertEquals(
+        "Mode must not be prefixed",
+        "/mode/",
         contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }

@@ -21,6 +21,7 @@ import java.io.IOException;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_SEPARATOR;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 @PreMatching
@@ -104,7 +105,10 @@ public class ContextFilter implements ContainerRequestFilter {
       }
     }
     if (configOrModeFound && subjectPathFound) {
-      modifiedPath.append(formattedContext(context)).append("/");
+      String formattedContext = formattedContext(context);
+      if (!formattedContext.isEmpty()) {
+        modifiedPath.append(formattedContext).append("/");
+      }
     } else if (contextPathFound) {
       // Must be a root contexts only
       modifiedPath.append("contexts").append("/");
@@ -118,8 +122,14 @@ public class ContextFilter implements ContainerRequestFilter {
   }
 
   private String formattedContext(String context) {
-    if (!context.startsWith(".")) {
-      context = "." + context;
+    if (context.startsWith(CONTEXT_DELIMITER)) {
+      context = context.substring(1);
+    }
+    if (context.endsWith(CONTEXT_DELIMITER)) {
+      context = context.substring(0, context.length() - 1);
+    }
+    if (!context.startsWith(CONTEXT_SEPARATOR)) {
+      context = CONTEXT_SEPARATOR + context;
     }
     return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
