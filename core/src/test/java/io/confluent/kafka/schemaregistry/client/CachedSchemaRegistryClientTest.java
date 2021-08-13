@@ -165,5 +165,40 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     ArrayList<Object> recordList = consume(consumer, topic, objects.length);
     assertArrayEquals(objects, recordList.toArray());
   }
+
+  @Test
+  public void testAvroProducerUsingContext() {
+    String topic = "testAvro";
+    IndexedRecord avroRecord = createAvroRecord();
+    Object[] objects = new Object[]{avroRecord};
+    Properties producerProps = createProducerProps();
+    producerProps.put(SCHEMA_REGISTRY_URL, restApp.restConnect + "/contexts/.ctx1" );
+    Producer<String, Object> producer = createProducer(producerProps);
+    produce(producer, topic, objects);
+
+    Properties consumerProps = createConsumerProps();
+    consumerProps.put(SCHEMA_REGISTRY_URL, restApp.restConnect + "/contexts/.ctx1" );
+    Consumer<String, Object> consumer = createConsumer(consumerProps);
+    ArrayList<Object> recordList = consume(consumer, topic, objects.length);
+    assertArrayEquals(objects, recordList.toArray());
+  }
+
+  @Test
+  public void testAvroNewProducerUsingContext() {
+    String topic = "testAvro";
+    IndexedRecord avroRecord = createAvroRecord();
+    Object[] objects = new Object[]
+        {avroRecord, true, 130, 345L, 1.23f, 2.34d, "abc", "def".getBytes()};
+    Properties producerProps = createNewProducerProps();
+    producerProps.put(SCHEMA_REGISTRY_URL, restApp.restConnect + "/contexts/.ctx1" );
+    KafkaProducer producer = createNewProducer(producerProps);
+    newProduce(producer, topic, objects);
+
+    Properties consumerProps = createConsumerProps();
+    consumerProps.put(SCHEMA_REGISTRY_URL, restApp.restConnect + "/contexts/.ctx1" );
+    Consumer<String, Object> consumer = createConsumer(consumerProps);
+    ArrayList<Object> recordList = consume(consumer, topic, objects.length);
+    assertArrayEquals(objects, recordList.toArray());
+  }
 }
 
