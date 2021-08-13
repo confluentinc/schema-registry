@@ -95,9 +95,11 @@ public class ContextFilterTest {
   @Test
   public void testWildcardContextUnmodified() {
     String path = "/contexts/:.:/schemas/";
+    UriBuilder uriBuilder = UriBuilder.fromPath(path);
+    uriBuilder.queryParam("subjectPrefix", ":*:");
     MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
     queryParams.put("subjectPrefix", Collections.singletonList(":*:"));
-    URI uri = contextFilter.modifyUri(UriBuilder.fromPath(path), path, queryParams);
+    URI uri = contextFilter.modifyUri(uriBuilder, path, queryParams);
     Assert.assertEquals(
         "URI must not change",
         "/schemas/",
