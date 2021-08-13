@@ -155,8 +155,8 @@ public class ContextFilter implements ContainerRequestFilter {
       }
       if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
         subject = formattedContext(context) + subject;
+        builder.replaceQueryParam("subject", subject);
       }
-      builder.replaceQueryParam("subject", subject);
     } else if (path.equals("schemas") || path.equals("subjects")) {
       String subject = queryParams.getFirst("subjectPrefix");
       if (subject == null) {
@@ -164,8 +164,8 @@ public class ContextFilter implements ContainerRequestFilter {
       }
       if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
         subject = formattedContext(context) + subject;
+        builder.replaceQueryParam("subjectPrefix", subject);
       }
-      builder.replaceQueryParam("subjectPrefix", subject);
     }
   }
 
