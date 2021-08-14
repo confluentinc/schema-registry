@@ -4,9 +4,14 @@
 
 package io.confluent.kafka.schemaregistry.rest.filters;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.rest.entities.ErrorMessage;
 import java.net.URI;
 import java.util.Objects;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +35,8 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_C
 public class ContextFilter implements ContainerRequestFilter {
   private static final Logger log = LoggerFactory.getLogger(ContextFilter.class);
 
+  private static final ObjectMapper MAPPER = new ObjectMapper();
+
   public ContextFilter() {
   }
 
@@ -38,11 +45,19 @@ public class ContextFilter implements ContainerRequestFilter {
 
     String path = requestContext.getUriInfo().getPath(false);
     if (path.startsWith("contexts/")) {
-      UriBuilder builder = requestContext.getUriInfo().getRequestUriBuilder();
-      MultivaluedMap<String, String> queryParams =
-          requestContext.getUriInfo().getQueryParameters(false);
-      URI uri = modifyUri(builder, path, queryParams);
-      requestContext.setRequestUri(uri);
+      try {
+        UriBuilder builder = requestContext.getUriInfo().getRequestUriBuilder();
+        MultivaluedMap<String, String> queryParams =
+            requestContext.getUriInfo().getQueryParameters(false);
+        URI uri = modifyUri(builder, path, queryParams);
+        requestContext.setRequestUri(uri);
+      } catch (IllegalArgumentException e) {
+        requestContext.abortWith(
+            Response.status(Status.BAD_REQUEST).entity(getErrorResponse(
+                Status.BAD_REQUEST, e.getMessage()))
+                .build()
+        );
+      }
     }
   }
 
@@ -132,6 +147,9 @@ public class ContextFilter implements ContainerRequestFilter {
     if (!context.startsWith(CONTEXT_SEPARATOR)) {
       context = CONTEXT_SEPARATOR + context;
     }
+    if (context.contains(CONTEXT_DELIMITER)) {
+      throw new IllegalArgumentException("Context name cannot contain a colon");
+    }
     return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
@@ -166,6 +184,18 @@ public class ContextFilter implements ContainerRequestFilter {
         subject = formattedContext(context) + subject;
         builder.replaceQueryParam("subjectPrefix", subject);
       }
+    }
+  }
+
+  public static String getErrorResponse(Response.Status status,
+      String message) {
+    try {
+      ErrorMessage errorMessage = new ErrorMessage(status.getStatusCode(),
+          message);
+      return MAPPER.writeValueAsString(errorMessage);
+    } catch (JsonProcessingException ex) {
+      log.error("Could not format response error message. {}", ex.toString());
+      return message;
     }
   }
 

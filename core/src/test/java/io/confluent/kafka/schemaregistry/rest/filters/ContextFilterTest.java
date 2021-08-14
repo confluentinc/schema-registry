@@ -192,4 +192,14 @@ public class ContextFilterTest {
     );
   }
 
+  @Test
+  public void testInvalidContext() {
+    String path = "/contexts/foo:bar/subjects";
+    Assert.assertThrows(
+        "Invalid context must be rejected",
+        IllegalArgumentException.class,
+        () -> contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
 }
