@@ -7,6 +7,7 @@ package io.confluent.kafka.schemaregistry.rest.filters;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.entities.ErrorMessage;
 import java.net.URI;
 import java.util.Objects;
@@ -101,7 +102,7 @@ public class ContextFilter implements ContainerRequestFilter {
 
       if (subjectPathFound) {
         if (!uriPathStr.startsWith(CONTEXT_PREFIX) && !uriPathStr.startsWith(CONTEXT_WILDCARD)) {
-          modifiedUriPathStr = formattedContext(context) + uriPathStr;
+          modifiedUriPathStr = QualifiedSubject.normalizeContext(context) + uriPathStr;
         }
 
         subjectPathFound = false;
@@ -121,9 +122,9 @@ public class ContextFilter implements ContainerRequestFilter {
       }
     }
     if (configOrModeFound && subjectPathFound) {
-      String formattedContext = formattedContext(context);
-      if (!formattedContext.isEmpty()) {
-        modifiedPath.append(formattedContext).append("/");
+      String normalizedContext = QualifiedSubject.normalizeContext(context);
+      if (!normalizedContext.isEmpty()) {
+        modifiedPath.append(normalizedContext).append("/");
       }
     } else if (contextPathFound) {
       // Must be a root contexts only
@@ -135,22 +136,6 @@ public class ContextFilter implements ContainerRequestFilter {
 
   private boolean isRootConfigOrMode(boolean isFirst, String uriPathStr) {
     return isFirst && (uriPathStr.equals("config") || uriPathStr.equals("mode"));
-  }
-
-  private String formattedContext(String context) {
-    if (context.startsWith(CONTEXT_DELIMITER)) {
-      context = context.substring(1);
-    }
-    if (context.endsWith(CONTEXT_DELIMITER)) {
-      context = context.substring(0, context.length() - 1);
-    }
-    if (!context.startsWith(CONTEXT_SEPARATOR)) {
-      context = CONTEXT_SEPARATOR + context;
-    }
-    if (context.contains(CONTEXT_DELIMITER)) {
-      throw new IllegalArgumentException("Context name cannot contain a colon");
-    }
-    return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
   private void replaceQueryParams(
@@ -172,7 +157,7 @@ public class ContextFilter implements ContainerRequestFilter {
         subject = "";
       }
       if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
-        subject = formattedContext(context) + subject;
+        subject = QualifiedSubject.normalizeContext(context) + subject;
         builder.replaceQueryParam("subject", subject);
       }
     } else if (path.equals("schemas") || path.equals("subjects")) {
@@ -181,7 +166,7 @@ public class ContextFilter implements ContainerRequestFilter {
         subject = "";
       }
       if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
-        subject = formattedContext(context) + subject;
+        subject = QualifiedSubject.normalizeContext(context) + subject;
         builder.replaceQueryParam("subjectPrefix", subject);
       }
     }
