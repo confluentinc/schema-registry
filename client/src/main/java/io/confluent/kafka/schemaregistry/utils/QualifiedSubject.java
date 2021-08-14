@@ -162,17 +162,20 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public static String normalizeContext(String context) {
+    if (context == null) {
+      return null;
+    }
     if (context.startsWith(CONTEXT_DELIMITER)) {
       context = context.substring(1);
     }
     if (context.endsWith(CONTEXT_DELIMITER)) {
       context = context.substring(0, context.length() - 1);
     }
-    if (!context.startsWith(CONTEXT_SEPARATOR)) {
-      context = CONTEXT_SEPARATOR + context;
-    }
     if (context.contains(CONTEXT_DELIMITER)) {
       throw new IllegalArgumentException("Context name cannot contain a colon");
+    }
+    if (!context.startsWith(CONTEXT_SEPARATOR)) {
+      context = CONTEXT_SEPARATOR + context;
     }
     return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
