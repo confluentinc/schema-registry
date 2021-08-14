@@ -80,9 +80,6 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public QualifiedSubject(String tenant, String context, String subject) {
-    if (context.contains(CONTEXT_DELIMITER)) {
-      throw new IllegalArgumentException("Context name cannot contain a colon");
-    }
     this.tenant = tenant != null ? tenant : DEFAULT_TENANT;
     this.context = context != null ? context : DEFAULT_CONTEXT;
     this.subject = subject != null ? subject : "";

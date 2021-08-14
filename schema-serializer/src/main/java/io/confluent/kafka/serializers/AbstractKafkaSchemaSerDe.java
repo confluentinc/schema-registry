@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.serializers;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_SEPARATOR;
+
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.Objects;
@@ -115,6 +118,12 @@ public abstract class AbstractKafkaSchemaSerDe {
   private String getContextName(String topic, String subject) {
     String contextName = contextNameStrategy.contextName(topic);
     if (contextName != null) {
+      if (!contextName.startsWith(CONTEXT_SEPARATOR)) {
+        throw new IllegalArgumentException("Context name must start with a dot");
+      }
+      if (contextName.contains(CONTEXT_DELIMITER)) {
+        throw new IllegalArgumentException("Context name cannot contain a colon");
+      }
       QualifiedSubject cs = new QualifiedSubject(null, contextName, subject);
       return cs.toQualifiedSubject();
     } else {
