@@ -16,9 +16,6 @@
 
 package io.confluent.kafka.serializers;
 
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_SEPARATOR;
-
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.Objects;
