@@ -122,7 +122,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public String toQualifiedContext() {
-    String qualifiedContext = context.equals(DEFAULT_CONTEXT)
+    String qualifiedContext = DEFAULT_CONTEXT.equals(context)
         ? ""
         : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
     if (DEFAULT_TENANT.equals(tenant)) {
@@ -159,6 +159,25 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   public static String normalize(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     return qs != null ? qs.toQualifiedSubject() : null;
+  }
+
+  public static String normalizeContext(String context) {
+    if (context == null) {
+      return null;
+    }
+    if (context.startsWith(CONTEXT_DELIMITER)) {
+      context = context.substring(1);
+    }
+    if (context.endsWith(CONTEXT_DELIMITER)) {
+      context = context.substring(0, context.length() - 1);
+    }
+    if (context.contains(CONTEXT_DELIMITER)) {
+      throw new IllegalArgumentException("Context name cannot contain a colon");
+    }
+    if (!context.startsWith(CONTEXT_SEPARATOR)) {
+      context = CONTEXT_SEPARATOR + context;
+    }
+    return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
   @Override

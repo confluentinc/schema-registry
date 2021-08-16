@@ -14,6 +14,7 @@
  */
 package io.confluent.kafka.schemaregistry.rest;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -57,6 +58,11 @@ public class RestApiContextTest extends ClusterTestHarness {
                    Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
                    rce.getErrorCode());
     }
+
+    // test getAllContexts
+    assertEquals("Getting all subjects should return default context",
+        Collections.singletonList(DEFAULT_CONTEXT),
+        restApp.restClient.getAllContexts());
 
     // test getAllSubjects with no existing data
     assertEquals("Getting all subjects should return empty",
@@ -103,6 +109,11 @@ public class RestApiContextTest extends ClusterTestHarness {
     assertEquals("Getting all versions from subject2 should match all registered versions",
                  allVersionsInSubject2,
                  restApp.restClient.getAllVersions(subject2));
+
+    // test getAllContexts
+    assertEquals("Getting all contexts should return all registered contexts",
+                 ImmutableList.of(DEFAULT_CONTEXT, ".ctx1", ".ctx2"),
+                 restApp.restClient.getAllContexts());
 
     // test getAllSubjectsWithPrefix with existing data
     assertEquals("Getting all subjects should match all registered subjects",
@@ -224,6 +235,11 @@ public class RestApiContextTest extends ClusterTestHarness {
     assertEquals("Getting all versions from subject3 should match all registered versions",
         allVersionsInSubject3,
         noCtxRestClient3.getAllVersions(":.:" + subject3));
+
+    // test getAllContexts
+    assertEquals("Getting all contexts should return all registered contexts",
+        ImmutableList.of(DEFAULT_CONTEXT, ".ctx1", ".ctx2"),
+        restClient1.getAllContexts());
 
     // test getAllSubjects with existing data
     assertEquals("Getting all subjects should match all registered subjects",
