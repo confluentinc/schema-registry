@@ -115,6 +115,7 @@ public abstract class AbstractKafkaSchemaSerDe {
   private String getContextName(String topic, String subject) {
     String contextName = contextNameStrategy.contextName(topic);
     if (contextName != null) {
+      contextName = QualifiedSubject.normalizeContext(contextName);
       QualifiedSubject cs = new QualifiedSubject(null, contextName, subject);
       return cs.toQualifiedSubject();
     } else {
