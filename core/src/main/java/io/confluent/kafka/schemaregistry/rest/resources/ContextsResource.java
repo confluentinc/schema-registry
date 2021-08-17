@@ -53,7 +53,7 @@ public class ContextsResource {
   @ApiResponses(value = {
       @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend datastore")})
   @PerformanceMetric("contexts.list")
-  public List<String> list() {
+  public List<String> listContexts() {
     try {
       return schemaRegistry.listContexts();
     } catch (SchemaRegistryStoreException e) {

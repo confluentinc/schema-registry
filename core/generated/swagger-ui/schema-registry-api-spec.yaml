@@ -327,7 +327,7 @@ paths:
     get:
       summary: "Get a list of contexts."
       description: ""
-      operationId: "list"
+      operationId: "listContexts"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
       - "application/vnd.schemaregistry+json"
