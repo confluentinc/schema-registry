@@ -44,6 +44,7 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.EN
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_NAME_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_REMOVED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_STRING_OR_BYTES_LABEL_CHANGED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.MESSAGE_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.MESSAGE_MOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.MESSAGE_REMOVED;
@@ -68,6 +69,7 @@ public class SchemaDiff {
     changes.add(FIELD_ADDED);
     changes.add(FIELD_REMOVED);
     changes.add(FIELD_NAME_CHANGED);
+    changes.add(FIELD_STRING_OR_BYTES_LABEL_CHANGED);
     changes.add(ONEOF_ADDED);
     changes.add(ONEOF_REMOVED);
     changes.add(ONEOF_FIELD_ADDED);
