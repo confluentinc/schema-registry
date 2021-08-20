@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
@@ -278,13 +277,13 @@ public class AvroDataTest {
     Schema union = SchemaBuilder.struct()
         .name(AVRO_TYPE_UNION)
         .field("sample",
-            SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE, "4").optional()
+            SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "4").optional()
                 .build())
         .field("other",
-            SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional()
+            SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional()
                 .build())
         .field("sameOther",
-            SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE, "6")
+            SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "6")
                 .optional().build())
         .build();
     Struct unionSample = new Struct(union).put("sample", ByteBuffer.wrap("foob".getBytes()));
@@ -1740,7 +1739,8 @@ public class AvroDataTest {
 
   @Test
   public void testToConnectFixed() {
-    Schema connectSchema = SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE, "4").build();
+    Schema connectSchema = SchemaBuilder.bytes().name("sample").parameter(
+        CONNECT_AVRO_FIXED_SIZE_PROP, "4").build();
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .fixed("sample").size(4);
     assertEquals(new SchemaAndValue(connectSchema, ByteBuffer.wrap("foob".getBytes())),
@@ -1764,9 +1764,12 @@ public class AvroDataTest {
             .endUnion();
     Schema unionConnectSchema = SchemaBuilder.struct()
             .name(AVRO_TYPE_UNION)
-            .field("sample", SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE, "4").optional().build())
-            .field("other", SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional().build())
-            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional().build())
+            .field("sample", SchemaBuilder.bytes().name("sample").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "4").optional().build())
+            .field("other", SchemaBuilder.bytes().name("other").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
+            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
             .build();
     GenericData.Fixed valueSample = new GenericData.Fixed(sampleSchema, "foob".getBytes());
     GenericData.Fixed valueOther = new GenericData.Fixed(otherSchema, "foobar".getBytes());
@@ -1801,9 +1804,12 @@ public class AvroDataTest {
             .endUnion();
     Schema unionConnectSchema = SchemaBuilder.struct()
             .name("io.confluent.connect.avro.Union")
-            .field("sample", SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE, "4").optional().build())
-            .field("other", SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional().build())
-            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional().build())
+            .field("sample", SchemaBuilder.bytes().name("sample").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "4").optional().build())
+            .field("other", SchemaBuilder.bytes().name("other").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
+            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
             .build();
     GenericData.Fixed valueSample = new GenericData.Fixed(sampleSchema, "foob".getBytes());
     GenericData.Fixed valueOther = new GenericData.Fixed(otherSchema, "foobar".getBytes());

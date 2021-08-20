@@ -263,7 +263,7 @@ public class AvroData {
   static final String AVRO_LOGICAL_DECIMAL = "decimal";
   static final String AVRO_LOGICAL_DECIMAL_SCALE_PROP = "scale";
   static final String AVRO_LOGICAL_DECIMAL_PRECISION_PROP = "precision";
-  static final String CONNECT_AVRO_FIXED_SIZE = "connect.fixed.size";
+  static final String CONNECT_AVRO_FIXED_SIZE_PROP = "connect.fixed.size";
   static final String CONNECT_AVRO_DECIMAL_PRECISION_PROP = "connect.decimal.precision";
   static final Integer CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT = 64;
 
@@ -481,14 +481,14 @@ public class AvroData {
           value = value instanceof byte[] ? ByteBuffer.wrap((byte[]) value) :
                                   (ByteBuffer) value;
           if (schema != null && isFixedSchema(schema)) {
-            int size = Integer.parseInt(schema.parameters().get(CONNECT_AVRO_FIXED_SIZE));
+            int size = Integer.parseInt(schema.parameters().get(CONNECT_AVRO_FIXED_SIZE_PROP));
             org.apache.avro.Schema fixedSchema = null;
             if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
               for (org.apache.avro.Schema memberSchema : avroSchema.getTypes()) {
                 if (memberSchema.getType() == org.apache.avro.Schema.Type.FIXED
                         && memberSchema.getFixedSize() == size
                         && unionMemberFieldName(memberSchema, enhancedSchemaSupport)
-                           .equals(schema.name())) {
+                           .equals(unionMemberFieldName(schema, enhancedSchemaSupport))) {
                   fixedSchema = memberSchema;
                 }
               }
@@ -835,9 +835,9 @@ public class AvroData {
       case BYTES:
         if (isFixedSchema(schema)) {
           baseSchema = org.apache.avro.SchemaBuilder.builder()
-                  .fixed(schema.name())
+                  .fixed(name)
                   .namespace(namespace)
-                  .size(Integer.parseInt(schema.parameters().get(CONNECT_AVRO_FIXED_SIZE)));
+                  .size(Integer.parseInt(schema.parameters().get(CONNECT_AVRO_FIXED_SIZE_PROP)));
         } else {
           baseSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
         }
@@ -1696,7 +1696,7 @@ public class AvroData {
           builder = SchemaBuilder.bytes();
         }
         if (schema.getType() == org.apache.avro.Schema.Type.FIXED) {
-          builder.parameter(CONNECT_AVRO_FIXED_SIZE, String.valueOf(schema.getFixedSize()));
+          builder.parameter(CONNECT_AVRO_FIXED_SIZE_PROP, String.valueOf(schema.getFixedSize()));
         }
         break;
       case DOUBLE:
@@ -2127,15 +2127,11 @@ public class AvroData {
   }
 
   private String unionMemberFieldName(Schema schema, boolean enhancedSchemaSupport) {
-    if (schema.type() == Schema.Type.STRUCT || isEnumSchema(schema)) {
+    if (schema.type() == Schema.Type.STRUCT || isEnumSchema(schema) || isFixedSchema(schema)) {
       if (enhancedSchemaSupport) {
         return scrubFullName(schema.name(), scrubInvalidNames);
       } else {
         return splitName(schema.name())[1];
-      }
-    } else {
-      if (isFixedSchema(schema)) {
-        return schema.name();
       }
     }
     return CONNECT_TYPES_TO_AVRO_TYPES.get(schema.type()).getName();
@@ -2151,7 +2147,7 @@ public class AvroData {
     return schema.type() == Schema.Type.BYTES
             && schema.name() != null
             && schema.parameters() != null
-            && schema.parameters().containsKey(CONNECT_AVRO_FIXED_SIZE);
+            && schema.parameters().containsKey(CONNECT_AVRO_FIXED_SIZE_PROP);
   }
 
   private boolean isInstanceOfAvroSchemaTypeForSimpleSchema(Schema fieldSchema,
@@ -2173,7 +2169,7 @@ public class AvroData {
       if (type.isInstance(value)) {
         if (isFixedSchema(fieldSchema)) {
           if (fixedValueSizeMatch(fieldSchema, value,
-              Integer.parseInt(fieldSchema.parameters().get(CONNECT_AVRO_FIXED_SIZE)),
+              Integer.parseInt(fieldSchema.parameters().get(CONNECT_AVRO_FIXED_SIZE_PROP)),
               enhancedSchemaSupport)) {
             return true;
           }
@@ -2198,7 +2194,7 @@ public class AvroData {
       return ((ByteBuffer)value).remaining() == size;
     } else if (value instanceof GenericFixed) {
       return unionMemberFieldName(((GenericFixed) value).getSchema(), enhancedSchemaSupport)
-              .equals(fieldSchema.name());
+              .equals(unionMemberFieldName(fieldSchema, enhancedSchemaSupport));
     } else {
       throw new DataException("Invalid class for fixed, expecting GenericFixed, byte[]"
               + " or ByteBuffer but found " + value.getClass());
