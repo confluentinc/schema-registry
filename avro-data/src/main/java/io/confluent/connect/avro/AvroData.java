@@ -512,7 +512,7 @@ public class AvroData {
           List<Object> converted = new ArrayList<>(list.size());
           Schema elementSchema = schema != null ? schema.valueSchema() : null;
           org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
-              schema, avroSchema);
+              schema, avroSchema, scrubInvalidNames);
           org.apache.avro.Schema elementAvroSchema =
               schema != null ? underlyingAvroSchema.getElementType() : ANYTHING_SCHEMA;
           for (Object val : list) {
@@ -541,7 +541,8 @@ public class AvroData {
               && !schema.keySchema().isOptional()) {
 
             // TODO most types don't need a new converted object since types pass through
-            underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
+            underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
+                schema, avroSchema, scrubInvalidNames);
             Map<String, Object> converted = new HashMap<>();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               // Key is a String, no conversion needed
@@ -608,7 +609,7 @@ public class AvroData {
                 enhancedSchemaSupport, scrubInvalidNames);
           } else {
             org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
-                schema, avroSchema);
+                schema, avroSchema, scrubInvalidNames);
             GenericRecordBuilder convertedBuilder = new GenericRecordBuilder(underlyingAvroSchema);
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name(), scrubInvalidNames);
@@ -658,8 +659,10 @@ public class AvroData {
   }
 
   private static boolean crossReferenceSchemaNames(final Schema schema,
-                                                   final org.apache.avro.Schema avroSchema) {
-    return Objects.equals(avroSchema.getFullName(), schema.name())
+                                                   final org.apache.avro.Schema avroSchema,
+                                                   final boolean scrubInvalidNames) {
+    String fullName = scrubFullName(schema.name(), scrubInvalidNames);
+    return Objects.equals(avroSchema.getFullName(), fullName)
         || Objects.equals(avroSchema.getType().getName(), schema.type().getName())
         || (schema.name() == null && avroSchema.getFullName().equals(DEFAULT_SCHEMA_FULL_NAME));
   }
@@ -669,14 +672,14 @@ public class AvroData {
    * Return the Avro schema of the actual type in the Union (instead of the union itself)
    */
   private static org.apache.avro.Schema avroSchemaForUnderlyingTypeIfOptional(
-      Schema schema, org.apache.avro.Schema avroSchema) {
+      Schema schema, org.apache.avro.Schema avroSchema, boolean scrubInvalidNames) {
 
     if (schema != null && schema.isOptional()) {
       if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
         for (org.apache.avro.Schema typeSchema : avroSchema
             .getTypes()) {
           if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL)
-              && crossReferenceSchemaNames(schema, typeSchema)) {
+              && crossReferenceSchemaNames(schema, typeSchema, scrubInvalidNames)) {
             return typeSchema;
           }
         }
@@ -1066,6 +1069,18 @@ public class AvroData {
     return finalSchema;
   }
 
+  private static String scrubFullName(String name, boolean scrubInvalidNames) {
+    if (!scrubInvalidNames) {
+      return name;
+    }
+    String[] split = splitName(name, scrubInvalidNames);
+    if (split[0] == null) {
+      return split[1];
+    } else {
+      return split[0] + "." + split[1];
+    }
+  }
+
   private String scrubName(String name) {
     return scrubName(name, scrubInvalidNames);
   }
@@ -1216,7 +1231,7 @@ public class AvroData {
           ObjectNode node = JsonNodeFactory.instance.objectNode();
           Struct struct = ((Struct) defaultVal);
           for (Field field : (schema.fields())) {
-            String fieldName = scrubName(field.name(), scrubInvalidNames);
+            String fieldName = scrubName(field.name());
             JsonNode fieldDef = defaultValueFromConnect(field.schema(), struct.get(field));
             node.put(fieldName, fieldDef);
           }
@@ -1542,8 +1557,9 @@ public class AvroData {
             Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
             Struct result = new Struct(schema);
             for (Field field : schema.fields()) {
+              String fieldName = scrubName(field.name());
               Object convertedFieldValue =
-                  toConnectData(field.schema(), original.get(field.name()), toConnectContext);
+                  toConnectData(field.schema(), original.get(fieldName), toConnectContext);
               result.put(field, convertedFieldValue);
             }
             return result;
@@ -1551,7 +1567,8 @@ public class AvroData {
             IndexedRecord original = (IndexedRecord) value;
             Struct result = new Struct(schema);
             for (Field field : schema.fields()) {
-              int avroFieldIndex = original.getSchema().getField(field.name()).pos();
+              String fieldName = scrubName(field.name());
+              int avroFieldIndex = original.getSchema().getField(fieldName).pos();
               Object convertedFieldValue =
                   toConnectData(field.schema(), original.get(avroFieldIndex), toConnectContext);
               result.put(field, convertedFieldValue);
@@ -2112,7 +2129,7 @@ public class AvroData {
   private String unionMemberFieldName(Schema schema, boolean enhancedSchemaSupport) {
     if (schema.type() == Schema.Type.STRUCT || isEnumSchema(schema)) {
       if (enhancedSchemaSupport) {
-        return schema.name();
+        return scrubFullName(schema.name(), scrubInvalidNames);
       } else {
         return splitName(schema.name())[1];
       }
@@ -2192,6 +2209,10 @@ public class AvroData {
    * Split a full dotted-syntax name into a namespace and a single-component name.
    */
   private String[] splitName(String fullName) {
+    return splitName(fullName, scrubInvalidNames);
+  }
+
+  private static String[] splitName(String fullName, boolean scrubInvalidNames) {
     String[] result = new String[2];
     int indexLastDot = fullName.lastIndexOf('.');
     if (indexLastDot >= 0) {
@@ -2201,7 +2222,7 @@ public class AvroData {
       result[0] = null;
       result[1] = fullName;
     }
-    result[1] = scrubName(result[1]);
+    result[1] = scrubName(result[1], scrubInvalidNames);
     return result;
   }
 
