@@ -25,9 +25,14 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 
 public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
+  public static final String FAIL_UNKNOWN_PROPERTIES = "json.fail.unknown.properties";
+  public static final boolean FAIL_UNKNOWN_PROPERTIES_DEFAULT = true;
+  public static final String FAIL_UNKNOWN_PROPERTIES_DOC = "Whether to fail serialization if "
+      + "unknown JSON properties are encountered";
+
   public static final String FAIL_INVALID_SCHEMA = "json.fail.invalid.schema";
   public static final boolean FAIL_INVALID_SCHEMA_DEFAULT = false;
-  public static final String FAIL_INVALID_SCHEMA_DOC = "Whether to fail deserialization if the "
+  public static final String FAIL_INVALID_SCHEMA_DOC = "Whether to fail serialization if the "
       + "payload does not match the schema";
 
   public static final String WRITE_DATES_AS_ISO8601 = "json.write.dates.iso8601";
@@ -54,7 +59,12 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   private static ConfigDef config;
 
   static {
-    config = baseConfigDef().define(FAIL_INVALID_SCHEMA,
+    config = baseConfigDef().define(FAIL_UNKNOWN_PROPERTIES,
+        ConfigDef.Type.BOOLEAN,
+        FAIL_UNKNOWN_PROPERTIES_DEFAULT,
+        ConfigDef.Importance.LOW,
+        FAIL_UNKNOWN_PROPERTIES_DOC
+    ).define(FAIL_INVALID_SCHEMA,
         ConfigDef.Type.BOOLEAN,
         FAIL_INVALID_SCHEMA_DEFAULT,
         ConfigDef.Importance.MEDIUM,

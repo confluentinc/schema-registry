@@ -280,6 +280,17 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testSchemaWithAdditionalProperties() throws Exception {
+    TestObj testObj = new TestObj();
+    String actual =
+        JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_7, false, false, null).toString();
+    String expected = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\","
+        + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":true,"
+        + "\"properties\":{\"prop\":{\"type\":\"string\"}}}";
+    assertEquals(expected, actual);
+  }
+
+  @Test
   public void testEnvelopeWithReferences() throws Exception {
     Map<String, String> schemas = getJsonSchemaWithReferences();
     SchemaReference ref = new SchemaReference("ref.json", "reference", 1);
