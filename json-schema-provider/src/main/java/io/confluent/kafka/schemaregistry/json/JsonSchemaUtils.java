@@ -118,6 +118,26 @@ public class JsonSchemaUtils {
       Object object,
       SpecificationVersion specVersion,
       boolean useOneofForNullables,
+      boolean failUnknownProperties,
+      SchemaRegistryClient client) throws IOException {
+    return getSchema(object, specVersion, useOneofForNullables,
+        failUnknownProperties, jsonMapper, client);
+  }
+
+  public static JsonSchema getSchema(
+      Object object,
+      SpecificationVersion specVersion,
+      boolean useOneofForNullables,
+      ObjectMapper objectMapper,
+      SchemaRegistryClient client) throws IOException {
+    return getSchema(object, specVersion, useOneofForNullables, true, objectMapper, client);
+  }
+
+  public static JsonSchema getSchema(
+      Object object,
+      SpecificationVersion specVersion,
+      boolean useOneofForNullables,
+      boolean failUnknownProperties,
       ObjectMapper objectMapper,
       SchemaRegistryClient client) throws IOException {
     if (object == null) {
@@ -147,7 +167,7 @@ public class JsonSchemaUtils {
                         + " with refs " + references));
       }
     }
-    JsonSchemaConfig config = getConfig(useOneofForNullables);
+    JsonSchemaConfig config = getConfig(useOneofForNullables, failUnknownProperties);
     JsonSchemaDraft draft;
     switch (specVersion) {
       case DRAFT_4:
@@ -193,31 +213,28 @@ public class JsonSchemaUtils {
     return new JsonSchema(schemaNode, references, resolvedReferences, null);
   }
 
-  private static JsonSchemaConfig getConfig(boolean useOneofForNullables) {
-    if (useOneofForNullables) {
-      return JsonSchemaConfig.nullableJsonSchemaDraft4();  // allow nulls
-    } else {
-      final JsonSchemaConfig vanilla = JsonSchemaConfig.vanillaJsonSchemaDraft4();
-      return JsonSchemaConfig.create(
-          vanilla.autoGenerateTitleForProperties(),
-          Optional.empty(),
-          true,
-          false,
-          vanilla.usePropertyOrdering(),
-          vanilla.hidePolymorphismTypeProperty(),
-          vanilla.disableWarnings(),
-          vanilla.useMinLengthForNotNull(),
-          vanilla.useTypeIdForDefinitionName(),
-          Collections.emptyMap(),
-          vanilla.useMultipleEditorSelectViaProperty(),
-          Collections.emptySet(),
-          Collections.emptyMap(),
-          Collections.emptyMap(),
-          vanilla.subclassesResolver(),
-          vanilla.failOnUnknownProperties(),
-          null
-      );
-    }
+  private static JsonSchemaConfig getConfig(
+      boolean useOneofForNullables, boolean failUnknownProperties) {
+    final JsonSchemaConfig vanilla = JsonSchemaConfig.vanillaJsonSchemaDraft4();
+    return JsonSchemaConfig.create(
+        vanilla.autoGenerateTitleForProperties(),
+        Optional.empty(),
+        true,
+        useOneofForNullables,
+        vanilla.usePropertyOrdering(),
+        vanilla.hidePolymorphismTypeProperty(),
+        vanilla.disableWarnings(),
+        vanilla.useMinLengthForNotNull(),
+        vanilla.useTypeIdForDefinitionName(),
+        Collections.emptyMap(),
+        vanilla.useMultipleEditorSelectViaProperty(),
+        Collections.emptySet(),
+        Collections.emptyMap(),
+        Collections.emptyMap(),
+        vanilla.subclassesResolver(),
+        failUnknownProperties,
+        null
+    );
   }
 
   public static Object getValue(Object object) {
