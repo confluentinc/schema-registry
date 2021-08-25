@@ -74,7 +74,7 @@ public class MessageDefinition {
         String doc,
         Map<String, String> params
     ) {
-      return addField(label, false, type, name, num, defaultVal, null, doc, params, null);
+      return addField(label, false, type, name, num, defaultVal, null, doc, params, null, null);
     }
 
     public Builder addField(
@@ -87,11 +87,12 @@ public class MessageDefinition {
         String jsonName,
         String doc,
         Map<String, String> params,
-        Boolean isPacked
+        Boolean isPacked,
+        Boolean isDeprecated
     ) {
       FieldDescriptorProto.Label protoLabel = sLabelMap.get(label);
       doAddField(protoLabel, isProto3Optional, type, name, num,
-              defaultVal, jsonName, doc, params, isPacked, null);
+              defaultVal, jsonName, doc, params, isPacked, isDeprecated, null);
       return this;
     }
 
@@ -168,6 +169,7 @@ public class MessageDefinition {
         String doc,
         Map<String, String> params,
         Boolean isPacked,
+        Boolean isDeprecated,
         OneofBuilder oneofBuilder
     ) {
       FieldDescriptorProto.Builder fieldBuilder = FieldDescriptorProto.newBuilder();
@@ -196,6 +198,12 @@ public class MessageDefinition {
         DescriptorProtos.FieldOptions.Builder optionsBuilder =
             DescriptorProtos.FieldOptions.newBuilder();
         optionsBuilder.setPacked(isPacked);
+        fieldBuilder.mergeOptions(optionsBuilder.build());
+      }
+      if (isDeprecated != null) {
+        DescriptorProtos.FieldOptions.Builder optionsBuilder =
+            DescriptorProtos.FieldOptions.newBuilder();
+        optionsBuilder.setDeprecated(isDeprecated);
         fieldBuilder.mergeOptions(optionsBuilder.build());
       }
       setFieldMeta(fieldBuilder, doc, params);
@@ -252,6 +260,7 @@ public class MessageDefinition {
           jsonName,
           doc,
           params,
+          null,
           null,
           this
       );
