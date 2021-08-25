@@ -84,7 +84,9 @@ public class ModeResource {
       @Parameter(description = "Name of the Subject", required = true)
       @PathParam("subject") String subject,
       @Context HttpHeaders headers,
-      @Parameter(description = "Update Request", required = true) @NotNull ModeUpdateRequest request
+      @Parameter(description = "Update Request", required = true)
+      @NotNull ModeUpdateRequest request,
+      @QueryParam("force") boolean force
   ) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
@@ -99,7 +101,7 @@ public class ModeResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.setModeOrForward(subject, mode, headerProperties);
+      schemaRegistry.setModeOrForward(subject, mode, force, headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -153,8 +155,9 @@ public class ModeResource {
   public ModeUpdateRequest updateTopLevelMode(
       @Context HttpHeaders headers,
       @Parameter(description = "Update Request", required = true)
-      @NotNull ModeUpdateRequest request) {
-    return updateMode(null, headers, request);
+      @NotNull ModeUpdateRequest request,
+      @QueryParam("force") boolean force) {
+    return updateMode(null, headers, request, force);
   }
 
   @GET

@@ -921,7 +921,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private void forwardSetModeRequestToLeader(
-      String subject, Mode mode,
+      String subject, Mode mode, boolean force,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
@@ -931,7 +931,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     log.debug(String.format("Forwarding update mode request %s to %s",
         modeUpdateRequest, baseUrl));
     try {
-      leaderRestService.setMode(headerProperties, modeUpdateRequest, subject);
+      leaderRestService.setMode(headerProperties, modeUpdateRequest, subject, force);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the update mode request %s to %s",
@@ -1593,13 +1593,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public void setMode(String subject, Mode mode)
       throws SchemaRegistryStoreException, OperationNotPermittedException {
+    setMode(subject, mode, false);
+  }
+
+  public void setMode(String subject, Mode mode, boolean force)
+      throws SchemaRegistryStoreException, OperationNotPermittedException {
     if (!allowModeChanges) {
       throw new OperationNotPermittedException("Mode changes are not allowed");
     }
     ModeKey modeKey = new ModeKey(subject);
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT) {
+      if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT && !force) {
         // Changing to import mode requires that no schemas exist with matching subjects.
         if (hasSubjects(subject, false)) {
           throw new OperationNotPermittedException("Cannot import since found existing subjects");
@@ -1616,17 +1621,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void setModeOrForward(String subject, Mode mode, Map<String, String> headerProperties)
+  public void setModeOrForward(String subject, Mode mode, boolean force,
+      Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownLeaderException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        setMode(subject, mode);
+        setMode(subject, mode, force);
       } else {
         // forward update mode request to the leader
         if (leaderIdentity != null) {
-          forwardSetModeRequestToLeader(subject, mode, headerProperties);
+          forwardSetModeRequestToLeader(subject, mode, force, headerProperties);
         } else {
           throw new UnknownLeaderException("Update mode request failed since leader is "
               + "unknown");
