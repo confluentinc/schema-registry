@@ -680,6 +680,12 @@ public class ProtobufSchema implements ParsedSchema {
       OptionElement option = new OptionElement("packed", kind, fd.getOptions().getPacked(), false);
       options.add(option);
     }
+    if (fd.getOptions().hasDeprecated()) {
+      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
+      OptionElement option =
+          new OptionElement("deprecated", kind, fd.getOptions().getDeprecated(), false);
+      options.add(option);
+    }
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
       OptionElement option = toOption("confluent.field_meta", meta);
@@ -892,6 +898,8 @@ public class ProtobufSchema implements ParsedSchema {
       String jsonName = field.getJsonName();
       Boolean isPacked = findOption("packed", field.getOptions())
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+      Boolean isDeprecated = findOption("deprecated", field.getOptions())
+          .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
       Optional<OptionElement> meta = findOption("confluent.field_meta", field.getOptions());
       String doc = findDoc(meta);
       Map<String, String> params = findParams(meta);
@@ -918,7 +926,8 @@ public class ProtobufSchema implements ParsedSchema {
           jsonName,
           doc,
           params,
-          isPacked
+          isPacked,
+          isDeprecated
       );
     }
     for (ReservedElement reserved : messageElem.getReserveds()) {

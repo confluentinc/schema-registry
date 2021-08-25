@@ -42,7 +42,7 @@ message NestedMessage {
     Status status = 5;
     ComplexType complex_type = 6;
     map<string, string> map_type = 7;
-    InnerMessage inner = 8;
+    InnerMessage inner = 8 [deprecated=true];
 
     message InnerMessage {
         string id = 1 [json_name="id"];
