@@ -389,6 +389,10 @@ paths:
         required: true
         schema:
           $ref: "#/definitions/ModeUpdateRequest"
+      - name: "force"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
@@ -459,6 +463,10 @@ paths:
         required: true
         schema:
           $ref: "#/definitions/ModeUpdateRequest"
+      - name: "force"
+        in: "query"
+        required: false
+        type: "boolean"
       responses:
         200:
           description: "successful operation"
