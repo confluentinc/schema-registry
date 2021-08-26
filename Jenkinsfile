@@ -6,4 +6,5 @@ common {
     "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
   nanoVersion = true
   timeoutHours = 3
+  nodeLabel = 'docker-debian-10-jdk8'
 }
