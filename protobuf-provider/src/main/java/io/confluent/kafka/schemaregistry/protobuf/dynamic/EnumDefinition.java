@@ -33,11 +33,11 @@ public class EnumDefinition {
   // --- public static ---
 
   public static Builder newBuilder(String enumName) {
-    return newBuilder(enumName, null);
+    return newBuilder(enumName, null, null);
   }
 
-  public static Builder newBuilder(String enumName, Boolean allowAlias) {
-    return new Builder(enumName, allowAlias);
+  public static Builder newBuilder(String enumName, Boolean allowAlias, Boolean isDeprecated) {
+    return new Builder(enumName, allowAlias, isDeprecated);
   }
 
   // --- public ---
@@ -67,13 +67,20 @@ public class EnumDefinition {
     // --- public ---
 
     public Builder addValue(String name, int num) {
-      return addValue(name, num, null, null);
+      return addValue(name, num, null, null, null);
     }
 
     // Note: added
-    public Builder addValue(String name, int num, String doc, Map<String, String> params) {
+    public Builder addValue(
+        String name, int num, String doc, Map<String, String> params, Boolean isDeprecated) {
       EnumValueDescriptorProto.Builder enumValBuilder = EnumValueDescriptorProto.newBuilder();
       enumValBuilder.setName(name).setNumber(num);
+      if (isDeprecated != null) {
+        DescriptorProtos.EnumValueOptions.Builder optionsBuilder =
+                DescriptorProtos.EnumValueOptions.newBuilder();
+        optionsBuilder.setDeprecated(isDeprecated);
+        enumValBuilder.mergeOptions(optionsBuilder.build());
+      }
       Meta meta = toMeta(doc, params);
       if (meta != null) {
         DescriptorProtos.EnumValueOptions.Builder optionsBuilder =
@@ -103,13 +110,19 @@ public class EnumDefinition {
 
     // --- private ---
 
-    private Builder(String enumName, Boolean allowAlias) {
+    private Builder(String enumName, Boolean allowAlias, Boolean isDeprecated) {
       mEnumTypeBuilder = EnumDescriptorProto.newBuilder();
       mEnumTypeBuilder.setName(enumName);
       if (allowAlias != null) {
         DescriptorProtos.EnumOptions.Builder optionsBuilder =
             DescriptorProtos.EnumOptions.newBuilder();
         optionsBuilder.setAllowAlias(allowAlias);
+        mEnumTypeBuilder.mergeOptions(optionsBuilder.build());
+      }
+      if (isDeprecated != null) {
+        DescriptorProtos.EnumOptions.Builder optionsBuilder =
+            DescriptorProtos.EnumOptions.newBuilder();
+        optionsBuilder.setDeprecated(isDeprecated);
         mEnumTypeBuilder.mergeOptions(optionsBuilder.build());
       }
     }

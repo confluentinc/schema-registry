@@ -136,6 +136,15 @@ public class MessageDefinition {
     }
 
     // Note: added
+    public Builder setDeprecated(boolean isDeprecated) {
+      DescriptorProtos.MessageOptions.Builder optionsBuilder =
+          DescriptorProtos.MessageOptions.newBuilder();
+      optionsBuilder.setDeprecated(isDeprecated);
+      mMsgTypeBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
     public Builder setMeta(String doc, Map<String, String> params) {
       Meta meta = toMeta(doc, params);
       if (meta != null) {
@@ -238,7 +247,7 @@ public class MessageDefinition {
         String defaultVal,
         String doc,
         Map<String, String> params) {
-      return addField(type, name, num, defaultVal, null, doc, params);
+      return addField(type, name, num, defaultVal, null, doc, params, false);
     }
 
     public OneofBuilder addField(
@@ -248,7 +257,8 @@ public class MessageDefinition {
         String defaultVal,
         String jsonName,
         String doc,
-        Map<String, String> params
+        Map<String, String> params,
+        Boolean deprecated
     ) {
       mMsgBuilder.doAddField(
           FieldDescriptorProto.Label.LABEL_OPTIONAL,
@@ -261,7 +271,7 @@ public class MessageDefinition {
           doc,
           params,
           null,
-          null,
+          deprecated,
           this
       );
       return this;
