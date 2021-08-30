@@ -451,6 +451,15 @@ public class DynamicSchema {
     }
 
     // Note: added
+    public Builder setDeprecated(boolean isDeprecated) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setDeprecated(isDeprecated);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    // Note: added
     public Builder setMeta(String doc, Map<String, String> params) {
       Meta meta = toMeta(doc, params);
       if (meta != null) {
