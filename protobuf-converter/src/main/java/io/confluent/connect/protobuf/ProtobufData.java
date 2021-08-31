@@ -51,6 +51,7 @@ import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -1241,25 +1242,17 @@ public class ProtobufData {
     if (cachedSchema != null) {
       return cachedSchema;
     }
-    SchemaBuilder builder = SchemaBuilder.struct();
     Descriptor descriptor = schema.toDescriptor();
     ToConnectContext ctx = new ToConnectContext();
-    ctx.put(descriptor.getFullName(), builder);
-    Schema resultSchema = toConnectSchema(ctx, builder, descriptor, schema.version()).build();
+    Schema resultSchema = toConnectSchema(ctx, descriptor, schema.version()).build();
     toConnectSchemaCache.put(cacheKey, resultSchema);
     return resultSchema;
   }
 
   private SchemaBuilder toConnectSchema(
-      ToConnectContext ctx, SchemaBuilder builder, Descriptor descriptor, Integer version) {
-    List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
-    if (isMapDescriptor(descriptor, fieldDescriptors)) {
-      String name = ProtobufSchema.toMapField(descriptor.getName());
-      return SchemaBuilder.map(toConnectSchema(ctx, fieldDescriptors.get(0)),
-          toConnectSchema(ctx, fieldDescriptors.get(1))
-      )
-          .name(name);
-    }
+      ToConnectContext ctx, Descriptor descriptor, Integer version) {
+    SchemaBuilder builder = SchemaBuilder.struct();
+    ctx.put(descriptor.getFullName(), builder);
     String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
     builder.name(name);
     List<OneofDescriptor> oneOfDescriptors = descriptor.getOneofs();
@@ -1267,6 +1260,7 @@ public class ProtobufData {
       String unionName = oneOfDescriptor.getName() + "_" + oneOfDescriptor.getIndex();
       builder.field(unionName, toConnectSchema(ctx, oneOfDescriptor));
     }
+    List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
       OneofDescriptor oneOfDescriptor = fieldDescriptor.getContainingOneof();
       if (oneOfDescriptor != null) {
@@ -1468,26 +1462,41 @@ public class ProtobufData {
   }
 
   private SchemaBuilder toStructSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
+    if (isMapDescriptor(descriptor)) {
+      return toMapSchema(ctx, descriptor.getMessageType());
+    }
     String fullName = descriptor.getMessageType().getFullName();
     SchemaBuilder builder = ctx.get(fullName);
     if (builder != null) {
       builder = new SchemaWrapper(builder);
     } else {
-      builder = SchemaBuilder.struct();
-      ctx.put(fullName, builder);
-      builder = toConnectSchema(ctx, builder, descriptor.getMessageType(), null);
+      builder = toConnectSchema(ctx, descriptor.getMessageType(), null);
     }
     return builder;
   }
 
   private static boolean isMapDescriptor(
-      Descriptor descriptor,
-      List<FieldDescriptor> fieldDescriptors
+      FieldDescriptor fieldDescriptor
   ) {
+    if (!fieldDescriptor.isRepeated()) {
+      return false;
+    }
+    Descriptor descriptor = fieldDescriptor.getMessageType();
+    List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     return descriptor.getName().endsWith(MAP_ENTRY_SUFFIX)
         && fieldDescriptors.size() == 2
         && fieldDescriptors.get(0).getName().equals(KEY_FIELD)
-        && fieldDescriptors.get(1).getName().equals(VALUE_FIELD);
+        && fieldDescriptors.get(1).getName().equals(VALUE_FIELD)
+        && !fieldDescriptors.get(0).isRepeated()
+        && !fieldDescriptors.get(1).isRepeated();
+  }
+
+  private SchemaBuilder toMapSchema(ToConnectContext ctx, Descriptor descriptor) {
+    List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
+    String name = ProtobufSchema.toMapField(descriptor.getName());
+    return SchemaBuilder.map(toConnectSchema(ctx, fieldDescriptors.get(0)),
+        toConnectSchema(ctx, fieldDescriptors.get(1))
+    ).name(name);
   }
 
   /**
