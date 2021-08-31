@@ -35,6 +35,8 @@ import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
+import io.confluent.connect.protobuf.test.MapReferences.AttributeFieldEntry;
+import io.confluent.connect.protobuf.test.MapReferences.MapReferencesMessage;
 import io.confluent.connect.protobuf.test.RecursiveKeyValue;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Field;
@@ -1073,6 +1075,83 @@ public class ProtobufDataTest {
     assertEquals(expectedNested.name(), actualNested.name());
     assertEquals(expectedNested.type(), actualNested.type());
     assertEquals(expectedNested.parameters(), actualNested.parameters());
+  }
+
+  @Test
+  public void testToConnectMultipleMapReferences() throws Exception {
+    AttributeFieldEntry entry1 = AttributeFieldEntry.newBuilder()
+        .setKey("key1").setValue("value1").build();
+    AttributeFieldEntry entry2 = AttributeFieldEntry.newBuilder()
+        .setKey("key2").setValue("value2").build();
+    AttributeFieldEntry entry3 = AttributeFieldEntry.newBuilder()
+        .setKey("key3").setValue("value3").build();
+    AttributeFieldEntry entry4 = AttributeFieldEntry.newBuilder()
+        .setKey("key4").setValue("value4").build();
+    MapReferencesMessage message = MapReferencesMessage.newBuilder()
+        .addMap1(entry1)
+        .addMap2(entry2)
+        .setNotAMap1(entry3)
+        .setNotAMap2(entry4)
+        .build();
+
+    ProtobufData protobufData = new ProtobufData();
+    ProtobufSchema protobufSchema = new ProtobufSchema(message.getDescriptorForType());
+    SchemaAndValue result = protobufData.toConnectData(protobufSchema, message);
+
+    final SchemaBuilder structBuilder = SchemaBuilder.struct();
+    structBuilder.name("AttributeFieldEntry");
+    structBuilder.field("key", SchemaBuilder.string()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
+        .build());
+    structBuilder.field("value", SchemaBuilder.string()
+        .optional()
+        .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2))
+        .build());
+    final SchemaBuilder builder = SchemaBuilder.struct();
+    builder.name("MapReferencesMessage");
+    builder.field("map1", SchemaBuilder.map(
+        OPTIONAL_STRING_SCHEMA,
+        SchemaBuilder.string()
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2))
+            .build()
+        ).name("attribute_field").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    builder.field("map2", SchemaBuilder.map(
+        OPTIONAL_STRING_SCHEMA,
+        SchemaBuilder.string()
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(2))
+            .build()
+        ).name("attribute_field").optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    builder.field("notAMap1", structBuilder
+        .optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(3)).build()
+    );
+    builder.field("notAMap2", new SchemaWrapper(structBuilder)
+        .optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(4)).build()
+    );
+    Schema expectedSchema = builder.build();
+    assertSchemasEqual(expectedSchema, result.schema());
+
+    Struct expected = new Struct(expectedSchema);
+    expected.put("map1", Collections.singletonMap("key1", "value1"));
+    expected.put("map2", Collections.singletonMap("key2", "value2"));
+    expected.put("notAMap1", new Struct(expectedSchema.field("notAMap1").schema())
+        .put("key", "key3")
+        .put("value", "value3"));
+    expected.put("notAMap2", new Struct(expectedSchema.field("notAMap2").schema())
+        .put("key", "key4")
+        .put("value", "value4"));
+    assertEquals(expected.get("map1"), ((Struct)result.value()).get("map1"));
+    assertEquals(expected.get("map2"), ((Struct)result.value()).get("map2"));
+    assertEquals(expected.get("notAMap1"), ((Struct)result.value()).get("notAMap1"));
+    // Extract structs as can't compare SchemaWrapper instances
+    Struct expectedNotAMap2 = (Struct) expected.get("notAMap2");
+    Struct actualNotAMap2 = (Struct) ((Struct)result.value()).get("notAMap2");
+    assertEquals(expectedNotAMap2.get("key"), actualNotAMap2.get("key"));
+    assertEquals(expectedNotAMap2.get("value"), actualNotAMap2.get("value"));
   }
 
   @Test
