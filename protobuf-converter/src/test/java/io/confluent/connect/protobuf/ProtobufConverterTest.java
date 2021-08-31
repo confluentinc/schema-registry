@@ -974,6 +974,7 @@ public class ProtobufConverterTest {
   }
 
   @Test
+  @Ignore // Protobuf does not support nested maps
   public void testExplicitlyNamedNestedMapsWithNonStringKeys() {
     final Schema fieldschema = SchemaBuilder.map(SchemaBuilder.string()
         .optional()
