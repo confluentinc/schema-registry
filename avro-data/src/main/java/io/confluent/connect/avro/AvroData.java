@@ -1070,7 +1070,7 @@ public class AvroData {
   }
 
   private static String scrubFullName(String name, boolean scrubInvalidNames) {
-    if (!scrubInvalidNames) {
+    if (name == null || !scrubInvalidNames) {
       return name;
     }
     String[] split = splitName(name, scrubInvalidNames);

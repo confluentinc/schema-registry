@@ -366,6 +366,43 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testFromConnectOptionalRecordWithNullName() {
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCRUB_INVALID_NAMES_CONFIG, true)
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData avroData = new AvroData(avroDataConfig);
+    Schema schema = SchemaBuilder.struct()
+        .optional()
+        .field("invalid field-name", SchemaBuilder.bool().optional().defaultValue(null).build())
+        .build();
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+    org.apache.avro.Schema recordSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
+        .name("invalid_field_name").type(org.apache.avro.SchemaBuilder.builder()
+            .unionOf().nullType().and().booleanType().endUnion()).withDefault(null)
+        .endRecord();
+    org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().nullType().and()
+        .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
+        .name("invalid_field_name").type(org.apache.avro.SchemaBuilder.builder()
+            .unionOf().nullType().and().booleanType().endUnion()).withDefault(null)
+        .endRecord()
+        .endUnion();
+
+    assertEquals(expectedAvroSchema, avroSchema);
+
+    Struct struct = new Struct(schema)
+        .put("invalid field-name", true);
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
+    org.apache.avro.generic.GenericRecord avroRecord = new org.apache.avro.generic.GenericRecordBuilder(recordSchema)
+        .set("invalid_field_name", true)
+        .build();
+
+    assertEquals(avroRecord, convertedRecord);
+  }
+
+  @Test
   public void testNameScrubbing() {
     assertEquals("abc_2B____", AvroData.doScrubName("abc+-.*_"));
     assertEquals("abc_def", AvroData.doScrubName("abc-def"));
