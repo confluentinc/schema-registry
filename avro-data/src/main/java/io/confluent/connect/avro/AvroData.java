@@ -1024,19 +1024,7 @@ public class AvroData {
       // can't store any metadata on the actual top-level schema when it's a union because of Avro
       // constraints on the format of schemas.
       if (!ignoreOptional) {
-        if (schema.isOptional()) {
-          if (schema.defaultValue() != null) {
-            finalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
-                .type(baseSchema).and()
-                .nullType()
-                .endUnion();
-          } else {
-            finalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
-                .nullType().and()
-                .type(baseSchema)
-                .endUnion();
-          }
-        }
+        finalSchema = maybeMakeOptional(schema, baseSchema);
       }
     }
 
@@ -1045,6 +1033,24 @@ public class AvroData {
     }
     fromConnectSchemaCache.put(schema, finalSchema);
     return finalSchema;
+  }
+
+  private org.apache.avro.Schema maybeMakeOptional(
+      Schema schema, org.apache.avro.Schema baseSchema) {
+    if (!schema.isOptional()) {
+      return baseSchema;
+    }
+    if (schema.defaultValue() != null) {
+      return org.apache.avro.SchemaBuilder.builder().unionOf()
+          .type(baseSchema).and()
+          .nullType()
+          .endUnion();
+    } else {
+      return org.apache.avro.SchemaBuilder.builder().unionOf()
+          .nullType().and()
+          .type(baseSchema)
+          .endUnion();
+    }
   }
 
   private static String scrubFullName(String name, boolean scrubInvalidNames) {
@@ -1090,6 +1096,9 @@ public class AvroData {
     org.apache.avro.Schema resolvedSchema;
     if (fromConnectContext.cycleReferences.containsKey(schema.name())) {
       resolvedSchema = fromConnectContext.cycleReferences.get(schema.name());
+      if (!ignoreOptional) {
+        resolvedSchema = maybeMakeOptional(schema, resolvedSchema);
+      }
     } else {
       resolvedSchema = fromConnectSchema(schema, fromConnectContext, ignoreOptional);
     }
