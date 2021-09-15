@@ -210,7 +210,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
     final List<SchemaProvider> providers = Collections.singletonList(getProvider());
     if (maybeMockScope == null) {
       return new CachedSchemaRegistryClient(
-              Collections.singletonList(schemaRegistryUrl),
+              schemaRegistryUrl,
               AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
               providers,
               originals
