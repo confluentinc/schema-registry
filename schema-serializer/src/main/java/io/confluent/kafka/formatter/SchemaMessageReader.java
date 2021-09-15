@@ -111,8 +111,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
 
     Map<String, Object> originals = getPropertiesMap(props);
 
-    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(
-        Collections.singletonList(url),
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(url,
         AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
         Collections.singletonList(getProvider()),
         originals
