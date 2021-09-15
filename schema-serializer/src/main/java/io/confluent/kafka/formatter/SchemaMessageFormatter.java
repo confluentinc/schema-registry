@@ -204,7 +204,7 @@ public abstract class SchemaMessageFormatter<T> implements MessageFormatter {
       Map<String, Object> originals
   ) {
     return new CachedSchemaRegistryClient(
-        Collections.singletonList(schemaRegistryUrl),
+        schemaRegistryUrl,
         AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
         Collections.singletonList(getProvider()),
         originals
