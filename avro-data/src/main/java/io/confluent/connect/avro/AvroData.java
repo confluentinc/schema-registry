@@ -2063,8 +2063,12 @@ public class AvroData {
         }
         List<Object> result = new ArrayList<>(jsonValue.size());
         for (JsonNode elem : jsonValue) {
-          result.add(
-              defaultValueFromAvro(schema, avroSchema.getElementType(), elem, toConnectContext));
+          result.add(defaultValueFromAvro(
+              schema.valueSchema(),
+              avroSchema.getElementType(),
+              elem,
+              toConnectContext)
+          );
         }
         return result;
       }
