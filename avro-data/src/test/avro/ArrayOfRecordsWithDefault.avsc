@@ -1,0 +1,36 @@
+{
+  "type": "record",
+  "name": "ArrayOfRecordsWithDefault",
+  "namespace": "com.connect.avro",
+  "fields": [
+    {
+      "name": "name",
+      "type": [null, "string"],
+      "default": null
+    },
+    {
+      "name": "records",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "ArrayItem",
+          "namespace": "com.connect.avro",
+          "fields": [
+            {
+              "name": "itemName",
+              "type": "string"
+            }, {
+              "name": "itemValue",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "default": [
+        {"itemName": "item1", "itemValue": "value1"},
+        {"itemName": "item2", "itemValue": "value2"}
+      ]
+    }
+  ]
+}

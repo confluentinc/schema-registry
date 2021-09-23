@@ -1,5 +1,6 @@
 package io.confluent.connect.avro;
 
+import com.connect.avro.ArrayOfRecordsWithDefault;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -10,6 +11,7 @@ import io.test.avro.union.FirstOption;
 import io.test.avro.union.MultiTypeUnionMessage;
 import io.test.avro.union.SecondOption;
 
+import java.util.HashMap;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.generic.GenericData;
@@ -355,5 +357,16 @@ public class AdditionalAvroDataTest
         Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
         Assert.assertEquals("B", outputAvroSchema.getField("enumFieldWithDiffDefault").defaultVal());
         Assert.assertNull(outputAvroSchema.getField("enumFieldWithDiffDefault").schema().getEnumDefault());
+    }
+
+    @Test
+    public void testArrayOfRecordsWithDefaultValue() throws IOException
+    {
+        ArrayOfRecordsWithDefault arrayOfRecords = ArrayOfRecordsWithDefault.newBuilder().build();
+
+        AvroData a = new AvroData(new AvroDataConfig(new HashMap<>()));
+        SchemaAndValue result = a.toConnectData(arrayOfRecords.getSchema(), arrayOfRecords, 1);
+
+
     }
 }
