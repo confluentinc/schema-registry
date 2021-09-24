@@ -2064,7 +2064,7 @@ public class AvroData {
         List<Object> result = new ArrayList<>(jsonValue.size());
         for (JsonNode elem : jsonValue) {
           Object converted = defaultValueFromAvro(
-              schema, avroSchema.getElementType(), elem, toConnectContext);
+              schema.valueSchema(), avroSchema.getElementType(), elem, toConnectContext);
           result.add(converted);
         }
         return result;
