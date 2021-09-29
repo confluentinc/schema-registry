@@ -171,7 +171,7 @@ public abstract class SchemaMessageReader<T> implements MessageReader {
     SchemaRegistryClient schemaRegistry;
     if (maybeMockScope == null) {
       schemaRegistry = new CachedSchemaRegistryClient(
-              schemaRegistryUrls,
+              url,
               AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
               schemaProviders,
               originals

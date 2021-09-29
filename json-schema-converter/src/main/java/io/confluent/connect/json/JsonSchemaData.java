@@ -1017,7 +1017,7 @@ public class JsonSchemaData {
       SchemaBuilder refBuilder = ctx.get(refSchema.getReferredSchema());
       if (refBuilder != null) {
         refBuilder.parameter(JSON_ID_PROP, DEFAULT_ID_PREFIX + (++idIndex));
-        return new SchemaWrapper(refBuilder);
+        return new SchemaWrapper(refBuilder, forceOptional);
       } else {
         return toConnectSchema(ctx, refSchema.getReferredSchema(), version, forceOptional);
       }
@@ -1134,29 +1134,32 @@ public class JsonSchemaData {
   static class SchemaWrapper extends SchemaBuilder {
 
     private final SchemaBuilder builder;
+    // Optional that overrides the one in builder
+    private boolean optional;
     // Parameters that override the ones in builder
     private final Map<String, String> parameters;
 
-    public SchemaWrapper(SchemaBuilder builder) {
+    public SchemaWrapper(SchemaBuilder builder, boolean optional) {
       super(Type.STRUCT);
       this.builder = builder;
+      this.optional = optional;
       this.parameters = new LinkedHashMap<>();
     }
 
     @Override
     public boolean isOptional() {
-      return builder.isOptional();
+      return optional;
     }
 
     @Override
     public SchemaBuilder optional() {
-      builder.optional();
+      optional = true;
       return this;
     }
 
     @Override
     public SchemaBuilder required() {
-      builder.required();
+      optional = false;
       return this;
     }
 

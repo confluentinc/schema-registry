@@ -5,12 +5,13 @@ package io.confluent.kafka.serializers.protobuf.test;
 option java_package = "io.confluent.kafka.serializers.protobuf.test";
 option java_outer_classname = "NestedTestProto";
 option java_multiple_files = false;
+option deprecated = false;
 
 message UserId {
     oneof user_id {
         string kafka_user_id = 1;
         int32 other_user_id = 2;
-        MessageId another_id = 3;
+        MessageId another_id = 3 [deprecated=true];
     }
 }
 
@@ -42,16 +43,18 @@ message NestedMessage {
     Status status = 5;
     ComplexType complex_type = 6;
     map<string, string> map_type = 7;
-    InnerMessage inner = 8;
+    InnerMessage inner = 8 [deprecated=true];
 
     message InnerMessage {
+        option deprecated = true;
         string id = 1 [json_name="id"];
         repeated int32 ids = 2 [packed=true];
     }
 
     enum InnerEnum {
         option allow_alias = true;
-        ZERO = 0;
+        option deprecated = true;
+        ZERO = 0 [deprecated=true];
         ALSO_ZERO = 0;
     }
 

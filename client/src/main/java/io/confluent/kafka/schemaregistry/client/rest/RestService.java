@@ -54,7 +54,6 @@ import java.util.Map;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
-import javax.ws.rs.core.UriBuilder;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.CompatibilityCheckResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -661,9 +660,14 @@ public class RestService implements Configurable {
 
   public ModeUpdateRequest setMode(String mode, String subject)
       throws IOException, RestClientException {
+    return setMode(mode, subject, false);
+  }
+  
+  public ModeUpdateRequest setMode(String mode, String subject, boolean force)
+      throws IOException, RestClientException {
     ModeUpdateRequest request = new ModeUpdateRequest();
     request.setMode(mode);
-    return setMode(DEFAULT_REQUEST_PROPERTIES, request, subject);
+    return setMode(DEFAULT_REQUEST_PROPERTIES, request, subject, force);
   }
 
   /**
@@ -671,11 +675,14 @@ public class RestService implements Configurable {
    */
   public ModeUpdateRequest setMode(Map<String, String> requestProperties,
                                    ModeUpdateRequest modeUpdateRequest,
-                                   String subject)
+                                   String subject,
+                                   boolean force)
       throws IOException, RestClientException {
     String path = subject != null
-                  ? UriBuilder.fromPath("/mode/{subject}").build(subject).toString()
-                  : "/mode";
+        ? UriBuilder.fromPath("/mode/{subject}")
+        .queryParam("force", force).build(subject).toString()
+        : UriBuilder.fromPath("/mode")
+            .queryParam("force", force).build().toString();
 
     ModeUpdateRequest response =
         httpRequest(path, "PUT", modeUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),

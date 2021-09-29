@@ -263,7 +263,7 @@ public class AvroData {
   static final String AVRO_LOGICAL_DECIMAL = "decimal";
   static final String AVRO_LOGICAL_DECIMAL_SCALE_PROP = "scale";
   static final String AVRO_LOGICAL_DECIMAL_PRECISION_PROP = "precision";
-  static final String CONNECT_AVRO_FIXED_SIZE = "connect.fixed.size";
+  static final String CONNECT_AVRO_FIXED_SIZE_PROP = "connect.fixed.size";
   static final String CONNECT_AVRO_DECIMAL_PRECISION_PROP = "connect.decimal.precision";
   static final Integer CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT = 64;
 
@@ -481,14 +481,14 @@ public class AvroData {
           value = value instanceof byte[] ? ByteBuffer.wrap((byte[]) value) :
                                   (ByteBuffer) value;
           if (schema != null && isFixedSchema(schema)) {
-            int size = Integer.parseInt(schema.parameters().get(CONNECT_AVRO_FIXED_SIZE));
+            int size = Integer.parseInt(schema.parameters().get(CONNECT_AVRO_FIXED_SIZE_PROP));
             org.apache.avro.Schema fixedSchema = null;
             if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
               for (org.apache.avro.Schema memberSchema : avroSchema.getTypes()) {
                 if (memberSchema.getType() == org.apache.avro.Schema.Type.FIXED
                         && memberSchema.getFixedSize() == size
                         && unionMemberFieldName(memberSchema, enhancedSchemaSupport)
-                           .equals(schema.name())) {
+                           .equals(unionMemberFieldName(schema, enhancedSchemaSupport))) {
                   fixedSchema = memberSchema;
                 }
               }
@@ -512,7 +512,7 @@ public class AvroData {
           List<Object> converted = new ArrayList<>(list.size());
           Schema elementSchema = schema != null ? schema.valueSchema() : null;
           org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
-              schema, avroSchema);
+              schema, avroSchema, scrubInvalidNames);
           org.apache.avro.Schema elementAvroSchema =
               schema != null ? underlyingAvroSchema.getElementType() : ANYTHING_SCHEMA;
           for (Object val : list) {
@@ -541,7 +541,8 @@ public class AvroData {
               && !schema.keySchema().isOptional()) {
 
             // TODO most types don't need a new converted object since types pass through
-            underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(schema, avroSchema);
+            underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
+                schema, avroSchema, scrubInvalidNames);
             Map<String, Object> converted = new HashMap<>();
             for (Map.Entry<Object, Object> entry : map.entrySet()) {
               // Key is a String, no conversion needed
@@ -608,7 +609,7 @@ public class AvroData {
                 enhancedSchemaSupport, scrubInvalidNames);
           } else {
             org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
-                schema, avroSchema);
+                schema, avroSchema, scrubInvalidNames);
             GenericRecordBuilder convertedBuilder = new GenericRecordBuilder(underlyingAvroSchema);
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name(), scrubInvalidNames);
@@ -658,8 +659,10 @@ public class AvroData {
   }
 
   private static boolean crossReferenceSchemaNames(final Schema schema,
-                                                   final org.apache.avro.Schema avroSchema) {
-    return Objects.equals(avroSchema.getFullName(), schema.name())
+                                                   final org.apache.avro.Schema avroSchema,
+                                                   final boolean scrubInvalidNames) {
+    String fullName = scrubFullName(schema.name(), scrubInvalidNames);
+    return Objects.equals(avroSchema.getFullName(), fullName)
         || Objects.equals(avroSchema.getType().getName(), schema.type().getName())
         || (schema.name() == null && avroSchema.getFullName().equals(DEFAULT_SCHEMA_FULL_NAME));
   }
@@ -669,14 +672,14 @@ public class AvroData {
    * Return the Avro schema of the actual type in the Union (instead of the union itself)
    */
   private static org.apache.avro.Schema avroSchemaForUnderlyingTypeIfOptional(
-      Schema schema, org.apache.avro.Schema avroSchema) {
+      Schema schema, org.apache.avro.Schema avroSchema, boolean scrubInvalidNames) {
 
     if (schema != null && schema.isOptional()) {
       if (avroSchema.getType() == org.apache.avro.Schema.Type.UNION) {
         for (org.apache.avro.Schema typeSchema : avroSchema
             .getTypes()) {
           if (!typeSchema.getType().equals(org.apache.avro.Schema.Type.NULL)
-              && crossReferenceSchemaNames(schema, typeSchema)) {
+              && crossReferenceSchemaNames(schema, typeSchema, scrubInvalidNames)) {
             return typeSchema;
           }
         }
@@ -832,9 +835,9 @@ public class AvroData {
       case BYTES:
         if (isFixedSchema(schema)) {
           baseSchema = org.apache.avro.SchemaBuilder.builder()
-                  .fixed(schema.name())
+                  .fixed(name)
                   .namespace(namespace)
-                  .size(Integer.parseInt(schema.parameters().get(CONNECT_AVRO_FIXED_SIZE)));
+                  .size(Integer.parseInt(schema.parameters().get(CONNECT_AVRO_FIXED_SIZE_PROP)));
         } else {
           baseSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
         }
@@ -1043,19 +1046,7 @@ public class AvroData {
       // can't store any metadata on the actual top-level schema when it's a union because of Avro
       // constraints on the format of schemas.
       if (!ignoreOptional) {
-        if (schema.isOptional()) {
-          if (schema.defaultValue() != null) {
-            finalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
-                .type(baseSchema).and()
-                .nullType()
-                .endUnion();
-          } else {
-            finalSchema = org.apache.avro.SchemaBuilder.builder().unionOf()
-                .nullType().and()
-                .type(baseSchema)
-                .endUnion();
-          }
-        }
+        finalSchema = maybeMakeOptional(schema, baseSchema);
       }
     }
 
@@ -1064,6 +1055,36 @@ public class AvroData {
     }
     fromConnectSchemaCache.put(schema, finalSchema);
     return finalSchema;
+  }
+
+  private org.apache.avro.Schema maybeMakeOptional(
+      Schema schema, org.apache.avro.Schema baseSchema) {
+    if (!schema.isOptional()) {
+      return baseSchema;
+    }
+    if (schema.defaultValue() != null) {
+      return org.apache.avro.SchemaBuilder.builder().unionOf()
+          .type(baseSchema).and()
+          .nullType()
+          .endUnion();
+    } else {
+      return org.apache.avro.SchemaBuilder.builder().unionOf()
+          .nullType().and()
+          .type(baseSchema)
+          .endUnion();
+    }
+  }
+
+  private static String scrubFullName(String name, boolean scrubInvalidNames) {
+    if (name == null || !scrubInvalidNames) {
+      return name;
+    }
+    String[] split = splitName(name, scrubInvalidNames);
+    if (split[0] == null) {
+      return split[1];
+    } else {
+      return split[0] + "." + split[1];
+    }
   }
 
   private String scrubName(String name) {
@@ -1097,6 +1118,9 @@ public class AvroData {
     org.apache.avro.Schema resolvedSchema;
     if (fromConnectContext.cycleReferences.containsKey(schema.name())) {
       resolvedSchema = fromConnectContext.cycleReferences.get(schema.name());
+      if (!ignoreOptional) {
+        resolvedSchema = maybeMakeOptional(schema, resolvedSchema);
+      }
     } else {
       resolvedSchema = fromConnectSchema(schema, fromConnectContext, ignoreOptional);
     }
@@ -1216,7 +1240,7 @@ public class AvroData {
           ObjectNode node = JsonNodeFactory.instance.objectNode();
           Struct struct = ((Struct) defaultVal);
           for (Field field : (schema.fields())) {
-            String fieldName = scrubName(field.name(), scrubInvalidNames);
+            String fieldName = scrubName(field.name());
             JsonNode fieldDef = defaultValueFromConnect(field.schema(), struct.get(field));
             node.put(fieldName, fieldDef);
           }
@@ -1542,8 +1566,9 @@ public class AvroData {
             Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
             Struct result = new Struct(schema);
             for (Field field : schema.fields()) {
+              String fieldName = scrubName(field.name());
               Object convertedFieldValue =
-                  toConnectData(field.schema(), original.get(field.name()), toConnectContext);
+                  toConnectData(field.schema(), original.get(fieldName), toConnectContext);
               result.put(field, convertedFieldValue);
             }
             return result;
@@ -1551,7 +1576,8 @@ public class AvroData {
             IndexedRecord original = (IndexedRecord) value;
             Struct result = new Struct(schema);
             for (Field field : schema.fields()) {
-              int avroFieldIndex = original.getSchema().getField(field.name()).pos();
+              String fieldName = scrubName(field.name());
+              int avroFieldIndex = original.getSchema().getField(fieldName).pos();
               Object convertedFieldValue =
                   toConnectData(field.schema(), original.get(avroFieldIndex), toConnectContext);
               result.put(field, convertedFieldValue);
@@ -1679,7 +1705,7 @@ public class AvroData {
           builder = SchemaBuilder.bytes();
         }
         if (schema.getType() == org.apache.avro.Schema.Type.FIXED) {
-          builder.parameter(CONNECT_AVRO_FIXED_SIZE, String.valueOf(schema.getFixedSize()));
+          builder.parameter(CONNECT_AVRO_FIXED_SIZE_PROP, String.valueOf(schema.getFixedSize()));
         }
         break;
       case DOUBLE:
@@ -2110,15 +2136,11 @@ public class AvroData {
   }
 
   private String unionMemberFieldName(Schema schema, boolean enhancedSchemaSupport) {
-    if (schema.type() == Schema.Type.STRUCT || isEnumSchema(schema)) {
+    if (schema.type() == Schema.Type.STRUCT || isEnumSchema(schema) || isFixedSchema(schema)) {
       if (enhancedSchemaSupport) {
-        return schema.name();
+        return scrubFullName(schema.name(), scrubInvalidNames);
       } else {
         return splitName(schema.name())[1];
-      }
-    } else {
-      if (isFixedSchema(schema)) {
-        return schema.name();
       }
     }
     return CONNECT_TYPES_TO_AVRO_TYPES.get(schema.type()).getName();
@@ -2134,7 +2156,7 @@ public class AvroData {
     return schema.type() == Schema.Type.BYTES
             && schema.name() != null
             && schema.parameters() != null
-            && schema.parameters().containsKey(CONNECT_AVRO_FIXED_SIZE);
+            && schema.parameters().containsKey(CONNECT_AVRO_FIXED_SIZE_PROP);
   }
 
   private boolean isInstanceOfAvroSchemaTypeForSimpleSchema(Schema fieldSchema,
@@ -2156,7 +2178,7 @@ public class AvroData {
       if (type.isInstance(value)) {
         if (isFixedSchema(fieldSchema)) {
           if (fixedValueSizeMatch(fieldSchema, value,
-              Integer.parseInt(fieldSchema.parameters().get(CONNECT_AVRO_FIXED_SIZE)),
+              Integer.parseInt(fieldSchema.parameters().get(CONNECT_AVRO_FIXED_SIZE_PROP)),
               enhancedSchemaSupport)) {
             return true;
           }
@@ -2181,7 +2203,7 @@ public class AvroData {
       return ((ByteBuffer)value).remaining() == size;
     } else if (value instanceof GenericFixed) {
       return unionMemberFieldName(((GenericFixed) value).getSchema(), enhancedSchemaSupport)
-              .equals(fieldSchema.name());
+              .equals(unionMemberFieldName(fieldSchema, enhancedSchemaSupport));
     } else {
       throw new DataException("Invalid class for fixed, expecting GenericFixed, byte[]"
               + " or ByteBuffer but found " + value.getClass());
@@ -2192,6 +2214,10 @@ public class AvroData {
    * Split a full dotted-syntax name into a namespace and a single-component name.
    */
   private String[] splitName(String fullName) {
+    return splitName(fullName, scrubInvalidNames);
+  }
+
+  private static String[] splitName(String fullName, boolean scrubInvalidNames) {
     String[] result = new String[2];
     int indexLastDot = fullName.lastIndexOf('.');
     if (indexLastDot >= 0) {
@@ -2201,7 +2227,7 @@ public class AvroData {
       result[0] = null;
       result[1] = fullName;
     }
-    result[1] = scrubName(result[1]);
+    result[1] = scrubName(result[1], scrubInvalidNames);
     return result;
   }
 

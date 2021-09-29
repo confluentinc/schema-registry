@@ -31,7 +31,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static final String CONTEXT_PREFIX = CONTEXT_DELIMITER + CONTEXT_SEPARATOR;
 
-  private static final String WILDCARD = "*";
+  public static final String WILDCARD = "*";
+
+  public static final String CONTEXT_WILDCARD = CONTEXT_DELIMITER + WILDCARD + CONTEXT_DELIMITER;
 
   private final String tenant;
   private final String context;
@@ -64,10 +66,12 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
         context = contextSubject.substring(1);      // skip CONTEXT_DELIMITER
         subject = "";
       }
+    } else if (contextSubject.startsWith(CONTEXT_WILDCARD)) {
+      context = WILDCARD;
+      subject = contextSubject.substring(CONTEXT_WILDCARD.length());
     } else {
       context = DEFAULT_CONTEXT;
-      // check for wildcard for backward compatibility
-      subject = WILDCARD.equals(contextSubject) ? "" : contextSubject;
+      subject = contextSubject;
     }
 
     this.tenant = tenant;
@@ -118,7 +122,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public String toQualifiedContext() {
-    String qualifiedContext = context.equals(DEFAULT_CONTEXT)
+    String qualifiedContext = DEFAULT_CONTEXT.equals(context)
         ? ""
         : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
     if (DEFAULT_TENANT.equals(tenant)) {
@@ -143,6 +147,37 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   public static String contextFor(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     return qs != null ? qs.getContext() : DEFAULT_CONTEXT;
+  }
+
+  /**
+   * Normalizes the given qualified subject name.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the qualified subject name
+   * @return the normalized subject name
+   */
+  public static String normalize(String tenant, String qualifiedSubject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    return qs != null ? qs.toQualifiedSubject() : null;
+  }
+
+  public static String normalizeContext(String context) {
+    if (context == null) {
+      return null;
+    }
+    if (context.startsWith(CONTEXT_DELIMITER)) {
+      context = context.substring(1);
+    }
+    if (context.endsWith(CONTEXT_DELIMITER)) {
+      context = context.substring(0, context.length() - 1);
+    }
+    if (context.contains(CONTEXT_DELIMITER)) {
+      throw new IllegalArgumentException("Context name cannot contain a colon");
+    }
+    if (!context.startsWith(CONTEXT_SEPARATOR)) {
+      context = CONTEXT_SEPARATOR + context;
+    }
+    return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
   @Override

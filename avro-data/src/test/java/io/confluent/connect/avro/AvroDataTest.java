@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
@@ -278,13 +277,13 @@ public class AvroDataTest {
     Schema union = SchemaBuilder.struct()
         .name(AVRO_TYPE_UNION)
         .field("sample",
-            SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE, "4").optional()
+            SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "4").optional()
                 .build())
         .field("other",
-            SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional()
+            SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional()
                 .build())
         .field("sameOther",
-            SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE, "6")
+            SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "6")
                 .optional().build())
         .build();
     Struct unionSample = new Struct(union).put("sample", ByteBuffer.wrap("foob".getBytes()));
@@ -326,6 +325,81 @@ public class AvroDataTest {
     assertEquals("invalid_record_name", convertedRecord.getSchema().getName());
     assertEquals("invalid_field_name", convertedRecord.getSchema().getFields().get(0).name());
     assertEquals("foo", convertedRecord.get("invalid_field_name"));
+  }
+
+  @Test
+  public void testFromConnectOptionalRecordWithInvalidName() {
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCRUB_INVALID_NAMES_CONFIG, true)
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData avroData = new AvroData(avroDataConfig);
+    Schema schema = SchemaBuilder.struct()
+        .name("invalid record-name")
+        .optional()
+        .field("invalid field-name", SchemaBuilder.bool().optional().defaultValue(null).build())
+        .build();
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+    org.apache.avro.Schema recordSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("invalid_record_name").fields()
+        .name("invalid_field_name").type(org.apache.avro.SchemaBuilder.builder()
+            .unionOf().nullType().and().booleanType().endUnion()).withDefault(null)
+        .endRecord();
+    org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().nullType().and()
+        .record("invalid_record_name").fields()
+        .name("invalid_field_name").type(org.apache.avro.SchemaBuilder.builder()
+            .unionOf().nullType().and().booleanType().endUnion()).withDefault(null)
+        .endRecord()
+        .endUnion();
+
+    assertEquals(expectedAvroSchema, avroSchema);
+
+    Struct struct = new Struct(schema)
+        .put("invalid field-name", true);
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
+    org.apache.avro.generic.GenericRecord avroRecord = new org.apache.avro.generic.GenericRecordBuilder(recordSchema)
+        .set("invalid_field_name", true)
+        .build();
+
+    assertEquals(avroRecord, convertedRecord);
+  }
+
+  @Test
+  public void testFromConnectOptionalRecordWithNullName() {
+    AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCRUB_INVALID_NAMES_CONFIG, true)
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData avroData = new AvroData(avroDataConfig);
+    Schema schema = SchemaBuilder.struct()
+        .optional()
+        .field("invalid field-name", SchemaBuilder.bool().optional().defaultValue(null).build())
+        .build();
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
+    org.apache.avro.Schema recordSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
+        .name("invalid_field_name").type(org.apache.avro.SchemaBuilder.builder()
+            .unionOf().nullType().and().booleanType().endUnion()).withDefault(null)
+        .endRecord();
+    org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().nullType().and()
+        .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
+        .name("invalid_field_name").type(org.apache.avro.SchemaBuilder.builder()
+            .unionOf().nullType().and().booleanType().endUnion()).withDefault(null)
+        .endRecord()
+        .endUnion();
+
+    assertEquals(expectedAvroSchema, avroSchema);
+
+    Struct struct = new Struct(schema)
+        .put("invalid field-name", true);
+    Object convertedRecord = avroData.fromConnectData(schema, struct);
+    org.apache.avro.generic.GenericRecord avroRecord = new org.apache.avro.generic.GenericRecordBuilder(recordSchema)
+        .set("invalid_field_name", true)
+        .build();
+
+    assertEquals(avroRecord, convertedRecord);
   }
 
   @Test
@@ -649,6 +723,53 @@ public class AvroDataTest {
     SchemaAndValue schemaAndValue = new SchemaAndValue(schema, struct);
     schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
     schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
+    schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
+    assertNotNull(schemaAndValue);
+  }
+
+  @Test
+  public void testFromConnectOptionalAndNonOptionalStruct() {
+    Schema innerSchema = SchemaBuilder.struct().name("inner")
+        .field("value", Schema.INT64_SCHEMA).optional().build();
+    Schema outerSchema = SchemaBuilder.struct().name("outer")
+        .field("struct", innerSchema)
+        .field("array", SchemaBuilder.array(innerSchema).build())
+        .build();
+    Struct innerStruct = new Struct(innerSchema)
+        .put("value", 46421L);
+    Struct outerStruct = new Struct(outerSchema)
+        .put("struct", innerStruct)
+        .put("array", Collections.singletonList(innerStruct));
+
+    org.apache.avro.Schema int64Schema = org.apache.avro.SchemaBuilder.builder().longType();
+    org.apache.avro.Schema recordSchema = org.apache.avro.SchemaBuilder.builder()
+        .record("inner").fields().name("value").type(int64Schema).noDefault()
+        .endRecord();
+    recordSchema.addProp("connect.name", "inner");
+    org.apache.avro.Schema unionSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().nullType().and()
+        .type(recordSchema)
+        .endUnion();
+    org.apache.avro.Schema arraySchema = org.apache.avro.SchemaBuilder.builder()
+        .array().items(unionSchema);
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder
+        .record("outer")
+        .fields()
+        .name("struct").type(unionSchema).withDefault(null)
+        .name("array").type(arraySchema).noDefault()
+        .endRecord();
+    avroSchema.addProp("connect.name", "outer");
+
+    org.apache.avro.generic.GenericRecord innerRecord
+        = new org.apache.avro.generic.GenericRecordBuilder(recordSchema)
+        .set("value", 46421L)
+        .build();
+    org.apache.avro.generic.GenericRecord avroRecord
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema)
+        .set("struct", innerRecord)
+        .set("array", Collections.singletonList(innerRecord))
+        .build();
+    SchemaAndValue schemaAndValue = new SchemaAndValue(outerSchema, outerStruct);
     schemaAndValue = convertToConnect(avroSchema, avroRecord, schemaAndValue);
     assertNotNull(schemaAndValue);
   }
@@ -1702,7 +1823,8 @@ public class AvroDataTest {
 
   @Test
   public void testToConnectFixed() {
-    Schema connectSchema = SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE, "4").build();
+    Schema connectSchema = SchemaBuilder.bytes().name("sample").parameter(
+        CONNECT_AVRO_FIXED_SIZE_PROP, "4").build();
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
         .fixed("sample").size(4);
     assertEquals(new SchemaAndValue(connectSchema, ByteBuffer.wrap("foob".getBytes())),
@@ -1726,9 +1848,12 @@ public class AvroDataTest {
             .endUnion();
     Schema unionConnectSchema = SchemaBuilder.struct()
             .name(AVRO_TYPE_UNION)
-            .field("sample", SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE, "4").optional().build())
-            .field("other", SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional().build())
-            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional().build())
+            .field("sample", SchemaBuilder.bytes().name("sample").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "4").optional().build())
+            .field("other", SchemaBuilder.bytes().name("other").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
+            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
             .build();
     GenericData.Fixed valueSample = new GenericData.Fixed(sampleSchema, "foob".getBytes());
     GenericData.Fixed valueOther = new GenericData.Fixed(otherSchema, "foobar".getBytes());
@@ -1763,9 +1888,12 @@ public class AvroDataTest {
             .endUnion();
     Schema unionConnectSchema = SchemaBuilder.struct()
             .name("io.confluent.connect.avro.Union")
-            .field("sample", SchemaBuilder.bytes().name("sample").parameter(CONNECT_AVRO_FIXED_SIZE, "4").optional().build())
-            .field("other", SchemaBuilder.bytes().name("other").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional().build())
-            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(CONNECT_AVRO_FIXED_SIZE, "6").optional().build())
+            .field("sample", SchemaBuilder.bytes().name("sample").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "4").optional().build())
+            .field("other", SchemaBuilder.bytes().name("other").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
+            .field("sameOther", SchemaBuilder.bytes().name("sameOther").parameter(
+                CONNECT_AVRO_FIXED_SIZE_PROP, "6").optional().build())
             .build();
     GenericData.Fixed valueSample = new GenericData.Fixed(sampleSchema, "foob".getBytes());
     GenericData.Fixed valueOther = new GenericData.Fixed(otherSchema, "foobar".getBytes());

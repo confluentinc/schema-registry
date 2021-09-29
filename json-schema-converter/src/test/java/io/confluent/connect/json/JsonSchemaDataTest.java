@@ -32,6 +32,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.connect.json.JsonSchemaData.SchemaWrapper;
+import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.kafka.connect.data.ConnectSchema;
@@ -70,6 +71,8 @@ import static org.apache.kafka.connect.data.Decimal.SCALE_FIELD;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class JsonSchemaDataTest {
@@ -801,6 +804,88 @@ public class JsonSchemaDataTest {
         .build();
     JsonSchemaData jsonSchemaData = new JsonSchemaData(jsonSchemaDataConfig);
     checkNonObjectConversion(jsonSchemaData, expectedSchema, struct, schema, obj);
+  }
+
+  @Test
+  public void testToConnectRecordWithOptionalReference() throws Exception {
+    String schemaString = "{\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-04/schema#\",\n"
+        + "  \"title\": \"Event\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"vehicle\": {\n"
+        + "      \"$ref\": \"#/definitions/VehicleDto\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"definitions\": {\n"
+        + "    \"PriceDto\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"required\": [\n"
+        + "        \"amount\"\n"
+        + "      ],\n"
+        + "      \"properties\": {\n"
+        + "        \"amount\": {\n"
+        + "          \"type\": \"number\",\n"
+        + "          \"format\": \"decimal\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    },\n"
+        + "    \"VehicleDto\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"required\": [\n"
+        + "        \"offerPrice\",\n"
+        + "        \"firstRegistrationDate\"\n"
+        + "      ],\n"
+        + "      \"properties\": {\n"
+        + "        \"offerPrice\": {\n"
+        + "          \"connect.index\": 1,\n"
+        + "          \"$ref\": \"#/definitions/PriceDto\"\n"
+        + "        },\n"
+        + "        \"catalogPrice\": {\n"
+        + "          \"connect.index\": 2,\n"
+        + "          \"oneOf\": [\n"
+        + "            {\n"
+        + "              \"type\": \"null\"\n"
+        + "            },\n"
+        + "            {\n"
+        + "              \"$ref\": \"#/definitions/PriceDto\"\n"
+        + "            }\n"
+        + "          ]\n"
+        + "        },\n"
+        + "        \"firstRegistrationDate\": {\n"
+        + "          \"connect.index\": 3,\n"
+        + "          \"type\": \"string\",\n"
+        + "          \"format\": \"date-time\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    ObjectSchema schema = (ObjectSchema) jsonSchema.rawSchema();
+
+    String json = "{\"vehicle\":{\"offerPrice\":{\"amount\":20000},\"firstRegistrationDate\":\"2020-08-19T12:05:15.953Z\"}}";
+    ObjectNode obj = (ObjectNode) Jackson.newObjectMapper().readTree(json);
+
+    JsonSchemaDataConfig jsonSchemaDataConfig = new JsonSchemaDataConfig.Builder()
+        .with(JsonSchemaDataConfig.USE_OPTIONAL_FOR_NON_REQUIRED_CONFIG, true)
+        .build();
+    JsonSchemaData jsonSchemaData = new JsonSchemaData(jsonSchemaDataConfig);
+
+    Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
+    Struct connectStruct = (Struct) jsonSchemaData.toConnectData(connectSchema, obj);
+
+    Schema vehicleSchema = connectSchema.field("vehicle").schema();
+    Schema offerPriceSchema = vehicleSchema.field("offerPrice").schema();
+    Schema catalogPriceSchema = vehicleSchema.field("catalogPrice").schema();
+    assertFalse(offerPriceSchema.isOptional());
+    assertTrue(catalogPriceSchema.isOptional());
+
+    Struct vehicleStruct = (Struct) connectStruct.get("vehicle");
+    Struct offerPriceStruct = (Struct) vehicleStruct.get("offerPrice");
+    Struct catalogPriceStruct = (Struct) vehicleStruct.get("catalogPrice");
+    assertNotNull(offerPriceStruct);
+    assertNull(catalogPriceStruct);
   }
 
   @Test
@@ -1598,7 +1683,7 @@ public class JsonSchemaDataTest {
     schemaBuilder.doc("A task");
     schemaBuilder.parameter(JsonSchemaData.JSON_ID_PROP, "#id1");
     schemaBuilder.field("parent",
-        new SchemaWrapper(schemaBuilder)
+        new SchemaWrapper(schemaBuilder, false)
             .build()
     );
     schemaBuilder.field("title",

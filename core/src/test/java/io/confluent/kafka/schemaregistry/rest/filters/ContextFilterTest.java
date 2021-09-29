@@ -5,7 +5,9 @@
 package io.confluent.kafka.schemaregistry.rest.filters;
 
 import java.net.URI;
+import java.util.Collections;
 import javax.ws.rs.core.MultivaluedHashMap;
+import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.UriBuilder;
 import org.junit.Assert;
 import org.junit.Test;
@@ -30,6 +32,26 @@ public class ContextFilterTest {
     Assert.assertEquals(
         "Subject must be prefixed",
         "/subjects/:.test-ctx:test-subject/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testSubjectPartOfUriDefaultContext() {
+    String path = "/contexts/:.:/subjects/test-subject/versions";
+    Assert.assertEquals(
+        "Subject must be prefixed",
+        "/subjects/test-subject/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testNoSubjectDefaultContext() {
+    String path = "/contexts/:.:/subjects";
+    Assert.assertEquals(
+        "Subject must be prefixed",
+        "/subjects/",
         contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
@@ -66,6 +88,26 @@ public class ContextFilterTest {
     Assert.assertEquals(
         "Query param must change",
         "subject=:.test-ctx:",
+        uri.getQuery()
+    );
+  }
+
+  @Test
+  public void testWildcardContextUnmodified() {
+    String path = "/contexts/:.:/schemas/";
+    UriBuilder uriBuilder = UriBuilder.fromPath(path);
+    uriBuilder.queryParam("subjectPrefix", ":*:");
+    MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
+    queryParams.put("subjectPrefix", Collections.singletonList(":*:"));
+    URI uri = contextFilter.modifyUri(uriBuilder, path, queryParams);
+    Assert.assertEquals(
+        "URI must not change",
+        "/schemas/",
+        uri.getPath()
+    );
+    Assert.assertEquals(
+        "Query param must not change",
+        "subjectPrefix=:*:",
         uri.getQuery()
     );
   }
@@ -124,8 +166,18 @@ public class ContextFilterTest {
   public void testModeUriWithoutSubject() {
     String path = "/contexts/.test-ctx/mode";
     Assert.assertEquals(
-        "Wildcard must be prefixed",
+        "Mode must be prefixed",
         "/mode/:.test-ctx:/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testModeUriWithoutSubjectDefaultContext() {
+    String path = "/contexts/:.:/mode";
+    Assert.assertEquals(
+        "Mode must not be prefixed",
+        "/mode/",
         contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
@@ -137,6 +189,16 @@ public class ContextFilterTest {
         "Non-root config must be unmodified",
         "/other/config/test/",
         contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testInvalidContext() {
+    String path = "/contexts/foo:bar/subjects";
+    Assert.assertThrows(
+        "Invalid context must be rejected",
+        IllegalArgumentException.class,
+        () -> contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
 

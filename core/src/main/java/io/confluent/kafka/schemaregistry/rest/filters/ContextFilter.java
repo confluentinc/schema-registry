@@ -4,9 +4,15 @@
 
 package io.confluent.kafka.schemaregistry.rest.filters;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.confluent.rest.entities.ErrorMessage;
 import java.net.URI;
 import java.util.Objects;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,14 +25,16 @@ import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
 
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 @PreMatching
 @Priority(Priorities.ENTITY_CODER)
 public class ContextFilter implements ContainerRequestFilter {
   private static final Logger log = LoggerFactory.getLogger(ContextFilter.class);
+
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   public ContextFilter() {
   }
@@ -36,11 +44,19 @@ public class ContextFilter implements ContainerRequestFilter {
 
     String path = requestContext.getUriInfo().getPath(false);
     if (path.startsWith("contexts/")) {
-      UriBuilder builder = requestContext.getUriInfo().getRequestUriBuilder();
-      MultivaluedMap<String, String> queryParams =
-          requestContext.getUriInfo().getQueryParameters(false);
-      URI uri = modifyUri(builder, path, queryParams);
-      requestContext.setRequestUri(uri);
+      try {
+        UriBuilder builder = requestContext.getUriInfo().getRequestUriBuilder();
+        MultivaluedMap<String, String> queryParams =
+            requestContext.getUriInfo().getQueryParameters(false);
+        URI uri = modifyUri(builder, path, queryParams);
+        requestContext.setRequestUri(uri);
+      } catch (IllegalArgumentException e) {
+        requestContext.abortWith(
+            Response.status(Status.BAD_REQUEST).entity(getErrorResponse(
+                Status.BAD_REQUEST, e.getMessage()))
+                .build()
+        );
+      }
     }
   }
 
@@ -83,8 +99,8 @@ public class ContextFilter implements ContainerRequestFilter {
       }
 
       if (subjectPathFound) {
-        if (!uriPathStr.startsWith(CONTEXT_PREFIX)) {
-          modifiedUriPathStr = formattedContext(context) + uriPathStr;
+        if (!uriPathStr.startsWith(CONTEXT_PREFIX) && !uriPathStr.startsWith(CONTEXT_WILDCARD)) {
+          modifiedUriPathStr = QualifiedSubject.normalizeContext(context) + uriPathStr;
         }
 
         subjectPathFound = false;
@@ -104,7 +120,10 @@ public class ContextFilter implements ContainerRequestFilter {
       }
     }
     if (configOrModeFound && subjectPathFound) {
-      modifiedPath.append(formattedContext(context)).append("/");
+      String normalizedContext = QualifiedSubject.normalizeContext(context);
+      if (!normalizedContext.isEmpty()) {
+        modifiedPath.append(normalizedContext).append("/");
+      }
     } else if (contextPathFound) {
       // Must be a root contexts only
       modifiedPath.append("contexts").append("/");
@@ -115,13 +134,6 @@ public class ContextFilter implements ContainerRequestFilter {
 
   private boolean isRootConfigOrMode(boolean isFirst, String uriPathStr) {
     return isFirst && (uriPathStr.equals("config") || uriPathStr.equals("mode"));
-  }
-
-  private String formattedContext(String context) {
-    if (!context.startsWith(".")) {
-      context = "." + context;
-    }
-    return CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
   private void replaceQueryParams(
@@ -142,15 +154,31 @@ public class ContextFilter implements ContainerRequestFilter {
       if (subject == null) {
         subject = "";
       }
-      subject = formattedContext(context) + subject;
-      builder.replaceQueryParam("subject", subject);
+      if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
+        subject = QualifiedSubject.normalizeContext(context) + subject;
+        builder.replaceQueryParam("subject", subject);
+      }
     } else if (path.equals("schemas") || path.equals("subjects")) {
       String subject = queryParams.getFirst("subjectPrefix");
       if (subject == null) {
         subject = "";
       }
-      subject = formattedContext(context) + subject;
-      builder.replaceQueryParam("subjectPrefix", subject);
+      if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
+        subject = QualifiedSubject.normalizeContext(context) + subject;
+        builder.replaceQueryParam("subjectPrefix", subject);
+      }
+    }
+  }
+
+  public static String getErrorResponse(Response.Status status,
+      String message) {
+    try {
+      ErrorMessage errorMessage = new ErrorMessage(status.getStatusCode(),
+          message);
+      return MAPPER.writeValueAsString(errorMessage);
+    } catch (JsonProcessingException ex) {
+      log.error("Could not format response error message. {}", ex.toString());
+      return message;
     }
   }
 

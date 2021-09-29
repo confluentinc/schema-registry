@@ -495,6 +495,16 @@ public class ProtobufSchema implements ParsedSchema {
       );
       options.add(option);
     }
+    if (file.getOptions().hasDeprecated()) {
+      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
+      OptionElement option = new OptionElement(
+          "deprecated",
+          kind,
+          file.getOptions().getDeprecated(),
+          false
+      );
+      options.add(option);
+    }
     if (file.getOptions().hasExtension(MetaProto.fileMeta)) {
       Meta meta = file.getOptions().getExtension(MetaProto.fileMeta);
       OptionElement option = toOption("confluent.file_meta", meta);
@@ -567,6 +577,16 @@ public class ProtobufSchema implements ParsedSchema {
       );
       options.add(option);
     }
+    if (descriptor.getOptions().hasDeprecated()) {
+      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
+      OptionElement option = new OptionElement(
+          "deprecated",
+          kind,
+          descriptor.getOptions().getDeprecated(),
+          false
+      );
+      options.add(option);
+    }
     if (descriptor.getOptions().hasExtension(MetaProto.messageMeta)) {
       Meta meta = descriptor.getOptions().getExtension(MetaProto.messageMeta);
       OptionElement option = toOption("confluent.message_meta", meta);
@@ -632,6 +652,16 @@ public class ProtobufSchema implements ParsedSchema {
     ImmutableList.Builder<EnumConstantElement> constants = ImmutableList.builder();
     for (EnumValueDescriptorProto ev : ed.getValueList()) {
       ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
+      if (ev.getOptions().hasDeprecated()) {
+        OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
+        OptionElement option = new OptionElement(
+            "deprecated",
+            kind,
+            ev.getOptions().getDeprecated(),
+            false
+        );
+        options.add(option);
+      }
       if (ev.getOptions().hasExtension(MetaProto.enumValueMeta)) {
         Meta meta = ev.getOptions().getExtension(MetaProto.enumValueMeta);
         OptionElement option = toOption("confluent.enum_value_meta", meta);
@@ -659,6 +689,16 @@ public class ProtobufSchema implements ParsedSchema {
       );
       options.add(option);
     }
+    if (ed.getOptions().hasDeprecated()) {
+      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
+      OptionElement option = new OptionElement(
+          "deprecated",
+          kind,
+          ed.getOptions().getDeprecated(),
+          false
+      );
+      options.add(option);
+    }
     if (ed.getOptions().hasExtension(MetaProto.enumMeta)) {
       Meta meta = ed.getOptions().getExtension(MetaProto.enumMeta);
       OptionElement option = toOption("confluent.enum_meta", meta);
@@ -678,6 +718,12 @@ public class ProtobufSchema implements ParsedSchema {
     if (fd.getOptions().hasPacked()) {
       OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement("packed", kind, fd.getOptions().getPacked(), false);
+      options.add(option);
+    }
+    if (fd.getOptions().hasDeprecated()) {
+      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
+      OptionElement option =
+          new OptionElement("deprecated", kind, fd.getOptions().getDeprecated(), false);
       options.add(option);
     }
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
@@ -833,6 +879,11 @@ public class ProtobufSchema implements ParsedSchema {
       if (javaMultipleFiles != null) {
         schema.setJavaMultipleFiles(javaMultipleFiles);
       }
+      Boolean isDeprecated = findOption("deprecated", rootElem.getOptions())
+          .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+      if (isDeprecated != null) {
+        schema.setDeprecated(isDeprecated);
+      }
       Optional<OptionElement> meta = findOption("confluent.file_meta", rootElem.getOptions());
       String doc = findDoc(meta);
       Map<String, String> params = findParams(meta);
@@ -862,8 +913,9 @@ public class ProtobufSchema implements ParsedSchema {
       MessageDefinition.OneofBuilder oneofBuilder = message.addOneof(oneof.getName());
       for (FieldElement field : oneof.getFields()) {
         String defaultVal = field.getDefaultValue();
-        String jsonName = findOption("json_name", field.getOptions())
-            .map(o -> o.getValue().toString()).orElse(null);
+        String jsonName = field.getJsonName();
+        Boolean isDeprecated = findOption("deprecated", field.getOptions())
+            .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
         Optional<OptionElement> meta = findOption("confluent.field_meta", field.getOptions());
         String doc = findDoc(meta);
         Map<String, String> params = findParams(meta);
@@ -874,7 +926,8 @@ public class ProtobufSchema implements ParsedSchema {
             defaultVal,
             jsonName,
             doc,
-            params
+            params,
+            isDeprecated
         );
         added.add(field.getName());
       }
@@ -891,6 +944,8 @@ public class ProtobufSchema implements ParsedSchema {
       String defaultVal = field.getDefaultValue();
       String jsonName = field.getJsonName();
       Boolean isPacked = findOption("packed", field.getOptions())
+          .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+      Boolean isDeprecated = findOption("deprecated", field.getOptions())
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
       Optional<OptionElement> meta = findOption("confluent.field_meta", field.getOptions());
       String doc = findDoc(meta);
@@ -918,7 +973,8 @@ public class ProtobufSchema implements ParsedSchema {
           jsonName,
           doc,
           params,
-          isPacked
+          isPacked,
+          isDeprecated
       );
     }
     for (ReservedElement reserved : messageElem.getReserveds()) {
@@ -941,6 +997,11 @@ public class ProtobufSchema implements ParsedSchema {
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
     if (isMapEntry != null) {
       message.setMapEntry(isMapEntry);
+    }
+    Boolean isDeprecated = findOption("deprecated", messageElem.getOptions())
+        .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+    if (isDeprecated != null) {
+      message.setDeprecated(isDeprecated);
     }
     Optional<OptionElement> meta = findOption("confluent.message_meta", messageElem.getOptions());
     String doc = findDoc(meta);
@@ -995,12 +1056,17 @@ public class ProtobufSchema implements ParsedSchema {
   private static EnumDefinition toDynamicEnum(EnumElement enumElem) {
     Boolean allowAlias = findOption("allow_alias", enumElem.getOptions())
         .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
-    EnumDefinition.Builder enumer = EnumDefinition.newBuilder(enumElem.getName(), allowAlias);
+    Boolean isDeprecated = findOption("deprecated", enumElem.getOptions())
+        .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+    EnumDefinition.Builder enumer =
+        EnumDefinition.newBuilder(enumElem.getName(), allowAlias, isDeprecated);
     for (EnumConstantElement constant : enumElem.getConstants()) {
+      Boolean isConstDeprecated = findOption("deprecated", constant.getOptions())
+          .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
       Optional<OptionElement> meta = findOption("confluent.enum_value_meta", constant.getOptions());
       String doc = findDoc(meta);
       Map<String, String> params = findParams(meta);
-      enumer.addValue(constant.getName(), constant.getTag(), doc, params);
+      enumer.addValue(constant.getName(), constant.getTag(), doc, params, isConstDeprecated);
     }
     Optional<OptionElement> meta = findOption("confluent.enum_meta", enumElem.getOptions());
     String doc = findDoc(meta);

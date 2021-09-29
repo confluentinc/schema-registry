@@ -14,9 +14,11 @@
  */
 package io.confluent.kafka.schemaregistry.rest;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -56,6 +58,11 @@ public class RestApiContextTest extends ClusterTestHarness {
                    Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
                    rce.getErrorCode());
     }
+
+    // test getAllContexts
+    assertEquals("Getting all subjects should return default context",
+        Collections.singletonList(DEFAULT_CONTEXT),
+        restApp.restClient.getAllContexts());
 
     // test getAllSubjects with no existing data
     assertEquals("Getting all subjects should return empty",
@@ -103,6 +110,11 @@ public class RestApiContextTest extends ClusterTestHarness {
                  allVersionsInSubject2,
                  restApp.restClient.getAllVersions(subject2));
 
+    // test getAllContexts
+    assertEquals("Getting all contexts should return all registered contexts",
+                 ImmutableList.of(DEFAULT_CONTEXT, ".ctx1", ".ctx2"),
+                 restApp.restClient.getAllContexts());
+
     // test getAllSubjectsWithPrefix with existing data
     assertEquals("Getting all subjects should match all registered subjects",
                  Collections.singletonList(subject1),
@@ -117,21 +129,37 @@ public class RestApiContextTest extends ClusterTestHarness {
     assertEquals("Getting all subjects should match no registered subjects",
                  Collections.emptyList(),
                  restApp.restClient.getAllSubjects());
+
+    // test getAllSubjectsWithPrefix with context wildcard
+    assertEquals("Getting all subjects should match all registered subjects",
+        ImmutableList.of(subject1, subject2),
+        restApp.restClient.getAllSubjects(":*:", false));
+
+    // test getSchemas with context wildcard
+    assertEquals("Getting all schemas should match all registered subjects",
+        schemasInSubject1 + schemasInSubject2,
+        restApp.restClient.getSchemas(":*:", false, false).size());
   }
 
   @Test
   public void testContextPaths() throws Exception {
     RestService restClient1 = new RestService(restApp.restConnect + "/contexts/.ctx1");
     RestService restClient2 = new RestService(restApp.restConnect + "/contexts/.ctx2");
+    RestService restClient3 = new RestService(restApp.restConnect + "/contexts/.");
+    RestService noCtxRestClient3 = new RestService(restApp.restConnect);
 
     String subject1 = "testTopic1";
     String subject2 = "testTopic2";
+    String subject3 = "testTopic3";
     int schemasInSubject1 = 10;
     List<Integer> allVersionsInSubject1 = new ArrayList<Integer>();
     List<String> allSchemasInSubject1 = TestUtils.getRandomCanonicalAvroString(schemasInSubject1);
     int schemasInSubject2 = 5;
     List<Integer> allVersionsInSubject2 = new ArrayList<Integer>();
     List<String> allSchemasInSubject2 = TestUtils.getRandomCanonicalAvroString(schemasInSubject2);
+    int schemasInSubject3 = 2;
+    List<Integer> allVersionsInSubject3 = new ArrayList<Integer>();
+    List<String> allSchemasInSubject3 = TestUtils.getRandomCanonicalAvroString(schemasInSubject3);
 
     // test getAllVersions with no existing data
     try {
@@ -178,6 +206,19 @@ public class RestApiContextTest extends ClusterTestHarness {
       allVersionsInSubject2.add(expectedVersion);
     }
 
+    // reset the schema id counter due to a different context
+    schemaIdCounter = 1;
+
+    // test registering schemas in subject3
+    for (int i = 0; i < schemasInSubject3; i++) {
+      String schema = allSchemasInSubject3.get(i);
+      int expectedVersion = i + 1;
+      registerAndVerifySchema(restClient3, schema, schemaIdCounter,
+          subject3);
+      schemaIdCounter++;
+      allVersionsInSubject3.add(expectedVersion);
+    }
+
     // test getAllVersions with existing data
     assertEquals("Getting all versions from subject1 should match all registered versions",
         allVersionsInSubject1,
@@ -185,6 +226,20 @@ public class RestApiContextTest extends ClusterTestHarness {
     assertEquals("Getting all versions from subject2 should match all registered versions",
         allVersionsInSubject2,
         restClient2.getAllVersions(subject2));
+    assertEquals("Getting all versions from subject3 should match all registered versions",
+        allVersionsInSubject3,
+        restClient3.getAllVersions(subject3));
+    assertEquals("Getting all versions from subject3 should match all registered versions",
+        allVersionsInSubject3,
+        noCtxRestClient3.getAllVersions(subject3));
+    assertEquals("Getting all versions from subject3 should match all registered versions",
+        allVersionsInSubject3,
+        noCtxRestClient3.getAllVersions(":.:" + subject3));
+
+    // test getAllContexts
+    assertEquals("Getting all contexts should return all registered contexts",
+        ImmutableList.of(DEFAULT_CONTEXT, ".ctx1", ".ctx2"),
+        restClient1.getAllContexts());
 
     // test getAllSubjects with existing data
     assertEquals("Getting all subjects should match all registered subjects",
@@ -195,6 +250,16 @@ public class RestApiContextTest extends ClusterTestHarness {
     assertEquals("Getting all subjects should match all registered subjects",
         Collections.singletonList(":.ctx2:" + subject2),
         restClient2.getAllSubjects());
+
+    // test getAllSubjects with existing data
+    assertEquals("Getting all subjects should match all registered subjects",
+        Collections.singletonList(subject3),
+        restClient3.getAllSubjects());
+
+    // test getAllSubjects with existing data
+    assertEquals("Getting all subjects should match all registered subjects",
+        Collections.singletonList(subject3),
+        noCtxRestClient3.getAllSubjects());
   }
 
   static void registerAndVerifySchema(RestService restService, String schemaString,

@@ -92,6 +92,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaRegistry {
@@ -918,7 +921,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private void forwardSetModeRequestToLeader(
-      String subject, Mode mode,
+      String subject, Mode mode, boolean force,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
@@ -928,7 +931,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     log.debug(String.format("Forwarding update mode request %s to %s",
         modeUpdateRequest, baseUrl));
     try {
-      leaderRestService.setMode(headerProperties, modeUpdateRequest, subject);
+      leaderRestService.setMode(headerProperties, modeUpdateRequest, subject, force);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the update mode request %s to %s",
@@ -1364,8 +1367,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private CloseableIterator<SchemaRegistryValue> allVersions(
           String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
     try {
-      String start = subjectOrPrefix;
-      String end = isPrefix ? subjectOrPrefix + Character.MAX_VALUE : subjectOrPrefix;
+      String start;
+      String end;
+      int idx = subjectOrPrefix.indexOf(CONTEXT_WILDCARD);
+      if (idx >= 0) {
+        // Context wildcard match
+        String prefix = subjectOrPrefix.substring(0, idx);
+        start = prefix + CONTEXT_PREFIX + CONTEXT_DELIMITER;
+        end = prefix + CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER;
+      } else {
+        start = subjectOrPrefix;
+        end = isPrefix ? subjectOrPrefix + Character.MAX_VALUE : subjectOrPrefix;
+      }
       SchemaKey key1 = new SchemaKey(start, MIN_VERSION);
       SchemaKey key2 = new SchemaKey(end, MAX_VERSION);
       return kafkaStore.getAll(key1, key2);
@@ -1580,13 +1593,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public void setMode(String subject, Mode mode)
       throws SchemaRegistryStoreException, OperationNotPermittedException {
+    setMode(subject, mode, false);
+  }
+
+  public void setMode(String subject, Mode mode, boolean force)
+      throws SchemaRegistryStoreException, OperationNotPermittedException {
     if (!allowModeChanges) {
       throw new OperationNotPermittedException("Mode changes are not allowed");
     }
     ModeKey modeKey = new ModeKey(subject);
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT) {
+      if (mode == Mode.IMPORT && getMode(subject) != Mode.IMPORT && !force) {
         // Changing to import mode requires that no schemas exist with matching subjects.
         if (hasSubjects(subject, false)) {
           throw new OperationNotPermittedException("Cannot import since found existing subjects");
@@ -1603,17 +1621,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void setModeOrForward(String subject, Mode mode, Map<String, String> headerProperties)
+  public void setModeOrForward(String subject, Mode mode, boolean force,
+      Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownLeaderException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        setMode(subject, mode);
+        setMode(subject, mode, force);
       } else {
         // forward update mode request to the leader
         if (leaderIdentity != null) {
-          forwardSetModeRequestToLeader(subject, mode, headerProperties);
+          forwardSetModeRequestToLeader(subject, mode, force, headerProperties);
         } else {
           throw new UnknownLeaderException("Update mode request failed since leader is "
               + "unknown");
