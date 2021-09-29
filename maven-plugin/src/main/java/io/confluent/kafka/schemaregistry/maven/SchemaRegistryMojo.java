@@ -43,6 +43,9 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
   @Parameter
   String userInfoConfig;
 
+  @Parameter
+  Map<String, String> httpHeaders;
+
   @Parameter(property = "kafka-schema-registry.skip")
   boolean skip;
 
@@ -77,7 +80,8 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
           this.schemaRegistryUrls,
           1000,
           providers,
-          config
+          config,
+          httpHeaders
       );
     }
     return this.client;
