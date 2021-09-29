@@ -32,7 +32,7 @@ import javax.ws.rs.core.Configurable;
 import javax.ws.rs.core.Response;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
@@ -56,19 +56,17 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   public String resourceExtensionConfigName;
 
   public SchemaRegistryExtensionTest() {
-    super(1, true, AvroCompatibilityLevel.BACKWARD.name);
+    super(1, true, CompatibilityLevel.BACKWARD.name);
   }
 
   @Test
   public void testAllowResource() throws Exception {
     String subject = "testSubject";
 
-    String schemaString1 = AvroUtils.parseSchema(
-        "{\"type\":\"record\","
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
         + "\"name\":\"myrecord\","
         + "\"fields\":"
-        + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
-        .canonicalString;
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
     int expectedIdSchema1 = 1;
     assertEquals(
         "Registering should succeed",

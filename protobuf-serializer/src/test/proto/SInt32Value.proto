@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+option java_package = "io.confluent.kafka.serializers.protobuf.test";
+
+// Wrapper message for `sint32`.
+message SInt32Value {
+    sint32 value = 1;
+}

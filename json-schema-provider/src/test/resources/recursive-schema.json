@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "categories": {
+      "description": "Test recursive schema.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Category"
+      }
+    }
+  },
+  "required": [
+    "categories"
+  ],
+  "definitions": {
+    "Category": {
+      "description": "Test category",
+      "type": "object",
+      "properties": {
+        "category_id": {
+          "description": "Some description",
+          "type": "integer"
+        },
+        "categories": {
+          "description": "All subcategories within this category.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Category"
+          }
+        }
+      },
+      "required": [
+        "category_id",
+        "categories"
+      ]
+    }
+  }
+}

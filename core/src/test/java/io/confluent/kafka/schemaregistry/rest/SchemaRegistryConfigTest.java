@@ -182,5 +182,11 @@ public class SchemaRegistryConfigTest {
     assertEquals("http", config.interInstanceProtocol());
   }
 
+  @Test
+  public void defaultMutabilityMode() throws RestConfigException {
+    Properties props = new Properties();
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    assertEquals(true, config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY));
+  }
 
 }

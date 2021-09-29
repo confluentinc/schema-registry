@@ -15,30 +15,37 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 
-public class ConfigValue implements SchemaRegistryValue {
+@JsonInclude(Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class ConfigValue extends SubjectValue {
 
-  private AvroCompatibilityLevel compatibilityLevel;
+  private CompatibilityLevel compatibilityLevel;
 
-  public ConfigValue(@JsonProperty("compatibilityLevel")
-                     AvroCompatibilityLevel compatibilityLevel) {
+  public ConfigValue(@JsonProperty("subject") String subject,
+                     @JsonProperty("compatibilityLevel") CompatibilityLevel compatibilityLevel) {
+    super(subject);
     this.compatibilityLevel = compatibilityLevel;
   }
 
   public ConfigValue() {
+    super(null);
     compatibilityLevel = null;
   }
 
   @JsonProperty("compatibilityLevel")
-  public AvroCompatibilityLevel getCompatibilityLevel() {
+  public CompatibilityLevel getCompatibilityLevel() {
     return compatibilityLevel;
   }
 
   @JsonProperty("compatibilityLevel")
-  public void setCompatibilityLevel(AvroCompatibilityLevel compatibilityLevel) {
+  public void setCompatibilityLevel(CompatibilityLevel compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
   }
 
@@ -48,6 +55,9 @@ public class ConfigValue implements SchemaRegistryValue {
       return true;
     }
     if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    if (!super.equals(o)) {
       return false;
     }
 
@@ -61,7 +71,8 @@ public class ConfigValue implements SchemaRegistryValue {
 
   @Override
   public int hashCode() {
-    int result = 31 * compatibilityLevel.hashCode();
+    int result = super.hashCode();
+    result = 31 * result + compatibilityLevel.hashCode();
     return result;
   }
 
@@ -70,5 +81,10 @@ public class ConfigValue implements SchemaRegistryValue {
     StringBuilder sb = new StringBuilder();
     sb.append("{compatibilityLevel=" + this.compatibilityLevel + "}");
     return sb.toString();
+  }
+
+  @Override
+  public ConfigKey toKey() {
+    return new ConfigKey(getSubject());
   }
 }

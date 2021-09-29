@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
+import io.confluent.kafka.serializers.jackson.Jackson;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -44,9 +45,13 @@ public class KafkaJsonSerializer<T> implements Serializer<T> {
   }
 
   protected void configure(KafkaJsonSerializerConfig config) {
+    this.objectMapper = Jackson.newObjectMapper();
     boolean prettyPrint = config.getBoolean(KafkaJsonSerializerConfig.JSON_INDENT_OUTPUT);
-    this.objectMapper = new ObjectMapper();
     this.objectMapper.configure(SerializationFeature.INDENT_OUTPUT, prettyPrint);
+    boolean writeDatesAsIso8601 = config.getBoolean(
+        KafkaJsonSerializerConfig.WRITE_DATES_AS_ISO8601);
+    this.objectMapper.configure(
+        SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, !writeDatesAsIso8601);
   }
 
   @Override

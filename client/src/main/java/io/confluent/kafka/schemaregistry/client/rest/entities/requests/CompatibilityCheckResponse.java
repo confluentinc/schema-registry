@@ -16,17 +16,26 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+
+import java.util.List;
+import java.util.Objects;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CompatibilityCheckResponse {
 
   private boolean isCompatible;
+  private List<String> messages = null;
 
   public static CompatibilityCheckResponse fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, CompatibilityCheckResponse.class);
+    return JacksonMapper.INSTANCE.readValue(json, CompatibilityCheckResponse.class);
   }
 
   @JsonProperty("is_compatible")
@@ -40,7 +49,33 @@ public class CompatibilityCheckResponse {
   }
 
   public String toJson() throws IOException {
-    return new ObjectMapper().writeValueAsString(this);
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
+  @JsonProperty("messages")
+  public List<String> getMessages() {
+    return messages;
+  }
+
+  @JsonProperty("messages")
+  public void setMessages(List<String> messages) {
+    this.messages = messages;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    CompatibilityCheckResponse that = (CompatibilityCheckResponse) o;
+    return isCompatible == that.isCompatible;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(isCompatible);
+  }
 }

@@ -16,32 +16,46 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaParseException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
+import java.util.stream.Collectors;
+
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 
 public abstract class SchemaRegistryMojo extends AbstractMojo {
 
   @Parameter(required = true)
   List<String> schemaRegistryUrls;
+
   @Parameter
   String userInfoConfig;
+
   @Parameter
   Map<String, String> httpHeaders;
-  private SchemaRegistryClient client;
+
+  @Parameter(property = "kafka-schema-registry.skip")
+  boolean skip;
+
+  @Parameter(required = false)
+  List<String> schemaProviders = new ArrayList<>();
+
+  @Parameter
+  Map<String, String> configs = new HashMap<>();
+
+  protected SchemaRegistryClient client;
 
   void client(SchemaRegistryClient client) {
     this.client = client;
@@ -50,47 +64,42 @@ public abstract class SchemaRegistryMojo extends AbstractMojo {
   protected SchemaRegistryClient client() {
     if (null == this.client) {
       Map<String, String> config = new HashMap<>();
+      if (configs != null && !configs.isEmpty()) {
+        config.putAll(configs);
+      }
       if (userInfoConfig != null) {
         // Note that BASIC_AUTH_CREDENTIALS_SOURCE is not configurable as the plugin only supports
         // a single schema registry URL, so there is no additional utility of the URL source.
         config.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
         config.put(SchemaRegistryClientConfig.USER_INFO_CONFIG, userInfoConfig);
       }
-      this.client = new CachedSchemaRegistryClient(this.schemaRegistryUrls, 1000, config, httpHeaders);
+      List<SchemaProvider> providers = schemaProviders != null && !schemaProviders.isEmpty()
+                                       ? schemaProviders()
+                                       : defaultSchemaProviders();
+      this.client = new CachedSchemaRegistryClient(
+          this.schemaRegistryUrls,
+          1000,
+          providers,
+          config,
+          httpHeaders
+      );
     }
     return this.client;
   }
 
-  protected Map<String, Schema> loadSchemas(Map<String, File> subjects) {
-    int errorCount = 0;
-    Map<String, Schema> results = new LinkedHashMap<>();
-
-    for (Map.Entry<String, File> kvp : subjects.entrySet()) {
-      Schema.Parser parser = new Schema.Parser();
-      getLog().debug(
-          String.format(
-              "Loading schema for subject(%s) from %s.",
-              kvp.getKey(),
-              kvp.getValue()
-          )
-      );
-
-      try (FileInputStream inputStream = new FileInputStream(kvp.getValue())) {
-        Schema schema = parser.parse(inputStream);
-        results.put(kvp.getKey(), schema);
-      } catch (IOException ex) {
-        getLog().error("Exception thrown while loading " + kvp.getValue(), ex);
-        errorCount++;
-      } catch (SchemaParseException ex) {
-        getLog().error("Exception thrown while parsing " + kvp.getValue(), ex);
-        errorCount++;
+  private List<SchemaProvider> schemaProviders() {
+    return schemaProviders.stream().map(s -> {
+      try {
+        return Utils.newInstance(s, SchemaProvider.class);
+      } catch (ClassNotFoundException e) {
+        throw new RuntimeException(e);
       }
-    }
+    }).collect(Collectors.toList());
+  }
 
-    if (errorCount > 0) {
-      throw new IllegalStateException("One or more schemas could not be loaded.");
-    }
-
-    return results;
+  private List<SchemaProvider> defaultSchemaProviders() {
+    return Arrays.asList(
+        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
+    );
   }
 }

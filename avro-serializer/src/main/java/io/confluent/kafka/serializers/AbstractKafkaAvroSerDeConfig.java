@@ -16,37 +16,29 @@
 
 package io.confluent.kafka.serializers;
 
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
-import io.confluent.common.config.AbstractConfig;
-import io.confluent.common.config.ConfigDef;
-import io.confluent.common.config.ConfigDef.Importance;
-import io.confluent.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
-import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 
 /**
- * Base class for configs for serializers and deserializers, defining a few common configs and
- * defaults.
+ * Use {@link io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig} instead
  */
-public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
+@Deprecated
+public class AbstractKafkaAvroSerDeConfig extends AbstractKafkaSchemaSerDeConfig {
 
   /**
    * Configurations beginning with this prefix can be used to specify headers to include in requests
    * made to Schema Registry. For example, to include an {@code Authorization} header with a value
    * of {@code Bearer NjksNDIw}, use the following configuration:
-   * 
+   *
    * <p>{@code request.header.Authorization=Bearer NjksNDIw}
    */
   public static final String REQUEST_HEADER_PREFIX = "request.header.";
 
   public static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
-  public static final String
-      SCHEMA_REGISTRY_URL_DOC =
+  public static final String SCHEMA_REGISTRY_URL_DOC =
       "Comma-separated list of URLs for schema registry instances that can be used to register "
       + "or look up schemas. "
       + "If you wish to get a connection to a mocked schema registry for testing, "
@@ -108,73 +100,24 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
       "Determines how to construct the subject name under which the value schema is registered "
       + "with the schema registry. By default, <topic>-value is used as subject.";
 
-  public static ConfigDef baseConfigDef() {
-    return new ConfigDef()
-        .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
-                Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
-        .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
-                Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
-        .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
-                Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
-        .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
-            Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
-        .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
-                Importance.MEDIUM, BEARER_AUTH_CREDENTIALS_SOURCE_DOC)
-        .define(SCHEMA_REGISTRY_USER_INFO_CONFIG, Type.PASSWORD, SCHEMA_REGISTRY_USER_INFO_DEFAULT,
-                Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
-        .define(USER_INFO_CONFIG, Type.PASSWORD, USER_INFO_DEFAULT,
-                Importance.MEDIUM, SCHEMA_REGISTRY_USER_INFO_DOC)
-        .define(BEARER_AUTH_TOKEN_CONFIG, Type.PASSWORD, BEARER_AUTH_TOKEN_DEFAULT,
-                Importance.MEDIUM, BEARER_AUTH_TOKEN_DOC)
-        .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
-                Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
-        .define(VALUE_SUBJECT_NAME_STRATEGY, Type.CLASS, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
-                Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC);
-  }
+  public static final String SCHEMA_REFLECTION_CONFIG = "schema.reflection";
+  public static final boolean SCHEMA_REFLECTION_DEFAULT = false;
+  public static final String SCHEMA_REFLECTION_DOC =
+          "If true, uses the Avro reflection API when serializing/deserializing ";
+
+  public static final String PROXY_HOST = SchemaRegistryClientConfig.PROXY_HOST;
+  public static final String PROXY_HOST_DEFAULT = "";
+  public static final String PROXY_HOST_DOC =
+      "The hostname, or address, of the proxy server that will be used to connect to the schema "
+          + "registry instances.";
+
+  public static final String PROXY_PORT = SchemaRegistryClientConfig.PROXY_PORT;
+  public static final int PROXY_PORT_DEFAULT = -1;
+  public static final String PROXY_PORT_DOC =
+      "The port number of the proxy server that will be used to connect to the schema registry "
+          + "instances.";
 
   public AbstractKafkaAvroSerDeConfig(ConfigDef config, Map<?, ?> props) {
     super(config, props);
-  }
-
-  public int getMaxSchemasPerSubject() {
-    return this.getInt(MAX_SCHEMAS_PER_SUBJECT_CONFIG);
-  }
-
-  public List<String> getSchemaRegistryUrls() {
-    return this.getList(SCHEMA_REGISTRY_URL_CONFIG);
-  }
-
-  public boolean autoRegisterSchema() {
-    return this.getBoolean(AUTO_REGISTER_SCHEMAS);
-  }
-
-  public Object keySubjectNameStrategy() {
-    return subjectNameStrategyInstance(KEY_SUBJECT_NAME_STRATEGY);
-  }
-
-  public Object valueSubjectNameStrategy() {
-    return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
-  }
-  
-  public Map<String, String> requestHeaders() {
-    return originalsWithPrefix(REQUEST_HEADER_PREFIX).entrySet().stream()
-        .collect(Collectors.toMap(Map.Entry::getKey, entry -> Objects.toString(entry.getValue())));
-  }
-
-  private Object subjectNameStrategyInstance(String config) {
-    Class subjectNameStrategyClass = this.getClass(config);
-    Class deprecatedClass = io.confluent.kafka.serializers.subject.SubjectNameStrategy.class;
-    if (deprecatedClass.isAssignableFrom(subjectNameStrategyClass)) {
-      return this.getConfiguredInstance(config, deprecatedClass);
-    }
-    return this.getConfiguredInstance(config, SubjectNameStrategy.class);
-  }
-
-  public String basicAuthUserInfo() {
-    String deprecatedValue = getString(SCHEMA_REGISTRY_USER_INFO_CONFIG);
-    if (deprecatedValue != null && !deprecatedValue.isEmpty()) {
-      return deprecatedValue;
-    }
-    return getString(USER_INFO_CONFIG);
   }
 }

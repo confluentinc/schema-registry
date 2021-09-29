@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+option java_package = "io.confluent.connect.protobuf.test";
+option java_outer_classname = "RecursiveKeyValue";
+
+import "google/protobuf/descriptor.proto";
+
+message RecursiveKeyValueMessage {
+    int32 key = 1;
+    string value = 2;
+    RecursiveKeyValueMessage key_value = 10;
+}

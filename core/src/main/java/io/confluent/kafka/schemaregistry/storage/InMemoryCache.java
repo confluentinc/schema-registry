@@ -15,148 +15,238 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Predicate;
-
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
+
+import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.BiPredicate;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 
 /**
  * In-memory store based on maps
  */
 public class InMemoryCache<K, V> implements LookupCache<K, V> {
-  // visible for subclasses
-  protected final ConcurrentNavigableMap<K, V> store;
-  private final Map<Integer, SchemaKey> guidToSchemaKey;
-  private final Map<MD5, SchemaIdAndSubjects> schemaHashToGuid;
-  private final Map<Integer, List<SchemaKey>> guidToDeletedSchemaKeys;
+  private final ConcurrentNavigableMap<K, V> store;
+  private final Map<String, Map<String, Map<Integer, Map<String, Integer>>>> guidToSubjectVersions;
+  private final Map<String, Map<String, Map<MD5, Integer>>> hashToGuid;
+  private final Map<String, Map<String, Map<SchemaKey, Set<Integer>>>> referencedBy;
 
-  public InMemoryCache() {
-    this(new ConcurrentSkipListMap<>());
+  public InMemoryCache(Serializer<K, V> serializer) {
+    this.store = new ConcurrentSkipListMap<>(new SubjectKeyComparator<>(this));
+    this.guidToSubjectVersions = new ConcurrentHashMap<>();
+    this.hashToGuid = new ConcurrentHashMap<>();
+    this.referencedBy = new ConcurrentHashMap<>();
   }
 
-  public InMemoryCache(ConcurrentNavigableMap<K, V> store) {
-    this.store = store;
-    this.guidToSchemaKey = new ConcurrentHashMap<>();
-    this.schemaHashToGuid = new ConcurrentHashMap<>();
-    this.guidToDeletedSchemaKeys = new ConcurrentHashMap<>();
-  }
-
+  @Override
   public void init() throws StoreInitializationException {
     // do nothing
   }
 
   @Override
-  public V get(K key) {
+  public V get(K key) throws StoreException {
     return store.get(key);
   }
 
   @Override
-  public void put(K key, V value) throws StoreException {
-    store.put(key, value);
+  public V put(K key, V value) throws StoreException {
+    return store.put(key, value);
   }
 
   @Override
-  public Iterator<V> getAll(K key1, K key2) {
+  public CloseableIterator<V> getAll(K key1, K key2) throws StoreException {
     ConcurrentNavigableMap<K, V> subMap = (key1 == null && key2 == null)
                                           ? store
                                           : store.subMap(key1, key2);
-    return subMap.values().iterator();
+    return new DelegatingIterator<>(subMap.values().iterator());
   }
 
   @Override
-  public void putAll(Map<K, V> entries) {
+  public void putAll(Map<K, V> entries) throws StoreException {
     store.putAll(entries);
   }
 
   @Override
-  public void delete(K key) throws StoreException {
-    store.remove(key);
+  public V delete(K key) throws StoreException {
+    return store.remove(key);
   }
 
   @Override
-  public Iterator<K> getAllKeys() throws StoreException {
-    return store.keySet().iterator();
+  public CloseableIterator<K> getAllKeys() throws StoreException {
+    return new DelegatingIterator<>(store.keySet().iterator());
   }
 
   @Override
-  public void close() {
+  public void flush() throws StoreException {
+  }
+
+  @Override
+  public void close() throws StoreException {
     store.clear();
   }
 
   @Override
-  public SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) {
-    MD5 md5 = MD5.ofString(schema.getSchema());
-    return schemaHashToGuid.get(md5);
+  public SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) throws StoreException {
+    String ctx = QualifiedSubject.contextFor(tenant(), schema.getSubject());
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> refs
+        = schema.getReferences();
+    MD5 md5 = MD5.ofString(schema.getSchema(), refs == null ? null : refs.stream()
+        .map(ref -> new SchemaReference(ref.getName(), ref.getSubject(), ref.getVersion()))
+        .collect(Collectors.toList()));
+    Map<String, Map<MD5, Integer>> ctxHashes =
+        hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
+    Map<MD5, Integer> hashes = ctxHashes.getOrDefault(ctx, Collections.emptyMap());
+    Integer id = hashes.get(md5);
+    if (id == null) {
+      return null;
+    }
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
+    Map<String, Integer> subjectVersions = guids.get(id);
+    if (subjectVersions == null || subjectVersions.isEmpty()) {
+      return null;
+    }
+    return new SchemaIdAndSubjects(id, subjectVersions);
   }
 
   @Override
-  public boolean containsSchema(Schema schema) {
-    MD5 md5 = MD5.ofString(schema.getSchema());
-    return this.schemaHashToGuid.containsKey(md5);
+  public boolean containsSchema(Schema schema) throws StoreException {
+    return schemaIdAndSubjects(schema) != null;
   }
 
   @Override
-  public SchemaKey schemaKeyById(Integer id) {
-    return guidToSchemaKey.get(id);
+  public Set<Integer> referencesSchema(SchemaKey schema) throws StoreException {
+    String ctx = QualifiedSubject.contextFor(tenant(), schema.getSubject());
+    Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+        referencedBy.getOrDefault(tenant(), Collections.emptyMap());
+    Map<SchemaKey, Set<Integer>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
+    return refBy.getOrDefault(schema, Collections.emptySet());
   }
 
   @Override
-  public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue) {
-    guidToSchemaKey.put(schemaValue.getId(), schemaKey);
+  public SchemaKey schemaKeyById(Integer id, String subject) throws StoreException {
+    String ctx = QualifiedSubject.contextFor(tenant(), subject);
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
+    Map<String, Integer> subjectVersions = guids.get(id);
+    if (subjectVersions == null || subjectVersions.isEmpty()) {
+      return null;
+    }
+    Map.Entry<String, Integer> entry = subjectVersions.entrySet().iterator().next();
+    return new SchemaKey(entry.getKey(), entry.getValue());
+  }
+
+  @Override
+  public void schemaDeleted(
+      SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+    Map<Integer, Map<String, Integer>> guids =
+        ctxGuids.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
+    Map<String, Integer> subjectVersions =
+        guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
+    subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
     addToSchemaHashToGuid(schemaKey, schemaValue);
-    guidToDeletedSchemaKeys
-        .computeIfAbsent(schemaValue.getId(), k -> new CopyOnWriteArrayList<>())
-        .add(schemaKey);
+    for (SchemaReference ref : schemaValue.getReferences()) {
+      SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
+      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+          referencedBy.getOrDefault(tenant(), Collections.emptyMap());
+      Map<SchemaKey, Set<Integer>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
+      if (refBy != null) {
+        Set<Integer> ids = refBy.get(refKey);
+        if (ids != null) {
+          ids.remove(schemaValue.getId());
+          if (ids.isEmpty()) {
+            refBy.remove(refKey);
+          }
+        }
+      }
+    }
   }
 
   @Override
-  public void schemaTombstoned(SchemaKey schemaKey) {
-    // Don't need to update guidToSchemaKey since the tombstone action was initiated by
-    // a newer schema being registered to guidToSchemaKey
-    schemaHashToGuid.values().forEach(v -> v.removeIf(k -> k.equals(schemaKey)));
-    guidToDeletedSchemaKeys.values().forEach(v -> v.removeIf(k -> k.equals(schemaKey)));
+  public void schemaTombstoned(SchemaKey schemaKey, SchemaValue schemaValue) {
+    if (schemaValue == null) {
+      return;
+    }
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
+    Map<String, Integer> subjectVersions = guids.get(schemaValue.getId());
+    if (subjectVersions == null || subjectVersions.isEmpty()) {
+      return;
+    }
+    subjectVersions.computeIfPresent(schemaKey.getSubject(),
+        (k, v) -> schemaKey.getVersion() == v ? null : v);
+    if (subjectVersions.isEmpty()) {
+      guids.remove(schemaValue.getId());
+    }
   }
 
   @Override
-  public void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue) {
-    guidToSchemaKey.put(schemaValue.getId(), schemaKey);
+  public void schemaRegistered(
+      SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+    Map<Integer, Map<String, Integer>> guids =
+        ctxGuids.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
+    Map<String, Integer> subjectVersions =
+        guids.computeIfAbsent(schemaValue.getId(), k -> new ConcurrentHashMap<>());
+    subjectVersions.put(schemaKey.getSubject(), schemaKey.getVersion());
     addToSchemaHashToGuid(schemaKey, schemaValue);
+    for (SchemaReference ref : schemaValue.getReferences()) {
+      SchemaKey refKey = new SchemaKey(ref.getSubject(), ref.getVersion());
+      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+          referencedBy.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+      Map<SchemaKey, Set<Integer>> refBy =
+          ctxRefBy.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
+      Set<Integer> ids = refBy.computeIfAbsent(
+              refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
+      ids.add(schemaValue.getId());
+    }
   }
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
-    MD5 md5 = MD5.ofString(schemaValue.getSchema());
-    SchemaIdAndSubjects schemaIdAndSubjects = schemaHashToGuid.get(md5);
-    if (schemaIdAndSubjects == null) {
-      schemaIdAndSubjects = new SchemaIdAndSubjects(schemaValue.getId());
-    }
-    schemaIdAndSubjects.addSubjectAndVersion(schemaKey.getSubject(), schemaKey.getVersion());
-    schemaHashToGuid.put(md5, schemaIdAndSubjects);
-  }
-
-  @Override
-  public List<SchemaKey> deletedSchemaKeys(SchemaValue schemaValue) {
-    return guidToDeletedSchemaKeys.getOrDefault(schemaValue.getId(), Collections.emptyList());
+    String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
+    MD5 md5 = MD5.ofString(schemaValue.getSchema(), schemaValue.getReferences());
+    Map<String, Map<MD5, Integer>> ctxHashes =
+        hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
+    Map<MD5, Integer> hashes = ctxHashes.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
+    hashes.put(md5, schemaValue.getId());
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public AvroCompatibilityLevel compatibilityLevel(String subject,
-                                                   boolean returnTopLevelIfNotFound,
-                                                   AvroCompatibilityLevel defaultForTopLevel
-  ) {
+  public CompatibilityLevel compatibilityLevel(String subject,
+                                               boolean returnTopLevelIfNotFound,
+                                               CompatibilityLevel defaultForTopLevel
+  ) throws StoreException {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
     ConfigValue config = (ConfigValue) get((K) subjectConfigKey);
     if (config == null && subject == null) {
@@ -165,7 +255,12 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (config != null) {
       return config.getCompatibilityLevel();
     } else if (returnTopLevelIfNotFound) {
-      config = (ConfigValue) get((K) new ConfigKey(null));
+      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+        config = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
+      } else {
+        config = (ConfigValue) get((K) new ConfigKey(null));
+      }
       return config != null ? config.getCompatibilityLevel() : defaultForTopLevel;
     } else {
       return null;
@@ -177,7 +272,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   public Mode mode(String subject,
                    boolean returnTopLevelIfNotFound,
                    Mode defaultForTopLevel
-  ) {
+  ) throws StoreException {
     ModeKey modeKey = new ModeKey(subject);
     ModeValue modeValue = (ModeValue) get((K) modeKey);
     if (modeValue == null && subject == null) {
@@ -186,7 +281,12 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (modeValue != null) {
       return modeValue.getMode();
     } else if (returnTopLevelIfNotFound) {
-      modeValue = (ModeValue) get((K) new ModeKey(null));
+      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+        modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
+      } else {
+        modeValue = (ModeValue) get((K) new ModeKey(null));
+      }
       return modeValue != null ? modeValue.getMode() : defaultForTopLevel;
     } else {
       return null;
@@ -194,11 +294,33 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public boolean hasSubjects(String subject) {
-    return hasSubjects(matchingPredicate(subject));
+  public Set<String> subjects(String subject, boolean lookupDeletedSubjects) throws StoreException {
+    return subjects(matchingSubjectPredicate(subject), lookupDeletedSubjects);
   }
 
-  public boolean hasSubjects(Predicate<String> match) {
+  private Set<String> subjects(Predicate<String> match, boolean lookupDeletedSubjects) {
+    return store.entrySet().stream()
+        .flatMap(e -> {
+          K k = e.getKey();
+          V v = e.getValue();
+          if (k instanceof SchemaKey) {
+            SchemaKey key = (SchemaKey) k;
+            SchemaValue value = (SchemaValue) v;
+            if (value != null && (!value.isDeleted() || lookupDeletedSubjects)) {
+              return match.test(key.getSubject()) ? Stream.of(key.getSubject()) : Stream.empty();
+            }
+          }
+          return Stream.empty();
+        })
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+  }
+
+  @Override
+  public boolean hasSubjects(String subject, boolean lookupDeletedSubjects) throws StoreException {
+    return hasSubjects(matchingSubjectPredicate(subject), lookupDeletedSubjects);
+  }
+
+  private boolean hasSubjects(Predicate<String> match, boolean lookupDeletedSubjects) {
     return store.entrySet().stream()
         .anyMatch(e -> {
           K k = e.getKey();
@@ -206,7 +328,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
           if (k instanceof SchemaKey) {
             SchemaKey key = (SchemaKey) k;
             SchemaValue value = (SchemaValue) v;
-            if (value != null && !value.isDeleted()) {
+            if (value != null && (!value.isDeleted() || lookupDeletedSubjects)) {
               return match.test(key.getSubject());
             }
           }
@@ -215,84 +337,88 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public void clearSubjects(String subject) {
-    clearSubjects(matchingPredicate(subject));
+  public Map<String, Integer> clearSubjects(String subject) throws StoreException {
+    return clearSubjects(subject, matchingSubjectPredicate(subject));
   }
 
-  public void clearSubjects(Predicate<String> match) {
-    Predicate<SchemaKey> matchDeleted = matchDeleted(match);
+  private Map<String, Integer> clearSubjects(String subject, Predicate<String> match) {
+    String ctx = QualifiedSubject.contextFor(tenant(), subject);
+    BiPredicate<String, Integer> matchDeleted = matchDeleted(match);
 
-    // Try to replace deleted schemas with non-deleted, otherwise remove
-    replaceMatchingDeletedWithNonDeletedOrRemove(match);
-
-    // Delete from non-store structures first as they rely on the store
-    schemaHashToGuid.values().forEach(v -> v.removeIf(matchDeleted));
-    schemaHashToGuid.entrySet().removeIf(e -> e.getValue().isEmpty());
-    guidToDeletedSchemaKeys.values().forEach(v -> v.removeIf(matchDeleted));
-    guidToDeletedSchemaKeys.entrySet().removeIf(e -> e.getValue().isEmpty());
+    Map<String, Map<Integer, Map<String, Integer>>> ctxGuids =
+        guidToSubjectVersions.getOrDefault(tenant(), Collections.emptyMap());
+    Map<Integer, Map<String, Integer>> guids = ctxGuids.getOrDefault(ctx, Collections.emptyMap());
+    Iterator<Map.Entry<Integer, Map<String, Integer>>> it = guids.entrySet().iterator();
+    while (it.hasNext()) {
+      Map<String, Integer> subjectVersions = it.next().getValue();
+      subjectVersions.entrySet().removeIf(e -> matchDeleted.test(e.getKey(), e.getValue()));
+      if (subjectVersions.isEmpty()) {
+        it.remove();
+      }
+    }
 
     // Delete from store later as the previous deletions rely on the store
+    Map<String, Integer> counts = new HashMap<>();
     store.entrySet().removeIf(e -> {
       if (e.getKey() instanceof SchemaKey) {
         SchemaKey key = (SchemaKey) e.getKey();
         SchemaValue value = (SchemaValue) e.getValue();
-        return match.test(key.getSubject()) && value.isDeleted();
+        boolean isMatch = match.test(key.getSubject()) && value.isDeleted();
+        if (isMatch) {
+          String schemaType = value.getSchemaType();
+          if (schemaType == null) {
+            schemaType = AvroSchema.TYPE;
+          }
+          counts.merge(schemaType, 1, Integer::sum);
+        }
+        return isMatch;
       }
       return false;
     });
+    return counts;
   }
 
-  private Predicate<String> matchingPredicate(String subject) {
+  protected Predicate<String> matchingSubjectPredicate(String subject) {
     return s -> subject == null || subject.equals(s);
   }
 
-  // Visible for testing
-  protected void replaceMatchingDeletedWithNonDeletedOrRemove(Predicate<String> match) {
-    Predicate<SchemaKey> matchDeleted = matchDeleted(match);
-
-    // Iterate through the entries, and for each entry that matches and is soft deleted,
-    // see if there is a replacement entry (that is not soft deleted) that has the same
-    // schema string.  If so, replace, else remove the entry.
-    Iterator<Map.Entry<Integer, SchemaKey>> it = guidToSchemaKey.entrySet().iterator();
-    while (it.hasNext()) {
-      Map.Entry<Integer, SchemaKey> entry = it.next();
-      SchemaKey schemaKey = entry.getValue();
-      if (matchDeleted.test(schemaKey)) {
-        SchemaValue schemaValue = (SchemaValue) store.get(schemaKey);
-        // The value returned from the store should not be null since we clean up caches
-        // after tombstoning, but we still check defensively
-        SchemaKey newSchemaKey = schemaValue != null
-                                 ? getNonDeletedSchemaKey(schemaValue.getSchema())
-                                 : null;
-        if (newSchemaKey != null) {
-          entry.setValue(newSchemaKey);
-        } else {
-          it.remove();
-        }
-      }
-    }
-  }
-
-  private SchemaKey getNonDeletedSchemaKey(String schema) {
-    MD5 md5 = MD5.ofString(schema);
-    SchemaIdAndSubjects keys = schemaHashToGuid.get(md5);
-    return keys == null ? null : keys.findAny(key -> {
-      SchemaValue value = (SchemaValue) store.get(key);
-      // The value returned from the store should not be null since we clean up caches
-      // after tombstoning, but we still check defensively
-      return value != null && !value.isDeleted();
-    });
-  }
-
-  private Predicate<SchemaKey> matchDeleted(Predicate<String> match) {
-    return key -> {
-      if (match.test(key.getSubject())) {
-        SchemaValue value = (SchemaValue) store.get(key);
+  private BiPredicate<String, Integer> matchDeleted(Predicate<String> match) {
+    return (subject, version) -> {
+      if (match.test(subject)) {
+        SchemaValue value = (SchemaValue) store.get(new SchemaKey(subject, version));
         // The value returned from the store should not be null since we clean up caches
         // after tombstoning, but we still check defensively
         return value == null || value.isDeleted();
       }
       return false;
     };
+  }
+
+  static class DelegatingIterator<T> implements CloseableIterator<T> {
+
+    private final Iterator<T> iterator;
+
+    public DelegatingIterator(Iterator<T> iterator) {
+      this.iterator = iterator;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iterator.hasNext();
+    }
+
+    @Override
+    public T next() {
+      return iterator.next();
+    }
+
+    @Override
+    public void remove() {
+      iterator.remove();
+    }
+
+    @Override
+    public void close() {
+    }
   }
 }

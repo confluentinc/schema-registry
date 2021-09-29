@@ -15,26 +15,17 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.hibernate.validator.constraints.NotEmpty;
 
-public class ClearSubjectValue implements SchemaRegistryValue {
-
-  @NotEmpty
-  private String subject;
+@JsonInclude(Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class ClearSubjectValue extends SubjectValue {
 
   public ClearSubjectValue(@JsonProperty("subject") String subject) {
-    this.subject = subject;
-  }
-
-  @JsonProperty("subject")
-  public String getSubject() {
-    return subject;
-  }
-
-  @JsonProperty("subject")
-  public void setSubject(String subject) {
-    this.subject = subject;
+    super(subject);
   }
 
   @Override
@@ -45,22 +36,23 @@ public class ClearSubjectValue implements SchemaRegistryValue {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-
-    ClearSubjectValue that = (ClearSubjectValue) o;
-
-    return subject.equals(that.subject);
+    return super.equals(o);
   }
 
   @Override
   public int hashCode() {
-    int result = subject.hashCode();
-    return result;
+    return super.hashCode();
   }
 
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("{subject=" + this.subject + "}");
+    sb.append("{subject=" + this.getSubject() + "}");
     return sb.toString();
+  }
+
+  @Override
+  public ClearSubjectKey toKey() {
+    return new ClearSubjectKey(getSubject());
   }
 }

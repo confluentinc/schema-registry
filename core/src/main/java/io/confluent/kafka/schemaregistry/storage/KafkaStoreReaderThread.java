@@ -17,6 +17,12 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
+import io.confluent.kafka.schemaregistry.storage.StoreUpdateHandler.ValidationStatus;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -69,9 +75,12 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private Consumer<byte[], byte[]> consumer;
   private final Producer<byte[], byte[]> producer;
   private long offsetInSchemasTopic = -1L;
-  // Noop key is only used to help reliably determine last offset; reader thread ignores 
+  private OffsetCheckpoint checkpointFile;
+  private Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
+  // Noop key is only used to help reliably determine last offset; reader thread ignores
   // messages with this key
   private final K noopKey;
+  private final AtomicBoolean initialized;
 
   private Properties consumerProps = new Properties();
 
@@ -83,6 +92,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 Store<K, V> localStore,
                                 Producer<byte[], byte[]> producer,
                                 K noopKey,
+                                AtomicBoolean initialized,
                                 SchemaRegistryConfig config) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     offsetUpdateLock = new ReentrantLock();
@@ -94,6 +104,21 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.localStore = localStore;
     this.producer = producer;
     this.noopKey = noopKey;
+    this.initialized = initialized;
+
+    if (localStore.isPersistent()) {
+      try {
+        String checkpointDir =
+            config.getString(SchemaRegistryConfig.KAFKASTORE_CHECKPOINT_DIR_CONFIG);
+        int checkpointVersion =
+            config.getInt(SchemaRegistryConfig.KAFKASTORE_CHECKPOINT_VERSION_CONFIG);
+        checkpointFile = new OffsetCheckpoint(checkpointDir, checkpointVersion, topic);
+        checkpointFileCache.putAll(checkpointFile.read());
+      } catch (IOException e) {
+        throw new IllegalStateException("Failed to read checkpoints", e);
+      }
+      log.info("Successfully read checkpoints");
+    }
 
     KafkaStore.addSchemaRegistryConfigsToClientProperties(config, consumerProps);
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
@@ -138,24 +163,46 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     }
 
     this.topicPartition = new TopicPartition(topic, 0);
-    this.consumer.assign(Arrays.asList(this.topicPartition));
-    this.consumer.seekToBeginning(Arrays.asList(this.topicPartition));
+    List<TopicPartition> topicPartitions = Arrays.asList(this.topicPartition);
+    this.consumer.assign(topicPartitions);
+
+    if (localStore.isPersistent()) {
+      for (final TopicPartition topicPartition : topicPartitions) {
+        final Long checkpoint = checkpointFileCache.get(topicPartition);
+        if (checkpoint != null) {
+          log.info("Seeking to checkpoint {} for {}", checkpoint, topicPartition);
+          consumer.seek(topicPartition, checkpoint);
+        } else {
+          log.info("Seeking to beginning for {}", topicPartition);
+          consumer.seekToBeginning(Collections.singletonList(topicPartition));
+        }
+      }
+    } else {
+      log.info("Seeking to beginning for all partitions");
+      consumer.seekToBeginning(topicPartitions);
+    }
 
     log.info("Initialized last consumed offset to " + offsetInSchemasTopic);
 
     log.debug("Kafka store reader thread started");
   }
 
+  public Map<TopicPartition, Long> checkpoints() {
+    return checkpointFileCache;
+  }
+
   @Override
   public void doWork() {
     try {
       ConsumerRecords<byte[], byte[]> records = consumer.poll(Long.MAX_VALUE);
+      storeUpdateHandler.startBatch(records.count());
       for (ConsumerRecord<byte[], byte[]> record : records) {
         K messageKey = null;
         try {
           messageKey = this.serializer.deserializeKey(record.key());
         } catch (SerializationException e) {
-          log.error("Failed to deserialize the schema or config key", e);
+          log.error("Failed to deserialize the schema or config key at offset "
+                  + record.offset(), e);
           continue;
         }
 
@@ -175,7 +222,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                 record.value() == null ? null
                                        : serializer.deserializeValue(messageKey, record.value());
           } catch (SerializationException e) {
-            log.error("Failed to deserialize a schema or config update", e);
+            log.error("Failed to deserialize a schema or config update at offset "
+                    + record.offset(), e);
             continue;
           }
           try {
@@ -184,29 +232,40 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                       + ","
                       + message
                       + ") to the local store");
-            boolean valid = this.storeUpdateHandler.validateUpdate(messageKey, message);
-            if (valid) {
-              if (message == null) {
-                localStore.delete(messageKey);
-              } else {
-                localStore.put(messageKey, message);
-              }
-              this.storeUpdateHandler.handleUpdate(messageKey, message);
-            } else {
-              if (localStore.get(messageKey) == null) {
+            TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+            long offset = record.offset();
+            long timestamp = record.timestamp();
+            ValidationStatus status = this.storeUpdateHandler.validateUpdate(
+                    messageKey, message, tp, offset, timestamp);
+            V oldMessage;
+            switch (status) {
+              case SUCCESS:
+                if (message == null) {
+                  oldMessage = localStore.delete(messageKey);
+                } else {
+                  oldMessage = localStore.put(messageKey, message);
+                }
+                this.storeUpdateHandler.handleUpdate(
+                        messageKey, message, oldMessage, tp, offset, timestamp);
+                break;
+              case ROLLBACK_FAILURE:
+                oldMessage = localStore.get(messageKey);
                 try {
                   ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
                       topic,
-                      0,
                       record.key(),
-                      null
+                      oldMessage == null ? null : serializer.serializeValue(oldMessage)
                   );
                   producer.send(producerRecord);
-                  log.debug("Tombstoned invalid key {}", messageKey);
-                } catch (KafkaException ke) {
-                  log.warn("Failed to tombstone invalid key {}", messageKey, ke);
+                  log.warn("Rollback invalid update to key {}", messageKey);
+                } catch (KafkaException | SerializationException ke) {
+                  log.error("Failed to recover from invalid update to key {}", messageKey, ke);
                 }
-              }
+                break;
+              case IGNORE_FAILURE:
+              default:
+                log.warn("Ignore invalid update to key {}", messageKey);
+                break;
             }
             try {
               offsetUpdateLock.lock();
@@ -215,13 +274,23 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             } finally {
               offsetUpdateLock.unlock();
             }
-          } catch (StoreException se) {
+          } catch (Exception se) {
             log.error("Failed to add record from the Kafka topic"
                       + topic
-                      + " the local store");
+                      + " the local store", se);
           }
         }
       }
+      if (localStore.isPersistent() && initialized.get()) {
+        try {
+          localStore.flush();
+          Map<TopicPartition, Long> offsets = storeUpdateHandler.checkpoint(records.count());
+          checkpointOffsets(offsets);
+        } catch (StoreException se) {
+          log.warn("Failed to flush", se);
+        }
+      }
+      storeUpdateHandler.endBatch(records.count());
     } catch (WakeupException we) {
       // do nothing because the thread is closing -- see shutdown()
     } catch (RecordTooLargeException rtle) {
@@ -229,25 +298,46 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           "Consumer threw RecordTooLargeException. A schema has been written that "
           + "exceeds the default maximum fetch size.", rtle);
     } catch (RuntimeException e) {
-      log.error("KafkaStoreReader thread has died for an unknown reason.");
+      log.error("KafkaStoreReader thread has died for an unknown reason.", e);
       throw new RuntimeException(e);
+    }
+  }
+
+  private void checkpointOffsets(Map<TopicPartition, Long> offsets) {
+    Map<TopicPartition, Long> newOffsets = offsets != null
+        ? offsets
+        : Collections.singletonMap(new TopicPartition(topic, 0), offsetInSchemasTopic + 1);
+    checkpointFileCache.putAll(newOffsets);
+    try {
+      checkpointFile.write(checkpointFileCache);
+    } catch (final IOException e) {
+      log.warn("Failed to write offset checkpoint file to {}: {}", checkpointFile, e);
     }
   }
 
   @Override
   public void shutdown() {
-    log.debug("Starting shutdown of KafkaStoreReaderThread.");
+    try {
+      log.debug("Starting shutdown of KafkaStoreReaderThread.");
 
-    super.initiateShutdown();
-    if (consumer != null) {
-      consumer.wakeup();
+      super.initiateShutdown();
+      if (consumer != null) {
+        consumer.wakeup();
+      }
+      if (localStore != null) {
+        localStore.close();
+      }
+      if (checkpointFile != null) {
+        checkpointFile.close();
+      }
+      super.awaitShutdown();
+      if (consumer != null) {
+        consumer.close();
+      }
+      log.info("KafkaStoreReaderThread shutdown complete.");
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
-    if (localStore != null) {
-      localStore.close();
-    }
-    super.awaitShutdown();
-    consumer.close();
-    log.info("KafkaStoreReaderThread shutdown complete.");
   }
 
   public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) throws StoreException {

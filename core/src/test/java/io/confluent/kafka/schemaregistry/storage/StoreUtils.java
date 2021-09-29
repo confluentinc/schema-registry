@@ -14,6 +14,8 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
+import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 
@@ -35,18 +37,18 @@ public class StoreUtils {
   /**
    * Get a new instance of KafkaStore and initialize it.
    */
-  public static KafkaStore<String, String> createAndInitKafkaStoreInstance(String zkConnect)
+  public static KafkaStore<String, String> createAndInitKafkaStoreInstance(String bootstrapServers)
       throws RestConfigException, StoreInitializationException, SchemaRegistryException {
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
-    return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore);
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
+    return createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore);
   }
   /**
    * Get a new instance of KafkaStore and initialize it.
    */
   public static KafkaStore<String, String> createAndInitKafkaStoreInstance(
-      String zkConnect, Store<String, String> inMemoryStore)
+      String bootstrapServers, Store<String, String> inMemoryStore)
       throws RestConfigException, StoreInitializationException, SchemaRegistryException {
-    return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore,
+    return createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore,
             new Properties());
   }
 
@@ -57,24 +59,22 @@ public class StoreUtils {
    * or ZooKeeper SASL individually, the other must have SASL enabled.
    */
   public static KafkaStore<String, String> createAndInitSASLStoreInstance(
-          String zkConnect)
+          String bootstrapServers)
       throws RestConfigException, StoreInitializationException, SchemaRegistryException {
     Properties props = new Properties();
 
     props.put(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG,
             SecurityProtocol.SASL_PLAINTEXT.toString());
 
-    props.put(SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG, false);
-
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
-    return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
+    return createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, props);
   }
 
   /**
    * Get a new instance of an SSL KafkaStore and initialize it.
    */
   public static KafkaStore<String, String> createAndInitSSLKafkaStoreInstance(
-          String zkConnect, Map<String, Object> sslConfigs, boolean requireSSLClientAuth)
+          String bootstrapServers, Map<String, Object> sslConfigs, boolean requireSSLClientAuth)
       throws RestConfigException, StoreInitializationException, SchemaRegistryException {
     Properties props = new Properties();
 
@@ -93,18 +93,18 @@ public class StoreUtils {
               ((Password) sslConfigs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)).value());
     }
 
-    Store<String, String> inMemoryStore = new InMemoryCache<String, String>();
-    return createAndInitKafkaStoreInstance(zkConnect, inMemoryStore, props);
+    Store<String, String> inMemoryStore = new InMemoryCache<>(StringSerializer.INSTANCE);
+    return createAndInitKafkaStoreInstance(bootstrapServers, inMemoryStore, props);
   }
 
   /**
    * Get a new instance of KafkaStore and initialize it.
    */
   public static KafkaStore<String, String> createAndInitKafkaStoreInstance(
-          String zkConnect, Store<String, String> inMemoryStore,
+          String bootstrapServers, Store<String, String> inMemoryStore,
           Properties props)
       throws RestConfigException, StoreInitializationException, SchemaRegistryException {
-    props.put(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
+    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
 
     SchemaRegistryConfig config = null;
@@ -117,5 +117,4 @@ public class StoreUtils {
     kafkaStore.init();
     return kafkaStore;
   }
-
 }

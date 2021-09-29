@@ -19,11 +19,9 @@ import org.junit.Test;
 import java.util.Collections;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleAvroSchemaException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
 import io.confluent.rest.exceptions.RestConstraintViolationException;
 
 import static org.junit.Assert.assertEquals;
@@ -36,10 +34,10 @@ public class RestApiModeTest extends ClusterTestHarness {
           + "\"name\":\"myrecord\","
           + "\"fields\":"
           + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
-      .canonicalString;
+      .canonicalString();
 
   public RestApiModeTest() {
-    super(1, true, AvroCompatibilityLevel.BACKWARD.name);
+    super(1, true, CompatibilityLevel.BACKWARD.name);
   }
 
   @Test
@@ -150,6 +148,16 @@ public class RestApiModeTest extends ClusterTestHarness {
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
           e.getStatus());
     }
+
+    // set subject mode to import with force=true
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode, subject, true).getMode());
+
+    // set global mode to import with force=true
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode, null, true).getMode());
   }
 
   @Test

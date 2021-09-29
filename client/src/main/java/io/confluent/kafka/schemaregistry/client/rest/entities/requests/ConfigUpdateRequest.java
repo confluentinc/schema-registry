@@ -16,22 +16,26 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import io.swagger.annotations.ApiModelProperty;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.io.IOException;
+import java.util.Objects;
 
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ConfigUpdateRequest {
 
   private String compatibilityLevel;
 
   public static ConfigUpdateRequest fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, ConfigUpdateRequest.class);
+    return JacksonMapper.INSTANCE.readValue(json, ConfigUpdateRequest.class);
   }
 
-  @ApiModelProperty(value = "Compatability Level",
+  @Schema(description = "Compatability Level",
       allowableValues = "BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, "
           + "FULL_TRANSITIVE, NONE")
   @JsonProperty("compatibility")
@@ -45,6 +49,23 @@ public class ConfigUpdateRequest {
   }
 
   public String toJson() throws IOException {
-    return new ObjectMapper().writeValueAsString(this);
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    ConfigUpdateRequest that = (ConfigUpdateRequest) o;
+    return Objects.equals(compatibilityLevel, that.compatibilityLevel);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(compatibilityLevel);
   }
 }

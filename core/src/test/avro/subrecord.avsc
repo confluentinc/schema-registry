@@ -1,0 +1,11 @@
+{
+  "namespace": "otherns",
+  "type": "record",
+  "name": "Subrecord",
+  "fields": [
+    {
+      "name": "field2",
+      "type": "string"
+    }
+  ]
+}

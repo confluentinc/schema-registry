@@ -15,14 +15,21 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.rest.RestConfig;
+import io.confluent.rest.RestConfigException;
+import kafka.cluster.Broker;
+import kafka.cluster.EndPoint;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.jdk.javaapi.CollectionConverters;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.HashSet;
@@ -32,18 +39,9 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 
-import io.confluent.common.config.AbstractConfig;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
-import io.confluent.kafka.schemaregistry.utils.ZkUtils;
-import io.confluent.rest.RestConfig;
-import io.confluent.rest.RestConfigException;
-import kafka.cluster.Broker;
-import kafka.cluster.EndPoint;
-import scala.collection.JavaConversions;
-
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.PREFERRED_RESPONSE_TYPES;
 import static io.confluent.kafka.schemaregistry.client.rest.Versions.SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class SchemaRegistryConfig extends RestConfig {
 
@@ -60,19 +58,21 @@ public class SchemaRegistryConfig extends RestConfig {
   @Deprecated
   public static final String KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT = "PLAINTEXT";
 
+  @Deprecated
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   public static final String KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG = "kafkastore.bootstrap.servers";
   public static final String KAFKASTORE_GROUP_ID_CONFIG = "kafkastore.group.id";
-  /**
-   * <code>kafkastore.zk.session.timeout.ms</code>
-   */
-  public static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG
-      = "kafkastore.zk.session.timeout.ms";
   /**
    * <code>kafkastore.topic</code>
    */
   public static final String KAFKASTORE_TOPIC_CONFIG = "kafkastore.topic";
   public static final String DEFAULT_KAFKASTORE_TOPIC = "_schemas";
+  /**
+   * <code>kafkastore.topic.skip.validation</code>
+   */
+  public static final String KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG =
+      "kafkastore.topic.skip.validation";
+  public static final boolean DEFAULT_KAFKASTORE_TOPIC_SKIP_VALIDATION = false;
   /**
    * <code>kafkastore.topic.replication.factor</code>
    */
@@ -80,39 +80,69 @@ public class SchemaRegistryConfig extends RestConfig {
       "kafkastore.topic.replication.factor";
   public static final int DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR = 3;
   /**
+   * <code>kafkastore.write.max.retries</code>
+   */
+  public static final String KAFKASTORE_WRITE_MAX_RETRIES_CONFIG =
+      "kafkastore.write.max.retries";
+  public static final int DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES = 5;
+  /**
    * <code>kafkastore.timeout.ms</code>
    */
   public static final String KAFKASTORE_TIMEOUT_CONFIG = "kafkastore.timeout.ms";
   /**
+   * <code>kafkastore.checkpoint.dir</code>
+   */
+  public static final String KAFKASTORE_CHECKPOINT_DIR_CONFIG = "kafkastore.checkpoint.dir";
+  /**
+   * <code>kafkastore.checkpoint.version</code>
+   */
+  public static final String KAFKASTORE_CHECKPOINT_VERSION_CONFIG = "kafkastore.checkpoint.version";
+  /**
    * <code>kafkastore.init.timeout.ms</code>
    */
   public static final String KAFKASTORE_INIT_TIMEOUT_CONFIG = "kafkastore.init.timeout.ms";
+  /**
+   * <code>kafkastore.update.handler</code>
+   */
+  public static final String KAFKASTORE_UPDATE_HANDLERS_CONFIG = "kafkastore.update.handlers";
 
   /**
-   * <code>master.eligibility</code>*
+   * <code>leader.eligibility</code>*
    */
+  @Deprecated
   public static final String MASTER_ELIGIBILITY = "master.eligibility";
-  public static final boolean DEFAULT_MASTER_ELIGIBILITY = true;
+  public static final String LEADER_ELIGIBILITY = "leader.eligibility";
+  public static final boolean DEFAULT_LEADER_ELIGIBILITY = true;
   /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
-  public static final boolean DEFAULT_MODE_MUTABILITY = false;
-  /**
-   * <code>schema.registry.zk.name</code>*
-   */
-  public static final String SCHEMAREGISTRY_ZK_NAMESPACE = "schema.registry.zk.namespace";
-  public static final String DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE = "schema_registry";
+  public static final boolean DEFAULT_MODE_MUTABILITY = true;
   /**
    * <code>host.name</code>
    */
   public static final String HOST_NAME_CONFIG = "host.name";
-  /**
-   * <code>avro.compatibility.level</code>
-   */
-  public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
 
-  public static final String ZOOKEEPER_SET_ACL_CONFIG = "zookeeper.set.acl";
+  public static final String SCHEMA_PROVIDERS_CONFIG = "schema.providers";
+
+  /**
+   * <code>schema.compatibility.level</code>
+   */
+  @Deprecated
+  public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
+  public static final String SCHEMA_COMPATIBILITY_CONFIG = "schema.compatibility.level";
+
+  /**
+   * <code>schema.cache.size</code>
+   */
+  public static final String SCHEMA_CACHE_SIZE_CONFIG = "schema.cache.size";
+  public static final int SCHEMA_CACHE_SIZE_DEFAULT = 1000;
+  /**
+   * <code>schema.cache.expiry.secs</code>
+   */
+  public static final String SCHEMA_CACHE_EXPIRY_SECS_CONFIG = "schema.cache.expiry.secs";
+  public static final int SCHEMA_CACHE_EXPIRY_SECS_DEFAULT = 300;
+
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
   public static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG =
@@ -167,79 +197,62 @@ public class SchemaRegistryConfig extends RestConfig {
       "schema.registry.inter.instance.protocol";
   public static final String INTER_INSTANCE_PROTOCOL_CONFIG =
       "inter.instance.protocol";
-  private static final String INTER_INSTANCE_HEADERS_WHITELIST_CONFIG =
+  public static final String INTER_INSTANCE_HEADERS_WHITELIST_CONFIG =
       "inter.instance.headers.whitelist";
 
   protected static final String SCHEMAREGISTRY_GROUP_ID_DOC =
       "Use this setting to override the group.id for the Kafka group used when Kafka is used for "
-      + "master election.\n"
+      + "leader election.\n"
       + "Without this configuration, group.id will be \"schema-registry\". If you want to run "
       + "more than one schema registry cluster against a single Kafka cluster you should make "
       + "this setting unique for each cluster.";
 
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
-      "Zookeeper URL for the Kafka cluster";
+      "ZooKeeper URL for the Kafka cluster";
   protected static final String KAFKASTORE_BOOTSTRAP_SERVERS_DOC =
       "A list of Kafka brokers to connect to. For example, "
       + "`PLAINTEXT://hostname:9092,SSL://hostname2:9092`\n"
       + "\n"
-      + "The effect of this setting depends on whether you specify `kafkastore.connection.url`."
-      + "\n"
-      + "If `kafkastore.connection.url` is not specified, then the Kafka cluster containing these "
-      + "bootstrap servers will be used both to coordinate schema registry instances (master "
-      + "election) and store schema data."
-      + "\n"
-      + "If `kafkastore.connection.url` is specified, then this setting is used to control how "
-      + "the schema registry connects to Kafka to store schema data and is particularly important "
-      + "when Kafka security is enabled. When this configuration is not specified, the Schema "
-      + "Registry's internal Kafka clients will get their Kafka bootstrap server list from "
-      + "ZooKeeper (configured with `kafkastore.connection.url`). In that case, all available "
-      + "listeners matching the `kafkastore.security.protocol` setting will be used."
-      + "\n"
-      + "By specifiying this configuration, you can control which endpoints are used to connect "
-      + "to Kafka. Kafka may expose multiple endpoints that all will be stored in ZooKeeper, but "
-      + "the Schema Registry may need to be configured with just one of those endpoints, for "
-      + "example to control which security protocol it uses.";
+      + "The Kafka cluster containing these "
+      + "bootstrap servers will be used both to coordinate schema registry instances (leader "
+      + "election) and store schema data.";
   protected static final String KAFKASTORE_GROUP_ID_DOC =
       "Use this setting to override the group.id for the KafkaStore consumer.\n"
       + "This setting can become important when security is enabled, to ensure stability over "
       + "the schema registry consumer's group.id\n"
       + "Without this configuration, group.id will be \"schema-registry-<host>-<port>\"";
-  protected static final String SCHEMAREGISTRY_ZK_NAMESPACE_DOC =
-      "The string that is used as the zookeeper namespace for storing schema registry "
-      + "metadata. SchemaRegistry instances which are part of the same schema registry service "
-      + "should have the same ZooKeeper namespace.";
-  protected static final String KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC =
-      "Zookeeper session timeout";
   protected static final String KAFKASTORE_TOPIC_DOC =
       "The durable single partition topic that acts"
       + "as the durable log for the data";
+  protected static final String KAFKASTORE_TOPIC_SKIP_VALIDATION_DOC =
+      "Whether schema registry should skip validation & creation of topics on boot.";
   protected static final String KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC =
       "The desired replication factor of the schema topic. The actual replication factor "
       + "will be the smaller of this value and the number of live Kafka brokers.";
   protected static final String KAFKASTORE_WRITE_RETRIES_DOC =
       "Retry a failed register schema request to the underlying Kafka store up to this many times, "
-      + " for example in case of a Kafka broker failure";
-  protected static final String KAFKASTORE_WRITE_RETRY_BACKOFF_MS_DOC =
-      "The amount of time in milliseconds to wait before attempting to retry a failed write "
-      + "to the Kafka store";
+      + " for example in case of a conflicting schema ID.";
   protected static final String KAFKASTORE_INIT_TIMEOUT_DOC =
       "The timeout for initialization of the Kafka store, including creation of the Kafka topic "
       + "that stores schema data.";
+  protected static final String KAFKASTORE_CHECKPOINT_DIR_DOC =
+      "For persistent stores, the directory in which to store offset checkpoints.";
+  protected static final String KAFKASTORE_CHECKPOINT_VERSION_DOC =
+      "For persistent stores, the version of the checkpoint offset file.";
   protected static final String KAFKASTORE_TIMEOUT_DOC =
       "The timeout for an operation on the Kafka store";
+  protected static final String KAFKASTORE_UPDATE_HANDLERS_DOC =
+      "  A list of classes to use as StoreUpdateHandler. Implementing the interface "
+          + "<code>StoreUpdateHandler</code> allows you to handle Kafka store update events.";
   protected static final String HOST_DOC =
-      "The host name advertised in Zookeeper. Make sure to set this if running SchemaRegistry "
+      "The host name. Make sure to set this if running SchemaRegistry "
       + "with multiple nodes.";
-  protected static final String
-      ZOOKEEPER_SET_ACL_DOC =
-      "Whether or not to set an ACL in ZooKeeper when znodes are created and ZooKeeper SASL "
-      + "authentication is "
-      + "configured. IMPORTANT: if set to `true`, the SASL principal must be the same as the Kafka"
-      + " brokers.";
+  protected static final String SCHEMA_PROVIDERS_DOC =
+      "  A list of classes to use as SchemaProvider. Implementing the interface "
+          + "<code>SchemaProvider</code> allows you to add custom schema types to Schema Registry.";
   protected static final String COMPATIBILITY_DOC =
-      "The Avro compatibility type. Valid values are: "
-      + "none (new schema can be any valid Avro schema), "
+      "The compatibility type. Valid values are: "
+      + "none (new schema can be any valid schema), "
       + "backward (new schema can read data produced by latest registered schema), "
       + "forward (latest registered schema can read data produced by the new schema), "
       + "full (new schema is backward and forward compatible with latest registered schema), "
@@ -247,11 +260,15 @@ public class SchemaRegistryConfig extends RestConfig {
       + "forward_transitive (new schema is forward compatible with all previous versions), "
       + "full_transitive (new schema is backward and forward compatible with all previous "
       + "versions)";
-  protected static final String MASTER_ELIGIBILITY_DOC =
-      "If true, this node can participate in master election. In a multi-colo setup, turn this off "
-      + "for clusters in the slave data center.";
+  protected static final String SCHEMA_CACHE_SIZE_DOC =
+      "The maximum size of the schema cache.";
+  protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
+      "The expiration in seconds for entries accessed in the cache.";
+  protected static final String LEADER_ELIGIBILITY_DOC =
+      "If true, this node can participate in leader election. In a multi-colo setup, turn this off "
+      + "for clusters in the follower data center.";
   protected static final String MODE_MUTABILITY_DOC =
-      "If true, this node will allow mode changes if it is the master.";
+      "If true, this node will allow mode changes if it is the leader.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
@@ -313,21 +330,19 @@ public class SchemaRegistryConfig extends RestConfig {
       "  A list of classpath resources containing static resources to serve using the default "
           + "servlet.";
   protected static final String SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC =
-      "The protocol used while making calls between the instances of schema registry. The slave "
-      + "to master node calls for writes and deletes will use the specified protocol. The default "
+      "The protocol used while making calls between the instances of schema registry. The follower "
+      + "to leader node calls for writes and deletes will use the specified protocol. The default "
       + "value would be `http`. When `https` is set, `ssl.keystore.` and "
       + "`ssl.truststore.` configs are used while making the call. The "
       + "schema.registry.inter.instance.protocol name is deprecated; prefer using "
       + "inter.instance.protocol instead.";
-  private static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
-      = "A list of ``http`` headers to forward from slave to master, "
+  protected static final String INTER_INSTANCE_HEADERS_WHITELIST_DOC
+      = "A list of ``http`` headers to forward from follower to leader, "
       + "in addition to ``Content-Type``, ``Accept``, ``Authorization``.";
 
-  private static final boolean ZOOKEEPER_SET_ACL_DEFAULT = false;
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
-  // TODO: move to Apache's ConfigDef
   private static final ConfigDef config;
 
   public static final String HTTPS = "https";
@@ -335,12 +350,8 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private Properties originalProperties;
 
-  private ZkUtils zkUtils;
-
-
   static {
     config = baseSchemaRegistryConfigDef();
-
   }
 
   public static ConfigDef baseSchemaRegistryConfigDef() {
@@ -359,24 +370,26 @@ public class SchemaRegistryConfig extends RestConfig {
         ConfigDef.Importance.MEDIUM,
         KAFKASTORE_BOOTSTRAP_SERVERS_DOC
     )
-    .define(SCHEMAREGISTRY_ZK_NAMESPACE, ConfigDef.Type.STRING,
-            DEFAULT_SCHEMAREGISTRY_ZK_NAMESPACE,
-            ConfigDef.Importance.LOW, SCHEMAREGISTRY_ZK_NAMESPACE_DOC
-    )
     .define(SCHEMAREGISTRY_GROUP_ID_CONFIG, ConfigDef.Type.STRING, "schema-registry",
-            ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_GROUP_ID_DOC
+        ConfigDef.Importance.MEDIUM, SCHEMAREGISTRY_GROUP_ID_DOC
     )
     .define(INTER_INSTANCE_HEADERS_WHITELIST_CONFIG, ConfigDef.Type.LIST, "",
-        ConfigDef.Importance.LOW, INTER_INSTANCE_HEADERS_WHITELIST_DOC)
-    .define(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, 30000, atLeast(0),
-            ConfigDef.Importance.LOW, KAFKASTORE_ZK_SESSION_TIMEOUT_MS_DOC
+        ConfigDef.Importance.LOW, INTER_INSTANCE_HEADERS_WHITELIST_DOC
     )
     .define(KAFKASTORE_TOPIC_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKASTORE_TOPIC,
         ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_DOC
     )
+    .define(KAFKASTORE_TOPIC_SKIP_VALIDATION_CONFIG, ConfigDef.Type.BOOLEAN,
+        DEFAULT_KAFKASTORE_TOPIC_SKIP_VALIDATION,
+        ConfigDef.Importance.MEDIUM, KAFKASTORE_TOPIC_SKIP_VALIDATION_DOC
+    )
     .define(KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,
         DEFAULT_KAFKASTORE_TOPIC_REPLICATION_FACTOR,
         ConfigDef.Importance.HIGH, KAFKASTORE_TOPIC_REPLICATION_FACTOR_DOC
+    )
+    .define(KAFKASTORE_WRITE_MAX_RETRIES_CONFIG, ConfigDef.Type.INT,
+        DEFAULT_KAFKASTORE_WRITE_MAX_RETRIES, atLeast(0),
+        ConfigDef.Importance.LOW, KAFKASTORE_WRITE_RETRIES_DOC
     )
     .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC
@@ -384,17 +397,38 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC
     )
+    .define(KAFKASTORE_CHECKPOINT_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
+        ConfigDef.Importance.MEDIUM, KAFKASTORE_CHECKPOINT_DIR_DOC
+    )
+    .define(KAFKASTORE_CHECKPOINT_VERSION_CONFIG, ConfigDef.Type.INT, 0,
+        ConfigDef.Importance.MEDIUM, KAFKASTORE_CHECKPOINT_VERSION_DOC
+    )
+    .define(KAFKASTORE_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
+        ConfigDef.Importance.LOW, KAFKASTORE_UPDATE_HANDLERS_DOC
+    )
     .define(HOST_NAME_CONFIG, ConfigDef.Type.STRING, getDefaultHost(),
         ConfigDef.Importance.HIGH, HOST_DOC
     )
-    .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
+    .define(SCHEMA_PROVIDERS_CONFIG, ConfigDef.Type.LIST, "",
+        ConfigDef.Importance.LOW, SCHEMA_PROVIDERS_DOC
+    )
+    .define(COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, "",
         ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
     )
-    .define(ZOOKEEPER_SET_ACL_CONFIG, ConfigDef.Type.BOOLEAN, ZOOKEEPER_SET_ACL_DEFAULT,
-        ConfigDef.Importance.HIGH, ZOOKEEPER_SET_ACL_DOC
+    .define(SCHEMA_COMPATIBILITY_CONFIG, ConfigDef.Type.STRING, COMPATIBILITY_DEFAULT,
+        ConfigDef.Importance.HIGH, COMPATIBILITY_DOC
     )
-    .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MASTER_ELIGIBILITY,
-        ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC
+    .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
+    )
+    .define(SCHEMA_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_EXPIRY_SECS_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_CACHE_EXPIRY_SECS_DOC
+    )
+    .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, null,
+        ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
+    )
+    .define(LEADER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELIGIBILITY,
+        ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
@@ -501,10 +535,25 @@ public class SchemaRegistryConfig extends RestConfig {
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_DOC);
   }
 
-  private final AvroCompatibilityLevel compatibilityType;
+  private final CompatibilityLevel compatibilityType;
+
+  private static Properties getPropsFromFile(String propsFile) throws RestConfigException {
+    Properties props = new Properties();
+    if (propsFile == null) {
+      return props;
+    }
+
+    try (FileInputStream propStream = new FileInputStream(propsFile)) {
+      props.load(propStream);
+    } catch (IOException e) {
+      throw new RestConfigException("Couldn't load properties from " + propsFile, e);
+    }
+
+    return props;
+  }
 
   public SchemaRegistryConfig(String propsFile) throws RestConfigException {
-    this(AbstractConfig.getPropsFromFile(propsFile));
+    this(getPropsFromFile(propsFile));
   }
 
   public SchemaRegistryConfig(Properties props) throws RestConfigException {
@@ -514,10 +563,13 @@ public class SchemaRegistryConfig extends RestConfig {
   public SchemaRegistryConfig(ConfigDef configDef, Properties props) throws RestConfigException {
     super(configDef, props);
     this.originalProperties = props;
-    String compatibilityTypeString = getString(SchemaRegistryConfig.COMPATIBILITY_CONFIG);
-    compatibilityType = AvroCompatibilityLevel.forName(compatibilityTypeString);
+    String compatibilityTypeString = getString(COMPATIBILITY_CONFIG);
+    if (compatibilityTypeString == null || compatibilityTypeString.isEmpty()) {
+      compatibilityTypeString = getString(SCHEMA_COMPATIBILITY_CONFIG);
+    }
+    compatibilityType = CompatibilityLevel.forName(compatibilityTypeString);
     if (compatibilityType == null) {
-      throw new RestConfigException("Unknown Avro compatibility level: " + compatibilityTypeString);
+      throw new RestConfigException("Unknown compatibility level: " + compatibilityTypeString);
     }
   }
 
@@ -533,72 +585,31 @@ public class SchemaRegistryConfig extends RestConfig {
     return originalProperties;
   }
 
-  public AvroCompatibilityLevel compatibilityType() {
+  public CompatibilityLevel compatibilityType() {
     return compatibilityType;
   }
 
-  public boolean useKafkaCoordination() {
-    boolean haveStoreConnectionUrl = !getString(KAFKASTORE_CONNECTION_URL_CONFIG).isEmpty();
+  public void checkBootstrapServers() {
     boolean haveBootstrapServers = !getList(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG).isEmpty();
-    if (!haveStoreConnectionUrl && ! haveBootstrapServers) {
+    if (!haveBootstrapServers) {
       throw new ConfigException(
-          "Must configure at least one bootstrap connection method, either "
-          + KAFKASTORE_CONNECTION_URL_CONFIG + " or " + KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
+          "Must specify bootstrap servers using " + KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
       );
     }
-    return !haveStoreConnectionUrl;
   }
 
   public String bootstrapBrokers() {
-    int zkSessionTimeoutMs = getInt(KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
-
-    List<String> bootstrapServersConfig = getList(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
-    List<String> endpoints;
-
-    if (bootstrapServersConfig.isEmpty()) {
-      ZkUtils zkUtils = null;
-      try {
-        zkUtils =
-            new ZkUtils(getString(KAFKASTORE_CONNECTION_URL_CONFIG),
-                zkSessionTimeoutMs,
-                zkSessionTimeoutMs,
-                checkZkAclConfig()
-            );
-        List<Broker> brokerSeq = zkUtils.getAllBrokersInCluster();
-        endpoints = brokersToEndpoints(brokerSeq);
-      } finally {
-        if (zkUtils != null) {
-          zkUtils.close();
-        }
-        log.debug("Kafka store zookeeper client shut down");
-      }
-    } else {
-      endpoints = bootstrapServersConfig;
-    }
+    List<String> endpoints = getList(KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
     return endpointsToBootstrapServers(
         endpoints,
         this.getString(KAFKASTORE_SECURITY_PROTOCOL_CONFIG)
     );
   }
 
-  /**
-   * Checks if the user has configured ZooKeeper ACLs or not. Throws an exception if the ZooKeeper
-   * client is set to create znodes with an ACL, yet the JAAS config is not present. Otherwise,
-   * returns whether or not the user has enabled ZooKeeper ACLs.
-   */
-  public boolean checkZkAclConfig() {
-    if (getBoolean(ZOOKEEPER_SET_ACL_CONFIG) && !JaasUtils.isZkSecurityEnabled()) {
-      throw new ConfigException(ZOOKEEPER_SET_ACL_CONFIG
-                                + " is set to true but ZooKeeper's "
-                                + "JAAS SASL configuration is not configured.");
-    }
-    return getBoolean(ZOOKEEPER_SET_ACL_CONFIG);
-  }
-
   static List<String> brokersToEndpoints(List<Broker> brokers) {
     final List<String> endpoints = new LinkedList<>();
     for (Broker broker : brokers) {
-      for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints())) {
+      for (EndPoint ep : CollectionConverters.asJavaCollection(broker.endPoints())) {
         String
             hostport =
             ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
@@ -640,12 +651,9 @@ public class SchemaRegistryConfig extends RestConfig {
     }
 
     if (sb.length() == 0) {
-      throw new ConfigException("No supported Kafka endpoints are configured. Either "
+      throw new ConfigException("No supported Kafka endpoints are configured. "
                                 + KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG
                                 + " must have at least one endpoint matching "
-                                + KAFKASTORE_SECURITY_PROTOCOL_CONFIG
-                                + " or broker endpoints loaded from ZooKeeper "
-                                + "must have at least one endpoint matching "
                                 + KAFKASTORE_SECURITY_PROTOCOL_CONFIG + ".");
     }
 
@@ -678,38 +686,6 @@ public class SchemaRegistryConfig extends RestConfig {
       return deprecatedValue;
     }
     return getString(INTER_INSTANCE_PROTOCOL_CONFIG);
-  }
-
-  public synchronized ZkUtils zkUtils() {
-    if (zkUtils == null) {
-      boolean zkAclsEnabled = checkZkAclConfig();
-      String srZkNamespace = getString(SchemaRegistryConfig.SCHEMAREGISTRY_ZK_NAMESPACE);
-      String srClusterZkUrl = getString(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG);
-      int zkSessionTimeoutMs = getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
-
-      int kafkaNamespaceIndex = srClusterZkUrl.indexOf("/");
-      String zkConnForNamespaceCreation = kafkaNamespaceIndex > 0
-          ? srClusterZkUrl.substring(0, kafkaNamespaceIndex)
-          : srClusterZkUrl;
-
-      final String schemaRegistryNamespace = "/" + srZkNamespace;
-      final String schemaRegistryZkUrl = zkConnForNamespaceCreation + schemaRegistryNamespace;
-
-      ZkUtils zkUtilsForNamespaceCreation = new ZkUtils(
-          zkConnForNamespaceCreation, zkSessionTimeoutMs, zkSessionTimeoutMs, zkAclsEnabled);
-      zkUtilsForNamespaceCreation.makeSurePersistentPathExists(
-          schemaRegistryNamespace);
-      log.info("Created schema registry namespace {} {}",
-          zkConnForNamespaceCreation, schemaRegistryNamespace);
-      zkUtilsForNamespaceCreation.close();
-      zkUtils = new ZkUtils(
-          schemaRegistryZkUrl,
-          zkSessionTimeoutMs,
-          zkSessionTimeoutMs,
-          zkAclsEnabled
-      );
-    }
-    return zkUtils;
   }
 
   public List<String> whitelistHeaders() {

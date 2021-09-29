@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package test1;
+
+message TestMessage {
+    string test_string = 1;
+    int32 test_int = 2;
+}

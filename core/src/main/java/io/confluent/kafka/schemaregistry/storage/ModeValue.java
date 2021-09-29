@@ -15,17 +15,25 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public class ModeValue implements SchemaRegistryValue {
+@JsonInclude(Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class ModeValue extends SubjectValue {
 
   private Mode mode;
 
-  public ModeValue(@JsonProperty("mode") Mode mode) {
+  public ModeValue(@JsonProperty("subject") String subject,
+                   @JsonProperty("mode") Mode mode) {
+    super(subject);
     this.mode = mode;
   }
 
   public ModeValue() {
+    super(null);
     mode = null;
   }
 
@@ -47,6 +55,9 @@ public class ModeValue implements SchemaRegistryValue {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
+    if (!super.equals(o)) {
+      return false;
+    }
 
     ModeValue that = (ModeValue) o;
 
@@ -58,7 +69,8 @@ public class ModeValue implements SchemaRegistryValue {
 
   @Override
   public int hashCode() {
-    int result = 31 * mode.hashCode();
+    int result = super.hashCode();
+    result = 31 * result + mode.hashCode();
     return result;
   }
 
@@ -67,5 +79,10 @@ public class ModeValue implements SchemaRegistryValue {
     StringBuilder sb = new StringBuilder();
     sb.append("{mode=" + this.mode + "}");
     return sb.toString();
+  }
+
+  @Override
+  public ModeKey toKey() {
+    return new ModeKey(getSubject());
   }
 }

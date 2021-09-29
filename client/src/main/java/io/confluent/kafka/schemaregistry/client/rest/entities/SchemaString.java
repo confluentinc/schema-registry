@@ -16,29 +16,53 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.swagger.annotations.ApiModelProperty;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
 
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SchemaString {
 
+  private String schemaType = AvroSchema.TYPE;
   private String schemaString;
+  private List<SchemaReference> references = Collections.emptyList();
+  private Integer maxId;
 
   public SchemaString() {
-
   }
 
+  // Visible for testing
   public SchemaString(String schemaString) {
     this.schemaString = schemaString;
   }
 
   public static SchemaString fromJson(String json) throws IOException {
-    return new ObjectMapper().readValue(json, SchemaString.class);
+    return JacksonMapper.INSTANCE.readValue(json, SchemaString.class);
   }
 
-  @ApiModelProperty(value = "Schema string identified by the ID")
+  @Schema(description = "Schema type")
+  @JsonProperty("schemaType")
+  @JsonSerialize(converter = SchemaTypeConverter.class)
+  public String getSchemaType() {
+    return schemaType;
+  }
+
+  @JsonProperty("schemaType")
+  public void setSchemaType(String schemaType) {
+    this.schemaType = schemaType;
+  }
+
+  @Schema(description = "Schema string identified by the ID")
   @JsonProperty("schema")
   public String getSchemaString() {
     return schemaString;
@@ -49,7 +73,49 @@ public class SchemaString {
     this.schemaString = schemaString;
   }
 
+  @Schema(description = "Schema references")
+  @JsonProperty("references")
+  public List<SchemaReference> getReferences() {
+    return this.references;
+  }
+
+  @JsonProperty("references")
+  public void setReferences(List<SchemaReference> references) {
+    this.references = references;
+  }
+
+  @Schema(description = "Maximum ID")
+  @JsonProperty("maxId")
+  public Integer getMaxId() {
+    return maxId;
+  }
+
+  @JsonProperty("maxId")
+  public void setMaxId(Integer maxId) {
+    this.maxId = maxId;
+  }
+
   public String toJson() throws IOException {
-    return new ObjectMapper().writeValueAsString(this);
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    SchemaString that = (SchemaString) o;
+    return Objects.equals(schemaType, that.schemaType)
+        && Objects.equals(schemaString, that.schemaString)
+        && Objects.equals(references, that.references)
+        && Objects.equals(maxId, that.maxId);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(schemaType, schemaString, references, maxId);
   }
 }

@@ -15,11 +15,14 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.DEFAULT_TENANT;
+
+import java.util.Map;
+import java.util.Set;
+
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
-
-import java.util.List;
 
 /**
  * Internal interface that provides various indexed methods that help lookup the underlying schemas.
@@ -39,31 +42,32 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param schema schema object; never {@code null}
    * @return the schema id and subjects associated with the schema, null otherwise.
    */
-  SchemaIdAndSubjects schemaIdAndSubjects(Schema schema);
+  SchemaIdAndSubjects schemaIdAndSubjects(Schema schema) throws StoreException;
 
   /**
-   * Checks is a schema is registered in any subject.
+   * Checks if a schema is registered in any subject.
    *
    * @param schema schema object
    * @return true if the schema is already registered else false
    */
-  boolean containsSchema(Schema schema);
+  boolean containsSchema(Schema schema) throws StoreException;
+
+  /**
+   * Returns schemas that reference the given schema.
+   *
+   * @param schema schema object
+   * @return the ids of schemas that reference the given schema
+   */
+  Set<Integer> referencesSchema(SchemaKey schema) throws StoreException;
 
   /**
    * Provides the {@link SchemaKey} for the provided schema id.
    *
    * @param id the schema id; never {@code null}
+   * @param subject the subject
    * @return the {@link SchemaKey} if found, otherwise null.
    */
-  SchemaKey schemaKeyById(Integer id);
-
-  /**
-   * Provides the list of {@link SchemaKey} that have been deleted for the registered {SchemaValue}
-   *
-   * @param schemaValue the SchemaValue being registered; never {@code null}
-   * @return the list of {@link SchemaKey} that have been marked to be deleted, can be null or empty
-   */
-  List<SchemaKey> deletedSchemaKeys(SchemaValue schemaValue);
+  SchemaKey schemaKeyById(Integer id, String subject) throws StoreException;
 
   /**
    * Callback that is invoked when a schema is registered.
@@ -72,8 +76,9 @@ public interface LookupCache<K,V> extends Store<K,V> {
    *
    * @param schemaKey   the registered SchemaKey; never {@code null}
    * @param schemaValue the registered SchemaValue; never {@code null}
+   * @param oldSchemaValue the previous SchemaValue
    */
-  void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue);
+  void schemaRegistered(SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue);
 
   /**
    * Callback that is invoked when a schema is deleted.
@@ -82,15 +87,17 @@ public interface LookupCache<K,V> extends Store<K,V> {
    *
    * @param schemaKey   the deleted SchemaKey; never {@code null}
    * @param schemaValue the deleted SchemaValue; never {@code null}
+   * @param oldSchemaValue the previous SchemaValue
    */
-  void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue);
+  void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue);
 
   /**
    * Callback that is invoked when a schema is tombstoned.
    *
    * @param schemaKey   the tombstoned SchemaKey; never {@code null}
+   * @param schemaValue the tombstoned SchemaValue
    */
-  void schemaTombstoned(SchemaKey schemaKey);
+  void schemaTombstoned(SchemaKey schemaKey, SchemaValue schemaValue);
 
   /**
    * Retrieves the config for a subject.
@@ -100,9 +107,10 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param defaultForTopLevel default value for the top level scope
    * @return the compatibility level if found, otherwise null
    */
-  AvroCompatibilityLevel compatibilityLevel(String subject,
-                                            boolean returnTopLevelIfNotFound,
-                                            AvroCompatibilityLevel defaultForTopLevel);
+  CompatibilityLevel compatibilityLevel(String subject,
+                                        boolean returnTopLevelIfNotFound,
+                                        CompatibilityLevel defaultForTopLevel)
+      throws StoreException;
 
   /**
    * Retrieves the mode for a subject.
@@ -112,7 +120,16 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param defaultForTopLevel default value for the top level scope
    * @return the mode if found, otherwise null.
    */
-  Mode mode(String subject, boolean returnTopLevelIfNotFound, Mode defaultForTopLevel);
+  Mode mode(String subject, boolean returnTopLevelIfNotFound, Mode defaultForTopLevel)
+      throws StoreException;
+
+  /**
+   * Returns subjects that have schemas (that are not deleted) that match the given subject.
+   *
+   * @param subject the subject, or null for all subjects
+   * @return the subjects with matching schemas
+   */
+  Set<String> subjects(String subject, boolean lookupDeletedSubjects) throws StoreException;
 
   /**
    * Returns whether there exist schemas (that are not deleted) that match the given subject.
@@ -120,12 +137,25 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param subject the subject, or null for all subjects
    * @return whether there exist matching schemas
    */
-  boolean hasSubjects(String subject) throws StoreException;
+  boolean hasSubjects(String subject, boolean lookupDeletedSubjects) throws StoreException;
 
   /**
    * Clears the cache of deleted schemas that match the given subject.
    *
    * @param subject the subject, or null for all subjects
+   * @return the number of schemas cleared by schema type
    */
-  void clearSubjects(String subject) throws StoreException;
+  Map<String, Integer> clearSubjects(String subject) throws StoreException;
+
+  default String tenant() {
+    return DEFAULT_TENANT;
+  }
+
+  /**
+   * Can be used by subclasses to implement multi-tenancy
+   *
+   * @param tenant the tenant
+   */
+  default void setTenant(String tenant) {
+  }
 }

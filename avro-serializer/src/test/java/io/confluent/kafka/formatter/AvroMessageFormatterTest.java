@@ -16,6 +16,8 @@
 package io.confluent.kafka.formatter;
 
 import static org.junit.Assert.assertEquals;
+
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -66,8 +68,8 @@ public class AvroMessageFormatterTest {
     Schema schema1 = Schema.create(Type.BYTES);
     Schema schema2 = Schema.create(Type.BYTES);
     schema2.addProp("foo", "bar"); // must be different than schema1
-    schemaRegistry.register("topicname", schema1);
-    schemaRegistry.register("othertopic", schema2);
+    schemaRegistry.register("topicname", new AvroSchema(schema1));
+    schemaRegistry.register("othertopic", new AvroSchema(schema2));
 
     formatter = new AvroMessageFormatter(schemaRegistry, null);
   }

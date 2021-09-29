@@ -17,25 +17,41 @@
 package io.confluent.kafka.serializers;
 
 
-import io.confluent.common.config.ConfigDef;
-import io.confluent.common.config.ConfigDef.Importance;
-import io.confluent.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
 
 import java.util.Map;
 
-public class KafkaAvroDeserializerConfig extends AbstractKafkaAvroSerDeConfig {
+public class KafkaAvroDeserializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
   public static final String SPECIFIC_AVRO_READER_CONFIG = "specific.avro.reader";
   public static final boolean SPECIFIC_AVRO_READER_DEFAULT = false;
   public static final String SPECIFIC_AVRO_READER_DOC =
       "If true, tries to look up the SpecificRecord class ";
 
+  public static final String AVRO_REFLECTION_ALLOW_NULL_CONFIG = "avro.reflection.allow.null";
+  public static final boolean AVRO_REFLECTION_ALLOW_NULL_DEFAULT = false;
+  public static final String AVRO_REFLECTION_ALLOW_NULL_DOC =
+      "If true, allows null field values used in ReflectionAvroDeserializer";
+
+  public static final String AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG =
+          "avro.use.logical.type.converters";
+  public static final boolean AVRO_USE_LOGICAL_TYPE_CONVERTERS_DEFAULT = false;
+  public static final String AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC =
+          "If true, use logical type converter in generic record";
+
   private static ConfigDef config;
 
   static {
     config = baseConfigDef()
         .define(SPECIFIC_AVRO_READER_CONFIG, Type.BOOLEAN, SPECIFIC_AVRO_READER_DEFAULT,
-                Importance.LOW, SPECIFIC_AVRO_READER_DOC);
+            Importance.LOW, SPECIFIC_AVRO_READER_DOC)
+        .define(AVRO_REFLECTION_ALLOW_NULL_CONFIG, Type.BOOLEAN, AVRO_REFLECTION_ALLOW_NULL_DEFAULT,
+            Importance.MEDIUM, AVRO_REFLECTION_ALLOW_NULL_DOC)
+        .define(AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, ConfigDef.Type.BOOLEAN,
+            AVRO_USE_LOGICAL_TYPE_CONVERTERS_DEFAULT, ConfigDef.Importance.MEDIUM,
+            AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC);
   }
 
   public KafkaAvroDeserializerConfig(Map<?, ?> props) {

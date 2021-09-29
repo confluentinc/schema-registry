@@ -1,17 +1,43 @@
 Schema Registry
 ================
 
-Schema Registry provides a serving layer for your metadata. It provides a
-RESTful interface for storing and retrieving Avro schemas. It stores a versioned
-history of all schemas, provides multiple compatibility settings and allows
-evolution of schemas according to the configured compatibility setting. It
-provides serializers that plug into Kafka clients that handle schema storage and
-retrieval for Kafka messages that are sent in the Avro format.
+Confluent Schema Registry provides a serving layer for your metadata. It provides a RESTful interface for storing and retrieving your Avro®, JSON Schema, and Protobuf schemas. It stores a versioned history of all schemas based on a specified subject name strategy, provides multiple compatibility settings and allows evolution of schemas according to the configured compatibility settings and expanded support for these schema types. It provides serializers that plug into Apache Kafka® clients that handle schema storage and retrieval for Kafka messages that are sent in any of the supported formats.
 
-Quickstart
-----------
+This README includes the following sections:
 
-The following assumes you have Kafka and an instance of the Schema Registry running using the default settings.
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+<!-- generated with [DocToc](https://github.com/thlorenz/doctoc), see the link for install and instructions for use -->
+
+- [Documentation](#documentation)
+- [Quickstart API Usage examples](#quickstart-api-usage-examples)
+- [Installation](#installation)
+- [Deployment](#deployment)
+- [Development](#development)
+- [OpenAPI Spec](#openapi-spec)
+- [Contribute](#contribute)
+- [License](#license)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+Documentation
+-------------
+
+Here are a few links to Schema Registry pages in the Confluent Documentation.
+
+- [Installing and Configuring Schema Registry](https://docs.confluent.io/current/schema-registry/installation/index.html)
+- [Schema Management overview](https://docs.confluent.io/current/schema-registry/index.html)
+- [Schema Registry Tutorial](https://docs.confluent.io/current/schema-registry/schema_registry_tutorial.html)
+- [Schema Registry API reference](https://docs.confluent.io/current/schema-registry/develop/api.html)
+- [Serializers, Deserializers for supported schema types](https://docs.confluent.io/current/schema-registry/serializer-formatter.html)
+- [Kafka Clients](https://docs.confluent.io/current/clients/index.html#kafka-clients)
+- [Schema Registry on Confluent Cloud](https://docs.confluent.io/current/quickstart/cloud-quickstart/schema-registry.html)
+
+Quickstart API Usage examples
+-----------------------------
+
+The following assumes you have Kafka and an [instance of the Schema Registry](https://docs.confluent.io/current/schema-registry/installation/index.html)
+running using the default settings. These examples, and more, are also available at [API Usage examples](https://docs.confluent.io/current/schema-registry/using.html) on [docs.confluent.io](https://docs.confluent.io/current/).
 
 ```bash
 # Register a new version of a schema under the subject "Kafka-key"
@@ -86,7 +112,7 @@ $ curl -X PUT -H "Content-Type: application/vnd.schemaregistry.v1+json" \
 Installation
 ------------
 
-You can download prebuilt versions of the Kafka REST Proxy as part of the
+You can download prebuilt versions of the schema registry as part of the
 [Confluent Platform](http://confluent.io/downloads/). To install from source,
 follow the instructions in the Development section.
 
@@ -109,6 +135,45 @@ with Maven.
 This project uses the [Google Java code style](https://google.github.io/styleguide/javaguide.html)
 to keep code clean and consistent.
 
+To build:
+
+```bash
+mvn compile
+```
+
+To run the unit and integration tests:
+
+```bash
+mvn test
+```
+
+To run an instance of Schema Registry against a local Kafka cluster (using the default configuration included with Kafka):
+
+```bash
+mvn exec:java -pl :kafka-schema-registry -Dexec.args="config/schema-registry.properties"
+```
+
+To create a packaged version, optionally skipping the tests:
+
+```bash
+mvn package [-DskipTests]
+```
+
+It produces:
+
+- Schema registry in `package-schema-registry/target/kafka-schema-registry-package-$VERSION-package`
+- Serde tools for avro/json/protobuf in `package-kafka-serde-tools/target/kafka-serde-tools-package-$VERSION-package`
+
+Each of the produced contains a directory layout similar to the packaged binary versions.
+
+You can also produce a standalone fat JAR of schema registry using the `standalone` profile:
+
+```bash
+mvn package -P standalone [-DskipTests]
+```
+
+This generates `package-schema-registry/target/kafka-schema-registry-package-$VERSION-standalone.jar`, which includes all the dependencies as well.
+
 OpenAPI Spec
 ------------
 
@@ -118,6 +183,8 @@ on `compile` phase.
 
 Contribute
 ----------
+
+Thanks for helping us to make Schema Registry even better!
 
 - Source Code: https://github.com/confluentinc/schema-registry
 - Issue Tracker: https://github.com/confluentinc/schema-registry/issues

@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+import "TestProto.proto";
+import "TestProto2.proto";
+
+package test3;
+
+message TestMessage {
+    test1.TestMessage nested_message1 = 1;
+    test2.TestMessage nested_message2 = 2;
+}

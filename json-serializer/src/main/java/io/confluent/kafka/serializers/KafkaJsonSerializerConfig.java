@@ -28,12 +28,25 @@ public class KafkaJsonSerializerConfig extends AbstractConfig {
   public static final String JSON_INDENT_OUTPUT_DOC =
       "Whether JSON output should be indented (\"pretty-printed\")";
 
+  public static final String WRITE_DATES_AS_ISO8601 = "json.write.dates.iso8601";
+  public static final boolean WRITE_DATES_AS_ISO8601_DEFAULT = false;
+  public static final String WRITE_DATES_AS_ISO8601_DOC = "Whether to write dates as "
+      + "ISO 8601 strings";
+
   private static ConfigDef config;
 
   static {
-    config = new ConfigDef()
-        .define(JSON_INDENT_OUTPUT, ConfigDef.Type.BOOLEAN, JSON_INDENT_OUTPUT_DEFAULT,
-                ConfigDef.Importance.LOW, JSON_INDENT_OUTPUT_DOC);
+    config = new ConfigDef().define(JSON_INDENT_OUTPUT,
+        ConfigDef.Type.BOOLEAN,
+        JSON_INDENT_OUTPUT_DEFAULT,
+        ConfigDef.Importance.LOW,
+        JSON_INDENT_OUTPUT_DOC
+    ).define(WRITE_DATES_AS_ISO8601,
+        ConfigDef.Type.BOOLEAN,
+        WRITE_DATES_AS_ISO8601_DEFAULT,
+        ConfigDef.Importance.MEDIUM,
+        WRITE_DATES_AS_ISO8601_DOC
+    );
   }
 
   public KafkaJsonSerializerConfig(Map<?, ?> props) {

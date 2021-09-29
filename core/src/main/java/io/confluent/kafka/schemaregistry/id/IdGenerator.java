@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.id;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
@@ -33,7 +32,7 @@ public interface IdGenerator {
    * @return the identifier for the schema; never {@code null}
    * @throws IdGenerationException exception when id can't be generated
    */
-  int id(Schema schema) throws IdGenerationException;
+  int id(SchemaValue schema) throws IdGenerationException;
 
   /**
    * Configure the underlying generator.
@@ -48,6 +47,14 @@ public interface IdGenerator {
    * @throws IdGenerationException exception when IdGenerator can't be initialized
    */
   void init() throws IdGenerationException;
+
+  /**
+   * Returns the current max id from the generator
+   *
+   * @param schema current schema in the request to Schema Registry
+   * @return the max id; never {@code null}
+   */
+  int getMaxId(SchemaValue schema);
 
   /**
    * Callback method that is invoked when a schema is registered.

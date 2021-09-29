@@ -15,26 +15,32 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
 @Path("/schemas")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -53,20 +59,60 @@ public class SchemasResource {
   }
 
   @GET
+  @Operation(summary = "Get the schemas.", responses = {
+      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+          + "data store\n")
+  })
+  @PerformanceMetric("schemas.get-schemas")
+  public List<Schema> getSchemas(
+      @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
+      @DefaultValue("false") @QueryParam("deleted") boolean lookupDeletedSchema,
+      @DefaultValue("false") @QueryParam("latestOnly") boolean latestOnly,
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
+    Iterator<Schema> schemas;
+    List<Schema> filteredSchemas = new ArrayList<>();
+    String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
+    try {
+      schemas = schemaRegistry.getVersionsWithSubjectPrefix(
+          subjectPrefix, lookupDeletedSchema, latestOnly);
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    int fromIndex = offset;
+    int toIndex = limit > 0 ? offset + limit : Integer.MAX_VALUE;
+    int index = 0;
+    while (schemas.hasNext() && index < toIndex) {
+      Schema schema = schemas.next();
+      if (index >= offset) {
+        filteredSchemas.add(schema);
+      }
+      index++;
+    }
+    return filteredSchemas;
+  }
+
+  @GET
   @Path("/ids/{id}")
-  @ApiOperation("Get the schema string identified by the input ID.")
-  @ApiResponses(value = {
-      @ApiResponse(code = 404, message = "Error code 40403 -- Schema not found\n"),
-      @ApiResponse(code = 500, message = "Error code 50001 -- Error in the backend data store\n")})
+  @Operation(summary = "Get the schema string identified by the input ID.", responses = {
+      @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not found\n"),
+      @ApiResponse(responseCode = "500",
+          description = "Error code 50001 -- Error in the backend data store\n")
+  })
   @PerformanceMetric("schemas.ids.get-schema")
   public SchemaString getSchema(
-      @ApiParam(value = "Globally unique identifier of the schema", required = true)
-      @PathParam("id") Integer id) {
-    SchemaString schema = null;
+      @Parameter(description = "Globally unique identifier of the schema", required = true)
+      @PathParam("id") Integer id,
+      @QueryParam("subject") String subject,
+      @DefaultValue("") @QueryParam("format") String format,
+      @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
+    SchemaString schema;
     String errorMessage = "Error while retrieving schema with id " + id + " from the schema "
                           + "registry";
     try {
-      schema = schemaRegistry.get(id);
+      schema = schemaRegistry.get(id, subject, format, fetchMaxId);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -74,8 +120,84 @@ public class SchemasResource {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
     if (schema == null) {
-      throw Errors.schemaNotFoundException();
+      throw Errors.schemaNotFoundException(id);
     }
     return schema;
+  }
+
+  @GET
+  @Path("/ids/{id}/subjects")
+  @Operation(summary = "Get all the subjects associated with the input ID.", responses = {
+      @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not found\n"),
+      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+          + "data store\n")
+  })
+  public Set<String> getSubjects(
+      @Parameter(description = "Globally unique identifier of the schema", required = true)
+      @PathParam("id") Integer id,
+      @QueryParam("subject") String subject,
+      @QueryParam("deleted") boolean lookupDeletedSchema) {
+    Set<String> subjects;
+    String errorMessage = "Error while retrieving all subjects associated with schema id "
+        + id + " from the schema registry";
+
+    try {
+      subjects = schemaRegistry.listSubjectsForId(id, subject, lookupDeletedSchema);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+
+    if (subjects == null) {
+      throw Errors.schemaNotFoundException();
+    }
+
+    return subjects;
+  }
+
+  @GET
+  @Path("/ids/{id}/versions")
+  @Operation(summary = "Get all the subject-version pairs associated with the input ID.",
+      responses = {
+          @ApiResponse(responseCode = "404", description = "Error code 40403 -- Schema not "
+              + "found\n"),
+          @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the "
+              + "backend data store\n")
+      })
+  public List<SubjectVersion> getVersions(
+      @Parameter(description = "Globally unique identifier of the schema", required = true)
+      @PathParam("id") Integer id,
+      @QueryParam("subject") String subject,
+      @QueryParam("deleted") boolean lookupDeletedSchema) {
+    List<SubjectVersion> versions;
+    String errorMessage = "Error while retrieving all subjects associated with schema id "
+                          + id + " from the schema registry";
+
+    try {
+      versions = schemaRegistry.listVersionsForId(id, subject, lookupDeletedSchema);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+
+    if (versions == null) {
+      throw Errors.schemaNotFoundException();
+    }
+
+    return versions;
+  }
+
+  @GET
+  @Path("/types")
+  @Operation(summary = "Get the schema types supported by this registry.", responses = {
+      @ApiResponse(responseCode = "500", description = "Error code 50001 -- Error in the backend "
+          + "data store\n")
+  })
+  public Set<String> getSchemaTypes() {
+    return schemaRegistry.schemaTypes();
   }
 }

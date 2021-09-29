@@ -16,10 +16,13 @@
 
 package io.confluent.connect.avro;
 
-import avro.shaded.com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
+
+import com.google.common.collect.ImmutableMap;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -35,11 +38,12 @@ import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.serializers.AbstractKafkaAvroSerDe;
-import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -55,7 +59,7 @@ public class AvroConverterTest {
   private static final String TOPIC = "topic";
 
   private static final Map<String, ?> SR_CONFIG = Collections.singletonMap(
-      AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost");
+      AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost");
 
   private final SchemaRegistryClient schemaRegistry;
   private final AvroConverter converter;
@@ -75,7 +79,7 @@ public class AvroConverterTest {
     converter.configure(SR_CONFIG, true);
     assertTrue(Whitebox.<Boolean>getInternalState(converter, "isKey"));
     assertNotNull(Whitebox.getInternalState(
-        Whitebox.<AbstractKafkaAvroSerDe>getInternalState(converter, "serializer"),
+        Whitebox.<AbstractKafkaSchemaSerDe>getInternalState(converter, "serializer"),
         "schemaRegistry"));
   }
 
@@ -84,7 +88,7 @@ public class AvroConverterTest {
     converter.configure(SR_CONFIG, false);
     assertFalse(Whitebox.<Boolean>getInternalState(converter, "isKey"));
     assertNotNull(Whitebox.getInternalState(
-        Whitebox.<AbstractKafkaAvroSerDe>getInternalState(converter, "serializer"),
+        Whitebox.<AbstractKafkaSchemaSerDe>getInternalState(converter, "serializer"),
         "schemaRegistry"));
   }
 
@@ -149,6 +153,14 @@ public class AvroConverterTest {
     assertEquals(expected, schemaAndValue.value());
   }
 
+  @Test
+  public void testTypeBytes() {
+    Schema schema = SchemaBuilder.bytes().build();
+    byte[] b = converter.fromConnectData("topic", schema, "jellomellow".getBytes());
+    SchemaAndValue sv = converter.toConnectData("topic", b);
+    assertEquals(Type.BYTES, sv.schema().type());
+    assertArrayEquals("jellomellow".getBytes(), ((ByteBuffer) sv.value()).array());
+  }
 
   @Test
   public void testNull() {
@@ -196,14 +208,14 @@ public class AvroConverterTest {
         .record("Foo").fields()
         .requiredInt("key")
         .endRecord();
-    schemaRegistry.register(subject, avroSchema1);
+    schemaRegistry.register(subject, new AvroSchema(avroSchema1));
 
     org.apache.avro.Schema avroSchema2 = org.apache.avro.SchemaBuilder
         .record("Foo").fields()
         .requiredInt("key")
         .requiredString("value")
         .endRecord();
-    schemaRegistry.register(subject, avroSchema2);
+    schemaRegistry.register(subject, new AvroSchema(avroSchema2));
 
 
     // Get serialized data
@@ -270,8 +282,8 @@ public class AvroConverterTest {
     SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
     AvroConverter avroConverter = new AvroConverter(schemaRegistry);
     Map<String, ?> converterConfig = ImmutableMap.of(
-        AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
-        AbstractKafkaAvroSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
+        AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
     avroConverter.configure(converterConfig, false);
     assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, false);
   }
@@ -281,8 +293,8 @@ public class AvroConverterTest {
     SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
     AvroConverter avroConverter = new AvroConverter(schemaRegistry);
     Map<String, ?> converterConfig = ImmutableMap.of(
-        AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
-        AbstractKafkaAvroSerDeConfig.KEY_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
+        AbstractKafkaSchemaSerDeConfig.KEY_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
     avroConverter.configure(converterConfig, true);
     assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, true);
   }
@@ -299,7 +311,7 @@ public class AvroConverterTest {
     final AvroConverter avroConverter = new AvroConverter(new MockSchemaRegistryClient());
     avroConverter.configure(
         Collections.singletonMap(
-            AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost"
+            AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost"
         ),
         false
     );
@@ -329,9 +341,9 @@ public class AvroConverterTest {
         .requiredString("value")
         .endRecord();
     String subjectSuffix = isKey ? "key" : "value";
-    schemaRegistry.register("topic1-" + subjectSuffix, avroSchema2_1);
-    schemaRegistry.register("topic2-" + subjectSuffix, avroSchema1);
-    schemaRegistry.register("topic2-" + subjectSuffix, avroSchema2_2);
+    schemaRegistry.register("topic1-" + subjectSuffix, new AvroSchema(avroSchema2_1));
+    schemaRegistry.register("topic2-" + subjectSuffix, new AvroSchema(avroSchema1));
+    schemaRegistry.register("topic2-" + subjectSuffix, new AvroSchema(avroSchema2_2));
 
     org.apache.avro.generic.GenericRecord avroRecord1
         = new org.apache.avro.generic.GenericRecordBuilder(avroSchema2_1).set("key", 15).set

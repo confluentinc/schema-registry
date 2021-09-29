@@ -16,7 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -48,12 +48,12 @@ public class SchemaRegistryErrorHandlerTest extends ClusterTestHarness {
       + "\"name\":\"myrecord\","
       + "\"fields\":"
       + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
-      .canonicalString;
+      .canonicalString();
 
   private final String subject = "testSubject";
 
   public SchemaRegistryErrorHandlerTest() {
-    super(1, true, AvroCompatibilityLevel.BACKWARD.name);
+    super(1, true, CompatibilityLevel.BACKWARD.name);
   }
 
 

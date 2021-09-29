@@ -21,4 +21,5 @@ target/
 .settings
 
 # Log file from schema registry daemon
+logs/
 nohup.out

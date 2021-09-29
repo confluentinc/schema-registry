@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>5.4.0-SNAPSHOT</version>
+        <version>7.1.0-0</version>
     </parent>
 
     <artifactId>kafka-schema-registry</artifactId>
@@ -18,6 +18,17 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-json-schema-provider</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-protobuf-provider</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
@@ -28,38 +39,67 @@
             <artifactId>kafka-clients</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>common-config</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>common-utils</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.glassfish.jersey.ext</groupId>
             <artifactId>jersey-bean-validation</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.hibernate.validator</groupId>
+                    <artifactId>hibernate-validator</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <version>6.1.7.Final</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>rest-utils</artifactId>
+            <version>${io.confluent.rest-utils.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
+        </dependency>
+        <!-- Use a repackaged version of log4j with security patches. Default log4j v1.2 is a transitive dependency of slf4j-log4j12, but it is excluded in common/pom.xml -->
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>confluent-log4j</artifactId>
+       </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.avro</groupId>
             <artifactId>avro</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.apache.zookeeper</groupId>
-            <artifactId>zookeeper</artifactId>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.101tec</groupId>
-            <artifactId>zkclient</artifactId>
+            <groupId>org.apache.zookeeper</groupId>
+            <artifactId>zookeeper</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-codec</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-codec</artifactId>
+            <version>${netty.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-protobuf-types</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -85,6 +125,7 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-avro-serializer</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -208,19 +249,30 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>io.swagger</groupId>
+            <groupId>io.swagger.core.v3</groupId>
             <artifactId>swagger-annotations</artifactId>
-            <version>1.5.22</version>
         </dependency>
         <dependency>
-            <groupId>io.swagger</groupId>
+            <groupId>io.swagger.core.v3</groupId>
             <artifactId>swagger-core</artifactId>
-            <version>1.5.3</version>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.6</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <phase>test-compile</phase>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
@@ -235,40 +287,75 @@
                     <mainClass>io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain</mainClass>
                 </configuration>
             </plugin>
-
             <plugin>
-                <groupId>com.github.kongchen</groupId>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                        <configuration>
+                            <testSourceDirectory>${project.basedir}/src/test/avro</testSourceDirectory>
+                            <imports>
+                                <import>${project.basedir}/src/test/avro/subrecord.avsc</import>
+                            </imports>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.github.os72</groupId>
+                <artifactId>protoc-jar-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>io.swagger.core.v3</groupId>
                 <artifactId>swagger-maven-plugin</artifactId>
-                <version>3.1.8</version>
                 <configuration>
-                    <apiSources>
-                        <apiSource>
-                            <springmvc>false</springmvc>
-
-                            <locations><location>io.confluent.kafka.schemaregistry.rest.resources</location></locations>
-                            <schemes>http,https
-                            </schemes>
-                            <info>
-                                <title>Confluent Schema Registry</title>
-                                <version>v1</version>
-                            </info>
-                            <outputFormats>yaml</outputFormats>
-                            <swaggerFileName>schema-registry-api-spec</swaggerFileName>
-                            <outputPath>${basedir}/generated/document.html</outputPath>
-                            <swaggerDirectory>${basedir}/generated/swagger-ui</swaggerDirectory>
-                        </apiSource>
-
-                    </apiSources>
+                    <resourcePackages>
+                        <package>io.confluent.kafka.schemaregistry.rest.resources</package>
+                    </resourcePackages>
+                    <prettyPrint>true</prettyPrint>
+                    <outputFormat>YAML</outputFormat>
+                    <outputFileName>schema-registry-api-spec</outputFileName>
+                    <openapiFilePath>${basedir}/generated/swagger-ui/schema-registry-api-spec.yaml</openapiFilePath>
+                    <outputPath>${basedir}/generated/swagger-ui</outputPath>
                 </configuration>
                 <executions>
                     <execution>
                         <phase>compile</phase>
                         <goals>
-                            <goal>generate</goal>
+                            <goal>resolve</goal>
                         </goals>
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>buildnumber-maven-plugin</artifactId>
+                <version>1.4</version>
+                <executions>
+                    <execution>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>create</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <buildNumberPropertyName>gitCommitID</buildNumberPropertyName>
+                    <doCheck>false</doCheck>
+                    <doUpdate>false</doUpdate>
+                </configuration>
+            </plugin>
         </plugins>
+
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
     </build>
 </project>
