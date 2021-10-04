@@ -942,8 +942,8 @@ public class ProtobufDataTest {
 
     Schema fieldSchema = SchemaBuilder.int64()
         .name(org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME)
-        // add default which will be ignore
-        // since in Protobuf messages can't have default values
+        // add default which will be ignored
+        // since in Protobuf, messages can't have default values
         .defaultValue(new java.util.Date(0))
         .version(1)
         .build();
