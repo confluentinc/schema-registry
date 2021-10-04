@@ -500,6 +500,7 @@ public class ProtobufData {
         label = "repeated";
       }
       String type = dataTypeFromConnectSchema(fieldSchema, name);
+      Object defaultVal = null;
       if (fieldSchema.type() == Schema.Type.STRUCT) {
         String fieldSchemaName = fieldSchema.name();
         if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
@@ -532,8 +533,9 @@ public class ProtobufData {
         timestampSchema.addMessageDefinition(timestampDefinition());
         schema.addSchema(timestampSchema.build());
         schema.addDependency(GOOGLE_PROTOBUF_TIMESTAMP_LOCATION);
+      } else {
+        defaultVal = fieldSchema.defaultValue();
       }
-      Object defaultVal = fieldSchema.defaultValue();
       return new FieldDefinition(
           label,
           type,
