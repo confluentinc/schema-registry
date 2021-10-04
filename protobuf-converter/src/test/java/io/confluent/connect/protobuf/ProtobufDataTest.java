@@ -1239,6 +1239,33 @@ public class ProtobufDataTest {
   }
 
   @Test
+  public void testFromConnectTimestampWithDefault() throws Exception {
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
+    java.util.Date date = sdf.parse("2017/09/18");
+
+    Schema fieldSchema = SchemaBuilder.int64()
+        .name(org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME)
+        // add default which will be ignored
+        // since in Protobuf, messages can't have default values
+        .defaultValue(new java.util.Date(0))
+        .version(1)
+        .build();
+    Schema schema = SchemaBuilder.struct()
+        .name("TimestampValue")
+        .field("value", fieldSchema)
+        .build();
+    Struct value = new Struct(schema).put("value", date);
+    byte[] messageBytes = getMessageBytes(new SchemaAndValue(schema, value));
+    Message message = TimestampValue.parseFrom(messageBytes);
+
+    assertEquals(1, message.getAllFields().size());
+
+    Descriptors.FieldDescriptor fieldDescriptor = message.getDescriptorForType()
+        .findFieldByName(VALUE_FIELD_NAME);
+    assertEquals(Timestamps.fromMillis(date.getTime()), message.getField(fieldDescriptor));
+  }
+
+  @Test
   public void testFromConnectFloat32() throws Exception {
     Float value = 12.3f;
     byte[] messageBytes = getMessageBytes(OPTIONAL_FLOAT32_SCHEMA, value);
