@@ -717,6 +717,7 @@ public class ProtobufData {
     }
     Map<String, String> params = new HashMap<>();
     String type = dataTypeFromConnectSchema(fieldSchema, name, params);
+    Object defaultVal = null;
     if (fieldSchema.type() == Schema.Type.STRUCT) {
       String fieldSchemaName = fieldSchema.name();
       if (fieldSchemaName != null && fieldSchemaName.startsWith(PROTOBUF_TYPE_UNION_PREFIX)) {
@@ -746,9 +747,10 @@ public class ProtobufData {
       if (dynamicSchema != null) {
         schema.addSchema(dynamicSchema);
         schema.addDependency(dynamicSchema.getFileDescriptorProto().getName());
+      } else {
+        defaultVal = fieldSchema.defaultValue();
       }
     }
-    Object defaultVal = fieldSchema.defaultValue();
     return new FieldDefinition(
         label,
         type,
