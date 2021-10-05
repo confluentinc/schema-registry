@@ -8,6 +8,7 @@
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
         <version>[7.1.0-0, 7.1.1-0)</version>
+        <relativePath>../rest-utils</relativePath>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
@@ -397,12 +398,36 @@
                 </executions>
             </plugin>
             <plugin>
+                <!--
+                Get the actual directory of the target in this pom file
+            -->
+                <groupId>org.commonjava.maven.plugins</groupId>
+                <artifactId>directory-maven-plugin</artifactId>
+                <version>0.1</version>
+                <executions>
+                    <execution>
+                        <id>directories</id>
+                        <goals>
+                            <goal>directory-of</goal>
+                        </goals>
+                        <phase>initialize</phase>
+                        <configuration>
+                            <property>schema-registry.topdir</property>
+                            <project>
+                                <groupId>io.confluent</groupId>
+                                <artifactId>kafka-schema-registry-parent</artifactId>
+                            </project>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
                 <version>${spotbugs.maven.plugin.version}</version>
                 <configuration>
                     <xmlOutput>true</xmlOutput>
-                    <excludeFilterFile>findbugs/findbugs-exclude.xml</excludeFilterFile>
+                    <excludeFilterFile>${schema-registry.topdir}/findbugs/findbugs-exclude.xml</excludeFilterFile>
                     <effort>Max</effort>
                     <threshold>Max</threshold>
                     <failOnError>true</failOnError>
