@@ -44,6 +44,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
 
   protected boolean autoRegisterSchema;
+  protected int useSchemaId;
+  protected boolean idCompatStrict;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
   protected boolean skipKnownTypes;
@@ -52,6 +54,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected void configure(KafkaProtobufSerializerConfig config) {
     configureClientProperties(config, new ProtobufSchemaProvider());
     this.autoRegisterSchema = config.autoRegisterSchema();
+    this.useSchemaId = config.useSchemaId();
+    this.idCompatStrict = config.getIdCompatibilityStrict();
     this.useLatestVersion = config.useLatestVersion();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
     this.skipKnownTypes = config.skipKnownTypes();
@@ -91,6 +95,11 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
         id = schemaRegistry.register(subject, schema);
+      } else if (useSchemaId >= 0) {
+        restClientErrorMsg = "Error retrieving schema ID";
+        schema = (ProtobufSchema)
+            lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
+        id = schemaRegistry.getId(subject, schema);
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         schema = (ProtobufSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
