@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
 import io.confluent.rest.RestConfigException;
-import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 
 public class SchemaRegistryMain {
 
@@ -43,8 +42,6 @@ public class SchemaRegistryMain {
       Server server = app.createServer();
       server.start();
       log.info("Server started, listening for requests...");
-      log.info("Schema Registry version: {} commitId: {}",
-              AppInfoParser.getVersion(), AppInfoParser.getCommitId());
       server.join();
     } catch (RestConfigException e) {
       log.error("Server configuration failed: ", e);
