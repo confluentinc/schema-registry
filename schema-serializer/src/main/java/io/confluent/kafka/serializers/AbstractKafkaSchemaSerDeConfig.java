@@ -66,6 +66,16 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String AUTO_REGISTER_SCHEMAS_DOC =
       "Specify if the Serializer should attempt to register the Schema with Schema Registry";
 
+  public static final String USE_SCHEMA_ID = "use.schema.id";
+  public static final int USE_SCHEMA_ID_DEFAULT = -1;
+  public static final String USE_SCHEMA_ID_DOC = "Schema ID to use for serialization";
+
+  public static final String ID_COMPATIBILITY_STRICT = "id.compatibility.strict";
+  public static final boolean ID_COMPATIBILITY_STRICT_DEFAULT = true;
+  public static final String ID_COMPATIBILITY_STRICT_DOC =
+      "Whether to check for backward compatibility between the schema with the given ID and "
+      + " the schema of the object to be serialized";
+
   public static final String USE_LATEST_VERSION = "use.latest.version";
   public static final boolean USE_LATEST_VERSION_DEFAULT = false;
   public static final String USE_LATEST_VERSION_DOC =
@@ -75,7 +85,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final boolean LATEST_COMPATIBILITY_STRICT_DEFAULT = true;
   public static final String LATEST_COMPATIBILITY_STRICT_DOC =
       "Whether to check for backward compatibility between the latest subject version and "
-      + " the Schema of the object to be serialized";
+      + " the schema of the object to be serialized";
 
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
@@ -155,6 +165,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
         .define(AUTO_REGISTER_SCHEMAS, Type.BOOLEAN, AUTO_REGISTER_SCHEMAS_DEFAULT,
                 Importance.MEDIUM, AUTO_REGISTER_SCHEMAS_DOC)
+        .define(USE_SCHEMA_ID, Type.INT, USE_SCHEMA_ID_DEFAULT,
+                Importance.LOW, USE_SCHEMA_ID_DOC)
+        .define(ID_COMPATIBILITY_STRICT, Type.BOOLEAN, ID_COMPATIBILITY_STRICT_DEFAULT,
+                Importance.LOW, ID_COMPATIBILITY_STRICT_DOC)
         .define(USE_LATEST_VERSION, Type.BOOLEAN, USE_LATEST_VERSION_DEFAULT,
                 Importance.LOW, USE_LATEST_VERSION_DOC)
         .define(LATEST_COMPATIBILITY_STRICT, Type.BOOLEAN, LATEST_COMPATIBILITY_STRICT_DEFAULT,
@@ -204,6 +218,14 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public boolean autoRegisterSchema() {
     return this.getBoolean(AUTO_REGISTER_SCHEMAS);
+  }
+
+  public int useSchemaId() {
+    return this.getInt(USE_SCHEMA_ID);
+  }
+
+  public boolean getIdCompatibilityStrict() {
+    return this.getBoolean(ID_COMPATIBILITY_STRICT);
   }
 
   public boolean useLatestVersion() {
