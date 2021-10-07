@@ -44,7 +44,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     extends AbstractKafkaSchemaSerDe {
 
   protected boolean autoRegisterSchema;
-  protected int useSchemaId;
+  protected int useSchemaId = -1;
   protected boolean idCompatStrict;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;

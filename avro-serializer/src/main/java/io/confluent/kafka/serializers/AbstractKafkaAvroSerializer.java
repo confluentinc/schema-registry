@@ -43,7 +43,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
   protected boolean removeJavaProperties;
-  protected int useSchemaId;
+  protected int useSchemaId = -1;
   protected boolean idCompatStrict;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;

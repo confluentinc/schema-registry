@@ -39,7 +39,7 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafkaSchemaSerDe {
 
   protected boolean autoRegisterSchema;
-  protected int useSchemaId;
+  protected int useSchemaId = -1;
   protected boolean idCompatStrict;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
