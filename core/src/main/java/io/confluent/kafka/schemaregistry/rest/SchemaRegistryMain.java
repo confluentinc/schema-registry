@@ -42,9 +42,9 @@ public class SchemaRegistryMain {
       SchemaRegistryRestApplication app = new SchemaRegistryRestApplication(config);
       Server server = app.createServer();
       server.start();
-      log.info("Server started, listening for requests...");
       log.info("Schema Registry version: {} commitId: {}",
-              AppInfoParser.getVersion(), AppInfoParser.getCommitId());
+          AppInfoParser.getVersion(), AppInfoParser.getCommitId());
+      log.info("Server started, listening for requests...");
       server.join();
     } catch (RestConfigException e) {
       log.error("Server configuration failed: ", e);
