@@ -528,7 +528,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           }
         }
         for (SchemaValue deleted : deletedVersions) {
-          if (deleted.getId().equals(schema.getId())) {
+          if (deleted.getId().equals(schema.getId())
+                  && deleted.getVersion().compareTo(schema.getVersion()) < 0) {
             // Tombstone previous version with the same ID
             SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
             kafkaStore.put(key, null);
