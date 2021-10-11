@@ -181,4 +181,49 @@ public class RestApiModeTest extends ClusterTestHarness {
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
   }
+
+  @Test
+  public void testRegisterSchemaWithSameIdAfterImport() throws Exception {
+    String subject = "testSubject";
+    String mode = "READWRITE";
+
+    // set mode to read write
+    assertEquals(
+            mode,
+            restApp.restClient.setMode(mode).getMode());
+
+    int expectedIdSchema1 = 1;
+    assertEquals("Registering without id should succeed",
+            expectedIdSchema1,
+            restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+
+    // delete subject so we can switch to import mode
+    restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
+
+    mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+            mode,
+            restApp.restClient.setMode(mode).getMode());
+
+    // register same schema with same id
+    expectedIdSchema1 = 1;
+    assertEquals("Registering with id should succeed",
+            expectedIdSchema1,
+            restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+
+    // delete subject again
+    restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
+
+    // register same schema with same id
+    expectedIdSchema1 = 1;
+    assertEquals("Registering with id should succeed",
+            expectedIdSchema1,
+            restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+
+    assertEquals("Getting schema by id should succeed",
+            SCHEMA_STRING,
+            restApp.restClient.getVersion(subject, 1).getSchema());
+  }
 }
