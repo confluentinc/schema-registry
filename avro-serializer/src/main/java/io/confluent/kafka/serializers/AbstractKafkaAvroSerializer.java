@@ -43,6 +43,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean autoRegisterSchema;
   protected boolean removeJavaProperties;
+  protected int useSchemaId = -1;
+  protected boolean idCompatStrict;
   protected boolean useLatestVersion;
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
@@ -54,6 +56,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     autoRegisterSchema = config.autoRegisterSchema();
     removeJavaProperties =
         config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
+    useSchemaId = config.useSchemaId();
+    idCompatStrict = config.getIdCompatibilityStrict();
     useLatestVersion = config.useLatestVersion();
     latestCompatStrict = config.getLatestCompatibilityStrict();
     avroReflectionAllowNull = config
@@ -107,6 +111,11 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema";
         id = schemaRegistry.register(subject, schema);
+      } else if (useSchemaId >= 0) {
+        restClientErrorMsg = "Error retrieving schema ID";
+        schema = (AvroSchema)
+            lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
+        id = schemaRegistry.getId(subject, schema);
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version of Avro schema";
         schema = (AvroSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
