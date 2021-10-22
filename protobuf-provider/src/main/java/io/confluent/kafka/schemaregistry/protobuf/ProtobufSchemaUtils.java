@@ -24,6 +24,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 
+import com.squareup.wire.schema.internal.parser.EnumConstantElement;
 import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.ExtendElement;
 import com.squareup.wire.schema.internal.parser.ExtensionsElement;
@@ -140,7 +141,27 @@ public class ProtobufSchemaUtils {
   }
 
   private static String toString(EnumElement type) {
-    return type.toSchema();
+    StringBuilder sb = new StringBuilder();
+    sb.append("enum ");
+    sb.append(type.getName());
+    sb.append(" {");
+
+    if (!type.getOptions().isEmpty() || !type.getConstants().isEmpty()) {
+      sb.append('\n');
+    }
+
+    if (!type.getOptions().isEmpty()) {
+      for (OptionElement option : type.getOptions()) {
+        appendIndented(sb, toString(option));
+      }
+    }
+    if (!type.getConstants().isEmpty()) {
+      for (EnumConstantElement constant : type.getConstants()) {
+        appendIndented(sb, constant.toSchema());
+      }
+    }
+    sb.append("}\n");
+    return sb.toString();
   }
 
   private static String toString(MessageElement type) {
@@ -170,7 +191,7 @@ public class ProtobufSchemaUtils {
     if (!type.getOneOfs().isEmpty()) {
       sb.append('\n');
       for (OneOfElement oneOf : type.getOneOfs()) {
-        appendIndented(sb, oneOf.toSchema());
+        appendIndented(sb, toString(oneOf));
       }
     }
     if (!type.getGroups().isEmpty()) {
@@ -196,6 +217,34 @@ public class ProtobufSchemaUtils {
         if (typeElement instanceof EnumElement) {
           appendIndented(sb, toString((EnumElement) typeElement));
         }
+      }
+    }
+    sb.append("}\n");
+    return sb.toString();
+  }
+
+  private static String toString(OneOfElement type) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("oneof ");
+    sb.append(type.getName());
+    sb.append(" {");
+
+    if (!type.getOptions().isEmpty()) {
+      sb.append('\n');
+      for (OptionElement option : type.getOptions()) {
+        appendIndented(sb, toString(option));
+      }
+    }
+    if (!type.getFields().isEmpty()) {
+      sb.append('\n');
+      for (FieldElement field : type.getFields()) {
+        appendIndented(sb, field.toSchema());
+      }
+    }
+    if (!type.getGroups().isEmpty()) {
+      sb.append('\n');
+      for (GroupElement group : type.getGroups()) {
+        appendIndented(sb, group.toSchema());
       }
     }
     sb.append("}\n");
