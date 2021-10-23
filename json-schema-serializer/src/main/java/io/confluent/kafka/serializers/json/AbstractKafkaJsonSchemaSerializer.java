@@ -38,6 +38,7 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
 public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafkaSchemaSerDe {
 
+  protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
@@ -51,6 +52,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
 
   protected void configure(KafkaJsonSchemaSerializerConfig config) {
     configureClientProperties(config, new JsonSchemaProvider());
+    this.normalizeSchema = config.normalizeSchema();
     this.autoRegisterSchema = config.autoRegisterSchema();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
@@ -101,7 +103,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       int id;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering JSON schema: ";
-        id = schemaRegistry.register(subject, schema);
+        id = schemaRegistry.register(subject, schema, normalizeSchema);
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (JsonSchema)
@@ -110,10 +112,10 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         schema = (JsonSchema) lookupLatestVersion(subject, schema, latestCompatStrict);
-        id = schemaRegistry.getId(subject, schema);
+        id = schemaRegistry.getId(subject, schema, normalizeSchema);
       } else {
         restClientErrorMsg = "Error retrieving JSON schema: ";
-        id = schemaRegistry.getId(subject, schema);
+        id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
       if (validate) {
         try {

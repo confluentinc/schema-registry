@@ -97,22 +97,24 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
       String topic,
       boolean parseKey,
       BufferedReader reader,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest
   ) {
     super(schemaRegistryClient, keySchema, valueSchema, topic,
-        parseKey, reader, autoRegister, useLatest);
+        parseKey, reader, normalizeSchema, autoRegister, useLatest);
   }
 
   @Override
   protected SchemaMessageSerializer<JsonNode> createSerializer(
       SchemaRegistryClient schemaRegistryClient,
+      boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest,
       Serializer keySerializer
   ) {
     return new JsonSchemaMessageSerializer(
-        schemaRegistryClient, autoRegister, useLatest, keySerializer);
+        schemaRegistryClient, normalizeSchema, autoRegister, useLatest, keySerializer);
   }
 
   @Override
@@ -136,9 +138,10 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
 
     JsonSchemaMessageSerializer(
         SchemaRegistryClient schemaRegistryClient,
-        boolean autoRegister, boolean useLatest, Serializer keySerializer
+        boolean normalizeSchema, boolean autoRegister, boolean useLatest, Serializer keySerializer
     ) {
       this.schemaRegistry = schemaRegistryClient;
+      this.normalizeSchema = normalizeSchema;
       this.autoRegisterSchema = autoRegister;
       this.useLatestVersion = useLatest;
       this.keySerializer = keySerializer;

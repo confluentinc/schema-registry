@@ -171,8 +171,22 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public int register(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    return register(subject, schema, 0, -1, normalize);
+  }
+
+  @Override
   public int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
+    return register(subject, schema, version, id, false);
+  }
+
+  private int register(String subject, ParsedSchema schema, int version, int id, boolean normalize)
+      throws IOException, RestClientException {
+    if (normalize) {
+      schema = schema.normalize();
+    }
     Map<ParsedSchema, Integer> schemaIdMap =
         schemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 
@@ -377,6 +391,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int getVersion(String subject, ParsedSchema schema)
       throws IOException, RestClientException {
+    return getVersion(subject, schema, false);
+  }
+
+  @Override
+  public int getVersion(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    if (normalize) {
+      schema = schema.normalize();
+    }
     Map<ParsedSchema, Integer> versions = versionCache.get(subject);
     if (versions != null) {
       return versions.get(schema);
@@ -431,6 +454,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public int getId(String subject, ParsedSchema schema) throws IOException, RestClientException {
+    return getId(subject, schema, false);
+  }
+
+  @Override
+  public int getId(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    if (normalize) {
+      schema = schema.normalize();
+    }
     Map<ParsedSchema, Integer> schemaIdMap =
         schemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 

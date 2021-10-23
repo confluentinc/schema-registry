@@ -60,7 +60,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
     if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       SchemaValue schemaObj = (SchemaValue) value;
-      normalize(schemaObj);
+      canonicalize(schemaObj);
       try {
         SchemaKey oldKey = lookupCache.schemaKeyById(schemaObj.getId(), schemaObj.getSubject());
         if (oldKey != null) {
@@ -91,11 +91,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   }
 
   @VisibleForTesting
-  protected static void normalize(SchemaValue schemaValue) {
+  protected static void canonicalize(SchemaValue schemaValue) {
     if (ProtobufSchema.TYPE.equals(schemaValue.getSchemaType())) {
-      // Normalize the schema if it is Protobuf (due to changes in Protobuf canonicalization)
-      String normalized = new ProtobufSchema(schemaValue.getSchema()).canonicalString();
-      schemaValue.setSchema(normalized);
+      // Canonicalize the schema if it is Protobuf (due to changes in Protobuf canonicalization)
+      String canonicalized = new ProtobufSchema(schemaValue.getSchema()).canonicalString();
+      schemaValue.setSchema(canonicalized);
     }
   }
 

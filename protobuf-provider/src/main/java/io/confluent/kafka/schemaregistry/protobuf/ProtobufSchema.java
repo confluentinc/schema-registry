@@ -1141,6 +1141,21 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   @Override
+  public ProtobufSchema normalize() {
+    String normalized = ProtobufSchemaUtils.toNormalizedString(this);
+    return new ProtobufSchema(
+        toProtoFile(normalized),
+        this.version,
+        this.name,
+        this.references.stream().sorted().distinct().collect(Collectors.toList()),
+        this.dependencies,
+        normalized,
+        null,
+        null
+    );
+  }
+
+  @Override
   public void validate() {
     toDynamicSchema();
   }

@@ -24,9 +24,13 @@ import org.apache.maven.plugins.annotations.Mojo;
 
 import java.io.IOException;
 import java.util.Map;
+import org.apache.maven.plugins.annotations.Parameter;
 
 @Mojo(name = "register", configurator = "custom-basic")
 public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
+
+  @Parameter(required = false)
+  boolean normalizeSchema = false;
 
   @Override
   protected boolean processSchema(String subject,
@@ -41,8 +45,8 @@ public class RegisterSchemaRegistryMojo extends UploadSchemaRegistryMojo {
       );
     }
 
-    Integer id = this.client().register(subject, schema);
-    Integer version = this.client().getVersion(subject, schema);
+    Integer id = this.client().register(subject, schema, normalizeSchema);
+    Integer version = this.client().getVersion(subject, schema, normalizeSchema);
     getLog().info(
         String.format(
             "Registered subject(%s) with id %s version %s",

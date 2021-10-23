@@ -83,7 +83,7 @@ public class KafkaProtobufSerializer<T extends Message>
       schema = ProtobufSchemaUtils.getSchema(record);
       try {
         // Ensure dependencies are resolved before caching
-        schema = resolveDependencies(schemaRegistry, autoRegisterSchema,
+        schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterSchema,
             useLatestVersion, latestCompatStrict, latestVersions,
             skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
       } catch (IOException | RestClientException e) {

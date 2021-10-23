@@ -48,6 +48,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected boolean useSpecificAvroReader = false;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
+  protected boolean normalizeSchema = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
   private final Map<SchemaPair, DatumReader<?>> datumReaderCache = new ConcurrentHashMap<>();
 
@@ -63,6 +64,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         .getBoolean(KafkaAvroDeserializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
             .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+    normalizeSchema = config.normalizeSchema();
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -122,10 +124,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, result, schema);
       AvroSchema subjectSchema = (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
-      version = schemaRegistry.getVersion(subject, subjectSchema);
+      version = schemaRegistry.getVersion(subject, subjectSchema, normalizeSchema);
     } else {
       //we already got the subject name
-      version = schemaRegistry.getVersion(subject, schema);
+      version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
     }
     return version;
   }

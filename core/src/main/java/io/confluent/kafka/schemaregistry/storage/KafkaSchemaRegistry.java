@@ -430,7 +430,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   @Override
   public int register(String subject,
-                      Schema schema)
+                      Schema schema,
+                      boolean normalize)
       throws SchemaRegistryException {
     try {
       checkRegisterMode(subject, schema);
@@ -439,7 +440,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
 
       int schemaId = schema.getId();
-      ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0);
+      ParsedSchema parsedSchema = canonicalizeSchema(schema, schemaId < 0, normalize);
 
       // see if the schema to be registered already exists
       SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
@@ -481,8 +482,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
       Collections.reverse(undeletedVersions);
 
-      boolean isCompatible =
+      final boolean isCompatible =
               isCompatibleWithPrevious(subject, parsedSchema, undeletedVersions).isEmpty();
+      if (normalize) {
+        parsedSchema = parsedSchema.normalize();
+      }
       // Allow schema providers to modify the schema during compatibility checks
       schema.setSchema(parsedSchema.canonicalString());
       schema.setReferences(parsedSchema.references());
@@ -576,9 +580,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   public int registerOrForward(String subject,
                                Schema schema,
+                               boolean normalize,
                                Map<String, String> headerProperties)
       throws SchemaRegistryException {
-    Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, false);
+    Schema existingSchema = lookUpSchemaUnderSubject(subject, schema, normalize, false);
     if (existingSchema != null) {
       if (schema.getId() != null
           && schema.getId() >= 0
@@ -592,11 +597,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        return register(subject, schema);
+        return register(subject, schema, normalize);
       } else {
         // forward registering request to the leader
         if (leaderIdentity != null) {
-          return forwardRegisterRequestToLeader(subject, schema, headerProperties);
+          return forwardRegisterRequestToLeader(subject, schema, normalize, headerProperties);
         } else {
           throw new UnknownLeaderException("Register schema request failed since leader is "
                                            + "unknown");
@@ -754,10 +759,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
    * Checks if given schema was ever registered under a subject. If found, it returns the version of
    * the schema under the subject. If not, returns -1
    */
-  public Schema lookUpSchemaUnderSubject(String subject, Schema schema, boolean lookupDeletedSchema)
+  public Schema lookUpSchemaUnderSubject(
+      String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     try {
-      ParsedSchema parsedSchema = canonicalizeSchema(schema, false);
+      ParsedSchema parsedSchema = canonicalizeSchema(schema, false, normalize);
       SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
       if (schemaIdAndSubjects != null) {
         if (schemaIdAndSubjects.hasSubject(subject)
@@ -811,7 +817,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private int forwardRegisterRequestToLeader(String subject, Schema schema,
+  private int forwardRegisterRequestToLeader(String subject, Schema schema, boolean normalize,
                                              Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
@@ -825,7 +831,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     log.debug(String.format("Forwarding registering schema request %s to %s",
                             registerSchemaRequest, baseUrl));
     try {
-      int id = leaderRestService.registerSchema(headerProperties, registerSchemaRequest, subject);
+      int id = leaderRestService.registerSchema(
+          headerProperties, registerSchemaRequest, subject, normalize);
       return id;
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
@@ -963,7 +970,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private ParsedSchema canonicalizeSchema(Schema schema, boolean isNew)
+  private ParsedSchema canonicalizeSchema(Schema schema, boolean isNew, boolean normalize)
           throws InvalidSchemaException {
     if (schema == null
         || schema.getSchema() == null
@@ -978,6 +985,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       String errMsg = "Invalid schema " + schema;
       log.error(errMsg, e);
       throw new InvalidSchemaException(errMsg, e);
+    }
+    if (normalize) {
+      parsedSchema = parsedSchema.normalize();
     }
     schema.setSchema(parsedSchema.canonicalString());
     schema.setReferences(parsedSchema.references());
@@ -1547,7 +1557,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       prevParsedSchemas.add(prevParsedSchema);
     }
 
-    ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true);
+    ParsedSchema parsedSchema = canonicalizeSchema(newSchema, true, false);
     return isCompatibleWithPrevious(subject, parsedSchema, prevParsedSchemas);
   }
 
