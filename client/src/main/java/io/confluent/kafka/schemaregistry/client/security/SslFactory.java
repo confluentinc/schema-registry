@@ -23,6 +23,8 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.crypto.Cipher;
 import javax.crypto.EncryptedPrivateKeyInfo;
@@ -60,6 +62,8 @@ import java.util.regex.Pattern;
 
 public class SslFactory {
 
+  private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
+
   private String protocol;
   private String provider;
   private String kmfAlgorithm;
@@ -89,24 +93,20 @@ public class SslFactory {
     try {
       this.keystore = createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
           (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
-          (Password) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
-          (Password) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG),
-          (Password) configs.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG),
-          (Password) configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG));
+          new Password((String) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG)),
+          new Password((String) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)),
+          new Password((String) configs.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG)),
+          new Password((String) configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)));
 
       this.truststore = createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
           (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-          (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG),
-          (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG));
+          new Password((String) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)),
+          new Password((String) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)));
 
       this.sslContext = createSSLContext(keystore, truststore);
     } catch (Exception e) {
       throw new RuntimeException("Error initializing the ssl context for RestService" , e);
     }
-  }
-
-  private static boolean isNotBlank(String str) {
-    return str != null && !str.trim().isEmpty();
   }
 
   private static SecureRandom createSecureRandom(String key) {
@@ -147,8 +147,8 @@ public class SslFactory {
       tmf.init(ts);
 
       sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
-//      log.debug("Created SSL context with keystore {}, truststore {}, provider {}.",
-//          keystore, truststore, sslContext.getProvider().getName());
+      log.debug("Created SSL context with keystore {}, truststore {}, provider {}.",
+          keystore, truststore, sslContext.getProvider().getName());
       return sslContext;
     } catch (Exception e) {
       throw new KafkaException(e);
@@ -219,7 +219,7 @@ public class SslFactory {
       return null;
   }
 
-  static interface SecurityStore {
+  interface SecurityStore {
     KeyStore get();
     char[] keyPassword();
     boolean modified();
@@ -277,7 +277,7 @@ public class SslFactory {
       try {
         return Files.getLastModifiedTime(Paths.get(path)).toMillis();
       } catch (IOException e) {
-//        log.error("Modification time of key store could not be obtained: " + path, e);
+        log.error("Modification time of key store could not be obtained: " + path, e);
         return null;
       }
     }
