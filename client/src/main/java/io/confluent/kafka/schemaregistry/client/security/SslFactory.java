@@ -93,20 +93,25 @@ public class SslFactory {
     try {
       this.keystore = createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
           (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
-          new Password((String) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG)),
-          new Password((String) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)),
-          new Password((String) configs.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG)),
-          new Password((String) configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)));
+          passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG)),
+          passwordOf(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)),
+          passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG)),
+          passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)));
 
       this.truststore = createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
           (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-          new Password((String) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)),
-          new Password((String) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)));
+          passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)),
+          passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)));
 
       this.sslContext = createSSLContext(keystore, truststore);
     } catch (Exception e) {
       throw new RuntimeException("Error initializing the ssl context for RestService" , e);
     }
+  }
+
+  private Password passwordOf(Object val) {
+    if (val == null || val.toString().trim().isEmpty()) return null;
+    return new Password(val.toString());
   }
 
   private static SecureRandom createSecureRandom(String key) {
