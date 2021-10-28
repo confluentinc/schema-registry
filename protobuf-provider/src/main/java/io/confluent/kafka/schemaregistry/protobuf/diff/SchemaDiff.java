@@ -60,6 +60,7 @@ public class SchemaDiff {
 
     changes.add(PACKAGE_CHANGED);
     changes.add(MESSAGE_ADDED);
+    changes.add(MESSAGE_MOVED);
     changes.add(ENUM_ADDED);
     changes.add(ENUM_REMOVED);
     changes.add(ENUM_CONST_ADDED);
@@ -209,7 +210,8 @@ public class SchemaDiff {
           if (originalMessageIndex != null && originalMessageIndex.equals(updateMessageIndex)) {
             MessageSchemaDiff.compare(ctx, originalMessage, updateMessage);
           } else {
-            // Moving or reordering a message is incompatible since we serialize message indexes
+            // Moving or reordering a message is compatible since serialized message indexes
+            // are w.r.t. the schema of the corresponding ID
             ctx.addDifference(MESSAGE_MOVED);
           }
         }
