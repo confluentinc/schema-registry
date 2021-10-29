@@ -109,6 +109,16 @@ public class SslFactory {
     }
   }
 
+  // Visibility for testing
+  SecurityStore keyStore() {
+    return this.keystore;
+  }
+
+  // Visibility for testing
+  SecurityStore trustStore() {
+    return this.truststore;
+  }
+
   private Password passwordOf(Object val) {
     if (val == null || val.toString().trim().isEmpty()) return null;
     return new Password(val.toString());
