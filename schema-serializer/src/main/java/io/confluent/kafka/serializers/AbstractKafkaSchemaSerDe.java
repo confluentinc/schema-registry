@@ -184,6 +184,19 @@ public abstract class AbstractKafkaSchemaSerDe {
     return schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 
+  protected ParsedSchema lookupSchemaBySubjectAndId(
+      String subject, int id, ParsedSchema schema, boolean idCompatStrict)
+      throws IOException, RestClientException {
+    ParsedSchema lookupSchema = getSchemaBySubjectAndId(subject, id);
+    if (idCompatStrict && !lookupSchema.isBackwardCompatible(schema).isEmpty()) {
+      throw new IOException("Incompatible schema " + lookupSchema.canonicalString()
+          + " with refs " + lookupSchema.references()
+          + " of type " + lookupSchema.schemaType()
+          + " for schema " + schema.canonicalString());
+    }
+    return lookupSchema;
+  }
+
   protected ParsedSchema lookupLatestVersion(
       String subject, ParsedSchema schema, boolean latestCompatStrict)
       throws IOException, RestClientException {

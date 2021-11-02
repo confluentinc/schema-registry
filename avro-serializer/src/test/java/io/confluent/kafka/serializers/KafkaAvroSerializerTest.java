@@ -173,9 +173,13 @@ public class KafkaAvroSerializerTest {
   }
 
   private IndexedRecord createAccountRecord() {
+    return createAccountRecord("0123456789");
+  }
+
+  private IndexedRecord createAccountRecord(String accountNumber) {
     Schema schema = createAccountSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
-    avroRecord.put("accountNumber", "0123456789");
+    avroRecord.put("accountNumber", accountNumber);
     return avroRecord;
   }
 
@@ -360,6 +364,72 @@ public class KafkaAvroSerializerTest {
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
     assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithPreRegisteredUseSchemaId()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_SCHEMA_ID,
+        1
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroSerializerWithPreRegisteredUseSchemaIdIncompatibleError()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_SCHEMA_ID,
+        2
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    schemaRegistry.register(topic + "-value", new AvroSchema(createAccountSchema()));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(bytes));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithPreRegisteredUseSchemaIdIncompatibleNoError()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_SCHEMA_ID,
+        2,
+        KafkaAvroSerializerConfig.ID_COMPATIBILITY_STRICT,
+        false
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    schemaRegistry.register(topic + "-value", new AvroSchema(createAccountSchema()));
+    IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, annotatedUserRecord);
+    // User gets deserialized as an account!
+    IndexedRecord badRecord = createAccountRecord("testUser");
+    assertEquals(badRecord, avroDeserializer.deserialize(topic, bytes));
+    assertEquals(badRecord, avroDecoder.fromBytes(bytes));
   }
 
   @Test
