@@ -243,24 +243,24 @@
     "compatible": true
   },
   {
-    "description": "Detect incompatible message index change",
+    "description": "Detect compatible message index change",
     "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}",
     "update_schema": "syntax = \"proto3\";\nmessage TestMessage2 {\n    string test_string = 1;\n}\nmessage TestMessage {\n    string test_string = 1;\n}",
     "changes": [
       "MESSAGE_ADDED #/TestMessage2",
       "MESSAGE_MOVED #/TestMessage"
     ],
-    "compatible": false
+    "compatible": true
   },
   {
-    "description": "Detect incompatible message index change",
+    "description": "Detect compatible message index change",
     "original_schema": "syntax = \"proto3\";\nmessage TestMessage {\n    string test_string = 1;\n}\nmessage TestMessage2 {\n    string test_string = 1;\n}",
     "update_schema": "syntax = \"proto3\";\nmessage TestMessage2 {\n    string test_string = 1;\n}\nmessage TestMessage {\n    string test_string = 1;\n}",
     "changes": [
       "MESSAGE_MOVED #/TestMessage2",
       "MESSAGE_MOVED #/TestMessage"
     ],
-    "compatible": false
+    "compatible": true
   },
   {
     "description": "Detect incompatible import change",
