@@ -19,7 +19,6 @@ import io.confluent.common.utils.TestUtils;
 
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.junit.Before;
 import org.junit.Test;
@@ -194,7 +193,7 @@ public class SslFactoryTest {
 
   @Test
   public void testPemTrustStoreConfigWithOneCert() throws Exception {
-    configs.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, pemAsConfigValue(CA1));
+    configs.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, pemAsConfigValue(CA1).value());
     configs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
     SslFactory factory = new SslFactory(configs);
 
@@ -207,7 +206,7 @@ public class SslFactoryTest {
 
   @Test
   public void testPemTrustStoreConfigWithMultipleCerts() throws Exception {
-    configs.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, pemAsConfigValue(CA1, CA2));
+    configs.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, pemAsConfigValue(CA1, CA2).value());
     configs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
     SslFactory factory = new SslFactory(configs);
 
@@ -246,9 +245,9 @@ public class SslFactoryTest {
   }
 
   private void verifyPemKeyStoreConfig(String keyFileName, Password keyPassword) throws Exception {
-    configs.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, pemAsConfigValue(keyFileName));
-    configs.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, pemAsConfigValue(CERTCHAIN));
-    configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
+    configs.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, pemAsConfigValue(keyFileName).value());
+    configs.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, pemAsConfigValue(CERTCHAIN).value());
+    configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword == null ? null : keyPassword.value());
     configs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
     SslFactory factory = new SslFactory(configs);
 
@@ -277,14 +276,14 @@ public class SslFactoryTest {
     configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
         pemFilePath(pemAsConfigValue(KEY, CERTCHAIN).value()));
     configs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
-    assertThrows(InvalidConfigurationException.class, () -> new SslFactory(configs));
+    assertThrows(RuntimeException.class, () -> new SslFactory(configs));
   }
 
   @Test
   public void testPemKeyStoreFileWithKeyPassword() throws Exception {
     configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
         pemFilePath(pemAsConfigValue(ENCRYPTED_KEY, CERTCHAIN).value()));
-    configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, KEY_PASSWORD);
+    configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, KEY_PASSWORD.value());
     configs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
     SslFactory factory = new SslFactory(configs);
 
@@ -301,7 +300,7 @@ public class SslFactoryTest {
     return pemFile.getAbsolutePath();
   }
 
-  private Password pemAsConfigValue(String... pemValues)  throws Exception {
+  private Password pemAsConfigValue(String... pemValues) {
     StringBuilder builder = new StringBuilder();
     for (String pem : pemValues) {
       builder.append(pem);
