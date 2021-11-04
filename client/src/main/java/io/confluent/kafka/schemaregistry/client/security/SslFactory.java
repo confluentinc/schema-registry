@@ -51,7 +51,6 @@ import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -119,11 +118,19 @@ public class SslFactory {
     }
   }
 
+  private static boolean isNotEmpty(CharSequence cs) {
+    return !isEmpty(cs);
+  }
+
+  private static boolean isEmpty(CharSequence cs) {
+    return cs == null || cs.length() == 0;
+  }
+
   private static SecurityStore createTruststore(String type, String path, Password password,
                                                 Password trustStoreCerts) {
     if (trustStoreCerts != null) {
       return createPemTrustStore(type, path, password, trustStoreCerts);
-    } else if (PEM_TYPE.equals(type) && StringUtils.isNotEmpty(path)) {
+    } else if (PEM_TYPE.equals(type) && isNotEmpty(path)) {
       if (password != null) {
         throw new InvalidConfigurationException(
             "SSL trust store password cannot be specified for PEM format.");
@@ -133,7 +140,7 @@ public class SslFactory {
     } else if (path == null && password != null) {
       throw new InvalidConfigurationException(
           "SSL trust store is not specified, but trust store password is specified.");
-    } else if (StringUtils.isNotEmpty(path)) {
+    } else if (isNotEmpty(path)) {
       return new FileBasedStore(type, path, password, null, false);
     } else {
       return null;
@@ -146,7 +153,7 @@ public class SslFactory {
       throw new InvalidConfigurationException(
           "SSL trust store certs can be specified only for PEM, but trust store type is "
               + type + ".");
-    } else if (StringUtils.isNotEmpty(path)) {
+    } else if (isNotEmpty(path)) {
       throw new InvalidConfigurationException(
           "Both SSL trust store location and separate trust certificates are specified.");
     } else if (password != null) {
@@ -177,16 +184,16 @@ public class SslFactory {
   private SSLContext createSslContext(SecurityStore keystore, SecurityStore truststore) {
     try {
       SSLContext sslContext;
-      if (StringUtils.isNotEmpty(provider)) {
+      if (isNotEmpty(provider)) {
         sslContext = SSLContext.getInstance(protocol, provider);
       } else {
         sslContext = SSLContext.getInstance(protocol);
       }
 
       KeyManager[] keyManagers = null;
-      if (keystore != null || StringUtils.isNotEmpty(kmfAlgorithm)) {
+      if (keystore != null || isNotEmpty(kmfAlgorithm)) {
         String kmfAlgorithm;
-        if (StringUtils.isNotEmpty(this.kmfAlgorithm)) {
+        if (isNotEmpty(this.kmfAlgorithm)) {
           kmfAlgorithm = this.kmfAlgorithm;
         } else {
           kmfAlgorithm = KeyManagerFactory.getDefaultAlgorithm();
@@ -200,7 +207,7 @@ public class SslFactory {
         keyManagers = kmf.getKeyManagers();
       }
 
-      String tmfAlgorithm = StringUtils.isNotEmpty(this.tmfAlgorithm) ? this.tmfAlgorithm :
+      String tmfAlgorithm = isNotEmpty(this.tmfAlgorithm) ? this.tmfAlgorithm :
           TrustManagerFactory.getDefaultAlgorithm();
       TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
       KeyStore ts = truststore == null ? null : truststore.get();
@@ -238,11 +245,11 @@ public class SslFactory {
     } else if (path == null && password != null) {
       throw new InvalidConfigurationException(
           "SSL key store is not specified, but key store password is specified.");
-    } else if (StringUtils.isNotEmpty(path)) {
+    } else if (isNotEmpty(path)) {
       if (password == null) {
         throw new InvalidConfigurationException(
             "SSL key store is specified, but key store password is not specified.");
-      } else if (StringUtils.isEmpty(type)) {
+      } else if (isEmpty(type)) {
         throw new InvalidConfigurationException(
             "SSL key store is specified, but store type is null or empty");
       }
