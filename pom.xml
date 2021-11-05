@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.1.0-0, 7.1.1-0)</version>
+        <version>7.1.0-0</version>
         <relativePath>../rest-utils</relativePath>
     </parent>
 
@@ -86,6 +86,9 @@
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.1.0-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.21</commons.compress.version>
+        <maven.compiler.source>11</maven.compiler.source>
+        <mave11n.compiler.target>11</mave11n.compiler.target>
+        <maven.compiler.target>11</maven.compiler.target>
     </properties>
 
     <repositories>
