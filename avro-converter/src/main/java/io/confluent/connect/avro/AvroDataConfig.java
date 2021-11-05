@@ -44,9 +44,10 @@ public class AvroDataConfig extends AbstractConfig {
 
   @Deprecated
   public static final String DISCARD_TYPE_DOC_DEFAULT_CONFIG = "discard.type.doc.default";
-  public static final boolean DISCARD_TYPE_DOC_DEFAULT = false;
-  public static final String DISCARD_TYPE_DOC_DOC =
-      "Only avro field doc will be retained during conversion of Avro and Connect schema.";
+  public static final boolean DISCARD_TYPE_DOC_DEFAULT_DEFAULT = false;
+  public static final String DISCARD_TYPE_DOC_DEFAULT_DOC =
+      "Only Avro field doc and default will be retained during conversion of Avro "
+          + "and Connect schema.";
 
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
@@ -61,9 +62,9 @@ public class AvroDataConfig extends AbstractConfig {
                 ConfigDef.Importance.LOW, SCHEMAS_CACHE_SIZE_DOC)
         .define(DISCARD_TYPE_DOC_DEFAULT_CONFIG,
                 ConfigDef.Type.BOOLEAN,
-                DISCARD_TYPE_DOC_DEFAULT,
+                DISCARD_TYPE_DOC_DEFAULT_DEFAULT,
                 ConfigDef.Importance.LOW,
-                DISCARD_TYPE_DOC_DOC);
+                DISCARD_TYPE_DOC_DEFAULT_DOC);
   }
 
   public AvroDataConfig(Map<?, ?> props) {
