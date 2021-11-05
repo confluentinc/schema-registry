@@ -912,7 +912,7 @@ public class AvroData {
         } else {
           String doc = schema.parameters() != null
                        ? schema.parameters()
-                         .get(discardTypeDocDefault ? CONNECT_RECORD_DOC_PROP: AVRO_RECORD_DOC_PROP)
+                       .get(discardTypeDocDefault ? CONNECT_RECORD_DOC_PROP : AVRO_RECORD_DOC_PROP)
                        : null;
           baseSchema = org.apache.avro.Schema.createRecord(
               name != null ? name : DEFAULT_SCHEMA_NAME, doc, namespace, false);
