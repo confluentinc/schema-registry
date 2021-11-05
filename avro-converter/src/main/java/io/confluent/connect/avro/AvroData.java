@@ -946,7 +946,7 @@ public class AvroData {
         }
         if (schema.parameters() != null) {
           JsonNode params = parametersFromConnect(schema.parameters());
-          if (discardTypeDocDefault || !params.isEmpty()) {
+          if (!params.isEmpty()) {
             baseSchema.addProp(CONNECT_PARAMETERS_PROP, params);
           }
         }
