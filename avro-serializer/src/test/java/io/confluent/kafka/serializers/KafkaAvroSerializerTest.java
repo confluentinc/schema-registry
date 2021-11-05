@@ -45,6 +45,7 @@ import java.util.Properties;
 
 import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.User;
+import io.confluent.kafka.example.Grant;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
@@ -501,6 +502,83 @@ public class KafkaAvroSerializerTest {
     avroDeserializer.configure(deserializerConfigs, false);
     byte[] bytes1 = avroSerializer.serialize(topic, record);
     assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+  }
+
+  /**
+   * Verify the capability to use specific record deserializer in a scenario where
+   * consumer is bound to multiple topics with different union type subjects
+   */
+  @Test
+  public void testKafkaAvroSerializerWithMultiTypeUnionSpecificAndMultipleTopics() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+            false,
+            KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+            true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+            KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+            "bogus",
+            KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+            true
+    );
+
+    String differentTopic = "another_topic";
+    IndexedRecord record = createSpecificAvroRecord();
+    AvroSchema schema = new AvroSchema(record.getSchema());
+
+    Grant grantRecord = Grant.newBuilder()
+            .setGrant("p234")
+            .build();
+    AvroSchema grantSchema = new AvroSchema(grantRecord.getSchema());
+
+    schemaRegistry.register("user", schema);
+    schemaRegistry.register("account", new AvroSchema(createAccountSchema()));
+    // Given TOPIC A subject is union type [A, B]
+    schemaRegistry.register(topic + "-value",
+            new AvroSchema("[ \"io.confluent.kafka.example.User\", \"example.avro.Account\" ]",
+                    ImmutableList.of(
+                            new SchemaReference("io.confluent.kafka.example.User", "user", 1),
+                            new SchemaReference("example.avro.Account", "account", 1)
+                    ),
+                    ImmutableMap.of(
+                            "io.confluent.kafka.example.User",
+                            schema.toString(),
+                            "example.avro.Account",
+                            createAccountSchema().toString()
+                    ),
+                    null
+            ));
+    schemaRegistry.register("grant", grantSchema);
+    // Given TOPIC B subject is union type [C]
+    schemaRegistry.register(differentTopic + "-value",
+            new AvroSchema("[ \"io.confluent.kafka.example.Grant\" ]",
+                    ImmutableList.of(
+                            new SchemaReference("io.confluent.kafka.example.Grant", "grant", 1)
+                    ),
+                    ImmutableMap.of(
+                            "io.confluent.kafka.example.User",
+                            schema.toString(),
+                            "example.avro.Account",
+                            createAccountSchema().toString(),
+                            "io.confluent.kafka.example.Grant",
+                            grantSchema.toString()
+                    ),
+                    null
+            ));
+
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+
+    byte[] bytes1 = avroSerializer.serialize(topic, record);
+    byte[] bytesGrant = avroSerializer.serialize(differentTopic, grantRecord);
+
+    // Assert that deserialize is capable to deserializing from topic A using A-subject
+    assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+    // Assert that deserialize is capable to deserializing from topic B using B-subject
+    assertEquals(grantRecord, avroDeserializer.deserialize(differentTopic, bytesGrant));
   }
 
   @Test
