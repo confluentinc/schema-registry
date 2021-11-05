@@ -358,22 +358,22 @@ public class AdditionalAvroDataTest
     }
 
     /**
-     *  Test the discard.type.doc flag restores old behavior. Avro field doc maps to connect schema
+     *  Test the discard.type.doc.default flag restores old behavior. Avro field doc maps to connect schema
      *  doc in both way conversion and type doc will be dropped.
      * */
     @Test
     public void testDiscardTypeDoc() throws IOException {
         AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
-                .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 1)
-                .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, true)
-                .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
-                .with(AvroDataConfig.DISCARD_TYPE_DOC_CONFIG, true)
-                .build();
+            .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 1)
+            .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, true)
+            .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+            .with(AvroDataConfig.DISCARD_TYPE_DOC_DEFAULT_CONFIG, true)
+            .build();
 
         avroData = new AvroData(avroDataConfig);
 
         Schema avroSchema =
-                new Parser().parse(new File("src/test/avro/RepeatedTypeWithDocFull.avsc"));
+            new Parser().parse(new File("src/test/avro/RepeatedTypeWithDocFull.avsc"));
 
         org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
 
@@ -381,33 +381,72 @@ public class AdditionalAvroDataTest
         Assert.assertNull(connectSchema.field("anotherStringField").schema().doc());
         Assert.assertEquals("record field's doc", connectSchema.field("recordField").schema().doc());
         Assert.assertEquals("nested record field's doc",
-                connectSchema.field("recordField").schema().field("nestedRecordField").schema().doc());
+            connectSchema.field("recordField").schema().field("nestedRecordField").schema().doc());
         Assert.assertEquals("another record field's doc",
-                connectSchema.field("anotherRecordField").schema().doc());
-        Assert.assertNull(connectSchema.field("recordFieldWithoutDoc").schema().doc());
+            connectSchema.field("anotherRecordField").schema().doc());
+        Assert.assertEquals("nested record's doc", connectSchema.field("recordFieldWithoutDoc").schema().doc());
 
         Assert.assertEquals("enum field's doc", connectSchema.field("enumField").schema().doc());
         Assert.assertEquals("another enum field's doc",
-                connectSchema.field("anotherEnumField").schema().doc());
-        Assert.assertNull(connectSchema.field("diffEnumField").schema().doc());
+            connectSchema.field("anotherEnumField").schema().doc());
+        Assert.assertEquals("diffEnum's doc", connectSchema.field("diffEnumField").schema().doc());
 
-        // will not guarantee lossless transform if turn on discard.type.doc
-        // the type doc will be drop
+        // will populate schema type doc to field doc
         Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
         Assert.assertEquals("field's doc", outputAvroSchema.getField("stringField").doc());
         Assert.assertNull(outputAvroSchema.getField("anotherStringField").doc());
         Assert.assertEquals("record field's doc", outputAvroSchema.getField("recordField").doc());
-        Assert.assertNull(outputAvroSchema.getField("recordField").schema().getDoc());
+        Assert.assertEquals("nested record's doc", outputAvroSchema.getField("recordField").schema().getDoc());
         Assert.assertEquals("nested record field's doc",
-                outputAvroSchema.getField("recordField").schema().getField("nestedRecordField").doc());
+            outputAvroSchema.getField("recordField").schema().getField("nestedRecordField").doc());
         Assert.assertEquals("another record field's doc",
-                outputAvroSchema.getField("anotherRecordField").doc());
-        Assert.assertNull(outputAvroSchema.getField("recordFieldWithoutDoc").doc());
+            outputAvroSchema.getField("anotherRecordField").doc());
+        Assert.assertEquals("Nested record's type doc populate to field doc",
+            "nested record's doc", outputAvroSchema.getField("recordFieldWithoutDoc").doc());
 
         Assert.assertEquals("enum field's doc", outputAvroSchema.getField("enumField").doc());
-        Assert.assertNull(outputAvroSchema.getField("enumField").schema().getDoc());
+        Assert.assertEquals("enum's doc", outputAvroSchema.getField("enumField").schema().getDoc());
         Assert.assertEquals("another enum field's doc",
-                outputAvroSchema.getField("anotherEnumField").doc());
-        Assert.assertNull(outputAvroSchema.getField("doclessEnumField").doc());
+            outputAvroSchema.getField("anotherEnumField").doc());
+        Assert.assertEquals("Enum's type doc populate to field doc",
+            "enum's doc", outputAvroSchema.getField("doclessEnumField").doc());
     }
+
+    @Test
+    public void testDiscardTypeDefault() throws IOException {
+        AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
+            .with(AvroDataConfig.SCHEMAS_CACHE_SIZE_CONFIG, 1)
+            .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, true)
+            .with(AvroDataConfig.ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG, true)
+            .with(AvroDataConfig.DISCARD_TYPE_DOC_DEFAULT_CONFIG, true)
+            .build();
+
+        avroData = new AvroData(avroDataConfig);
+
+        Schema avroSchema =
+            new Parser().parse(new File("src/test/avro/RepeatedTypeWithDefault.avsc"));
+        org.apache.kafka.connect.data.Schema connectSchema = avroData.toConnectSchema(avroSchema);
+
+        Assert.assertEquals("field's default", connectSchema.field("stringField").schema().defaultValue());
+        Assert.assertNull(connectSchema.field("anotherStringField").schema().defaultValue());
+        Assert.assertEquals(9.18f, connectSchema.field("floatField").schema().defaultValue());
+
+        Assert.assertEquals("ONE", connectSchema.field("enumField").schema().defaultValue());
+        Assert.assertEquals("TWO", connectSchema.field("anotherEnumField").schema().defaultValue());
+        Assert.assertEquals("B", connectSchema.field("enumFieldWithDiffDefault").schema().defaultValue());
+        Assert.assertNull(connectSchema.field("enumFieldWithoutDefault").schema().defaultValue());
+
+        Schema outputAvroSchema = avroData.fromConnectSchema(connectSchema);
+        Assert.assertEquals("field's default", outputAvroSchema.getField("stringField").defaultVal());
+        Assert.assertNull(outputAvroSchema.getField("anotherStringField").defaultVal());
+        Assert.assertEquals(9.18f, outputAvroSchema.getField("floatField").defaultVal());
+
+        Assert.assertEquals("ONE", outputAvroSchema.getField("enumField").defaultVal());
+        Assert.assertEquals("TWO", outputAvroSchema.getField("anotherEnumField").defaultVal());
+        Assert.assertEquals("B", outputAvroSchema.getField("enumFieldWithDiffDefault").defaultVal());
+        Assert.assertNull("Enum's type default will be dropped",
+            outputAvroSchema.getField("enumFieldWithDiffDefault").schema().getEnumDefault());
+        Assert.assertNull(outputAvroSchema.getField("enumFieldWithoutDefault").defaultVal());
+    }
+
 }

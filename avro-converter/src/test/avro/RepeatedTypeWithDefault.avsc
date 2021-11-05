@@ -37,6 +37,10 @@
       }
     },
     {
+      "name": "enumFieldWithoutDefault",
+      "type": "someKind"
+    },
+    {
       "name": "floatField",
       "type": "float",
       "default": 9.18
