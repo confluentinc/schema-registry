@@ -212,7 +212,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     if (readerSchema != null) {
       return readerSchema;
     }
-    readerSchema = readerSchemaCache.get(writerSchema.getFullName());
+    final boolean shouldSkipReaderSchemaCacheUsage = shouldSkipReaderSchemaCacheUsage(writerSchema);
+    if (!shouldSkipReaderSchemaCacheUsage) {
+      readerSchema = readerSchemaCache.get(writerSchema.getFullName());
+    }
     if (readerSchema != null) {
       return readerSchema;
     }
@@ -225,11 +228,22 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
     } else if (useSpecificAvroReader) {
       readerSchema = getSpecificReaderSchema(writerSchema);
-      readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
+      if (!shouldSkipReaderSchemaCacheUsage) {
+        readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
+      }
     } else {
       readerSchema = writerSchema;
     }
     return readerSchema;
+  }
+
+  private boolean shouldSkipReaderSchemaCacheUsage(Schema schema) {
+    return useSpecificAvroReader
+      && (
+        schema.getType() == Type.ARRAY
+        || schema.getType() == Type.MAP
+        || schema.getType() == Type.UNION
+      );
   }
 
   @SuppressWarnings("unchecked")
