@@ -230,6 +230,8 @@ paths:
             \ code 50003 -- Error while forwarding the request to the primary"
   /mode:
     get:
+      summary: "Get global mode."
+      description: ""
       operationId: "getTopLevelMode"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -246,7 +248,11 @@ paths:
           description: "successful operation"
           schema:
             $ref: "#/definitions/ModeGetResponse"
+        500:
+          description: "Error code 50001 -- Error in the backend data store"
     put:
+      summary: "Update global mode."
+      description: ""
       operationId: "updateTopLevelMode"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -269,8 +275,17 @@ paths:
           description: "successful operation"
           schema:
             $ref: "#/definitions/ModeUpdateRequest"
+        422:
+          description: "Error code 42204 -- Invalid mode\nError code 42205 -- Operation\
+            \ not permitted"
+        500:
+          description: "Error code 50001 -- Error in the backend data store\nError\
+            \ code 50003 -- Error while forwarding the request to the primary\nError\
+            \ code 50004 -- Unknown leader"
   /mode/{subject}:
     get:
+      summary: "Get mode for a subject."
+      description: ""
       operationId: "getMode"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -284,6 +299,7 @@ paths:
       parameters:
       - name: "subject"
         in: "path"
+        description: "Name of the Subject"
         required: true
         type: "string"
       responses:
@@ -291,7 +307,13 @@ paths:
           description: "successful operation"
           schema:
             $ref: "#/definitions/ModeGetResponse"
+        404:
+          description: "Subject not found"
+        500:
+          description: "Error code 50001 -- Error in the backend data store"
     put:
+      summary: "Update mode for the specified subject."
+      description: ""
       operationId: "updateMode"
       consumes:
       - "application/vnd.schemaregistry.v1+json"
@@ -305,6 +327,7 @@ paths:
       parameters:
       - name: "subject"
         in: "path"
+        description: "Name of the Subject"
         required: true
         type: "string"
       - in: "body"
@@ -318,6 +341,13 @@ paths:
           description: "successful operation"
           schema:
             $ref: "#/definitions/ModeUpdateRequest"
+        422:
+          description: "Error code 42204 -- Invalid mode\nError code 42205 -- Operation\
+            \ not permitted"
+        500:
+          description: "Error code 50001 -- Error in the backend data store\nError\
+            \ code 50003 -- Error while forwarding the request to the primary\nError\
+            \ code 50004 -- Unknown leader"
   /schemas/ids/{id}:
     get:
       summary: "Get the schema string identified by the input ID."
