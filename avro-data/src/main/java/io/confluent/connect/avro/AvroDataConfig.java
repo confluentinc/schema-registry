@@ -47,6 +47,13 @@ public class AvroDataConfig extends AbstractConfig {
   public static final String SCHEMAS_CACHE_SIZE_DOC =
       "Size of the converted schemas cache";
 
+  @Deprecated
+  public static final String DISCARD_TYPE_DOC_DEFAULT_CONFIG = "discard.type.doc.default";
+  public static final boolean DISCARD_TYPE_DOC_DEFAULT_DEFAULT = false;
+  public static final String DISCARD_TYPE_DOC_DEFAULT_DOC =
+      "Only Avro field doc and default will be retained during conversion of Avro "
+          + "and Connect schema.";
+
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
         .define(ENHANCED_AVRO_SCHEMA_SUPPORT_CONFIG,
@@ -59,7 +66,12 @@ public class AvroDataConfig extends AbstractConfig {
         .define(CONNECT_META_DATA_CONFIG, ConfigDef.Type.BOOLEAN, CONNECT_META_DATA_DEFAULT,
                 ConfigDef.Importance.LOW, CONNECT_META_DATA_DOC)
         .define(SCHEMAS_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMAS_CACHE_SIZE_DEFAULT,
-                ConfigDef.Importance.LOW, SCHEMAS_CACHE_SIZE_DOC);
+                ConfigDef.Importance.LOW, SCHEMAS_CACHE_SIZE_DOC)
+        .define(DISCARD_TYPE_DOC_DEFAULT_CONFIG,
+                ConfigDef.Type.BOOLEAN,
+                DISCARD_TYPE_DOC_DEFAULT_DEFAULT,
+                ConfigDef.Importance.LOW,
+                DISCARD_TYPE_DOC_DEFAULT_DOC);
   }
 
   public AvroDataConfig(Map<?, ?> props) {
@@ -80,6 +92,10 @@ public class AvroDataConfig extends AbstractConfig {
 
   public int getSchemasCacheSize() {
     return Math.max(1, this.getInt(SCHEMAS_CACHE_SIZE_CONFIG));
+  }
+
+  public boolean isDiscardTypeDocDefault() {
+    return this.getBoolean(DISCARD_TYPE_DOC_DEFAULT_CONFIG);
   }
 
 
