@@ -95,7 +95,7 @@ public class Context {
 
   public TypeElementInfo getType(final String name, final boolean isOriginal) {
     String fullName = resolve(name, isOriginal);
-    return getTypeForFullName(fullName, isOriginal);
+    return fullName != null ? getTypeForFullName(fullName, isOriginal) : null;
   }
 
   public void setPackageName(final String packageName, final boolean isOriginal) {

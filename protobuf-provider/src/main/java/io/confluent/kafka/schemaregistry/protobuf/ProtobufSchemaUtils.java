@@ -24,6 +24,8 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 
+import com.squareup.wire.schema.Field.Label;
+import com.squareup.wire.schema.ProtoType;
 import com.squareup.wire.schema.internal.parser.EnumConstantElement;
 import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.ExtendElement;
@@ -33,6 +35,7 @@ import com.squareup.wire.schema.internal.parser.GroupElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.OneOfElement;
 import com.squareup.wire.schema.internal.parser.OptionElement;
+import com.squareup.wire.schema.internal.parser.OptionElement.Kind;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ReservedElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
@@ -42,10 +45,17 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 public class ProtobufSchemaUtils {
@@ -85,14 +95,20 @@ public class ProtobufSchemaUtils {
   }
 
   protected static String toNormalizedString(ProtobufSchema schema) {
-    return toString(schema.rawSchema(), true);
+    Context ctx = new Context();
+    for (ProtoFileElement protoFile : schema.dependenciesWithLogicalTypes().values()) {
+      collectContextInfo(ctx, protoFile);
+    }
+    ProtoFileElement protoFile = schema.rawSchema();
+    collectContextInfo(ctx, protoFile);
+    return toString(ctx, protoFile, true);
   }
 
   protected static String toString(ProtoFileElement protoFile) {
-    return toString(protoFile, false);
+    return toString(new Context(), protoFile, false);
   }
 
-  protected static String toString(ProtoFileElement protoFile, boolean normalize) {
+  private static String toString(Context ctx, ProtoFileElement protoFile, boolean normalize) {
     StringBuilder sb = new StringBuilder();
     if (protoFile.getSyntax() != null) {
       sb.append("syntax = \"");
@@ -133,7 +149,7 @@ public class ProtobufSchemaUtils {
         options.sort(Comparator.comparing(OptionElement::getName));
       }
       for (OptionElement option : options) {
-        sb.append(toString(option));
+        sb.append(toOptionString(option, normalize));
       }
     }
     if (!protoFile.getTypes().isEmpty()) {
@@ -142,12 +158,16 @@ public class ProtobufSchemaUtils {
       // the non-normalized schema to serialize message indexes
       for (TypeElement typeElement : protoFile.getTypes()) {
         if (typeElement instanceof MessageElement) {
-          sb.append(toString((MessageElement) typeElement, normalize));
+          try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
+            sb.append(toString(ctx, (MessageElement) typeElement, normalize));
+          }
         }
       }
       for (TypeElement typeElement : protoFile.getTypes()) {
         if (typeElement instanceof EnumElement) {
-          sb.append(toString((EnumElement) typeElement, normalize));
+          try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
+            sb.append(toString(ctx, (EnumElement) typeElement, normalize));
+          }
         }
       }
     }
@@ -166,7 +186,7 @@ public class ProtobufSchemaUtils {
     return sb.toString();
   }
 
-  private static String toString(EnumElement type, boolean normalize) {
+  private static String toString(Context ctx, EnumElement type, boolean normalize) {
     StringBuilder sb = new StringBuilder();
     sb.append("enum ");
     sb.append(type.getName());
@@ -183,7 +203,7 @@ public class ProtobufSchemaUtils {
         options.sort(Comparator.comparing(OptionElement::getName));
       }
       for (OptionElement option : options) {
-        appendIndented(sb, toString(option));
+        appendIndented(sb, toOptionString(option, normalize));
       }
     }
     if (!type.getConstants().isEmpty()) {
@@ -195,20 +215,33 @@ public class ProtobufSchemaUtils {
             .thenComparing(EnumConstantElement::getName));
       }
       for (EnumConstantElement constant : constants) {
-        if (normalize) {
-          List<OptionElement> options = new ArrayList<>(constant.getOptions());
-          options.sort(Comparator.comparing(OptionElement::getName));
-          constant = new EnumConstantElement(constant.getLocation(), constant.getName(),
-              constant.getTag(), constant.getDocumentation(), options);
-        }
-        appendIndented(sb, constant.toSchema());
+        appendIndented(sb, toString(ctx, constant, normalize));
       }
     }
     sb.append("}\n");
     return sb.toString();
   }
 
-  private static String toString(MessageElement type, boolean normalize) {
+  private static String toString(Context ctx, EnumConstantElement type, boolean normalize) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(type.getName());
+    sb.append(" = ");
+    sb.append(type.getTag());
+
+    List<OptionElement> options = type.getOptions();
+    if (!options.isEmpty()) {
+      if (normalize) {
+        options = new ArrayList<>(options);
+        options.sort(Comparator.comparing(OptionElement::getName));
+      }
+      sb.append(" ");
+      appendOptions(sb, options, normalize);
+    }
+    sb.append(";\n");
+    return sb.toString();
+  }
+
+  private static String toString(Context ctx, MessageElement type, boolean normalize) {
     StringBuilder sb = new StringBuilder();
     sb.append("message ");
     sb.append(type.getName());
@@ -240,7 +273,7 @@ public class ProtobufSchemaUtils {
         options.sort(Comparator.comparing(OptionElement::getName));
       }
       for (OptionElement option : options) {
-        appendIndented(sb, toString(option));
+        appendIndented(sb, toOptionString(option, normalize));
       }
     }
     if (!type.getFields().isEmpty()) {
@@ -251,14 +284,7 @@ public class ProtobufSchemaUtils {
         fields.sort(Comparator.comparing(FieldElement::getTag));
       }
       for (FieldElement field : fields) {
-        if (normalize) {
-          List<OptionElement> options = new ArrayList<>(field.getOptions());
-          options.sort(Comparator.comparing(OptionElement::getName));
-          field = new FieldElement(field.getLocation(), field.getLabel(), field.getType(),
-              field.getName(), field.getDefaultValue(), field.getJsonName(),
-              field.getTag(), field.getDocumentation(), options);
-        }
-        appendIndented(sb, field.toSchema());
+        appendIndented(sb, toString(ctx, field, normalize));
       }
     }
     if (!type.getOneOfs().isEmpty()) {
@@ -277,7 +303,7 @@ public class ProtobufSchemaUtils {
         oneOfs.sort(Comparator.comparing(o -> o.getFields().get(1).getTag()));
       }
       for (OneOfElement oneOf : oneOfs) {
-        appendIndented(sb, toString(oneOf, normalize));
+        appendIndented(sb, toString(ctx, oneOf, normalize));
       }
     }
     if (!type.getGroups().isEmpty()) {
@@ -298,12 +324,16 @@ public class ProtobufSchemaUtils {
       // the non-normalized schema to serialize message indexes
       for (TypeElement typeElement : type.getNestedTypes()) {
         if (typeElement instanceof MessageElement) {
-          appendIndented(sb, toString((MessageElement) typeElement, normalize));
+          try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
+            appendIndented(sb, toString(ctx, (MessageElement) typeElement, normalize));
+          }
         }
       }
       for (TypeElement typeElement : type.getNestedTypes()) {
         if (typeElement instanceof EnumElement) {
-          appendIndented(sb, toString((EnumElement) typeElement, normalize));
+          try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
+            appendIndented(sb, toString(ctx, (EnumElement) typeElement, normalize));
+          }
         }
       }
     }
@@ -311,7 +341,7 @@ public class ProtobufSchemaUtils {
     return sb.toString();
   }
 
-  private static String toString(OneOfElement type, boolean normalize) {
+  private static String toString(Context ctx, OneOfElement type, boolean normalize) {
     StringBuilder sb = new StringBuilder();
     sb.append("oneof ");
     sb.append(type.getName());
@@ -325,7 +355,7 @@ public class ProtobufSchemaUtils {
         options.sort(Comparator.comparing(OptionElement::getName));
       }
       for (OptionElement option : options) {
-        appendIndented(sb, toString(option));
+        appendIndented(sb, toOptionString(option, normalize));
       }
     }
     if (!type.getFields().isEmpty()) {
@@ -336,14 +366,7 @@ public class ProtobufSchemaUtils {
         fields.sort(Comparator.comparing(FieldElement::getTag));
       }
       for (FieldElement field : fields) {
-        if (normalize) {
-          List<OptionElement> options = new ArrayList<>(field.getOptions());
-          options.sort(Comparator.comparing(OptionElement::getName));
-          field = new FieldElement(field.getLocation(), field.getLabel(), field.getType(),
-              field.getName(), field.getDefaultValue(), field.getJsonName(),
-              field.getTag(), field.getDocumentation(), options);
-        }
-        appendIndented(sb, field.toSchema());
+        appendIndented(sb, toString(ctx, field, normalize));
       }
     }
     if (!type.getGroups().isEmpty()) {
@@ -356,17 +379,117 @@ public class ProtobufSchemaUtils {
     return sb.toString();
   }
 
-  private static String toString(OptionElement type) {
-    String result;
-    if (OptionElement.Kind.STRING == type.getKind()) {
-      String name = type.getName();
-      String value = escapeChars(type.getValue().toString());
-      String formattedName = type.isParenthesized() ? String.format("(%s)", name) : name;
-      result = String.format("%s = \"%s\"", formattedName, value);
-    } else {
-      result = type.toSchema();
+  private static String toString(Context ctx, FieldElement field, boolean normalize) {
+    StringBuilder sb = new StringBuilder();
+    Label label = field.getLabel();
+    if (label != null) {
+      sb.append(label.name().toLowerCase(Locale.US));
+      sb.append(" ");
     }
-    return String.format("option %s;%n", result);
+    String fieldType = field.getType();
+    if (normalize) {
+      ProtoType protoType = ProtoType.get(fieldType);
+      if (!protoType.isScalar() && !protoType.isMap()) {
+        fieldType = ctx.resolve(fieldType);
+        if (fieldType == null) {
+          throw new IllegalArgumentException("Could not resolve type: " + field.getType());
+        }
+      }
+    }
+    sb.append(fieldType);
+    sb.append(" ");
+    sb.append(field.getName());
+    sb.append(" = ");
+    sb.append(field.getTag());
+
+    List<OptionElement> optionsWithSpecialValues = new ArrayList<>(field.getOptions());
+    String defaultValue = field.getDefaultValue();
+    if (defaultValue != null) {
+      ProtoType protoType = ProtoType.get(field.getType());
+      optionsWithSpecialValues.add(
+          OptionElement.Companion.create("default", toKind(protoType), defaultValue));
+    }
+    String jsonName = field.getJsonName();
+    if (jsonName != null) {
+      optionsWithSpecialValues.add(
+          OptionElement.Companion.create("json_name", Kind.STRING, jsonName));
+    }
+    if (!optionsWithSpecialValues.isEmpty()) {
+      sb.append(" ");
+      if (normalize) {
+        optionsWithSpecialValues.sort(Comparator.comparing(OptionElement::getName));
+      }
+      appendOptions(sb, optionsWithSpecialValues, normalize);
+    }
+
+    sb.append(";\n");
+    return sb.toString();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static String toString(OptionElement option, boolean normalize) {
+    switch (option.getKind()) {
+      case STRING:
+        String name = option.getName();
+        String formattedName = option.isParenthesized() ? String.format("(%s)", name) : name;
+        String value = escapeChars(option.getValue().toString());
+        return String.format("%s = \"%s\"", formattedName, value);
+      case MAP:
+        if (normalize) {
+          Map<String, Object> map = new TreeMap<>((Map<String, Object>)option.getValue());
+          option = new OptionElement(
+              option.getName(), option.getKind(), map, option.isParenthesized());
+        }
+        return option.toSchema();
+      default:
+        return option.toSchema();
+    }
+  }
+
+  private static String toOptionString(OptionElement option, boolean normalize) {
+    return String.format("option %s;%n", toString(option, normalize));
+  }
+
+  private static void appendOptions(
+      StringBuilder sb, List<OptionElement> options, boolean normalize) {
+    int count = options.size();
+    if (count == 1) {
+      sb.append('[')
+          .append(toString(options.get(0), normalize))
+          .append(']');
+      return;
+    }
+    sb.append("[\n");
+    for (int i = 0; i < count; i++) {
+      String endl = i < count - 1 ? "," : "";
+      appendIndented(sb, toString(options.get(i), normalize) + endl);
+    }
+    sb.append(']');
+  }
+
+  private static Kind toKind(ProtoType protoType) {
+    switch (protoType.getSimpleName()) {
+      case "bool":
+        return OptionElement.Kind.BOOLEAN;
+      case "string":
+        return OptionElement.Kind.STRING;
+      case "bytes":
+      case "double":
+      case "float":
+      case "fixed32":
+      case "fixed64":
+      case "int32":
+      case "int64":
+      case "sfixed32":
+      case "sfixed64":
+      case "sint32":
+      case "sint64":
+      case "uint32":
+      case "uint64":
+        return OptionElement.Kind.NUMBER;
+      default:
+        return OptionElement.Kind.ENUM;
+    }
   }
 
   private static void appendIndented(StringBuilder sb, String value) {
@@ -421,5 +544,76 @@ public class ProtobufSchemaUtils {
       }
     }
     return buffer.toString();
+  }
+
+  private static void collectContextInfo(final Context ctx, final ProtoFileElement protoFile) {
+    String packageName = protoFile.getPackageName();
+    if (packageName == null) {
+      packageName = "";
+    }
+    ctx.setPackageName(packageName);
+    collectContextInfo(ctx, protoFile.getTypes());
+  }
+
+  private static void collectContextInfo(final Context ctx, final List<TypeElement> types) {
+    for (TypeElement typeElement : types) {
+      try (Context.NamedScope nameScope = ctx.enterName(typeElement.getName())) {
+        collectContextInfo(ctx, typeElement.getNestedTypes());
+      }
+    }
+  }
+
+  public static class Context {
+    private String packageName;
+    private final Deque<String> fullPath = new ArrayDeque<>();
+    private final Set<String> fullNames = new HashSet<>();
+
+    public void setPackageName(String packageName) {
+      this.packageName = packageName;
+    }
+
+    public NamedScope enterName(final String name) {
+      return new NamedScope(name);
+    }
+
+    public String resolve(String name) {
+      if (name.startsWith(".")) {
+        if (fullNames.contains(name)) {
+          return name;
+        }
+      } else {
+        Deque<String> prefix = new ArrayDeque<>(fullPath);
+        if (!packageName.isEmpty()) {
+          prefix.addFirst(packageName);
+        }
+        while (!prefix.isEmpty()) {
+          String n = "." + String.join(".", prefix) + "." + name;
+          if (fullNames.contains(n)) {
+            return n;
+          }
+          prefix.removeLast();
+        }
+        String n = "." + name;
+        if (fullNames.contains(n)) {
+          return n;
+        }
+      }
+      return null;
+    }
+
+    public class NamedScope implements AutoCloseable {
+      public NamedScope(final String name) {
+        fullPath.addLast(name);
+        String n = "." + String.join(".", fullPath);
+        if (packageName != null) {
+          n = "." + packageName + n;
+        }
+        fullNames.add(n);
+      }
+
+      public void close() {
+        fullPath.removeLast();
+      }
+    }
   }
 }
