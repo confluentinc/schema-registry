@@ -57,6 +57,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+import kotlin.ranges.IntRange;
 
 public class ProtobufSchemaUtils {
 
@@ -255,11 +256,25 @@ public class ProtobufSchemaUtils {
             .filter(r -> !r.getValues().isEmpty())
             .map(r -> {
               List<Object> values = new ArrayList<>(r.getValues());
-              values.sort(Comparator.comparing(Object::toString));
+              Comparator<Object> cmp = values.get(0) instanceof String
+                  ? Comparator.comparing(Object::toString)
+                  : Comparator.comparing(
+                      o -> o instanceof IntRange ? ((IntRange) o).getStart() : (Integer) o);
+              values.sort(cmp);
               return new ReservedElement(r.getLocation(), r.getDocumentation(), values);
             })
             .collect(Collectors.toList());
-        reserveds.sort(Comparator.comparing(r -> r.getValues().get(1).toString()));
+        Comparator<Object> cmp = Comparator.comparing(r -> {
+          Object o = ((ReservedElement)r).getValues().get(0);
+          if (o instanceof IntRange) {
+            return ((IntRange) o).getStart();
+          } else if (o instanceof Integer) {
+            return (Integer) o;
+          } else {
+            return Integer.MAX_VALUE;
+          }
+        }).thenComparing(r -> ((ReservedElement) r).getValues().get(0).toString());
+        reserveds.sort(cmp);
       }
       for (ReservedElement reserved : reserveds) {
         appendIndented(sb, reserved.toSchema());
@@ -300,7 +315,7 @@ public class ProtobufSchemaUtils {
                   fields, o.getGroups(), o.getOptions());
             })
             .collect(Collectors.toList());
-        oneOfs.sort(Comparator.comparing(o -> o.getFields().get(1).getTag()));
+        oneOfs.sort(Comparator.comparing(o -> o.getFields().get(0).getTag()));
       }
       for (OneOfElement oneOf : oneOfs) {
         appendIndented(sb, toString(ctx, oneOf, normalize));
@@ -360,11 +375,8 @@ public class ProtobufSchemaUtils {
     }
     if (!type.getFields().isEmpty()) {
       sb.append('\n');
+      // Fields have already been sorted while sorting oneOfs in the calling method
       List<FieldElement> fields = type.getFields();
-      if (normalize) {
-        fields = new ArrayList<>(fields);
-        fields.sort(Comparator.comparing(FieldElement::getTag));
-      }
       for (FieldElement field : fields) {
         appendIndented(sb, toString(ctx, field, normalize));
       }
