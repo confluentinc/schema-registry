@@ -1087,7 +1087,14 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public String name() {
-    return name != null ? name : firstMessage().getName();
+    if (name != null) {
+      return name;
+    }
+    String messageName = firstMessage().getName();
+    String packageName = schemaObj.getPackageName();
+    return packageName != null && !packageName.isEmpty()
+        ? packageName + '.' + messageName
+        : messageName;
   }
 
   @Override
