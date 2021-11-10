@@ -655,7 +655,7 @@ public class ProtobufSchemaTest {
         + "package my.package;\n"
         + "\n"
         + "import \"google/protobuf/timestamp.proto\";\n"
-        + "import \"confluent/decimal.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
         + "\n"
         + "option java_package = \"my.package\";\n"
         + "option java_multiple_files = true;\n"
@@ -683,9 +683,8 @@ public class ProtobufSchemaTest {
         + "        int32 other_id = 11;\n"
         + "    }\n"
         + "    oneof some_val2 {\n"
-        + "        option deprecated = true;\n"
-        + "        string one_id = 13;\n"
-        + "        int32 other_id = 10 [default = 0];\n"
+        + "        string one_id2 = 13;\n"
+        + "        int32 other_id2 = 10 [json_name = \"otherId2\", deprecated = true];\n"
         + "    }\n"
         + "    InnerMessage.DeepMessage deep2 = 4;\n"
         + "    Nested.InnerMessage.DeepMessage deep3 = 5;\n"
@@ -699,7 +698,7 @@ public class ProtobufSchemaTest {
         + "      option allow_alias = true;\n"
         + "      TWO = 2;\n"
         + "      ONE = 1;\n"
-        + "      ZERO = 0 [lazy = true, deprecated = true];\n"
+        + "      ZERO = 0 [deprecated = true];\n"
         + "      ALSO_ZERO = 0;\n"
         + "    }\n"
         + "\n"
@@ -720,7 +719,7 @@ public class ProtobufSchemaTest {
     String normalized = "syntax = \"proto3\";\n"
         + "package my.package;\n"
         + "\n"
-        + "import \"confluent/decimal.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
         + "import \"google/protobuf/timestamp.proto\";\n"
         + "\n"
         + "option java_multiple_files = true;\n"
@@ -743,9 +742,14 @@ public class ProtobufSchemaTest {
         + "  .google.protobuf.Timestamp test_timestamp = 2;\n"
         + "\n"
         + "  message InnerMessage {\n"
-        + "    reserved 1, 20, 29 to 31;\n"
-        + "    reserved 9 to 11, 14, 15;\n"
-        + "    reserved \"bar\", \"foo\";\n"
+        + "    reserved 1;\n"
+        + "    reserved 9 to 11;\n"
+        + "    reserved 14;\n"
+        + "    reserved 15;\n"
+        + "    reserved 20;\n"
+        + "    reserved 29 to 31;\n"
+        + "    reserved \"bar\";\n"
+        + "    reserved \"foo\";\n"
         + "  \n"
         + "    option deprecated = true;\n"
         + "  \n"
@@ -758,10 +762,11 @@ public class ProtobufSchemaTest {
         + "    .my.package.Nested.InnerMessage.DeepMessage deep5 = 7;\n"
         + "  \n"
         + "    oneof some_val2 {\n"
-        + "      option deprecated = true;\n"
-        + "    \n"
-        + "      int32 other_id = 10 [default = 0];\n"
-        + "      string one_id = 13;\n"
+        + "      int32 other_id2 = 10 [\n"
+        + "        deprecated = true,\n"
+        + "        json_name = \"otherId2\"\n"
+        + "      ];\n"
+        + "      string one_id2 = 13;\n"
         + "    }\n"
         + "    oneof some_val {\n"
         + "      int32 other_id = 11;\n"
@@ -774,10 +779,7 @@ public class ProtobufSchemaTest {
         + "    enum InnerEnum {\n"
         + "      option allow_alias = true;\n"
         + "      ALSO_ZERO = 0;\n"
-        + "      ZERO = 0 [\n"
-        + "        deprecated = true,\n"
-        + "        lazy = true\n"
-        + "      ];\n"
+        + "      ZERO = 0 [deprecated = true];\n"
         + "      ONE = 1;\n"
         + "      TWO = 2;\n"
         + "    }\n"
@@ -789,7 +791,14 @@ public class ProtobufSchemaTest {
         + "}\n";
 
     ProtobufSchema schema = new ProtobufSchema(schemaString);
-    assertEquals(normalized, ProtobufSchemaUtils.toNormalizedString(schema));
+    Descriptor descriptor = schema.toDescriptor();
+    assertNotNull(descriptor);
+    ProtobufSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+    descriptor = normalizedSchema.toDescriptor();
+    assertNotNull(descriptor);
+    normalizedSchema = new ProtobufSchema(descriptor).normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
   }
 
   @Test

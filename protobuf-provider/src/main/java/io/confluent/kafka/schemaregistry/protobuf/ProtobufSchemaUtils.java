@@ -48,6 +48,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashSet;
@@ -254,15 +255,13 @@ public class ProtobufSchemaUtils {
       if (normalize) {
         reserveds = reserveds.stream()
             .filter(r -> !r.getValues().isEmpty())
-            .map(r -> {
-              List<Object> values = new ArrayList<>(r.getValues());
-              Comparator<Object> cmp = values.get(0) instanceof String
-                  ? Comparator.comparing(Object::toString)
-                  : Comparator.comparing(
-                      o -> o instanceof IntRange ? ((IntRange) o).getStart() : (Integer) o);
-              values.sort(cmp);
-              return new ReservedElement(r.getLocation(), r.getDocumentation(), values);
-            })
+            .flatMap(r -> r.getValues().stream()
+                .map(o -> new ReservedElement(
+                    r.getLocation(),
+                    r.getDocumentation(),
+                    Collections.singletonList(o))
+                )
+            )
             .collect(Collectors.toList());
         Comparator<Object> cmp = Comparator.comparing(r -> {
           Object o = ((ReservedElement)r).getValues().get(0);
