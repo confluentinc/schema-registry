@@ -25,7 +25,7 @@
               files="(AbstractKafkaAvroDeserializer|AbstractKafkaAvroSerializer|AvroSchemaUtils|CompatibilityResource|ContextKey|KafkaSchemaRegistry|KafkaStoreMessageHandler|KafkaStoreReaderThread|AvroData|DownloadSchemaRegistryMojo|MockSchemaRegistryClient|SchemaRegistrySerializer|SchemaValue|SubjectVersionsResource|ProtobufSchema|SchemaDiff|FieldSchemaDiff|MessageSchemaDiff|DynamicSchema|SchemaMessageFormatter|ProtobufData|JsonSchema|JSON.*|AbstractKafkaJsonSchemaDeserializer|JsonSchemaData|JsonSchemaUtils|ProtobufSchemaUtils|SchemaMessageReader|AbstractKafkaProtobufSerializer|AbstractKafkaProtobufDeserializer|SubjectKeyComparator|ContextFilter|QualifiedSubject).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AvroData|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|KafkaStoreReaderThread|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufDeserializer|ProtobufData|ProtobufSchemaUtils|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader|ContextFilter|QualifiedSubject).java"/>
+              files="(AvroData|DownloadSchemaRegistryMojo|KafkaSchemaRegistry|KafkaStoreReaderThread|MessageDefinition|Schema|SchemaValue|SchemaDiff|MessageSchemaDiff|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufDeserializer|ProtobufData|ProtobufSchemaUtils|JsonSchemaData|SchemaMessageFormatter|SchemaMessageReader|ContextFilter|QualifiedSubject).java"/>
 
     <suppress checks="JavaNCSS"
               files="(AvroData|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils).java"/>
@@ -43,7 +43,7 @@
               files="(AvroData|ProtobufData).java"/>
 
     <suppress checks="MemberName"
-              files="(DynamicSchema|EnumDefinition|MessageDefinition).java"/>
+              files="(DynamicSchema|EnumDefinition|MessageDefinition|ServiceDefinition).java"/>
 
     <suppress checks="[a-zA-Z0-9]*"
               files="(BoundedConcurrentHashMap|DecimalOrBuilder|DecimalProto|Decimal|MetaProto).java"/>

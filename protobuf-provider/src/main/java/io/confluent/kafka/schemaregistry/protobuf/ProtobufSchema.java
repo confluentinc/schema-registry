@@ -71,6 +71,7 @@ import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import com.squareup.wire.schema.internal.parser.OneOfElement;
 import com.squareup.wire.schema.internal.parser.OptionElement;
+import com.squareup.wire.schema.internal.parser.OptionElement.Kind;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ProtoParser;
 import com.squareup.wire.schema.internal.parser.ReservedElement;
@@ -82,7 +83,6 @@ import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
 import java.util.LinkedHashMap;
-import java.util.function.Function;
 import kotlin.ranges.IntRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -478,7 +478,6 @@ public class ProtobufSchema implements ParsedSchema {
     if ("".equals(packageName)) {
       packageName = null;
     }
-
     Syntax syntax = null;
     switch (file.getSyntax()) {
       case PROTO2:
@@ -518,194 +517,80 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (file.getOptions().hasJavaPackage()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          JAVA_PACKAGE,
-          kind,
-          file.getOptions().getJavaPackage(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          JAVA_PACKAGE, Kind.STRING, file.getOptions().getJavaPackage(), false));
     }
     if (file.getOptions().hasJavaOuterClassname()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          JAVA_OUTER_CLASSNAME,
-          kind,
-          file.getOptions().getJavaOuterClassname(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          JAVA_OUTER_CLASSNAME, Kind.STRING, file.getOptions().getJavaOuterClassname(), false));
     }
     if (file.getOptions().hasJavaMultipleFiles()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(
-          JAVA_MULTIPLE_FILES,
-          kind,
-          file.getOptions().getJavaMultipleFiles(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          JAVA_MULTIPLE_FILES, Kind.BOOLEAN, file.getOptions().getJavaMultipleFiles(), false));
     }
     if (file.getOptions().hasJavaStringCheckUtf8()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(
-          JAVA_STRING_CHECK_UTF8,
-          kind,
-          file.getOptions().getJavaStringCheckUtf8(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          JAVA_STRING_CHECK_UTF8, Kind.BOOLEAN, file.getOptions().getJavaStringCheckUtf8(), false));
     }
     if (file.getOptions().hasOptimizeFor()) {
-      OptionElement.Kind kind = OptionElement.Kind.ENUM;
-      OptionElement option = new OptionElement(
-          OPTIMIZE_FOR,
-          kind,
-          file.getOptions().getOptimizeFor(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          OPTIMIZE_FOR, Kind.ENUM, file.getOptions().getOptimizeFor(), false));
     }
     if (file.getOptions().hasGoPackage()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          GO_PACKAGE,
-          kind,
-          file.getOptions().getGoPackage(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          GO_PACKAGE, Kind.STRING, file.getOptions().getGoPackage(), false));
     }
     if (file.getOptions().hasCcGenericServices()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(
-          CC_GENERIC_SERVICES,
-          kind,
-          file.getOptions().getCcGenericServices(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          CC_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getCcGenericServices(), false));
     }
     if (file.getOptions().hasJavaGenericServices()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(
-          JAVA_GENERIC_SERVICES,
-          kind,
-          file.getOptions().getJavaGenericServices(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          JAVA_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getJavaGenericServices(), false));
     }
     if (file.getOptions().hasPyGenericServices()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(
-          PY_GENERIC_SERVICES,
-          kind,
-          file.getOptions().getPyGenericServices(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          PY_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getPyGenericServices(), false));
     }
     if (file.getOptions().hasPhpGenericServices()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(
-          PHP_GENERIC_SERVICES,
-          kind,
-          file.getOptions().getPhpGenericServices(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          PHP_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getPhpGenericServices(), false));
     }
     if (file.getOptions().hasDeprecated()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(
-          DEPRECATED,
-          kind,
-          file.getOptions().getDeprecated(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          DEPRECATED, Kind.BOOLEAN, file.getOptions().getDeprecated(), false));
     }
     if (file.getOptions().hasCcEnableArenas()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(
-          CC_ENABLE_ARENAS,
-          kind,
-          file.getOptions().getCcEnableArenas(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          CC_ENABLE_ARENAS, Kind.BOOLEAN, file.getOptions().getCcEnableArenas(), false));
     }
     if (file.getOptions().hasObjcClassPrefix()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          OBJC_CLASS_PREFIX,
-          kind,
-          file.getOptions().getObjcClassPrefix(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          OBJC_CLASS_PREFIX, Kind.STRING, file.getOptions().getObjcClassPrefix(), false));
     }
     if (file.getOptions().hasCsharpNamespace()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          CSHARP_NAMESPACE,
-          kind,
-          file.getOptions().getCsharpNamespace(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          CSHARP_NAMESPACE, Kind.STRING, file.getOptions().getCsharpNamespace(), false));
     }
     if (file.getOptions().hasSwiftPrefix()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          SWIFT_PREFIX,
-          kind,
-          file.getOptions().getSwiftPrefix(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          SWIFT_PREFIX, Kind.STRING, file.getOptions().getSwiftPrefix(), false));
     }
     if (file.getOptions().hasPhpClassPrefix()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          PHP_CLASS_PREFIX,
-          kind,
-          file.getOptions().getPhpClassPrefix(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          PHP_CLASS_PREFIX, Kind.STRING, file.getOptions().getPhpClassPrefix(), false));
     }
     if (file.getOptions().hasPhpNamespace()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          PHP_NAMESPACE,
-          kind,
-          file.getOptions().getPhpNamespace(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          PHP_NAMESPACE, Kind.STRING, file.getOptions().getPhpNamespace(), false));
     }
     if (file.getOptions().hasPhpMetadataNamespace()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          PHP_METADATA_NAMESPACE,
-          kind,
-          file.getOptions().getPhpMetadataNamespace(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          PHP_METADATA_NAMESPACE, Kind.STRING, file.getOptions().getPhpMetadataNamespace(), false));
     }
     if (file.getOptions().hasRubyPackage()) {
-      OptionElement.Kind kind = OptionElement.Kind.STRING;
-      OptionElement option = new OptionElement(
-          RUBY_PACKAGE,
-          kind,
-          file.getOptions().getRubyPackage(),
-          false
-      );
-      options.add(option);
+      options.add(new OptionElement(
+          RUBY_PACKAGE, Kind.STRING, file.getOptions().getRubyPackage(), false));
     }
     if (file.getOptions().hasExtension(MetaProto.fileMeta)) {
       Meta meta = file.getOptions().getExtension(MetaProto.fileMeta);
@@ -714,7 +599,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    // NOTE: skip extensions, some options
+    // NOTE: skip extensions
     return new ProtoFileElement(DEFAULT_LOCATION,
         packageName,
         syntax,
@@ -770,32 +655,23 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (descriptor.getOptions().hasNoStandardDescriptorAccessor()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement(
-          NO_STANDARD_DESCRIPTOR_ACCESSOR,
-          kind,
-          descriptor.getOptions().getNoStandardDescriptorAccessor(),
-          false
+          NO_STANDARD_DESCRIPTOR_ACCESSOR, Kind.BOOLEAN,
+          descriptor.getOptions().getNoStandardDescriptorAccessor(), false
       );
       options.add(option);
     }
     if (descriptor.getOptions().hasDeprecated()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement(
-          DEPRECATED,
-          kind,
-          descriptor.getOptions().getDeprecated(),
-          false
+          DEPRECATED, Kind.BOOLEAN,
+          descriptor.getOptions().getDeprecated(), false
       );
       options.add(option);
     }
     if (descriptor.getOptions().hasMapEntry()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement(
-          MAP_ENTRY,
-          kind,
-          descriptor.getOptions().getMapEntry(),
-          false
+          MAP_ENTRY, Kind.BOOLEAN,
+          descriptor.getOptions().getMapEntry(), false
       );
       options.add(option);
     }
@@ -806,7 +682,7 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    // NOTE: skip some options, extensions, groups
+    // NOTE: skip extensions, groups
     return new MessageElement(DEFAULT_LOCATION,
         name,
         "",
@@ -839,8 +715,7 @@ public class ProtobufSchema implements ParsedSchema {
       }
       map.put(PARAMS_FIELD, keyValues);
     }
-    OptionElement.Kind kind = OptionElement.Kind.MAP;
-    return map.isEmpty() ? null : new OptionElement(name, kind, map, true);
+    return map.isEmpty() ? null : new OptionElement(name, Kind.MAP, map, true);
   }
 
   private static ReservedElement toReserved(ReservedRange range) {
@@ -865,12 +740,9 @@ public class ProtobufSchema implements ParsedSchema {
     for (EnumValueDescriptorProto ev : ed.getValueList()) {
       ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
       if (ev.getOptions().hasDeprecated()) {
-        OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
         OptionElement option = new OptionElement(
-            DEPRECATED,
-            kind,
-            ev.getOptions().getDeprecated(),
-            false
+            DEPRECATED, Kind.BOOLEAN,
+            ev.getOptions().getDeprecated(), false
         );
         options.add(option);
       }
@@ -881,7 +753,6 @@ public class ProtobufSchema implements ParsedSchema {
           options.add(option);
         }
       }
-      // NOTE: skip some options
       constants.add(new EnumConstantElement(
           DEFAULT_LOCATION,
           ev.getName(),
@@ -892,22 +763,16 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (ed.getOptions().hasAllowAlias()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement(
-          ALLOW_ALIAS,
-          kind,
-          ed.getOptions().getAllowAlias(),
-          false
+          ALLOW_ALIAS, Kind.BOOLEAN,
+          ed.getOptions().getAllowAlias(), false
       );
       options.add(option);
     }
     if (ed.getOptions().hasDeprecated()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement(
-          DEPRECATED,
-          kind,
-          ed.getOptions().getDeprecated(),
-          false
+          DEPRECATED, Kind.BOOLEAN,
+          ed.getOptions().getDeprecated(), false
       );
       options.add(option);
     }
@@ -918,7 +783,6 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    // NOTE: skip some options
     return new EnumElement(DEFAULT_LOCATION, name, "", options.build(), constants.build());
   }
 
@@ -929,22 +793,16 @@ public class ProtobufSchema implements ParsedSchema {
     for (MethodDescriptorProto method : sd.getMethodList()) {
       ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
       if (method.getOptions().hasDeprecated()) {
-        OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
         OptionElement option = new OptionElement(
-            DEPRECATED,
-            kind,
-            method.getOptions().getDeprecated(),
-            false
+            DEPRECATED, Kind.BOOLEAN,
+            method.getOptions().getDeprecated(), false
         );
         options.add(option);
       }
       if (method.getOptions().hasIdempotencyLevel()) {
-        OptionElement.Kind kind = OptionElement.Kind.ENUM;
         OptionElement option = new OptionElement(
-            IDEMPOTENCY_LEVEL,
-            kind,
-            method.getOptions().getIdempotencyLevel(),
-            false
+            IDEMPOTENCY_LEVEL, Kind.ENUM,
+            method.getOptions().getIdempotencyLevel(), false
         );
         options.add(option);
       }
@@ -961,12 +819,9 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (sd.getOptions().hasDeprecated()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option = new OptionElement(
-          DEPRECATED,
-          kind,
-          sd.getOptions().getDeprecated(),
-          false
+          DEPRECATED, Kind.BOOLEAN,
+          sd.getOptions().getDeprecated(), false
       );
       options.add(option);
     }
@@ -979,24 +834,22 @@ public class ProtobufSchema implements ParsedSchema {
     log.trace("*** field name: {}", name);
     ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
     if (fd.getOptions().hasCtype()) {
-      OptionElement.Kind kind = OptionElement.Kind.ENUM;
-      OptionElement option = new OptionElement(CTYPE, kind, fd.getOptions().getCtype(), false);
+      OptionElement option = new OptionElement(CTYPE, Kind.ENUM, fd.getOptions().getCtype(), false);
       options.add(option);
     }
     if (fd.getOptions().hasPacked()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
-      OptionElement option = new OptionElement(PACKED, kind, fd.getOptions().getPacked(), false);
+      OptionElement option =
+          new OptionElement(PACKED, Kind.BOOLEAN, fd.getOptions().getPacked(), false);
       options.add(option);
     }
     if (fd.getOptions().hasJstype()) {
-      OptionElement.Kind kind = OptionElement.Kind.ENUM;
-      OptionElement option = new OptionElement(JSTYPE, kind, fd.getOptions().getJstype(), false);
+      OptionElement option =
+          new OptionElement(JSTYPE, Kind.ENUM, fd.getOptions().getJstype(), false);
       options.add(option);
     }
     if (fd.getOptions().hasDeprecated()) {
-      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
       OptionElement option =
-          new OptionElement(DEPRECATED, kind, fd.getOptions().getDeprecated(), false);
+          new OptionElement(DEPRECATED, Kind.BOOLEAN, fd.getOptions().getDeprecated(), false);
       options.add(option);
     }
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
@@ -1010,7 +863,6 @@ public class ProtobufSchema implements ParsedSchema {
     String defaultValue = !PROTO3.equals(file.getSyntax()) && fd.hasDefaultValue()
                           ? fd.getDefaultValue()
                           : null;
-    // NOTE: skip some options
     return new FieldElement(DEFAULT_LOCATION,
         inOneof ? null : label(file, fd),
         dataType(fd),
@@ -1183,7 +1035,8 @@ public class ProtobufSchema implements ParsedSchema {
       }
       OptionElement phpGenericServices = options.get(PHP_GENERIC_SERVICES);
       if (phpGenericServices != null) {
-        schema.setPhpGenericServices(Boolean.parseBoolean(phpGenericServices.getValue().toString()));
+        schema.setPhpGenericServices(
+            Boolean.parseBoolean(phpGenericServices.getValue().toString()));
       }
       OptionElement isDeprecated = options.get(DEPRECATED);
       if (isDeprecated != null) {

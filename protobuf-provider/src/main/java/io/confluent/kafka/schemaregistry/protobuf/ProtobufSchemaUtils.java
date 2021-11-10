@@ -182,6 +182,8 @@ public class ProtobufSchemaUtils {
     }
     if (!protoFile.getServices().isEmpty()) {
       sb.append('\n');
+      // Don't sort service elements to be consistent with the fact that
+      // we don't sort message/enum elements
       for (ServiceElement service : protoFile.getServices()) {
         sb.append(toString(ctx, service, normalize));
       }

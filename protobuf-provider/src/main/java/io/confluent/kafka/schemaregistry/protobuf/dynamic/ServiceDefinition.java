@@ -74,7 +74,7 @@ public class ServiceDefinition {
       if (clientStreaming != null) {
         methodBuilder.setClientStreaming(clientStreaming);
       }
-      if (serverStreaming != null ){
+      if (serverStreaming != null) {
         methodBuilder.setServerStreaming(serverStreaming);
       }
       if (isDeprecated != null) {
