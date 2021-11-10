@@ -714,6 +714,14 @@ public class ProtobufSchemaTest {
         + "enum Status {\n"
         + "  INACTIVE = 1;\n"
         + "  ACTIVE = 0;\n"
+        + "}\n"
+        + "service MyService {\n"
+        + "  option deprecated = true;\n"
+        + "  rpc MyMethod2(stream Nested) returns(Nested.InnerMessage);\n"
+        + "  rpc MyMethod1(Nested.InnerMessage) returns(stream Nested) {\n"
+        + "    option idempotency_level = NO_SIDE_EFFECTS;\n"
+        + "    option deprecated = true;\n"
+        + "  };\n"
         + "}";
 
     String normalized = "syntax = \"proto3\";\n"
@@ -788,6 +796,16 @@ public class ProtobufSchemaTest {
         + "enum Status {\n"
         + "  ACTIVE = 0;\n"
         + "  INACTIVE = 1;\n"
+        + "}\n"
+        + "\n"
+        + "service MyService {\n"
+        + "  option deprecated = true;\n"
+        + "\n"
+        + "  rpc MyMethod1 (.my.package.Nested.InnerMessage) returns (stream .my.package.Nested) {\n"
+        + "    option deprecated = true;\n"
+        + "    option idempotency_level = NO_SIDE_EFFECTS;\n"
+        + "  };\n"
+        + "  rpc MyMethod2 (stream .my.package.Nested) returns (.my.package.Nested.InnerMessage);\n"
         + "}\n";
 
     ProtobufSchema schema = new ProtobufSchema(schemaString);

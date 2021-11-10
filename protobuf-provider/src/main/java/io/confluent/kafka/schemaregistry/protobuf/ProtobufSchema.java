@@ -26,7 +26,9 @@ import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
+import com.google.protobuf.DescriptorProtos.MethodDescriptorProto;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
+import com.google.protobuf.DescriptorProtos.ServiceDescriptorProto;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
@@ -68,7 +70,10 @@ import com.squareup.wire.schema.internal.parser.OptionElement;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ProtoParser;
 import com.squareup.wire.schema.internal.parser.ReservedElement;
+import com.squareup.wire.schema.internal.parser.RpcElement;
+import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
@@ -452,6 +457,12 @@ public class ProtobufSchema implements ParsedSchema {
       EnumElement enumer = toEnum(ed);
       types.add(enumer);
     }
+    ImmutableList.Builder<ServiceElement> services = ImmutableList.builder();
+    for (ServiceDescriptorProto sd : file.getServiceList()) {
+      ServiceElement service = toService(sd);
+      services.add(service);
+
+    }
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();
     List<String> dependencyList = file.getDependencyList();
@@ -512,14 +523,14 @@ public class ProtobufSchema implements ParsedSchema {
         options.add(option);
       }
     }
-    // NOTE: skip services, extensions, some options
+    // NOTE: skip extensions, some options
     return new ProtoFileElement(DEFAULT_LOCATION,
         packageName,
         syntax,
         imports.build(),
         publicImports.build(),
         types.build(),
-        Collections.emptyList(),
+        services.build(),
         Collections.emptyList(),
         options.build()
     );
@@ -710,6 +721,57 @@ public class ProtobufSchema implements ParsedSchema {
     return new EnumElement(DEFAULT_LOCATION, name, "", options.build(), constants.build());
   }
 
+  private static ServiceElement toService(ServiceDescriptorProto sd) {
+    String name = sd.getName();
+    log.trace("*** service name: {}", name);
+    ImmutableList.Builder<RpcElement> methods = ImmutableList.builder();
+    for (MethodDescriptorProto method : sd.getMethodList()) {
+      ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
+      if (method.getOptions().hasDeprecated()) {
+        OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
+        OptionElement option = new OptionElement(
+            "deprecated",
+            kind,
+            method.getOptions().getDeprecated(),
+            false
+        );
+        options.add(option);
+      }
+      if (method.getOptions().hasIdempotencyLevel()) {
+        OptionElement.Kind kind = OptionElement.Kind.ENUM;
+        OptionElement option = new OptionElement(
+            "idempotency_level",
+            kind,
+            method.getOptions().getIdempotencyLevel(),
+            false
+        );
+        options.add(option);
+      }
+      methods.add(new RpcElement(
+          DEFAULT_LOCATION,
+          method.getName(),
+          "",
+          method.getInputType(),
+          method.getOutputType(),
+          method.getClientStreaming(),
+          method.getServerStreaming(),
+          options.build()
+      ));
+    }
+    ImmutableList.Builder<OptionElement> options = ImmutableList.builder();
+    if (sd.getOptions().hasDeprecated()) {
+      OptionElement.Kind kind = OptionElement.Kind.BOOLEAN;
+      OptionElement option = new OptionElement(
+          "deprecated",
+          kind,
+          sd.getOptions().getDeprecated(),
+          false
+      );
+      options.add(option);
+    }
+    return new ServiceElement(DEFAULT_LOCATION, name, "", methods.build(), options.build());
+  }
+
   private static FieldElement toField(
       FileDescriptorProto file, FieldDescriptorProto fd, boolean inOneof) {
     String name = fd.getName();
@@ -849,6 +911,10 @@ public class ProtobufSchema implements ParsedSchema {
           EnumDefinition enumer = toDynamicEnum((EnumElement) typeElem);
           schema.addEnumDefinition(enumer);
         }
+      }
+      for (ServiceElement serviceElement : rootElem.getServices()) {
+        ServiceDefinition service = toDynamicService(serviceElement);
+        schema.addServiceDefinition(service);
       }
       for (String ref : rootElem.getImports()) {
         ProtoFileElement dep = dependencies.get(ref);
@@ -1073,6 +1139,26 @@ public class ProtobufSchema implements ParsedSchema {
     Map<String, String> params = findParams(meta);
     enumer.setMeta(doc, params);
     return enumer.build();
+  }
+
+  private static ServiceDefinition toDynamicService(ServiceElement serviceElement) {
+    ServiceDefinition.Builder service =
+        ServiceDefinition.newBuilder(serviceElement.getName());
+    Boolean isDeprecated = findOption("deprecated", serviceElement.getOptions())
+        .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+    if (isDeprecated != null) {
+      service.setDeprecated(isDeprecated);
+    }
+    for (RpcElement method : serviceElement.getRpcs()) {
+      Boolean isMethodDeprecated = findOption("deprecated", method.getOptions())
+          .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
+      String idempotencyLevel = findOption("idempotency_level", method.getOptions())
+          .map(o -> o.getValue().toString()).orElse(null);
+      service.addMethod(method.getName(), method.getRequestType(), method.getResponseType(),
+          method.getRequestStreaming(), method.getResponseStreaming(),
+          isMethodDeprecated, idempotencyLevel);
+    }
+    return service.build();
   }
 
   @Override

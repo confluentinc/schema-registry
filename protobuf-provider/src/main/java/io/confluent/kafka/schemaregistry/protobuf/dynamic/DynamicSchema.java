@@ -399,6 +399,11 @@ public class DynamicSchema {
       return this;
     }
 
+    public Builder addServiceDefinition(ServiceDefinition serviceDef) {
+      mFileDescProtoBuilder.addService(serviceDef.getServiceType());
+      return this;
+    }
+
     // Note: added
     public Builder addDependency(String dependency) {
       for (int i = 0; i < mFileDescProtoBuilder.getDependencyCount(); i++) {

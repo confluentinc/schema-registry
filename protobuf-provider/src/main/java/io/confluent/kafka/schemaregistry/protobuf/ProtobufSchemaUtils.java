@@ -38,6 +38,7 @@ import com.squareup.wire.schema.internal.parser.OptionElement;
 import com.squareup.wire.schema.internal.parser.OptionElement.Kind;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import com.squareup.wire.schema.internal.parser.ReservedElement;
+import com.squareup.wire.schema.internal.parser.RpcElement;
 import com.squareup.wire.schema.internal.parser.ServiceElement;
 import com.squareup.wire.schema.internal.parser.TypeElement;
 import java.io.IOException;
@@ -182,9 +183,89 @@ public class ProtobufSchemaUtils {
     if (!protoFile.getServices().isEmpty()) {
       sb.append('\n');
       for (ServiceElement service : protoFile.getServices()) {
-        sb.append(service.toSchema());
+        sb.append(toString(ctx, service, normalize));
       }
     }
+    return sb.toString();
+  }
+
+  private static String toString(Context ctx, ServiceElement service, boolean normalize) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("service ");
+    sb.append(service.getName());
+    sb.append(" {");
+    if (!service.getOptions().isEmpty()) {
+      sb.append('\n');
+      List<OptionElement> options = service.getOptions();
+      if (normalize) {
+        options = new ArrayList<>(options);
+        options.sort(Comparator.comparing(OptionElement::getName));
+      }
+      for (OptionElement option : options) {
+        appendIndented(sb, toOptionString(option, normalize));
+      }
+    }
+    if (!service.getRpcs().isEmpty()) {
+      sb.append('\n');
+      List<RpcElement> rpcs = service.getRpcs();
+      if (normalize) {
+        rpcs = new ArrayList<>(rpcs);
+        rpcs.sort(Comparator.comparing(RpcElement::getName));
+      }
+      for (RpcElement rpc : rpcs) {
+        appendIndented(sb, toString(ctx, rpc, normalize));
+      }
+    }
+    sb.append("}\n");
+    return sb.toString();
+  }
+
+  private static String toString(Context ctx, RpcElement rpc, boolean normalize) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("rpc ");
+    sb.append(rpc.getName());
+    sb.append(" (");
+
+    if (rpc.getRequestStreaming()) {
+      sb.append("stream ");
+    }
+    String requestType = rpc.getRequestType();
+    if (normalize) {
+      requestType = ctx.resolve(requestType);
+      if (requestType == null) {
+        throw new IllegalArgumentException("Could not resolve type: " + rpc.getRequestType());
+      }
+    }
+    sb.append(requestType);
+    sb.append(") returns (");
+
+    if (rpc.getResponseStreaming()) {
+      sb.append("stream ");
+    }
+    String responseType = rpc.getResponseType();
+    if (normalize) {
+      responseType = ctx.resolve(responseType);
+      if (responseType == null) {
+        throw new IllegalArgumentException("Could not resolve type: " + rpc.getResponseType());
+      }
+    }
+    sb.append(responseType);
+    sb.append(")");
+
+    if (!rpc.getOptions().isEmpty()) {
+      sb.append(" {\n");
+      List<OptionElement> options = rpc.getOptions();
+      if (normalize) {
+        options = new ArrayList<>(options);
+        options.sort(Comparator.comparing(OptionElement::getName));
+      }
+      for (OptionElement option : options) {
+        appendIndented(sb, toOptionString(option, normalize));
+      }
+      sb.append('}');
+    }
+
+    sb.append(";\n");
     return sb.toString();
   }
 
