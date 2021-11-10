@@ -461,7 +461,6 @@ public class ProtobufSchema implements ParsedSchema {
     for (ServiceDescriptorProto sd : file.getServiceList()) {
       ServiceElement service = toService(sd);
       services.add(service);
-
     }
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();

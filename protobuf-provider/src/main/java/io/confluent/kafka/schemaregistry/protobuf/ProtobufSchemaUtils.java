@@ -207,12 +207,9 @@ public class ProtobufSchemaUtils {
     }
     if (!service.getRpcs().isEmpty()) {
       sb.append('\n');
-      List<RpcElement> rpcs = service.getRpcs();
-      if (normalize) {
-        rpcs = new ArrayList<>(rpcs);
-        rpcs.sort(Comparator.comparing(RpcElement::getName));
-      }
-      for (RpcElement rpc : rpcs) {
+      // Don't sort rpc elements to be consistent with the fact that
+      // we don't sort message/enum elements
+      for (RpcElement rpc : service.getRpcs()) {
         appendIndented(sb, toString(ctx, rpc, normalize));
       }
     }

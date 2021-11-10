@@ -801,11 +801,11 @@ public class ProtobufSchemaTest {
         + "service MyService {\n"
         + "  option deprecated = true;\n"
         + "\n"
+        + "  rpc MyMethod2 (stream .my.package.Nested) returns (.my.package.Nested.InnerMessage);\n"
         + "  rpc MyMethod1 (.my.package.Nested.InnerMessage) returns (stream .my.package.Nested) {\n"
         + "    option deprecated = true;\n"
         + "    option idempotency_level = NO_SIDE_EFFECTS;\n"
         + "  };\n"
-        + "  rpc MyMethod2 (stream .my.package.Nested) returns (.my.package.Nested.InnerMessage);\n"
         + "}\n";
 
     ProtobufSchema schema = new ProtobufSchema(schemaString);
