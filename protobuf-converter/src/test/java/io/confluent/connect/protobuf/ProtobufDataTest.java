@@ -132,6 +132,8 @@ public class ProtobufDataTest {
       .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
       .build();
 
+  private static final String PROTOBUF_SERIALIZERS_TEST_PACKAGE_NAME_PREFIX = NestedTestProto.class.getPackage().getName() + ".";
+
   private static final String VALUE_FIELD_NAME = "value";
 
   private SchemaAndValue getExpectedSchemaAndValue(
@@ -199,7 +201,7 @@ public class ProtobufDataTest {
     final SchemaBuilder complexTypeBuilder = SchemaBuilder.struct();
     complexTypeBuilder.name("ComplexType");
     final SchemaBuilder someValBuilder = SchemaBuilder.struct();
-    someValBuilder.name(PROTOBUF_TYPE_UNION_PREFIX + "some_val");
+    someValBuilder.name(PROTOBUF_TYPE_UNION_PREFIX + PROTOBUF_SERIALIZERS_TEST_PACKAGE_NAME_PREFIX + "ComplexType.some_val");
     someValBuilder.field(
         "one_id",
         SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
@@ -237,7 +239,7 @@ public class ProtobufDataTest {
     final SchemaBuilder userIdBuilder = SchemaBuilder.struct();
     userIdBuilder.name("UserId");
     final SchemaBuilder idBuilder = SchemaBuilder.struct();
-    idBuilder.name(PROTOBUF_TYPE_UNION_PREFIX + "user_id");
+    idBuilder.name(PROTOBUF_TYPE_UNION_PREFIX  + PROTOBUF_SERIALIZERS_TEST_PACKAGE_NAME_PREFIX + "UserId.user_id");
     idBuilder.field(
         "kafka_user_id",
         SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()

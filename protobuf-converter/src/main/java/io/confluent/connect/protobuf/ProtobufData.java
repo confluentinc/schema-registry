@@ -1254,7 +1254,7 @@ public class ProtobufData {
 
   private Schema toConnectSchema(ToConnectContext ctx, OneofDescriptor descriptor) {
     SchemaBuilder builder = SchemaBuilder.struct();
-    builder.name(PROTOBUF_TYPE_UNION_PREFIX + descriptor.getName());
+    builder.name(PROTOBUF_TYPE_UNION_PREFIX + descriptor.getFullName());
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
       builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
