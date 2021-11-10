@@ -65,7 +65,7 @@ public class ServiceDefinition {
         Boolean clientStreaming,
         Boolean serverStreaming,
         Boolean isDeprecated,
-        String idempotencyLevel
+        IdempotencyLevel idempotencyLevel
     ) {
       MethodDescriptorProto.Builder methodBuilder = MethodDescriptorProto.newBuilder();
       methodBuilder.setName(name)
@@ -86,7 +86,7 @@ public class ServiceDefinition {
       if (idempotencyLevel != null) {
         DescriptorProtos.MethodOptions.Builder optionsBuilder =
             DescriptorProtos.MethodOptions.newBuilder();
-        optionsBuilder.setIdempotencyLevel(IdempotencyLevel.valueOf(idempotencyLevel));
+        optionsBuilder.setIdempotencyLevel(idempotencyLevel);
         methodBuilder.mergeOptions(optionsBuilder.build());
       }
       mServiceTypeBuilder.addMethod(methodBuilder.build());
