@@ -254,7 +254,6 @@ public class ProtobufSchemaUtils {
       List<ReservedElement> reserveds = type.getReserveds();
       if (normalize) {
         reserveds = reserveds.stream()
-            .filter(r -> !r.getValues().isEmpty())
             .flatMap(r -> r.getValues().stream()
                 .map(o -> new ReservedElement(
                     r.getLocation(),
