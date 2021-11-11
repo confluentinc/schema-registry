@@ -57,7 +57,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 import kotlin.ranges.IntRange;
 
@@ -355,7 +354,7 @@ public class ProtobufSchemaUtils {
         reserveds.sort(cmp);
       }
       for (ReservedElement reserved : reserveds) {
-        appendIndented(sb, reserved.toSchema());
+        appendIndented(sb, toString(ctx, reserved, normalize));
       }
     }
     if (!type.getOptions().isEmpty()) {
@@ -431,6 +430,36 @@ public class ProtobufSchemaUtils {
       }
     }
     sb.append("}\n");
+    return sb.toString();
+  }
+
+  private static String toString(Context ctx, ReservedElement type, boolean normalize) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("reserved ");
+
+    boolean first = true;
+    for (Object value : type.getValues()) {
+      if (first) {
+        first = false;
+      } else {
+        sb.append(", ");
+      }
+      if (value instanceof String) {
+        sb.append("\"");
+        sb.append(value);
+        sb.append("\"");
+      } else if (value instanceof Integer) {
+        sb.append(value);
+      } else if (value instanceof IntRange) {
+        IntRange range = (IntRange) value;
+        sb.append(range.getStart());
+        sb.append(" to ");
+        sb.append(range.getEndInclusive());
+      } else {
+        throw new IllegalArgumentException();
+      }
+    }
+    sb.append(";\n");
     return sb.toString();
   }
 
@@ -518,26 +547,99 @@ public class ProtobufSchemaUtils {
 
   @SuppressWarnings("unchecked")
   private static String toString(OptionElement option, boolean normalize) {
+    StringBuilder sb = new StringBuilder();
+    String name = option.getName();
+    if (option.isParenthesized()) {
+      sb.append("(").append(name).append(")");
+    } else {
+      sb.append(name);
+    }
+    Object value = option.getValue();
     switch (option.getKind()) {
       case STRING:
-        String name = option.getName();
-        String formattedName = option.isParenthesized() ? String.format("(%s)", name) : name;
-        String value = escapeChars(option.getValue().toString());
-        return String.format("%s = \"%s\"", formattedName, value);
+        sb.append(" = \"");
+        sb.append(escapeChars(value.toString()));
+        sb.append("\"");
+        break;
+      case BOOLEAN:
+      case NUMBER:
+      case ENUM:
+        sb.append(" = ");
+        sb.append(value);
+        break;
+      case OPTION:
+        sb.append(".");
+        // Treat nested options as non-parenthesized always, prevents double parentheses.
+        sb.append(toString((OptionElement) value, normalize));
+        break;
       case MAP:
-        if (normalize) {
-          Map<String, Object> map = new TreeMap<>((Map<String, Object>)option.getValue());
-          option = new OptionElement(
-              option.getName(), option.getKind(), map, option.isParenthesized());
-        }
-        return option.toSchema();
-      default:
-        return option.toSchema();
+        sb.append(" = {\n");
+        formatOptionMap(sb, (Map<String, Object>) value);
+        sb.append('}');
+        break;
+      case LIST:
+        sb.append(" = ");
+        appendOptions(sb, (List<OptionElement>) value, normalize);
+        break;
+    }
+    return sb.toString();
+  }
+
+  private static void formatOptionMap(StringBuilder sb, Map<String, Object> valueMap) {
+    int lastIndex = valueMap.size() - 1;
+    int index = 0;
+    List<String> keys = valueMap.keySet().stream()
+        .sorted()
+        .collect(Collectors.toList());
+    for (String key : keys) {
+      String endl = index != lastIndex ? "," : "";
+      String kv = new StringBuilder()
+          .append(key)
+          .append(": ")
+          .append(formatOptionMapValue(valueMap.get(key)))
+          .append(endl)
+          .toString();
+      appendIndented(sb, kv);
+      index++;
     }
   }
 
+  @SuppressWarnings("unchecked")
+  private static String formatOptionMapValue(Object value) {
+    StringBuilder sb = new StringBuilder();
+    if (value instanceof  String) {
+      sb.append("\"");
+      sb.append(escapeChars(value.toString()));
+      sb.append("\"");
+    } else if (value instanceof Map) {
+      sb.append("{\n");
+      formatOptionMap(sb, (Map<String, Object>) value);
+      sb.append('}');
+    } else if (value instanceof List) {
+      List<Object> list = (List<Object>) value;
+      sb.append("[\n");
+      int lastIndex = list.size() - 1;
+      for (int i = 0; i < list.size(); i++) {
+        String endl = i != lastIndex ? "," : "";
+        String v = new StringBuilder()
+            .append(formatOptionMapValue(list.get(i)))
+            .append(endl)
+            .toString();
+        appendIndented(sb, v);
+      }
+      sb.append("]");
+    } else {
+      sb.append(value);
+    }
+    return sb.toString();
+  }
+
   private static String toOptionString(OptionElement option, boolean normalize) {
-    return String.format("option %s;%n", toString(option, normalize));
+    StringBuilder sb = new StringBuilder();
+    sb.append("option ")
+        .append(toString(option, normalize))
+        .append(";\n");
+    return sb.toString();
   }
 
   private static void appendOptions(
